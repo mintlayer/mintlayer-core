@@ -152,7 +152,6 @@ where
         const REQUIRED: &[Protocol] = &[
             Protocol::new(ProtocolType::Pubsub, SemVer::new(1, 1, 0)),
             Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-            Protocol::new(ProtocolType::Handshake, SemVer::new(1, 0, 0)),
             Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
         ];
 

@@ -18,6 +18,8 @@ use std::{
     fmt::{self, Display, Formatter},
 };
 
+use tap::TapFallible;
+
 use common::primitives::semver::SemVer;
 use logging::log;
 use serialization::{Decode, Encode};
@@ -32,44 +34,41 @@ pub struct Protocol {
 /// Protocol type.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Encode, Decode)]
 pub enum ProtocolType {
-    // TODO: FIXME.
+    // TODO: FIXME: Add the documentation.
     Pubsub,
     Ping,
-    Handshake,
     Sync,
 }
 
-/*
-    "/meshsub/1.1.0",
-   "/meshsub/1.0.0",
-   "/ipfs/ping/1.0.0",
-   "/ipfs/id/1.0.0",
-   "/ipfs/id/push/1.0.0",
-   "/mintlayer/sync/0.1.0",
-*/
-
 impl Protocol {
+    /// Constructs a new protocol instance with given type and version.
     pub const fn new(protocol: ProtocolType, version: SemVer) -> Self {
         Self { protocol, version }
     }
 
-    // TODO: FIXME:
-    // pub fn from_str(val: &str) -> Option<Self> {
-    //     let (protocol, version) = val.rsplit_once('/')?;
-    //     // TODO: tap_err?
-    //     let version = match SemVer::try_from(val) {
-    //         Err(e) => {
-    //             log::trace!("Ignoring protocol with malformed version: {val} ({e:?})");
-    //             return None;
-    //         }
-    //         Ok(v) => v,
-    //     };
-    //     let protocol = match protocol {
-    //         "meshsub" => ProtocolType::Pubsub,
-    //         "/mintlayer/sync/" => ProtocolType::Sync,
-    //         _ => return None,
-    //     };
-    // }
+    /// Parses a protocol from the given string.
+    ///
+    /// A string must contain the name of a protocol and a version after the last slash. For
+    /// example: "/meshsub/1.1.0" or "/mintlayer/sync/0.1.0".
+    pub fn from_str(val: &str) -> Option<Self> {
+        let (protocol, version) = val.rsplit_once('/')?;
+
+        let protocol = match protocol {
+            "/meshsub" => ProtocolType::Pubsub,
+            "/ipfs/ping" => ProtocolType::Ping,
+            "/mintlayer/sync" => ProtocolType::Sync,
+            _ => {
+                log::trace!("Ignoring unknown '{val}' protocol");
+                return None;
+            }
+        };
+
+        let version = SemVer::try_from(version)
+            .tap_err(|e| log::trace!("Ignoring protocol with malformed version: {val} ({e:?})"))
+            .ok()?;
+
+        Some(Protocol::new(protocol, version))
+    }
 
     pub fn protocol(&self) -> ProtocolType {
         self.protocol
@@ -93,63 +92,49 @@ where
     I: IntoIterator<Item = P>,
     P: AsRef<str>,
 {
-    // TODO: Iterate instead of parsing?..
-    // let protocols: HashSet<&str> = protocols.into_iter().map(|p| p.as_ref()).collect();
-    //
-    // let mut result = HashSet::new();
-    //
-    // if protocols.contains("/meshsub/1.0.0") && protocols.contains("/meshsub/1.1.0") {
-    //     todo!();
-    // }
-
-    /*
-        "/meshsub/1.1.0",
-       "/meshsub/1.0.0",
-       "/ipfs/ping/1.0.0",
-       "/ipfs/id/1.0.0",
-       "/ipfs/id/push/1.0.0",
-       "/mintlayer/sync/0.1.0",
-    */
-    todo!();
-    todo!();
-
-    //result
-    todo!()
+    protocols.into_iter().filter_map(|p| Protocol::from_str(p.as_ref())).collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // #[test]
-    // fn from_str() {
-    //     let data = [
-    //         ("/meshsub/1.1.0", ProtocolType::Pubsub, SemVer::new(1, 1, 0)),
-    //         ("/ipfs/ping/2.3.4", ProtocolType::Ping, SemVer::new(2, 3, 4)),
-    //         ("/ipfs/id/1.0.0", ProtocolType::Ping, SemVer::new(2, 3, 4)),
-    //         (
-    //             "/ipfs/id/push/1.0.0",
-    //             ProtocolType::Ping,
-    //             SemVer::new(2, 3, 4),
-    //         ),
-    //         (
-    //             "/mintlayer/sync/0.1.0",
-    //             ProtocolType::Sync,
-    //             SemVer::new(0, 1, 0),
-    //         ),
-    //     ];
-    //
-    //     for (str, protocol, version) in data {
-    //         let actual = Protocol::from_str(str).unwrap();
-    //         assert_eq!(actual.protocol, protocol);
-    //         assert_eq!(actual.version, version);
-    //     }
-    // }
+    #[test]
+    fn from_str() {
+        let data = [
+            ("/meshsub/1.1.0", ProtocolType::Pubsub, SemVer::new(1, 1, 0)),
+            ("/ipfs/ping/2.3.4", ProtocolType::Ping, SemVer::new(2, 3, 4)),
+            (
+                "/mintlayer/sync/0.1.0",
+                ProtocolType::Sync,
+                SemVer::new(0, 1, 0),
+            ),
+        ];
+
+        for (str, protocol, version) in data {
+            let actual = Protocol::from_str(str).unwrap();
+            assert_eq!(actual.protocol, protocol);
+            assert_eq!(actual.version, version);
+        }
+    }
 
     #[test]
-    fn FIXME_parse_protocols() {
-        todo!();
-        todo!();
-        parse_protocols(["aaa", "bbb"]);
+    fn parse_standard_protocols() {
+        let expected: HashSet<_> = [
+            Protocol::new(ProtocolType::Pubsub, SemVer::new(1, 1, 0)),
+            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+        ]
+        .into_iter()
+        .collect();
+        let parsed = parse_protocols([
+            "/meshsub/1.1.0",
+            "/meshsub/1.0.0",
+            "/ipfs/ping/1.0.0",
+            "/ipfs/id/1.0.0",
+            "/ipfs/id/push/1.0.0",
+            "/mintlayer/sync/0.1.0",
+        ]);
+        assert_eq!(expected, parsed);
     }
 }
