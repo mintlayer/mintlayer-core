@@ -781,7 +781,6 @@ mod tests {
         assert_eq!(Amount { val: 1234567890100 }.into_fixedpoint_str(0), "1234567890100");
         assert_eq!(Amount { val: 12345678901200 }.into_fixedpoint_str(0), "12345678901200");
         assert_eq!(Amount { val: 123456789012300 }.into_fixedpoint_str(0), "123456789012300");
-
     }
 
     #[rustfmt::skip]
