@@ -187,7 +187,7 @@ impl Sum<SignedAmount> for Option<SignedAmount> {
 
 #[cfg(test)]
 mod tests {
-    use crate::amount_sum;
+    use crate::{amount_sum, primitives::amount::UnsignedIntType};
 
     use super::*;
 
@@ -382,6 +382,32 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn unsigned_conversion_signed_arbitrary() {
+        let amount = SignedAmount::from_atoms(10);
+        let unsigned_amount_inner = 10 as UnsignedIntType;
+        assert_eq!(
+            amount.into_unsigned().unwrap(),
+            Amount::from_atoms(unsigned_amount_inner)
+        )
+    }
+
+    #[test]
+    fn unsigned_conversion_signed_max() {
+        let amount = SignedAmount::MAX;
+        let unsigned_amount_inner = SignedIntType::MAX as UnsignedIntType;
+        assert_eq!(
+            amount.into_unsigned().unwrap(),
+            Amount::from_atoms(unsigned_amount_inner)
+        )
+    }
+
+    #[test]
+    fn unsigned_conversion_signed_negative() {
+        let amount = SignedAmount::from_atoms(-10);
+        assert!(amount.into_unsigned().is_none())
     }
 
     #[rustfmt::skip]

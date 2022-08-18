@@ -282,6 +282,8 @@ macro_rules! amount_sum {
 
 #[cfg(test)]
 mod tests {
+    use crate::primitives::signed_amount::SignedIntType;
+
     use super::*;
 
     #[test]
@@ -485,6 +487,38 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn signed_conversion_arbitrary() {
+        let amount = Amount::from_atoms(10);
+        let signed_amount_inner = 10 as SignedIntType;
+        assert_eq!(
+            amount.into_signed().unwrap(),
+            SignedAmount::from_atoms(signed_amount_inner)
+        )
+    }
+
+    #[test]
+    fn signed_conversion_max() {
+        let amount = Amount::MAX;
+        assert!(amount.into_signed().is_none())
+    }
+
+    #[test]
+    fn signed_conversion_signed_max_before_threshold() {
+        let amount = Amount::from_atoms(SignedIntType::MAX as UnsignedIntType);
+        let signed_amount_inner = SignedIntType::MAX;
+        assert_eq!(
+            amount.into_signed().unwrap(),
+            SignedAmount::from_atoms(signed_amount_inner)
+        )
+    }
+
+    #[test]
+    fn signed_conversion_signed_max_after_threshold() {
+        let amount = Amount::from_atoms(SignedIntType::MAX as UnsignedIntType + 1);
+        assert!(amount.into_signed().is_none())
     }
 
     #[rustfmt::skip]
