@@ -17,7 +17,7 @@
 
 use std::iter::Sum;
 
-use super::Amount;
+use super::{amount::UnsignedIntType, Amount};
 
 pub type SignedIntType = i128;
 
@@ -28,18 +28,9 @@ pub struct SignedAmount {
     val: SignedIntType,
 }
 
-fn remove_right_most_zeros_and_decimal_point(s: String) -> String {
-    let point_pos = s.chars().position(|c| c == '.');
-    if point_pos.is_none() {
-        return s;
-    }
-    let s = s.trim_end_matches('0');
-    let s = s.trim_end_matches('.');
-    s.to_owned()
-}
-
 impl SignedAmount {
     pub const MAX: Self = Self::from_atoms(SignedIntType::MAX);
+    pub const MIN: Self = Self::from_atoms(SignedIntType::MIN);
 
     pub const fn from_atoms(v: SignedIntType) -> Self {
         SignedAmount { val: v }
@@ -62,22 +53,20 @@ impl SignedAmount {
     }
 
     pub fn into_fixedpoint_str(self, decimals: u8) -> String {
-        let amount_str = self.val.abs().to_string();
-        let decimals = decimals as usize;
-        let sign = if self.val < 0 { "-" } else { "" };
-        if amount_str.len() <= decimals {
-            let zeros = "0".repeat(decimals - amount_str.len());
-            let result = sign.to_owned() + "0." + &zeros + &amount_str;
+        let negative = self.val < 0;
 
-            remove_right_most_zeros_and_decimal_point(result)
+        let abs_amount = if self.val == SignedIntType::MIN {
+            // since this function can never fail, we cover the corner case of SignedIntType::MIN where the sign can't be flipped
+            let v = (SignedIntType::MIN + 1).abs();
+            Amount::from_atoms((v as UnsignedIntType) + 1)
         } else {
-            let ten: SignedIntType = 10;
-            let unit = ten.pow(decimals as u32);
-            let whole = self.val.abs() / unit;
-            let fraction = self.val.abs() % unit;
-            let result = format!("{sign}{whole}.{fraction:00$}", decimals as usize);
+            Amount::from_atoms(self.val.abs() as UnsignedIntType)
+        };
 
-            remove_right_most_zeros_and_decimal_point(result)
+        if negative {
+            "-".to_owned() + &abs_amount.into_fixedpoint_str(decimals)
+        } else {
+            abs_amount.into_fixedpoint_str(decimals)
         }
     }
 
@@ -85,8 +74,15 @@ impl SignedAmount {
         let negative = amount_str.starts_with('-');
         let amount_str = amount_str.strip_prefix('-').unwrap_or(amount_str);
 
-        // in this solution, we exclude SignedAmount::MIN, but we don't really care
         let unsigned_amount = Amount::from_fixedpoint_str(amount_str, decimals)?;
+
+        if negative && unsigned_amount.into_atoms() == UnsignedIntType::MAX / 2 + 1 {
+            // cover the corner case: SignedAmount::MIN
+            return Some(SignedAmount {
+                val: SignedIntType::MIN,
+            });
+        }
+
         let signed_amount = unsigned_amount.into_signed()?;
         let signed_atoms = if negative {
             -signed_amount.into_atoms()
@@ -1035,5 +1031,15 @@ mod tests {
         assert_eq!(SignedAmount { val: -1234567890100 }.into_fixedpoint_str(1), "-123456789010");
         assert_eq!(SignedAmount { val: -12345678901200 }.into_fixedpoint_str(1), "-1234567890120");
         assert_eq!(SignedAmount { val: -123456789012300 }.into_fixedpoint_str(1), "-12345678901230");
+    }
+
+    #[rustfmt::skip]
+    #[test]
+    fn fixedpoint_boundaries() {
+        assert_eq!(SignedAmount::from_atoms(SignedIntType::MIN).into_fixedpoint_str(0), "-170141183460469231731687303715884105728");
+        assert_eq!(SignedAmount::from_atoms(SignedIntType::MIN+1).into_fixedpoint_str(0), "-170141183460469231731687303715884105727");
+
+        assert_eq!(SignedAmount::from_fixedpoint_str("-170141183460469231731687303715884105728", 0).unwrap(), SignedAmount::MIN);
+        assert_eq!(SignedAmount::from_fixedpoint_str("-170141183460469231731687303715884105727", 0).unwrap(), SignedAmount::from_atoms(SignedIntType::MIN+1));
     }
 }
