@@ -55,13 +55,7 @@ impl SignedAmount {
     pub fn into_fixedpoint_str(self, decimals: u8) -> String {
         let negative = self.val < 0;
 
-        let abs_amount = if self.val == SignedIntType::MIN {
-            // since this function can never fail, we cover the corner case of SignedIntType::MIN where the sign can't be flipped
-            let v = (SignedIntType::MIN + 1).abs();
-            Amount::from_atoms((v as UnsignedIntType) + 1)
-        } else {
-            Amount::from_atoms(self.val.abs() as UnsignedIntType)
-        };
+        let abs_amount = Amount::from_atoms(self.val.unsigned_abs());
 
         if negative {
             "-".to_owned() + &abs_amount.into_fixedpoint_str(decimals)
@@ -76,8 +70,8 @@ impl SignedAmount {
 
         let unsigned_amount = Amount::from_fixedpoint_str(amount_str, decimals)?;
 
+        // cover the corner case: SignedAmount::MIN
         if negative && unsigned_amount.into_atoms() == UnsignedIntType::MAX / 2 + 1 {
-            // cover the corner case: SignedAmount::MIN
             return Some(SignedAmount {
                 val: SignedIntType::MIN,
             });
