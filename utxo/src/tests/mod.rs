@@ -531,7 +531,7 @@ fn check_add_utxos_from_block_reward(#[case] seed: Seed) {
         .is_ok());
 
     block_reward.outputs().iter().enumerate().for_each(|(i, x)| {
-        let outpoint = OutPoint::new(OutPointSourceId::BlockReward(block_id.clone()), i as u32);
+        let outpoint = OutPoint::new(OutPointSourceId::BlockReward(block_id), i as u32);
         let utxo = cache.utxo(&outpoint).expect("utxo should exist");
         assert_eq!(utxo.output(), x);
     });
