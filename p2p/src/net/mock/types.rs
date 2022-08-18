@@ -13,16 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{error, message, net};
-use common::primitives::semver;
-use crypto::random::{make_pseudo_rng, Rng};
-use serialization::{Decode, Encode};
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
     net::SocketAddr,
 };
+
 use tokio::sync::oneshot;
+
+use common::primitives::semver;
+use crypto::random::{make_pseudo_rng, Rng};
+use serialization::{Decode, Encode};
+
+use crate::{
+    error, message,
+    net::{self, types::Protocol},
+};
 
 pub enum Command {
     Connect {
@@ -116,25 +122,6 @@ pub enum PeerEvent {
 #[derive(Debug)]
 pub enum MockEvent {
     Disconnect,
-}
-
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct Protocol {
-    name: String,
-    version: semver::SemVer,
-}
-
-impl Protocol {
-    pub fn new(name: &str, version: semver::SemVer) -> Self {
-        Self {
-            name: name.to_string(),
-            version,
-        }
-    }
-
-    pub fn name(&self) -> &String {
-        &self.name
-    }
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]

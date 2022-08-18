@@ -13,31 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod backend;
+pub mod peer;
+pub mod socket;
+pub mod types;
+
+use std::{hash::Hash, net::SocketAddr, sync::Arc};
+
+use async_trait::async_trait;
+use tokio::{
+    net::TcpListener,
+    sync::{mpsc, oneshot},
+};
+
+use logging::log;
+
 use crate::{
     config,
     error::P2pError,
     message,
     net::{
         self,
-        types::{
-            protocol::parse_protocols, ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent,
-            ValidationResult,
-        },
+        types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent, ValidationResult},
         ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,
     },
 };
-use async_trait::async_trait;
-use logging::log;
-use std::{hash::Hash, net::SocketAddr, sync::Arc};
-use tokio::{
-    net::TcpListener,
-    sync::{mpsc, oneshot},
-};
-
-pub mod backend;
-pub mod peer;
-pub mod socket;
-pub mod types;
 
 #[derive(Debug)]
 pub struct MockService;
@@ -98,7 +98,7 @@ where
             magic_bytes: self.network,
             version: self.version,
             agent: None,
-            protocols: parse_protocols(self.protocols.iter().map(|proto| proto.name().as_str())),
+            protocols: self.protocols.into_iter().collect(),
         })
     }
 }
