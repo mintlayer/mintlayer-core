@@ -129,18 +129,14 @@ where
         !self.peerdb.is_id_banned(peer_id)
     }
 
-    // TODO: FIXME: Update the documentation.
-    /// Verify protocol compatibility
+    /// Verifies the protocols compatibility.
     ///
-    /// Make sure that remote peer supports the same versions of the protocols that we do
-    /// and that they support the mandatory protocols which for now are configured to be:
+    /// Checks that the given set of protocols contains the following protocols with the exact
+    /// versions:
     ///
-    /// - `/meshsub/1.1.0`
-    /// - `/meshsub/1.0.0`
-    /// - `/ipfs/ping/1.0.0`
-    /// - `/ipfs/id/1.0.0`
-    /// - `/ipfs/id/push/1.0.0`
-    /// - `/mintlayer/sync/0.1.0`
+    /// - Pubsub 1.1.0
+    /// - Ping 1.0.0
+    /// - Sync 0.1.0
     ///
     /// If any of the protocols are missing or if any of them have a different version,
     /// the validation fails and connection must be closed.
@@ -150,6 +146,7 @@ where
     /// matching versions are found, the protocol set has been validated successfully.
     fn validate_supported_protocols(&self, protocols: &HashSet<Protocol>) -> bool {
         const REQUIRED: &[Protocol] = &[
+            Protocol::new(ProtocolType::Pubsub, SemVer::new(1, 0, 0)),
             Protocol::new(ProtocolType::Pubsub, SemVer::new(1, 1, 0)),
             Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
             Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),

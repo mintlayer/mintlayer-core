@@ -338,8 +338,7 @@ async fn remote_closes_connection_libp2p() {
 
 #[tokio::test]
 async fn remote_closes_connection_mock() {
-    // TODO: fix protocol ids to work
-    // remote_closes_connection::<MockService>(make_mock_addr(), make_mock_addr()).await;
+    remote_closes_connection::<MockService>(make_mock_addr(), make_mock_addr()).await;
 }
 
 async fn inbound_connection_too_many_peers<T>(
