@@ -567,6 +567,14 @@ mod tests {
         assert_eq!(Amount::from_fixedpoint_str("21987654321.000000", 8).unwrap(), Amount { val: 2198765432100000000 });
         assert_eq!(Amount::from_fixedpoint_str("21987654321.0000000", 8).unwrap(), Amount { val: 2198765432100000000 });
         assert_eq!(Amount::from_fixedpoint_str("21987654321.00000000", 8).unwrap(), Amount { val: 2198765432100000000 });
+        assert_eq!(Amount::from_fixedpoint_str(".2", 8).unwrap(), Amount { val: 20000000 });
+        assert_eq!(Amount::from_fixedpoint_str(".23", 8).unwrap(), Amount { val: 23000000 });
+        assert_eq!(Amount::from_fixedpoint_str(".234", 8).unwrap(), Amount { val: 23400000 });
+        assert_eq!(Amount::from_fixedpoint_str(".2345", 8).unwrap(), Amount { val: 23450000 });
+        assert_eq!(Amount::from_fixedpoint_str(".23456", 8).unwrap(), Amount { val: 23456000 });
+        assert_eq!(Amount::from_fixedpoint_str(".234567", 8).unwrap(), Amount { val: 23456700 });
+        assert_eq!(Amount::from_fixedpoint_str(".2345678", 8).unwrap(), Amount { val: 23456780 });
+        assert_eq!(Amount::from_fixedpoint_str(".23456789", 8).unwrap(), Amount { val: 23456789 });
         assert!(Amount::from_fixedpoint_str("", 8).is_none());
         assert!(Amount::from_fixedpoint_str(" ", 8).is_none());
         assert!(Amount::from_fixedpoint_str("21987654321.000000000", 8).is_none());
@@ -677,6 +685,7 @@ mod tests {
         assert_eq!(Amount::from_fixedpoint_str("21", 1).unwrap(), Amount { val: 210 });
         assert_eq!(Amount::from_fixedpoint_str("1", 1).unwrap(), Amount { val: 10 });
         assert_eq!(Amount::from_fixedpoint_str("1.2", 1).unwrap(), Amount { val: 12 });
+        assert_eq!(Amount::from_fixedpoint_str(".2", 1).unwrap(), Amount { val: 2 });
         assert!(Amount::from_fixedpoint_str("1.23", 1).is_none());
         assert!(Amount::from_fixedpoint_str("1.234", 1).is_none());
         assert!(Amount::from_fixedpoint_str("1.2345", 1).is_none());
