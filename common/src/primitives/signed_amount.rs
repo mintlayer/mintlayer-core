@@ -84,8 +84,8 @@ impl SignedAmount {
     }
 
     pub fn from_fixedpoint_str(amount_str: &str, decimals: u8) -> Option<Self> {
-        let negative = amount_str.starts_with("-");
-        let amount_str = if amount_str.starts_with("-") {
+        let negative = amount_str.starts_with('-');
+        let amount_str = if amount_str.starts_with('-') {
             &amount_str[1..]
         } else {
             amount_str
