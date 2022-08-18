@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod chainstate_interface;
+pub mod chainstate_interface_impl_delegation;
 pub mod rpc;
 
 pub use crate::{
