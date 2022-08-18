@@ -18,6 +18,8 @@
 use serialization::{Decode, Encode};
 use std::iter::Sum;
 
+use super::signed_amount::SignedAmount;
+
 // Copyright (c) 2021 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
@@ -64,6 +66,18 @@ impl Amount {
 
     pub fn into_atoms(&self) -> UnsignedIntType {
         self.val
+    }
+
+    pub fn from_signed(amount: SignedAmount) -> Option<Self> {
+        let signed_atoms = amount.into_atoms();
+        let atoms: UnsignedIntType = signed_atoms.try_into().ok()?;
+        Some(Self::from_atoms(atoms))
+    }
+
+    pub fn into_signed(self) -> Option<SignedAmount> {
+        let atoms = self.val;
+        let signed_atoms: super::signed_amount::SignedIntType = atoms.try_into().ok()?;
+        Some(SignedAmount::from_atoms(signed_atoms))
     }
 
     pub fn into_fixedpoint_str(self, decimals: u8) -> String {
