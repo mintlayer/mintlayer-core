@@ -96,8 +96,7 @@ impl<'a> UtxosCache<'a> {
         check_for_overwrite: bool,
     ) -> Result<(), Error> {
         for (idx, output) in reward.outputs().iter().enumerate() {
-            let outpoint =
-                OutPoint::new(OutPointSourceId::BlockReward(block_id.clone()), idx as u32);
+            let outpoint = OutPoint::new(OutPointSourceId::BlockReward(*block_id), idx as u32);
             // block reward transactions can always be overwritten
             let overwrite = if check_for_overwrite {
                 self.has_utxo(&outpoint)
