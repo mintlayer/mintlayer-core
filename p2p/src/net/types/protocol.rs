@@ -53,7 +53,7 @@ impl Protocol {
     ///
     /// A string must contain the name of a protocol and a version after the last slash. For
     /// example: "/ipfs/ping/1.0.0" or "/mintlayer/sync/0.1.0".
-    pub fn from_str(val: &str) -> Option<Self> {
+    pub fn parse(val: &str) -> Option<Self> {
         let (protocol, version) = val.rsplit_once('/')?;
 
         let protocol = match protocol {
@@ -93,12 +93,12 @@ impl Display for Protocol {
 /// Parses the given strings into a set of protocols.
 ///
 /// The protocols that aren't related to any `ProtocolType` are ignored.
-pub fn parse_protocols<'a, I, P>(protocols: I) -> HashSet<Protocol>
+pub fn parse_protocols<I, P>(protocols: I) -> HashSet<Protocol>
 where
     I: IntoIterator<Item = P>,
     P: AsRef<str>,
 {
-    protocols.into_iter().filter_map(|p| Protocol::from_str(p.as_ref())).collect()
+    protocols.into_iter().filter_map(|p| Protocol::parse(p.as_ref())).collect()
 }
 
 #[cfg(test)]
@@ -106,7 +106,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn from_str() {
+    fn parse() {
         let data = [
             ("/meshsub/1.0.0", ProtocolType::Pubsub, SemVer::new(1, 0, 0)),
             ("/meshsub/1.1.0", ProtocolType::Pubsub, SemVer::new(1, 1, 0)),
@@ -119,7 +119,7 @@ mod tests {
         ];
 
         for (str, protocol, version) in data {
-            let actual = Protocol::from_str(str).unwrap();
+            let actual = Protocol::parse(str).unwrap();
             assert_eq!(actual.protocol, protocol);
             assert_eq!(actual.version, version);
         }
