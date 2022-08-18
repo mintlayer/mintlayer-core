@@ -246,7 +246,13 @@ async fn validate_invalid_outbound_connection() {
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
                 agent: None,
-                protocols: default_protocols(),
+                protocols: parse_protocols([
+                    "/meshsub/1.0.0",
+                    "/meshsub/1.1.0",
+                    "/ipfs/ping/1.0.0",
+                    "/ipfs/id/1.0.0",
+                    "/ipfs/id/push/1.0.0",
+                ]),
             },
         )
         .await;
@@ -321,7 +327,13 @@ async fn validate_invalid_inbound_connection() {
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
                 agent: None,
-                protocols: default_protocols(),
+                protocols: parse_protocols([
+                    "/meshsub/1.0.0",
+                    "/meshsub/1.1.0",
+                    "/ipfs/ping/1.0.0",
+                    "/ipfs/id/1.0.0",
+                    "/ipfs/id/push/1.0.0",
+                ]),
             },
         )
         .await;
