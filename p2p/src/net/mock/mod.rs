@@ -19,7 +19,10 @@ use crate::{
     message,
     net::{
         self,
-        types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent, ValidationResult},
+        types::{
+            protocol::parse_protocols, ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent,
+            ValidationResult,
+        },
         ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,
     },
 };
@@ -85,7 +88,7 @@ where
 
 impl<T> TryInto<net::types::PeerInfo<T>> for types::MockPeerInfo
 where
-    T: NetworkingService<PeerId = types::MockPeerId, ProtocolId = String>,
+    T: NetworkingService<PeerId = types::MockPeerId>,
 {
     type Error = P2pError;
 
@@ -95,7 +98,7 @@ where
             magic_bytes: self.network,
             version: self.version,
             agent: None,
-            protocols: self.protocols.iter().map(|proto| proto.name()).cloned().collect::<Vec<_>>(),
+            protocols: parse_protocols(self.protocols.iter().map(|proto| proto.name().as_str())),
         })
     }
 }
@@ -104,7 +107,6 @@ where
 impl NetworkingService for MockService {
     type Address = SocketAddr;
     type PeerId = types::MockPeerId;
-    type ProtocolId = String;
     type SyncingPeerRequestId = MockRequestId;
     type PubSubMessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self>;
@@ -305,6 +307,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::net::types::protocol::parse_protocols;
 
     #[tokio::test]
     async fn connect_to_remote() {
@@ -341,7 +344,7 @@ mod tests {
                     magic_bytes: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     agent: None,
-                    protocols: vec!["floodsub".to_string(), "ping".to_string()],
+                    protocols: parse_protocols(["floodsub", "ping"]),
                 }
             );
         } else {
@@ -385,7 +388,7 @@ mod tests {
                 assert_eq!(peer_info.agent, None);
                 assert_eq!(
                     peer_info.protocols,
-                    vec!["floodsub".to_string(), "ping".to_string()],
+                    parse_protocols(["floodsub", "/ipfs/ping/1.0.0"]),
                 );
             }
             _ => panic!("invalid event received, expected incoming connection"),

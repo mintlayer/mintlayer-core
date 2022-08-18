@@ -64,7 +64,6 @@ fn make_libp2p_keys() -> (
 impl NetworkingService for Libp2pService {
     type Address = Multiaddr;
     type PeerId = PeerId;
-    type ProtocolId = String;
     type SyncingPeerRequestId = RequestId;
     type PubSubMessageId = MessageId;
     type ConnectivityHandle = service::connectivity::Libp2pConnectivityHandle<Self>;

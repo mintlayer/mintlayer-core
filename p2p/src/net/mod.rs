@@ -13,18 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{config, error, message};
-use async_trait::async_trait;
-use common::primitives;
+pub mod libp2p;
+pub mod mock;
+pub mod types;
+
 use std::{
     fmt::{Debug, Display},
     hash::Hash,
     sync::Arc,
 };
 
-pub mod libp2p;
-pub mod mock;
-pub mod types;
+use async_trait::async_trait;
+
+use common::primitives;
+
+use crate::{config, error, message};
 
 /// [NetworkingService] provides the low-level network interface
 /// that each network service provider must implement
@@ -45,9 +48,6 @@ pub trait NetworkingService {
 
     /// Unique ID assigned to each received request from a peer
     type SyncingPeerRequestId: Debug + Eq + Hash + Send + Sync;
-
-    /// Id that identifies a protocol
-    type ProtocolId: Clone + Debug + Display + Eq + PartialEq + Send;
 
     /// Handle for sending/receiving connecitivity-related events
     type ConnectivityHandle: Send;

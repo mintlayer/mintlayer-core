@@ -20,21 +20,31 @@
 //!
 
 #![allow(rustdoc::private_intra_doc_links)]
+
+pub mod peerdb;
+
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
+};
+
+use futures::FutureExt;
+use tokio::sync::{mpsc, oneshot};
+
+use chainstate::ban_score::BanScore;
+use common::{chain::ChainConfig, primitives::semver};
+use logging::log;
+use utils::ensure;
+
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event,
-    net::{self, ConnectivityService, NetworkingService},
+    net::{self, types::Protocol, ConnectivityService, NetworkingService},
     P2pConfig,
 };
-use chainstate::ban_score::BanScore;
-use common::{chain::ChainConfig, primitives::semver};
-use futures::FutureExt;
-use logging::log;
-use std::{collections::HashMap, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
-use tokio::sync::{mpsc, oneshot};
-use utils::ensure;
-
-pub mod peerdb;
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
 const MAX_ACTIVE_CONNECTIONS: usize = 128;
@@ -115,6 +125,7 @@ where
         !self.peerdb.is_id_banned(peer_id)
     }
 
+    // TODO: FIXME: Update the documentation.
     /// Verify protocol compatibility
     ///
     /// Make sure that remote peer supports the same versions of the protocols that we do
@@ -127,16 +138,16 @@ where
     /// - `/ipfs/id/push/1.0.0`
     /// - `/mintlayer/sync/0.1.0`
     ///
-    /// If any of the procols are missing or if any of them have a different version,
+    /// If any of the protocols are missing or if any of them have a different version,
     /// the validation fails and connection must be closed.
     ///
     /// Either peer may support additional protocols which are not known to the other
     /// peer and that is totally fine. As long as the aforementioned protocols with
     /// matching versions are found, the protocol set has been validated successfully.
-    // TODO: create generic versions of the protocols when mock interface is supported again
-    // TODO: convert `protocols` to a hashset
-    // TODO: define better protocol id type
-    fn validate_supported_protocols(&self, protocols: &[T::ProtocolId]) -> bool {
+    fn validate_supported_protocols(&self, protocols: &HashSet<Protocol>) -> bool {
+        todo!();
+        todo!();
+
         const REQUIRED: &[&str] = &[
             "/meshsub/1.1.0",
             "/meshsub/1.0.0",

@@ -22,7 +22,12 @@ use logging::log;
 
 use crate::{
     error::{ConversionError, P2pError, ProtocolError},
-    net::{self, libp2p::types, types::ConnectivityEvent, ConnectivityService, NetworkingService},
+    net::{
+        self,
+        libp2p::types,
+        types::{protocol::parse_protocols, ConnectivityEvent},
+        ConnectivityService, NetworkingService,
+    },
 };
 
 /// Connectivity handle for libp2p
@@ -131,7 +136,7 @@ where
 
 impl<T> TryInto<net::types::PeerInfo<T>> for types::IdentifyInfoWrapper
 where
-    T: NetworkingService<PeerId = PeerId, ProtocolId = String>,
+    T: NetworkingService<PeerId = PeerId>,
 {
     type Error = P2pError;
 
@@ -157,7 +162,7 @@ where
             magic_bytes,
             version,
             agent: Some(self.agent_version.clone()),
-            protocols: self.protocols.clone(),
+            protocols: parse_protocols(&self.protocols),
         })
     }
 }
