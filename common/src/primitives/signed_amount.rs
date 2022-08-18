@@ -84,55 +84,22 @@ impl SignedAmount {
     }
 
     pub fn from_fixedpoint_str(amount_str: &str, decimals: u8) -> Option<Self> {
-        let decimals = decimals as usize;
-        let amount_str = amount_str.trim_matches(' '); // trim spaces
-        let amount_str = amount_str.replace('_', "");
-
-        // empty not allowed
-        if amount_str.is_empty() {
-            return None;
-        }
-        // too long
-        if amount_str.len() > 100 {
-            return None;
-        }
-        // must be only numbers or decimal point
-        if !amount_str.chars().all(|c| char::is_numeric(c) || c == '.' || c == '-') {
-            return None;
-        }
-        // if the amount is only one minus sign, it's invalid
-        if amount_str == "-" {
-            return None;
-        }
-
-        #[allow(clippy::if_same_then_else)]
-        if amount_str.matches('.').count() > 1 {
-            // only 1 decimal point allowed
-            None
-        } else if amount_str.matches('-').count() > 1 {
-            None
-        } else if amount_str.contains('-') && !amount_str.starts_with('-') {
-            None
-        } else if amount_str.matches('.').count() == 0 {
-            // if there is no decimal point, then just add N zeros to the right and we're done
-            let zeros = "0".repeat(decimals);
-            let amount_str = amount_str + &zeros;
-
-            amount_str.parse::<SignedIntType>().ok().map(|v| SignedAmount { val: v })
+        let negative = amount_str.starts_with("-");
+        let amount_str = if amount_str.starts_with("-") {
+            &amount_str[1..]
         } else {
-            // if there's 1 decimal point, split, join the numbers, then add zeros to the right
-            let amount_split = amount_str.split('.').collect::<Vec<&str>>();
-            debug_assert!(amount_split.len() == 2); // we already checked we have 1 decimal exactly
-            if amount_split[1].len() > decimals {
-                // there cannot be more decimals than the assumed amount
-                return None;
-            }
-            let zeros = "0".repeat(decimals - amount_split[1].len());
-            let atoms_str = amount_split[0].to_owned() + amount_split[1] + &zeros;
-            let atoms_str = atoms_str.trim_start_matches('0');
+            amount_str
+        };
 
-            atoms_str.parse::<SignedIntType>().ok().map(|v| SignedAmount { val: v })
-        }
+        // in this solution, we exclude SignedAmount::MIN, but we don't really care
+        let unsigned_amount = Amount::from_fixedpoint_str(amount_str, decimals)?;
+        let signed_amount = unsigned_amount.into_signed()?;
+        let signed_atoms = if negative {
+            -signed_amount.into_atoms()
+        } else {
+            signed_amount.into_atoms()
+        };
+        Some(Self::from_atoms(signed_atoms))
     }
 }
 
@@ -468,6 +435,7 @@ mod tests {
         assert!(SignedAmount::from_fixedpoint_str("--21987654321", 8).is_none());
         assert!(SignedAmount::from_fixedpoint_str("-219876-54321", 8).is_none());
         assert!(SignedAmount::from_fixedpoint_str("-21987654321-", 8).is_none());
+        assert!(SignedAmount::from_fixedpoint_str(".", 8).is_none());
     }
 
     #[rustfmt::skip]
@@ -528,6 +496,7 @@ mod tests {
         assert!(SignedAmount::from_fixedpoint_str("--21987654321", 8).is_none());
         assert!(SignedAmount::from_fixedpoint_str("-219876-54321", 8).is_none());
         assert!(SignedAmount::from_fixedpoint_str("-21987654321-", 8).is_none());
+        assert!(SignedAmount::from_fixedpoint_str("-.", 8).is_none());
     }
 
     #[rustfmt::skip]
@@ -731,6 +700,7 @@ mod tests {
         assert!(SignedAmount::from_fixedpoint_str("--21987654321.0", 1).is_none());
         assert!(SignedAmount::from_fixedpoint_str("-21987-654321.0", 1).is_none());
         assert!(SignedAmount::from_fixedpoint_str("-21987654321.0-", 1).is_none());
+        assert!(SignedAmount::from_fixedpoint_str(".", 1).is_none());
     }
 
     #[rustfmt::skip]
@@ -792,6 +762,7 @@ mod tests {
         assert!(SignedAmount::from_fixedpoint_str("--21987654321.0", 1).is_none());
         assert!(SignedAmount::from_fixedpoint_str("-21987-654321.0", 1).is_none());
         assert!(SignedAmount::from_fixedpoint_str("-21987654321.0-", 1).is_none());
+        assert!(SignedAmount::from_fixedpoint_str("-.", 1).is_none());
     }
 
     #[rustfmt::skip]
