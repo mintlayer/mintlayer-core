@@ -54,7 +54,7 @@ impl Protocol {
         let (protocol, version) = val.rsplit_once('/')?;
 
         let protocol = match protocol {
-            "/meshsub" => ProtocolType::Pubsub,
+            //"/meshsub" => ProtocolType::Pubsub,
             "/ipfs/ping" => ProtocolType::Ping,
             "/mintlayer/sync" => ProtocolType::Sync,
             _ => {
@@ -85,14 +85,34 @@ impl Display for Protocol {
     }
 }
 
-// TODO: FIXME: Add the documentation.
-// Describe that "invalid protocols are ignored"
-pub fn parse_protocols<'a, I, P>(protocols: I) -> HashSet<Protocol>
+/// Parses the given strings into a set of protocols.
+///
+/// The protocols that aren't related to any `ProtocolType` are ignored.
+pub fn parse_protocols<'a, T, I, P>(protocols: T) -> HashSet<Protocol>
 where
-    I: IntoIterator<Item = P>,
+    T: IntoIterator<Item = P, IntoIter = I>,
+    I: Clone + Iterator<Item = P>,
     P: AsRef<str>,
 {
-    protocols.into_iter().filter_map(|p| Protocol::from_str(p.as_ref())).collect()
+    let protocols = protocols.into_iter();
+
+    // TODO: FIXME: Think of a better solution.
+    // We need to check that both "/meshsub/1.0.0" and "/meshsub/1.1.0" are present in order to
+    // convert these protocols to our `ProtocolType::Pubsub`.
+    let pubsub = if protocols.clone().any(|p| p.as_ref() == "/meshsub/1.0.0")
+        && protocols.clone().any(|p| p.as_ref() == "/meshsub/1.1.0")
+    {
+        Some(Protocol::new(ProtocolType::Pubsub, SemVer::new(1, 1, 0)))
+    } else {
+        None
+    };
+
+    // All other protocols corresponds as one to one.
+    protocols
+        .into_iter()
+        .filter_map(|p| Protocol::from_str(p.as_ref()))
+        .chain(pubsub)
+        .collect()
 }
 
 #[cfg(test)]
@@ -102,7 +122,8 @@ mod tests {
     #[test]
     fn from_str() {
         let data = [
-            ("/meshsub/1.1.0", ProtocolType::Pubsub, SemVer::new(1, 1, 0)),
+            // TODO: FIXME:
+            // ("/meshsub/1.1.0", ProtocolType::Pubsub, SemVer::new(1, 1, 0)),
             ("/ipfs/ping/2.3.4", ProtocolType::Ping, SemVer::new(2, 3, 4)),
             (
                 "/mintlayer/sync/0.1.0",
@@ -128,8 +149,8 @@ mod tests {
         .into_iter()
         .collect();
         let parsed = parse_protocols([
-            "/meshsub/1.1.0",
             "/meshsub/1.0.0",
+            "/meshsub/1.1.0",
             "/ipfs/ping/1.0.0",
             "/ipfs/id/1.0.0",
             "/ipfs/id/push/1.0.0",

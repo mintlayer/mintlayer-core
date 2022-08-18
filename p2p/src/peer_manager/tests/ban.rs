@@ -377,8 +377,8 @@ async fn inbound_connection_invalid_magic_mock() {
 /// Returns a set of minimal required protocols.
 fn default_protocols() -> HashSet<Protocol> {
     parse_protocols([
-        "/meshsub/1.1.0",
         "/meshsub/1.0.0",
+        "/meshsub/1.1.0",
         "/ipfs/ping/1.0.0",
         "/ipfs/id/1.0.0",
         "/ipfs/id/push/1.0.0",

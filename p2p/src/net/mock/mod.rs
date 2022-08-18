@@ -344,7 +344,7 @@ mod tests {
                     magic_bytes: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     agent: None,
-                    protocols: parse_protocols(["floodsub", "ping"]),
+                    protocols: parse_protocols(["floodsub", "/ipfs/ping/1.0.0"]),
                 }
             );
         } else {
