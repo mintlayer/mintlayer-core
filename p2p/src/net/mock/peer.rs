@@ -23,12 +23,9 @@ use logging::log;
 
 use crate::{
     error::{P2pError, ProtocolError},
-    net::{
-        mock::{
-            socket,
-            types::{self, MockEvent, MockPeerId, PeerEvent},
-        },
-        types::protocol::parse_protocols,
+    net::mock::{
+        socket,
+        types::{self, MockEvent, MockPeerId, PeerEvent},
     },
 };
 

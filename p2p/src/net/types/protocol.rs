@@ -13,15 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::HashSet,
-    fmt::{self, Display, Formatter},
-};
-
-use tap::TapFallible;
+use std::fmt::{self, Display, Formatter};
 
 use common::primitives::semver::SemVer;
-use logging::log;
 use serialization::{Decode, Encode};
 
 /// Protocol type and version.
@@ -49,30 +43,6 @@ impl Protocol {
         Self { protocol, version }
     }
 
-    /// Parses a protocol from the given string.
-    ///
-    /// A string must contain the name of a protocol and a version after the last slash. For
-    /// example: "/ipfs/ping/1.0.0" or "/mintlayer/sync/0.1.0".
-    pub fn parse(val: &str) -> Option<Self> {
-        let (protocol, version) = val.rsplit_once('/')?;
-
-        let protocol = match protocol {
-            "/meshsub" => ProtocolType::PubSub,
-            "/ipfs/ping" => ProtocolType::Ping,
-            "/mintlayer/sync" => ProtocolType::Sync,
-            _ => {
-                log::trace!("Ignoring unknown '{val}' protocol");
-                return None;
-            }
-        };
-
-        let version = SemVer::try_from(version)
-            .tap_err(|e| log::trace!("Ignoring protocol with malformed version: {val} ({e:?})"))
-            .ok()?;
-
-        Some(Protocol::new(protocol, version))
-    }
-
     /// Returns a protocol type.
     pub fn protocol(&self) -> ProtocolType {
         self.protocol
@@ -87,62 +57,5 @@ impl Protocol {
 impl Display for Protocol {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:?} {}", self.protocol, self.version)
-    }
-}
-
-/// Parses the given strings into a set of protocols.
-///
-/// The protocols that aren't related to any `ProtocolType` are ignored.
-pub fn parse_protocols<I, P>(protocols: I) -> HashSet<Protocol>
-where
-    I: IntoIterator<Item = P>,
-    P: AsRef<str>,
-{
-    protocols.into_iter().filter_map(|p| Protocol::parse(p.as_ref())).collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse() {
-        let data = [
-            ("/meshsub/1.0.0", ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-            ("/meshsub/1.1.0", ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-            ("/ipfs/ping/2.3.4", ProtocolType::Ping, SemVer::new(2, 3, 4)),
-            (
-                "/mintlayer/sync/0.1.0",
-                ProtocolType::Sync,
-                SemVer::new(0, 1, 0),
-            ),
-        ];
-
-        for (str, protocol, version) in data {
-            let actual = Protocol::parse(str).unwrap();
-            assert_eq!(actual.protocol, protocol);
-            assert_eq!(actual.version, version);
-        }
-    }
-
-    #[test]
-    fn parse_standard_protocols() {
-        let expected: HashSet<_> = [
-            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-        ]
-        .into_iter()
-        .collect();
-        let parsed = parse_protocols([
-            "/meshsub/1.0.0",
-            "/meshsub/1.1.0",
-            "/ipfs/ping/1.0.0",
-            "/ipfs/id/1.0.0",
-            "/ipfs/id/push/1.0.0",
-            "/mintlayer/sync/0.1.0",
-        ]);
-        assert_eq!(expected, parsed);
     }
 }
