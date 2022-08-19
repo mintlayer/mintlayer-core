@@ -129,7 +129,7 @@ mod tests {
             };
             let chainstate_storage = Store::new_empty().unwrap();
 
-            let boxed_chainstate = make_chainstate(
+            let boxed_chainstate: Box<dyn ChainstateInterface> = make_chainstate(
                 chain_config.clone(),
                 chainstate_config,
                 chainstate_storage,
