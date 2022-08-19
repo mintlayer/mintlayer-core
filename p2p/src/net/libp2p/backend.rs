@@ -342,7 +342,7 @@ mod tests {
         identity, mplex, noise, ping,
         request_response::{ProtocolSupport, RequestResponse, RequestResponseConfig},
         swarm::SwarmBuilder,
-        tcp::TcpConfig,
+        tcp::{GenTcpConfig, TcpTransport},
         Transport,
     };
     use std::{
@@ -361,9 +361,7 @@ mod tests {
         let noise_keys =
             noise::Keypair::<noise::X25519Spec>::new().into_authentic(&id_keys).unwrap();
 
-        let transport = TcpConfig::new()
-            .nodelay(true)
-            .port_reuse(false)
+        let transport = TcpTransport::new(GenTcpConfig::new().nodelay(true).port_reuse(false))
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(mplex::MplexConfig::new())

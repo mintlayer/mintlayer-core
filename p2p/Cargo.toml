@@ -30,7 +30,7 @@ version = "0.15"
 features = ["macros"]
 
 [dependencies.libp2p]
-version = "0.45"
+version = "0.46"
 default-features = false
 features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "request-response", "tcp-async-io"]
 
