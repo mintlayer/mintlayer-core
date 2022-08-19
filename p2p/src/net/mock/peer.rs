@@ -103,9 +103,7 @@ impl Peer {
                             peer_id: self.local_peer_id,
                             version: *self.config.version(),
                             network: *self.config.magic_bytes(),
-                            protocols: parse_protocols(["floodsub", "/ipfs/ping/1.0.0"])
-                                .into_iter()
-                                .collect(),
+                            protocols: parse_protocols(["floodsub", "ping"]).into_iter().collect(),
                         },
                     ))
                     .await?;
@@ -132,9 +130,7 @@ impl Peer {
                         peer_id: self.local_peer_id,
                         version: *self.config.version(),
                         network: *self.config.magic_bytes(),
-                        protocols: parse_protocols(["floodsub", "/ipfs/ping/1.0.0"])
-                            .into_iter()
-                            .collect(),
+                        protocols: parse_protocols(["floodsub", "ping"]).into_iter().collect(),
                     }))
                     .await?;
 
@@ -245,7 +241,7 @@ mod tests {
                 peer_id: peer_id2,
                 version: *config.version(),
                 network: *config.magic_bytes(),
-                protocols: parse_protocols(["floodsub", "/ipfs/ping/1.0.0"]).into_iter().collect(),
+                protocols: parse_protocols(["floodsub", "ping"]).into_iter().collect(),
             }))
             .await
             .is_ok());
@@ -259,9 +255,7 @@ mod tests {
                     peer_id: peer_id2,
                     network: *config.magic_bytes(),
                     version: *config.version(),
-                    protocols: parse_protocols(["floodsub", "/ipfs/ping/1.0.0"])
-                        .into_iter()
-                        .collect(),
+                    protocols: parse_protocols(["floodsub", "ping"]).into_iter().collect(),
                 }
             ))
         );
@@ -301,9 +295,7 @@ mod tests {
                         peer_id: peer_id2,
                         version: *config.version(),
                         network: *config.magic_bytes(),
-                        protocols: parse_protocols(["floodsub", "/ipfs/ping/1.0.0"])
-                            .into_iter()
-                            .collect(),
+                        protocols: parse_protocols(["floodsub", "ping"]).into_iter().collect(),
                     }
                 ))
                 .await
@@ -319,9 +311,7 @@ mod tests {
                     peer_id: peer_id2,
                     network: *config.magic_bytes(),
                     version: *config.version(),
-                    protocols: parse_protocols(["floodsub", "/ipfs/ping/1.0.0"])
-                        .into_iter()
-                        .collect(),
+                    protocols: parse_protocols(["floodsub", "ping"]).into_iter().collect(),
                 }
             ))
         );
@@ -357,7 +347,7 @@ mod tests {
                 peer_id: peer_id2,
                 version: *config.version(),
                 network: [1, 2, 3, 4],
-                protocols: parse_protocols(["floodsub", "/ipfs/ping/1.0.0"]).into_iter().collect(),
+                protocols: parse_protocols(["floodsub", "ping"]).into_iter().collect(),
             }))
             .await
             .is_ok());

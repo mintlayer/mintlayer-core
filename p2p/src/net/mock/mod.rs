@@ -344,7 +344,7 @@ mod tests {
                     magic_bytes: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     agent: None,
-                    protocols: parse_protocols(["floodsub", "/ipfs/ping/1.0.0"]),
+                    protocols: parse_protocols(["floodsub", "ping"]),
                 }
             );
         } else {
@@ -386,10 +386,7 @@ mod tests {
                     common::primitives::semver::SemVer::new(0, 1, 0),
                 );
                 assert_eq!(peer_info.agent, None);
-                assert_eq!(
-                    peer_info.protocols,
-                    parse_protocols(["floodsub", "/ipfs/ping/1.0.0"]),
-                );
+                assert_eq!(peer_info.protocols, parse_protocols(["floodsub", "ping"]),);
             }
             _ => panic!("invalid event received, expected incoming connection"),
         }
