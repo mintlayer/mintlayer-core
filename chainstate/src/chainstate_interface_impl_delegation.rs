@@ -108,7 +108,7 @@ mod tests {
         make_chainstate, ChainstateConfig,
     };
 
-    fn test_box_interface_ref<C: ChainstateInterface>(chainstate: &C, chain_config: &ChainConfig) {
+    fn test_interface_ref<C: ChainstateInterface>(chainstate: &C, chain_config: &ChainConfig) {
         assert_eq!(
             chainstate.get_best_block_id().unwrap(),
             chain_config.genesis_block_id()
@@ -119,7 +119,7 @@ mod tests {
         );
     }
 
-    fn test_box_interface<C: ChainstateInterface>(chainstate: C, chain_config: &ChainConfig) {
+    fn test_interface<C: ChainstateInterface>(chainstate: C, chain_config: &ChainConfig) {
         assert_eq!(
             chainstate.get_best_block_id().unwrap(),
             chain_config.genesis_block_id()
@@ -149,8 +149,8 @@ mod tests {
             )
             .unwrap();
 
-            test_box_interface_ref(&boxed_chainstate, &*chain_config);
-            test_box_interface(boxed_chainstate, &*chain_config);
+            test_interface_ref(&boxed_chainstate, &*chain_config);
+            test_interface(boxed_chainstate, &*chain_config);
         });
     }
 }
