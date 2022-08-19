@@ -92,3 +92,53 @@ impl<
         self.deref().filter_already_existing_blocks(headers)
     }
 }
+#[cfg(test)]
+mod tests {
+
+    use std::sync::Arc;
+
+    use chainstate_storage::inmemory::Store;
+    use common::{
+        chain::{config::create_unit_test_config, ChainConfig},
+        primitives::BlockHeight,
+    };
+
+    use crate::{
+        chainstate_interface::ChainstateInterface, detail::time_getter::TimeGetter,
+        make_chainstate, ChainstateConfig,
+    };
+
+    fn test_interface<C: ChainstateInterface>(chainstate: C, chain_config: &ChainConfig) {
+        assert_eq!(
+            chainstate.get_best_block_id().unwrap(),
+            chain_config.genesis_block_id()
+        );
+        assert_eq!(
+            chainstate.get_best_block_height().unwrap(),
+            BlockHeight::new(0)
+        );
+    }
+
+    #[test]
+    fn boxed_interface_call() {
+        common::concurrency::model(|| {
+            let chain_config = Arc::new(create_unit_test_config());
+            let chainstate_config = ChainstateConfig {
+                max_db_commit_attempts: 10,
+                max_orphan_blocks: 0,
+            };
+            let chainstate_storage = Store::new_empty().unwrap();
+
+            let boxed_chainstate = make_chainstate(
+                chain_config.clone(),
+                chainstate_config,
+                chainstate_storage,
+                None,
+                TimeGetter::default(),
+            )
+            .unwrap();
+
+            test_interface(boxed_chainstate, &*chain_config);
+        });
+    }
+}
