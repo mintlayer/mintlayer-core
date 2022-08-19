@@ -50,7 +50,7 @@ impl std::fmt::Debug for Error {
     }
 }
 
-fn run(runner_args: &[OsString]) -> Result<(), Error> {
+fn do_run(runner_args: &[OsString]) -> Result<(), Error> {
     // Various derived paths
     let top_source_dir = Path::new(CRATE_DIR).parent().unwrap().to_str().unwrap();
     let binary_dir = Path::new(NODE_BINARY).parent().unwrap().to_str().unwrap();
@@ -123,14 +123,16 @@ fn main() {
         data: (),
     };
 
-    let outcome = run_tests(&harness_args, vec![functional_tests], move |_| {
-        match run(&runner_args) {
+    let outcome = run_tests(
+        &harness_args,
+        vec![functional_tests],
+        move |_| match do_run(&runner_args) {
             Ok(()) => Outcome::Passed,
             Err(e) => Outcome::Failed {
                 msg: Some(e.to_string()),
             },
-        }
-    });
+        },
+    );
 
     outcome.exit()
 }
