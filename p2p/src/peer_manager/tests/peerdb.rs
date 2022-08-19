@@ -15,14 +15,16 @@
 
 use std::collections::HashMap;
 
-use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
+use libp2p::{multiaddr, Multiaddr, PeerId};
+
+use common::primitives::semver::SemVer;
 
 use super::*;
 use crate::{
     config,
     net::{
         libp2p::Libp2pService,
-        types::{self, protocol::parse_protocols},
+        types::{self, Protocol, ProtocolType},
     },
     peer_manager::peerdb::{Peer, PeerDb},
 };
@@ -37,13 +39,14 @@ fn make_peer_info() -> (PeerId, types::PeerInfo<Libp2pService>) {
             magic_bytes: [1, 2, 3, 4],
             version: common::primitives::semver::SemVer::new(0, 1, 0),
             agent: None,
-            protocols: parse_protocols([
-                "/meshsub/1.1.0",
-                "/meshsub/1.0.0",
-                "/ipfs/ping/1.0.0",
-                "/ipfs/id/push/1.0.0",
-                "/mintlayer/sync/0.1.0",
-            ]),
+            protocols: [
+                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+            ]
+            .into_iter()
+            .collect(),
         },
     )
 }
@@ -493,7 +496,7 @@ fn peer_discovered_libp2p() {
 
                         for addr in info {
                             let components = addr.iter().collect::<Vec<_>>();
-                            if std::matches!(components[0], Protocol::Ip6(_)) {
+                            if std::matches!(components[0], multiaddr::Protocol::Ip6(_)) {
                                 ip6.push(addr.clone());
                             } else {
                                 ip4.push(addr.clone());

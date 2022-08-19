@@ -145,9 +145,18 @@ where
     /// peer and that is totally fine. As long as the aforementioned protocols with
     /// matching versions are found, the protocol set has been validated successfully.
     fn validate_supported_protocols(&self, protocols: &HashSet<Protocol>) -> bool {
-        const REQUIRED: &[Protocol] = &[
+        // We can work with any of these pubsub versions.
+        const ONE_OF: &[Protocol] = &[
             Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
             Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+        ];
+
+        if !ONE_OF.iter().any(|p| protocols.contains(p)) {
+            return false;
+        }
+
+        // All of these protocols are required.
+        const REQUIRED: &[Protocol] = &[
             Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
             Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
         ];

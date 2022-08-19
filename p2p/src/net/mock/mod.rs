@@ -307,7 +307,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::types::protocol::parse_protocols;
+    use crate::net::types::{Protocol, ProtocolType};
+    use common::primitives::semver::SemVer;
 
     #[tokio::test]
     async fn connect_to_remote() {
@@ -344,7 +345,12 @@ mod tests {
                     magic_bytes: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     agent: None,
-                    protocols: parse_protocols(["floodsub", "ping"]),
+                    protocols: [
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
+                        Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
+                    ]
+                    .into_iter()
+                    .collect(),
                 }
             );
         } else {
@@ -386,7 +392,15 @@ mod tests {
                     common::primitives::semver::SemVer::new(0, 1, 0),
                 );
                 assert_eq!(peer_info.agent, None);
-                assert_eq!(peer_info.protocols, parse_protocols(["floodsub", "ping"]),);
+                assert_eq!(
+                    peer_info.protocols,
+                    [
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
+                        Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
+                    ]
+                    .into_iter()
+                    .collect()
+                );
             }
             _ => panic!("invalid event received, expected incoming connection"),
         }

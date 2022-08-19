@@ -13,13 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{net::SocketAddr, sync::Arc};
+
+use libp2p::{Multiaddr, PeerId};
+
+use common::{chain::config, primitives::semver::SemVer};
+use p2p_test_utils::{make_libp2p_addr, make_mock_addr};
+
 use crate::{
     error::{DialError, P2pError, ProtocolError},
     net::{
         self,
         libp2p::Libp2pService,
         mock::{types::MockPeerId, MockService},
-        types::protocol::parse_protocols,
+        types::{Protocol, ProtocolType},
         ConnectivityService, NetworkingService,
     },
     peer_manager::{
@@ -27,10 +34,6 @@ use crate::{
         tests::{connect_services, make_peer_manager},
     },
 };
-use common::chain::config;
-use libp2p::{Multiaddr, PeerId};
-use p2p_test_utils::{make_libp2p_addr, make_mock_addr};
-use std::{net::SocketAddr, sync::Arc};
 
 // try to connect to an address that no one listening on and verify it fails
 async fn test_swarm_connect<T: NetworkingService>(bind_addr: T::Address, remote_addr: T::Address)
@@ -154,45 +157,53 @@ async fn test_validate_supported_protocols() {
     let swarm = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config).await;
 
     // all needed protocols
-    assert!(swarm.validate_supported_protocols(&parse_protocols([
-        "/meshsub/1.1.0",
-        "/meshsub/1.0.0",
-        "/ipfs/ping/1.0.0",
-        "/ipfs/id/1.0.0",
-        "/ipfs/id/push/1.0.0",
-        "/mintlayer/sync/0.1.0",
-    ])));
+    assert!(swarm.validate_supported_protocols(
+        &[
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+        ]
+        .into_iter()
+        .collect()
+    ));
 
     // all needed protocols + 2 extra
-    assert!(swarm.validate_supported_protocols(&parse_protocols([
-        "/meshsub/1.1.0",
-        "/meshsub/1.0.0",
-        "/ipfs/ping/1.0.0",
-        "/ipfs/id/1.0.0",
-        "/ipfs/id/push/1.0.0",
-        "/mintlayer/sync/0.1.0",
-        "/mintlayer/extra/0.1.0",
-        "/mintlayer/extra-test/0.2.0",
-    ])));
+    assert!(swarm.validate_supported_protocols(
+        &[
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::Ping, SemVer::new(2, 0, 0)),
+            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+            Protocol::new(ProtocolType::Sync, SemVer::new(3, 1, 2)),
+        ]
+        .into_iter()
+        .collect()
+    ));
 
     // all needed protocols but wrong version for sync
-    assert!(!swarm.validate_supported_protocols(&parse_protocols([
-        "/meshsub/1.1.0",
-        "/meshsub/1.0.0",
-        "/ipfs/ping/1.0.0",
-        "/ipfs/id/1.0.0",
-        "/ipfs/id/push/1.0.0",
-        "/mintlayer/sync/0.2.0",
-    ])));
+    assert!(!swarm.validate_supported_protocols(
+        &[
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::Sync, SemVer::new(0, 2, 0)),
+        ]
+        .into_iter()
+        .collect()
+    ));
 
     // ping protocol missing
-    assert!(!swarm.validate_supported_protocols(&parse_protocols([
-        "/meshsub/1.1.0",
-        "/meshsub/1.0.0",
-        "/ipfs/id/1.0.0",
-        "/ipfs/id/push/1.0.0",
-        "/mintlayer/sync/0.1.0",
-    ])));
+    assert!(!swarm.validate_supported_protocols(
+        &[
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+        ]
+        .into_iter()
+        .collect()
+    ));
 }
 
 async fn connect_outbound_different_network<T>(addr1: T::Address, addr2: T::Address)
@@ -393,14 +404,14 @@ async fn inbound_connection_too_many_peers_libp2p() {
             magic_bytes: *config.magic_bytes(),
             version: common::primitives::semver::SemVer::new(0, 1, 0),
             agent: None,
-            protocols: parse_protocols([
-                "/meshsub/1.1.0",
-                "/meshsub/1.0.0",
-                "/ipfs/ping/1.0.0",
-                "/ipfs/id/1.0.0",
-                "/ipfs/id/push/1.0.0",
-                "/mintlayer/sync/0.1.0",
-            ]),
+            protocols: [
+                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+            ]
+            .into_iter()
+            .collect(),
         })
         .collect::<Vec<_>>();
 
@@ -422,7 +433,12 @@ async fn inbound_connection_too_many_peers_mock() {
             magic_bytes: *config.magic_bytes(),
             version: common::primitives::semver::SemVer::new(0, 1, 0),
             agent: None,
-            protocols: parse_protocols(["floodsub", "syncing"]),
+            protocols: [
+                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                Protocol::new(ProtocolType::Sync, SemVer::new(1, 0, 0)),
+            ]
+            .into_iter()
+            .collect(),
         })
         .collect::<Vec<_>>();
 

@@ -17,7 +17,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use libp2p::Multiaddr;
 
-use common::chain::config;
+use common::{chain::config, primitives::semver::SemVer};
 use p2p_test_utils::{make_libp2p_addr, make_mock_addr};
 
 use crate::{
@@ -26,7 +26,7 @@ use crate::{
         self,
         libp2p::Libp2pService,
         mock::MockService,
-        types::{protocol::parse_protocols, Protocol},
+        types::{Protocol, ProtocolType},
         ConnectivityService, NetworkingService,
     },
     peer_manager::tests::{connect_services, make_peer_manager},
@@ -246,13 +246,13 @@ async fn validate_invalid_outbound_connection() {
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
                 agent: None,
-                protocols: parse_protocols([
-                    "/meshsub/1.0.0",
-                    "/meshsub/1.1.0",
-                    "/ipfs/ping/1.0.0",
-                    "/ipfs/id/1.0.0",
-                    "/ipfs/id/push/1.0.0",
-                ]),
+                protocols: [
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                ]
+                .into_iter()
+                .collect(),
             },
         )
         .await;
@@ -327,13 +327,13 @@ async fn validate_invalid_inbound_connection() {
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
                 agent: None,
-                protocols: parse_protocols([
-                    "/meshsub/1.0.0",
-                    "/meshsub/1.1.0",
-                    "/ipfs/ping/1.0.0",
-                    "/ipfs/id/1.0.0",
-                    "/ipfs/id/push/1.0.0",
-                ]),
+                protocols: [
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                ]
+                .into_iter()
+                .collect(),
             },
         )
         .await;
@@ -388,12 +388,12 @@ async fn inbound_connection_invalid_magic_mock() {
 // TODO: Move to `p2p-test-utils`?
 /// Returns a set of minimal required protocols.
 fn default_protocols() -> HashSet<Protocol> {
-    parse_protocols([
-        "/meshsub/1.0.0",
-        "/meshsub/1.1.0",
-        "/ipfs/ping/1.0.0",
-        "/ipfs/id/1.0.0",
-        "/ipfs/id/push/1.0.0",
-        "/mintlayer/sync/0.1.0",
-    ])
+    [
+        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+    ]
+    .into_iter()
+    .collect()
 }

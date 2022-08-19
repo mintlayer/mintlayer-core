@@ -316,9 +316,9 @@ mod tests {
         ];
 
         for (str, protocol, version) in data {
-            let actual = Protocol::parse(str).unwrap();
-            assert_eq!(actual.protocol, protocol);
-            assert_eq!(actual.version, version);
+            let actual = str.parse::<Protocol>().unwrap();
+            assert_eq!(actual.protocol(), protocol);
+            assert_eq!(actual.version(), version);
         }
     }
 
