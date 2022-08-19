@@ -134,7 +134,7 @@ where
     /// Checks that the given set of protocols contains the following protocols with the exact
     /// versions:
     ///
-    /// - Pubsub 1.1.0
+    /// - PubSub 1.1.0
     /// - Ping 1.0.0
     /// - Sync 0.1.0
     ///
@@ -146,8 +146,8 @@ where
     /// matching versions are found, the protocol set has been validated successfully.
     fn validate_supported_protocols(&self, protocols: &HashSet<Protocol>) -> bool {
         const REQUIRED: &[Protocol] = &[
-            Protocol::new(ProtocolType::Pubsub, SemVer::new(1, 0, 0)),
-            Protocol::new(ProtocolType::Pubsub, SemVer::new(1, 1, 0)),
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
             Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
             Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
         ];

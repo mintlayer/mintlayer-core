@@ -35,7 +35,7 @@ pub struct Protocol {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Encode, Decode)]
 pub enum ProtocolType {
     /// The publish/subscription protocol.
-    Pubsub,
+    PubSub,
     /// The ping protocol can be used as a simple application-layer health check. Corresponds to
     /// the "/ipfs/ping" protocol.
     Ping,
@@ -57,7 +57,7 @@ impl Protocol {
         let (protocol, version) = val.rsplit_once('/')?;
 
         let protocol = match protocol {
-            "/meshsub" => ProtocolType::Pubsub,
+            "/meshsub" => ProtocolType::PubSub,
             "/ipfs/ping" => ProtocolType::Ping,
             "/mintlayer/sync" => ProtocolType::Sync,
             _ => {
@@ -108,8 +108,8 @@ mod tests {
     #[test]
     fn parse() {
         let data = [
-            ("/meshsub/1.0.0", ProtocolType::Pubsub, SemVer::new(1, 0, 0)),
-            ("/meshsub/1.1.0", ProtocolType::Pubsub, SemVer::new(1, 1, 0)),
+            ("/meshsub/1.0.0", ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+            ("/meshsub/1.1.0", ProtocolType::PubSub, SemVer::new(1, 1, 0)),
             ("/ipfs/ping/2.3.4", ProtocolType::Ping, SemVer::new(2, 3, 4)),
             (
                 "/mintlayer/sync/0.1.0",
@@ -128,8 +128,8 @@ mod tests {
     #[test]
     fn parse_standard_protocols() {
         let expected: HashSet<_> = [
-            Protocol::new(ProtocolType::Pubsub, SemVer::new(1, 0, 0)),
-            Protocol::new(ProtocolType::Pubsub, SemVer::new(1, 1, 0)),
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
             Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
             Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
         ]
