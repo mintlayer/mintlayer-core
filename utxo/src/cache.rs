@@ -87,7 +87,7 @@ impl<'a> UtxosCache<'a> {
         self.current_block_hash = block_hash;
     }
 
-    /// Given a block reward adds its outputs to the utxo set
+    /// Given a block reward add its outputs to the utxo set
     pub fn add_utxos_from_block_reward(
         &mut self,
         reward: &BlockReward,
@@ -110,7 +110,7 @@ impl<'a> UtxosCache<'a> {
         Ok(())
     }
 
-    /// Given a transaction adds its outputs to the utxo set
+    /// Given a transaction add its outputs to the utxo set
     pub fn add_utxos_from_tx(
         &mut self,
         tx: &Transaction,
