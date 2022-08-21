@@ -127,6 +127,7 @@ pub trait MempoolInterface<C>: Send {
     fn drop_transaction(&mut self, tx: &Id<Transaction>);
 
     // Add/remove transactions to/from the mempool according to a new tip
+    #[cfg(test)]
     fn new_tip_set(&mut self, chain_state: C);
 }
 
@@ -746,6 +747,7 @@ where
     T: GetTime + Send,
     M: GetMemoryUsage + Send,
 {
+    #[cfg(test)]
     fn new_tip_set(&mut self, chain_state: C) {
         self.chain_state = chain_state;
         self.rolling_fee_rate.set({
