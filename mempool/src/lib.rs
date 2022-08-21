@@ -28,13 +28,10 @@ mod feerate;
 pub mod pool;
 pub mod rpc;
 
-impl<C: 'static, T: 'static, M: 'static> subsystem::Subsystem
-    for Box<dyn MempoolInterface<C, T, M>>
-{
-}
+impl<C: 'static> subsystem::Subsystem for Box<dyn MempoolInterface<C>> {}
 
 #[allow(dead_code)]
-type MempoolHandle<C, T, M> = subsystem::Handle<Box<dyn MempoolInterface<C, T, M>>>;
+type MempoolHandle<C> = subsystem::Handle<Box<dyn MempoolInterface<C>>>;
 
 pub type Result<T> = core::result::Result<T, MempoolError>;
 
@@ -58,7 +55,7 @@ pub fn make_mempool<C, T, M, H>(
     chainstate_handle: H,
     time_getter: T,
     memory_usage_estimator: M,
-) -> crate::Result<Box<dyn MempoolInterface<C, T, M>>>
+) -> crate::Result<Box<dyn MempoolInterface<C>>>
 where
     C: ChainState + 'static + Send,
     H: 'static + Send,

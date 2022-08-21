@@ -113,7 +113,7 @@ fn get_relay_fee(tx: &Transaction) -> Amount {
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
 }
 
-pub trait MempoolInterface<C, T, M>: Send {
+pub trait MempoolInterface<C>: Send {
     fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error>;
     fn get_all(&self) -> Vec<&Transaction>;
 
@@ -739,7 +739,7 @@ impl GetMemoryUsage for SystemUsageEstimator {
     }
 }
 
-impl<C, H, T, M> MempoolInterface<C, T, M> for Mempool<C, H, T, M>
+impl<C, H, T, M> MempoolInterface<C> for Mempool<C, H, T, M>
 where
     C: ChainState + Send,
     H: Send,
