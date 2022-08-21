@@ -87,6 +87,7 @@ pub async fn initialize(
             Arc::clone(&chain_config),
             Arc::new(node_config.p2p),
             chainstate.clone(),
+            mempool.clone(),
         )
         .await
         .expect("The p2p subsystem initialization failed"),

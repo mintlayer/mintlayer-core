@@ -20,6 +20,7 @@ common = { path = "../common/" }
 crypto = { path = "../crypto/" }
 chainstate = { path = "../chainstate/" }
 logging = { path = "../logging/" }
+mempool = { path = "../mempool/" }
 rpc = { path = "../rpc/" }
 serialization = { path = "../serialization/" }
 subsystem = { path = "../subsystem/" }
