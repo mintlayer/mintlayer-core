@@ -143,4 +143,16 @@ mod tests {
             Ok(SemVer::new(1, 2, 0x500))
         );
     }
+
+    #[test]
+    fn ordering() {
+        assert!(SemVer::new(0, 0, 0) < SemVer::new(0, 0, 1));
+        assert!(SemVer::new(0, 0, u16::MAX) < SemVer::new(0, 1, 0));
+        assert!(SemVer::new(0, 1, 0) < SemVer::new(0, 1, 1));
+        assert!(SemVer::new(0, u8::MAX, 0) < SemVer::new(1, 0, 1));
+        assert!(SemVer::new(0, u8::MAX, u16::MAX) < SemVer::new(1, 0, 1));
+        assert!(SemVer::new(1, 0, 0) < SemVer::new(1, 0, 1));
+        assert!(SemVer::new(1, 0, 1) < SemVer::new(1, 1, 0));
+        assert!(SemVer::new(1, u8::MAX, u16::MAX) < SemVer::new(2, 0, 0));
+    }
 }
