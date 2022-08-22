@@ -20,7 +20,7 @@
 //! The framework is taken from Bitcoin and is written in Python. It is ultimately responsible for
 //! running the tests. All command line arguments are forwarded to it.
 
-use libtest_mimic::{run_tests, Arguments as HarnessArgs, Outcome, Test};
+use libtest_mimic::{run, Arguments as HarnessArgs, Failed, Trial};
 use std::env::consts::EXE_SUFFIX;
 use std::{env, ffi::OsString, path::Path, process::Command};
 
@@ -50,7 +50,7 @@ impl std::fmt::Debug for Error {
     }
 }
 
-fn run(runner_args: &[OsString]) -> Result<(), Error> {
+fn do_run(runner_args: &[OsString]) -> Result<(), Failed> {
     // Various derived paths
     let top_source_dir = Path::new(CRATE_DIR).parent().unwrap().to_str().unwrap();
     let binary_dir = Path::new(NODE_BINARY).parent().unwrap().to_str().unwrap();
@@ -95,7 +95,7 @@ ENABLE_BITCOIND=true
 
     if !status.success() {
         let status = status.code().ok_or(Error::RunnerKilled)?;
-        return Err(Error::TestsFailed(status));
+        return Err(format!("{:?}", Error::TestsFailed(status)).into());
     }
     Ok(())
 }
@@ -115,22 +115,10 @@ fn main() {
         (harness_args, runner_args)
     };
 
-    let functional_tests = Test {
-        name: "functional".into(),
-        kind: String::new(),
-        is_ignored: true,
-        is_bench: false,
-        data: (),
-    };
+    let functional_tests =
+        Trial::test("functional", move || do_run(&runner_args)).with_ignored_flag(true);
 
-    let outcome = run_tests(&harness_args, vec![functional_tests], move |_| {
-        match run(&runner_args) {
-            Ok(()) => Outcome::Passed,
-            Err(e) => Outcome::Failed {
-                msg: Some(e.to_string()),
-            },
-        }
-    });
+    let outcome = run(&harness_args, vec![functional_tests]);
 
     outcome.exit()
 }

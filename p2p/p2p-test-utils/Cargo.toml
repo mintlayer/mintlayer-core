@@ -16,7 +16,7 @@ p2p = { path = "../" }
 subsystem = { path = "../../subsystem/" }
 
 [dependencies.libp2p]
-version = "0.45"
+version = "0.46"
 default-features = false
 features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "tcp-async-io"]
 

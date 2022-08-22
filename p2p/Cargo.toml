@@ -10,7 +10,7 @@ bytes = "1.1"
 futures = "0.3"
 itertools = "0.10"
 parity-scale-codec = "3.1"
-sscanf = "0.2"
+sscanf = "0.3"
 thiserror = "1.0"
 void = "1.0"
 tap = "1.0"
@@ -26,11 +26,11 @@ subsystem = { path = "../subsystem/" }
 utils = { path = "../utils/" }
 
 [dependencies.jsonrpsee]
-version = "0.14"
+version = "0.15"
 features = ["macros"]
 
 [dependencies.libp2p]
-version = "0.45"
+version = "0.46"
 default-features = false
 features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "request-response", "tcp-async-io"]
 

@@ -28,7 +28,7 @@ use libp2p::{
     request_response::*,
     swarm::NetworkBehaviour,
     swarm::{SwarmBuilder, SwarmEvent},
-    tcp::TcpConfig,
+    tcp::{GenTcpConfig, TcpTransport},
     Multiaddr, Swarm, Transport,
 };
 use logging::log;
@@ -75,9 +75,7 @@ pub async fn make_libp2p(
         .into_authentic(&id_keys)
         .expect("noise keys not authentic");
 
-    let transport = TcpConfig::new()
-        .nodelay(true)
-        .port_reuse(true)
+    let transport = TcpTransport::new(GenTcpConfig::new().nodelay(true).port_reuse(true))
         .upgrade(upgrade::Version::V1)
         .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
         .multiplex(mplex::MplexConfig::new())
@@ -174,9 +172,7 @@ pub async fn make_libp2p_with_ping(
         .into_authentic(&id_keys)
         .expect("noise keys not authentic");
 
-    let transport = TcpConfig::new()
-        .nodelay(true)
-        .port_reuse(true)
+    let transport = TcpTransport::new(GenTcpConfig::new().nodelay(true).port_reuse(true))
         .upgrade(upgrade::Version::V1)
         .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
         .multiplex(mplex::MplexConfig::new())
@@ -299,9 +295,7 @@ pub fn make_transport_and_keys() -> (Boxed<(PeerId, StreamMuxerBox)>, PeerId, id
         .expect("noise keys not authentic");
 
     (
-        TcpConfig::new()
-            .nodelay(true)
-            .port_reuse(true)
+        TcpTransport::new(GenTcpConfig::new().nodelay(true).port_reuse(true))
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(mplex::MplexConfig::new())

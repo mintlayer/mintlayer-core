@@ -28,9 +28,10 @@ use libp2p::{
     noise::{self, AuthenticKeypair},
     request_response::*,
     swarm::SwarmBuilder,
-    tcp::TcpConfig,
-    Multiaddr, Transport,
+    tcp::TcpTransport,
+    Multiaddr,
 };
+use libp2p::{tcp::GenTcpConfig, Transport};
 use logging::log;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
@@ -81,8 +82,7 @@ impl NetworkingService for Libp2pService {
         Self::SyncingMessagingHandle,
     )> {
         let (peer_id, id_keys, noise_keys) = make_libp2p_keys();
-        let transport = TcpConfig::new()
-            .nodelay(true)
+        let transport = TcpTransport::new(GenTcpConfig::new().nodelay(true))
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(mplex::MplexConfig::new())
