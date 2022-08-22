@@ -17,7 +17,7 @@ pub mod protocol;
 
 pub use protocol::{Protocol, ProtocolType};
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use super::*;
 
@@ -56,7 +56,7 @@ pub struct PeerInfo<T: NetworkingService> {
     pub agent: Option<String>,
 
     /// A set of supported protocols.
-    pub protocols: HashSet<Protocol>,
+    pub protocols: BTreeSet<Protocol>,
 }
 
 impl<T: NetworkingService> Display for PeerInfo<T> {

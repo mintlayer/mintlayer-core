@@ -19,14 +19,14 @@ use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
 
 /// Protocol type and version.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Encode, Decode)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct Protocol {
     version: SemVer,
     protocol: ProtocolType,
 }
 
 /// Protocol type.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Encode, Decode)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum ProtocolType {
     /// The publish/subscription protocol.
     PubSub,

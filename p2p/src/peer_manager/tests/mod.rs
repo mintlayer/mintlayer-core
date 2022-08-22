@@ -17,7 +17,7 @@ mod ban;
 mod connections;
 mod peerdb;
 
-use std::{collections::HashSet, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 
 use tokio::time::timeout;
 
@@ -91,7 +91,7 @@ where
 }
 
 /// Returns a set of minimal required protocols.
-pub fn default_protocols() -> HashSet<Protocol> {
+pub fn default_protocols() -> BTreeSet<Protocol> {
     [
         Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
         Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),

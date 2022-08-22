@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashSet, str::FromStr};
+use std::{collections::BTreeSet, str::FromStr};
 
 use async_trait::async_trait;
 use itertools::Itertools;
@@ -282,7 +282,7 @@ impl FromStr for Protocol {
 /// Parses the given strings into a set of protocols.
 ///
 /// The protocols that aren't related to any `ProtocolType` are ignored.
-fn parse_protocols<I, P>(protocols: I) -> HashSet<Protocol>
+fn parse_protocols<I, P>(protocols: I) -> BTreeSet<Protocol>
 where
     I: IntoIterator<Item = P>,
     P: AsRef<str>,
@@ -324,7 +324,7 @@ mod tests {
 
     #[test]
     fn parse_standard_protocols() {
-        let expected: HashSet<_> = [
+        let expected: BTreeSet<_> = [
             Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
             Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
             Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
