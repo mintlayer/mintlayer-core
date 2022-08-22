@@ -46,11 +46,14 @@ skip = [
     {name = "windows_x86_64_msvc", version = "=0.34.0"},
     {name = "curve25519-dalek", version = "=3.2.0"},
     {name = "universal-hash", version = "=0.4.1"},
-    {name = "poly1305", version = "0.7.2"},
+    {name = "poly1305", version = "=0.7.2"},
     {name = "cipher", version = "=0.3.0"},
-    {name = "chacha20poly1305", version = "0.9.1"},
-    {name = "chacha20", version = "0.8.2"},
+    {name = "chacha20poly1305", version = "=0.9.1"},
+    {name = "chacha20", version = "=0.8.2"},
     {name = "aead", version = "=0.4.3"},
+    {name = "clap", version = "=2.34.0"},
+    {name = "strsim", version = "=0.8.0"},
+    {name = "textwrap", version = "=0.11.0"},
 ]
 
 [licenses]
