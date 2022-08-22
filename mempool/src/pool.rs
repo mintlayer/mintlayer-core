@@ -19,7 +19,6 @@ use std::fmt::Debug;
 use std::time::Duration;
 
 use common::chain::tokens::OutputValue;
-use mockall::*;
 use serialization::Encode;
 
 use common::chain::transaction::Transaction;
@@ -43,34 +42,9 @@ use crate::feerate::INCREMENTAL_RELAY_THRESHOLD;
 use store::MempoolStore;
 use store::TxMempoolEntry;
 
+use crate::config::*;
+
 mod store;
-
-const ROLLING_FEE_BASE_HALFLIFE: Time = Duration::new(60 * 60 * 12, 1);
-// TODO this willbe defined elsewhere (some of limits.rs file)
-const MAX_BLOCK_SIZE_BYTES: usize = 1_000_000;
-
-const MAX_BIP125_REPLACEMENT_CANDIDATES: usize = 100;
-
-// TODO this should really be taken from some global node settings
-const RELAY_FEE_PER_BYTE: usize = 1;
-
-const MAX_MEMPOOL_SIZE_BYTES: usize = 300_000_000;
-
-const DEFAULT_MEMPOOL_EXPIRY: Duration = Duration::new(336 * 60 * 60, 0);
-
-const ROLLING_FEE_DECAY_INTERVAL: Time = Duration::new(10, 0);
-
-pub(crate) type MemoryUsage = usize;
-
-#[automock]
-pub trait GetMemoryUsage {
-    fn get_memory_usage(&self) -> MemoryUsage;
-}
-
-pub(crate) type Time = Duration;
-pub trait GetTime {
-    fn get_time(&self) -> Time;
-}
 
 impl<C, H, T, M> TryGetFee for Mempool<C, H, T, M>
 where

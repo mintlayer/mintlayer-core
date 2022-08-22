@@ -17,12 +17,13 @@
 
 use pool::MempoolInterface;
 
+use crate::config::GetMemoryUsage;
+use crate::config::GetTime;
 use crate::error::Error as MempoolError;
 use crate::pool::ChainState;
-use crate::pool::GetMemoryUsage;
-use crate::pool::GetTime;
 use crate::pool::Mempool;
 
+mod config;
 pub mod error;
 mod feerate;
 pub mod pool;
