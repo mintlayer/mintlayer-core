@@ -18,7 +18,7 @@ use std::sync::Arc;
 use futures::FutureExt;
 use tokio::sync::mpsc;
 
-use common::chain::ChainConfig;
+use common::{chain::ChainConfig, primitives::semver::SemVer};
 use logging::log;
 
 use crate::{
@@ -103,9 +103,10 @@ impl Peer {
                             peer_id: self.local_peer_id,
                             version: *self.config.version(),
                             network: *self.config.magic_bytes(),
+                            // TODO: Replace the hard-coded values when ping and pubsub protocols are implemented for the mock interface.
                             protocols: [
-                                Protocol::new(ProtocolType::PubSub, *self.config.version()),
-                                Protocol::new(ProtocolType::Ping, *self.config.version()),
+                                Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
+                                Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
                             ]
                             .into_iter()
                             .collect(),

@@ -28,10 +28,9 @@ pub struct Protocol {
 /// Protocol type.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum ProtocolType {
-    /// The publish/subscription protocol.
+    /// The publish/subscribe protocol.
     PubSub,
-    /// The ping protocol can be used as a simple application-layer health check. Corresponds to
-    /// the "/ipfs/ping" protocol.
+    /// The ping protocol can be used as a simple application-layer health check.
     Ping,
     /// The synchronisation protocol.
     Sync,

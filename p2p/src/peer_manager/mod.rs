@@ -134,7 +134,7 @@ where
     /// Checks that the given set of protocols contains the following protocols with the exact
     /// versions:
     ///
-    /// - PubSub 1.1.0
+    /// - PubSub 1.1.0 or PubSub 1.0.0
     /// - Ping 1.0.0
     /// - Sync 0.1.0
     ///
