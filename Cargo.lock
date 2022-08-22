@@ -5,6 +5,11 @@ version = 3
 [[package]]
 name = "accounting"
 version = "0.1.0"
+dependencies = [
+ "common",
+ "crypto",
+ "thiserror",
+]
 
 [[package]]
 name = "adler"
