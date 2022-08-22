@@ -13,18 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use futures::FutureExt;
+use tokio::sync::mpsc;
+
+use common::chain::ChainConfig;
+use logging::log;
+
 use crate::{
     error::{P2pError, ProtocolError},
-    net::mock::{
-        socket,
-        types::{self, MockEvent, MockPeerId, PeerEvent},
+    net::{
+        mock::{
+            socket,
+            types::{self, MockEvent, MockPeerId, PeerEvent},
+        },
+        types::{Protocol, ProtocolType},
     },
 };
-use common::chain::ChainConfig;
-use futures::FutureExt;
-use logging::log;
-use std::sync::Arc;
-use tokio::sync::mpsc;
 
 pub enum Role {
     Inbound,
@@ -97,10 +103,12 @@ impl Peer {
                             peer_id: self.local_peer_id,
                             version: *self.config.version(),
                             network: *self.config.magic_bytes(),
-                            protocols: vec![
-                                types::Protocol::new("floodsub", *self.config.version()),
-                                types::Protocol::new("ping", *self.config.version()),
-                            ],
+                            protocols: [
+                                Protocol::new(ProtocolType::PubSub, *self.config.version()),
+                                Protocol::new(ProtocolType::Ping, *self.config.version()),
+                            ]
+                            .into_iter()
+                            .collect(),
                         },
                     ))
                     .await?;
@@ -127,10 +135,12 @@ impl Peer {
                         peer_id: self.local_peer_id,
                         version: *self.config.version(),
                         network: *self.config.magic_bytes(),
-                        protocols: vec![
-                            types::Protocol::new("floodsub", *self.config.version()),
-                            types::Protocol::new("ping", *self.config.version()),
-                        ],
+                        protocols: [
+                            Protocol::new(ProtocolType::PubSub, *self.config.version()),
+                            Protocol::new(ProtocolType::Ping, *self.config.version()),
+                        ]
+                        .into_iter()
+                        .collect(),
                     }))
                     .await?;
 
@@ -206,6 +216,7 @@ mod tests {
     use super::*;
     use crate::{message, net::mock::socket};
     use chainstate::Locator;
+    use common::primitives::semver::SemVer;
     use futures::FutureExt;
 
     #[tokio::test]
@@ -241,10 +252,12 @@ mod tests {
                 peer_id: peer_id2,
                 version: *config.version(),
                 network: *config.magic_bytes(),
-                protocols: vec![
-                    types::Protocol::new("floodsub", *config.version()),
-                    types::Protocol::new("ping", *config.version()),
-                ],
+                protocols: [
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                ]
+                .into_iter()
+                .collect(),
             }))
             .await
             .is_ok());
@@ -258,10 +271,12 @@ mod tests {
                     peer_id: peer_id2,
                     network: *config.magic_bytes(),
                     version: *config.version(),
-                    protocols: vec![
-                        types::Protocol::new("floodsub", *config.version()),
-                        types::Protocol::new("ping", *config.version()),
+                    protocols: [
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
                     ]
+                    .into_iter()
+                    .collect(),
                 }
             ))
         );
@@ -301,10 +316,12 @@ mod tests {
                         peer_id: peer_id2,
                         version: *config.version(),
                         network: *config.magic_bytes(),
-                        protocols: vec![
-                            types::Protocol::new("floodsub", *config.version()),
-                            types::Protocol::new("ping", *config.version()),
-                        ],
+                        protocols: [
+                            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                        ]
+                        .into_iter()
+                        .collect(),
                     }
                 ))
                 .await
@@ -320,10 +337,12 @@ mod tests {
                     peer_id: peer_id2,
                     network: *config.magic_bytes(),
                     version: *config.version(),
-                    protocols: vec![
-                        types::Protocol::new("floodsub", *config.version()),
-                        types::Protocol::new("ping", *config.version()),
+                    protocols: [
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
                     ]
+                    .into_iter()
+                    .collect(),
                 }
             ))
         );
@@ -359,10 +378,12 @@ mod tests {
                 peer_id: peer_id2,
                 version: *config.version(),
                 network: [1, 2, 3, 4],
-                protocols: vec![
-                    types::Protocol::new("floodsub", *config.version()),
-                    types::Protocol::new("ping", *config.version()),
-                ],
+                protocols: [
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                ]
+                .into_iter()
+                .collect(),
             }))
             .await
             .is_ok());

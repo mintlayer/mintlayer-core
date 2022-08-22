@@ -15,7 +15,7 @@
 
 use serialization::{Decode, Encode};
 
-#[derive(Debug, PartialEq, Eq, Encode, Decode, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Encode, Decode, Copy, Clone, Hash)]
 pub struct SemVer {
     pub major: u8,
     pub minor: u8,
@@ -23,7 +23,7 @@ pub struct SemVer {
 }
 
 impl SemVer {
-    pub fn new(major: u8, minor: u8, patch: u16) -> Self {
+    pub const fn new(major: u8, minor: u8, patch: u16) -> Self {
         Self {
             major,
             minor,

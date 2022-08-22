@@ -13,15 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{collections::HashSet, sync::Arc};
+
+use libp2p::Multiaddr;
+
+use common::{chain::config, primitives::semver::SemVer};
+use p2p_test_utils::{make_libp2p_addr, make_mock_addr};
+
 use crate::{
     error::{P2pError, PeerError},
-    net::{self, libp2p::Libp2pService, mock::MockService, ConnectivityService, NetworkingService},
+    net::{
+        self,
+        libp2p::Libp2pService,
+        mock::MockService,
+        types::{Protocol, ProtocolType},
+        ConnectivityService, NetworkingService,
+    },
     peer_manager::tests::{connect_services, make_peer_manager},
 };
-use common::chain::config;
-use libp2p::Multiaddr;
-use p2p_test_utils::{make_libp2p_addr, make_mock_addr};
-use std::sync::Arc;
 
 // ban peer whose connected to us
 async fn ban_connected_peer<T>(addr1: T::Address, addr2: T::Address)
@@ -186,14 +195,7 @@ async fn validate_invalid_outbound_connection() {
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
                 agent: None,
-                protocols: vec![
-                    "/meshsub/1.1.0".to_string(),
-                    "/meshsub/1.0.0".to_string(),
-                    "/ipfs/ping/1.0.0".to_string(),
-                    "/ipfs/id/1.0.0".to_string(),
-                    "/ipfs/id/push/1.0.0".to_string(),
-                    "/mintlayer/sync/0.1.0".to_string(),
-                ],
+                protocols: default_protocols(),
             },
         )
         .await;
@@ -210,14 +212,7 @@ async fn validate_invalid_outbound_connection() {
                 magic_bytes: [1, 2, 3, 4],
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
                 agent: None,
-                protocols: vec![
-                    "/meshsub/1.1.0".to_string(),
-                    "/meshsub/1.0.0".to_string(),
-                    "/ipfs/ping/1.0.0".to_string(),
-                    "/ipfs/id/1.0.0".to_string(),
-                    "/ipfs/id/push/1.0.0".to_string(),
-                    "/mintlayer/sync/0.1.0".to_string(),
-                ],
+                protocols: default_protocols(),
             },
         )
         .await;
@@ -234,14 +229,7 @@ async fn validate_invalid_outbound_connection() {
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(1, 1, 1),
                 agent: None,
-                protocols: vec![
-                    "/meshsub/1.1.0".to_string(),
-                    "/meshsub/1.0.0".to_string(),
-                    "/ipfs/ping/1.0.0".to_string(),
-                    "/ipfs/id/1.0.0".to_string(),
-                    "/ipfs/id/push/1.0.0".to_string(),
-                    "/mintlayer/sync/0.1.0".to_string(),
-                ],
+                protocols: default_protocols(),
             },
         )
         .await;
@@ -258,13 +246,13 @@ async fn validate_invalid_outbound_connection() {
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
                 agent: None,
-                protocols: vec![
-                    "/meshsub/1.1.0".to_string(),
-                    "/meshsub/1.0.0".to_string(),
-                    "/ipfs/ping/1.0.0".to_string(),
-                    "/ipfs/id/push/1.0.0".to_string(),
-                    "/mintlayer/sync/0.1.0".to_string(),
-                ],
+                protocols: [
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                ]
+                .into_iter()
+                .collect(),
             },
         )
         .await;
@@ -288,14 +276,7 @@ async fn validate_invalid_inbound_connection() {
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
                 agent: None,
-                protocols: vec![
-                    "/meshsub/1.1.0".to_string(),
-                    "/meshsub/1.0.0".to_string(),
-                    "/ipfs/ping/1.0.0".to_string(),
-                    "/ipfs/id/1.0.0".to_string(),
-                    "/ipfs/id/push/1.0.0".to_string(),
-                    "/mintlayer/sync/0.1.0".to_string(),
-                ],
+                protocols: default_protocols(),
             },
         )
         .await;
@@ -312,14 +293,7 @@ async fn validate_invalid_inbound_connection() {
                 magic_bytes: [1, 2, 3, 4],
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
                 agent: None,
-                protocols: vec![
-                    "/meshsub/1.1.0".to_string(),
-                    "/meshsub/1.0.0".to_string(),
-                    "/ipfs/ping/1.0.0".to_string(),
-                    "/ipfs/id/1.0.0".to_string(),
-                    "/ipfs/id/push/1.0.0".to_string(),
-                    "/mintlayer/sync/0.1.0".to_string(),
-                ],
+                protocols: default_protocols(),
             },
         )
         .await;
@@ -336,14 +310,7 @@ async fn validate_invalid_inbound_connection() {
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(1, 1, 1),
                 agent: None,
-                protocols: vec![
-                    "/meshsub/1.1.0".to_string(),
-                    "/meshsub/1.0.0".to_string(),
-                    "/ipfs/ping/1.0.0".to_string(),
-                    "/ipfs/id/1.0.0".to_string(),
-                    "/ipfs/id/push/1.0.0".to_string(),
-                    "/mintlayer/sync/0.1.0".to_string(),
-                ],
+                protocols: default_protocols(),
             },
         )
         .await;
@@ -360,13 +327,13 @@ async fn validate_invalid_inbound_connection() {
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
                 agent: None,
-                protocols: vec![
-                    "/meshsub/1.1.0".to_string(),
-                    "/meshsub/1.0.0".to_string(),
-                    "/ipfs/ping/1.0.0".to_string(),
-                    "/ipfs/id/push/1.0.0".to_string(),
-                    "/mintlayer/sync/0.1.0".to_string(),
-                ],
+                protocols: [
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                ]
+                .into_iter()
+                .collect(),
             },
         )
         .await;
@@ -416,4 +383,17 @@ async fn inbound_connection_invalid_magic_libp2p() {
 #[tokio::test]
 async fn inbound_connection_invalid_magic_mock() {
     inbound_connection_invalid_magic::<MockService>(make_mock_addr(), make_mock_addr()).await;
+}
+
+// TODO: Move to `p2p-test-utils`?
+/// Returns a set of minimal required protocols.
+fn default_protocols() -> HashSet<Protocol> {
+    [
+        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+    ]
+    .into_iter()
+    .collect()
 }
