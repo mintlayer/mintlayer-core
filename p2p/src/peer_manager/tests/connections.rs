@@ -31,7 +31,7 @@ use crate::{
     },
     peer_manager::{
         self,
-        tests::{connect_services, make_peer_manager},
+        tests::{connect_services, default_protocols, make_peer_manager},
     },
 };
 
@@ -157,16 +157,7 @@ async fn test_validate_supported_protocols() {
     let swarm = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config).await;
 
     // all needed protocols
-    assert!(swarm.validate_supported_protocols(
-        &[
-            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-        ]
-        .into_iter()
-        .collect()
-    ));
+    assert!(swarm.validate_supported_protocols(&default_protocols()));
 
     // all needed protocols + 2 extra
     assert!(swarm.validate_supported_protocols(
@@ -404,14 +395,7 @@ async fn inbound_connection_too_many_peers_libp2p() {
             magic_bytes: *config.magic_bytes(),
             version: common::primitives::semver::SemVer::new(0, 1, 0),
             agent: None,
-            protocols: [
-                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-            ]
-            .into_iter()
-            .collect(),
+            protocols: default_protocols(),
         })
         .collect::<Vec<_>>();
 

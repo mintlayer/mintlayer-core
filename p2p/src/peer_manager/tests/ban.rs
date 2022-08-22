@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use libp2p::Multiaddr;
 
@@ -29,7 +29,7 @@ use crate::{
         types::{Protocol, ProtocolType},
         ConnectivityService, NetworkingService,
     },
-    peer_manager::tests::{connect_services, make_peer_manager},
+    peer_manager::tests::{connect_services, default_protocols, make_peer_manager},
 };
 
 // ban peer whose connected to us
@@ -383,17 +383,4 @@ async fn inbound_connection_invalid_magic_libp2p() {
 #[tokio::test]
 async fn inbound_connection_invalid_magic_mock() {
     inbound_connection_invalid_magic::<MockService>(make_mock_addr(), make_mock_addr()).await;
-}
-
-// TODO: Move to `p2p-test-utils`?
-/// Returns a set of minimal required protocols.
-fn default_protocols() -> HashSet<Protocol> {
-    [
-        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-    ]
-    .into_iter()
-    .collect()
 }

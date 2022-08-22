@@ -17,15 +17,10 @@ use std::collections::HashMap;
 
 use libp2p::{multiaddr, Multiaddr, PeerId};
 
-use common::primitives::semver::SemVer;
-
 use super::*;
 use crate::{
     config,
-    net::{
-        libp2p::Libp2pService,
-        types::{self, Protocol, ProtocolType},
-    },
+    net::{libp2p::Libp2pService, types},
     peer_manager::peerdb::{Peer, PeerDb},
 };
 
@@ -39,14 +34,7 @@ fn make_peer_info() -> (PeerId, types::PeerInfo<Libp2pService>) {
             magic_bytes: [1, 2, 3, 4],
             version: common::primitives::semver::SemVer::new(0, 1, 0),
             agent: None,
-            protocols: [
-                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-            ]
-            .into_iter()
-            .collect(),
+            protocols: default_protocols(),
         },
     )
 }

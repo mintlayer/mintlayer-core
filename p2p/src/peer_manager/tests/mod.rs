@@ -17,13 +17,15 @@ mod ban;
 mod connections;
 mod peerdb;
 
-use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
+use std::{collections::HashSet, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 
 use tokio::time::timeout;
 
+use common::primitives::semver::SemVer;
+
 use crate::{
     net::{
-        types::{ConnectivityEvent, PeerInfo},
+        types::{ConnectivityEvent, PeerInfo, Protocol, ProtocolType},
         ConnectivityService, NetworkingService,
     },
     peer_manager::PeerManager,
@@ -86,4 +88,16 @@ where
     }
 
     (address, peer_info)
+}
+
+/// Returns a set of minimal required protocols.
+pub fn default_protocols() -> HashSet<Protocol> {
+    [
+        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+    ]
+    .into_iter()
+    .collect()
 }
