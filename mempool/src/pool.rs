@@ -19,7 +19,6 @@ use std::fmt::Debug;
 use std::time::Duration;
 
 use common::chain::tokens::OutputValue;
-use mockall::*;
 use serialization::Encode;
 
 use common::chain::transaction::Transaction;
@@ -43,40 +42,16 @@ use crate::feerate::INCREMENTAL_RELAY_THRESHOLD;
 use store::MempoolStore;
 use store::TxMempoolEntry;
 
+use crate::config::*;
+
 mod store;
 
-const ROLLING_FEE_BASE_HALFLIFE: Time = Duration::new(60 * 60 * 12, 1);
-// TODO this willbe defined elsewhere (some of limits.rs file)
-const MAX_BLOCK_SIZE_BYTES: usize = 1_000_000;
-
-const MAX_BIP125_REPLACEMENT_CANDIDATES: usize = 100;
-
-// TODO this should really be taken from some global node settings
-const RELAY_FEE_PER_BYTE: usize = 1;
-
-const MAX_MEMPOOL_SIZE_BYTES: usize = 300_000_000;
-
-const DEFAULT_MEMPOOL_EXPIRY: Duration = Duration::new(336 * 60 * 60, 0);
-
-const ROLLING_FEE_DECAY_INTERVAL: Time = Duration::new(10, 0);
-
-pub(crate) type MemoryUsage = usize;
-
-#[automock]
-pub trait GetMemoryUsage {
-    fn get_memory_usage(&self) -> MemoryUsage;
-}
-
-pub(crate) type Time = Duration;
-pub trait GetTime {
-    fn get_time(&self) -> Time;
-}
-
-impl<C, T, M> TryGetFee for MempoolImpl<C, T, M>
+impl<C, H, T, M> TryGetFee for Mempool<C, H, T, M>
 where
-    C: ChainState,
-    T: GetTime,
-    M: GetMemoryUsage,
+    C: ChainState + Send,
+    H: Send,
+    T: GetTime + Send,
+    M: GetMemoryUsage + Send,
 {
     // TODO this calculation is already done in ChainState, reuse it
     fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError> {
@@ -112,8 +87,7 @@ fn get_relay_fee(tx: &Transaction) -> Amount {
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
 }
 
-pub trait Mempool<C, T, M> {
-    fn create(chain_state: C, clock: T, memory_usage_estimator: M) -> Self;
+pub trait MempoolInterface<C>: Send {
     fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error>;
     fn get_all(&self) -> Vec<&Transaction>;
 
@@ -127,6 +101,7 @@ pub trait Mempool<C, T, M> {
     fn drop_transaction(&mut self, tx: &Id<Transaction>);
 
     // Add/remove transactions to/from the mempool according to a new tip
+    #[cfg(test)]
     fn new_tip_set(&mut self, chain_state: C);
 }
 
@@ -199,22 +174,48 @@ impl RollingFeeRate {
 }
 
 #[derive(Debug)]
-pub struct MempoolImpl<C: ChainState, T: GetTime, M: GetMemoryUsage> {
+pub struct Mempool<
+    C: ChainState + 'static + Send,
+    H: 'static + Send,
+    T: GetTime + 'static + Send,
+    M: GetMemoryUsage + 'static + Send,
+> {
     store: MempoolStore,
     rolling_fee_rate: Cell<RollingFeeRate>,
     max_size: usize,
     max_tx_age: Duration,
     chain_state: C,
+    #[allow(unused)]
+    chainstate_handle: H,
     clock: T,
     memory_usage_estimator: M,
 }
 
-impl<C, T, M> MempoolImpl<C, T, M>
+impl<C, H, T, M> Mempool<C, H, T, M>
 where
-    C: ChainState,
-    T: GetTime,
-    M: GetMemoryUsage,
+    C: ChainState + Send,
+    H: Send,
+    T: GetTime + Send,
+    M: GetMemoryUsage + Send,
 {
+    pub(crate) fn new(
+        chain_state: C,
+        chainstate_handle: H,
+        clock: T,
+        memory_usage_estimator: M,
+    ) -> Self {
+        Self {
+            store: MempoolStore::new(),
+            chain_state,
+            chainstate_handle,
+            max_size: MAX_MEMPOOL_SIZE_BYTES,
+            max_tx_age: DEFAULT_MEMPOOL_EXPIRY,
+            rolling_fee_rate: Cell::new(RollingFeeRate::new(clock.get_time())),
+            clock,
+            memory_usage_estimator,
+        }
+    }
+
     fn rolling_fee_halflife(&self) -> Time {
         let mem_usage = self.get_memory_usage();
         if mem_usage < self.max_size / 4 {
@@ -674,28 +675,30 @@ where
     }
 }
 
-trait SpendsUnconfirmed<C, T, M>
+trait SpendsUnconfirmed<C, H, T, M>
 where
-    C: ChainState,
-    T: GetTime,
-    M: GetMemoryUsage,
+    C: ChainState + Send,
+    H: Send,
+    T: GetTime + Send,
+    M: GetMemoryUsage + Send,
 {
-    fn spends_unconfirmed(&self, mempool: &MempoolImpl<C, T, M>) -> bool;
+    fn spends_unconfirmed(&self, mempool: &Mempool<C, H, T, M>) -> bool;
 }
 
-impl<C, T, M> SpendsUnconfirmed<C, T, M> for TxInput
+impl<C, H, T, M> SpendsUnconfirmed<C, H, T, M> for TxInput
 where
-    C: ChainState,
-    T: GetTime,
-    M: GetMemoryUsage,
+    C: ChainState + Send,
+    H: Send,
+    T: GetTime + Send,
+    M: GetMemoryUsage + Send,
 {
-    fn spends_unconfirmed(&self, mempool: &MempoolImpl<C, T, M>) -> bool {
+    fn spends_unconfirmed(&self, mempool: &Mempool<C, H, T, M>) -> bool {
         mempool.contains_transaction(self.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
     }
 }
 
 #[derive(Clone)]
-struct SystemClock;
+pub struct SystemClock;
 impl GetTime for SystemClock {
     fn get_time(&self) -> Duration {
         common::primitives::time::get()
@@ -703,7 +706,7 @@ impl GetTime for SystemClock {
 }
 
 #[derive(Clone)]
-struct SystemUsageEstimator;
+pub struct SystemUsageEstimator;
 impl GetMemoryUsage for SystemUsageEstimator {
     fn get_memory_usage(&self) -> MemoryUsage {
         //TODO implement real usage estimation here
@@ -711,24 +714,14 @@ impl GetMemoryUsage for SystemUsageEstimator {
     }
 }
 
-impl<C, T, M> Mempool<C, T, M> for MempoolImpl<C, T, M>
+impl<C, H, T, M> MempoolInterface<C> for Mempool<C, H, T, M>
 where
-    C: ChainState,
-    T: GetTime,
-    M: GetMemoryUsage,
+    C: ChainState + Send,
+    H: Send,
+    T: GetTime + Send,
+    M: GetMemoryUsage + Send,
 {
-    fn create(chain_state: C, clock: T, memory_usage_estimator: M) -> Self {
-        Self {
-            store: MempoolStore::new(),
-            chain_state,
-            max_size: MAX_MEMPOOL_SIZE_BYTES,
-            max_tx_age: DEFAULT_MEMPOOL_EXPIRY,
-            rolling_fee_rate: Cell::new(RollingFeeRate::new(clock.get_time())),
-            clock,
-            memory_usage_estimator,
-        }
-    }
-
+    #[cfg(test)]
     fn new_tip_set(&mut self, chain_state: C) {
         self.chain_state = chain_state;
         self.rolling_fee_rate.set({
