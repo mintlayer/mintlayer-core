@@ -163,9 +163,14 @@ pub fn filter_transferred_and_issued_amounts(
     }
 }
 
-pub fn filter_transferred_and_burn_amounts(token_data: &TokenData) -> Option<(TokenId, Amount)> {
+pub fn filter_transferred_and_burn_amounts(
+    token_data: &TokenData,
+    origin_token_id: TokenId,
+) -> Option<Amount> {
     match token_data {
-        TokenData::TokenTransferV1 { token_id, amount } => Some((*token_id, *amount)),
+        TokenData::TokenTransferV1 { token_id, amount } => {
+            (token_id == &origin_token_id).then_some(*amount)
+        }
         TokenData::TokenIssuanceV1 {
             token_ticker: _,
             amount_to_issue: _,
@@ -175,6 +180,6 @@ pub fn filter_transferred_and_burn_amounts(token_data: &TokenData) -> Option<(To
         TokenData::TokenBurnV1 {
             token_id,
             amount_to_burn,
-        } => Some((*token_id, *amount_to_burn)),
+        } => (token_id == &origin_token_id).then_some(*amount_to_burn),
     }
 }

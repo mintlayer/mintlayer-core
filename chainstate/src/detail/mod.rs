@@ -13,41 +13,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_storage::{BlockchainStorage, Transactional};
-use common::chain::tokens::TokensError;
-use common::chain::tokens::{OutputValue, RPCTokenInfo, TokenData, TokenId};
-use common::chain::{OutPointSourceId, SpendablePosition, Transaction};
-pub mod ban_score;
-pub mod time_getter;
-pub use self::error::*;
-mod block_index_history_iter;
-mod error;
-mod median_time;
-mod orphan_blocks;
-mod transaction_verifier;
-pub use chainstate_types::Locator;
-use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
-use common::{
-    chain::{
-        block::{BlockHeader, BlockReward},
-        config::ChainConfig,
-        Block, GenBlock,
-    },
-    primitives::{BlockDistance, BlockHeight, Id, Idable},
-};
-pub use error::*;
-use itertools::Itertools;
-use logging::log;
-use std::sync::Arc;
-use utils::eventhandler::{EventHandler, EventsController};
-mod chainstateref;
-mod tokens;
 use self::{
     orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut},
     time_getter::TimeGetter,
 };
 use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
+use chainstate_storage::{BlockchainStorage, Transactional};
+use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+use common::{
+    chain::{
+        block::{BlockHeader, BlockReward},
+        config::ChainConfig,
+        tokens::{OutputValue, RPCTokenInfo, TokenData, TokenId, TokensError},
+        Block, GenBlock, OutPointSourceId, SpendablePosition, Transaction,
+    },
+    primitives::{BlockDistance, BlockHeight, Id, Idable},
+};
+use itertools::Itertools;
+use logging::log;
+use std::sync::Arc;
+use utils::eventhandler::{EventHandler, EventsController};
 use utxo::UtxosDBMut;
+
+pub mod ban_score;
+mod block_index_history_iter;
+mod chainstateref;
+mod error;
+mod median_time;
+mod orphan_blocks;
+pub mod time_getter;
+mod tokens;
+mod transaction_verifier;
+pub use self::error::*;
+pub use chainstate_types::Locator;
+pub use error::*;
 
 type TxRw<'a, S> = <S as Transactional<'a>>::TransactionRw;
 type TxRo<'a, S> = <S as Transactional<'a>>::TransactionRo;

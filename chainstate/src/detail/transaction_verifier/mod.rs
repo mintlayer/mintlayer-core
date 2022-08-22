@@ -235,26 +235,19 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
 
     pub fn calculate_transfered_and_burned_tokens(
         outputs: &[TxOutput],
-    ) -> Result<TokensMap, TokensError> {
-        let mut total_tokens: TokensMap = BTreeMap::new();
-
-        outputs
+        token_id: TokenId,
+    ) -> Result<Amount, TokensError> {
+        let result = outputs
             .iter()
             .filter_map(|x| match x.value() {
                 OutputValue::Coin(_) => None,
-                OutputValue::Token(token_data) => filter_transferred_and_burn_amounts(token_data),
+                OutputValue::Token(token_data) => {
+                    filter_transferred_and_burn_amounts(token_data, token_id)
+                }
             })
-            .try_for_each(|(token_id, amount)| {
-                total_tokens.insert(
-                    token_id,
-                    (total_tokens.get(&token_id).cloned().unwrap_or(Amount::from_atoms(0))
-                        + amount)
-                        .ok_or(TokensError::CoinOrTokenOverflow)?,
-                );
-                Ok(())
-            })?;
-
-        Ok(total_tokens)
+            .try_fold(Amount::from_atoms(0), |accum, output| accum + output)
+            .ok_or(TokensError::CoinOrTokenOverflow)?;
+        Ok(result)
     }
 
     pub fn calculate_tokens_total_inputs(
@@ -577,7 +570,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn check_connected_burn_data(
+    fn verify_burn_data(
         &self,
         tx: &Transaction,
         block_id: &Id<Block>,
@@ -607,7 +600,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn check_connected_transfer_data(
+    fn verify_transfer_data(
         &self,
         block_id: Id<Block>,
         tx: &Transaction,
@@ -620,10 +613,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
             .map_err(|_err| TokensError::NoTokenInInputs(tx.get_id(), block_id))?;
 
         // Is token exist in outputs?
-        let total_output_tokens = Self::calculate_transfered_and_burned_tokens(tx.outputs())?;
-        let output_amount = total_output_tokens
-            .get(token_id)
-            .ok_or_else(|| TokensError::SomeTokensLost(tx.get_id(), block_id))?;
+        let output_amount = Self::calculate_transfered_and_burned_tokens(tx.outputs(), *token_id)?;
 
         // Check amounts
         ensure!(
@@ -632,14 +622,14 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         );
 
         ensure!(
-            input_amount >= *output_amount,
+            input_amount >= output_amount,
             TokensError::InsufficientTokensInInputs(tx.get_id(), block_id,)
         );
 
         Ok(())
     }
 
-    fn check_connected_issue_data(
+    fn verify_issue_data(
         &self,
         _token_ticker: &[u8],
         _amount_to_issue: &Amount,
@@ -703,15 +693,15 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn check_connected_tokens(
-        &mut self,
+    fn verify_tokens(
+        &self,
         token_data: &TokenData,
         tx: &Transaction,
-        block: &Block,
+        block_id: Id<Block>,
     ) -> Result<(), TokensError> {
         match token_data {
             TokenData::TokenTransferV1 { token_id, amount } => {
-                self.check_connected_transfer_data(block.get_id(), tx, token_id, amount)?;
+                self.verify_transfer_data(block_id, tx, token_id, amount)?;
             }
             TokenData::TokenIssuanceV1 {
                 token_ticker,
@@ -719,68 +709,54 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                 number_of_decimals,
                 metadata_uri,
             } => {
-                self.check_connected_issue_data(
+                self.verify_issue_data(
                     token_ticker,
                     amount_to_issue,
                     number_of_decimals,
                     metadata_uri,
                     tx.get_id(),
-                    block.get_id(),
+                    block_id,
                 )?;
-                self.register_issuance(tx)?;
             }
             TokenData::TokenBurnV1 {
                 token_id,
                 amount_to_burn,
             } => {
-                self.check_connected_burn_data(tx, &block.get_id(), token_id, amount_to_burn)?;
+                self.verify_burn_data(tx, &block_id, token_id, amount_to_burn)?;
             }
         }
         Ok(())
     }
 
-    fn check_tokens_values(&mut self, block: &Block) -> Result<(), ConnectTransactionError> {
-        for tx in block.transactions() {
-            // Check tokens before connect tx
-            tx.outputs()
-                .iter()
-                .filter_map(|output| match output.value() {
-                    OutputValue::Coin(_) => None,
-                    OutputValue::Token(token_data) => Some(token_data),
-                })
-                .try_for_each(|token_data| self.check_connected_tokens(token_data, tx, block))
-                .map_err(ConnectTransactionError::TokensError)?;
-
-            if self.is_issuance_in_custom_block(tx)? {
-                // check is fee enough for issuance
-                ensure!(
-                    self.check_transferred_amounts_and_get_fee(tx).map_err(|_| {
-                        ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
-                            tx.get_id(),
-                            block.get_id(),
-                        ))
-                    })? >= TOKEN_MIN_ISSUANCE_FEE,
-                    ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
-                        tx.get_id(),
-                        block.get_id()
-                    ),)
-                );
-            }
-        }
-        Ok(())
-    }
-
-    fn is_issuance_in_custom_block(
-        &mut self,
+    fn check_tokens_values(
+        &self,
+        block_id: Id<Block>,
         tx: &Transaction,
-    ) -> Result<bool, ConnectTransactionError> {
-        // If it is not a genesis and in tx issuance
-        Ok(self
-            .db_tx
-            .get_best_block_id()
-            .map_err(ConnectTransactionError::StorageError)?
-            .is_some()
-            && get_tokens_issuance_count(tx) == TOKEN_MAX_ISSUANCE_ALLOWED)
+    ) -> Result<(), ConnectTransactionError> {
+        // Check tokens before connect tx
+        tx.outputs()
+            .iter()
+            .filter_map(|output| match output.value() {
+                OutputValue::Coin(_) => None,
+                OutputValue::Token(token_data) => Some(token_data),
+            })
+            .try_for_each(|token_data| self.verify_tokens(token_data, tx, block_id))
+            .map_err(ConnectTransactionError::TokensError)?;
+
+        // check is fee enough for issuance
+        ensure!(
+            self.check_transferred_amounts_and_get_fee(tx).map_err(|_| {
+                ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
+                    tx.get_id(),
+                    block_id,
+                ))
+            })? >= TOKEN_MIN_ISSUANCE_FEE,
+            ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
+                tx.get_id(),
+                block_id
+            ),)
+        );
+        Ok(())
     }
 
     fn spend(
@@ -810,6 +786,11 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(())
     }
 
+    fn register_tokens(&mut self, tx: &Transaction) -> Result<(), ConnectTransactionError> {
+        // self.register_issuance(tx)?;
+        unimplemented!()
+    }
+
     pub fn connect_transaction(
         &mut self,
         spend_ref: BlockTransactableRef,
@@ -827,7 +808,10 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                 self.precache_inputs(tx.inputs())?;
 
                 // Check tokens values
-                self.check_tokens_values(block)?;
+                self.check_tokens_values(block.get_id(), tx)?;
+
+                // Register tokens if tx has issuance data
+                self.register_tokens(tx)?;
 
                 // check for attempted money printing
                 self.check_transferred_amounts_and_get_fee(tx)?;
