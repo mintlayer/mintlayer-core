@@ -16,6 +16,7 @@ use self::delegation::DelegationAddress;
 
 pub struct PoSAccounting {
     pool_addresses_balances: BTreeMap<H256, Amount>,
+    delegation_to_pool_shares: BTreeMap<(H256, H256), Amount>,
     delegation_addresses_balances: BTreeMap<H256, delegation::DelegationAddress>,
 }
 
@@ -23,6 +24,7 @@ impl PoSAccounting {
     pub fn new_empty() -> Self {
         Self {
             pool_addresses_balances: Default::default(),
+            delegation_to_pool_shares: Default::default(),
             delegation_addresses_balances: Default::default(),
         }
     }
@@ -136,17 +138,35 @@ impl PoSAccounting {
         Ok(())
     }
 
+    fn add_delegation_to_pool_share(
+        &mut self,
+        pool_id: H256,
+        delegation_address: H256,
+        amount_to_add: Amount,
+    ) -> Result<(), Error> {
+        let current_amount = self
+            .delegation_to_pool_shares
+            .entry((pool_id, delegation_address))
+            .or_insert(Amount::from_atoms(0));
+        let new_amount =
+            (*current_amount + amount_to_add).ok_or(Error::PoolBalanceAdditionError)?;
+        *current_amount = new_amount;
+        Ok(())
+    }
+
     pub fn delegate_staking(
         &mut self,
         delegation_target: H256,
         amount_to_delegate: Amount,
     ) -> Result<(), Error> {
-        let delegation_target =
+        let delegation_data =
             self.add_to_delegation_balance_and_get(delegation_target, amount_to_delegate)?;
 
-        let pool_id = *delegation_target.source_pool();
+        let pool_id = *delegation_data.source_pool();
 
         self.add_balance_to_pool(pool_id, amount_to_delegate)?;
+
+        self.add_delegation_to_pool_share(pool_id, delegation_target, amount_to_delegate)?;
 
         Ok(())
     }

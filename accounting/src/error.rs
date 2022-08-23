@@ -16,4 +16,6 @@ pub enum Error {
     DelegationBalanceAdditionError,
     #[error("Pool balance arithmetic error")]
     PoolBalanceAdditionError,
+    #[error("Delegation shares arithmetic error")]
+    DelegationSharesAdditionError,
 }
