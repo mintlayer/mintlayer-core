@@ -129,7 +129,7 @@ impl MempoolStore {
     }
 
     #[cfg(test)]
-    pub(super) fn assert_valid_inner(&self) {
+    fn assert_valid_inner(&self) {
         let entries = self.txs_by_descendant_score.values().flatten().collect::<Vec<_>>();
         for id in self.txs_by_id.keys() {
             assert_eq!(

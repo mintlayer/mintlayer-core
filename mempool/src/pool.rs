@@ -758,6 +758,7 @@ where
     // TODO Consider returning an error
     fn drop_transaction(&mut self, tx_id: &Id<Transaction>) {
         self.store.remove_tx(tx_id);
+        self.store.assert_valid();
     }
 }
 

@@ -447,6 +447,7 @@ fn add_single_tx() -> anyhow::Result<()> {
     assert!(!mempool.contains_transaction(&tx_id));
     let all_txs = mempool.get_all();
     assert_eq!(all_txs, Vec::<&Transaction>::new());
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -473,6 +474,7 @@ fn txs_sorted() -> anyhow::Result<()> {
     let mut fees_sorted = fees.clone();
     fees_sorted.sort_by(|a, b| b.cmp(a));
     assert_eq!(fees, fees_sorted);
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -488,6 +490,7 @@ fn tx_no_inputs() -> anyhow::Result<()> {
         mempool.add_transaction(tx),
         Err(Error::TxValidationError(TxValidationError::NoInputs))
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -513,6 +516,7 @@ fn tx_no_outputs() -> anyhow::Result<()> {
         mempool.add_transaction(tx),
         Err(Error::TxValidationError(TxValidationError::NoOutputs))
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -551,6 +555,7 @@ fn tx_duplicate_inputs() -> anyhow::Result<()> {
         mempool.add_transaction(tx),
         Err(Error::TxValidationError(TxValidationError::DuplicateInputs))
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -583,6 +588,7 @@ fn tx_already_in_mempool() -> anyhow::Result<()> {
             TxValidationError::TransactionAlreadyInMempool
         ))
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -624,6 +630,7 @@ fn outpoint_not_found() -> anyhow::Result<()> {
             TxValidationError::OutPointNotFound { .. }
         ))
     ));
+    mempool.store.assert_valid();
 
     Ok(())
 }
@@ -647,6 +654,7 @@ fn tx_too_big() -> anyhow::Result<()> {
             TxValidationError::ExceedsMaxBlockSize
         ))
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -690,6 +698,7 @@ fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Result<(), 
     );
     mempool.add_transaction(replacement)?;
     assert!(!mempool.contains_transaction(&original_id));
+    mempool.store.assert_valid();
 
     Ok(())
 }
@@ -734,6 +743,7 @@ fn try_replace_irreplaceable() -> anyhow::Result<()> {
 
     mempool.drop_transaction(&original_id);
     mempool.add_transaction(replacement)?;
+    mempool.store.assert_valid();
 
     Ok(())
 }
@@ -800,6 +810,7 @@ fn tx_replace_child() -> anyhow::Result<()> {
     let replacement_tx =
         tx_spend_input(&mempool, child_tx_input, replacement_fee, flags, locktime)?;
     mempool.add_transaction(replacement_tx)?;
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -952,6 +963,7 @@ fn one_ancestor_replaceability_signal_is_enough() -> anyhow::Result<()> {
 
     mempool.add_transaction(replacing_tx)?;
     assert!(!mempool.contains_transaction(&replaced_tx_id));
+    mempool.store.assert_valid();
 
     Ok(())
 }
@@ -1071,6 +1083,7 @@ fn too_many_conflicts() -> anyhow::Result<()> {
         err,
         Error::TxValidationError(TxValidationError::TooManyPotentialReplacements)
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1125,6 +1138,7 @@ fn spends_new_unconfirmed() -> anyhow::Result<()> {
             TxValidationError::SpendsNewUnconfirmedOutput
         ))
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1216,6 +1230,7 @@ fn pays_more_than_conflicts_with_descendants() -> anyhow::Result<()> {
     assert!(!mempool.contains_transaction(&replaced_id));
     assert!(!mempool.contains_transaction(&descendant1_id));
     assert!(!mempool.contains_transaction(&descendant2_id));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1312,6 +1327,7 @@ fn only_expired_entries_removed() -> anyhow::Result<()> {
     mempool.add_transaction(child_1)?;
     assert!(!mempool.contains_transaction(&expired_tx_id));
     assert!(mempool.contains_transaction(&child_1_id));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1521,6 +1537,7 @@ fn rolling_fee() -> anyhow::Result<()> {
         FeeRate::new(Amount::from_atoms(0))
     );
 
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1544,6 +1561,7 @@ fn different_size_txs() -> anyhow::Result<()> {
         mempool.add_transaction(tx)?;
     }
 
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1637,6 +1655,7 @@ fn descendant_score() -> anyhow::Result<()> {
     assert_eq!(entry_b.fees_with_descendants, entry_b.fee);
 
     check_txs_sorted_by_descendant_sore(&mempool);
+    mempool.store.assert_valid();
 
     Ok(())
 }
@@ -1708,6 +1727,7 @@ fn descendant_of_expired_entry() -> anyhow::Result<()> {
 
     assert!(!mempool.contains_transaction(&parent_id));
     assert!(!mempool.contains_transaction(&child_id));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1734,6 +1754,7 @@ fn mempool_full() -> anyhow::Result<()> {
         mempool.add_transaction(tx),
         Err(Error::MempoolFull)
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1783,5 +1804,6 @@ fn no_empty_bags_in_descendant_score_index() -> anyhow::Result<()> {
         mempool.drop_transaction(&id)
     }
     assert!(mempool.store.txs_by_descendant_score.is_empty());
+    mempool.store.assert_valid();
     Ok(())
 }
