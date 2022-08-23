@@ -24,7 +24,7 @@
 pub mod peerdb;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap},
     fmt::Debug,
     str::FromStr,
     sync::Arc,
@@ -134,7 +134,7 @@ where
     /// Checks that the given set of protocols contains the following protocols with the exact
     /// versions:
     ///
-    /// - PubSub 1.1.0
+    /// - PubSub 1.1.0 or PubSub 1.0.0
     /// - Ping 1.0.0
     /// - Sync 0.1.0
     ///
@@ -144,7 +144,7 @@ where
     /// Either peer may support additional protocols which are not known to the other
     /// peer and that is totally fine. As long as the aforementioned protocols with
     /// matching versions are found, the protocol set has been validated successfully.
-    fn validate_supported_protocols(&self, protocols: &HashSet<Protocol>) -> bool {
+    fn validate_supported_protocols(&self, protocols: &BTreeSet<Protocol>) -> bool {
         // We can work with any of these pubsub versions.
         const ONE_OF: &[Protocol] = &[
             Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
