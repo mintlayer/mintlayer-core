@@ -72,7 +72,7 @@ impl PoSAccounting {
 
         Ok(PoSAccountingUndo::CreatePool {
             input0_outpoint: input0_outpoint.clone(),
-            pledge_amount: pledge_amount,
+            pledge_amount,
         })
     }
 
