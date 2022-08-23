@@ -42,6 +42,9 @@ use crate::{
     },
 };
 
+/// This is the direct implementation of the NetworkingService, however, it gets wrapped with Libp2pService,
+/// where the implementation of Libp2pService instantiates a new object from thi struct, and satisfies all
+/// NetworkingService requirements, and hence becomes the proper backend
 pub struct Libp2pBackend {
     /// Created libp2p swarm object
     pub(super) swarm: Swarm<behaviour::Libp2pBehaviour>,
