@@ -12,12 +12,13 @@ use crypto::{hash::StreamHasher, key::PublicKey};
 use crate::error::Error;
 
 pub mod delegation;
-use self::delegation::DelegationAddress;
+use self::delegation::DelegationData;
 
 pub struct PoSAccounting {
     pool_addresses_balances: BTreeMap<H256, Amount>,
     delegation_to_pool_shares: BTreeMap<(H256, H256), Amount>,
-    delegation_addresses_balances: BTreeMap<H256, delegation::DelegationAddress>,
+    delegation_addresses_balances: BTreeMap<H256, Amount>,
+    delegation_addresses_data: BTreeMap<H256, delegation::DelegationData>,
 }
 
 impl PoSAccounting {
@@ -26,6 +27,7 @@ impl PoSAccounting {
             pool_addresses_balances: Default::default(),
             delegation_to_pool_shares: Default::default(),
             delegation_addresses_balances: Default::default(),
+            delegation_addresses_data: Default::default(),
         }
     }
 
@@ -101,9 +103,9 @@ impl PoSAccounting {
             return Err(Error::DelegationCreationFailedPoolDoesNotExist);
         }
 
-        match self.delegation_addresses_balances.entry(delegation_address) {
+        match self.delegation_addresses_data.entry(delegation_address) {
             std::collections::btree_map::Entry::Vacant(entry) => {
-                entry.insert(DelegationAddress::new(target_pool, spend_key))
+                entry.insert(DelegationData::new(target_pool, spend_key))
             }
             std::collections::btree_map::Entry::Occupied(_entry) => {
                 // This should never happen since it's based on an unspent input
@@ -118,12 +120,21 @@ impl PoSAccounting {
         &mut self,
         delegation_target: H256,
         amount_to_delegate: Amount,
-    ) -> Result<&DelegationAddress, Error> {
-        let delegation_target = self
+    ) -> Result<(), Error> {
+        let current_amount = self
             .delegation_addresses_balances
             .get_mut(&delegation_target)
             .ok_or(Error::DelegateToNonexistingAddress)?;
-        delegation_target.add_amount(amount_to_delegate)?;
+        *current_amount =
+            (*current_amount + amount_to_delegate).ok_or(Error::DelegationBalanceAdditionError)?;
+        Ok(())
+    }
+
+    fn get_delegation_data(&mut self, delegation_target: H256) -> Result<&DelegationData, Error> {
+        let delegation_target = self
+            .delegation_addresses_data
+            .get_mut(&delegation_target)
+            .ok_or(Error::DelegateToNonexistingAddress)?;
         Ok(delegation_target)
     }
 
@@ -159,10 +170,11 @@ impl PoSAccounting {
         delegation_target: H256,
         amount_to_delegate: Amount,
     ) -> Result<(), Error> {
-        let delegation_data =
-            self.add_to_delegation_balance_and_get(delegation_target, amount_to_delegate)?;
+        let delegation_data = self.get_delegation_data(delegation_target)?;
 
         let pool_id = *delegation_data.source_pool();
+
+        self.add_to_delegation_balance_and_get(delegation_target, amount_to_delegate)?;
 
         self.add_balance_to_pool(pool_id, amount_to_delegate)?;
 
