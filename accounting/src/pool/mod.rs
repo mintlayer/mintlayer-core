@@ -116,7 +116,7 @@ impl PoSAccounting {
         Ok(delegation_address)
     }
 
-    fn add_to_delegation_balance_and_get(
+    fn add_to_delegation_balance(
         &mut self,
         delegation_target: H256,
         amount_to_delegate: Amount,
@@ -174,7 +174,7 @@ impl PoSAccounting {
 
         let pool_id = *delegation_data.source_pool();
 
-        self.add_to_delegation_balance_and_get(delegation_target, amount_to_delegate)?;
+        self.add_to_delegation_balance(delegation_target, amount_to_delegate)?;
 
         self.add_balance_to_pool(pool_id, amount_to_delegate)?;
 
