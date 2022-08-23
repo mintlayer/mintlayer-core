@@ -20,6 +20,8 @@ use std::{
 
 use chainstate_types::Locator;
 use chainstate_types::{BlockIndex, GenBlockIndex};
+use common::chain::Transaction;
+use common::chain::TxInput;
 use common::chain::{
     block::{timestamp::BlockTimestamp, BlockReward},
     config::ChainConfig,
@@ -205,6 +207,10 @@ impl<
         tx_id: &Id<common::chain::Transaction>,
     ) -> Result<Option<TokenId>, ChainstateError> {
         self.deref().get_token_id_from_issuance_tx(tx_id)
+    }
+
+    fn available_inputs(&self, tx: &Transaction) -> Vec<TxInput> {
+        self.deref().available_inputs(tx)
     }
 }
 

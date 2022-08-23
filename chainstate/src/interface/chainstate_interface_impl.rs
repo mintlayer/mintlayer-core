@@ -21,6 +21,7 @@ use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::block::BlockReward;
 use common::chain::config::ChainConfig;
 use common::chain::tokens::TokenAuxiliaryData;
+use common::chain::TxInput;
 use common::chain::{OutPointSourceId, Transaction, TxMainChainIndex};
 use common::{
     chain::{
@@ -279,5 +280,9 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
             .query()
             .get_token_id_from_issuance_tx(tx_id)
             .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn available_inputs(&self, _tx: &Transaction) -> Vec<TxInput> {
+        vec![]
     }
 }
