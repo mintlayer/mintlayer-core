@@ -97,7 +97,7 @@ impl PoSAccounting {
         Ok(())
     }
 
-    pub fn decomission_pool(&mut self, pool_address: H256) -> Result<PoSAccountingUndo, Error> {
+    pub fn decommission_pool(&mut self, pool_address: H256) -> Result<PoSAccountingUndo, Error> {
         let last_amount = self
             .pool_addresses_balances
             .remove(&pool_address)
