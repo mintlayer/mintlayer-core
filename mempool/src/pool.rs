@@ -738,6 +738,7 @@ where
         let conflicts = self.validate_transaction(&tx)?;
         self.store.drop_conflicts(conflicts);
         self.finalize_tx(tx)?;
+        self.store.assert_valid();
         Ok(())
     }
 

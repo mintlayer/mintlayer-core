@@ -123,6 +123,32 @@ impl MempoolStore {
         self.txs_by_id.get(&id.get())
     }
 
+    pub(super) fn assert_valid(&self) {
+        #[cfg(test)]
+        self.assert_valid_inner()
+    }
+
+    #[cfg(test)]
+    pub(super) fn assert_valid_inner(&self) {
+        let entries = self.txs_by_descendant_score.values().flatten().collect::<Vec<_>>();
+        for id in self.txs_by_id.keys() {
+            assert_eq!(
+                entries.iter().filter(|entry_id| ***entry_id == Id::new(*id)).count(),
+                1
+            )
+        }
+        for entry in self.txs_by_id.values() {
+            for child in &entry.children {
+                assert!(self
+                    .txs_by_id
+                    .get(&child.get())
+                    .expect("child")
+                    .parents
+                    .contains(&entry.tx_id()))
+            }
+        }
+    }
+
     fn append_to_parents(&mut self, entry: &TxMempoolEntry) {
         for parent in entry.unconfirmed_parents() {
             self.txs_by_id
