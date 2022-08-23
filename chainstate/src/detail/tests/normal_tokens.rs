@@ -460,6 +460,7 @@ fn test_burn_tokens() {
     common::concurrency::model(|| {
         const ISSUED_FUNDS: Amount = Amount::from_atoms(123456788);
         const HALF_ISSUED_FUNDS: Amount = Amount::from_atoms(61728394);
+        const QUARTER_ISSUED_FUNDS: Amount = Amount::from_atoms(30864197);
 
         let mut test_framework = TestFramework::default();
         // Issue a new token
@@ -494,23 +495,11 @@ fn test_burn_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
+                ConnectTransactionError::AttemptToPrintMoney(_, _)
             ))
         ));
 
-        // Burn 50% and don't add utxo for the rest
-        let values = vec![OutputValue::Token(TokenData::TokenBurnV1 {
-            token_id,
-            amount_to_burn: HALF_ISSUED_FUNDS,
-        })];
-        assert!(matches!(
-            process_token(&mut test_framework, ParentBlock::BestBlock, values),
-            Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::SomeTokensLost(_, _))
-            ))
-        ));
-
-        // Burn 50% and 50% transfer
+        // Burn 25% through burn data, and burn 25% with just don't add output for them, and transfer the rest 50%
         let values = vec![
             OutputValue::Token(TokenData::TokenBurnV1 {
                 token_id,
@@ -518,7 +507,20 @@ fn test_burn_tokens() {
             }),
             OutputValue::Token(TokenData::TokenTransferV1 {
                 token_id,
-                amount: HALF_ISSUED_FUNDS,
+                amount: (HALF_ISSUED_FUNDS / 2).unwrap(),
+            }),
+        ];
+        process_token(&mut test_framework, ParentBlock::BestBlock, values).unwrap();
+
+        // Burn 50% and 50% transfer
+        let values = vec![
+            OutputValue::Token(TokenData::TokenBurnV1 {
+                token_id,
+                amount_to_burn: QUARTER_ISSUED_FUNDS,
+            }),
+            OutputValue::Token(TokenData::TokenTransferV1 {
+                token_id,
+                amount: QUARTER_ISSUED_FUNDS,
             }),
         ];
         let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
@@ -528,7 +530,7 @@ fn test_burn_tokens() {
         // Try to burn the rest 50%
         let values = vec![OutputValue::Token(TokenData::TokenBurnV1 {
             token_id,
-            amount_to_burn: HALF_ISSUED_FUNDS,
+            amount_to_burn: QUARTER_ISSUED_FUNDS,
         })];
         let block_index = process_token(&mut test_framework, ParentBlock::BestBlock, values)
             .unwrap()
@@ -544,7 +546,10 @@ fn test_burn_tokens() {
         assert!(matches!(
             process_token_ex(&mut test_framework, inputs, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
+                ConnectTransactionError::OutputIndexOutOfRange {
+                    tx_id: _,
+                    source_output_index: _
+                }
             ))
         ));
     })

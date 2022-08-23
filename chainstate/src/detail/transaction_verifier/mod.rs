@@ -25,11 +25,9 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         calculate_tx_index_from_block,
-        config::{TOKEN_MAX_ISSUANCE_ALLOWED, TOKEN_MIN_ISSUANCE_FEE},
+        config::TOKEN_MIN_ISSUANCE_FEE,
         signature::{verify_signature, Transactable},
-        tokens::{
-            get_tokens_issuance_count, token_id, OutputValue, TokenData, TokenId, TokensError,
-        },
+        tokens::{token_id, OutputValue, TokenData, TokenId, TokensError},
         Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
         Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
     },
@@ -43,8 +41,15 @@ use utils::ensure;
 
 use super::tokens::filter_transferred_and_burn_amounts;
 use super::tokens::filter_transferred_and_issued_amounts;
+use super::tokens::is_tokens_issuance;
 
 type TokensMap = BTreeMap<TokenId, Amount>;
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+enum CoinOrTokenId {
+    Coin,
+    TokenId(TokenId),
+}
 
 /// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -279,7 +284,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                         },
                     )?;
 
-                    match filter_transferred_and_issued_amounts(&tx, output)? {
+                    match filter_transferred_and_issued_amounts(&tx, output.value())? {
                         Some((ref input_token_id, amount)) => {
                             if token_id == input_token_id {
                                 total_tokens = (total_tokens + amount)
@@ -313,17 +318,18 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(tx_index)
     }
 
-    fn calculate_coins_total_inputs(
+    fn calculate_total_inputs(
         &self,
         inputs: &[TxInput],
-    ) -> Result<Amount, ConnectTransactionError> {
-        let mut total = Amount::from_atoms(0);
+    ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
+        let mut result = BTreeMap::new();
+
         for input in inputs.iter() {
             let outpoint = input.outpoint();
             let tx_index = self.get_tx_index_from_cache(outpoint)?;
             let output_index = outpoint.output_index() as usize;
 
-            let output_amount = match tx_index.position() {
+            match tx_index.position() {
                 common::chain::SpendablePosition::Transaction(tx_pos) => {
                     let tx = self
                         .db_tx
@@ -335,60 +341,203 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                             )
                         })?;
 
-                    Self::get_output_value(tx.outputs(), output_index, tx.get_id().into())
-                        .cloned()?
+                    let output_value =
+                        Self::get_output_value(tx.outputs(), output_index, tx.get_id().into())?;
+
+                    match output_value {
+                        OutputValue::Coin(amount) => {
+                            result.insert(
+                                CoinOrTokenId::Coin,
+                                (result
+                                    .get(&CoinOrTokenId::Coin)
+                                    .cloned()
+                                    .unwrap_or(Amount::from_atoms(0))
+                                    + *amount)
+                                    .ok_or(ConnectTransactionError::TokensError(
+                                        TokensError::CoinOrTokenOverflow,
+                                    ))?,
+                            );
+                        }
+                        OutputValue::Token(token_data) => match token_data {
+                            TokenData::TokenTransferV1 { token_id, amount } => {
+                                let key = CoinOrTokenId::TokenId(*token_id);
+                                result.insert(
+                                    key,
+                                    (result.get(&key).cloned().unwrap_or(Amount::from_atoms(0))
+                                        + *amount)
+                                        .ok_or(ConnectTransactionError::TokensError(
+                                            TokensError::CoinOrTokenOverflow,
+                                        ))?,
+                                );
+                            }
+                            TokenData::TokenIssuanceV1 {
+                                token_ticker: _,
+                                amount_to_issue,
+                                number_of_decimals: _,
+                                metadata_uri: _,
+                            } => {
+                                let token_id =
+                                    token_id(&tx).ok_or(ConnectTransactionError::TokensError(
+                                        TokensError::TokenIdCantBeCalculated,
+                                    ))?;
+                                result.insert(CoinOrTokenId::TokenId(token_id), *amount_to_issue);
+                            }
+                            TokenData::TokenBurnV1 {
+                                token_id: _,
+                                amount_to_burn: _,
+                            } => {
+                                /* Token have burned and can't be transferred */
+                                return Err(ConnectTransactionError::TokensError(
+                                    TokensError::AttemptToTransferBurnedTokens,
+                                ));
+                            }
+                        },
+                    }
                 }
                 common::chain::SpendablePosition::BlockReward(block_id) => {
                     let outputs = self.block_reward_outputs(block_id)?;
-                    Self::get_output_value(&outputs, output_index, (*block_id).into()).cloned()?
-                }
-            };
-            match output_amount {
-                OutputValue::Coin(output_amount) => {
-                    total = (total + output_amount)
-                        .ok_or(ConnectTransactionError::InputAdditionError)?
-                }
-                OutputValue::Token(_) => { /*For now we don't calculate here tokens, use calculate_tokens_total_inputs */
+                    match Self::get_output_value(&outputs, output_index, (*block_id).into())? {
+                        OutputValue::Coin(amount) => {
+                            result.insert(
+                                CoinOrTokenId::Coin,
+                                (result
+                                    .get(&CoinOrTokenId::Coin)
+                                    .cloned()
+                                    .unwrap_or(Amount::from_atoms(0))
+                                    + *amount)
+                                    .ok_or(ConnectTransactionError::TokensError(
+                                        TokensError::CoinOrTokenOverflow,
+                                    ))?,
+                            );
+                        }
+                        OutputValue::Token(_) => {
+                            return Err(ConnectTransactionError::TokensError(
+                                TokensError::BlockRewardInTokens,
+                            ));
+                        }
+                    }
                 }
             }
         }
-        Ok(total)
+        Ok(result)
     }
 
     fn check_transferred_amounts_and_get_fee(
         &self,
         tx: &Transaction,
     ) -> Result<Amount, ConnectTransactionError> {
+        // Probably, we can use better approach for calculating fees
+        let mut total_fee = Amount::from_atoms(0);
         let inputs = tx.inputs();
         let outputs = tx.outputs();
 
-        let inputs_total = self.calculate_coins_total_inputs(inputs)?;
-        let outputs_total = Self::calculate_coins_total_outputs(outputs)?;
+        let inputs_total_map = self.calculate_total_inputs(inputs)?;
+        let outputs_total_map = Self::calculate_total_outputs(outputs)?;
 
-        if outputs_total > inputs_total {
-            return Err(ConnectTransactionError::AttemptToPrintMoney(
-                inputs_total,
-                outputs_total,
-            ));
+        for (coin_or_token_id, outputs_total) in outputs_total_map {
+            // TODO: Check error for this
+            let inputs_total = *inputs_total_map
+                .get(&coin_or_token_id)
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+            //
+            if outputs_total > inputs_total {
+                return Err(ConnectTransactionError::AttemptToPrintMoney(
+                    inputs_total,
+                    outputs_total,
+                ));
+            }
+            //
+            if coin_or_token_id == CoinOrTokenId::Coin {
+                let paid_fee = inputs_total - outputs_total;
+                total_fee = paid_fee.ok_or(ConnectTransactionError::TxFeeTotalCalcFailed(
+                    inputs_total,
+                    outputs_total,
+                ))?;
+            }
+            // TODO: Check is fee enough for issuance
         }
-
-        let paid_fee = inputs_total - outputs_total;
-        paid_fee.ok_or(ConnectTransactionError::TxFeeTotalCalcFailed(
-            inputs_total,
-            outputs_total,
-        ))
+        Ok(total_fee)
     }
 
-    fn calculate_coins_total_outputs(
+    fn calculate_total_outputs(
         outputs: &[TxOutput],
-    ) -> Result<Amount, ConnectTransactionError> {
-        outputs
-            .iter()
-            .try_fold(Amount::from_atoms(0), |accum, out| match out.value() {
-                OutputValue::Coin(value) => accum + *value,
-                OutputValue::Token(_) => Some(accum),
-            })
-            .ok_or(ConnectTransactionError::OutputAdditionError)
+    ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
+        let mut total_amounts = BTreeMap::new();
+
+        let result: Result<(), ConnectTransactionError> = outputs.iter().try_for_each(|output| {
+            match output.value() {
+                OutputValue::Coin(amount) => {
+                    total_amounts.insert(
+                        CoinOrTokenId::Coin,
+                        (total_amounts
+                            .get(&CoinOrTokenId::Coin)
+                            .cloned()
+                            .unwrap_or(Amount::from_atoms(0))
+                            + *amount)
+                            .ok_or(ConnectTransactionError::TokensError(
+                                TokensError::CoinOrTokenOverflow,
+                            ))?,
+                    );
+                }
+                OutputValue::Token(token_data) => match token_data {
+                    TokenData::TokenTransferV1 { token_id, amount } => {
+                        total_amounts.insert(
+                            CoinOrTokenId::TokenId(*token_id),
+                            (total_amounts
+                                .get(&CoinOrTokenId::Coin)
+                                .cloned()
+                                .unwrap_or(Amount::from_atoms(0))
+                                + *amount)
+                                .ok_or(ConnectTransactionError::TokensError(
+                                    TokensError::CoinOrTokenOverflow,
+                                ))?,
+                        );
+                    }
+                    TokenData::TokenIssuanceV1 {
+                        token_ticker: _,
+                        amount_to_issue: _,
+                        number_of_decimals: _,
+                        metadata_uri: _,
+                    } => {
+                        // TODO: Might be it's not necessary at all?
+
+                        // if include_issuance {
+                        //     let token_id = token_id()
+                        //     total_amounts.insert(
+                        //         CoinOrTokenId::TokenId(*token_id),
+                        //         (total_amounts
+                        //             .get(&CoinOrTokenId::Coin)
+                        //             .cloned()
+                        //             .unwrap_or(Amount::from_atoms(0))
+                        //             + *amount)
+                        //             .ok_or(ConnectTransactionError::TokensError(
+                        //                 TokensError::CoinOrTokenOverflow,
+                        //             ))?,
+                        //     );
+                        // }
+                    }
+                    TokenData::TokenBurnV1 {
+                        token_id,
+                        amount_to_burn,
+                    } => {
+                        total_amounts.insert(
+                            CoinOrTokenId::TokenId(*token_id),
+                            (total_amounts
+                                .get(&CoinOrTokenId::Coin)
+                                .cloned()
+                                .unwrap_or(Amount::from_atoms(0))
+                                + *amount_to_burn)
+                                .ok_or(ConnectTransactionError::TokensError(
+                                    TokensError::CoinOrTokenOverflow,
+                                ))?,
+                        );
+                    }
+                },
+            }
+            Ok(())
+        });
+        result?;
+        Ok(total_amounts)
     }
 
     fn calculate_block_total_fees(&self, block: &Block) -> Result<Amount, ConnectTransactionError> {
@@ -415,12 +564,23 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         let outputs = block_reward_transactable.outputs();
 
         let inputs_total = inputs.map_or_else(
-            || Ok(Amount::from_atoms(0)),
-            |ins| self.calculate_coins_total_inputs(ins),
+            || Ok::<Amount, ConnectTransactionError>(Amount::from_atoms(0)),
+            |ins| {
+                Ok(self
+                    .calculate_total_inputs(ins)?
+                    .get(&CoinOrTokenId::Coin)
+                    .cloned()
+                    .unwrap_or(Amount::from_atoms(0)))
+            },
         )?;
         let outputs_total = outputs.map_or_else(
-            || Ok(Amount::from_atoms(0)),
-            Self::calculate_coins_total_outputs,
+            || Ok::<Amount, ConnectTransactionError>(Amount::from_atoms(0)),
+            |outputs| {
+                Ok(Self::calculate_total_outputs(outputs)?
+                    .get(&CoinOrTokenId::Coin)
+                    .cloned()
+                    .unwrap_or(Amount::from_atoms(0)))
+            },
         )?;
 
         let max_allowed_outputs_total =
@@ -570,78 +730,6 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn verify_burn_data(
-        &self,
-        tx: &Transaction,
-        block_id: &Id<Block>,
-        burn_token_id: &TokenId,
-        amount_to_burn: &Amount,
-    ) -> Result<(), TokensError> {
-        // Calculate token inputs
-        let origin_amount = self
-            .calculate_tokens_total_inputs(tx.inputs(), burn_token_id)
-            .map_err(|_err| TokensError::NoTokenInInputs(tx.get_id(), *block_id))?;
-
-        // Check amount
-        ensure!(
-            origin_amount >= *amount_to_burn,
-            TokensError::InsufficientTokensInInputs(tx.get_id(), *block_id)
-        );
-
-        // If we burn a piece of the token, we have to check output with the rest tokens
-        if origin_amount > *amount_to_burn {
-            // Check whether all tokens burn and transfer
-            ensure!(
-                (*amount_to_burn + Self::get_change_amount(tx, burn_token_id)?)
-                    == Some(origin_amount),
-                TokensError::SomeTokensLost(tx.get_id(), *block_id)
-            );
-        }
-        Ok(())
-    }
-
-    fn verify_transfer_data(
-        &self,
-        block_id: Id<Block>,
-        tx: &Transaction,
-        token_id: &TokenId,
-        token_amount: &Amount,
-    ) -> Result<(), TokensError> {
-        // Calculate token inputs
-        let input_amount = self
-            .calculate_tokens_total_inputs(tx.inputs(), token_id)
-            .map_err(|_err| TokensError::NoTokenInInputs(tx.get_id(), block_id))?;
-
-        // Is token exist in outputs?
-        let output_amount = Self::calculate_transfered_and_burned_tokens(tx.outputs(), *token_id)?;
-
-        // Check amounts
-        ensure!(
-            input_amount >= *token_amount,
-            TokensError::InsufficientTokensInInputs(tx.get_id(), block_id,)
-        );
-
-        ensure!(
-            input_amount >= output_amount,
-            TokensError::InsufficientTokensInInputs(tx.get_id(), block_id,)
-        );
-
-        Ok(())
-    }
-
-    fn verify_issue_data(
-        &self,
-        _token_ticker: &[u8],
-        _amount_to_issue: &Amount,
-        _number_of_decimals: &u8,
-        _metadata_uri: &[u8],
-        _tx_id: Id<Transaction>,
-        _block_id: Id<Block>,
-    ) -> Result<(), TokensError> {
-        //TODO: For now, there are no checks, but it might be added for NFT
-        Ok(())
-    }
-
     // Calc not burned tokens that were placed in OutputValue::TokenTransfer after partial burn
     fn get_change_amount(tx: &Transaction, burn_token_id: &TokenId) -> Result<Amount, TokensError> {
         let change_amount = tx
@@ -670,11 +758,11 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(change_amount)
     }
 
-    fn register_issuance(&mut self, tx: &Transaction) -> Result<(), TokensError> {
+    fn register_tokens(&mut self, tx: &Transaction) -> Result<(), TokensError> {
         let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
 
         let _tokens_op = match self.tokens_cache.entry(token_id) {
-            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Occupied(entry) => entry.into_mut(), // TODO: Tokens already issued? Must we return error?
             Entry::Vacant(entry) => entry.insert(CachedTokensOperation::Write(tx.get_id())),
         };
         Ok(())
@@ -690,72 +778,6 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                 entry.insert(CachedTokensOperation::Erase);
             }
         }
-        Ok(())
-    }
-
-    fn verify_tokens(
-        &self,
-        token_data: &TokenData,
-        tx: &Transaction,
-        block_id: Id<Block>,
-    ) -> Result<(), TokensError> {
-        match token_data {
-            TokenData::TokenTransferV1 { token_id, amount } => {
-                self.verify_transfer_data(block_id, tx, token_id, amount)?;
-            }
-            TokenData::TokenIssuanceV1 {
-                token_ticker,
-                amount_to_issue,
-                number_of_decimals,
-                metadata_uri,
-            } => {
-                self.verify_issue_data(
-                    token_ticker,
-                    amount_to_issue,
-                    number_of_decimals,
-                    metadata_uri,
-                    tx.get_id(),
-                    block_id,
-                )?;
-            }
-            TokenData::TokenBurnV1 {
-                token_id,
-                amount_to_burn,
-            } => {
-                self.verify_burn_data(tx, &block_id, token_id, amount_to_burn)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn check_tokens_values(
-        &self,
-        block_id: Id<Block>,
-        tx: &Transaction,
-    ) -> Result<(), ConnectTransactionError> {
-        // Check tokens before connect tx
-        tx.outputs()
-            .iter()
-            .filter_map(|output| match output.value() {
-                OutputValue::Coin(_) => None,
-                OutputValue::Token(token_data) => Some(token_data),
-            })
-            .try_for_each(|token_data| self.verify_tokens(token_data, tx, block_id))
-            .map_err(ConnectTransactionError::TokensError)?;
-
-        // check is fee enough for issuance
-        ensure!(
-            self.check_transferred_amounts_and_get_fee(tx).map_err(|_| {
-                ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
-                    tx.get_id(),
-                    block_id,
-                ))
-            })? >= TOKEN_MIN_ISSUANCE_FEE,
-            ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
-                tx.get_id(),
-                block_id
-            ),)
-        );
         Ok(())
     }
 
@@ -786,11 +808,6 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn register_tokens(&mut self, tx: &Transaction) -> Result<(), ConnectTransactionError> {
-        // self.register_issuance(tx)?;
-        unimplemented!()
-    }
-
     pub fn connect_transaction(
         &mut self,
         spend_ref: BlockTransactableRef,
@@ -807,14 +824,11 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                 // pre-cache all inputs
                 self.precache_inputs(tx.inputs())?;
 
-                // Check tokens values
-                self.check_tokens_values(block.get_id(), tx)?;
+                // check for attempted money printing
+                self.check_transferred_amounts_and_get_fee(tx)?;
 
                 // Register tokens if tx has issuance data
                 self.register_tokens(tx)?;
-
-                // check for attempted money printing
-                self.check_transferred_amounts_and_get_fee(tx)?;
 
                 // verify input signatures
                 self.verify_signatures(tx, spend_height, median_time_past)?;
@@ -853,29 +867,8 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
     }
 
     fn remove_tokens(&mut self, tx: &Transaction) -> Result<(), ConnectTransactionError> {
-        let was_tokens_issued = tx
-            .outputs()
-            .iter()
-            .find_map(|output| match output.value() {
-                OutputValue::Coin(_) => None,
-                OutputValue::Token(token_data) => match token_data {
-                    TokenData::TokenTransferV1 {
-                        token_id: _,
-                        amount: _,
-                    } => None,
-                    TokenData::TokenIssuanceV1 {
-                        token_ticker: _,
-                        amount_to_issue: _,
-                        number_of_decimals: _,
-                        metadata_uri: _,
-                    } => Some(()),
-                    TokenData::TokenBurnV1 {
-                        token_id: _,
-                        amount_to_burn: _,
-                    } => None,
-                },
-            })
-            .is_some();
+        let was_tokens_issued =
+            tx.outputs().iter().find(|output| is_tokens_issuance(output.value())).is_some();
         if was_tokens_issued {
             let token_id = token_id(tx).ok_or(ConnectTransactionError::TokensError(
                 TokensError::TokenIdCantBeCalculated,

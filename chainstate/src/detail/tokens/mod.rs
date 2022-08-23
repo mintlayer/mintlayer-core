@@ -137,9 +137,9 @@ pub fn check_tokens_data(
 // Get TokenId and Amount in input
 pub fn filter_transferred_and_issued_amounts(
     prev_tx: &Transaction,
-    output: &common::chain::TxOutput,
+    output_value: &OutputValue,
 ) -> Result<Option<(TokenId, Amount)>, TokensError> {
-    match output.value() {
+    match output_value {
         OutputValue::Coin(_) => Ok(None),
         OutputValue::Token(token) => Ok(Some(match token {
             TokenData::TokenTransferV1 { token_id, amount } => (*token_id, *amount),
@@ -181,5 +181,27 @@ pub fn filter_transferred_and_burn_amounts(
             token_id,
             amount_to_burn,
         } => (token_id == &origin_token_id).then_some(*amount_to_burn),
+    }
+}
+
+pub fn is_tokens_issuance(output_value: &OutputValue) -> bool {
+    match output_value {
+        OutputValue::Coin(_) => false,
+        OutputValue::Token(token_data) => match token_data {
+            TokenData::TokenTransferV1 {
+                token_id: _,
+                amount: _,
+            } => false,
+            TokenData::TokenIssuanceV1 {
+                token_ticker: _,
+                amount_to_issue: _,
+                number_of_decimals: _,
+                metadata_uri: _,
+            } => true,
+            TokenData::TokenBurnV1 {
+                token_id: _,
+                amount_to_burn: _,
+            } => false,
+        },
     }
 }

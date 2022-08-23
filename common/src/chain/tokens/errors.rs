@@ -56,4 +56,6 @@ pub enum TokensError {
     TokenIdCantBeCalculated,
     #[error("Burned tokens cannot be transferred")]
     AttemptToTransferBurnedTokens,
+    #[error("Block reward can't be paid by tokens")]
+    BlockRewardInTokens,
 }
