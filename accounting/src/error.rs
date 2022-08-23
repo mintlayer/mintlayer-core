@@ -22,4 +22,6 @@ pub enum Error {
     InvariantErrorPoolCreationReversalFailedNotFound,
     #[error("Pledge amount has changed while reversal being done")]
     InvariantErrorPoolCreationReversalFailedAmountChanged,
+    #[error("Undo failed as decommission pool is still in storage")]
+    InvariantErrorDecommissionUndoFailedAlreadyExists,
 }

@@ -109,6 +109,20 @@ impl PoSAccounting {
         })
     }
 
+    pub fn undo_decommission_pool(
+        &mut self,
+        pool_address: H256,
+        last_amount: Amount,
+    ) -> Result<(), Error> {
+        match self.pool_addresses_balances.entry(pool_address) {
+            std::collections::btree_map::Entry::Vacant(entry) => entry.insert(last_amount),
+            std::collections::btree_map::Entry::Occupied(_entry) => {
+                return Err(Error::InvariantErrorDecommissionUndoFailedAlreadyExists);
+            }
+        };
+        Ok(())
+    }
+
     pub fn pool_exists(&self, pool_id: H256) -> bool {
         self.pool_addresses_balances.contains_key(&pool_id)
     }
