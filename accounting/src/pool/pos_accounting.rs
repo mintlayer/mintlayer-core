@@ -187,7 +187,7 @@ impl PoSAccounting {
         let range_start = (pool_id, H256::zero());
         let range_end = (pool_id, H256::repeat_byte(0xFF));
         let range = self.delegation_to_pool_shares.range(range_start..=range_end);
-        let result = range.map(|(k, v)| (k.1, *v)).collect::<BTreeMap<_, _>>();
+        let result = range.map(|((_pool_id, del_id), v)| (*del_id, *v)).collect::<BTreeMap<_, _>>();
         if result.is_empty() {
             None
         } else {
