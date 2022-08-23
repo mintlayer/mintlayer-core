@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::ops::Bound::Included;
 
 use common::{
     chain::OutPoint,
@@ -180,5 +181,18 @@ impl PoSAccounting {
         self.add_delegation_to_pool_share(pool_id, delegation_target, amount_to_delegate)?;
 
         Ok(())
+    }
+
+    // TODO: test that all values within the pool will be returned, especially boundary values
+    pub fn get_delegation_shares(&self, pool_id: H256) -> Option<BTreeMap<H256, Amount>> {
+        let iter = self
+            .delegation_to_pool_shares
+            .range((pool_id, H256::zero())..=(pool_id, H256::repeat_byte(0xFF)));
+        let result = iter.map(|(k, v)| (k.1, *v)).collect::<BTreeMap<_, _>>();
+        if result.is_empty() {
+            return None;
+        } else {
+            return Some(result);
+        }
     }
 }
