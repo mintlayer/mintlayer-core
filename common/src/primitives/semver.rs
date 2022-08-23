@@ -15,7 +15,7 @@
 
 use serialization::{Decode, Encode};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, Copy, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, Copy, Clone)]
 pub struct SemVer {
     pub major: u8,
     pub minor: u8,
