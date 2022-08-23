@@ -13,6 +13,31 @@ use super::{
     helpers::{make_delegation_address, make_pool_address},
 };
 
+pub enum PoSAccountingUndo {
+    CreatePool {
+        input0_outpoint: OutPoint,
+        pledge_amount: Amount,
+    },
+    DecommissionPool {
+        pool_address: H256,
+        last_amount: Amount,
+    },
+    CreateDelegationAddress {
+        target_pool: H256,
+        spend_key: PublicKey,
+        input0_outpoint: OutPoint,
+    },
+    AddDelegationBalance {
+        pool_id: H256,
+        delegation_address: H256,
+        amount_to_add: Amount,
+    },
+    DelegateStaking {
+        delegation_target: H256,
+        amount_to_delegate: Amount,
+    },
+}
+
 pub struct PoSAccounting {
     pool_addresses_balances: BTreeMap<H256, Amount>,
     delegation_to_pool_shares: BTreeMap<(H256, H256), Amount>,
@@ -34,7 +59,7 @@ impl PoSAccounting {
         &mut self,
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
-    ) -> Result<(), Error> {
+    ) -> Result<PoSAccountingUndo, Error> {
         let pool_address = make_pool_address(input0_outpoint);
 
         match self.pool_addresses_balances.entry(pool_address) {
@@ -45,13 +70,43 @@ impl PoSAccounting {
             }
         };
 
+        Ok(PoSAccountingUndo::CreatePool {
+            input0_outpoint: input0_outpoint.clone(),
+            pledge_amount: pledge_amount,
+        })
+    }
+
+    pub fn undo_create_pool(
+        &mut self,
+        input0_outpoint: &OutPoint,
+        pledge_amount: Amount,
+    ) -> Result<(), Error> {
+        let pool_address = make_pool_address(input0_outpoint);
+
+        let amount = self.pool_addresses_balances.remove(&pool_address);
+
+        match amount {
+            Some(amount) => {
+                if amount != pledge_amount {
+                    return Err(Error::InvariantErrorPoolCreationReversalFailedAmountChanged);
+                }
+            }
+            None => return Err(Error::InvariantErrorPoolCreationReversalFailedNotFound),
+        }
+
         Ok(())
     }
 
-    pub fn decomission_pool(&mut self, pool_address: H256) -> Result<Amount, Error> {
-        self.pool_addresses_balances
+    pub fn decomission_pool(&mut self, pool_address: H256) -> Result<PoSAccountingUndo, Error> {
+        let last_amount = self
+            .pool_addresses_balances
             .remove(&pool_address)
-            .ok_or(Error::AttemptedDecommissionNonexistingPool)
+            .ok_or(Error::AttemptedDecommissionNonexistingPool)?;
+
+        Ok(PoSAccountingUndo::DecommissionPool {
+            pool_address,
+            last_amount,
+        })
     }
 
     pub fn pool_exists(&self, pool_id: H256) -> bool {
@@ -63,7 +118,7 @@ impl PoSAccounting {
         target_pool: H256,
         spend_key: PublicKey,
         input0_outpoint: &OutPoint,
-    ) -> Result<H256, Error> {
+    ) -> Result<(H256, PoSAccountingUndo), Error> {
         let delegation_address = make_delegation_address(input0_outpoint);
 
         if !self.pool_exists(target_pool) {
@@ -72,7 +127,7 @@ impl PoSAccounting {
 
         match self.delegation_addresses_data.entry(delegation_address) {
             std::collections::btree_map::Entry::Vacant(entry) => {
-                entry.insert(DelegationData::new(target_pool, spend_key))
+                entry.insert(DelegationData::new(target_pool, spend_key.clone()))
             }
             std::collections::btree_map::Entry::Occupied(_entry) => {
                 // This should never happen since it's based on an unspent input
@@ -80,7 +135,14 @@ impl PoSAccounting {
             }
         };
 
-        Ok(delegation_address)
+        Ok((
+            delegation_address,
+            PoSAccountingUndo::CreateDelegationAddress {
+                target_pool,
+                spend_key,
+                input0_outpoint: input0_outpoint.clone(),
+            },
+        ))
     }
 
     fn add_to_delegation_balance(
@@ -97,10 +159,10 @@ impl PoSAccounting {
         Ok(())
     }
 
-    fn get_delegation_data(&mut self, delegation_target: H256) -> Result<&DelegationData, Error> {
+    fn get_delegation_data(&self, delegation_target: H256) -> Result<&DelegationData, Error> {
         let delegation_target = self
             .delegation_addresses_data
-            .get_mut(&delegation_target)
+            .get(&delegation_target)
             .ok_or(Error::DelegateToNonexistingAddress)?;
         Ok(delegation_target)
     }
@@ -136,7 +198,7 @@ impl PoSAccounting {
         &mut self,
         delegation_target: H256,
         amount_to_delegate: Amount,
-    ) -> Result<(), Error> {
+    ) -> Result<PoSAccountingUndo, Error> {
         let delegation_data = self.get_delegation_data(delegation_target)?;
 
         let pool_id = *delegation_data.source_pool();
@@ -147,7 +209,10 @@ impl PoSAccounting {
 
         self.add_delegation_to_pool_share(pool_id, delegation_target, amount_to_delegate)?;
 
-        Ok(())
+        Ok(PoSAccountingUndo::DelegateStaking {
+            delegation_target,
+            amount_to_delegate,
+        })
     }
 
     // TODO: test that all values within the pool will be returned, especially boundary values, and off boundary aren't returned

@@ -18,4 +18,8 @@ pub enum Error {
     PoolBalanceAdditionError,
     #[error("Delegation shares arithmetic error")]
     DelegationSharesAdditionError,
+    #[error("Pool creation undo failed; pool cannot be found")]
+    InvariantErrorPoolCreationReversalFailedNotFound,
+    #[error("Pledge amount has changed while reversal being done")]
+    InvariantErrorPoolCreationReversalFailedAmountChanged,
 }
