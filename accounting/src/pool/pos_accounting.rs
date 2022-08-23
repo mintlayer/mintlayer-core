@@ -2,16 +2,16 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::OutPoint,
-    primitives::{
-        id::{hash_encoded_to, DefaultHashAlgoStream},
-        Amount, H256,
-    },
+    primitives::{Amount, H256},
 };
-use crypto::{hash::StreamHasher, key::PublicKey};
+use crypto::key::PublicKey;
 
 use crate::error::Error;
 
-use super::delegation::DelegationData;
+use super::{
+    delegation::DelegationData,
+    helpers::{make_delegation_address, make_pool_address},
+};
 
 pub struct PoSAccounting {
     pool_addresses_balances: BTreeMap<H256, Amount>,
@@ -30,44 +30,12 @@ impl PoSAccounting {
         }
     }
 
-    fn pool_address_preimage_suffix() -> u32 {
-        // arbitrary, we use this to create different values when hashing with no security requirements
-        0
-    }
-
-    fn delegation_address_preimage_suffix() -> u32 {
-        // arbitrary, we use this to create different values when hashing with no security requirements
-        1
-    }
-
-    pub fn make_pool_address(input0_outpoint: &OutPoint) -> H256 {
-        let mut pool_address_creator = DefaultHashAlgoStream::new();
-        hash_encoded_to(&input0_outpoint, &mut pool_address_creator);
-        // 0 is arbitrary here, we use this as prefix to use this information again
-        hash_encoded_to(
-            &Self::pool_address_preimage_suffix(),
-            &mut pool_address_creator,
-        );
-        pool_address_creator.finalize().into()
-    }
-
-    pub fn make_delegation_address(input0_outpoint: &OutPoint) -> H256 {
-        let mut pool_address_creator = DefaultHashAlgoStream::new();
-        hash_encoded_to(&input0_outpoint, &mut pool_address_creator);
-        // 1 is arbitrary here, we use this as prefix to use this information again
-        hash_encoded_to(
-            &Self::delegation_address_preimage_suffix(),
-            &mut pool_address_creator,
-        );
-        pool_address_creator.finalize().into()
-    }
-
     pub fn create_pool(
         &mut self,
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
     ) -> Result<(), Error> {
-        let pool_address = Self::make_pool_address(input0_outpoint);
+        let pool_address = make_pool_address(input0_outpoint);
 
         match self.pool_addresses_balances.entry(pool_address) {
             std::collections::btree_map::Entry::Vacant(entry) => entry.insert(pledge_amount),
@@ -96,7 +64,7 @@ impl PoSAccounting {
         spend_key: PublicKey,
         input0_outpoint: &OutPoint,
     ) -> Result<H256, Error> {
-        let delegation_address = Self::make_delegation_address(input0_outpoint);
+        let delegation_address = make_delegation_address(input0_outpoint);
 
         if !self.pool_exists(target_pool) {
             return Err(Error::DelegationCreationFailedPoolDoesNotExist);
