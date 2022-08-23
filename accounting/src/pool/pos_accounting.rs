@@ -182,7 +182,7 @@ impl PoSAccounting {
         Ok(())
     }
 
-    // TODO: test that all values within the pool will be returned, especially boundary values
+    // TODO: test that all values within the pool will be returned, especially boundary values, and off boundary aren't returned
     pub fn get_delegation_shares(&self, pool_id: H256) -> Option<BTreeMap<H256, Amount>> {
         let iter = self
             .delegation_to_pool_shares
