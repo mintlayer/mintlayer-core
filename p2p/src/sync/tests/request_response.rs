@@ -67,7 +67,9 @@ async fn test_request_response_libp2p() {
     test_request_response::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
 }
 
+// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
+#[cfg(not(target_os = "macos"))]
 async fn test_request_response_mock() {
     test_request_response::<MockService>(make_mock_addr(), make_mock_addr()).await;
 }
@@ -146,7 +148,9 @@ async fn test_multiple_requests_and_responses_libp2p() {
         .await;
 }
 
+// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
+#[cfg(not(target_os = "macos"))]
 async fn test_multiple_requests_and_responses_mock() {
     test_multiple_requests_and_responses::<MockService>(make_mock_addr(), make_mock_addr()).await;
 }

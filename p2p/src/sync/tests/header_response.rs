@@ -49,7 +49,9 @@ async fn too_many_headers_libp2p() {
     too_many_headers::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
 }
 
+// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
+#[cfg(not(target_os = "macos"))]
 async fn too_many_headers_mock() {
     too_many_headers::<MockService>(make_mock_addr(), MockPeerId::random()).await;
 }
@@ -75,7 +77,9 @@ async fn empty_response_libp2p() {
     empty_response::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
 }
 
+// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
+#[cfg(not(target_os = "macos"))]
 async fn empty_response_mock() {
     empty_response::<MockService>(make_mock_addr(), MockPeerId::random()).await;
 }
@@ -114,7 +118,9 @@ async fn valid_response_libp2p() {
     valid_response::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
 }
 
+// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
+#[cfg(not(target_os = "macos"))]
 async fn valid_response_mock() {
     valid_response::<MockService>(make_mock_addr(), MockPeerId::random()).await;
 }
@@ -153,7 +159,9 @@ async fn header_doesnt_attach_to_local_chain_libp2p() {
         .await;
 }
 
+// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
+#[cfg(not(target_os = "macos"))]
 async fn header_doesnt_attach_to_local_chain_mock() {
     header_doesnt_attach_to_local_chain::<MockService>(make_mock_addr(), MockPeerId::random())
         .await;
@@ -193,7 +201,9 @@ async fn headers_not_in_order_libp2p() {
     headers_not_in_order::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
 }
 
+// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
+#[cfg(not(target_os = "macos"))]
 async fn headers_not_in_order_mock() {
     headers_not_in_order::<MockService>(make_mock_addr(), MockPeerId::random()).await;
 }
@@ -233,7 +243,9 @@ async fn invalid_state_libp2p() {
     invalid_state::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
 }
 
+// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
+#[cfg(not(target_os = "macos"))]
 async fn invalid_state_mock() {
     invalid_state::<MockService>(make_mock_addr(), MockPeerId::random()).await;
 }
@@ -258,7 +270,9 @@ async fn peer_doesnt_exist_libp2p() {
     peer_doesnt_exist::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
 }
 
+// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
+#[cfg(not(target_os = "macos"))]
 async fn peer_doesnt_exist_mock() {
     peer_doesnt_exist::<MockService>(make_mock_addr(), MockPeerId::random()).await;
 }
