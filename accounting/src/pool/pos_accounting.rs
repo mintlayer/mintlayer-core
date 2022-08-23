@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::ops::Bound::Included;
 
 use common::{
     chain::OutPoint,
@@ -190,9 +189,9 @@ impl PoSAccounting {
             .range((pool_id, H256::zero())..=(pool_id, H256::repeat_byte(0xFF)));
         let result = iter.map(|(k, v)| (k.1, *v)).collect::<BTreeMap<_, _>>();
         if result.is_empty() {
-            return None;
+            None
         } else {
-            return Some(result);
+            Some(result)
         }
     }
 }
