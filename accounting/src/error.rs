@@ -9,7 +9,7 @@ pub enum Error {
     #[error("Failed to create a delegation because the target pool doesn't exist")]
     DelegationCreationFailedPoolDoesNotExist,
     #[error("Delegate to a non-existing reward address")]
-    DelegateToNonexistingRewardAddress,
+    DelegateToNonexistingAddress,
     #[error("Delegate to a non-existing pool")]
     DelegateToNonexistingPool,
     #[error("Delegation arithmetic error")]

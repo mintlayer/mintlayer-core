@@ -3,13 +3,13 @@ use crypto::key::PublicKey;
 
 use crate::error::Error;
 
-pub struct RewardAddress {
+pub struct DelegationAddress {
     amount: Amount,
     spend_key: PublicKey,
     source_pool: H256,
 }
 
-impl RewardAddress {
+impl DelegationAddress {
     pub fn new(source_pool: H256, spend_key: PublicKey) -> Self {
         Self {
             amount: Amount::from_atoms(0),

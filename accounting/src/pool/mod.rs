@@ -11,19 +11,19 @@ use crypto::{hash::StreamHasher, key::PublicKey};
 
 use crate::error::Error;
 
-pub mod reward;
-use self::reward::RewardAddress;
+pub mod delegation;
+use self::delegation::DelegationAddress;
 
 pub struct PoSAccounting {
     pool_addresses_balances: BTreeMap<H256, Amount>,
-    reward_addresses_balances: BTreeMap<H256, reward::RewardAddress>,
+    delegation_addresses_balances: BTreeMap<H256, delegation::DelegationAddress>,
 }
 
 impl PoSAccounting {
     pub fn new_empty() -> Self {
         Self {
             pool_addresses_balances: Default::default(),
-            reward_addresses_balances: Default::default(),
+            delegation_addresses_balances: Default::default(),
         }
     }
 
@@ -32,7 +32,7 @@ impl PoSAccounting {
         0
     }
 
-    fn reward_address_preimage_suffix() -> u32 {
+    fn delegation_address_preimage_suffix() -> u32 {
         // arbitrary, we use this to create different values when hashing with no security requirements
         1
     }
@@ -48,12 +48,12 @@ impl PoSAccounting {
         pool_address_creator.finalize().into()
     }
 
-    pub fn make_reward_address(input0_outpoint: &OutPoint) -> H256 {
+    pub fn make_delegation_address(input0_outpoint: &OutPoint) -> H256 {
         let mut pool_address_creator = DefaultHashAlgoStream::new();
         hash_encoded_to(&input0_outpoint, &mut pool_address_creator);
         // 1 is arbitrary here, we use this as prefix to use this information again
         hash_encoded_to(
-            &Self::reward_address_preimage_suffix(),
+            &Self::delegation_address_preimage_suffix(),
             &mut pool_address_creator,
         );
         pool_address_creator.finalize().into()
@@ -93,15 +93,15 @@ impl PoSAccounting {
         spend_key: PublicKey,
         input0_outpoint: &OutPoint,
     ) -> Result<H256, Error> {
-        let reward_address = Self::make_reward_address(input0_outpoint);
+        let delegation_address = Self::make_delegation_address(input0_outpoint);
 
         if !self.pool_exists(target_pool) {
             return Err(Error::DelegationCreationFailedPoolDoesNotExist);
         }
 
-        match self.reward_addresses_balances.entry(reward_address) {
+        match self.delegation_addresses_balances.entry(delegation_address) {
             std::collections::btree_map::Entry::Vacant(entry) => {
-                entry.insert(RewardAddress::new(target_pool, spend_key))
+                entry.insert(DelegationAddress::new(target_pool, spend_key))
             }
             std::collections::btree_map::Entry::Occupied(_entry) => {
                 // This should never happen since it's based on an unspent input
@@ -109,20 +109,20 @@ impl PoSAccounting {
             }
         };
 
-        Ok(reward_address)
+        Ok(delegation_address)
     }
 
-    fn add_to_reward_balance_and_get(
+    fn add_to_delegation_balance_and_get(
         &mut self,
         delegation_target: H256,
         amount_to_delegate: Amount,
-    ) -> Result<&RewardAddress, Error> {
-        let reward_target = self
-            .reward_addresses_balances
+    ) -> Result<&DelegationAddress, Error> {
+        let delegation_target = self
+            .delegation_addresses_balances
             .get_mut(&delegation_target)
-            .ok_or(Error::DelegateToNonexistingRewardAddress)?;
-        reward_target.add_amount(amount_to_delegate)?;
-        Ok(reward_target)
+            .ok_or(Error::DelegateToNonexistingAddress)?;
+        delegation_target.add_amount(amount_to_delegate)?;
+        Ok(delegation_target)
     }
 
     fn add_balance_to_pool(&mut self, pool_id: H256, amount_to_add: Amount) -> Result<(), Error> {
@@ -141,10 +141,10 @@ impl PoSAccounting {
         delegation_target: H256,
         amount_to_delegate: Amount,
     ) -> Result<(), Error> {
-        let reward_target =
-            self.add_to_reward_balance_and_get(delegation_target, amount_to_delegate)?;
+        let delegation_target =
+            self.add_to_delegation_balance_and_get(delegation_target, amount_to_delegate)?;
 
-        let pool_id = *reward_target.source_pool();
+        let pool_id = *delegation_target.source_pool();
 
         self.add_balance_to_pool(pool_id, amount_to_delegate)?;
 
