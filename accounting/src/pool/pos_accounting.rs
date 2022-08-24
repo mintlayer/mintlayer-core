@@ -221,9 +221,7 @@ impl PoSAccounting {
             .pool_addresses_balances
             .get_mut(&pool_id)
             .ok_or(Error::DelegateToNonexistingPool)?;
-        let new_pool_amount =
-            (*pool_amount + amount_to_add).ok_or(Error::PoolBalanceAdditionError)?;
-        *pool_amount = new_pool_amount;
+        *pool_amount = (*pool_amount + amount_to_add).ok_or(Error::PoolBalanceAdditionError)?;
         Ok(())
     }
 
@@ -236,9 +234,8 @@ impl PoSAccounting {
             .pool_addresses_balances
             .get_mut(&pool_id)
             .ok_or(Error::DelegateToNonexistingPool)?;
-        let new_pool_amount = (*pool_amount - amount_to_add)
+        *pool_amount = (*pool_amount - amount_to_add)
             .ok_or(Error::InvariantErrorPoolBalanceAdditionUndoError)?;
-        *pool_amount = new_pool_amount;
         Ok(())
     }
 
@@ -252,9 +249,8 @@ impl PoSAccounting {
             .delegation_to_pool_shares
             .entry((pool_id, delegation_address))
             .or_insert(Amount::from_atoms(0));
-        let new_amount =
+        *current_amount =
             (*current_amount + amount_to_add).ok_or(Error::DelegationSharesAdditionError)?;
-        *current_amount = new_amount;
         Ok(())
     }
 
@@ -268,9 +264,8 @@ impl PoSAccounting {
             .delegation_to_pool_shares
             .entry((pool_id, delegation_address))
             .or_insert(Amount::from_atoms(0));
-        let new_amount = (*current_amount - amount_to_add)
+        *current_amount = (*current_amount - amount_to_add)
             .ok_or(Error::InvariantErrorDelegationSharesAdditionUndoError)?;
-        *current_amount = new_amount;
         Ok(())
     }
 
