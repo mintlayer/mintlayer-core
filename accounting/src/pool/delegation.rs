@@ -1,6 +1,7 @@
 use common::primitives::H256;
 use crypto::key::PublicKey;
 
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct DelegationData {
     spend_key: PublicKey,
     source_pool: H256,

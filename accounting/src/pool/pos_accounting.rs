@@ -23,8 +23,7 @@ pub enum PoSAccountingUndo {
         last_amount: Amount,
     },
     CreateDelegationAddress {
-        target_pool: H256,
-        spend_key: PublicKey,
+        delegation_data: DelegationData,
         input0_outpoint: OutPoint,
     },
     AddDelegationBalance {
@@ -139,9 +138,11 @@ impl PoSAccounting {
             return Err(Error::DelegationCreationFailedPoolDoesNotExist);
         }
 
-        match self.delegation_addresses_data.entry(delegation_address) {
+        let delegation_data = match self.delegation_addresses_data.entry(delegation_address) {
             std::collections::btree_map::Entry::Vacant(entry) => {
-                entry.insert(DelegationData::new(target_pool, spend_key.clone()))
+                let delegation_data = DelegationData::new(target_pool, spend_key.clone());
+                entry.insert(delegation_data.clone());
+                delegation_data
             }
             std::collections::btree_map::Entry::Occupied(_entry) => {
                 // This should never happen since it's based on an unspent input
@@ -152,11 +153,31 @@ impl PoSAccounting {
         Ok((
             delegation_address,
             PoSAccountingUndo::CreateDelegationAddress {
-                target_pool,
-                spend_key,
+                delegation_data,
                 input0_outpoint: input0_outpoint.clone(),
             },
         ))
+    }
+
+    pub fn undo_create_delegation_address(
+        &mut self,
+        delegation_data: DelegationData,
+        input0_outpoint: &OutPoint,
+    ) -> Result<(), Error> {
+        let delegation_address = make_delegation_address(input0_outpoint);
+
+        let removed_data = self.delegation_addresses_data.remove(&delegation_address);
+
+        let removed_data = match removed_data {
+            Some(d) => d,
+            None => return Err(Error::InvariantErrorDelegationAddressUndoFailedNotFound),
+        };
+
+        if removed_data != delegation_data {
+            return Err(Error::InvariantErrorDelegationAddressUndoFailedDataConflict);
+        }
+
+        Ok(())
     }
 
     fn add_to_delegation_balance(

@@ -24,4 +24,8 @@ pub enum Error {
     InvariantErrorPoolCreationReversalFailedAmountChanged,
     #[error("Undo failed as decommission pool is still in storage")]
     InvariantErrorDecommissionUndoFailedAlreadyExists,
+    #[error("Reversal of delegation address creation failed; not found")]
+    InvariantErrorDelegationAddressUndoFailedNotFound,
+    #[error("Reversal of delegation address creation failed; data changed")]
+    InvariantErrorDelegationAddressUndoFailedDataConflict,
 }
