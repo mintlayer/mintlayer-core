@@ -140,7 +140,7 @@ impl PoSAccounting {
 
         let delegation_data = match self.delegation_addresses_data.entry(delegation_address) {
             std::collections::btree_map::Entry::Vacant(entry) => {
-                let delegation_data = DelegationData::new(target_pool, spend_key.clone());
+                let delegation_data = DelegationData::new(target_pool, spend_key);
                 entry.insert(delegation_data.clone());
                 delegation_data
             }
