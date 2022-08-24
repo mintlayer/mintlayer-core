@@ -316,4 +316,20 @@ impl PoSAccounting {
             Some(result)
         }
     }
+
+    pub fn get_delegation_share(&self, pool_id: H256, delegation_address: H256) -> Option<Amount> {
+        self.delegation_to_pool_shares.get(&(pool_id, delegation_address)).copied()
+    }
+
+    pub fn get_pool_balance(&self, pool_id: H256) -> Option<Amount> {
+        self.pool_addresses_balances.get(&pool_id).copied()
+    }
+
+    pub fn get_delegation_address_balance(&self, delegation_address: H256) -> Option<Amount> {
+        self.delegation_addresses_balances.get(&delegation_address).copied()
+    }
+
+    pub fn get_delegation_address_data(&self, delegation_address: H256) -> Option<DelegationData> {
+        self.delegation_addresses_data.get(&delegation_address).cloned()
+    }
 }
