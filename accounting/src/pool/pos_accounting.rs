@@ -6,7 +6,10 @@ use common::{
 };
 use crypto::key::PublicKey;
 
-use crate::error::Error;
+use crate::{
+    error::Error,
+    storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
+};
 
 use super::{
     delegation::DelegationData,
@@ -37,23 +40,27 @@ pub enum PoSAccountingUndo {
     },
 }
 
-pub struct PoSAccounting {
+pub struct PoSAccounting<S> {
+    store: S,
     pool_addresses_balances: BTreeMap<H256, Amount>,
     delegation_to_pool_shares: BTreeMap<(H256, H256), Amount>,
     delegation_addresses_balances: BTreeMap<H256, Amount>,
     delegation_addresses_data: BTreeMap<H256, DelegationData>,
 }
 
-impl PoSAccounting {
-    pub fn new_empty() -> Self {
+impl<S> PoSAccounting<S> {
+    pub fn new_empty(store: S) -> Self {
         Self {
+            store,
             pool_addresses_balances: Default::default(),
             delegation_to_pool_shares: Default::default(),
             delegation_addresses_balances: Default::default(),
             delegation_addresses_data: Default::default(),
         }
     }
+}
 
+impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
     pub fn create_pool(
         &mut self,
         input0_outpoint: &OutPoint,
@@ -122,10 +129,6 @@ impl PoSAccounting {
         Ok(())
     }
 
-    pub fn pool_exists(&self, pool_id: H256) -> bool {
-        self.pool_addresses_balances.contains_key(&pool_id)
-    }
-
     pub fn create_delegation_address(
         &mut self,
         target_pool: H256,
@@ -134,7 +137,7 @@ impl PoSAccounting {
     ) -> Result<(H256, PoSAccountingUndo), Error> {
         let delegation_address = make_delegation_address(input0_outpoint);
 
-        if !self.pool_exists(target_pool) {
+        if !self.pool_exists(target_pool)? {
             return Err(Error::DelegationCreationFailedPoolDoesNotExist);
         }
 
@@ -206,14 +209,6 @@ impl PoSAccounting {
         *current_amount = (*current_amount - amount_to_delegate)
             .ok_or(Error::InvariantErrorDelegationBalanceAdditionUndoError)?;
         Ok(())
-    }
-
-    fn get_delegation_data(&self, delegation_target: H256) -> Result<&DelegationData, Error> {
-        let delegation_target = self
-            .delegation_addresses_data
-            .get(&delegation_target)
-            .ok_or(Error::DelegateToNonexistingAddress)?;
-        Ok(delegation_target)
     }
 
     fn add_balance_to_pool(&mut self, pool_id: H256, amount_to_add: Amount) -> Result<(), Error> {
@@ -303,33 +298,60 @@ impl PoSAccounting {
 
         Ok(())
     }
+}
+
+impl<S: PoSAccountingStorageRead> PoSAccounting<S> {
+    pub fn pool_exists(&self, pool_id: H256) -> Result<bool, Error> {
+        self.store
+            .get_pool_address_balance(pool_id)
+            .map_err(Error::from)
+            .map(|v| v.is_some())
+    }
+
+    fn get_delegation_data(&self, delegation_target: H256) -> Result<DelegationData, Error> {
+        let delegation_target = self
+            .store
+            .get_delegation_address_data(delegation_target)
+            .map_err(Error::from)?
+            .ok_or(Error::DelegateToNonexistingAddress)?;
+        Ok(delegation_target)
+    }
 
     // TODO: test that all values within the pool will be returned, especially boundary values, and off boundary aren't returned
-    pub fn get_delegation_shares(&self, pool_id: H256) -> Option<BTreeMap<H256, Amount>> {
-        let range_start = (pool_id, H256::zero());
-        let range_end = (pool_id, H256::repeat_byte(0xFF));
-        let range = self.delegation_to_pool_shares.range(range_start..=range_end);
-        let result = range.map(|((_pool_id, del_id), v)| (*del_id, *v)).collect::<BTreeMap<_, _>>();
-        if result.is_empty() {
-            None
-        } else {
-            Some(result)
-        }
+    pub fn get_delegation_shares(
+        &self,
+        pool_id: H256,
+    ) -> Result<Option<BTreeMap<H256, Amount>>, Error> {
+        self.store.get_pool_delegation_shares(pool_id).map_err(Error::from)
     }
 
-    pub fn get_delegation_share(&self, pool_id: H256, delegation_address: H256) -> Option<Amount> {
-        self.delegation_to_pool_shares.get(&(pool_id, delegation_address)).copied()
+    pub fn get_delegation_share(
+        &self,
+        pool_id: H256,
+        delegation_address: H256,
+    ) -> Result<Option<Amount>, Error> {
+        self.store
+            .get_pool_delegation_amount(pool_id, delegation_address)
+            .map_err(Error::from)
     }
 
-    pub fn get_pool_balance(&self, pool_id: H256) -> Option<Amount> {
-        self.pool_addresses_balances.get(&pool_id).copied()
+    pub fn get_pool_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error> {
+        self.store.get_pool_address_balance(pool_id).map_err(Error::from)
     }
 
-    pub fn get_delegation_address_balance(&self, delegation_address: H256) -> Option<Amount> {
-        self.delegation_addresses_balances.get(&delegation_address).copied()
+    pub fn get_delegation_address_balance(
+        &self,
+        delegation_address: H256,
+    ) -> Result<Option<Amount>, Error> {
+        self.store
+            .get_delegation_address_balance(delegation_address)
+            .map_err(Error::from)
     }
 
-    pub fn get_delegation_address_data(&self, delegation_address: H256) -> Option<DelegationData> {
-        self.delegation_addresses_data.get(&delegation_address).cloned()
+    pub fn get_delegation_address_data(
+        &self,
+        delegation_address: H256,
+    ) -> Result<Option<DelegationData>, Error> {
+        self.store.get_delegation_address_data(delegation_address).map_err(Error::from)
     }
 }

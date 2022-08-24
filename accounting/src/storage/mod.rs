@@ -25,6 +25,12 @@ pub trait PoSAccountingStorageRead {
         &self,
         delegation_address: H256,
     ) -> Result<Option<Amount>, Error>;
+
+    fn get_pool_delegation_amount(
+        &self,
+        pool_id: H256,
+        delegation_address: H256,
+    ) -> Result<Option<Amount>, Error>;
 }
 
 pub trait PoSAccountingStorageWrite: PoSAccountingStorageRead {

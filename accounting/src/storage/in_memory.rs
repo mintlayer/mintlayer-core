@@ -60,6 +60,14 @@ impl PoSAccountingStorageRead for InMemoryPoSAccounting {
     ) -> Result<Option<Amount>, Error> {
         Ok(self.delegation_addresses_balances.get(&delegation_address).copied())
     }
+
+    fn get_pool_delegation_amount(
+        &self,
+        pool_id: H256,
+        delegation_address: H256,
+    ) -> Result<Option<Amount>, Error> {
+        Ok(self.delegation_to_pool_shares.get(&(pool_id, delegation_address)).copied())
+    }
 }
 
 impl PoSAccountingStorageWrite for InMemoryPoSAccounting {

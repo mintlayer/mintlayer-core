@@ -1,7 +1,7 @@
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum Error {
     #[error("Accounting storage error")]
-    StorageError,
+    StorageError(#[from] chainstate_types::storage_result::Error),
     #[error("Pool already exists")]
     InvariantErrorPoolAlreadyExists,
     #[error("Attempted to decommission a non-existing pool")]
