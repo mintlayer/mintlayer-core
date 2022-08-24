@@ -279,7 +279,7 @@ fn token_transfer_test() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
+                ConnectTransactionError::AttemptToPrintMoney(_, _)
             ))
         ));
 
@@ -291,7 +291,7 @@ fn token_transfer_test() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
+                ConnectTransactionError::MissingOutputOrSpent
             ))
         ));
 
@@ -503,11 +503,11 @@ fn test_burn_tokens() {
         let values = vec![
             OutputValue::Token(TokenData::TokenBurnV1 {
                 token_id,
-                amount_to_burn: HALF_ISSUED_FUNDS,
+                amount_to_burn: QUARTER_ISSUED_FUNDS,
             }),
             OutputValue::Token(TokenData::TokenTransferV1 {
                 token_id,
-                amount: (HALF_ISSUED_FUNDS / 2).unwrap(),
+                amount: HALF_ISSUED_FUNDS,
             }),
         ];
         process_token(&mut test_framework, ParentBlock::BestBlock, values).unwrap();
@@ -745,7 +745,7 @@ fn test_attempt_to_print_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
+                ConnectTransactionError::AttemptToPrintMoney(_, _)
             ))
         ));
     });
@@ -808,7 +808,7 @@ fn test_attempt_to_mix_input_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
+                ConnectTransactionError::AttemptToPrintMoney(_, _)
             ))
         ));
 
@@ -820,7 +820,7 @@ fn test_attempt_to_mix_input_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
+                ConnectTransactionError::AttemptToPrintMoney(_, _)
             ))
         ));
     })
