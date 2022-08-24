@@ -28,4 +28,10 @@ pub enum Error {
     InvariantErrorDelegationAddressUndoFailedNotFound,
     #[error("Reversal of delegation address creation failed; data changed")]
     InvariantErrorDelegationAddressUndoFailedDataConflict,
+    #[error("Delegation balance arithmetic undo error")]
+    InvariantErrorDelegationBalanceAdditionUndoError,
+    #[error("Pool balance arithmetic undo error")]
+    InvariantErrorPoolBalanceAdditionUndoError,
+    #[error("Delegation shares arithmetic undo error")]
+    InvariantErrorDelegationSharesAdditionUndoError,
 }

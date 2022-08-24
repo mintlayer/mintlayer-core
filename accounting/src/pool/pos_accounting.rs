@@ -194,6 +194,20 @@ impl PoSAccounting {
         Ok(())
     }
 
+    fn undo_add_to_delegation_balance(
+        &mut self,
+        delegation_target: H256,
+        amount_to_delegate: Amount,
+    ) -> Result<(), Error> {
+        let current_amount = self
+            .delegation_addresses_balances
+            .get_mut(&delegation_target)
+            .ok_or(Error::DelegateToNonexistingAddress)?;
+        *current_amount = (*current_amount - amount_to_delegate)
+            .ok_or(Error::InvariantErrorDelegationBalanceAdditionUndoError)?;
+        Ok(())
+    }
+
     fn get_delegation_data(&self, delegation_target: H256) -> Result<&DelegationData, Error> {
         let delegation_target = self
             .delegation_addresses_data
@@ -213,6 +227,21 @@ impl PoSAccounting {
         Ok(())
     }
 
+    fn undo_add_balance_to_pool(
+        &mut self,
+        pool_id: H256,
+        amount_to_add: Amount,
+    ) -> Result<(), Error> {
+        let pool_amount = self
+            .pool_addresses_balances
+            .get_mut(&pool_id)
+            .ok_or(Error::DelegateToNonexistingPool)?;
+        let new_pool_amount = (*pool_amount - amount_to_add)
+            .ok_or(Error::InvariantErrorPoolBalanceAdditionUndoError)?;
+        *pool_amount = new_pool_amount;
+        Ok(())
+    }
+
     fn add_delegation_to_pool_share(
         &mut self,
         pool_id: H256,
@@ -224,7 +253,23 @@ impl PoSAccounting {
             .entry((pool_id, delegation_address))
             .or_insert(Amount::from_atoms(0));
         let new_amount =
-            (*current_amount + amount_to_add).ok_or(Error::PoolBalanceAdditionError)?;
+            (*current_amount + amount_to_add).ok_or(Error::DelegationSharesAdditionError)?;
+        *current_amount = new_amount;
+        Ok(())
+    }
+
+    fn undo_add_delegation_to_pool_share(
+        &mut self,
+        pool_id: H256,
+        delegation_address: H256,
+        amount_to_add: Amount,
+    ) -> Result<(), Error> {
+        let current_amount = self
+            .delegation_to_pool_shares
+            .entry((pool_id, delegation_address))
+            .or_insert(Amount::from_atoms(0));
+        let new_amount = (*current_amount - amount_to_add)
+            .ok_or(Error::InvariantErrorDelegationSharesAdditionUndoError)?;
         *current_amount = new_amount;
         Ok(())
     }
@@ -234,9 +279,7 @@ impl PoSAccounting {
         delegation_target: H256,
         amount_to_delegate: Amount,
     ) -> Result<PoSAccountingUndo, Error> {
-        let delegation_data = self.get_delegation_data(delegation_target)?;
-
-        let pool_id = *delegation_data.source_pool();
+        let pool_id = *self.get_delegation_data(delegation_target)?.source_pool();
 
         self.add_to_delegation_balance(delegation_target, amount_to_delegate)?;
 
@@ -248,6 +291,22 @@ impl PoSAccounting {
             delegation_target,
             amount_to_delegate,
         })
+    }
+
+    pub fn undo_delegate_staking(
+        &mut self,
+        delegation_target: H256,
+        amount_to_delegate: Amount,
+    ) -> Result<(), Error> {
+        let pool_id = *self.get_delegation_data(delegation_target)?.source_pool();
+
+        self.undo_add_delegation_to_pool_share(pool_id, delegation_target, amount_to_delegate)?;
+
+        self.undo_add_balance_to_pool(pool_id, amount_to_delegate)?;
+
+        self.undo_add_to_delegation_balance(delegation_target, amount_to_delegate)?;
+
+        Ok(())
     }
 
     // TODO: test that all values within the pool will be returned, especially boundary values, and off boundary aren't returned
