@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use common::primitives::{Amount, H256};
-use crypto::key::PublicKey;
 
 use crate::pool::delegation::DelegationData;
 
@@ -57,8 +56,7 @@ pub trait PoSAccountingStorageWrite: PoSAccountingStorageRead {
     fn set_delegation_address_data(
         &mut self,
         delegation_address: H256,
-        source_pool: H256,
-        public_key: &PublicKey,
+        delegation_data: DelegationData,
     ) -> Result<(), Error>;
 
     fn del_delegation_address_data(&mut self, delegation_address: H256) -> Result<(), Error>;
