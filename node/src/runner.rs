@@ -18,7 +18,6 @@
 use std::{fs, path::Path, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context, Result};
-use mempool::DummyMempoolChainState;
 use paste::paste;
 
 use chainstate::rpc::ChainstateRpcServer;
@@ -73,7 +72,7 @@ pub async fn initialize(
     let mempool = manager.add_subsystem(
         "mempool",
         mempool::make_mempool(
-            DummyMempoolChainState {},
+            Arc::clone(&chain_config),
             chainstate.clone(),
             mempool::pool::SystemClock {},
             mempool::pool::SystemUsageEstimator {},

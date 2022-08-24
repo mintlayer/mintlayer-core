@@ -13,11 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use crate::detail::BlockSource;
 use crate::ChainstateConfig;
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::tokens::TokenAuxiliaryData;
+use common::chain::OutPoint;
 use common::chain::Transaction;
 use common::chain::TxInput;
 use common::chain::{
@@ -25,10 +28,11 @@ use common::chain::{
     tokens::{RPCTokenInfo, TokenId},
     ChainConfig, OutPointSourceId, TxMainChainIndex,
 };
+use common::primitives::Amount;
 use common::primitives::{BlockHeight, Id};
 use utils::eventhandler::EventHandler;
 
-use crate::{detail::BlockSource, ChainstateError, ChainstateEvent};
+use crate::{ChainstateError, ChainstateEvent};
 use chainstate_types::Locator;
 
 pub trait ChainstateInterface: Send {
@@ -118,5 +122,13 @@ pub trait ChainstateInterface: Send {
         &self,
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TokenId>, ChainstateError>;
-    fn available_inputs(&self, tx: &Transaction) -> Vec<TxInput>;
+
+    /// Returns all spendable inputs of a Transaction
+    fn available_inputs(&self, tx: &Transaction) -> Result<Vec<TxInput>, ChainstateError>;
+
+    /// Returns the value of a given OutPoint
+    fn get_outpoint_value(&self, outpoint: &OutPoint) -> Result<Amount, ChainstateError>;
+
+    /// Returns the current utxo set
+    fn confirmed_outpoints(&self) -> Result<BTreeSet<OutPoint>, ChainstateError>;
 }

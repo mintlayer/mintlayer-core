@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate::ChainstateError;
 use thiserror::Error;
 
 use common::chain::transaction::Transaction;
@@ -81,6 +82,22 @@ pub enum TxValidationError {
     AncestorFeeUpdateOverflow,
     #[error("Transaction is a descendant of expired transaction.")]
     DescendantOfExpiredTransaction,
+    #[error("Chainstate error")]
+    ChainstateError,
+    #[error("Subsystem call error")]
+    CallError,
     #[error("Internal Error.")]
     InternalError,
+}
+
+impl From<subsystem::subsystem::CallError> for TxValidationError {
+    fn from(_e: subsystem::subsystem::CallError) -> TxValidationError {
+        TxValidationError::CallError
+    }
+}
+
+impl From<ChainstateError> for TxValidationError {
+    fn from(_e: ChainstateError) -> TxValidationError {
+        TxValidationError::ChainstateError
+    }
 }

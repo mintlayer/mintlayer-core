@@ -23,6 +23,12 @@ use common::chain::config::ChainConfig;
 use common::chain::tokens::TokenAuxiliaryData;
 use common::chain::TxInput;
 use common::chain::{OutPointSourceId, Transaction, TxMainChainIndex};
+use std::collections::BTreeSet;
+
+use chainstate_types::PropertyQueryError;
+use common::chain::OutPoint;
+use common::chain::OutputSpentState;
+use common::primitives::Amount;
 use common::{
     chain::{
         block::{Block, BlockHeader, GenBlock},
@@ -282,7 +288,38 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn available_inputs(&self, _tx: &Transaction) -> Vec<TxInput> {
-        vec![]
+    fn available_inputs(&self, tx: &Transaction) -> Result<Vec<TxInput>, ChainstateError> {
+        eprintln!("available_inputs chainstate");
+        let mut available_inputs = Vec::new();
+        for input in tx.inputs() {
+            let index = self
+                .chainstate
+                .make_db_tx_ro()
+                .get_mainchain_tx_index(&input.outpoint().tx_id())
+                .map_err(ChainstateError::FailedToReadProperty)?;
+            if let Some(index) = index {
+                if OutputSpentState::Unspent
+                    == index.get_spent_state(input.outpoint().output_index()).map_err(|_| {
+                        ChainstateError::FailedToReadProperty(
+                            PropertyQueryError::OutpointIndexOutOfRange,
+                        )
+                    })?
+                {
+                    available_inputs.push(input.clone())
+                }
+            }
+        }
+        Ok(available_inputs)
+    }
+
+    fn get_outpoint_value(
+        &self,
+        _outpoint: &common::chain::OutPoint,
+    ) -> Result<common::primitives::Amount, ChainstateError> {
+        Ok(Amount::from_atoms(0))
+    }
+
+    fn confirmed_outpoints(&self) -> Result<BTreeSet<OutPoint>, ChainstateError> {
+        Ok(BTreeSet::new())
     }
 }

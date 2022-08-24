@@ -209,8 +209,21 @@ impl<
         self.deref().get_token_id_from_issuance_tx(tx_id)
     }
 
-    fn available_inputs(&self, tx: &Transaction) -> Vec<TxInput> {
+    fn available_inputs(&self, tx: &Transaction) -> Result<Vec<TxInput>, ChainstateError> {
         self.deref().available_inputs(tx)
+    }
+
+    fn get_outpoint_value(
+        &self,
+        outpoint: &common::chain::OutPoint,
+    ) -> Result<common::primitives::Amount, ChainstateError> {
+        self.deref().get_outpoint_value(outpoint)
+    }
+
+    fn confirmed_outpoints(
+        &self,
+    ) -> Result<std::collections::BTreeSet<common::chain::OutPoint>, ChainstateError> {
+        self.deref().confirmed_outpoints()
     }
 }
 

@@ -2342,17 +2342,21 @@ name = "mempool"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chainstate",
  "chainstate-storage",
  "common",
+ "futures",
  "jsonrpsee",
  "lazy_static",
  "logging",
  "mockall",
+ "parking_lot 0.12.1",
  "rpc",
  "serialization",
  "subsystem",
  "thiserror",
+ "tokio",
  "utils",
 ]
 
