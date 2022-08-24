@@ -3,7 +3,11 @@ use std::collections::BTreeMap;
 use common::primitives::{Amount, H256};
 use crypto::key::PublicKey;
 
-use crate::{error::Error, pool::delegation::DelegationData};
+use crate::pool::delegation::DelegationData;
+
+use chainstate_types::storage_result::Error;
+
+pub mod in_memory;
 
 pub trait PoSAccountingStorageRead {
     fn get_pool_address_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error>;
@@ -17,16 +21,23 @@ pub trait PoSAccountingStorageRead {
         &self,
         delegation_address: H256,
     ) -> Result<Option<DelegationData>, Error>;
+
+    fn get_delegation_address_balance(
+        &self,
+        delegation_address: H256,
+    ) -> Result<Option<Amount>, Error>;
 }
 
 pub trait PoSAccountingStorageWrite: PoSAccountingStorageRead {
     fn set_pool_address_balance(&mut self, pool_id: H256, amount: Amount) -> Result<(), Error>;
+
     fn set_pool_delegation_shares(
         &mut self,
         pool_id: H256,
         delegation_address: H256,
         amount: Amount,
     ) -> Result<(), Error>;
+
     fn set_delegation_address_data(
         delegation_address: H256,
         source_pool: H256,

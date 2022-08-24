@@ -9,5 +9,6 @@ edition = "2021"
 [dependencies]
 common = {path = '../common'}
 crypto = {path = '../crypto'}
+chainstate-types = {path = '../chainstate-types'}
 
 thiserror = "1.0"
