@@ -66,15 +66,16 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
     ) -> Result<PoSAccountingUndo, Error> {
-        let pool_address = make_pool_address(input0_outpoint);
+        let pool_id = make_pool_address(input0_outpoint);
 
-        match self.pool_addresses_balances.entry(pool_address) {
-            std::collections::btree_map::Entry::Vacant(entry) => entry.insert(pledge_amount),
-            std::collections::btree_map::Entry::Occupied(_entry) => {
-                // This should never happen since it's based on an unspent input
-                return Err(Error::InvariantErrorPoolAlreadyExists);
-            }
-        };
+        let current_amount = self.store.get_pool_address_balance(pool_id)?;
+
+        if current_amount.is_some() {
+            // This should never happen since it's based on an unspent input
+            return Err(Error::InvariantErrorPoolAlreadyExists);
+        }
+
+        self.store.set_pool_address_balance(pool_id, pledge_amount)?;
 
         Ok(PoSAccountingUndo::CreatePool {
             input0_outpoint: input0_outpoint.clone(),
@@ -87,9 +88,9 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
     ) -> Result<(), Error> {
-        let pool_address = make_pool_address(input0_outpoint);
+        let pool_id = make_pool_address(input0_outpoint);
 
-        let amount = self.pool_addresses_balances.remove(&pool_address);
+        let amount = self.store.get_pool_address_balance(pool_id)?;
 
         match amount {
             Some(amount) => {
@@ -99,6 +100,8 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
             }
             None => return Err(Error::InvariantErrorPoolCreationReversalFailedNotFound),
         }
+
+        self.store.del_pool(pool_id)?;
 
         Ok(())
     }
