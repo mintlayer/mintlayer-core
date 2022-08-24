@@ -33,10 +33,13 @@ pub trait PoSAccountingStorageWrite: PoSAccountingStorageRead {
 
     fn del_pool(&mut self, pool_id: H256) -> Result<(), Error>;
 
-    fn set_delegation_address_balance(delegation_target: H256, amount: Amount)
-        -> Result<(), Error>;
+    fn set_delegation_address_balance(
+        &mut self,
+        delegation_target: H256,
+        amount: Amount,
+    ) -> Result<(), Error>;
 
-    fn del_delegation_address_balance(delegation_target: H256) -> Result<(), Error>;
+    fn del_delegation_address_balance(&mut self, delegation_target: H256) -> Result<(), Error>;
 
     fn set_pool_delegation_shares(
         &mut self,
@@ -52,10 +55,11 @@ pub trait PoSAccountingStorageWrite: PoSAccountingStorageRead {
     ) -> Result<(), Error>;
 
     fn set_delegation_address_data(
+        &mut self,
         delegation_address: H256,
         source_pool: H256,
         public_key: &PublicKey,
     ) -> Result<(), Error>;
 
-    fn del_delegation_address_data(delegation_address: H256) -> Result<(), Error>;
+    fn del_delegation_address_data(&mut self, delegation_address: H256) -> Result<(), Error>;
 }
