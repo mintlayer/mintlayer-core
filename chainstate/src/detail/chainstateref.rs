@@ -30,6 +30,7 @@ use common::{
 use consensus::{BlockIndexHandle, TransactionIndexHandle};
 use logging::log;
 use utils::ensure;
+use utxo::{BlockUndo, UtxosDB, UtxosView};
 
 use super::{median_time::calculate_median_time_past, time_getter::TimeGetterFn};
 use crate::{BlockError, BlockSource, ChainstateConfig};
@@ -515,20 +516,24 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     fn make_cache_with_connected_transactions(
-        &self,
+        &'a self,
+        utxo_view: &'a impl UtxosView,
         block: &Block,
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
+        block_undo: &mut BlockUndo,
     ) -> Result<TransactionVerifier<S>, BlockError> {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
 
-        let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
+        let mut tx_verifier =
+            TransactionVerifier::new(&self.db_tx, utxo_view.derive_cache(), self.chain_config);
         tx_verifier.connect_transaction(
             BlockTransactableRef::BlockReward(block),
             spend_height,
             &median_time_past,
             blockreward_maturity,
+            block_undo,
         )?;
 
         for (tx_num, _tx) in block.transactions().iter().enumerate() {
@@ -537,6 +542,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 spend_height,
                 &median_time_past,
                 blockreward_maturity,
+                block_undo,
             )?;
         }
 
@@ -547,14 +553,20 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     fn make_cache_with_disconnected_transactions(
-        &self,
+        &'a self,
+        utxo_cache: &'a impl UtxosView,
         block: &Block,
+        block_undo: &BlockUndo,
     ) -> Result<TransactionVerifier<S>, BlockError> {
-        let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
+        let mut tx_verifier =
+            TransactionVerifier::new(&self.db_tx, utxo_view.derive_cache(), self.chain_config);
         block.transactions().iter().enumerate().try_for_each(|(tx_num, _tx)| {
-            tx_verifier.disconnect_transaction(BlockTransactableRef::Transaction(block, tx_num))
+            tx_verifier.disconnect_transaction(
+                BlockTransactableRef::Transaction(block, tx_num),
+                block_undo,
+            )
         })?;
-        tx_verifier.disconnect_transaction(BlockTransactableRef::BlockReward(block))?;
+        tx_verifier.disconnect_transaction(BlockTransactableRef::BlockReward(block), block_undo)?;
         Ok(tx_verifier)
     }
 }
@@ -639,19 +651,37 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
-        let connected_txs =
-            self.make_cache_with_connected_transactions(block, spend_height, blockreward_maturity)?;
-        let consumed = connected_txs.consume()?;
+        let mut utxo_db = UtxosDB::new(&mut self.db_tx);
+        let mut block_undo: BlockUndo = Default::default();
+        let connected_txs = self.make_cache_with_connected_transactions(
+            &utxo_db,
+            block,
+            spend_height,
+            blockreward_maturity,
+            &mut block_undo,
+        )?;
 
+        let consumed = connected_txs.consume()?;
         TransactionVerifier::flush_to_storage(&mut self.db_tx, consumed)?;
+
+        self.db_tx.set_undo_data(block.get_id(), &block_undo)?;
         Ok(())
     }
 
     fn disconnect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
-        let cached_inputs = self.make_cache_with_disconnected_transactions(block)?;
-        let cached_inputs = cached_inputs.consume()?;
+        let mut utxo_db = UtxosDB::new(&mut self.db_tx);
+        let block_id = block.get_id();
+        let block_undo = self
+            .db_tx
+            .get_undo_data(block_id)
+            .ok_or_else(|| ConnectTransactionError::MissingBlockUndoOnDisconnect(block_id))?;
 
+        let cached_inputs =
+            self.make_cache_with_disconnected_transactions(&utxo_db, block, &block_undo)?;
+        let cached_inputs = cached_inputs.consume()?;
         TransactionVerifier::flush_to_storage(&mut self.db_tx, cached_inputs)?;
+
+        self.db_tx.del_undo_data(block_id)?;
         Ok(())
     }
 

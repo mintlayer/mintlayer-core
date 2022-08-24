@@ -556,18 +556,13 @@ fn check_spend_undo_spend(#[case] seed: Seed) {
     );
     let tx = Transaction::new(0x00, vec![input], create_tx_outputs(&mut rng, 1), 0x01).unwrap();
     let undo = cache.spend_utxos_from_tx(&tx, BlockHeight::new(1)).unwrap();
+    assert!(!cache.has_utxo_in_cache(&outpoint));
 
     //undo spending
-    let tx_outpoint = OutPoint::new(OutPointSourceId::from(tx.get_id()), 0);
-    cache.spend_utxo(&tx_outpoint).unwrap();
-    cache
-        .add_utxo(
-            &outpoint,
-            undo.inner()[0].clone(),
-            cache.has_utxo(&outpoint),
-        )
-        .unwrap();
+    cache.unspend_utxos_from_tx(&tx, &undo).unwrap();
+    assert!(cache.has_utxo_in_cache(&outpoint));
 
     //spend the transaction again
     cache.spend_utxos_from_tx(&tx, BlockHeight::new(1)).unwrap();
+    assert!(!cache.has_utxo_in_cache(&outpoint));
 }

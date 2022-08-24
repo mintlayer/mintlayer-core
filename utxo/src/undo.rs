@@ -14,10 +14,22 @@
 // limitations under the License.
 
 use crate::Utxo;
-use common::primitives::BlockHeight;
 use serialization::{Decode, Encode};
 
-#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
+#[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
+pub struct BlockRewardUndo(Vec<Utxo>);
+
+impl BlockRewardUndo {
+    pub fn new(utxos: Vec<Utxo>) -> Self {
+        Self(utxos)
+    }
+
+    pub fn inner(&self) -> &[Utxo] {
+        &self.0
+    }
+}
+
+#[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct TxUndo(Vec<Utxo>);
 
 impl TxUndo {
@@ -46,26 +58,34 @@ impl TxUndo {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
+#[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct BlockUndo {
-    // determines at what height this undo file belongs to.
-    height: BlockHeight,
-    undos: Vec<TxUndo>,
+    reward_undo: BlockRewardUndo,
+    tx_undos: Vec<TxUndo>,
 }
 
 impl BlockUndo {
-    pub fn new(tx_undos: Vec<TxUndo>, height: BlockHeight) -> Self {
+    pub fn new(reward_undo: BlockRewardUndo, tx_undos: Vec<TxUndo>) -> Self {
         Self {
-            height,
-            undos: tx_undos,
+            tx_undos: tx_undos,
+            reward_undo: reward_undo,
         }
     }
+
     pub fn tx_undos(&self) -> &[TxUndo] {
-        &self.undos
+        &self.tx_undos
     }
 
-    pub fn height(&self) -> BlockHeight {
-        self.height
+    pub fn push_tx_undo(&mut self, tx_undo: TxUndo) {
+        self.tx_undos.push(tx_undo);
+    }
+
+    pub fn block_reward_undo(&self) -> &BlockRewardUndo {
+        &self.reward_undo
+    }
+
+    pub fn set_block_reward_undo(&mut self, reward_undo: BlockRewardUndo) {
+        self.reward_undo = reward_undo;
     }
 }
 

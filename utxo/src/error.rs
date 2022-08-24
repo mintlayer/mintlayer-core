@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate_types::storage_result;
 use thiserror::Error;
 
 #[derive(Error, Debug, Eq, PartialEq)]
@@ -30,11 +31,11 @@ pub enum Error {
     #[error("Attempted to get the block height of a UTXO source that is based on the mempool")]
     NoBlockchainHeightFound,
     #[error("Database error: `{0}`")]
-    DBError(String),
+    DBError(storage_result::Error),
 }
 
-impl From<chainstate_types::storage_result::Error> for Error {
-    fn from(e: chainstate_types::storage_result::Error) -> Self {
-        Error::DBError(format!("{:?}", e))
+impl From<storage_result::Error> for Error {
+    fn from(e: storage_result::Error) -> Self {
+        Error::DBError(e)
     }
 }

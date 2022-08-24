@@ -15,10 +15,14 @@
 
 use crate::{
     utxo_entry::{IsDirty, IsFresh, UtxoEntry},
-    {Error, FlushableUtxoView, TxUndo, Utxo, UtxoSource, UtxosView},
+    {BlockRewardUndo, Error, FlushableUtxoView, TxUndo, Utxo, UtxoSource, UtxosView},
 };
 use common::{
-    chain::{block::BlockReward, GenBlock, OutPoint, OutPointSourceId, Transaction},
+    chain::{
+        block::{BlockReward, BlockRewardTransactable},
+        signature::Transactable,
+        GenBlock, OutPoint, OutPointSourceId, Transaction,
+    },
     primitives::{BlockHeight, Id, Idable},
 };
 use logging::log;
@@ -58,7 +62,7 @@ impl<'a> UtxosCache<'a> {
     /// Returns a UtxoEntry, given the outpoint.
     // the reason why it's not a `&UtxoEntry`, is because the flags are bound to change esp.
     // when the utxo was actually retrieved from the parent.
-    fn get_utxo_entry(&self, outpoint: &OutPoint) -> Option<UtxoEntry> {
+    fn fetch_utxo_entry(&mut self, outpoint: &OutPoint) -> Option<UtxoEntry> {
         if let Some(res) = self.utxos.get(outpoint) {
             return Some(res.clone());
         }
@@ -68,9 +72,13 @@ impl<'a> UtxosCache<'a> {
             // if the utxo exists in parent:
             // dirty is FALSE because this view does not have the utxo, therefore is different from parent
             // fresh is FALSE because this view does not have the utxo but the parent has.
-            parent
+            let entry = parent
                 .utxo(outpoint)
-                .map(|utxo| UtxoEntry::new(Some(utxo), IsFresh::No, IsDirty::No))
+                .map(|utxo| UtxoEntry::new(Some(utxo), IsFresh::No, IsDirty::No));
+            if let Some(entry) = &entry {
+                self.utxos.insert(outpoint.clone(), entry.clone());
+            }
+            entry
         })
     }
 
@@ -145,6 +153,69 @@ impl<'a> UtxosCache<'a> {
         tx_undo.map(TxUndo::new)
     }
 
+    pub fn unspend_utxos_from_tx(
+        &mut self,
+        tx: &Transaction,
+        tx_undo: &TxUndo,
+    ) -> Result<(), Error> {
+        for (i, _) in tx.outputs().iter().enumerate() {
+            let tx_outpoint = OutPoint::new(OutPointSourceId::from(tx.get_id()), i as u32);
+            self.spend_utxo(&tx_outpoint)?;
+        }
+
+        for (tx_in, utxo) in tx.inputs().iter().zip(tx_undo.inner().iter()) {
+            self.add_utxo(tx_in.outpoint(), utxo.clone(), false)?;
+        }
+        Ok(())
+    }
+
+    /// Marks the inputs of a transactable block reward as 'spent', adds outputs to the utxo set.
+    /// Returns a TxUndo if function is a success or an error if the tx's input cannot be spent.
+    pub fn spend_utxos_from_block_transactable(
+        &mut self,
+        reward_transactable: &BlockRewardTransactable,
+        block_id: &Id<GenBlock>,
+        height: BlockHeight,
+    ) -> Result<Option<BlockRewardUndo>, Error> {
+        let mut reward_undo: Option<BlockRewardUndo> = None;
+        if let Some(inputs) = reward_transactable.inputs() {
+            let utxos: Result<Vec<Utxo>, Error> =
+                inputs.iter().map(|tx_in| self.spend_utxo(tx_in.outpoint())).collect();
+            reward_undo = utxos.map(|utxos| Some(BlockRewardUndo::new(utxos)))?;
+        }
+
+        if let Some(outputs) = reward_transactable.outputs() {
+            let source_id = OutPointSourceId::from(*block_id);
+            for (idx, output) in outputs.iter().enumerate() {
+                let outpoint = OutPoint::new(source_id.clone(), idx as u32);
+                let utxo = Utxo::new(output.clone(), false, UtxoSource::Blockchain(height));
+                self.add_utxo(&outpoint, utxo, true)?; //true?
+            }
+        }
+        Ok(reward_undo)
+    }
+
+    pub fn unspend_utxos_from_block_transactable(
+        &mut self,
+        reward_transactable: &BlockRewardTransactable,
+        block_id: &Id<GenBlock>,
+        reward_undo: &BlockRewardUndo,
+    ) -> Result<(), Error> {
+        if let Some(outputs) = reward_transactable.outputs() {
+            for (i, _) in outputs.iter().enumerate() {
+                let tx_outpoint = OutPoint::new(OutPointSourceId::from(*block_id), i as u32);
+                self.spend_utxo(&tx_outpoint)?;
+            }
+        }
+
+        if let Some(inputs) = reward_transactable.inputs() {
+            for (tx_in, utxo) in inputs.iter().zip(reward_undo.inner().iter()) {
+                self.add_utxo(tx_in.outpoint(), utxo.clone(), false)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Adds an utxo entry to the cache
     pub fn add_utxo(
         &mut self,
@@ -199,7 +270,7 @@ impl<'a> UtxosCache<'a> {
     /// Flags the utxo as "spent", given an outpoint.
     /// Returns the Utxo if an update was performed.
     pub fn spend_utxo(&mut self, outpoint: &OutPoint) -> Result<Utxo, Error> {
-        let entry = self.get_utxo_entry(outpoint).ok_or(Error::NoUtxoFound)?;
+        let entry = self.fetch_utxo_entry(outpoint).ok_or(Error::NoUtxoFound)?;
         // TODO: update the memory usage
         // self.memory_usage must be deducted from this entry's size
 
@@ -223,7 +294,7 @@ impl<'a> UtxosCache<'a> {
 
     /// Returns a mutable reference of the utxo, given the outpoint.
     pub fn get_mut_utxo(&mut self, outpoint: &OutPoint) -> Option<&mut Utxo> {
-        let entry = self.get_utxo_entry(outpoint)?;
+        let entry = self.fetch_utxo_entry(outpoint)?;
         let utxo = entry.utxo()?;
 
         let utxo: &mut UtxoEntry = self.utxos.entry(outpoint.clone()).or_insert_with(|| {
@@ -238,7 +309,7 @@ impl<'a> UtxosCache<'a> {
         utxo.utxo_mut()
     }
 
-    /// removes the utxo in the cache with the outpoint
+    /// Removes the utxo from the cache if it's not modified
     pub fn uncache(&mut self, outpoint: &OutPoint) -> Result<(), Error> {
         let key = outpoint;
         if let Some(entry) = self.utxos.get(key) {
@@ -445,4 +516,6 @@ mod unit_test {
         );
         assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
     }
+
+    //TODO: test for fetch
 }

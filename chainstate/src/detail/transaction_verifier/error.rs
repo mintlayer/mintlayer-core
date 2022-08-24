@@ -16,6 +16,7 @@
 use common::{
     chain::{block::Block, SpendError, Spender, TxMainChainIndexError, TxMainChainPosition},
     primitives::{Amount, Id},
+    utxo::Error,
 };
 use thiserror::Error;
 
@@ -47,6 +48,12 @@ pub enum ConnectTransactionError {
     MissingOutputOrSpentOutputErasedOnConnect,
     #[error("While disconnecting a block, output was erased in a previous step (possible in reorgs with no cache flushing)")]
     MissingOutputOrSpentOutputErasedOnDisconnect,
+    #[error("While disconnecting a block undo was not found (possible in reorgs with no cache flushing)")]
+    MissingBlockUndoOnDisconnect(Id<Block>),
+    #[error(
+        "While disconnecting a block, undo transaction number `{0}` does not exist in block `{1}`"
+    )]
+    MissingTxUndoOnDisconnect(usize, Id<Block>),
     #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     AttemptToPrintMoney(Amount, Amount),
     #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]
@@ -110,6 +117,20 @@ impl From<SpendError> for ConnectTransactionError {
                 tx_id,
                 source_output_index,
             },
+        }
+    }
+}
+impl From<utxo::Error> for ConnectTransactionError {
+    fn from(err: utxo::Error) -> Self {
+        match err {
+            utxo::Error::UtxoAlreadySpent() => ConnectTransactionError::DoubleSpendAttempt(TODO),
+            utxo::Error::DBError(error) => ConnectTransactionError::StorageError(error),
+            utxo::Error::FreshUtxoAlreadyExists() => ConnectTransactionError::TODO(),
+            utxo::Error::NoBlockchainHeightFound() => {
+                ConnectTransactionError::BlockHeightArithmeticError
+            }
+            utxo::Error::OverwritingUtxo() => ConnectTransactionError::TODO(),
+            utxo::Error::NoUtxoFound() => ConnectTransactionError::MissingOutputOrSpent,
         }
     }
 }
