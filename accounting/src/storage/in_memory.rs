@@ -6,7 +6,7 @@ use crate::pool::delegation::DelegationData;
 
 use chainstate_types::storage_result::Error;
 
-use super::PoSAccountingStorageRead;
+use super::{PoSAccountingStorageRead, PoSAccountingStorageWrite};
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct InMemoryPoSAccounting {
@@ -59,5 +59,64 @@ impl PoSAccountingStorageRead for InMemoryPoSAccounting {
         delegation_address: H256,
     ) -> Result<Option<Amount>, Error> {
         Ok(self.delegation_addresses_balances.get(&delegation_address).copied())
+    }
+}
+
+impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
+    fn set_pool_address_balance(&mut self, pool_id: H256, amount: Amount) -> Result<(), Error> {
+        self.pool_addresses_balances.insert(pool_id, amount);
+        Ok(())
+    }
+
+    fn del_pool(&mut self, pool_id: H256) -> Result<(), Error> {
+        self.pool_addresses_balances.remove(&pool_id);
+        Ok(())
+    }
+
+    fn set_delegation_address_balance(
+        &mut self,
+        delegation_target: H256,
+        amount: Amount,
+    ) -> Result<(), Error> {
+        self.delegation_addresses_balances.insert(delegation_target, amount);
+        Ok(())
+    }
+
+    fn del_delegation_address_balance(&mut self, delegation_target: H256) -> Result<(), Error> {
+        self.delegation_addresses_balances.remove(&delegation_target);
+        Ok(())
+    }
+
+    fn set_pool_delegation_shares(
+        &mut self,
+        pool_id: H256,
+        delegation_address: H256,
+        amount: Amount,
+    ) -> Result<(), Error> {
+        self.delegation_to_pool_shares.insert((pool_id, delegation_address), amount);
+        Ok(())
+    }
+
+    fn del_pool_delegation_shares(
+        &mut self,
+        pool_id: H256,
+        delegation_address: H256,
+    ) -> Result<(), Error> {
+        self.delegation_to_pool_shares.remove(&(pool_id, delegation_address));
+        Ok(())
+    }
+
+    fn set_delegation_address_data(
+        &mut self,
+        delegation_address: H256,
+        delegation_data: DelegationData,
+    ) -> Result<(), Error> {
+        self.delegation_addresses_data.insert(delegation_address, delegation_data);
+        Ok(())
+    }
+
+    fn del_delegation_address_data(&mut self, delegation_address: H256) -> Result<(), Error> {
+        self.delegation_addresses_data.remove(&delegation_address);
+        Ok(())
     }
 }
