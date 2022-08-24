@@ -34,7 +34,7 @@ use crate::{
 use common::chain::config::ChainConfig;
 use connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent};
 use libp2p::{
-    gossipsub::{self, Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
+    // gossipsub::{self, Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
     identify, identity, ping,
     request_response::*,
     swarm::{
@@ -79,7 +79,7 @@ pub struct Libp2pBehaviour {
     pub connmgr: connection_manager::ConnectionManager,
     pub identify: identify::Identify,
     pub discovery: discovery::DiscoveryManager,
-    pub gossipsub: Gossipsub,
+    // pub gossipsub: Gossipsub,
     pub ping: ping::Behaviour,
     pub sync: RequestResponse<SyncMessagingCodec>,
 
@@ -103,13 +103,13 @@ impl Libp2pBehaviour {
         p2p_config: Arc<config::P2pConfig>,
         id_keys: identity::Keypair,
     ) -> Self {
-        let gossipsub_config = GossipsubConfigBuilder::default()
-            .heartbeat_interval(GOSSIPSUB_HEARTBEAT)
-            .validation_mode(ValidationMode::Strict)
-            .max_transmit_size(GOSSIPSUB_MAX_TRANSMIT_SIZE)
-            .validate_messages()
-            .build()
-            .expect("configuration to be valid");
+        // let gossipsub_config = GossipsubConfigBuilder::default()
+        //     .heartbeat_interval(GOSSIPSUB_HEARTBEAT)
+        //     .validation_mode(ValidationMode::Strict)
+        //     .max_transmit_size(GOSSIPSUB_MAX_TRANSMIT_SIZE)
+        //     .validate_messages()
+        //     .build()
+        //     .expect("configuration to be valid");
 
         let version = config.version();
         let protocol = format!(
@@ -140,11 +140,11 @@ impl Libp2pBehaviour {
                 iter::once((SyncingProtocol(), ProtocolSupport::Full)),
                 req_cfg,
             ),
-            gossipsub: Gossipsub::new(
-                MessageAuthenticity::Signed(id_keys.clone()),
-                gossipsub_config,
-            )
-            .expect("configuration to be valid"),
+            // gossipsub: Gossipsub::new(
+            //     MessageAuthenticity::Signed(id_keys.clone()),
+            //     gossipsub_config,
+            // )
+            // .expect("configuration to be valid"),
             connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(Arc::clone(&p2p_config)).await,
             events: VecDeque::new(),
@@ -237,63 +237,63 @@ impl NetworkBehaviourEventProcess<ping::PingEvent> for Libp2pBehaviour {
     }
 }
 
-impl NetworkBehaviourEventProcess<gossipsub::GossipsubEvent> for Libp2pBehaviour {
-    /// Messages from Gossipsub (PubSub for us) are processed here, and then create an event to the PubSub module
-    fn inject_event(&mut self, event: gossipsub::GossipsubEvent) {
-        match event {
-            gossipsub::GossipsubEvent::Unsubscribed { peer_id, topic } => {
-                log::trace!("peer {peer_id} unsubscribed from topic {topic:?}");
-            }
-            gossipsub::GossipsubEvent::Subscribed { peer_id, topic } => {
-                log::trace!("peer {peer_id} subscribed to topic {topic:?}");
-            }
-            gossipsub::GossipsubEvent::GossipsubNotSupported { peer_id } => {
-                log::info!("peer {peer_id} does not support gossipsub");
+// impl NetworkBehaviourEventProcess<gossipsub::GossipsubEvent> for Libp2pBehaviour {
+//     /// Messages from Gossipsub (PubSub for us) are processed here, and then create an event to the PubSub module
+//     fn inject_event(&mut self, event: gossipsub::GossipsubEvent) {
+//         match event {
+//             gossipsub::GossipsubEvent::Unsubscribed { peer_id, topic } => {
+//                 log::trace!("peer {peer_id} unsubscribed from topic {topic:?}");
+//             }
+//             gossipsub::GossipsubEvent::Subscribed { peer_id, topic } => {
+//                 log::trace!("peer {peer_id} subscribed to topic {topic:?}");
+//             }
+//             gossipsub::GossipsubEvent::GossipsubNotSupported { peer_id } => {
+//                 log::info!("peer {peer_id} does not support gossipsub");
 
-                self.add_event(Libp2pBehaviourEvent::Connectivity(
-                    ConnectivityEvent::Misbehaved {
-                        peer_id,
-                        error: P2pError::ProtocolError(ProtocolError::Incompatible),
-                    },
-                ))
-            }
-            gossipsub::GossipsubEvent::Message {
-                propagation_source,
-                message_id,
-                message,
-            } => {
-                log::trace!(
-                    "gossipsub message received, message id {:?}, propagation source {}",
-                    message_id,
-                    propagation_source
-                );
+//                 self.add_event(Libp2pBehaviourEvent::Connectivity(
+//                     ConnectivityEvent::Misbehaved {
+//                         peer_id,
+//                         error: P2pError::ProtocolError(ProtocolError::Incompatible),
+//                     },
+//                 ))
+//             }
+//             gossipsub::GossipsubEvent::Message {
+//                 propagation_source,
+//                 message_id,
+//                 message,
+//             } => {
+//                 log::trace!(
+//                     "gossipsub message received, message id {:?}, propagation source {}",
+//                     message_id,
+//                     propagation_source
+//                 );
 
-                let announcement = match message::Announcement::decode(&mut &message.data[..]) {
-                    Ok(data) => data,
-                    Err(_) => {
-                        log::warn!(
-                            "received invalid message, propagation source: {:?}",
-                            propagation_source
-                        );
+//                 let announcement = match message::Announcement::decode(&mut &message.data[..]) {
+//                     Ok(data) => data,
+//                     Err(_) => {
+//                         log::warn!(
+//                             "received invalid message, propagation source: {:?}",
+//                             propagation_source
+//                         );
 
-                        return self.add_event(Libp2pBehaviourEvent::Connectivity(
-                            ConnectivityEvent::Misbehaved {
-                                peer_id: propagation_source,
-                                error: P2pError::ProtocolError(ProtocolError::InvalidMessage),
-                            },
-                        ));
-                    }
-                };
+//                         return self.add_event(Libp2pBehaviourEvent::Connectivity(
+//                             ConnectivityEvent::Misbehaved {
+//                                 peer_id: propagation_source,
+//                                 error: P2pError::ProtocolError(ProtocolError::InvalidMessage),
+//                             },
+//                         ));
+//                     }
+//                 };
 
-                self.add_event(Libp2pBehaviourEvent::PubSub(PubSubEvent::Announcement {
-                    peer_id: propagation_source,
-                    message_id,
-                    announcement,
-                }));
-            }
-        }
-    }
-}
+//                 self.add_event(Libp2pBehaviourEvent::PubSub(PubSubEvent::Announcement {
+//                     peer_id: propagation_source,
+//                     message_id,
+//                     announcement,
+//                 }));
+//             }
+//         }
+//     }
+// }
 
 impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse>>
     for Libp2pBehaviour

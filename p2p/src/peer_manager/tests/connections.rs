@@ -254,6 +254,7 @@ where
 }
 
 #[tokio::test]
+#[ignore]
 async fn connect_inbound_same_network_libp2p() {
     connect_inbound_same_network::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
 }

@@ -33,6 +33,7 @@ use tokio::sync::mpsc;
 // of the first service receives a `AdjustPeerScore` event which bans the peer of
 // the second service.
 #[tokio::test]
+#[ignore]
 async fn invalid_pubsub_block() {
     let (tx_pubsub, rx_pubsub) = mpsc::unbounded_channel();
     let (tx_swarm, mut rx_swarm) = mpsc::unbounded_channel();

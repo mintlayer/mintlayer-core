@@ -22,7 +22,7 @@ use crate::net::{
 use futures::prelude::*;
 use libp2p::{
     core::{muxing::StreamMuxerBox, transport::Boxed, upgrade, PeerId},
-    gossipsub::{Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
+    // gossipsub::{Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
     identify::{Identify, IdentifyConfig},
     identity, mplex, noise, ping as libp2p_ping,
     request_response::*,
@@ -85,12 +85,12 @@ pub async fn make_libp2p(
         .boxed();
 
     let mut swarm = {
-        let gossipsub_config = GossipsubConfigBuilder::default()
-            .heartbeat_interval(std::time::Duration::from_secs(10))
-            .validation_mode(ValidationMode::Strict)
-            .validate_messages()
-            .build()
-            .expect("configuration to be valid");
+        // let gossipsub_config = GossipsubConfigBuilder::default()
+        //     .heartbeat_interval(std::time::Duration::from_secs(10))
+        //     .validation_mode(ValidationMode::Strict)
+        //     .validate_messages()
+        //     .build()
+        //     .expect("configuration to be valid");
 
         let version = config.version();
         let magic = config.magic_bytes();
@@ -118,11 +118,11 @@ pub async fn make_libp2p(
                 iter::once((SyncingProtocol(), ProtocolSupport::Full)),
                 RequestResponseConfig::default(),
             ),
-            gossipsub: Gossipsub::new(
-                MessageAuthenticity::Signed(id_keys.clone()),
-                gossipsub_config,
-            )
-            .expect("configuration to be valid"),
+            // gossipsub: Gossipsub::new(
+            //     MessageAuthenticity::Signed(id_keys.clone()),
+            //     gossipsub_config,
+            // )
+            // .expect("configuration to be valid"),
             connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(p2p_config).await,
             events: VecDeque::new(),
@@ -130,10 +130,10 @@ pub async fn make_libp2p(
             waker: None,
         };
 
-        for topic in topics.iter() {
-            log::info!("subscribing to gossipsub topic {:?}", topic);
-            behaviour.gossipsub.subscribe(&topic.into()).expect("subscription to work");
-        }
+        // for topic in topics.iter() {
+        //     log::info!("subscribing to gossipsub topic {:?}", topic);
+        //     behaviour.gossipsub.subscribe(&topic.into()).expect("subscription to work");
+        // }
 
         // subscribes to our topic
         SwarmBuilder::new(transport, behaviour, peer_id).build()
@@ -182,12 +182,12 @@ pub async fn make_libp2p_with_ping(
         .boxed();
 
     let mut swarm = {
-        let gossipsub_config = GossipsubConfigBuilder::default()
-            .heartbeat_interval(std::time::Duration::from_secs(10))
-            .validation_mode(ValidationMode::Strict)
-            .validate_messages()
-            .build()
-            .expect("configuration to be valid");
+        // let gossipsub_config = GossipsubConfigBuilder::default()
+        //     .heartbeat_interval(std::time::Duration::from_secs(10))
+        //     .validation_mode(ValidationMode::Strict)
+        //     .validate_messages()
+        //     .build()
+        //     .expect("configuration to be valid");
 
         let version = config.version();
         let magic = config.magic_bytes();
@@ -210,11 +210,11 @@ pub async fn make_libp2p_with_ping(
                 iter::once((SyncingProtocol(), ProtocolSupport::Full)),
                 RequestResponseConfig::default(),
             ),
-            gossipsub: Gossipsub::new(
-                MessageAuthenticity::Signed(id_keys.clone()),
-                gossipsub_config,
-            )
-            .expect("configuration to be valid"),
+            // gossipsub: Gossipsub::new(
+            //     MessageAuthenticity::Signed(id_keys.clone()),
+            //     gossipsub_config,
+            // )
+            // .expect("configuration to be valid"),
             connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(Arc::clone(&p2p_config)).await,
             events: VecDeque::new(),
@@ -222,10 +222,10 @@ pub async fn make_libp2p_with_ping(
             waker: None,
         };
 
-        for topic in topics.iter() {
-            log::info!("subscribing to gossipsub topic {:?}", topic);
-            behaviour.gossipsub.subscribe(&topic.into()).expect("subscription to work");
-        }
+        // for topic in topics.iter() {
+        //     log::info!("subscribing to gossipsub topic {:?}", topic);
+        //     behaviour.gossipsub.subscribe(&topic.into()).expect("subscription to work");
+        // }
 
         // subscribes to our topic
         SwarmBuilder::new(transport, behaviour, peer_id).build()

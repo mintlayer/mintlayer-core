@@ -34,6 +34,7 @@ use std::sync::Arc;
 
 // verify that libp2p gossipsub works
 #[tokio::test]
+#[ignore]
 async fn test_libp2p_gossipsub() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut conn1, mut pubsub1, _) =
@@ -109,6 +110,7 @@ async fn test_libp2p_gossipsub() {
 // test libp2p gossipsub with multiple peers and verify that as our libp2p requires message
 // validation, peers don't automatically forward the messages
 #[tokio::test]
+#[ignore]
 async fn test_libp2p_gossipsub_3_peers() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut conn1, mut pubsub1, _) =
@@ -243,6 +245,7 @@ async fn test_libp2p_gossipsub_3_peers() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_libp2p_gossipsub_too_big_message() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut conn1, mut pubsub1, _) =

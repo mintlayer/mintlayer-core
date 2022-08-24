@@ -18,7 +18,7 @@
 
 use futures::StreamExt;
 use libp2p::{
-    gossipsub::{IdentTopic, MessageAcceptance, MessageId},
+    // gossipsub::{IdentTopic, MessageAcceptance, MessageId},
     request_response::RequestId,
     swarm::{Swarm, SwarmEvent},
     Multiaddr, PeerId,
@@ -103,9 +103,9 @@ impl Libp2pBackend {
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::Syncing(event)) => {
                         self.sync_tx.send(event).map_err(P2pError::from)?;
                     }
-                    SwarmEvent::Behaviour(Libp2pBehaviourEvent::PubSub(event)) => {
-                        self.gossip_tx.send(event).map_err(P2pError::from)?;
-                    }
+                    // SwarmEvent::Behaviour(Libp2pBehaviourEvent::PubSub(event)) => {
+                    //     self.gossip_tx.send(event).map_err(P2pError::from)?;
+                    // }
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::Control(
                         ControlEvent::CloseConnection { peer_id })
                     ) => {
@@ -180,44 +180,44 @@ impl Libp2pBackend {
         }
     }
 
-    /// Announce data on the network
-    fn announce_data(
-        &mut self,
-        topic: net::types::PubSubTopic,
-        message: Vec<u8>,
-        response: oneshot::Sender<crate::Result<()>>,
-    ) -> crate::Result<()> {
-        log::trace!("publish message on gossipsub topic {topic:?}");
+    // /// Announce data on the network
+    // fn announce_data(
+    //     &mut self,
+    //     topic: net::types::PubSubTopic,
+    //     message: Vec<u8>,
+    //     response: oneshot::Sender<crate::Result<()>>,
+    // ) -> crate::Result<()> {
+    //     log::trace!("publish message on gossipsub topic {topic:?}");
 
-        let res = self
-            .swarm
-            .behaviour_mut()
-            .gossipsub
-            .publish((&topic).into(), message)
-            .map(|_| ())
-            .map_err(|e| e.into());
-        response.send(res).map_err(|_| P2pError::ChannelClosed)
-    }
+    //     let res = self
+    //         .swarm
+    //         .behaviour_mut()
+    //         .gossipsub
+    //         .publish((&topic).into(), message)
+    //         .map(|_| ())
+    //         .map_err(|e| e.into());
+    //     response.send(res).map_err(|_| P2pError::ChannelClosed)
+    // }
 
-    /// Report validation result to the GossipSub
-    fn report_validation_result(
-        &mut self,
-        message_id: MessageId,
-        source: PeerId,
-        result: MessageAcceptance,
-        response: oneshot::Sender<crate::Result<()>>,
-    ) -> crate::Result<()> {
-        log::trace!("report gossipsub message validation result: {message_id} {source} {result:?}");
+    // /// Report validation result to the GossipSub
+    // fn report_validation_result(
+    //     &mut self,
+    //     message_id: MessageId,
+    //     source: PeerId,
+    //     result: MessageAcceptance,
+    //     response: oneshot::Sender<crate::Result<()>>,
+    // ) -> crate::Result<()> {
+    //     log::trace!("report gossipsub message validation result: {message_id} {source} {result:?}");
 
-        match self.swarm.behaviour_mut().gossipsub.report_message_validation_result(
-            &message_id,
-            &source,
-            result,
-        ) {
-            Ok(_) => response.send(Ok(())).map_err(|_| P2pError::ChannelClosed),
-            Err(e) => response.send(Err(e.into())).map_err(|_| P2pError::ChannelClosed),
-        }
-    }
+    //     match self.swarm.behaviour_mut().gossipsub.report_message_validation_result(
+    //         &message_id,
+    //         &source,
+    //         result,
+    //     ) {
+    //         Ok(_) => response.send(Ok(())).map_err(|_| P2pError::ChannelClosed),
+    //         Err(e) => response.send(Err(e.into())).map_err(|_| P2pError::ChannelClosed),
+    //     }
+    // }
 
     /// Send request to remote peer
     fn send_request(
@@ -270,22 +270,22 @@ impl Libp2pBackend {
         }
     }
 
-    /// Subscribe to GossipSub topics
-    fn subscribe(
-        &mut self,
-        topics: Vec<IdentTopic>,
-        response: oneshot::Sender<crate::Result<()>>,
-    ) -> crate::Result<()> {
-        log::trace!("subscribe to gossipsub topics {topics:#?}");
+    // /// Subscribe to GossipSub topics
+    // fn subscribe(
+    //     &mut self,
+    //     topics: Vec<IdentTopic>,
+    //     response: oneshot::Sender<crate::Result<()>>,
+    // ) -> crate::Result<()> {
+    //     log::trace!("subscribe to gossipsub topics {topics:#?}");
 
-        for topic in topics {
-            if let Err(err) = self.swarm.behaviour_mut().gossipsub.subscribe(&topic) {
-                return response.send(Err(err.into())).map_err(|_| P2pError::ChannelClosed);
-            }
-        }
+    //     for topic in topics {
+    //         if let Err(err) = self.swarm.behaviour_mut().gossipsub.subscribe(&topic) {
+    //             return response.send(Err(err.into())).map_err(|_| P2pError::ChannelClosed);
+    //         }
+    //     }
 
-        response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
-    }
+    //     response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+    // }
 
     /// Ban peer
     fn ban_peer(
@@ -312,17 +312,17 @@ impl Libp2pBackend {
                 response,
             } => self.dial(peer_id, peer_addr, response),
             types::Command::Disconnect { peer_id, response } => self.disconnect(peer_id, response),
-            types::Command::AnnounceData {
-                topic,
-                message,
-                response,
-            } => self.announce_data(topic, message, response),
-            types::Command::ReportValidationResult {
-                message_id,
-                source,
-                result,
-                response,
-            } => self.report_validation_result(message_id, source, result, response),
+            // types::Command::AnnounceData {
+            //     topic,
+            //     message,
+            //     response,
+            // } => self.announce_data(topic, message, response),
+            // types::Command::ReportValidationResult {
+            //     message_id,
+            //     source,
+            //     result,
+            //     response,
+            // } => self.report_validation_result(message_id, source, result, response),
             types::Command::SendRequest {
                 peer_id,
                 request,
@@ -333,11 +333,12 @@ impl Libp2pBackend {
                 response,
                 channel,
             } => self.send_response(request_id, *response, channel),
-            types::Command::Subscribe { topics, response } => self.subscribe(topics, response),
+            // types::Command::Subscribe { topics, response } => self.subscribe(topics, response),
             types::Command::BanPeer { peer_id, response } => self.ban_peer(peer_id, response),
             types::Command::ListenAddress { response } => {
                 response.send(self.listen_addr.clone()).map_err(|_| P2pError::ChannelClosed)
             }
+            _ => { Ok(()) },
         }
     }
 }
@@ -381,16 +382,16 @@ mod tests {
             .multiplex(mplex::MplexConfig::new())
             .boxed();
 
-        let gossipsub_config = GossipsubConfigBuilder::default()
-            .validate_messages()
-            .build()
-            .expect("configuration to be valid");
+        // let gossipsub_config = GossipsubConfigBuilder::default()
+        //     .validate_messages()
+        //     .build()
+        //     .expect("configuration to be valid");
 
-        let gossipsub: Gossipsub = Gossipsub::new(
-            MessageAuthenticity::Signed(id_keys.clone()),
-            gossipsub_config,
-        )
-        .expect("configuration to be valid");
+        // let gossipsub: Gossipsub = Gossipsub::new(
+        //     MessageAuthenticity::Signed(id_keys.clone()),
+        //     gossipsub_config,
+        // )
+        // .expect("configuration to be valid");
 
         let identify = Identify::new(IdentifyConfig::new(
             "/mintlayer/0.1.0-13371338".into(),
@@ -403,7 +404,7 @@ mod tests {
 
         let behaviour = behaviour::Libp2pBehaviour {
             ping: ping::Behaviour::new(ping::Config::new()),
-            gossipsub,
+            // gossipsub,
             identify,
             sync,
             connmgr: connection_manager::ConnectionManager::new(),

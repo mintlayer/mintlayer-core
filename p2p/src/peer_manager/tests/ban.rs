@@ -61,6 +61,7 @@ where
 }
 
 #[tokio::test]
+#[ignore]
 async fn ban_connected_peer_libp2p() {
     ban_connected_peer::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
 }
@@ -110,6 +111,7 @@ where
 }
 
 #[tokio::test]
+#[ignore]
 async fn banned_peer_attempts_to_connect_libp2p() {
     banned_peer_attempts_to_connect::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
 }
@@ -169,6 +171,7 @@ where
 }
 
 #[tokio::test]
+#[ignore]
 async fn connect_to_banned_peer_libp2p() {
     connect_to_banned_peer::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
 }
