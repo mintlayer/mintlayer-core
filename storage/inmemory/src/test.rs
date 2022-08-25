@@ -58,10 +58,10 @@ fn generic_abort<B: Backend>(backend: B) {
 
 #[test]
 fn commit() {
-    common::concurrency::model(|| generic_commit(InMemory::new()))
+    utils::concurrency::model(|| generic_commit(InMemory::new()))
 }
 
 #[test]
 fn abort() {
-    common::concurrency::model(|| generic_abort(InMemory::new()))
+    utils::concurrency::model(|| generic_abort(InMemory::new()))
 }

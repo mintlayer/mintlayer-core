@@ -103,7 +103,7 @@ mod test {
 
     #[test]
     fn empty_ro() {
-        common::concurrency::model(|| {
+        utils::concurrency::model(|| {
             let store = Storage::<_, Schema>::new(inmemory::InMemory::new()).unwrap();
             let tx = store.transaction_ro();
             assert_eq!(tx.get::<MyMap, _>().get(b"foo".as_ref()), Ok(None));
@@ -112,7 +112,7 @@ mod test {
 
     #[test]
     fn empty_rw() {
-        common::concurrency::model(|| {
+        utils::concurrency::model(|| {
             let store = Storage::<_, Schema>::new(inmemory::InMemory::new()).unwrap();
             let tx = store.transaction_rw();
             assert_eq!(tx.get::<MyMap, _>().get(b"foo".as_ref()), Ok(None));

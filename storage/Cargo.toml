@@ -14,5 +14,5 @@ storage-core = { path = "core" }
 storage-inmemory = { path = "inmemory", optional = true }
 
 [dev-dependencies]
-common = { path = "../common" }
+utils = { path = "../utils" }
 storage-inmemory = { path = "inmemory" }

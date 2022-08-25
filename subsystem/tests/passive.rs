@@ -103,7 +103,7 @@ impl Tester {
 #[test]
 fn basic_passive_subsystem() {
     let runtime = helpers::init_test_runtime();
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         runtime.block_on(async {
             let mut app = subsystem::Manager::new("app");
 
@@ -123,7 +123,7 @@ fn basic_passive_subsystem() {
 #[test]
 fn basic_passive_shutdown() {
     let runtime = helpers::init_test_runtime();
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         runtime.block_on(async {
             let mut app = subsystem::Manager::new("app");
 

@@ -28,7 +28,7 @@ use crate::detail::{
 #[trace]
 #[case(Seed::from_entropy())]
 fn reorg_simple(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
         let genesis_id = tf.genesis().get_id();
@@ -64,7 +64,7 @@ fn reorg_simple(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn test_very_long_reorgs(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
         let events: EventList = Arc::new(Mutex::new(Vec::new()));

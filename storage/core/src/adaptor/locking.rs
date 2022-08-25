@@ -24,8 +24,8 @@ use crate::{
 };
 use traits::{ReadOps, WriteOps};
 
-use common::sync;
 use std::collections::BTreeMap;
+use utils::sync;
 
 // Read-only transaction just holds a read lock to the database
 pub struct TxRo<'tx, T>(sync::RwLockReadGuard<'tx, T>);

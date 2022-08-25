@@ -7,5 +7,7 @@ license = "MIT"
 [dependencies]
 
 # Local dependencies
-common = { path = "../../common" }
 storage-core = { path = "../core" }
+
+[dev-dependencies]
+utils = { path = "../../utils" }
