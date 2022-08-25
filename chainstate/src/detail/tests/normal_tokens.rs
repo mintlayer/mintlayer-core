@@ -385,7 +385,7 @@ fn token_issuance_with_insufficient_fee() {
         let outputs = vec![
             TxOutput::new(value, OutputPurpose::Transfer(receiver.clone())),
             TxOutput::new(
-                OutputValue::Coin((input_coins - Amount::from_atoms(1)).unwrap()),
+                OutputValue::Coin(input_coins),
                 OutputPurpose::Transfer(receiver),
             ),
         ];
@@ -622,7 +622,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
+                ConnectTransactionError::MissingOutputOrSpent
             ))
         ));
 

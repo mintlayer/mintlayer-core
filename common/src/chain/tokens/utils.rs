@@ -14,33 +14,37 @@
 // limitations under the License.
 
 use super::{OutputValue, TokenData, TokenId};
-use crate::{chain::Transaction, primitives::id::hash_encoded};
+use crate::{
+    chain::{Transaction, TxOutput},
+    primitives::id::hash_encoded,
+};
 
 pub fn token_id(tx: &Transaction) -> Option<TokenId> {
     Some(hash_encoded(tx.inputs().get(0)?))
 }
 
-pub fn get_tokens_issuance_count(tx: &Transaction) -> usize {
-    tx.outputs()
-        .iter()
-        .filter_map(|output| match output.value() {
-            OutputValue::Coin(_) => None,
-            OutputValue::Token(asset) => Some(asset),
-        })
-        .fold(0, |accum, asset| match asset {
+pub fn is_tokens_issuance(output_value: &OutputValue) -> bool {
+    match output_value {
+        OutputValue::Coin(_) => false,
+        OutputValue::Token(token_data) => match token_data {
             TokenData::TokenTransferV1 {
                 token_id: _,
                 amount: _,
-            } => accum,
+            } => false,
             TokenData::TokenIssuanceV1 {
                 token_ticker: _,
                 amount_to_issue: _,
                 number_of_decimals: _,
                 metadata_uri: _,
-            } => accum + 1,
+            } => true,
             TokenData::TokenBurnV1 {
                 token_id: _,
                 amount_to_burn: _,
-            } => accum,
-        })
+            } => false,
+        },
+    }
+}
+
+pub fn get_tokens_issuance_count(outputs: &[TxOutput]) -> usize {
+    outputs.iter().filter(|&output| is_tokens_issuance(output.value())).count()
 }

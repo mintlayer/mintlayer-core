@@ -28,7 +28,7 @@ use crate::{
     detail::{
         tests::{
             test_framework::{BlockBuilder, TestFrameworkBuilder, TransactionBuilder},
-            TestBlockInfo,
+            TestBlockInfo, *,
         },
         BlockIndex, GenBlockIndex, TimeGetter,
     },
@@ -181,9 +181,16 @@ fn build_test_framework() {
 #[test]
 fn process_block() {
     let mut tf = TestFramework::default();
+    let outpoint_source_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
+
     tf.make_block_builder()
         .add_transaction(
             TransactionBuilder::new()
+                .add_input(TxInput::new(
+                    outpoint_source_id,
+                    0,
+                    InputWitness::NoSignature(None),
+                ))
                 .add_output(TxOutput::new(
                     OutputValue::Coin(Amount::from_atoms(0)),
                     OutputPurpose::Transfer(Destination::AnyoneCanSpend),
