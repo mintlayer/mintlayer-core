@@ -258,7 +258,11 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
             .ok_or(Error::InvariantErrorDelegationShareNotFound)?;
         let new_amount =
             (current_amount + amount_to_add).ok_or(Error::DelegationSharesAdditionError)?;
-        self.store.set_pool_delegation_shares(pool_id, delegation_address, new_amount)?;
+        if new_amount > Amount::from_atoms(0) {
+            self.store.set_pool_delegation_shares(pool_id, delegation_address, new_amount)?;
+        } else {
+            self.store.del_pool_delegation_shares(pool_id, delegation_address)?;
+        }
         Ok(())
     }
 
