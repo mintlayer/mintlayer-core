@@ -146,17 +146,15 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
             return Err(Error::DelegationCreationFailedPoolDoesNotExist);
         }
 
-        let delegation_data = match self.delegation_addresses_data.entry(delegation_address) {
-            std::collections::btree_map::Entry::Vacant(entry) => {
-                let delegation_data = DelegationData::new(target_pool, spend_key);
-                entry.insert(delegation_data.clone());
-                delegation_data
-            }
-            std::collections::btree_map::Entry::Occupied(_entry) => {
-                // This should never happen since it's based on an unspent input
-                return Err(Error::InvariantErrorPoolAlreadyExists);
-            }
-        };
+        let current_delegation_data = self.store.get_delegation_address_data(delegation_address)?;
+        if current_delegation_data.is_some() {
+            // This should never happen since it's based on an unspent input
+            return Err(Error::InvariantErrorPoolAlreadyExists);
+        }
+
+        let delegation_data = DelegationData::new(target_pool, spend_key);
+        self.store
+            .set_delegation_address_data(delegation_address, delegation_data.clone())?;
 
         Ok((
             delegation_address,
@@ -174,16 +172,16 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
     ) -> Result<(), Error> {
         let delegation_address = make_delegation_address(input0_outpoint);
 
-        let removed_data = self.delegation_addresses_data.remove(&delegation_address);
-
-        let removed_data = match removed_data {
-            Some(d) => d,
-            None => return Err(Error::InvariantErrorDelegationAddressUndoFailedNotFound),
-        };
+        let removed_data = self
+            .store
+            .get_delegation_address_data(delegation_address)?
+            .ok_or(Error::InvariantErrorDelegationAddressUndoFailedNotFound)?;
 
         if removed_data != delegation_data {
             return Err(Error::InvariantErrorDelegationAddressUndoFailedDataConflict);
         }
+
+        self.store.del_delegation_address_data(delegation_address)?;
 
         Ok(())
     }
