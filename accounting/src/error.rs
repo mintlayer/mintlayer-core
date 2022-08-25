@@ -34,4 +34,6 @@ pub enum Error {
     InvariantErrorPoolBalanceAdditionUndoError,
     #[error("Delegation shares arithmetic undo error")]
     InvariantErrorDelegationSharesAdditionUndoError,
+    #[error("Delegation shares arithmetic undo error as it doesn't exist")]
+    InvariantErrorDelegationShareNotFound,
 }

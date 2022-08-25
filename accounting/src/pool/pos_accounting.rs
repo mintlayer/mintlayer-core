@@ -42,15 +42,11 @@ pub enum PoSAccountingUndo {
 
 pub struct PoSAccounting<S> {
     store: S,
-    delegation_to_pool_shares: BTreeMap<(H256, H256), Amount>,
 }
 
 impl<S> PoSAccounting<S> {
     pub fn new_empty(store: S) -> Self {
-        Self {
-            store,
-            delegation_to_pool_shares: Default::default(),
-        }
+        Self { store }
     }
 }
 
@@ -241,11 +237,12 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         amount_to_add: Amount,
     ) -> Result<(), Error> {
         let current_amount = self
-            .delegation_to_pool_shares
-            .entry((pool_id, delegation_address))
-            .or_insert(Amount::from_atoms(0));
-        *current_amount =
-            (*current_amount + amount_to_add).ok_or(Error::DelegationSharesAdditionError)?;
+            .store
+            .get_pool_delegation_amount(pool_id, delegation_address)?
+            .unwrap_or(Amount::from_atoms(0));
+        let new_amount =
+            (current_amount + amount_to_add).ok_or(Error::DelegationSharesAdditionError)?;
+        self.store.set_pool_delegation_shares(pool_id, delegation_address, new_amount)?;
         Ok(())
     }
 
@@ -256,11 +253,12 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         amount_to_add: Amount,
     ) -> Result<(), Error> {
         let current_amount = self
-            .delegation_to_pool_shares
-            .entry((pool_id, delegation_address))
-            .or_insert(Amount::from_atoms(0));
-        *current_amount = (*current_amount - amount_to_add)
-            .ok_or(Error::InvariantErrorDelegationSharesAdditionUndoError)?;
+            .store
+            .get_pool_delegation_amount(pool_id, delegation_address)?
+            .ok_or(Error::InvariantErrorDelegationShareNotFound)?;
+        let new_amount =
+            (current_amount + amount_to_add).ok_or(Error::DelegationSharesAdditionError)?;
+        self.store.set_pool_delegation_shares(pool_id, delegation_address, new_amount)?;
         Ok(())
     }
 
