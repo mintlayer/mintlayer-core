@@ -135,7 +135,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         self.store.del_pool_data(pool_id)?;
 
         Ok(PoSAccountingUndo::DecommissionPool {
-            pool_id: pool_id,
+            pool_id,
             last_amount,
             pool_data,
         })

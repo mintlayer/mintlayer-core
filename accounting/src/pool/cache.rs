@@ -49,14 +49,14 @@ impl<'a> PoSAccountingView for PoSAccountingOperationsCache<'a> {
         pool_id: H256,
     ) -> Result<Option<BTreeMap<H256, Amount>>, Error> {
         match self.get_cached_delegations_shares(pool_id) {
-            Some(v) => Ok(Some(v.clone())),
+            Some(v) => Ok(Some(v)),
             None => self.parent.get_pool_delegations_shares(pool_id),
         }
     }
 
     fn get_delegation_balance(&self, delegation_id: H256) -> Result<Option<Amount>, Error> {
         match self.delegation_balances.get(&delegation_id) {
-            Some(v) => Ok(Some(v.clone())),
+            Some(v) => Ok(Some(*v)),
             None => self.parent.get_delegation_balance(delegation_id),
         }
     }
@@ -74,7 +74,7 @@ impl<'a> PoSAccountingView for PoSAccountingOperationsCache<'a> {
         delegation_id: H256,
     ) -> Result<Option<Amount>, Error> {
         match self.pool_delegation_shares.get(&(pool_id, delegation_id)) {
-            Some(v) => Ok(Some(v.clone())),
+            Some(v) => Ok(Some(*v)),
             None => self.parent.get_pool_delegation_share(pool_id, delegation_id),
         }
     }
