@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use common::primitives::{Amount, H256};
 
-use crate::pool::delegation::DelegationData;
+use crate::pool::{delegation::DelegationData, pool_data::PoolData};
 
 use chainstate_types::storage_result::Error;
 
@@ -10,6 +10,7 @@ use super::{PoSAccountingStorageRead, PoSAccountingStorageWrite};
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct InMemoryPoSAccounting {
+    pool_addresses_data: BTreeMap<H256, PoolData>,
     pool_addresses_balances: BTreeMap<H256, Amount>,
     delegation_to_pool_shares: BTreeMap<(H256, H256), Amount>,
     delegation_addresses_balances: BTreeMap<H256, Amount>,
@@ -19,6 +20,7 @@ pub struct InMemoryPoSAccounting {
 impl InMemoryPoSAccounting {
     pub fn new() -> Self {
         Self {
+            pool_addresses_data: Default::default(),
             pool_addresses_balances: Default::default(),
             delegation_to_pool_shares: Default::default(),
             delegation_addresses_balances: Default::default(),
@@ -67,6 +69,10 @@ impl PoSAccountingStorageRead for InMemoryPoSAccounting {
         delegation_address: H256,
     ) -> Result<Option<Amount>, Error> {
         Ok(self.delegation_to_pool_shares.get(&(pool_id, delegation_address)).copied())
+    }
+
+    fn get_pool_data(&self, pool_id: H256) -> Result<Option<PoolData>, Error> {
+        Ok(self.pool_addresses_data.get(&pool_id).cloned())
     }
 }
 
@@ -125,6 +131,16 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
 
     fn del_delegation_address_data(&mut self, delegation_address: H256) -> Result<(), Error> {
         self.delegation_addresses_data.remove(&delegation_address);
+        Ok(())
+    }
+
+    fn set_pool_data(&mut self, pool_id: H256, pool_data: PoolData) -> Result<(), Error> {
+        self.pool_addresses_data.insert(pool_id, pool_data);
+        Ok(())
+    }
+
+    fn del_pool_data(&mut self, pool_id: H256) -> Result<(), Error> {
+        self.pool_addresses_data.remove(&pool_id);
         Ok(())
     }
 }
