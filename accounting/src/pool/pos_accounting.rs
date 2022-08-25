@@ -63,7 +63,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         let pool_id = make_pool_address(input0_outpoint);
 
         {
-            let current_amount = self.store.get_pool_address_balance(pool_id)?;
+            let current_amount = self.store.get_pool_balance(pool_id)?;
             if current_amount.is_some() {
                 // This should never happen since it's based on an unspent input
                 return Err(Error::InvariantErrorPoolBalanceAlreadyExists);
@@ -78,7 +78,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
             }
         }
 
-        self.store.set_pool_address_balance(pool_id, pledge_amount)?;
+        self.store.set_pool_balance(pool_id, pledge_amount)?;
         self.store.set_pool_data(pool_id, &PoolData::new(decommission_key.clone()))?;
 
         Ok(PoSAccountingUndo::CreatePool {
@@ -95,7 +95,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
     ) -> Result<(), Error> {
         let pool_id = make_pool_address(input0_outpoint);
 
-        let amount = self.store.get_pool_address_balance(pool_id)?;
+        let amount = self.store.get_pool_balance(pool_id)?;
 
         match amount {
             Some(amount) => {
@@ -122,7 +122,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
     pub fn decommission_pool(&mut self, pool_id: H256) -> Result<PoSAccountingUndo, Error> {
         let last_amount = self
             .store
-            .get_pool_address_balance(pool_id)?
+            .get_pool_balance(pool_id)?
             .ok_or(Error::AttemptedDecommissionNonexistingPoolBalance)?;
 
         let pool_data = self
@@ -146,7 +146,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         last_amount: Amount,
         pool_data: &PoolData,
     ) -> Result<(), Error> {
-        let current_amount = self.store.get_pool_address_balance(pool_id)?;
+        let current_amount = self.store.get_pool_balance(pool_id)?;
         if current_amount.is_some() {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists);
         }
@@ -156,7 +156,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists);
         }
 
-        self.store.set_pool_address_balance(pool_id, last_amount)?;
+        self.store.set_pool_balance(pool_id, last_amount)?;
         self.store.set_pool_data(pool_id, pool_data)?;
 
         Ok(())
@@ -175,8 +175,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         let delegation_address = make_delegation_address(input0_outpoint);
 
         {
-            let current_delegation_data =
-                self.store.get_delegation_address_data(delegation_address)?;
+            let current_delegation_data = self.store.get_delegation_data(delegation_address)?;
             if current_delegation_data.is_some() {
                 // This should never happen since it's based on an unspent input
                 return Err(Error::InvariantErrorDelegationCreationFailedAddressAlreadyExists);
@@ -185,7 +184,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
 
         let delegation_data = DelegationData::new(target_pool, spend_key);
 
-        self.store.set_delegation_address_data(delegation_address, &delegation_data)?;
+        self.store.set_delegation_data(delegation_address, &delegation_data)?;
 
         Ok((
             delegation_address,
@@ -205,14 +204,14 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
 
         let removed_data = self
             .store
-            .get_delegation_address_data(delegation_address)?
+            .get_delegation_data(delegation_address)?
             .ok_or(Error::InvariantErrorDelegationAddressUndoFailedNotFound)?;
 
         if removed_data != delegation_data {
             return Err(Error::InvariantErrorDelegationAddressUndoFailedDataConflict);
         }
 
-        self.store.del_delegation_address_data(delegation_address)?;
+        self.store.del_delegation_data(delegation_address)?;
 
         Ok(())
     }
@@ -224,11 +223,11 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
     ) -> Result<(), Error> {
         let current_amount = self
             .store
-            .get_delegation_address_balance(delegation_target)?
+            .get_delegation_balance(delegation_target)?
             .ok_or(Error::DelegateToNonexistingAddress)?;
         let new_amount =
             (current_amount + amount_to_delegate).ok_or(Error::DelegationBalanceAdditionError)?;
-        self.store.set_delegation_address_balance(delegation_target, new_amount)?;
+        self.store.set_delegation_balance(delegation_target, new_amount)?;
         Ok(())
     }
 
@@ -239,21 +238,19 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
     ) -> Result<(), Error> {
         let current_amount = self
             .store
-            .get_delegation_address_balance(delegation_target)?
+            .get_delegation_balance(delegation_target)?
             .ok_or(Error::DelegateToNonexistingAddress)?;
         let new_amount =
             (current_amount - amount_to_delegate).ok_or(Error::DelegationBalanceAdditionError)?;
-        self.store.set_delegation_address_balance(delegation_target, new_amount)?;
+        self.store.set_delegation_balance(delegation_target, new_amount)?;
         Ok(())
     }
 
     fn add_balance_to_pool(&mut self, pool_id: H256, amount_to_add: Amount) -> Result<(), Error> {
-        let pool_amount = self
-            .store
-            .get_pool_address_balance(pool_id)?
-            .ok_or(Error::DelegateToNonexistingPool)?;
+        let pool_amount =
+            self.store.get_pool_balance(pool_id)?.ok_or(Error::DelegateToNonexistingPool)?;
         let new_amount = (pool_amount + amount_to_add).ok_or(Error::PoolBalanceAdditionError)?;
-        self.store.set_pool_address_balance(pool_id, new_amount)?;
+        self.store.set_pool_balance(pool_id, new_amount)?;
         Ok(())
     }
 
@@ -262,12 +259,10 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         pool_id: H256,
         amount_to_add: Amount,
     ) -> Result<(), Error> {
-        let pool_amount = self
-            .store
-            .get_pool_address_balance(pool_id)?
-            .ok_or(Error::DelegateToNonexistingPool)?;
+        let pool_amount =
+            self.store.get_pool_balance(pool_id)?.ok_or(Error::DelegateToNonexistingPool)?;
         let new_amount = (pool_amount - amount_to_add).ok_or(Error::PoolBalanceAdditionError)?;
-        self.store.set_pool_address_balance(pool_id, new_amount)?;
+        self.store.set_pool_balance(pool_id, new_amount)?;
         Ok(())
     }
 
@@ -279,11 +274,11 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
     ) -> Result<(), Error> {
         let current_amount = self
             .store
-            .get_pool_delegation_amount(pool_id, delegation_address)?
+            .get_pool_delegation_share(pool_id, delegation_address)?
             .unwrap_or(Amount::from_atoms(0));
         let new_amount =
             (current_amount + amount_to_add).ok_or(Error::DelegationSharesAdditionError)?;
-        self.store.set_pool_delegation_shares(pool_id, delegation_address, new_amount)?;
+        self.store.set_pool_delegation_share(pool_id, delegation_address, new_amount)?;
         Ok(())
     }
 
@@ -295,14 +290,14 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
     ) -> Result<(), Error> {
         let current_amount = self
             .store
-            .get_pool_delegation_amount(pool_id, delegation_address)?
+            .get_pool_delegation_share(pool_id, delegation_address)?
             .ok_or(Error::InvariantErrorDelegationShareNotFound)?;
         let new_amount =
             (current_amount + amount_to_add).ok_or(Error::DelegationSharesAdditionError)?;
         if new_amount > Amount::from_atoms(0) {
-            self.store.set_pool_delegation_shares(pool_id, delegation_address, new_amount)?;
+            self.store.set_pool_delegation_share(pool_id, delegation_address, new_amount)?;
         } else {
-            self.store.del_pool_delegation_shares(pool_id, delegation_address)?;
+            self.store.del_pool_delegation_share(pool_id, delegation_address)?;
         }
         Ok(())
     }
@@ -345,16 +340,13 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
 
 impl<S: PoSAccountingStorageRead> PoSAccounting<S> {
     pub fn pool_exists(&self, pool_id: H256) -> Result<bool, Error> {
-        self.store
-            .get_pool_address_balance(pool_id)
-            .map_err(Error::from)
-            .map(|v| v.is_some())
+        self.store.get_pool_balance(pool_id).map_err(Error::from).map(|v| v.is_some())
     }
 
     fn get_delegation_data(&self, delegation_target: H256) -> Result<DelegationData, Error> {
         let delegation_target = self
             .store
-            .get_delegation_address_data(delegation_target)
+            .get_delegation_data(delegation_target)
             .map_err(Error::from)?
             .ok_or(Error::DelegateToNonexistingAddress)?;
         Ok(delegation_target)
@@ -365,7 +357,7 @@ impl<S: PoSAccountingStorageRead> PoSAccounting<S> {
         &self,
         pool_id: H256,
     ) -> Result<Option<BTreeMap<H256, Amount>>, Error> {
-        self.store.get_pool_delegation_shares(pool_id).map_err(Error::from)
+        self.store.get_pool_delegations_shares(pool_id).map_err(Error::from)
     }
 
     pub fn get_delegation_share(
@@ -374,27 +366,25 @@ impl<S: PoSAccountingStorageRead> PoSAccounting<S> {
         delegation_address: H256,
     ) -> Result<Option<Amount>, Error> {
         self.store
-            .get_pool_delegation_amount(pool_id, delegation_address)
+            .get_pool_delegation_share(pool_id, delegation_address)
             .map_err(Error::from)
     }
 
     pub fn get_pool_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error> {
-        self.store.get_pool_address_balance(pool_id).map_err(Error::from)
+        self.store.get_pool_balance(pool_id).map_err(Error::from)
     }
 
     pub fn get_delegation_address_balance(
         &self,
         delegation_address: H256,
     ) -> Result<Option<Amount>, Error> {
-        self.store
-            .get_delegation_address_balance(delegation_address)
-            .map_err(Error::from)
+        self.store.get_delegation_balance(delegation_address).map_err(Error::from)
     }
 
     pub fn get_delegation_address_data(
         &self,
         delegation_address: H256,
     ) -> Result<Option<DelegationData>, Error> {
-        self.store.get_delegation_address_data(delegation_address).map_err(Error::from)
+        self.store.get_delegation_data(delegation_address).map_err(Error::from)
     }
 }

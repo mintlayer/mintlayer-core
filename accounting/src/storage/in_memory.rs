@@ -30,11 +30,11 @@ impl InMemoryPoSAccounting {
 }
 
 impl PoSAccountingStorageRead for InMemoryPoSAccounting {
-    fn get_pool_address_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error> {
+    fn get_pool_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error> {
         Ok(self.pool_addresses_balances.get(&pool_id).copied())
     }
 
-    fn get_pool_delegation_shares(
+    fn get_pool_delegations_shares(
         &self,
         pool_id: H256,
     ) -> Result<Option<BTreeMap<H256, Amount>>, Error> {
@@ -49,21 +49,18 @@ impl PoSAccountingStorageRead for InMemoryPoSAccounting {
         }
     }
 
-    fn get_delegation_address_data(
+    fn get_delegation_data(
         &self,
         delegation_address: H256,
     ) -> Result<Option<DelegationData>, Error> {
         Ok(self.delegation_addresses_data.get(&delegation_address).cloned())
     }
 
-    fn get_delegation_address_balance(
-        &self,
-        delegation_address: H256,
-    ) -> Result<Option<Amount>, Error> {
+    fn get_delegation_balance(&self, delegation_address: H256) -> Result<Option<Amount>, Error> {
         Ok(self.delegation_addresses_balances.get(&delegation_address).copied())
     }
 
-    fn get_pool_delegation_amount(
+    fn get_pool_delegation_share(
         &self,
         pool_id: H256,
         delegation_address: H256,
@@ -77,7 +74,7 @@ impl PoSAccountingStorageRead for InMemoryPoSAccounting {
 }
 
 impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
-    fn set_pool_address_balance(&mut self, pool_id: H256, amount: Amount) -> Result<(), Error> {
+    fn set_pool_balance(&mut self, pool_id: H256, amount: Amount) -> Result<(), Error> {
         self.pool_addresses_balances.insert(pool_id, amount);
         Ok(())
     }
@@ -87,7 +84,7 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         Ok(())
     }
 
-    fn set_delegation_address_balance(
+    fn set_delegation_balance(
         &mut self,
         delegation_target: H256,
         amount: Amount,
@@ -96,12 +93,12 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         Ok(())
     }
 
-    fn del_delegation_address_balance(&mut self, delegation_target: H256) -> Result<(), Error> {
+    fn del_delegation_balance(&mut self, delegation_target: H256) -> Result<(), Error> {
         self.delegation_addresses_balances.remove(&delegation_target);
         Ok(())
     }
 
-    fn set_pool_delegation_shares(
+    fn set_pool_delegation_share(
         &mut self,
         pool_id: H256,
         delegation_address: H256,
@@ -111,7 +108,7 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         Ok(())
     }
 
-    fn del_pool_delegation_shares(
+    fn del_pool_delegation_share(
         &mut self,
         pool_id: H256,
         delegation_address: H256,
@@ -120,7 +117,7 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         Ok(())
     }
 
-    fn set_delegation_address_data(
+    fn set_delegation_data(
         &mut self,
         delegation_address: H256,
         delegation_data: &DelegationData,
@@ -130,7 +127,7 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         Ok(())
     }
 
-    fn del_delegation_address_data(&mut self, delegation_address: H256) -> Result<(), Error> {
+    fn del_delegation_data(&mut self, delegation_address: H256) -> Result<(), Error> {
         self.delegation_addresses_data.remove(&delegation_address);
         Ok(())
     }
