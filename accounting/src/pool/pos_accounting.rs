@@ -45,7 +45,6 @@ pub struct PoSAccounting<S> {
     pool_addresses_balances: BTreeMap<H256, Amount>,
     delegation_to_pool_shares: BTreeMap<(H256, H256), Amount>,
     delegation_addresses_balances: BTreeMap<H256, Amount>,
-    delegation_addresses_data: BTreeMap<H256, DelegationData>,
 }
 
 impl<S> PoSAccounting<S> {
@@ -55,7 +54,6 @@ impl<S> PoSAccounting<S> {
             pool_addresses_balances: Default::default(),
             delegation_to_pool_shares: Default::default(),
             delegation_addresses_balances: Default::default(),
-            delegation_addresses_data: Default::default(),
         }
     }
 }
