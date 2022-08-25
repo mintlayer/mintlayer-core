@@ -251,6 +251,16 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         };
         Ok(tx_index)
     }
+    fn calculate_total_outputs(
+        outputs: &[TxOutput],
+    ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
+        let mut total_amounts = BTreeMap::new();
+        outputs
+            .iter()
+            .filter_map(|output| filter_for_total_outputs(output.value()))
+            .try_for_each(|(key, amount)| insert_or_increase(&mut total_amounts, key, *amount))?;
+        Ok(total_amounts)
+    }
 
     fn calculate_total_inputs(
         &self,
@@ -260,10 +270,9 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
 
         for input in inputs.iter() {
             let outpoint = input.outpoint();
-            let tx_index = self.get_tx_index_from_cache(outpoint)?;
             let output_index = outpoint.output_index() as usize;
 
-            match tx_index.position() {
+            match self.get_tx_index_from_cache(outpoint)?.position() {
                 common::chain::SpendablePosition::Transaction(tx_pos) => {
                     let tx = self
                         .db_tx
@@ -278,71 +287,14 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                     let output_value =
                         Self::get_output_value(tx.outputs(), output_index, tx.get_id().into())?;
 
-                    match output_value {
-                        OutputValue::Coin(amount) => {
-                            result.insert(
-                                CoinOrTokenId::Coin,
-                                (result
-                                    .get(&CoinOrTokenId::Coin)
-                                    .cloned()
-                                    .unwrap_or(Amount::from_atoms(0))
-                                    + *amount)
-                                    .ok_or(ConnectTransactionError::TokensError(
-                                        TokensError::CoinOrTokenOverflow,
-                                    ))?,
-                            );
-                        }
-                        OutputValue::Token(token_data) => match token_data {
-                            TokenData::TokenTransferV1 { token_id, amount } => {
-                                let key = CoinOrTokenId::TokenId(*token_id);
-                                result.insert(
-                                    key,
-                                    (result.get(&key).cloned().unwrap_or(Amount::from_atoms(0))
-                                        + *amount)
-                                        .ok_or(ConnectTransactionError::TokensError(
-                                            TokensError::CoinOrTokenOverflow,
-                                        ))?,
-                                );
-                            }
-                            TokenData::TokenIssuanceV1 {
-                                token_ticker: _,
-                                amount_to_issue,
-                                number_of_decimals: _,
-                                metadata_uri: _,
-                            } => {
-                                let token_id =
-                                    token_id(&tx).ok_or(ConnectTransactionError::TokensError(
-                                        TokensError::TokenIdCantBeCalculated,
-                                    ))?;
-                                result.insert(CoinOrTokenId::TokenId(token_id), *amount_to_issue);
-                            }
-                            TokenData::TokenBurnV1 {
-                                token_id: _,
-                                amount_to_burn: _,
-                            } => {
-                                /* Token have burned and can't be transferred */
-                                return Err(ConnectTransactionError::TokensError(
-                                    TokensError::AttemptToTransferBurnedTokens,
-                                ));
-                            }
-                        },
-                    }
+                    let (key, amount) = filter_for_total_inputs(output_value, &tx)?;
+                    insert_or_increase(&mut result, key, amount)?
                 }
                 common::chain::SpendablePosition::BlockReward(block_id) => {
                     let outputs = self.block_reward_outputs(block_id)?;
                     match Self::get_output_value(&outputs, output_index, (*block_id).into())? {
                         OutputValue::Coin(amount) => {
-                            result.insert(
-                                CoinOrTokenId::Coin,
-                                (result
-                                    .get(&CoinOrTokenId::Coin)
-                                    .cloned()
-                                    .unwrap_or(Amount::from_atoms(0))
-                                    + *amount)
-                                    .ok_or(ConnectTransactionError::TokensError(
-                                        TokensError::CoinOrTokenOverflow,
-                                    ))?,
-                            );
+                            insert_or_increase(&mut result, CoinOrTokenId::Coin, *amount)?
                         }
                         OutputValue::Token(_) => {
                             return Err(ConnectTransactionError::TokensError(
@@ -383,59 +335,12 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
 
         // TODO: Check is fee enough for issuance
         let issuance_count = get_tokens_issuance_count(tx.outputs());
-        if dbg!(issuance_count) == 1 && dbg!(total_fee) < dbg!(TOKEN_MIN_ISSUANCE_FEE) {
+        if issuance_count == 1 && total_fee < TOKEN_MIN_ISSUANCE_FEE {
             return Err(ConnectTransactionError::TokensError(
                 TokensError::InsufficientTokenFees(tx.get_id(), block_id),
             ));
         }
         Ok(total_fee)
-    }
-
-    fn calculate_total_outputs(
-        outputs: &[TxOutput],
-    ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
-        let mut total_amounts = BTreeMap::new();
-
-        let res: Result<(), ConnectTransactionError> = outputs
-            .iter()
-            .filter_map(|output| {
-                match output.value() {
-                    OutputValue::Coin(amount) => Some((CoinOrTokenId::Coin, amount)),
-                    OutputValue::Token(token_data) => match token_data {
-                        TokenData::TokenTransferV1 { token_id, amount } => {
-                            Some((CoinOrTokenId::TokenId(*token_id), amount))
-                        }
-                        TokenData::TokenIssuanceV1 {
-                            token_ticker: _,
-                            amount_to_issue: _,
-                            number_of_decimals: _,
-                            metadata_uri: _,
-                        } => {
-                            // TODO: Might be it's not necessary at all?
-                            // if include_issuance {
-                            // ...
-                            // }
-                            None
-                        }
-                        TokenData::TokenBurnV1 {
-                            token_id,
-                            amount_to_burn,
-                        } => Some((CoinOrTokenId::TokenId(*token_id), amount_to_burn)),
-                    },
-                }
-            })
-            .try_for_each(|(key, amount)| {
-                total_amounts.insert(
-                    key,
-                    (total_amounts.get(&key).cloned().unwrap_or(Amount::from_atoms(0)) + *amount)
-                        .ok_or(ConnectTransactionError::TokensError(
-                        TokensError::CoinOrTokenOverflow,
-                    ))?,
-                );
-                Ok(())
-            });
-        res?;
-        Ok(total_amounts)
     }
 
     fn calculate_block_total_fees(&self, block: &Block) -> Result<Amount, ConnectTransactionError> {
@@ -845,6 +750,86 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
             tx_index_data: self.tx_index_cache,
             tokens_data: self.tokens_cache,
         })
+    }
+}
+
+fn filter_for_total_inputs(
+    output_value: &OutputValue,
+    tx: &Transaction,
+) -> Result<(CoinOrTokenId, Amount), ConnectTransactionError> {
+    Ok(match output_value {
+        OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
+        OutputValue::Token(token_data) => match token_data {
+            TokenData::TokenTransferV1 { token_id, amount } => {
+                (CoinOrTokenId::TokenId(*token_id), *amount)
+            }
+            TokenData::TokenIssuanceV1 {
+                token_ticker: _,
+                amount_to_issue,
+                number_of_decimals: _,
+                metadata_uri: _,
+            } => {
+                let token_id = token_id(tx).ok_or(ConnectTransactionError::TokensError(
+                    TokensError::TokenIdCantBeCalculated,
+                ))?;
+                (CoinOrTokenId::TokenId(token_id), *amount_to_issue)
+            }
+            TokenData::TokenBurnV1 {
+                token_id: _,
+                amount_to_burn: _,
+            } => {
+                /* Token have burned and can't be transferred */
+                return Err(ConnectTransactionError::TokensError(
+                    TokensError::AttemptToTransferBurnedTokens,
+                ));
+            }
+        },
+    })
+}
+
+fn insert_or_increase(
+    total_amounts: &mut BTreeMap<CoinOrTokenId, Amount>,
+    key: CoinOrTokenId,
+    amount: Amount,
+) -> Result<(), ConnectTransactionError> {
+    match total_amounts.entry(key) {
+        Entry::Occupied(entry) => {
+            let old_value: Amount = *entry.get();
+            *entry.into_mut() = (old_value + amount).ok_or(ConnectTransactionError::TokensError(
+                TokensError::CoinOrTokenOverflow,
+            ))?
+        }
+        Entry::Vacant(entry) => {
+            entry.insert(amount);
+        }
+    }
+    Ok(())
+}
+
+fn filter_for_total_outputs(output_value: &OutputValue) -> Option<(CoinOrTokenId, &Amount)> {
+    match output_value {
+        OutputValue::Coin(amount) => Some((CoinOrTokenId::Coin, amount)),
+        OutputValue::Token(token_data) => match token_data {
+            TokenData::TokenTransferV1 { token_id, amount } => {
+                Some((CoinOrTokenId::TokenId(*token_id), amount))
+            }
+            TokenData::TokenIssuanceV1 {
+                token_ticker: _,
+                amount_to_issue: _,
+                number_of_decimals: _,
+                metadata_uri: _,
+            } => {
+                // TODO: Might be it's not necessary at all?
+                // if include_issuance {
+                // ...
+                // }
+                None
+            }
+            TokenData::TokenBurnV1 {
+                token_id,
+                amount_to_burn,
+            } => Some((CoinOrTokenId::TokenId(*token_id), amount_to_burn)),
+        },
     }
 }
 
