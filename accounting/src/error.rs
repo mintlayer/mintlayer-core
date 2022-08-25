@@ -12,10 +12,10 @@ pub enum Error {
     AttemptedDecommissionNonexistingPoolData,
     #[error("Failed to create a delegation because the target pool doesn't exist")]
     DelegationCreationFailedPoolDoesNotExist,
-    #[error("Failed to create a delegation because the resulting address already exists")]
-    InvariantErrorDelegationCreationFailedAddressAlreadyExists,
-    #[error("Delegate to a non-existing reward address")]
-    DelegateToNonexistingAddress,
+    #[error("Failed to create a delegation because the resulting id already exists")]
+    InvariantErrorDelegationCreationFailedIdAlreadyExists,
+    #[error("Delegate to a non-existing reward id")]
+    DelegateToNonexistingId,
     #[error("Delegate to a non-existing pool")]
     DelegateToNonexistingPool,
     #[error("Delegation arithmetic error")]
@@ -34,10 +34,10 @@ pub enum Error {
     InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists,
     #[error("Undo failed as decommission pool data is still in storage")]
     InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists,
-    #[error("Reversal of delegation address creation failed; not found")]
-    InvariantErrorDelegationAddressUndoFailedNotFound,
-    #[error("Reversal of delegation address creation failed; data changed")]
-    InvariantErrorDelegationAddressUndoFailedDataConflict,
+    #[error("Reversal of delegation id creation failed; not found")]
+    InvariantErrorDelegationIdUndoFailedNotFound,
+    #[error("Reversal of delegation id creation failed; data changed")]
+    InvariantErrorDelegationIdUndoFailedDataConflict,
     #[error("Delegation balance arithmetic undo error")]
     InvariantErrorDelegationBalanceAdditionUndoError,
     #[error("Pool balance arithmetic undo error")]

@@ -49,23 +49,20 @@ impl PoSAccountingStorageRead for InMemoryPoSAccounting {
         }
     }
 
-    fn get_delegation_data(
-        &self,
-        delegation_address: H256,
-    ) -> Result<Option<DelegationData>, Error> {
-        Ok(self.delegation_data.get(&delegation_address).cloned())
+    fn get_delegation_data(&self, delegation_id: H256) -> Result<Option<DelegationData>, Error> {
+        Ok(self.delegation_data.get(&delegation_id).cloned())
     }
 
-    fn get_delegation_balance(&self, delegation_address: H256) -> Result<Option<Amount>, Error> {
-        Ok(self.delegation_balances.get(&delegation_address).copied())
+    fn get_delegation_balance(&self, delegation_id: H256) -> Result<Option<Amount>, Error> {
+        Ok(self.delegation_balances.get(&delegation_id).copied())
     }
 
     fn get_pool_delegation_share(
         &self,
         pool_id: H256,
-        delegation_address: H256,
+        delegation_id: H256,
     ) -> Result<Option<Amount>, Error> {
-        Ok(self.pool_delegation_shares.get(&(pool_id, delegation_address)).copied())
+        Ok(self.pool_delegation_shares.get(&(pool_id, delegation_id)).copied())
     }
 
     fn get_pool_data(&self, pool_id: H256) -> Result<Option<PoolData>, Error> {
@@ -101,33 +98,33 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
     fn set_pool_delegation_share(
         &mut self,
         pool_id: H256,
-        delegation_address: H256,
+        delegation_id: H256,
         amount: Amount,
     ) -> Result<(), Error> {
-        self.pool_delegation_shares.insert((pool_id, delegation_address), amount);
+        self.pool_delegation_shares.insert((pool_id, delegation_id), amount);
         Ok(())
     }
 
     fn del_pool_delegation_share(
         &mut self,
         pool_id: H256,
-        delegation_address: H256,
+        delegation_id: H256,
     ) -> Result<(), Error> {
-        self.pool_delegation_shares.remove(&(pool_id, delegation_address));
+        self.pool_delegation_shares.remove(&(pool_id, delegation_id));
         Ok(())
     }
 
     fn set_delegation_data(
         &mut self,
-        delegation_address: H256,
+        delegation_id: H256,
         delegation_data: &DelegationData,
     ) -> Result<(), Error> {
-        self.delegation_data.insert(delegation_address, delegation_data.clone());
+        self.delegation_data.insert(delegation_id, delegation_data.clone());
         Ok(())
     }
 
-    fn del_delegation_data(&mut self, delegation_address: H256) -> Result<(), Error> {
-        self.delegation_data.remove(&delegation_address);
+    fn del_delegation_data(&mut self, delegation_id: H256) -> Result<(), Error> {
+        self.delegation_data.remove(&delegation_id);
         Ok(())
     }
 

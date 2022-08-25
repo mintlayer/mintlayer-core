@@ -13,7 +13,7 @@ use crate::{
 
 use super::{
     delegation::DelegationData,
-    helpers::{make_delegation_address, make_pool_address},
+    helpers::{make_delegation_id, make_pool_id},
     pool_data::PoolData,
     view::PoSAccountingView,
 };
@@ -25,17 +25,17 @@ pub enum PoSAccountingUndo {
         decommission_key: PublicKey,
     },
     DecommissionPool {
-        pool_address: H256,
+        pool_id: H256,
         last_amount: Amount,
         pool_data: PoolData,
     },
-    CreateDelegationAddress {
+    CreateDelegationId {
         delegation_data: DelegationData,
         input0_outpoint: OutPoint,
     },
     AddDelegationBalance {
         pool_id: H256,
-        delegation_address: H256,
+        delegation_id: H256,
         amount_to_add: Amount,
     },
     DelegateStaking {
@@ -61,7 +61,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         pledge_amount: Amount,
         decommission_key: PublicKey,
     ) -> Result<PoSAccountingUndo, Error> {
-        let pool_id = make_pool_address(input0_outpoint);
+        let pool_id = make_pool_id(input0_outpoint);
 
         {
             let current_amount = self.store.get_pool_balance(pool_id)?;
@@ -94,7 +94,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
     ) -> Result<(), Error> {
-        let pool_id = make_pool_address(input0_outpoint);
+        let pool_id = make_pool_id(input0_outpoint);
 
         let amount = self.store.get_pool_balance(pool_id)?;
 
@@ -135,7 +135,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         self.store.del_pool_data(pool_id)?;
 
         Ok(PoSAccountingUndo::DecommissionPool {
-            pool_address: pool_id,
+            pool_id: pool_id,
             last_amount,
             pool_data,
         })
@@ -163,7 +163,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         Ok(())
     }
 
-    pub fn create_delegation_address(
+    pub fn create_delegation_id(
         &mut self,
         target_pool: H256,
         spend_key: PublicKey,
@@ -173,46 +173,46 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
             return Err(Error::DelegationCreationFailedPoolDoesNotExist);
         }
 
-        let delegation_address = make_delegation_address(input0_outpoint);
+        let delegation_id = make_delegation_id(input0_outpoint);
 
         {
-            let current_delegation_data = self.store.get_delegation_data(delegation_address)?;
+            let current_delegation_data = self.store.get_delegation_data(delegation_id)?;
             if current_delegation_data.is_some() {
                 // This should never happen since it's based on an unspent input
-                return Err(Error::InvariantErrorDelegationCreationFailedAddressAlreadyExists);
+                return Err(Error::InvariantErrorDelegationCreationFailedIdAlreadyExists);
             }
         }
 
         let delegation_data = DelegationData::new(target_pool, spend_key);
 
-        self.store.set_delegation_data(delegation_address, &delegation_data)?;
+        self.store.set_delegation_data(delegation_id, &delegation_data)?;
 
         Ok((
-            delegation_address,
-            PoSAccountingUndo::CreateDelegationAddress {
+            delegation_id,
+            PoSAccountingUndo::CreateDelegationId {
                 delegation_data,
                 input0_outpoint: input0_outpoint.clone(),
             },
         ))
     }
 
-    pub fn undo_create_delegation_address(
+    pub fn undo_create_delegation_id(
         &mut self,
         delegation_data: DelegationData,
         input0_outpoint: &OutPoint,
     ) -> Result<(), Error> {
-        let delegation_address = make_delegation_address(input0_outpoint);
+        let delegation_id = make_delegation_id(input0_outpoint);
 
         let removed_data = self
             .store
-            .get_delegation_data(delegation_address)?
-            .ok_or(Error::InvariantErrorDelegationAddressUndoFailedNotFound)?;
+            .get_delegation_data(delegation_id)?
+            .ok_or(Error::InvariantErrorDelegationIdUndoFailedNotFound)?;
 
         if removed_data != delegation_data {
-            return Err(Error::InvariantErrorDelegationAddressUndoFailedDataConflict);
+            return Err(Error::InvariantErrorDelegationIdUndoFailedDataConflict);
         }
 
-        self.store.del_delegation_data(delegation_address)?;
+        self.store.del_delegation_data(delegation_id)?;
 
         Ok(())
     }
@@ -225,7 +225,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         let current_amount = self
             .store
             .get_delegation_balance(delegation_target)?
-            .ok_or(Error::DelegateToNonexistingAddress)?;
+            .ok_or(Error::DelegateToNonexistingId)?;
         let new_amount =
             (current_amount + amount_to_delegate).ok_or(Error::DelegationBalanceAdditionError)?;
         self.store.set_delegation_balance(delegation_target, new_amount)?;
@@ -240,7 +240,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         let current_amount = self
             .store
             .get_delegation_balance(delegation_target)?
-            .ok_or(Error::DelegateToNonexistingAddress)?;
+            .ok_or(Error::DelegateToNonexistingId)?;
         let new_amount =
             (current_amount - amount_to_delegate).ok_or(Error::DelegationBalanceAdditionError)?;
         self.store.set_delegation_balance(delegation_target, new_amount)?;
@@ -270,35 +270,35 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
     fn add_delegation_to_pool_share(
         &mut self,
         pool_id: H256,
-        delegation_address: H256,
+        delegation_id: H256,
         amount_to_add: Amount,
     ) -> Result<(), Error> {
         let current_amount = self
             .store
-            .get_pool_delegation_share(pool_id, delegation_address)?
+            .get_pool_delegation_share(pool_id, delegation_id)?
             .unwrap_or(Amount::from_atoms(0));
         let new_amount =
             (current_amount + amount_to_add).ok_or(Error::DelegationSharesAdditionError)?;
-        self.store.set_pool_delegation_share(pool_id, delegation_address, new_amount)?;
+        self.store.set_pool_delegation_share(pool_id, delegation_id, new_amount)?;
         Ok(())
     }
 
     fn undo_add_delegation_to_pool_share(
         &mut self,
         pool_id: H256,
-        delegation_address: H256,
+        delegation_id: H256,
         amount_to_add: Amount,
     ) -> Result<(), Error> {
         let current_amount = self
             .store
-            .get_pool_delegation_share(pool_id, delegation_address)?
+            .get_pool_delegation_share(pool_id, delegation_id)?
             .ok_or(Error::InvariantErrorDelegationShareNotFound)?;
         let new_amount =
             (current_amount + amount_to_add).ok_or(Error::DelegationSharesAdditionError)?;
         if new_amount > Amount::from_atoms(0) {
-            self.store.set_pool_delegation_share(pool_id, delegation_address, new_amount)?;
+            self.store.set_pool_delegation_share(pool_id, delegation_id, new_amount)?;
         } else {
-            self.store.del_pool_delegation_share(pool_id, delegation_address)?;
+            self.store.del_pool_delegation_share(pool_id, delegation_id)?;
         }
         Ok(())
     }
@@ -349,7 +349,7 @@ impl<S: PoSAccountingStorageRead> PoSAccounting<S> {
             .store
             .get_delegation_data(delegation_target)
             .map_err(Error::from)?
-            .ok_or(Error::DelegateToNonexistingAddress)?;
+            .ok_or(Error::DelegateToNonexistingId)?;
         Ok(delegation_target)
     }
 
@@ -364,10 +364,10 @@ impl<S: PoSAccountingStorageRead> PoSAccounting<S> {
     pub fn get_delegation_share(
         &self,
         pool_id: H256,
-        delegation_address: H256,
+        delegation_id: H256,
     ) -> Result<Option<Amount>, Error> {
         self.store
-            .get_pool_delegation_share(pool_id, delegation_address)
+            .get_pool_delegation_share(pool_id, delegation_id)
             .map_err(Error::from)
     }
 
@@ -375,18 +375,15 @@ impl<S: PoSAccountingStorageRead> PoSAccounting<S> {
         self.store.get_pool_balance(pool_id).map_err(Error::from)
     }
 
-    pub fn get_delegation_address_balance(
-        &self,
-        delegation_address: H256,
-    ) -> Result<Option<Amount>, Error> {
-        self.store.get_delegation_balance(delegation_address).map_err(Error::from)
+    pub fn get_delegation_id_balance(&self, delegation_id: H256) -> Result<Option<Amount>, Error> {
+        self.store.get_delegation_balance(delegation_id).map_err(Error::from)
     }
 
-    pub fn get_delegation_address_data(
+    pub fn get_delegation_id_data(
         &self,
-        delegation_address: H256,
+        delegation_id: H256,
     ) -> Result<Option<DelegationData>, Error> {
-        self.store.get_delegation_data(delegation_address).map_err(Error::from)
+        self.store.get_delegation_data(delegation_id).map_err(Error::from)
     }
 }
 
@@ -406,8 +403,8 @@ impl<S: PoSAccountingStorageRead> PoSAccountingView for PoSAccounting<S> {
         self.store.get_pool_delegations_shares(pool_id).map_err(Error::from)
     }
 
-    fn get_delegation_balance(&self, delegation_address: H256) -> Result<Option<Amount>, Error> {
-        self.store.get_delegation_balance(delegation_address).map_err(Error::from)
+    fn get_delegation_balance(&self, delegation_id: H256) -> Result<Option<Amount>, Error> {
+        self.store.get_delegation_balance(delegation_id).map_err(Error::from)
     }
 
     fn get_delegation_data(&self, delegation_id: H256) -> Result<Option<DelegationData>, Error> {
@@ -417,10 +414,10 @@ impl<S: PoSAccountingStorageRead> PoSAccountingView for PoSAccounting<S> {
     fn get_pool_delegation_share(
         &self,
         pool_id: H256,
-        delegation_address: H256,
+        delegation_id: H256,
     ) -> Result<Option<Amount>, Error> {
         self.store
-            .get_pool_delegation_share(pool_id, delegation_address)
+            .get_pool_delegation_share(pool_id, delegation_id)
             .map_err(Error::from)
     }
 }
