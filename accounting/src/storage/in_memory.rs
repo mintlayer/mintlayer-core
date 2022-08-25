@@ -10,28 +10,28 @@ use super::{PoSAccountingStorageRead, PoSAccountingStorageWrite};
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct InMemoryPoSAccounting {
-    pool_addresses_data: BTreeMap<H256, PoolData>,
-    pool_addresses_balances: BTreeMap<H256, Amount>,
-    delegation_to_pool_shares: BTreeMap<(H256, H256), Amount>,
-    delegation_addresses_balances: BTreeMap<H256, Amount>,
-    delegation_addresses_data: BTreeMap<H256, DelegationData>,
+    pool_data: BTreeMap<H256, PoolData>,
+    pool_balances: BTreeMap<H256, Amount>,
+    pool_delegation_shares: BTreeMap<(H256, H256), Amount>,
+    delegation_balances: BTreeMap<H256, Amount>,
+    delegation_data: BTreeMap<H256, DelegationData>,
 }
 
 impl InMemoryPoSAccounting {
     pub fn new() -> Self {
         Self {
-            pool_addresses_data: Default::default(),
-            pool_addresses_balances: Default::default(),
-            delegation_to_pool_shares: Default::default(),
-            delegation_addresses_balances: Default::default(),
-            delegation_addresses_data: Default::default(),
+            pool_data: Default::default(),
+            pool_balances: Default::default(),
+            pool_delegation_shares: Default::default(),
+            delegation_balances: Default::default(),
+            delegation_data: Default::default(),
         }
     }
 }
 
 impl PoSAccountingStorageRead for InMemoryPoSAccounting {
     fn get_pool_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error> {
-        Ok(self.pool_addresses_balances.get(&pool_id).copied())
+        Ok(self.pool_balances.get(&pool_id).copied())
     }
 
     fn get_pool_delegations_shares(
@@ -40,7 +40,7 @@ impl PoSAccountingStorageRead for InMemoryPoSAccounting {
     ) -> Result<Option<BTreeMap<H256, Amount>>, Error> {
         let range_start = (pool_id, H256::zero());
         let range_end = (pool_id, H256::repeat_byte(0xFF));
-        let range = self.delegation_to_pool_shares.range(range_start..=range_end);
+        let range = self.pool_delegation_shares.range(range_start..=range_end);
         let result = range.map(|((_pool_id, del_id), v)| (*del_id, *v)).collect::<BTreeMap<_, _>>();
         if result.is_empty() {
             Ok(None)
@@ -53,11 +53,11 @@ impl PoSAccountingStorageRead for InMemoryPoSAccounting {
         &self,
         delegation_address: H256,
     ) -> Result<Option<DelegationData>, Error> {
-        Ok(self.delegation_addresses_data.get(&delegation_address).cloned())
+        Ok(self.delegation_data.get(&delegation_address).cloned())
     }
 
     fn get_delegation_balance(&self, delegation_address: H256) -> Result<Option<Amount>, Error> {
-        Ok(self.delegation_addresses_balances.get(&delegation_address).copied())
+        Ok(self.delegation_balances.get(&delegation_address).copied())
     }
 
     fn get_pool_delegation_share(
@@ -65,22 +65,22 @@ impl PoSAccountingStorageRead for InMemoryPoSAccounting {
         pool_id: H256,
         delegation_address: H256,
     ) -> Result<Option<Amount>, Error> {
-        Ok(self.delegation_to_pool_shares.get(&(pool_id, delegation_address)).copied())
+        Ok(self.pool_delegation_shares.get(&(pool_id, delegation_address)).copied())
     }
 
     fn get_pool_data(&self, pool_id: H256) -> Result<Option<PoolData>, Error> {
-        Ok(self.pool_addresses_data.get(&pool_id).cloned())
+        Ok(self.pool_data.get(&pool_id).cloned())
     }
 }
 
 impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
     fn set_pool_balance(&mut self, pool_id: H256, amount: Amount) -> Result<(), Error> {
-        self.pool_addresses_balances.insert(pool_id, amount);
+        self.pool_balances.insert(pool_id, amount);
         Ok(())
     }
 
     fn del_pool_balance(&mut self, pool_id: H256) -> Result<(), Error> {
-        self.pool_addresses_balances.remove(&pool_id);
+        self.pool_balances.remove(&pool_id);
         Ok(())
     }
 
@@ -89,12 +89,12 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         delegation_target: H256,
         amount: Amount,
     ) -> Result<(), Error> {
-        self.delegation_addresses_balances.insert(delegation_target, amount);
+        self.delegation_balances.insert(delegation_target, amount);
         Ok(())
     }
 
     fn del_delegation_balance(&mut self, delegation_target: H256) -> Result<(), Error> {
-        self.delegation_addresses_balances.remove(&delegation_target);
+        self.delegation_balances.remove(&delegation_target);
         Ok(())
     }
 
@@ -104,7 +104,7 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         delegation_address: H256,
         amount: Amount,
     ) -> Result<(), Error> {
-        self.delegation_to_pool_shares.insert((pool_id, delegation_address), amount);
+        self.pool_delegation_shares.insert((pool_id, delegation_address), amount);
         Ok(())
     }
 
@@ -113,7 +113,7 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         pool_id: H256,
         delegation_address: H256,
     ) -> Result<(), Error> {
-        self.delegation_to_pool_shares.remove(&(pool_id, delegation_address));
+        self.pool_delegation_shares.remove(&(pool_id, delegation_address));
         Ok(())
     }
 
@@ -122,23 +122,22 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         delegation_address: H256,
         delegation_data: &DelegationData,
     ) -> Result<(), Error> {
-        self.delegation_addresses_data
-            .insert(delegation_address, delegation_data.clone());
+        self.delegation_data.insert(delegation_address, delegation_data.clone());
         Ok(())
     }
 
     fn del_delegation_data(&mut self, delegation_address: H256) -> Result<(), Error> {
-        self.delegation_addresses_data.remove(&delegation_address);
+        self.delegation_data.remove(&delegation_address);
         Ok(())
     }
 
     fn set_pool_data(&mut self, pool_id: H256, pool_data: &PoolData) -> Result<(), Error> {
-        self.pool_addresses_data.insert(pool_id, pool_data.clone());
+        self.pool_data.insert(pool_id, pool_data.clone());
         Ok(())
     }
 
     fn del_pool_data(&mut self, pool_id: H256) -> Result<(), Error> {
-        self.pool_addresses_data.remove(&pool_id);
+        self.pool_data.remove(&pool_id);
         Ok(())
     }
 }
