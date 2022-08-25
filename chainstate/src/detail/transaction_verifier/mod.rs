@@ -533,7 +533,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 self.precache_inputs(tx.inputs())?;
 
                 // check for attempted money printing
-                self.check_transferred_amounts_and_get_fee(tx)?;
+                let _ = self.check_transferred_amounts_and_get_fee(tx)?;
 
                 // verify input signatures
                 self.verify_signatures(tx, spend_height, median_time_past)?;
