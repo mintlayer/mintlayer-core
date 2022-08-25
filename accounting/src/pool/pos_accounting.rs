@@ -44,7 +44,6 @@ pub struct PoSAccounting<S> {
     store: S,
     pool_addresses_balances: BTreeMap<H256, Amount>,
     delegation_to_pool_shares: BTreeMap<(H256, H256), Amount>,
-    delegation_addresses_balances: BTreeMap<H256, Amount>,
 }
 
 impl<S> PoSAccounting<S> {
@@ -53,7 +52,6 @@ impl<S> PoSAccounting<S> {
             store,
             pool_addresses_balances: Default::default(),
             delegation_to_pool_shares: Default::default(),
-            delegation_addresses_balances: Default::default(),
         }
     }
 }
@@ -190,11 +188,12 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         amount_to_delegate: Amount,
     ) -> Result<(), Error> {
         let current_amount = self
-            .delegation_addresses_balances
-            .get_mut(&delegation_target)
+            .store
+            .get_delegation_address_balance(delegation_target)?
             .ok_or(Error::DelegateToNonexistingAddress)?;
-        *current_amount =
-            (*current_amount + amount_to_delegate).ok_or(Error::DelegationBalanceAdditionError)?;
+        let new_amount =
+            (current_amount + amount_to_delegate).ok_or(Error::DelegationBalanceAdditionError)?;
+        self.store.set_delegation_address_balance(delegation_target, new_amount)?;
         Ok(())
     }
 
@@ -204,11 +203,12 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         amount_to_delegate: Amount,
     ) -> Result<(), Error> {
         let current_amount = self
-            .delegation_addresses_balances
-            .get_mut(&delegation_target)
+            .store
+            .get_delegation_address_balance(delegation_target)?
             .ok_or(Error::DelegateToNonexistingAddress)?;
-        *current_amount = (*current_amount - amount_to_delegate)
-            .ok_or(Error::InvariantErrorDelegationBalanceAdditionUndoError)?;
+        let new_amount =
+            (current_amount - amount_to_delegate).ok_or(Error::DelegationBalanceAdditionError)?;
+        self.store.set_delegation_address_balance(delegation_target, new_amount)?;
         Ok(())
     }
 
