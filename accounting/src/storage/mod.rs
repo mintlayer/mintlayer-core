@@ -68,7 +68,7 @@ pub trait PoSAccountingStorageWrite: PoSAccountingStorageRead {
     fn set_delegation_address_data(
         &mut self,
         delegation_address: H256,
-        delegation_data: DelegationData,
+        delegation_data: &DelegationData,
     ) -> Result<(), Error>;
 
     fn del_delegation_address_data(&mut self, delegation_address: H256) -> Result<(), Error>;

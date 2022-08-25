@@ -123,9 +123,10 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
     fn set_delegation_address_data(
         &mut self,
         delegation_address: H256,
-        delegation_data: DelegationData,
+        delegation_data: &DelegationData,
     ) -> Result<(), Error> {
-        self.delegation_addresses_data.insert(delegation_address, delegation_data);
+        self.delegation_addresses_data
+            .insert(delegation_address, delegation_data.clone());
         Ok(())
     }
 

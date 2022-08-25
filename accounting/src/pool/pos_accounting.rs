@@ -185,8 +185,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
 
         let delegation_data = DelegationData::new(target_pool, spend_key);
 
-        self.store
-            .set_delegation_address_data(delegation_address, delegation_data.clone())?;
+        self.store.set_delegation_address_data(delegation_address, &delegation_data)?;
 
         Ok((
             delegation_address,
