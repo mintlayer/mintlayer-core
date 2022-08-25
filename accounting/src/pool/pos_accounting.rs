@@ -14,16 +14,19 @@ use crate::{
 use super::{
     delegation::DelegationData,
     helpers::{make_delegation_address, make_pool_address},
+    pool_data::PoolData,
 };
 
 pub enum PoSAccountingUndo {
     CreatePool {
         input0_outpoint: OutPoint,
         pledge_amount: Amount,
+        decommission_key: PublicKey,
     },
     DecommissionPool {
         pool_address: H256,
         last_amount: Amount,
+        pool_data: PoolData,
     },
     CreateDelegationAddress {
         delegation_data: DelegationData,
@@ -55,21 +58,33 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         &mut self,
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
+        decommission_key: PublicKey,
     ) -> Result<PoSAccountingUndo, Error> {
         let pool_id = make_pool_address(input0_outpoint);
 
-        let current_amount = self.store.get_pool_address_balance(pool_id)?;
+        {
+            let current_amount = self.store.get_pool_address_balance(pool_id)?;
+            if current_amount.is_some() {
+                // This should never happen since it's based on an unspent input
+                return Err(Error::InvariantErrorPoolBalanceAlreadyExists);
+            }
+        }
 
-        if current_amount.is_some() {
-            // This should never happen since it's based on an unspent input
-            return Err(Error::InvariantErrorPoolAlreadyExists);
+        {
+            let current_data = self.store.get_pool_data(pool_id)?;
+            if current_data.is_some() {
+                // This should never happen since it's based on an unspent input
+                return Err(Error::InvariantErrorPoolDataAlreadyExists);
+            }
         }
 
         self.store.set_pool_address_balance(pool_id, pledge_amount)?;
+        self.store.set_pool_data(pool_id, &PoolData::new(decommission_key.clone()))?;
 
         Ok(PoSAccountingUndo::CreatePool {
             input0_outpoint: input0_outpoint.clone(),
             pledge_amount,
+            decommission_key,
         })
     }
 
@@ -88,10 +103,18 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
                     return Err(Error::InvariantErrorPoolCreationReversalFailedAmountChanged);
                 }
             }
-            None => return Err(Error::InvariantErrorPoolCreationReversalFailedNotFound),
+            None => return Err(Error::InvariantErrorPoolCreationReversalFailedBalanceNotFound),
         }
 
-        self.store.del_pool(pool_id)?;
+        let pool_data = self.store.get_pool_data(pool_id)?;
+        {
+            if pool_data.is_none() {
+                return Err(Error::InvariantErrorPoolCreationReversalFailedDataNotFound);
+            }
+        }
+
+        self.store.del_pool_balance(pool_id)?;
+        self.store.del_pool_data(pool_id)?;
 
         Ok(())
     }
@@ -100,12 +123,20 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         let last_amount = self
             .store
             .get_pool_address_balance(pool_id)?
-            .ok_or(Error::AttemptedDecommissionNonexistingPool)?;
-        self.store.del_pool(pool_id)?;
+            .ok_or(Error::AttemptedDecommissionNonexistingPoolBalance)?;
+
+        let pool_data = self
+            .store
+            .get_pool_data(pool_id)?
+            .ok_or(Error::AttemptedDecommissionNonexistingPoolData)?;
+
+        self.store.del_pool_balance(pool_id)?;
+        self.store.del_pool_data(pool_id)?;
 
         Ok(PoSAccountingUndo::DecommissionPool {
             pool_address: pool_id,
             last_amount,
+            pool_data,
         })
     }
 
@@ -113,13 +144,20 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         &mut self,
         pool_id: H256,
         last_amount: Amount,
+        pool_data: &PoolData,
     ) -> Result<(), Error> {
         let current_amount = self.store.get_pool_address_balance(pool_id)?;
         if current_amount.is_some() {
-            return Err(Error::InvariantErrorDecommissionUndoFailedAlreadyExists);
+            return Err(Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists);
+        }
+
+        let current_data = self.store.get_pool_data(pool_id)?;
+        if current_data.is_some() {
+            return Err(Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists);
         }
 
         self.store.set_pool_address_balance(pool_id, last_amount)?;
+        self.store.set_pool_data(pool_id, pool_data)?;
 
         Ok(())
     }
@@ -130,19 +168,23 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         spend_key: PublicKey,
         input0_outpoint: &OutPoint,
     ) -> Result<(H256, PoSAccountingUndo), Error> {
-        let delegation_address = make_delegation_address(input0_outpoint);
-
         if !self.pool_exists(target_pool)? {
             return Err(Error::DelegationCreationFailedPoolDoesNotExist);
         }
 
-        let current_delegation_data = self.store.get_delegation_address_data(delegation_address)?;
-        if current_delegation_data.is_some() {
-            // This should never happen since it's based on an unspent input
-            return Err(Error::InvariantErrorPoolAlreadyExists);
+        let delegation_address = make_delegation_address(input0_outpoint);
+
+        {
+            let current_delegation_data =
+                self.store.get_delegation_address_data(delegation_address)?;
+            if current_delegation_data.is_some() {
+                // This should never happen since it's based on an unspent input
+                return Err(Error::InvariantErrorDelegationCreationFailedAddressAlreadyExists);
+            }
         }
 
         let delegation_data = DelegationData::new(target_pool, spend_key);
+
         self.store
             .set_delegation_address_data(delegation_address, delegation_data.clone())?;
 

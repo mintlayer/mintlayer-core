@@ -82,7 +82,7 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         Ok(())
     }
 
-    fn del_pool(&mut self, pool_id: H256) -> Result<(), Error> {
+    fn del_pool_balance(&mut self, pool_id: H256) -> Result<(), Error> {
         self.pool_addresses_balances.remove(&pool_id);
         Ok(())
     }
@@ -134,8 +134,8 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         Ok(())
     }
 
-    fn set_pool_data(&mut self, pool_id: H256, pool_data: PoolData) -> Result<(), Error> {
-        self.pool_addresses_data.insert(pool_id, pool_data);
+    fn set_pool_data(&mut self, pool_id: H256, pool_data: &PoolData) -> Result<(), Error> {
+        self.pool_addresses_data.insert(pool_id, pool_data.clone());
         Ok(())
     }
 
