@@ -42,7 +42,6 @@ pub enum PoSAccountingUndo {
 
 pub struct PoSAccounting<S> {
     store: S,
-    pool_addresses_balances: BTreeMap<H256, Amount>,
     delegation_to_pool_shares: BTreeMap<(H256, H256), Amount>,
 }
 
@@ -50,7 +49,6 @@ impl<S> PoSAccounting<S> {
     pub fn new_empty(store: S) -> Self {
         Self {
             store,
-            pool_addresses_balances: Default::default(),
             delegation_to_pool_shares: Default::default(),
         }
     }
@@ -214,10 +212,11 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
 
     fn add_balance_to_pool(&mut self, pool_id: H256, amount_to_add: Amount) -> Result<(), Error> {
         let pool_amount = self
-            .pool_addresses_balances
-            .get_mut(&pool_id)
+            .store
+            .get_pool_address_balance(pool_id)?
             .ok_or(Error::DelegateToNonexistingPool)?;
-        *pool_amount = (*pool_amount + amount_to_add).ok_or(Error::PoolBalanceAdditionError)?;
+        let new_amount = (pool_amount + amount_to_add).ok_or(Error::PoolBalanceAdditionError)?;
+        self.store.set_pool_address_balance(pool_id, new_amount)?;
         Ok(())
     }
 
@@ -227,11 +226,11 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         amount_to_add: Amount,
     ) -> Result<(), Error> {
         let pool_amount = self
-            .pool_addresses_balances
-            .get_mut(&pool_id)
+            .store
+            .get_pool_address_balance(pool_id)?
             .ok_or(Error::DelegateToNonexistingPool)?;
-        *pool_amount = (*pool_amount - amount_to_add)
-            .ok_or(Error::InvariantErrorPoolBalanceAdditionUndoError)?;
+        let new_amount = (pool_amount - amount_to_add).ok_or(Error::PoolBalanceAdditionError)?;
+        self.store.set_pool_address_balance(pool_id, new_amount)?;
         Ok(())
     }
 
