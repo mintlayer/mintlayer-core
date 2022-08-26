@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod error;
-
 mod cached_operation;
+pub mod error;
 use self::{cached_operation::CachedTokensOperation, error::ConnectTransactionError};
+use ::utils::ensure;
 use cached_operation::CachedInputsOperation;
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use chainstate_types::GenBlockIndex;
@@ -28,7 +28,7 @@ use common::{
         config::TOKEN_MIN_ISSUANCE_FEE,
         signature::{verify_signature, Transactable},
         tokens::{
-            get_tokens_issuance_count, is_tokens_issuance, token_id, OutputValue, TokenData,
+            get_tokens_issuance_count, is_tokens_issuance, token_id, CoinOrTokenId, OutputValue,
             TokenId, TokensError,
         },
         Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
@@ -40,13 +40,11 @@ use std::{
     collections::{btree_map::Entry, BTreeMap},
     sync::Arc,
 };
-use utils::ensure;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
-enum CoinOrTokenId {
-    Coin,
-    TokenId(TokenId),
-}
+mod utils;
+use self::utils::{
+    check_transferred_amount, filter_for_total_inputs, filter_for_total_outputs, insert_or_increase,
+};
 
 /// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -333,7 +331,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         let total_fee = check_transferred_amount(&inputs_total_map, &outputs_total_map)
             .and_then(|_| Self::get_paid_fee_unchecked(&inputs_total_map, &outputs_total_map))?;
 
-        // TODO: Check is fee enough for issuance
+        // Check is fee enough for issuance
         let issuance_count = get_tokens_issuance_count(tx.outputs());
         if issuance_count == 1 && total_fee < TOKEN_MIN_ISSUANCE_FEE {
             return Err(ConnectTransactionError::TokensError(
@@ -751,106 +749,6 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
             tokens_data: self.tokens_cache,
         })
     }
-}
-
-fn filter_for_total_inputs(
-    output_value: &OutputValue,
-    tx: &Transaction,
-) -> Result<(CoinOrTokenId, Amount), ConnectTransactionError> {
-    Ok(match output_value {
-        OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
-        OutputValue::Token(token_data) => match token_data {
-            TokenData::TokenTransferV1 { token_id, amount } => {
-                (CoinOrTokenId::TokenId(*token_id), *amount)
-            }
-            TokenData::TokenIssuanceV1 {
-                token_ticker: _,
-                amount_to_issue,
-                number_of_decimals: _,
-                metadata_uri: _,
-            } => {
-                let token_id = token_id(tx).ok_or(ConnectTransactionError::TokensError(
-                    TokensError::TokenIdCantBeCalculated,
-                ))?;
-                (CoinOrTokenId::TokenId(token_id), *amount_to_issue)
-            }
-            TokenData::TokenBurnV1 {
-                token_id: _,
-                amount_to_burn: _,
-            } => {
-                /* Token have burned and can't be transferred */
-                return Err(ConnectTransactionError::TokensError(
-                    TokensError::AttemptToTransferBurnedTokens,
-                ));
-            }
-        },
-    })
-}
-
-fn insert_or_increase(
-    total_amounts: &mut BTreeMap<CoinOrTokenId, Amount>,
-    key: CoinOrTokenId,
-    amount: Amount,
-) -> Result<(), ConnectTransactionError> {
-    match total_amounts.entry(key) {
-        Entry::Occupied(entry) => {
-            let old_value: Amount = *entry.get();
-            *entry.into_mut() = (old_value + amount).ok_or(ConnectTransactionError::TokensError(
-                TokensError::CoinOrTokenOverflow,
-            ))?
-        }
-        Entry::Vacant(entry) => {
-            entry.insert(amount);
-        }
-    }
-    Ok(())
-}
-
-fn filter_for_total_outputs(output_value: &OutputValue) -> Option<(CoinOrTokenId, &Amount)> {
-    match output_value {
-        OutputValue::Coin(amount) => Some((CoinOrTokenId::Coin, amount)),
-        OutputValue::Token(token_data) => match token_data {
-            TokenData::TokenTransferV1 { token_id, amount } => {
-                Some((CoinOrTokenId::TokenId(*token_id), amount))
-            }
-            TokenData::TokenIssuanceV1 {
-                token_ticker: _,
-                amount_to_issue: _,
-                number_of_decimals: _,
-                metadata_uri: _,
-            } => {
-                // TODO: Might be it's not necessary at all?
-                // if include_issuance {
-                // ...
-                // }
-                None
-            }
-            TokenData::TokenBurnV1 {
-                token_id,
-                amount_to_burn,
-            } => Some((CoinOrTokenId::TokenId(*token_id), amount_to_burn)),
-        },
-    }
-}
-
-fn check_transferred_amount(
-    inputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
-    outputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
-) -> Result<(), ConnectTransactionError> {
-    for (coin_or_token_id, outputs_total) in outputs_total_map {
-        // TODO: Check error for this
-        let inputs_total = inputs_total_map
-            .get(coin_or_token_id)
-            .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
-        //
-        if outputs_total > inputs_total {
-            return Err(ConnectTransactionError::AttemptToPrintMoney(
-                *inputs_total,
-                *outputs_total,
-            ));
-        }
-    }
-    Ok(())
 }
 
 impl<'a, S: BlockchainStorageWrite + 'a> TransactionVerifier<'a, S> {

@@ -27,6 +27,12 @@ pub use errors::TokensError;
 pub use rpc::*;
 pub use utils::*;
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum CoinOrTokenId {
+    Coin,
+    TokenId(TokenId),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum OutputValue {
     Coin(Amount),
