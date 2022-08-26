@@ -36,16 +36,10 @@ pub enum TokensError {
     CoinOrTokenOverflow,
     #[error("Insufficient token fees insuffience in transaction {0} in block {1}")]
     InsufficientTokenFees(Id<Transaction>, Id<Block>),
-    #[error("Insufficient tokens in inputs in transaction {0} in block {1}")]
-    InsufficientTokensInInputs(Id<Transaction>, Id<Block>),
     #[error("Can't burn zero value in transaction {0} in block {1}")]
     BurnZeroTokens(Id<Transaction>, Id<Block>),
     #[error("Can't transfer zero tokens in transaction {0} in block {1}")]
     TransferZeroTokens(Id<Transaction>, Id<Block>),
-    #[error("Some of the tokens are lost in transaction {0} in block {1}")]
-    SomeTokensLost(Id<Transaction>, Id<Block>),
-    #[error("Can't find tokens in inputs in transaction {0} in block {1}")]
-    NoTokenInInputs(Id<Transaction>, Id<Block>),
     #[error("Can't fetch transaction inputs in main chain by outpoint")]
     NoTxInMainChainByOutpoint,
     #[error("Block reward output can't be used in tokens transaction")]
