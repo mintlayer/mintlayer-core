@@ -46,4 +46,14 @@ pub enum Error {
     InvariantErrorDelegationSharesAdditionUndoError,
     #[error("Delegation shares arithmetic undo error as it doesn't exist")]
     InvariantErrorDelegationShareNotFound,
+    #[error("Arithemetic error; conversion to unsigned failed")]
+    ArithmeticErrorToUnsignedFailed,
+    #[error("Arithemetic error; conversion to signed failed")]
+    ArithmeticErrorToSignedFailed,
+    #[error("Arithemetic error; delta signed addition failed")]
+    ArithmeticErrorDeltaAdditionFailed,
+    #[error("Arithemetic error; sum to unsigned failed")]
+    ArithmeticErrorSumToUnsignedFailed,
+    #[error("Arithemetic error; sum to signed failed")]
+    ArithmeticErrorSumToSignedFailed,
 }
