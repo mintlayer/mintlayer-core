@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn boxed_interface_call() {
-        common::concurrency::model(|| {
+        utils::concurrency::model(|| {
             let chain_config = Arc::new(create_unit_test_config());
             let chainstate_config = ChainstateConfig {
                 max_db_commit_attempts: 10,

@@ -27,7 +27,7 @@ type ErrorList = Arc<Mutex<Vec<BlockError>>>;
 #[trace]
 #[case(Seed::from_entropy())]
 fn simple_subscribe(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
         let events = subscribe(&mut tf.chainstate, 1);
@@ -68,7 +68,7 @@ fn simple_subscribe(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn several_subscribers(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
 
@@ -94,7 +94,7 @@ fn several_subscribers(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn several_subscribers_several_events(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
 
@@ -121,7 +121,7 @@ fn several_subscribers_several_events(#[case] seed: Seed) {
 // An orphan block is rejected during processing, so it shouldn't trigger the new tip event.
 #[test]
 fn orphan_block() {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let (orphan_error_hook, errors) = orphan_error_hook();
         let mut tf = TestFramework::builder().with_orphan_error_hook(orphan_error_hook).build();
 
@@ -143,7 +143,7 @@ fn orphan_block() {
 #[trace]
 #[case(Seed::from_entropy())]
 fn custom_orphan_error_hook(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (orphan_error_hook, errors) = orphan_error_hook();
         let mut tf = TestFramework::builder().with_orphan_error_hook(orphan_error_hook).build();

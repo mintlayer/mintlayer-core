@@ -597,6 +597,7 @@ dependencies = [
  "serialization",
  "storage",
  "test-utils",
+ "utils",
  "utxo",
 ]
 
@@ -735,7 +736,6 @@ dependencies = [
  "itertools",
  "lazy_static",
  "logging",
- "loom",
  "merkletree",
  "parity-scale-codec",
  "proptest",
@@ -4036,9 +4036,9 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 name = "storage"
 version = "0.1.0"
 dependencies = [
- "common",
  "storage-core",
  "storage-inmemory",
+ "utils",
 ]
 
 [[package]]
@@ -4047,14 +4047,15 @@ version = "0.1.0"
 dependencies = [
  "logging",
  "thiserror",
+ "utils",
 ]
 
 [[package]]
 name = "storage-inmemory"
 version = "0.1.0"
 dependencies = [
- "common",
  "storage-core",
+ "utils",
 ]
 
 [[package]]
@@ -4075,12 +4076,12 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "cfg-if",
- "common",
  "futures",
  "logging",
  "testing_logger",
  "thiserror",
  "tokio",
+ "utils",
 ]
 
 [[package]]
@@ -4620,6 +4621,7 @@ name = "utils"
 version = "0.1.0"
 dependencies = [
  "atomic-traits",
+ "loom",
  "num-traits",
  "slave-pool",
 ]

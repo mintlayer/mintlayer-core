@@ -92,7 +92,7 @@ mod test {
 
     #[test]
     fn blocks_median_time() {
-        common::concurrency::model(|| {
+        utils::concurrency::model(|| {
             let chain_config = Arc::new(create_unit_test_config());
             let chainstate_config = ChainstateConfig::new();
             let storage = Store::new_empty().unwrap();
@@ -155,7 +155,7 @@ mod test {
 
     #[test]
     fn blocks_median_time_unordered_blocks_in_time() {
-        common::concurrency::model(|| {
+        utils::concurrency::model(|| {
             let chain_config = Arc::new(create_unit_test_config());
 
             let current_time = Arc::new(std::sync::atomic::AtomicU64::new(

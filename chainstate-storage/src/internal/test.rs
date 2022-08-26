@@ -27,9 +27,9 @@ type TestStore = crate::inmemory::Store;
 
 #[test]
 fn test_storage_get_default_version_in_tx() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let store = TestStore::new_empty().unwrap();
-        let vtx = store.transaction_ro().run(|tx| tx.get_storage_version()).unwrap();
+        let vtx = store.transaction_ro().get_storage_version().unwrap();
         let vst = store.get_storage_version().unwrap();
         assert_eq!(vtx, 1, "Default storage version wrong");
         assert_eq!(vtx, vst, "Transaction and non-transaction inconsistency");
@@ -147,7 +147,7 @@ fn test_storage_manipulation() {
 
 #[test]
 fn get_set_transactions() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         // Set up the store and initialize the version to 2
         let mut store = TestStore::new_empty().unwrap();
         assert_eq!(store.set_storage_version(2), Ok(()));
@@ -155,25 +155,21 @@ fn get_set_transactions() {
         // Concurrently bump version and run a transactiomn that reads the version twice.
         let thr1 = {
             let store = Store::clone(&store);
-            common::thread::spawn(move || {
-                let _ = store.transaction_rw().run(|tx| {
-                    let v = tx.get_storage_version()?;
-                    tx.set_storage_version(v + 1)?;
-                    storage::commit(())
-                });
+            utils::thread::spawn(move || {
+                let mut tx = store.transaction_rw();
+                let v = tx.get_storage_version().unwrap();
+                tx.set_storage_version(v + 1).unwrap();
+                tx.commit().unwrap();
             })
         };
         let thr0 = {
             let store = Store::clone(&store);
-            common::thread::spawn(move || {
-                let tx_result = store.transaction_ro().run(|tx| {
-                    let v1 = tx.get_storage_version()?;
-                    let v2 = tx.get_storage_version()?;
-                    assert!([2, 3].contains(&v1));
-                    assert_eq!(v1, v2, "Version query in a transaction inconsistent");
-                    Ok(())
-                });
-                assert!(tx_result.is_ok());
+            utils::thread::spawn(move || {
+                let tx = store.transaction_ro();
+                let v1 = tx.get_storage_version().unwrap();
+                let v2 = tx.get_storage_version().unwrap();
+                assert!([2, 3].contains(&v1));
+                assert_eq!(v1, v2, "Version query in a transaction inconsistent");
             })
         };
 
@@ -185,7 +181,7 @@ fn get_set_transactions() {
 
 #[test]
 fn test_storage_transactions() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         // Set up the store and initialize the version to 2
         let mut store = TestStore::new_empty().unwrap();
         assert_eq!(store.set_storage_version(2), Ok(()));
@@ -193,24 +189,20 @@ fn test_storage_transactions() {
         // Concurrently bump version by 3 and 5 in two separate threads
         let thr0 = {
             let store = Store::clone(&store);
-            common::thread::spawn(move || {
-                let tx_result = store.transaction_rw().run(|tx| {
-                    let v = tx.get_storage_version()?;
-                    tx.set_storage_version(v + 3)?;
-                    storage::commit(())
-                });
-                assert!(tx_result.is_ok());
+            utils::thread::spawn(move || {
+                let mut tx = store.transaction_rw();
+                let v = tx.get_storage_version().unwrap();
+                tx.set_storage_version(v + 3).unwrap();
+                tx.commit().unwrap();
             })
         };
         let thr1 = {
             let store = Store::clone(&store);
-            common::thread::spawn(move || {
-                let tx_result = store.transaction_rw().run(|tx| {
-                    let v = tx.get_storage_version()?;
-                    tx.set_storage_version(v + 5)?;
-                    storage::commit(())
-                });
-                assert!(tx_result.is_ok());
+            utils::thread::spawn(move || {
+                let mut tx = store.transaction_rw();
+                let v = tx.get_storage_version().unwrap();
+                tx.set_storage_version(v + 5).unwrap();
+                tx.commit().unwrap();
             })
         };
 
@@ -222,7 +214,7 @@ fn test_storage_transactions() {
 
 #[test]
 fn test_storage_transactions_with_result_check() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         // Set up the store and initialize the version to 2
         let mut store = TestStore::new_empty().unwrap();
         assert_eq!(store.set_storage_version(2), Ok(()));
@@ -230,7 +222,7 @@ fn test_storage_transactions_with_result_check() {
         // Concurrently bump version by 3 and 5 in two separate threads
         let thr0 = {
             let store = Store::clone(&store);
-            common::thread::spawn(move || {
+            utils::thread::spawn(move || {
                 let mut tx = store.transaction_rw();
                 let v = tx.get_storage_version().unwrap();
                 assert!(tx.set_storage_version(v + 3).is_ok());
@@ -239,7 +231,7 @@ fn test_storage_transactions_with_result_check() {
         };
         let thr1 = {
             let store = Store::clone(&store);
-            common::thread::spawn(move || {
+            utils::thread::spawn(move || {
                 let mut tx = store.transaction_rw();
                 let v = tx.get_storage_version().unwrap();
                 assert!(tx.set_storage_version(v + 5).is_ok());

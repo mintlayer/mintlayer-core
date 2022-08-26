@@ -15,6 +15,12 @@
 
 //! Application-level interface for the persistent blockchain storage.
 
+mod internal;
+#[cfg(any(test, feature = "mock"))]
+pub mod mock;
+
+pub use internal::{utxo_db, Store};
+
 use chainstate_types::BlockIndex;
 use common::chain::block::BlockReward;
 use common::chain::tokens::TokenId;
@@ -22,23 +28,14 @@ use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosit
 use common::chain::OutPointSourceId;
 use common::chain::{Block, GenBlock};
 use common::primitives::{BlockHeight, Id};
-use storage::traits;
 use utxo::{UtxosStorageRead, UtxosStorageWrite};
-
-mod internal;
-#[cfg(any(test, feature = "mock"))]
-pub mod mock;
-
-pub use internal::{utxo_db, Store};
-pub use storage::transaction::{TransactionRo, TransactionRw};
 
 /// Possibly failing result of blockchain storage query
 pub type Result<T> = chainstate_types::storage_result::Result<T>;
 pub type Error = chainstate_types::storage_result::Error;
 
 pub mod inmemory {
-    use crate::internal;
-    pub type Store = internal::Store<storage::inmemory::Store<internal::Schema>>;
+    pub type Store = super::Store<storage::inmemory::InMemory>;
 }
 
 /// Queries on persistent blockchain data
@@ -119,13 +116,28 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead + UtxosStorageWrite {
     fn del_token_tx(&mut self, token_id: TokenId) -> crate::Result<()>;
 }
 
+/// Operations on read-only transactions
+pub trait TransactionRo: BlockchainStorageRead {
+    /// Close the transaction
+    fn close(self);
+}
+
+/// Operations on read-write transactions
+pub trait TransactionRw: BlockchainStorageWrite {
+    /// Abort the transaction
+    fn abort(self);
+
+    /// Commit the transaction
+    fn commit(self) -> crate::Result<()>;
+}
+
 /// Support for transactions over blockchain storage
 pub trait Transactional<'t> {
     /// Associated read-only transaction type.
-    type TransactionRo: traits::TransactionRo<Error = crate::Error> + BlockchainStorageRead + 't;
+    type TransactionRo: TransactionRo + 't;
 
     /// Associated read-write transaction type.
-    type TransactionRw: traits::TransactionRw<Error = crate::Error> + BlockchainStorageWrite + 't;
+    type TransactionRw: TransactionRw + 't;
 
     /// Start a read-only transaction.
     fn transaction_ro<'s: 't>(&'s self) -> Self::TransactionRo;

@@ -127,7 +127,7 @@ fn process_token_ex(
 
 #[test]
 fn token_issue_test() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         // Process token without errors
 
         let mut test_framework = TestFramework::default();
@@ -245,7 +245,7 @@ fn token_issue_test() {
 
 #[test]
 fn token_transfer_test() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let mut test_framework = TestFramework::default();
         // Issue a new token
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
@@ -313,7 +313,7 @@ fn token_transfer_test() {
 
 #[test]
 fn couple_of_token_issuance_in_one_tx() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let mut test_framework = TestFramework::default();
         let parent_block_id = test_framework.best_block_id();
         let test_block_info = TestBlockInfo::from_id(&test_framework.chainstate, parent_block_id);
@@ -357,7 +357,7 @@ fn couple_of_token_issuance_in_one_tx() {
 
 #[test]
 fn token_issuance_with_insufficient_fee() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let mut test_framework = TestFramework::default();
 
         let parent_block_id = test_framework.best_block_id();
@@ -410,7 +410,7 @@ fn token_issuance_with_insufficient_fee() {
 
 #[test]
 fn transfer_tokens() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         const TOTAL_TOKEN_VALUE: Amount = Amount::from_atoms(52292852472);
 
         // Process token without errors
@@ -457,7 +457,7 @@ fn transfer_tokens() {
 
 #[test]
 fn test_burn_tokens() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         const ISSUED_FUNDS: Amount = Amount::from_atoms(123456788);
         const HALF_ISSUED_FUNDS: Amount = Amount::from_atoms(61728394);
         const QUARTER_ISSUED_FUNDS: Amount = Amount::from_atoms(30864197);
@@ -569,7 +569,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
     // to this chain (whose previous block is C2), and D2 contains an input that also spends
     // B1, check that output is spent.
 
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         const ISSUED_FUNDS: Amount = Amount::from_atoms(1_000_000);
 
         // Issue a new token
@@ -705,7 +705,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
 
 #[test]
 fn test_attempt_to_print_tokens() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         const ISSUED_FUNDS: Amount = Amount::from_atoms(987_654_321);
 
         // Issue a new token
@@ -753,7 +753,7 @@ fn test_attempt_to_print_tokens() {
 
 #[test]
 fn test_attempt_to_mix_input_tokens() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         const ISSUED_FUNDS: Amount = Amount::from_atoms(987_654_321);
         // Issuance a few different tokens
         let mut test_framework = TestFramework::default();
@@ -828,14 +828,14 @@ fn test_attempt_to_mix_input_tokens() {
 
 #[test]
 fn test_tokens_storage() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         // TODO: Test tokens records in the storage before and after token issuance, also after reorg
     })
 }
 
 #[test]
 fn snapshot_testing_tokens_data() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         // TODO: Add tests, that will prevent change fields order
     })
 }

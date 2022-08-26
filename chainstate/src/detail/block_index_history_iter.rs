@@ -71,7 +71,7 @@ mod tests {
 
     #[test]
     fn history_iteration() {
-        common::concurrency::model(|| {
+        utils::concurrency::model(|| {
             let mut tf = TestFramework::default();
 
             // put three blocks in a chain after genesis

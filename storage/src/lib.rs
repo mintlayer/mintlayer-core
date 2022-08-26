@@ -26,7 +26,7 @@
 //! # Example
 //!
 //! ```
-//! # use storage::{schema, traits::*};
+//! # use storage::{schema, Storage};
 //! // Delcare a schema. Schema specifies which indices are present,
 //! // name of each index and its kind. Indices are identified by types.
 //! // Here, we create just one index.
@@ -36,51 +36,86 @@
 //!     }
 //! }
 //!
-//! // Our store type is parametrized by the schema.
-//! type MyStore = storage::inmemory::Store<Schema>;
+//! fn test() -> storage::Result<()> {
+//!     // Initialize an empty store.
+//!     let mut store = Storage::<_, Schema>::new(storage::inmemory::InMemory::new())?;
 //!
-//! // Initialize an empty store.
-//! let mut store = MyStore::default();
+//!     // All store operations happen inside of a transaction.
+//!     let mut tx = store.transaction_rw();
 //!
-//! // All store operations happen inside of a transaction.
-//! store.transaction_rw().run(|tx| {
 //!     // Get the storage map, identified by the index type.
-//!     let mut col = tx.get_mut::<MyMap, _>();
+//!     let mut map = tx.get_mut::<MyMap, _>();
 //!
 //!     // Associate the value "bar" with the key "foo"
-//!     col.put(b"foo".to_vec(), b"bar".to_vec())?;
+//!     map.put(b"foo".to_vec(), b"bar".to_vec())?;
 //!
 //!     // Get the value out again.
-//!     let val = col.get(b"foo")?;
+//!     let val = map.get(b"foo")?;
 //!     assert_eq!(val, Some(&b"bar"[..]));
 //!
 //!     // End the transaction
-//!     storage::commit(())
-//! });
+//!     tx.commit()?;
 //!
-//! // Try writing a value but abort the transaction afterwards.
-//! store.transaction_rw().run(|tx| {
+//!     // Try writing a value but abort the transaction afterwards.
+//!     let mut tx = store.transaction_rw();
 //!     tx.get_mut::<MyMap, _>().put(b"baz".to_vec(), b"xyz".to_vec())?;
-//!     storage::abort(())
-//! });
+//!     tx.abort();
 //!
-//! // Transaction can return data. Values taken from the database have to be cloned
-//! // in order for them to be available after the transaction terminates.
-//! let result = store.transaction_ro().run(|tx| {
-//!     Ok(tx.get::<MyMap, _>().get(b"baz")?.map(ToOwned::to_owned))
-//! });
-//! assert_eq!(result, Ok(None));
+//!     // Transaction can return data. Values taken from the database have to be cloned
+//!     // in order for them to be available after the transaction terminates.
+//!     let tx = store.transaction_ro();
+//!     assert_eq!(tx.get::<MyMap, _>().get(b"baz")?, None);
+//!     tx.close();
 //!
-//! // Check the value we first inserted is still there.
-//! let result = store.transaction_ro().run(|tx| {
+//!     // Check the value we first inserted is still there.
+//!     let tx = store.transaction_ro();
 //!     assert_eq!(tx.get::<MyMap, _>().get(b"foo")?, Some(&b"bar"[..]));
+//!     tx.close();
+//!
 //!     Ok(())
-//! });
+//! }
+//! # test().unwrap();
 //! ```
 
-// Re-export core abstractions
-pub use storage_core::*;
+mod interface;
+pub mod schema;
+
+// Re-export user-facing items from core
+pub use storage_core::{error, Backend, Error, Result};
+
+// Re-export the interface types
+pub use interface::*;
 
 // Re-export the in-memory storage
+// TODO: Remove this to further decouple the general storage interface from individual backends
 #[cfg(feature = "inmemory")]
 pub use storage_inmemory as inmemory;
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    decl_schema! {
+        Schema {
+            MyMap: Single,
+        }
+    }
+
+    #[test]
+    fn empty_ro() {
+        utils::concurrency::model(|| {
+            let store = Storage::<_, Schema>::new(inmemory::InMemory::new()).unwrap();
+            let tx = store.transaction_ro();
+            assert_eq!(tx.get::<MyMap, _>().get(b"foo".as_ref()), Ok(None));
+        });
+    }
+
+    #[test]
+    fn empty_rw() {
+        utils::concurrency::model(|| {
+            let store = Storage::<_, Schema>::new(inmemory::InMemory::new()).unwrap();
+            let tx = store.transaction_rw();
+            assert_eq!(tx.get::<MyMap, _>().get(b"foo".as_ref()), Ok(None));
+        });
+    }
+}
