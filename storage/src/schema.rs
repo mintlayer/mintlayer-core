@@ -15,42 +15,52 @@
 
 //! Describe the database schema at type level
 
+pub use storage_core::{info::MapDesc, DbIndex};
+
 /// Describes single key-value map
-pub trait DBIndex {
-    /// Index name.
+pub trait DbMap: 'static {
+    /// Map name.
     const NAME: &'static str;
 
     /// Expected size of values in the map. May be used for storage optimization.
     const SIZE_HINT: core::ops::Range<usize> = 0..usize::MAX;
-
-    /// Whether this maps keys to single or multiple values.
-    type Kind: MapKind;
 }
 
 /// What constitutes a valid database schema
-pub trait Schema: internal::Sealed {}
-
-impl Schema for () {}
-
-impl<DBIdx: DBIndex, Rest: Schema> Schema for (DBIdx, Rest) {}
-
-/// Require given schema to contain given index
-pub trait HasDBIndex<DBIdx: DBIndex, I>: Schema {}
-impl<DBIdx: DBIndex, Rest: Schema> HasDBIndex<DBIdx, ()> for (DBIdx, Rest) {}
-impl<DBIdx: DBIndex, Head: DBIndex, Rest: HasDBIndex<DBIdx, I>, I> HasDBIndex<DBIdx, (I,)>
-    for (Head, Rest)
-{
+pub trait Schema: internal::Sealed + 'static {
+    type DescIter: Iterator<Item = MapDesc>;
+    fn desc_iter() -> Self::DescIter;
 }
 
-/// Marker for key-value maps
-pub struct Single;
-/// Marker for key-multivalue maps
-pub struct Multi;
+impl Schema for () {
+    type DescIter = std::iter::Empty<MapDesc>;
+    fn desc_iter() -> Self::DescIter {
+        std::iter::empty()
+    }
+}
 
-/// Specifies map kind, either [Single] or [Multi].
-pub trait MapKind {}
-impl MapKind for Single {}
-impl MapKind for Multi {}
+impl<M: DbMap, Rest: Schema> Schema for (M, Rest) {
+    type DescIter = std::iter::Chain<std::iter::Once<MapDesc>, Rest::DescIter>;
+    fn desc_iter() -> Self::DescIter {
+        let map_desc = MapDesc {
+            name: M::NAME,
+            size_hint: M::SIZE_HINT,
+        };
+        std::iter::once(map_desc).chain(Rest::desc_iter())
+    }
+}
+
+/// Require a schema to contain given map (identified by a type tag)
+pub trait HasDbMap<M: DbMap, I>: Schema {
+    /// Index of the map in the schema
+    const INDEX: DbIndex;
+}
+impl<M: DbMap, Rest: Schema> HasDbMap<M, ()> for (M, Rest) {
+    const INDEX: DbIndex = DbIndex::new(0);
+}
+impl<M: DbMap, Head: DbMap, Rest: HasDbMap<M, I>, I> HasDbMap<M, (I,)> for (Head, Rest) {
+    const INDEX: DbIndex = DbIndex::new(Rest::INDEX.get() + 1);
+}
 
 mod internal {
     use super::*;
@@ -58,7 +68,7 @@ mod internal {
     // This is to prevent the Schema trait from being implemented on new types.
     pub trait Sealed {}
     impl Sealed for () {}
-    impl<DBIdx: DBIndex, Rest: Schema> Sealed for (DBIdx, Rest) {}
+    impl<DBIdx: DbMap, Rest: Schema> Sealed for (DBIdx, Rest) {}
 }
 
 #[macro_export]
@@ -69,11 +79,10 @@ macro_rules! decl_schema {
         }
     ) => {
         $(
-            #[doc = concat!("Database index: ", stringify!($name))]
+            #[doc = concat!("Database map: `", stringify!($name), "`")]
             $vis struct $name;
-            impl $crate::schema::DBIndex for $name {
+            impl $crate::schema::DbMap for $name {
                 const NAME: &'static str = stringify!($name);
-                type Kind = $crate::schema::$mul;
             }
         )*
         $svis type $schema = $crate::decl_schema!(@LIST $($name)*);
@@ -88,18 +97,17 @@ mod test {
 
     decl_schema! {
         MySchema {
+            DBIdx0: Single,
             DBIdx1: Single,
             DBIdx2: Single,
         }
     }
 
-    fn is_schema<T: Schema>() -> bool {
-        true
-    }
-
     #[test]
-    fn test_is_schema() {
-        // we are just interested this compiles
-        assert!(is_schema::<MySchema>());
+    fn schema() {
+        // Check calculated column indices
+        assert_eq!(<MySchema as HasDbMap<DBIdx0, _>>::INDEX, DbIndex::new(0));
+        assert_eq!(<MySchema as HasDbMap<DBIdx1, _>>::INDEX, DbIndex::new(1));
+        assert_eq!(<MySchema as HasDbMap<DBIdx2, _>>::INDEX, DbIndex::new(2));
     }
 }

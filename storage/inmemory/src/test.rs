@@ -13,34 +13,55 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use storage_core::traits::*;
+use super::*;
+use storage_core::{
+    backend::{Backend, ReadOps, TransactionalRo, TransactionalRw, TxRw, WriteOps},
+    info,
+};
 
-storage_core::decl_schema! {
-    MySchema {
-        MyMap: Single,
+fn generic_commit<B: Backend>(backend: B) {
+    let dbinfo: DbDesc = [info::MapDesc::new("foo")].into_iter().collect();
+    let store = backend.open(dbinfo).expect("db open to succeed");
+    let idx = info::DbIndex::new(0);
+
+    {
+        // Create a transaction, modify storage and abort transaction
+        let mut dbtx = store.transaction_rw();
+        dbtx.put(idx, b"hello".to_vec(), b"world".to_vec()).unwrap();
+        dbtx.commit().expect("commit to succeed");
+    }
+
+    {
+        // Check the modification did not happen
+        let dbtx = store.transaction_ro();
+        assert_eq!(dbtx.get(idx, b"hello"), Ok(Some(b"world".as_ref())));
     }
 }
 
-type MyStore = crate::Store<MySchema>;
+fn generic_abort<B: Backend>(backend: B) {
+    let dbinfo: DbDesc = [info::MapDesc::new("foo")].into_iter().collect();
+    let store = backend.open(dbinfo).expect("db open to succeed");
+    let idx = info::DbIndex::new(0);
 
-fn generic_aborted_write<St: Backend<MySchema>>(store: &St) -> storage_core::Result<()> {
-    store.transaction_rw().run(|tx| {
-        tx.get_mut::<MyMap, _>().put(b"hello".to_vec(), b"world".to_vec())?;
-        storage_core::abort(())
-    })
+    {
+        // Create a transaction, modify storage and abort transaction
+        let mut dbtx = store.transaction_rw();
+        dbtx.put(idx, b"hello".to_vec(), b"world".to_vec()).unwrap();
+    }
+
+    {
+        // Check the modification did not happen
+        let dbtx = store.transaction_ro();
+        assert_eq!(dbtx.get(idx, b"hello"), Ok(None));
+    }
 }
 
 #[test]
-fn test_abort() {
-    common::concurrency::model(|| {
-        let store = MyStore::default();
+fn commit() {
+    common::concurrency::model(|| generic_commit(InMemory::new()))
+}
 
-        let r = generic_aborted_write(&store);
-        assert_eq!(r, Ok(()));
-
-        let r = store
-            .transaction_ro()
-            .run(|tx| Ok(tx.get::<MyMap, _>().get(b"hello")?.is_some()));
-        assert_eq!(r, Ok(false));
-    })
+#[test]
+fn abort() {
+    common::concurrency::model(|| generic_abort(InMemory::new()))
 }

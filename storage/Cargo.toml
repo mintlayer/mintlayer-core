@@ -15,3 +15,4 @@ storage-inmemory = { path = "inmemory", optional = true }
 
 [dev-dependencies]
 common = { path = "../common" }
+storage-inmemory = { path = "inmemory" }
