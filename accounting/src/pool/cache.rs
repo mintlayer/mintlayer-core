@@ -16,6 +16,17 @@ pub struct PoSAccountingOperationsCache<'a> {
 }
 
 impl<'a> PoSAccountingOperationsCache<'a> {
+    pub fn new(parent: &'a dyn PoSAccountingView) -> Self {
+        Self {
+            parent,
+            pool_data: Default::default(),
+            pool_balances: Default::default(),
+            pool_delegation_shares: Default::default(),
+            delegation_balances: Default::default(),
+            delegation_data: Default::default(),
+        }
+    }
+
     fn get_cached_delegations_shares(&self, pool_id: H256) -> Option<BTreeMap<H256, Amount>> {
         let range_start = (pool_id, H256::zero());
         let range_end = (pool_id, H256::repeat_byte(0xFF));
