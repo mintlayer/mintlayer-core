@@ -17,11 +17,13 @@ mockall = { version = "0.11", optional = true }
 
 [dev-dependencies]
 crypto = { path = '../crypto' }
+test-utils = {path = '../test-utils'}
+utils = { path = '../utils' }
+
 itertools = "0.10"
 mockall = "0.11"
 num-traits = "0.2"
 rstest = "0.15"
-test-utils = {path = '../test-utils'}
 
 [features]
 mock = [ 'mockall' ]

@@ -38,7 +38,7 @@ fn process_a_trivial_block() {
 #[trace]
 #[case(Seed::from_entropy())]
 fn get_locator(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut btf = TestFramework::default();
 
@@ -77,7 +77,7 @@ fn get_locator(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn get_headers(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let header_limit = i64::from(HEADER_LIMIT).try_into().unwrap();
         let headers_count = rng.gen_range(1000..header_limit);
@@ -126,7 +126,7 @@ fn get_headers(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn get_headers_genesis(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
         let mut btf = TestFramework::default();
@@ -153,7 +153,7 @@ fn get_headers_genesis(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn get_headers_branching_chains(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let common_height = rng.gen_range(100..10_000);
 
@@ -177,7 +177,7 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn get_headers_different_chains(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
         let mut tf1 = TestFramework::default();
@@ -216,7 +216,7 @@ fn get_headers_different_chains(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn filter_already_existing_blocks(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
         let mut tf1 = TestFramework::default();
@@ -283,7 +283,7 @@ fn filter_already_existing_blocks(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn filter_already_existing_blocks_detached_headers(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
         let mut tf1 = TestFramework::default();

@@ -18,10 +18,7 @@ pub mod chain;
 pub mod primitives;
 pub mod uint;
 
-mod concurrency_impl;
-
 #[macro_use]
 mod fixed_hash;
 
-pub use concurrency_impl::*;
 pub use uint::{Uint128, Uint256};

@@ -298,7 +298,7 @@ mod tests {
 
     #[test]
     fn use_generic_test() {
-        common::concurrency::model(|| {
+        utils::concurrency::model(|| {
             let store = TestStore::new_empty().unwrap();
             generic_test(&store);
         });
@@ -366,7 +366,7 @@ mod tests {
 
     #[test]
     fn attach_to_top_real_storage() {
-        common::concurrency::model(|| {
+        utils::concurrency::model(|| {
             let mut store = TestStore::new_empty().unwrap();
             let (_block0, block1) = sample_data();
             let _result = attach_block_to_top(&mut store, &block1);
