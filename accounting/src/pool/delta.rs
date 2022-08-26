@@ -14,7 +14,7 @@ enum PoolDataDelta {
 
 #[allow(dead_code)]
 enum DelegationDataDelta {
-    Add(DelegationData),
+    Add(Box<DelegationData>),
     Remove,
 }
 
@@ -60,7 +60,7 @@ impl<'a> PoSAccountingDelta<'a> {
 /// Errors can happen when doing conversions; which can uncover inconsistency issues
 fn delta_add(lhs: &Option<Amount>, rhs: &Option<SignedAmount>) -> Result<Option<Amount>, Error> {
     match (lhs, rhs) {
-        (None, None) => return Ok(None),
+        (None, None) => Ok(None),
         (None, Some(v)) => Ok(Some(
             (*v).into_unsigned().ok_or(Error::ArithmeticErrorToUnsignedFailed)?,
         )),
@@ -101,7 +101,7 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
     fn get_pool_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error> {
         let parent_balance = self.parent.get_pool_balance(pool_id)?;
         let local_delta = self.pool_balances.get(&pool_id).cloned();
-        Ok(delta_add(&parent_balance, &local_delta)?)
+        delta_add(&parent_balance, &local_delta)
     }
 
     fn get_pool_data(&self, pool_id: H256) -> Result<Option<PoolData>, Error> {
@@ -144,7 +144,7 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
         let local_data = self.delegation_data.get(&delegation_id);
         match local_data {
             Some(d) => match d {
-                DelegationDataDelta::Add(d) => Ok(Some(d.clone())),
+                DelegationDataDelta::Add(d) => Ok(Some(*d.clone())),
                 DelegationDataDelta::Remove => Ok(None),
             },
             None => self.parent.get_delegation_data(delegation_id),
