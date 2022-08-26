@@ -10,8 +10,8 @@ use super::{delegation::DelegationData, pool_data::PoolData, view::PoSAccounting
 #[derive(Clone, Encode, Decode)]
 #[allow(dead_code)]
 enum PoolDataDelta {
-    Add(PoolData),
-    DeletePool,
+    CreatePool(PoolData),
+    DecommissionPool,
 }
 
 #[derive(Clone, Encode, Decode)]
@@ -112,8 +112,8 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
         let local_data = self.pool_data.get(&pool_id);
         match local_data {
             Some(d) => match d {
-                PoolDataDelta::Add(d) => Ok(Some(d.clone())),
-                PoolDataDelta::DeletePool => Ok(None),
+                PoolDataDelta::CreatePool(d) => Ok(Some(d.clone())),
+                PoolDataDelta::DecommissionPool => Ok(None),
             },
             None => self.parent.get_pool_data(pool_id),
         }
