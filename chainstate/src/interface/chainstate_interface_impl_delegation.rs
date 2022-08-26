@@ -20,7 +20,10 @@ use std::{
 
 use chainstate_types::Locator;
 use common::{
-    chain::{Block, GenBlock},
+    chain::{
+        tokens::{RPCTokenInfo, TokenId},
+        Block, GenBlock,
+    },
     primitives::{BlockHeight, Id},
 };
 
@@ -90,6 +93,10 @@ impl<
         headers: Vec<common::chain::block::BlockHeader>,
     ) -> Result<Vec<common::chain::block::BlockHeader>, ChainstateError> {
         self.deref().filter_already_existing_blocks(headers)
+    }
+
+    fn token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, ChainstateError> {
+        self.deref().token_info(token_id)
     }
 }
 #[cfg(test)]
