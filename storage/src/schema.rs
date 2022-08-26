@@ -43,7 +43,7 @@ impl<M: DbMap, Rest: Schema> Schema for (M, Rest) {
     type DescIter = std::iter::Chain<std::iter::Once<MapDesc>, Rest::DescIter>;
     fn desc_iter() -> Self::DescIter {
         let map_desc = MapDesc {
-            name: M::NAME,
+            name: M::NAME.to_string(),
             size_hint: M::SIZE_HINT,
         };
         std::iter::once(map_desc).chain(Rest::desc_iter())
