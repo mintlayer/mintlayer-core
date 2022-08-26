@@ -58,8 +58,6 @@ pub fn check_tokens_issuance_data(
     tx_id: Id<Transaction>,
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
-    //TODO: Shall we have a check for unique token name?
-
     // Check token name
     if token_ticker.len() > TOKEN_MAX_TICKER_LEN
         || token_ticker.is_empty()

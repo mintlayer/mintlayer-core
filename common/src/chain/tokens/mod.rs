@@ -41,10 +41,10 @@ pub enum OutputValue {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum TokenData {
-    // TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.
+    /// TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.
     #[codec(index = 1)]
     TokenTransferV1 { token_id: TokenId, amount: Amount },
-    // A new token creation
+    /// A new token creation
     #[codec(index = 2)]
     TokenIssuanceV1 {
         token_ticker: Vec<u8>,
@@ -53,7 +53,7 @@ pub enum TokenData {
         number_of_decimals: u8,
         metadata_uri: Vec<u8>,
     },
-    // Burning a token or NFT
+    /// Burning a token or NFT
     #[codec(index = 3)]
     TokenBurnV1 {
         token_id: TokenId,
