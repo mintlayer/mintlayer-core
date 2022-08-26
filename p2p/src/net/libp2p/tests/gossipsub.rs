@@ -110,7 +110,11 @@ async fn test_gossipsub_not_supported() {
     .await;
 
     let (transport, peer_id, id_keys) = make_transport_and_keys();
-    let mut swarm = SwarmBuilder::new(transport, make_identify(config, id_keys), peer_id).build();
+    let mut swarm = SwarmBuilder::new(transport, make_identify(config, id_keys), peer_id)
+        .executor(Box::new(|fut| {
+            tokio::spawn(fut);
+        }))
+        .build();
 
     connect_swarms::<behaviour::Libp2pBehaviour, Identify>(&mut backend1.swarm, &mut swarm).await;
 

@@ -364,7 +364,7 @@ mod tests {
         let noise_keys =
             noise::Keypair::<noise::X25519Spec>::new().into_authentic(&id_keys).unwrap();
 
-        let transport = TcpTransport::new(GenTcpConfig::new().nodelay(true).port_reuse(false))
+        let transport = TcpTransport::new(GenTcpConfig::new().nodelay(true))
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(mplex::MplexConfig::new())
