@@ -24,9 +24,6 @@ pub trait DbMap: 'static {
 
     /// Expected size of values in the map. May be used for storage optimization.
     const SIZE_HINT: core::ops::Range<usize> = 0..usize::MAX;
-
-    /// Whether this maps keys to single or multiple values.
-    type Kind: MapKind;
 }
 
 /// What constitutes a valid database schema
@@ -65,16 +62,6 @@ impl<M: DbMap, Head: DbMap, Rest: HasDbMap<M, I>, I> HasDbMap<M, (I,)> for (Head
     const INDEX: DbIndex = DbIndex::new(Rest::INDEX.get() + 1);
 }
 
-/// Marker for key-value maps
-pub struct Single;
-/// Marker for key-multivalue maps
-pub struct Multi;
-
-/// Specifies map kind, either [Single] or [Multi].
-pub trait MapKind {}
-impl MapKind for Single {}
-impl MapKind for Multi {}
-
 mod internal {
     use super::*;
 
@@ -96,7 +83,6 @@ macro_rules! decl_schema {
             $vis struct $name;
             impl $crate::schema::DbMap for $name {
                 const NAME: &'static str = stringify!($name);
-                type Kind = $crate::schema::$mul;
             }
         )*
         $svis type $schema = $crate::decl_schema!(@LIST $($name)*);

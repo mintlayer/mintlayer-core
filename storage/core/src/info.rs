@@ -38,9 +38,6 @@ pub struct MapDesc {
     pub name: &'static str,
     /// Value size hint
     pub size_hint: core::ops::Range<usize>,
-    // TODO not implemented, is it even needed?
-    // /// Map multiplicity (i.e. is this a key-value or a key-multi-value map)
-    // pub multiplicity: Multiplicity,
 }
 
 impl MapDesc {

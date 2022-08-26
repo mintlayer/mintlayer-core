@@ -80,9 +80,8 @@ impl<'tx, B: Backend, Sch> TxImpl for TransactionRo<'tx, B, Sch> {
 
 impl<'tx, B: Backend, Sch: Schema> TransactionRo<'tx, B, Sch> {
     /// Get key-value map immutably (key-to-single-value only for now)
-    pub fn get<DbMap, I>(&self) -> MapRef<'_, Self>
+    pub fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<'_, Self>
     where
-        DbMap: schema::DbMap<Kind = schema::Single>,
         Sch: schema::HasDbMap<DbMap, I>,
     {
         MapRef::new(&self.dbtx, <Sch as schema::HasDbMap<DbMap, I>>::INDEX)
@@ -106,18 +105,16 @@ impl<'tx, B: Backend, Sch> TxImpl for TransactionRw<'tx, B, Sch> {
 
 impl<'tx, B: Backend, Sch: Schema> TransactionRw<'tx, B, Sch> {
     /// Get key-value map immutably (key-to-single-value only for now)
-    pub fn get<DbMap, I>(&self) -> MapRef<Self>
+    pub fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<Self>
     where
-        DbMap: schema::DbMap<Kind = schema::Single>,
         Sch: schema::HasDbMap<DbMap, I>,
     {
         MapRef::new(&self.dbtx, <Sch as schema::HasDbMap<DbMap, I>>::INDEX)
     }
 
     /// Get key-value map immutably (key-to-single-value only for now)
-    pub fn get_mut<DbMap, I>(&mut self) -> MapMut<Self>
+    pub fn get_mut<DbMap: schema::DbMap, I>(&mut self) -> MapMut<Self>
     where
-        DbMap: schema::DbMap<Kind = schema::Single>,
         Sch: schema::HasDbMap<DbMap, I>,
     {
         MapMut::new(&mut self.dbtx, <Sch as schema::HasDbMap<DbMap, I>>::INDEX)

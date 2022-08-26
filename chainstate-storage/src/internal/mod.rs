@@ -314,7 +314,7 @@ macro_rules! impl_read_ops {
             // Read a value from the database and decode it
             fn read<DBIdx, I, T>(&self, key: &[u8]) -> crate::Result<Option<T>>
             where
-                DBIdx: storage::schema::DbMap<Kind = storage::schema::Single>,
+                DBIdx: storage::schema::DbMap,
                 Schema: storage::schema::HasDbMap<DBIdx, I>,
                 T: Decode,
             {
@@ -408,7 +408,7 @@ impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
     // Encode a value and write it to the database
     fn write<DbMap, I, T>(&mut self, key: Vec<u8>, value: &T) -> crate::Result<()>
     where
-        DbMap: storage::schema::DbMap<Kind = storage::schema::Single>,
+        DbMap: storage::schema::DbMap,
         Schema: storage::schema::HasDbMap<DbMap, I>,
         T: Encode,
     {
