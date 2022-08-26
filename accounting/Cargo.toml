@@ -10,5 +10,7 @@ edition = "2021"
 common = {path = '../common'}
 crypto = {path = '../crypto'}
 chainstate-types = {path = '../chainstate-types'}
+serialization = {path = "../serialization"}
 
 thiserror = "1.0"
+parity-scale-codec = "3.1"

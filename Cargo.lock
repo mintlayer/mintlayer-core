@@ -9,6 +9,8 @@ dependencies = [
  "chainstate-types",
  "common",
  "crypto",
+ "parity-scale-codec",
+ "serialization",
  "thiserror",
 ]
 

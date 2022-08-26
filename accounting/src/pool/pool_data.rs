@@ -1,6 +1,7 @@
 use crypto::key::PublicKey;
+use serialization::{Decode, Encode};
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct PoolData {
     decommission_public_key: PublicKey,
 }

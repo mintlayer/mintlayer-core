@@ -1,23 +1,27 @@
 use std::collections::BTreeMap;
 
 use common::primitives::{signed_amount::SignedAmount, Amount, H256};
+use serialization::{Decode, Encode};
 
 use crate::error::Error;
 
 use super::{delegation::DelegationData, pool_data::PoolData, view::PoSAccountingView};
 
+#[derive(Clone, Encode, Decode)]
 #[allow(dead_code)]
 enum PoolDataDelta {
     Add(PoolData),
     Remove,
 }
 
+#[derive(Clone, Encode, Decode)]
 #[allow(dead_code)]
 enum DelegationDataDelta {
     Add(Box<DelegationData>),
     Remove,
 }
 
+#[derive(Clone)]
 pub struct PoSAccountingDelta<'a> {
     parent: &'a dyn PoSAccountingView,
     pool_data: BTreeMap<H256, PoolDataDelta>,
