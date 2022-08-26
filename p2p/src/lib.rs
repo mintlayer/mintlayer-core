@@ -21,7 +21,9 @@ use crate::{
 use chainstate::chainstate_interface;
 use common::chain::ChainConfig;
 use logging::log;
+use mempool::{pool::MempoolInterface, DummyMempoolChainState};
 use std::{fmt::Debug, str::FromStr, sync::Arc};
+use tap::TapFallible;
 use tokio::sync::{mpsc, oneshot};
 
 pub mod config;
@@ -143,6 +145,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+        _mempool_handle: subsystem::Handle<Box<dyn MempoolInterface<DummyMempoolChainState>>>,
     ) -> crate::Result<Self>
     where
         <T as NetworkingService>::Address: FromStr,
@@ -176,7 +179,7 @@ where
         {
             let chain_config = Arc::clone(&chain_config);
             tokio::spawn(async move {
-                if let Err(err) = peer_manager::PeerManager::<T>::new(
+                peer_manager::PeerManager::<T>::new(
                     chain_config,
                     Arc::clone(&p2p_config),
                     conn,
@@ -185,9 +188,7 @@ where
                 )
                 .run()
                 .await
-                {
-                    log::error!("PeerManager failed: {err}");
-                }
+                .tap_err(|err| log::error!("PeerManager failed: {err}"))
             });
         }
         {
@@ -196,7 +197,7 @@ where
             let chain_config = Arc::clone(&chain_config);
 
             tokio::spawn(async move {
-                if let Err(err) = sync::BlockSyncManager::<T>::new(
+                sync::BlockSyncManager::<T>::new(
                     chain_config,
                     sync,
                     consensus_handle,
@@ -206,9 +207,7 @@ where
                 )
                 .run()
                 .await
-                {
-                    log::error!("SyncManager failed: {err}");
-                }
+                .tap_err(|err| log::error!("SyncManager failed: {err}"))
             });
         }
 
@@ -216,7 +215,7 @@ where
             let tx_swarm = tx_swarm.clone();
 
             tokio::spawn(async move {
-                if let Err(err) = pubsub::PubSubMessageHandler::<T>::new(
+                pubsub::PubSubMessageHandler::<T>::new(
                     chain_config,
                     pubsub,
                     consensus_handle,
@@ -226,9 +225,7 @@ where
                 )
                 .run()
                 .await
-                {
-                    log::error!("PubSubMessageHandler failed: {err}");
-                }
+                .tap_err(|err| log::error!("PubSubMessageHandler failed: {err}"))
             });
         }
 
@@ -244,6 +241,7 @@ pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+    mempool_handle: subsystem::Handle<Box<dyn MempoolInterface<DummyMempoolChainState>>>,
 ) -> crate::Result<P2pInterface<T>>
 where
     T: NetworkingService + 'static,
@@ -256,6 +254,6 @@ where
     <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
 {
     Ok(P2pInterface {
-        p2p: P2P::new(chain_config, p2p_config, consensus_handle).await?,
+        p2p: P2P::new(chain_config, p2p_config, consensus_handle, mempool_handle).await?,
     })
 }

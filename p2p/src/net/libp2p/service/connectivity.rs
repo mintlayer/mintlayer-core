@@ -13,16 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{collections::BTreeSet, str::FromStr};
+
 use async_trait::async_trait;
 use itertools::Itertools;
-use libp2p::{core::PeerId, multiaddr::Protocol, Multiaddr};
+use libp2p::{core::PeerId, multiaddr, Multiaddr};
+use tap::TapFallible;
 use tokio::sync::{mpsc, oneshot};
 
+use common::primitives::semver::SemVer;
 use logging::log;
 
 use crate::{
     error::{ConversionError, P2pError, ProtocolError},
-    net::{self, libp2p::types, types::ConnectivityEvent, ConnectivityService, NetworkingService},
+    net::{
+        self,
+        libp2p::types,
+        types::{ConnectivityEvent, Protocol, ProtocolType},
+        ConnectivityService, NetworkingService,
+    },
 };
 
 /// Connectivity handle for libp2p
@@ -62,23 +71,26 @@ impl<T: NetworkingService> Libp2pConnectivityHandle<T> {
 pub fn parse_discovered_addr(peer_id: PeerId, peer_addr: Multiaddr) -> Option<Multiaddr> {
     let mut components = peer_addr.iter();
 
-    if !std::matches!(components.next(), Some(Protocol::Ip4(_) | Protocol::Ip6(_))) {
+    if !std::matches!(
+        components.next(),
+        Some(multiaddr::Protocol::Ip4(_) | multiaddr::Protocol::Ip6(_))
+    ) {
         return None;
     }
 
-    if !std::matches!(components.next(), Some(Protocol::Tcp(_))) {
+    if !std::matches!(components.next(), Some(multiaddr::Protocol::Tcp(_))) {
         return None;
     }
 
     match components.next() {
-        Some(Protocol::P2p(_)) => Some(peer_addr.clone()),
-        None => Some(peer_addr.with(Protocol::P2p(peer_id.into()))),
+        Some(multiaddr::Protocol::P2p(_)) => Some(peer_addr.clone()),
+        None => Some(peer_addr.with(multiaddr::Protocol::P2p(peer_id.into()))),
         Some(_) => None,
     }
 }
 
 /// Get the network layer protocol from `addr`
-fn get_addr_from_multiaddr(addr: &Multiaddr) -> Option<Protocol> {
+fn get_addr_from_multiaddr(addr: &Multiaddr) -> Option<multiaddr::Protocol> {
     addr.iter().next()
 }
 
@@ -96,8 +108,8 @@ where
         iter.into_iter().for_each(|(id, addr)| {
             entry.peer_id = id;
             match get_addr_from_multiaddr(&addr) {
-                Some(Protocol::Ip4(_)) => entry.ip4.push(addr),
-                Some(Protocol::Ip6(_)) => entry.ip6.push(addr),
+                Some(multiaddr::Protocol::Ip4(_)) => entry.ip4.push(addr),
+                Some(multiaddr::Protocol::Ip6(_)) => entry.ip6.push(addr),
                 _ => panic!("parse_discovered_addr() failed!"),
             }
         });
@@ -131,7 +143,7 @@ where
 
 impl<T> TryInto<net::types::PeerInfo<T>> for types::IdentifyInfoWrapper
 where
-    T: NetworkingService<PeerId = PeerId, ProtocolId = String>,
+    T: NetworkingService<PeerId = PeerId>,
 {
     type Error = P2pError;
 
@@ -145,10 +157,7 @@ where
                         return Err(P2pError::ProtocolError(ProtocolError::InvalidProtocol));
                     }
 
-                    Ok((
-                        common::primitives::semver::SemVer::new(maj, min, pat),
-                        magic.to_le_bytes(),
-                    ))
+                    Ok((SemVer::new(maj, min, pat), magic.to_le_bytes()))
                 }
             }?;
 
@@ -157,7 +166,7 @@ where
             magic_bytes,
             version,
             agent: Some(self.agent_version.clone()),
-            protocols: self.protocols.clone(),
+            protocols: parse_protocols(&self.protocols),
         })
     }
 }
@@ -248,5 +257,89 @@ where
                 Ok(ConnectivityEvent::Misbehaved { peer_id, error })
             }
         }
+    }
+}
+
+impl FromStr for Protocol {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (protocol, version) = s.rsplit_once('/').ok_or("Invalid protocol format")?;
+
+        let protocol = match protocol {
+            "/meshsub" => ProtocolType::PubSub,
+            "/ipfs/ping" => ProtocolType::Ping,
+            "/mintlayer/sync" => ProtocolType::Sync,
+            _ => return Err("Unknown protocol".into()),
+        };
+
+        let version = SemVer::try_from(version)?;
+
+        Ok(Protocol::new(protocol, version))
+    }
+}
+
+/// Parses the given strings into a set of protocols.
+///
+/// The protocols that aren't related to any `ProtocolType` are ignored.
+fn parse_protocols<I, P>(protocols: I) -> BTreeSet<Protocol>
+where
+    I: IntoIterator<Item = P>,
+    P: AsRef<str>,
+{
+    protocols
+        .into_iter()
+        .filter_map(|p| {
+            p.as_ref()
+                .parse()
+                .tap_err(|e| log::trace!("Ignoring '{}' protocol: {e:?}", p.as_ref()))
+                .ok()
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse() {
+        let data = [
+            ("/meshsub/1.0.0", ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+            ("/meshsub/1.1.0", ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+            ("/ipfs/ping/2.3.4", ProtocolType::Ping, SemVer::new(2, 3, 4)),
+            (
+                "/mintlayer/sync/0.1.0",
+                ProtocolType::Sync,
+                SemVer::new(0, 1, 0),
+            ),
+        ];
+
+        for (str, protocol, version) in data {
+            let actual = str.parse::<Protocol>().unwrap();
+            assert_eq!(actual.protocol(), protocol);
+            assert_eq!(actual.version(), version);
+        }
+    }
+
+    #[test]
+    fn parse_standard_protocols() {
+        let expected: BTreeSet<_> = [
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+        ]
+        .into_iter()
+        .collect();
+        let parsed = parse_protocols([
+            "/meshsub/1.0.0",
+            "/meshsub/1.1.0",
+            "/ipfs/ping/1.0.0",
+            "/ipfs/id/1.0.0",
+            "/ipfs/id/push/1.0.0",
+            "/mintlayer/sync/0.1.0",
+        ]);
+        assert_eq!(expected, parsed);
     }
 }

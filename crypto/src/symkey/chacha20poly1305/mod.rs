@@ -15,7 +15,7 @@
 
 use crate::random::{CryptoRng, Rng};
 use crate::symkey::Error;
-use chacha20poly1305::aead::{AeadInPlace, NewAead};
+use chacha20poly1305::aead::{AeadInPlace, KeyInit};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use serialization::{Decode, Encode};
 

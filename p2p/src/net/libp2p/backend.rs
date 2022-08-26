@@ -16,17 +16,6 @@
 
 //! Libp2p backend service
 
-use crate::{
-    error::{P2pError, PeerError},
-    net::{
-        self,
-        libp2p::{
-            behaviour,
-            types::{self, ControlEvent, Libp2pBehaviourEvent},
-        },
-    },
-};
-use behaviour::sync_codec::message_types::{SyncRequest, SyncResponse};
 use futures::StreamExt;
 use libp2p::{
     gossipsub::{IdentTopic, MessageAcceptance, MessageId},
@@ -34,9 +23,28 @@ use libp2p::{
     swarm::{Swarm, SwarmEvent},
     Multiaddr, PeerId,
 };
-use logging::log;
+use tap::TapFallible;
 use tokio::sync::{mpsc, oneshot};
 
+use logging::log;
+
+use crate::{
+    error::{P2pError, PeerError},
+    net::{
+        self,
+        libp2p::{
+            behaviour::{
+                self,
+                sync_codec::message_types::{SyncRequest, SyncResponse},
+            },
+            types::{self, ControlEvent, Libp2pBehaviourEvent},
+        },
+    },
+};
+
+/// This is the direct implementation of the NetworkingService, however, it gets wrapped with Libp2pService,
+/// where the implementation of Libp2pService instantiates a new object from thi struct, and satisfies all
+/// NetworkingService requirements, and hence becomes the proper backend
 pub struct Libp2pBackend {
     /// Created libp2p swarm object
     pub(super) swarm: Swarm<behaviour::Libp2pBehaviour>,
@@ -101,13 +109,8 @@ impl Libp2pBackend {
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::Control(
                         ControlEvent::CloseConnection { peer_id })
                     ) => {
-                        // TODO: `inspect_err`
-                        match self.swarm.disconnect_peer_id(peer_id) {
-                            Ok(_) => {}
-                            Err(err) => {
-                                log::error!("Failed to disconnect peer {}: {:?}", peer_id, err);
-                            }
-                        }
+                        let _ = self.swarm.disconnect_peer_id(peer_id)
+                            .tap_err(|e| log::error!("Failed to disconnect peer {peer_id}: {e:?}"));
                     }
                     _ => {
                         log::debug!("unhandled event {:?}", event);
@@ -342,7 +345,7 @@ mod tests {
         identity, mplex, noise, ping,
         request_response::{ProtocolSupport, RequestResponse, RequestResponseConfig},
         swarm::SwarmBuilder,
-        tcp::TcpConfig,
+        tcp::{GenTcpConfig, TcpTransport},
         Transport,
     };
     use std::{
@@ -361,9 +364,7 @@ mod tests {
         let noise_keys =
             noise::Keypair::<noise::X25519Spec>::new().into_authentic(&id_keys).unwrap();
 
-        let transport = TcpConfig::new()
-            .nodelay(true)
-            .port_reuse(false)
+        let transport = TcpTransport::new(GenTcpConfig::new().nodelay(true).port_reuse(false))
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(mplex::MplexConfig::new())

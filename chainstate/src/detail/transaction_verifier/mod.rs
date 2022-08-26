@@ -598,7 +598,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                 self.precache_inputs(tx.inputs())?;
 
                 // check for attempted money printing
-                self.check_transferred_amounts_and_get_fee(block.get_id(), tx)?;
+                let _ = self.check_transferred_amounts_and_get_fee(block.get_id(), tx)?;
 
                 // Register tokens if tx has issuance data
                 self.register_tokens(tx)?;

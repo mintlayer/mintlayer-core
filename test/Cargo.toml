@@ -12,7 +12,7 @@ common = { path = "../common" }
 tokio = { version = "1.19", features = ['full'] }
 
 [dev-dependencies]
-libtest-mimic = "0.4"
+libtest-mimic = "0.5"
 thiserror = "1.0"
 
 [[test]]

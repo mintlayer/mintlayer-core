@@ -18,7 +18,7 @@ use crate::{
     {Error, FlushableUtxoView, TxUndo, Utxo, UtxoSource, UtxosView},
 };
 use common::{
-    chain::{GenBlock, OutPoint, OutPointSourceId, Transaction},
+    chain::{block::BlockReward, GenBlock, OutPoint, OutPointSourceId, Transaction},
     primitives::{BlockHeight, Id, Idable},
 };
 use logging::log;
@@ -87,7 +87,31 @@ impl<'a> UtxosCache<'a> {
         self.current_block_hash = block_hash;
     }
 
-    pub fn add_utxos(
+    /// Given a block reward add its outputs to the utxo set
+    pub fn add_utxos_from_block_reward(
+        &mut self,
+        reward: &BlockReward,
+        source: UtxoSource,
+        block_id: &Id<GenBlock>,
+        check_for_overwrite: bool,
+    ) -> Result<(), Error> {
+        for (idx, output) in reward.outputs().iter().enumerate() {
+            let outpoint = OutPoint::new(OutPointSourceId::BlockReward(*block_id), idx as u32);
+            // block reward transactions can always be overwritten
+            let overwrite = if check_for_overwrite {
+                self.has_utxo(&outpoint)
+            } else {
+                true
+            };
+            let utxo = Utxo::new(output.clone(), true, source.clone());
+
+            self.add_utxo(&outpoint, utxo, overwrite)?;
+        }
+        Ok(())
+    }
+
+    /// Given a transaction add its outputs to the utxo set
+    pub fn add_utxos_from_tx(
         &mut self,
         tx: &Transaction,
         source: UtxoSource,
@@ -108,11 +132,15 @@ impl<'a> UtxosCache<'a> {
 
     /// Marks the inputs of a transaction as 'spent', adds outputs to the utxo set.
     /// Returns a TxUndo if function is a success or an error if the tx's input cannot be spent.
-    pub fn spend_utxos(&mut self, tx: &Transaction, height: BlockHeight) -> Result<TxUndo, Error> {
+    pub fn spend_utxos_from_tx(
+        &mut self,
+        tx: &Transaction,
+        height: BlockHeight,
+    ) -> Result<TxUndo, Error> {
         let tx_undo: Result<Vec<Utxo>, Error> =
             tx.inputs().iter().map(|tx_in| self.spend_utxo(tx_in.outpoint())).collect();
 
-        self.add_utxos(tx, UtxoSource::Blockchain(height), false)?;
+        self.add_utxos_from_tx(tx, UtxoSource::Blockchain(height), false)?;
 
         tx_undo.map(TxUndo::new)
     }
@@ -341,6 +369,14 @@ mod unit_test {
     use common::primitives::H256;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
+
+    #[test]
+    fn set_best_block() {
+        let expected_best_block_id: Id<GenBlock> = H256::random().into();
+        let mut cache = UtxosCache::new_for_test(H256::random().into());
+        cache.set_best_block(expected_best_block_id);
+        assert_eq!(expected_best_block_id, cache.best_block_hash());
+    }
 
     #[rstest]
     #[trace]

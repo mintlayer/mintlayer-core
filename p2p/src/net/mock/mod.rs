@@ -13,6 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod backend;
+pub mod peer;
+pub mod socket;
+pub mod types;
+
+use std::{hash::Hash, net::SocketAddr, sync::Arc};
+
+use async_trait::async_trait;
+use tokio::{
+    net::TcpListener,
+    sync::{mpsc, oneshot},
+};
+
+use logging::log;
+
 use crate::{
     config,
     error::P2pError,
@@ -23,18 +38,6 @@ use crate::{
         ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,
     },
 };
-use async_trait::async_trait;
-use logging::log;
-use std::{hash::Hash, net::SocketAddr, sync::Arc};
-use tokio::{
-    net::TcpListener,
-    sync::{mpsc, oneshot},
-};
-
-pub mod backend;
-pub mod peer;
-pub mod socket;
-pub mod types;
 
 #[derive(Debug)]
 pub struct MockService;
@@ -85,7 +88,7 @@ where
 
 impl<T> TryInto<net::types::PeerInfo<T>> for types::MockPeerInfo
 where
-    T: NetworkingService<PeerId = types::MockPeerId, ProtocolId = String>,
+    T: NetworkingService<PeerId = types::MockPeerId>,
 {
     type Error = P2pError;
 
@@ -95,7 +98,7 @@ where
             magic_bytes: self.network,
             version: self.version,
             agent: None,
-            protocols: self.protocols.iter().map(|proto| proto.name()).cloned().collect::<Vec<_>>(),
+            protocols: self.protocols.into_iter().collect(),
         })
     }
 }
@@ -104,7 +107,6 @@ where
 impl NetworkingService for MockService {
     type Address = SocketAddr;
     type PeerId = types::MockPeerId;
-    type ProtocolId = String;
     type SyncingPeerRequestId = MockRequestId;
     type PubSubMessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self>;
@@ -305,6 +307,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::net::types::{Protocol, ProtocolType};
+    use common::primitives::semver::SemVer;
 
     #[tokio::test]
     async fn connect_to_remote() {
@@ -341,7 +345,12 @@ mod tests {
                     magic_bytes: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     agent: None,
-                    protocols: vec!["floodsub".to_string(), "ping".to_string()],
+                    protocols: [
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
+                        Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
+                    ]
+                    .into_iter()
+                    .collect(),
                 }
             );
         } else {
@@ -385,7 +394,12 @@ mod tests {
                 assert_eq!(peer_info.agent, None);
                 assert_eq!(
                     peer_info.protocols,
-                    vec!["floodsub".to_string(), "ping".to_string()],
+                    [
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
+                        Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
+                    ]
+                    .into_iter()
+                    .collect()
                 );
             }
             _ => panic!("invalid event received, expected incoming connection"),

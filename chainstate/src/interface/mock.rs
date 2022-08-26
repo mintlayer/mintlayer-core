@@ -25,7 +25,7 @@ use common::{
 
 use crate::{detail::BlockSource, ChainstateError, ChainstateEvent, Locator};
 
-use super::ChainstateInterface;
+use super::chainstate_interface::ChainstateInterface;
 
 mockall::mock! {
     pub ChainstateInterfaceMock {}

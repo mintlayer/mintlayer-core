@@ -29,7 +29,7 @@ use crate::{
         tokens::OutputValue,
         Destination, OutputPurpose, Transaction, TransactionCreationError, TxInput, TxOutput,
     },
-    primitives::{amount::IntType, Amount, Id, H256},
+    primitives::{amount::UnsignedIntType, Amount, Id, H256},
 };
 
 // This is required because we can't access private fields of the Transaction class
@@ -82,7 +82,7 @@ pub fn generate_unsigned_tx(
 
     let outputs = std::iter::from_fn(|| {
         Some(TxOutput::new(
-            OutputValue::Coin(Amount::from_atoms(rng.gen::<IntType>())),
+            OutputValue::Coin(Amount::from_atoms(rng.gen::<UnsignedIntType>())),
             OutputPurpose::Transfer(destination.clone()),
         ))
     })

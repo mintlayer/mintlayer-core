@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod chainstate_interface;
+mod interface;
+pub use interface::chainstate_interface;
+use interface::chainstate_interface_impl;
+pub use interface::chainstate_interface_impl_delegation;
+
 pub mod rpc;
 
 pub use crate::{
@@ -21,7 +25,6 @@ pub use crate::{
     detail::{ban_score, BlockError, BlockSource, Locator},
 };
 
-mod chainstate_interface_impl;
 mod config;
 mod detail;
 
