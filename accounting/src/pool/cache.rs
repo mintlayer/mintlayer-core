@@ -48,9 +48,15 @@ impl<'a> PoSAccountingView for PoSAccountingOperationsCache<'a> {
         &self,
         pool_id: H256,
     ) -> Result<Option<BTreeMap<H256, Amount>>, Error> {
-        match self.get_cached_delegations_shares(pool_id) {
-            Some(v) => Ok(Some(v)),
-            None => self.parent.get_pool_delegations_shares(pool_id),
+        let parent_shares = self.parent.get_pool_delegations_shares(pool_id)?.unwrap_or_default();
+        let local_shares = self.get_cached_delegations_shares(pool_id).unwrap_or_default();
+        if parent_shares.is_empty() && local_shares.is_empty() {
+            Ok(None)
+        } else {
+            // TODO: test that local shares overwrite parent shares
+            Ok(Some(
+                parent_shares.into_iter().chain(local_shares).collect(),
+            ))
         }
     }
 
