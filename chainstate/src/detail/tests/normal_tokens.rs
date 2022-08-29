@@ -156,7 +156,7 @@ fn token_issue_test() {
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueErrorIncorrectTicker(_, _)
+                    TokensError::IssueErrorInvalidTicker(_, _)
                 ))
             ))
         ));
@@ -172,7 +172,7 @@ fn token_issue_test() {
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueErrorIncorrectTicker(_, _)
+                    TokensError::IssueErrorInvalidTicker(_, _)
                 ))
             ))
         ));
@@ -188,7 +188,7 @@ fn token_issue_test() {
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueErrorIncorrectTicker(_, _)
+                    TokensError::IssueErrorInvalidTicker(_, _)
                 ))
             ))
         ));

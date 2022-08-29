@@ -63,10 +63,7 @@ pub fn check_tokens_issuance_data(
         || token_ticker.is_empty()
         || !String::from_utf8_lossy(token_ticker).is_ascii()
     {
-        return Err(TokensError::IssueErrorIncorrectTicker(
-            tx_id,
-            source_block_id,
-        ));
+        return Err(TokensError::IssueErrorInvalidTicker(tx_id, source_block_id));
     }
 
     // Check amount

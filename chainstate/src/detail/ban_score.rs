@@ -124,7 +124,7 @@ impl BanScore for CheckBlockError {
 impl BanScore for TokensError {
     fn ban_score(&self) -> u32 {
         match self {
-            TokensError::IssueErrorIncorrectTicker(_, _) => 100,
+            TokensError::IssueErrorInvalidTicker(_, _) => 100,
             TokensError::IssueErrorIncorrectAmount(_, _) => 100,
             TokensError::IssueErrorTooManyDecimals(_, _) => 100,
             TokensError::IssueErrorIncorrectMetadataURI(_, _) => 100,
