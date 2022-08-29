@@ -437,5 +437,8 @@ impl<'st, B: storage::Backend> crate::TransactionRw for StoreTxRw<'st, B> {
     }
 }
 
+impl<'st, B: storage::Backend> crate::IsTransaction for StoreTxRo<'st, B> {}
+impl<'st, B: storage::Backend> crate::IsTransaction for StoreTxRw<'st, B> {}
+
 #[cfg(test)]
 mod test;

@@ -139,6 +139,8 @@ mockall::mock! {
     impl crate::TransactionRo for StoreTxRo {
         fn close(self);
     }
+
+    impl crate::IsTransaction for StoreTxRo {}
 }
 
 mockall::mock! {
@@ -212,6 +214,8 @@ mockall::mock! {
         fn abort(self);
         fn commit(self) -> crate::Result<()>;
     }
+
+    impl crate::IsTransaction for StoreTxRw {}
 }
 
 #[cfg(test)]
