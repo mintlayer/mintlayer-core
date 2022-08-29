@@ -311,7 +311,7 @@ fn token_transfer_test() {
 }
 
 #[test]
-fn couple_of_token_issuance_in_one_tx() {
+fn multiple_token_issuance_in_one_tx() {
     utils::concurrency::model(|| {
         let mut test_framework = TestFramework::default();
         let parent_block_id = test_framework.best_block_id();
