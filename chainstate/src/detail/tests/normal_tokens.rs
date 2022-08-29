@@ -128,10 +128,9 @@ fn process_token_ex(
 #[test]
 fn token_issue_test() {
     utils::concurrency::model(|| {
-        // Process token without errors
-
         let mut test_framework = TestFramework::default();
-        // let mut chainstate = setup_chainstate();
+
+        // Valid case
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
