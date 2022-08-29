@@ -13,15 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use libp2p::{Multiaddr, PeerId};
+use tokio::{sync::oneshot, time::timeout};
 
 use common::{chain::config, primitives::semver::SemVer};
 use p2p_test_utils::{make_libp2p_addr, make_mock_addr};
 
 use crate::{
     error::{DialError, P2pError, ProtocolError},
+    event::SwarmEvent,
     net::{
         self,
         libp2p::Libp2pService,
@@ -433,4 +435,123 @@ async fn inbound_connection_too_many_peers_mock() {
         peers,
     )
     .await;
+}
+
+async fn connection_timeout<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    <T as net::NetworkingService>::Address: std::str::FromStr,
+    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+{
+    let config = Arc::new(config::create_mainnet());
+    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
+
+    swarm1
+        .peer_connectivity_handle
+        .connect(addr2.clone())
+        .await
+        .expect("dial to succeed");
+
+    match timeout(
+        Duration::from_secs(swarm1._p2p_config.outbound_connection_timeout),
+        swarm1.peer_connectivity_handle.poll_next(),
+    )
+    .await
+    {
+        Ok(res) => assert!(std::matches!(
+            res,
+            Ok(net::types::ConnectivityEvent::ConnectionError {
+                address: _,
+                error: P2pError::DialError(DialError::IoError(
+                    std::io::ErrorKind::ConnectionRefused
+                )),
+            })
+        )),
+        Err(_err) => panic!("did not receive `ConnectionError` in time"),
+    }
+}
+
+#[tokio::test]
+async fn connection_timeout_libp2p() {
+    connection_timeout::<Libp2pService>(
+        make_libp2p_addr(),
+        format!("/ip4/255.255.255.255/tcp/8888/p2p/{}", PeerId::random())
+            .parse()
+            .unwrap(),
+    )
+    .await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn connection_timeout_mock() {
+    // TODO: implement timeouts for mock backend
+}
+
+// try to establish a new connection through RPC and verify that it is notified of the timeout
+async fn connection_timeout_rpc_notified<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    <T as net::NetworkingService>::Address: std::str::FromStr,
+    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+{
+    let config = Arc::new(config::create_mainnet());
+    let p2p_config = Arc::new(Default::default());
+    let (conn, _, _) = T::start(addr1, Arc::clone(&config), Arc::clone(&p2p_config)).await.unwrap();
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
+
+    let mut swarm = peer_manager::PeerManager::<T>::new(
+        Arc::clone(&config),
+        Arc::clone(&p2p_config),
+        conn,
+        rx,
+        tx_sync,
+    );
+
+    tokio::spawn(async move {
+        loop {
+            let _ = rx_sync.recv().await;
+        }
+    });
+    tokio::spawn(async move {
+        swarm.run().await.unwrap();
+    });
+
+    let (rtx, rrx) = oneshot::channel();
+    tx.send(SwarmEvent::Connect(addr2, rtx)).unwrap();
+
+    match timeout(
+        Duration::from_secs(p2p_config.outbound_connection_timeout),
+        rrx,
+    )
+    .await
+    {
+        Ok(res) => assert!(std::matches!(
+            res.unwrap(),
+            Err(P2pError::DialError(DialError::IoError(
+                std::io::ErrorKind::ConnectionRefused
+            )))
+        )),
+        Err(_err) => panic!("did not receive `ConnectionError` in time"),
+    }
+}
+
+#[tokio::test]
+async fn connection_timeout_rpc_notified_libp2p() {
+    connection_timeout_rpc_notified::<Libp2pService>(
+        make_libp2p_addr(),
+        format!("/ip4/255.255.255.255/tcp/8888/p2p/{}", PeerId::random())
+            .parse()
+            .unwrap(),
+    )
+    .await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn connection_timeout_rpc_notified_mock() {
+    // TODO: implement timeouts for mock backend
 }
