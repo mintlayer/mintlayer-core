@@ -157,7 +157,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
                 .iter()
                 .map(|tx| cache.spend_utxos_from_tx(tx, block_height).expect("should spend okay."))
                 .collect_vec();
-            BlockUndo::new(undos, block_height)
+            BlockUndo::new(Default::default(), undos)
         };
 
         // check that the block_undo contains the same utxos recorded as "spent",

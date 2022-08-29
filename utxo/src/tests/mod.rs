@@ -85,7 +85,7 @@ fn check_spend_utxo(
     parent_presence: Presence,
     cache_presence: Presence,
     cache_flags: Option<(IsFresh, IsDirty)>,
-    spend_result: Result<(), Error>,
+    mut spend_result: Result<(), Error>,
     result_flags: Option<(IsFresh, IsDirty)>,
 ) {
     // initialize the parent cache.
@@ -112,6 +112,13 @@ fn check_spend_utxo(
         cache_flags,
         Some(parent_outpoint),
     );
+
+    // patch the spend result in case it's a double spend with proper outpoint
+    // which cannot be known beforehand
+    spend_result = spend_result.map_err(|err| match err {
+        UtxoAlreadySpent(_) => UtxoAlreadySpent(child_outpoint.tx_id()),
+        _ => err,
+    });
 
     // perform the spend_utxo
     let res = child.spend_utxo(&child_outpoint);
@@ -312,27 +319,29 @@ fn add_utxo_test(#[case] seed: Seed) {
 #[rustfmt::skip]
 fn spend_utxo_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
+    // just a dummy id for the compiler
+    let id = OutPointSourceId::Transaction(Id::new(H256::random()));
     /*
                               PARENT     CACHE
                               PRESENCE   PRESENCE  CACHE Flags          RESULT                       RESULT Flags
     */
-    check_spend_utxo(&mut rng, Absent,  Absent,  None,                               Err(Error::NoUtxoFound),      None);
-    check_spend_utxo(&mut rng, Absent,  Spent,   Some((IsFresh::Yes, IsDirty::No)),  Err(Error::UtxoAlreadySpent), None);
-    check_spend_utxo(&mut rng, Absent,  Spent,   Some((IsFresh::No, IsDirty::Yes)),  Err(Error::UtxoAlreadySpent), Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                       None);
-    check_spend_utxo(&mut rng, Spent,   Absent,  None,                               Err(Error::NoUtxoFound),      None);
-    check_spend_utxo(&mut rng, Spent,   Absent,  Some((IsFresh::Yes, IsDirty::No)),  Err(Error::NoUtxoFound),      None);
-    check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                       None);
-    check_spend_utxo(&mut rng, Present, Absent,  None,                               Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Present, Spent,   Some((IsFresh::Yes, IsDirty::No)),  Err(Error::UtxoAlreadySpent), None);
-    check_spend_utxo(&mut rng, Present, Spent,   Some((IsFresh::No, IsDirty::Yes)),  Err(Error::UtxoAlreadySpent), Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                       None);
+    check_spend_utxo(&mut rng, Absent,  Absent,  None,                               Err(Error::NoUtxoFound),                  None);
+    check_spend_utxo(&mut rng, Absent,  Spent,   Some((IsFresh::Yes, IsDirty::No)),  Err(Error::UtxoAlreadySpent(id.clone())), None);
+    check_spend_utxo(&mut rng, Absent,  Spent,   Some((IsFresh::No, IsDirty::Yes)),  Err(Error::UtxoAlreadySpent(id.clone())), Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                                   None);
+    check_spend_utxo(&mut rng, Spent,   Absent,  None,                               Err(Error::NoUtxoFound),                  None);
+    check_spend_utxo(&mut rng, Spent,   Absent,  Some((IsFresh::Yes, IsDirty::No)),  Err(Error::NoUtxoFound),                  None);
+    check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                                   None);
+    check_spend_utxo(&mut rng, Present, Absent,  None,                               Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Present, Spent,   Some((IsFresh::Yes, IsDirty::No)),  Err(Error::UtxoAlreadySpent(id.clone())), None);
+    check_spend_utxo(&mut rng, Present, Spent,   Some((IsFresh::No, IsDirty::Yes)),  Err(Error::UtxoAlreadySpent(id.clone())), Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                                   None);
 }
 
 #[rstest]

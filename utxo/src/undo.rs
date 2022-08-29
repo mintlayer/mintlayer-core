@@ -129,7 +129,6 @@ pub mod test {
     #[case(Seed::from_entropy())]
     fn block_undo_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let expected_height = BlockHeight::new(5);
         let (utxo0, _) = create_utxo(&mut rng, 0);
         let (utxo1, _) = create_utxo(&mut rng, 1);
         let tx_undo0 = TxUndo::new(vec![utxo0, utxo1]);
@@ -139,17 +138,20 @@ pub mod test {
         let (utxo4, _) = create_utxo(&mut rng, 4);
         let tx_undo1 = TxUndo::new(vec![utxo2, utxo3, utxo4]);
 
-        let blockundo = BlockUndo::new(vec![tx_undo0.clone(), tx_undo1.clone()], expected_height);
+        let (utxo5, _) = create_utxo(&mut rng, 5);
+        let reward_undo = BlockRewardUndo::new(vec![utxo5]);
+
+        let blockundo = BlockUndo::new(
+            reward_undo.clone(),
+            vec![tx_undo0.clone(), tx_undo1.clone()],
+        );
 
         // check `inner()`
-        {
-            let inner = blockundo.tx_undos();
+        let inner = blockundo.tx_undos();
 
-            assert_eq!(&tx_undo0, &inner[0]);
-            assert_eq!(&tx_undo1, &inner[1]);
-        }
+        assert_eq!(&tx_undo0, &inner[0]);
+        assert_eq!(&tx_undo1, &inner[1]);
 
-        // check the height
-        assert_eq!(blockundo.height, expected_height);
+        assert_eq!(&reward_undo, blockundo.block_reward_undo());
     }
 }

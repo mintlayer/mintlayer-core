@@ -153,6 +153,7 @@ impl<'a> UtxosCache<'a> {
         tx_undo.map(TxUndo::new)
     }
 
+    // Marks outputs of a transaction as spent and inputs as unspent
     pub fn unspend_utxos_from_tx(
         &mut self,
         tx: &Transaction,
@@ -170,7 +171,8 @@ impl<'a> UtxosCache<'a> {
     }
 
     /// Marks the inputs of a transactable block reward as 'spent', adds outputs to the utxo set.
-    /// Returns a TxUndo if function is a success or an error if the tx's input cannot be spent.
+    /// If BlockRewardTransactable has no inputs then just adds outputs to utxo set.
+    /// Returns a BlockRewardUndo if function is a success or an error if the input cannot be spent.
     pub fn spend_utxos_from_block_transactable(
         &mut self,
         reward_transactable: &BlockRewardTransactable,
@@ -195,6 +197,7 @@ impl<'a> UtxosCache<'a> {
         Ok(reward_undo)
     }
 
+    // Marks outputs of a block reward as spent and inputs as unspent.
     pub fn unspend_utxos_from_block_transactable(
         &mut self,
         reward_transactable: &BlockRewardTransactable,
@@ -284,7 +287,7 @@ impl<'a> UtxosCache<'a> {
             self.utxos.insert(outpoint.clone(), new_entry);
         }
 
-        entry.take_utxo().ok_or(Error::UtxoAlreadySpent)
+        entry.take_utxo().ok_or(Error::UtxoAlreadySpent(outpoint.tx_id()))
     }
 
     /// Checks whether utxo exists in the cache
@@ -517,5 +520,28 @@ mod unit_test {
         assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
     }
 
-    //TODO: test for fetch
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn fetch_an_entry(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let mut cache1 = UtxosCache::new_for_test(H256::random().into());
+        let (_, outpoint) = insert_single_entry(
+            &mut rng,
+            &mut cache1,
+            Presence::Present,
+            Some((IsFresh::Yes, IsDirty::Yes)),
+            None,
+        );
+
+        let mut cache2 = UtxosCache::new(&cache1);
+
+        assert!(cache1.has_utxo_in_cache(&outpoint));
+        assert!(!cache2.has_utxo_in_cache(&outpoint));
+
+        cache2.fetch_utxo_entry(&outpoint);
+
+        assert!(cache1.has_utxo_in_cache(&outpoint));
+        assert!(cache2.has_utxo_in_cache(&outpoint));
+    }
 }

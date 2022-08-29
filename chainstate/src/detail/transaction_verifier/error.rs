@@ -14,9 +14,11 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::Block, SpendError, Spender, TxMainChainIndexError, TxMainChainPosition},
+    chain::{
+        block::Block, OutPointSourceId, SpendError, Spender, TxMainChainIndexError,
+        TxMainChainPosition,
+    },
     primitives::{Amount, Id},
-    utxo::Error,
 };
 use thiserror::Error;
 
@@ -48,12 +50,12 @@ pub enum ConnectTransactionError {
     MissingOutputOrSpentOutputErasedOnConnect,
     #[error("While disconnecting a block, output was erased in a previous step (possible in reorgs with no cache flushing)")]
     MissingOutputOrSpentOutputErasedOnDisconnect,
-    #[error("While disconnecting a block undo was not found (possible in reorgs with no cache flushing)")]
-    MissingBlockUndoOnDisconnect(Id<Block>),
     #[error(
         "While disconnecting a block, undo transaction number `{0}` does not exist in block `{1}`"
     )]
-    MissingTxUndoOnDisconnect(usize, Id<Block>),
+    MissingTxUndo(usize, Id<Block>),
+    #[error("While disconnecting a block, block undo info does not exist in block `{0}`")]
+    MissingBlockUndo(Id<Block>),
     #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     AttemptToPrintMoney(Amount, Amount),
     #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]
@@ -93,6 +95,8 @@ pub enum ConnectTransactionError {
     SerializationInvariantError(Id<Block>),
     #[error("Timelock rules violated")]
     TimeLockViolation,
+    #[error("Utxo invariant broken: `{0}`")]
+    UtxoInvariantBroken(String),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
@@ -123,14 +127,23 @@ impl From<SpendError> for ConnectTransactionError {
 impl From<utxo::Error> for ConnectTransactionError {
     fn from(err: utxo::Error) -> Self {
         match err {
-            utxo::Error::UtxoAlreadySpent() => ConnectTransactionError::DoubleSpendAttempt(TODO),
+            utxo::Error::UtxoAlreadySpent(outpoint_id) => {
+                ConnectTransactionError::DoubleSpendAttempt(match outpoint_id {
+                    OutPointSourceId::Transaction(id) => Spender::from(id),
+                    OutPointSourceId::BlockReward(id) => Spender::from(id),
+                })
+            }
             utxo::Error::DBError(error) => ConnectTransactionError::StorageError(error),
-            utxo::Error::FreshUtxoAlreadyExists() => ConnectTransactionError::TODO(),
-            utxo::Error::NoBlockchainHeightFound() => {
+            utxo::Error::FreshUtxoAlreadyExists => {
+                ConnectTransactionError::UtxoInvariantBroken(err.to_string())
+            }
+            utxo::Error::OverwritingUtxo => {
+                ConnectTransactionError::UtxoInvariantBroken(err.to_string())
+            }
+            utxo::Error::NoBlockchainHeightFound => {
                 ConnectTransactionError::BlockHeightArithmeticError
             }
-            utxo::Error::OverwritingUtxo() => ConnectTransactionError::TODO(),
-            utxo::Error::NoUtxoFound() => ConnectTransactionError::MissingOutputOrSpent,
+            utxo::Error::NoUtxoFound => ConnectTransactionError::MissingOutputOrSpent,
         }
     }
 }

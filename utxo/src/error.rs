@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use chainstate_types::storage_result;
+use common::chain::OutPointSourceId;
 use thiserror::Error;
 
 #[derive(Error, Debug, Eq, PartialEq)]
@@ -25,7 +26,7 @@ pub enum Error {
     )]
     FreshUtxoAlreadyExists,
     #[error("Attempted to spend a UTXO that's already spent")]
-    UtxoAlreadySpent,
+    UtxoAlreadySpent(OutPointSourceId),
     #[error("Attempted to spend a non-existing UTXO")]
     NoUtxoFound,
     #[error("Attempted to get the block height of a UTXO source that is based on the mempool")]

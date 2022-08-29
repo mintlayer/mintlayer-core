@@ -99,6 +99,9 @@ impl BanScore for ConnectTransactionError {
             // Even though this is an invariant, we consider it a violation to be overly cautious
             ConnectTransactionError::SerializationInvariantError(_) => 100,
             ConnectTransactionError::TimeLockViolation => 100,
+            &ConnectTransactionError::MissingBlockUndo(_) => 0, //???
+            &ConnectTransactionError::MissingTxUndo(_, _) => 0, //???
+            &ConnectTransactionError::UtxoInvariantBroken(_) => 0, //???
         }
     }
 }
