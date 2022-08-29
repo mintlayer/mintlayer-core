@@ -17,8 +17,9 @@ use chainstate_storage::BlockchainStorageRead;
 use common::{
     chain::{
         config::{Builder as ChainConfigBuilder, ChainType},
+        signature::inputsig::InputWitness,
         tokens::OutputValue,
-        Block, Destination, GenBlock, Genesis, NetUpgrades, OutputPurpose, TxOutput,
+        Block, Destination, GenBlock, Genesis, NetUpgrades, OutputPurpose, TxInput, TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable},
 };
@@ -28,7 +29,7 @@ use crate::{
     detail::{
         tests::{
             test_framework::{BlockBuilder, TestFrameworkBuilder, TransactionBuilder},
-            TestBlockInfo, *,
+            TestBlockInfo,
         },
         BlockIndex, GenBlockIndex, TimeGetter,
     },
