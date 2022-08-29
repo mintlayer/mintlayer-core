@@ -531,7 +531,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn register_tokens(&mut self, tx: &Transaction) -> Result<(), TokensError> {
+    fn register_tokens_issuance(&mut self, tx: &Transaction) -> Result<(), TokensError> {
         let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
 
         let _tokens_op = match self.tokens_cache.entry(token_id) {
@@ -601,7 +601,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                 let _ = self.check_transferred_amounts_and_get_fee(block.get_id(), tx)?;
 
                 // Register tokens if tx has issuance data
-                self.register_tokens(tx)?;
+                self.register_tokens_issuance(tx)?;
 
                 // verify input signatures
                 self.verify_signatures(tx, spend_height, median_time_past)?;
@@ -639,7 +639,10 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn remove_tokens(&mut self, tx: &Transaction) -> Result<(), ConnectTransactionError> {
+    fn unregister_token_issuance(
+        &mut self,
+        tx: &Transaction,
+    ) -> Result<(), ConnectTransactionError> {
         let was_tokens_issued =
             tx.outputs().iter().any(|output| is_tokens_issuance(output.value()));
         if was_tokens_issued {
@@ -680,7 +683,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                 }
 
                 // Remove issued tokens
-                self.remove_tokens(tx)?;
+                self.unregister_token_issuance(tx)?;
             }
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.block_reward_transactable();
