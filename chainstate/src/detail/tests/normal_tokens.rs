@@ -362,7 +362,7 @@ fn multiple_token_issuance_in_one_tx() {
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
-        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values.clone())
+        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
             .unwrap()
             .unwrap();
     })
@@ -426,7 +426,7 @@ fn token_issuance_with_insufficient_fee() {
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
-        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values.clone())
+        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
             .unwrap()
             .unwrap();
     })
@@ -523,7 +523,7 @@ fn test_burn_tokens() {
             ))
         ));
 
-        // Burn 25% through burn data, and burn 25% with just don't add output for them, and transfer the rest 50%
+        // Valid case: Burn 25% through burn data, and burn 25% with just don't add output for them, and transfer the rest 50%
         let values = vec![
             OutputValue::Token(TokenData::TokenBurnV1 {
                 token_id,
@@ -536,7 +536,7 @@ fn test_burn_tokens() {
         ];
         process_token(&mut test_framework, ParentBlock::BestBlock, values).unwrap();
 
-        // Burn 50% and 50% transfer
+        // Valid case: Burn 50% and 50% transfer
         let values = vec![
             OutputValue::Token(TokenData::TokenBurnV1 {
                 token_id,
@@ -551,7 +551,7 @@ fn test_burn_tokens() {
             .unwrap()
             .unwrap();
 
-        // Try to burn the rest 50%
+        // Valid case: Try to burn the rest 50%
         let values = vec![OutputValue::Token(TokenData::TokenBurnV1 {
             token_id,
             amount_to_burn: QUARTER_ISSUED_FUNDS,
@@ -772,6 +772,18 @@ fn test_attempt_to_print_tokens() {
                 ConnectTransactionError::AttemptToPrintMoney(_, _)
             ))
         ));
+
+        // Valid case - try to transfer correct amount of tokens
+        let values = vec![
+            OutputValue::Token(TokenData::TokenTransferV1 {
+                token_id,
+                amount: ISSUED_FUNDS,
+            }),
+            OutputValue::Coin(Amount::from_atoms(123454)),
+        ];
+        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
+            .unwrap()
+            .unwrap();
     });
 }
 
