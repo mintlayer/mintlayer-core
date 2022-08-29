@@ -130,20 +130,6 @@ fn token_issue_test() {
     utils::concurrency::model(|| {
         let mut test_framework = TestFramework::default();
 
-        // Valid case
-        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: b"SOME".to_vec(),
-            amount_to_issue: Amount::from_atoms(52292852472),
-            number_of_decimals: 1,
-            metadata_uri: b"https://some_site.meta".to_vec(),
-        })];
-        let block_index =
-            process_token(&mut test_framework, ParentBlock::BestBlock, values.clone())
-                .unwrap()
-                .unwrap();
-        let block = test_framework.block(*block_index.block_id());
-        assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
-
         // Ticker is too long
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"TRY TO USE THE LONG NAME".to_vec(),
@@ -239,14 +225,8 @@ fn token_issue_test() {
                 ))
             ))
         ));
-    });
-}
 
-#[test]
-fn token_transfer_test() {
-    utils::concurrency::model(|| {
-        let mut test_framework = TestFramework::default();
-        // Issue a new token
+        // Valid case
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
@@ -259,21 +239,32 @@ fn token_transfer_test() {
                 .unwrap();
         let block = test_framework.block(*block_index.block_id());
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
+    });
+}
 
-        // Transfer it
-        let token_id = token_id(&block.transactions()[0]).unwrap();
-        let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
-            token_id,
-            amount: Amount::from_atoms(123456789),
+#[test]
+fn token_transfer_test() {
+    utils::concurrency::model(|| {
+        let mut test_framework = TestFramework::default();
+        // Issue a new token
+        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
+            token_ticker: b"SOME".to_vec(),
+            amount_to_issue: Amount::from_atoms(52_292_852_472),
+            number_of_decimals: 1,
+            metadata_uri: b"https://some_site.meta".to_vec(),
         })];
-        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
-            .unwrap()
-            .unwrap();
+        let block_index =
+            process_token(&mut test_framework, ParentBlock::BestBlock, values.clone())
+                .unwrap()
+                .unwrap();
+        let block = test_framework.block(*block_index.block_id());
+        let token_id = token_id(&block.transactions()[0]).unwrap();
+        assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
         // Try to transfer exceed amount
         let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
             token_id,
-            amount: Amount::from_atoms(987654321),
+            amount: Amount::from_atoms(987_654_321_123),
         })];
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
@@ -307,6 +298,15 @@ fn token_transfer_test() {
                 ))
             ))
         ));
+
+        // Valid case - Transfer tokens
+        let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
+            token_id,
+            amount: Amount::from_atoms(123456789),
+        })];
+        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
+            .unwrap()
+            .unwrap();
     })
 }
 
@@ -317,7 +317,7 @@ fn multiple_token_issuance_in_one_tx() {
         let parent_block_id = test_framework.best_block_id();
         let test_block_info = TestBlockInfo::from_id(&test_framework.chainstate, parent_block_id);
         let receiver = anyonecanspend_address();
-        let value = OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let issuance_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
@@ -330,8 +330,11 @@ fn multiple_token_issuance_in_one_tx() {
             InputWitness::NoSignature(None),
         )];
         let outputs = vec![
-            TxOutput::new(value.clone(), OutputPurpose::Transfer(receiver.clone())),
-            TxOutput::new(value, OutputPurpose::Transfer(receiver)),
+            TxOutput::new(
+                issuance_value.clone(),
+                OutputPurpose::Transfer(receiver.clone()),
+            ),
+            TxOutput::new(issuance_value, OutputPurpose::Transfer(receiver)),
         ];
         let block = Block::new(
             vec![Transaction::new(0, inputs, outputs, 0).unwrap()],
