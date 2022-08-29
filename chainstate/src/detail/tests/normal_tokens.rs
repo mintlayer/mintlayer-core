@@ -354,6 +354,17 @@ fn multiple_token_issuance_in_one_tx() {
                 ))
             ))
         ));
+
+        // Valid issuance
+        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
+            token_ticker: b"SOME".to_vec(),
+            amount_to_issue: Amount::from_atoms(52292852472),
+            number_of_decimals: 1,
+            metadata_uri: b"https://some_site.meta".to_vec(),
+        })];
+        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values.clone())
+            .unwrap()
+            .unwrap();
     })
 }
 
@@ -400,22 +411,33 @@ fn token_issuance_with_insufficient_fee() {
         )
         .unwrap();
 
-        // Process it
+        // Try to process tx with insufficient token fees
         assert!(matches!(
             test_framework.process_block(block, BlockSource::Local),
             Err(BlockError::StateUpdateFailed(
                 ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(_, _))
             ))
         ));
+
+        // Valid issuance
+        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
+            token_ticker: b"SOME".to_vec(),
+            amount_to_issue: Amount::from_atoms(52292852472),
+            number_of_decimals: 1,
+            metadata_uri: b"https://some_site.meta".to_vec(),
+        })];
+        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values.clone())
+            .unwrap()
+            .unwrap();
     })
 }
 
 #[test]
-fn transfer_tokens() {
+fn transfer_split_and_combine_tokens() {
     utils::concurrency::model(|| {
         const TOTAL_TOKEN_VALUE: Amount = Amount::from_atoms(52292852472);
 
-        // Process token without errors
+        // Issue a new token
         let mut test_framework = TestFramework::default();
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"SOME".to_vec(),
@@ -431,7 +453,7 @@ fn transfer_tokens() {
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
         let token_id = token_id(&block.transactions()[0]).unwrap();
 
-        // Split token in outputs
+        // Split tokens in outputs
         let values = vec![
             OutputValue::Token(TokenData::TokenTransferV1 {
                 token_id,
