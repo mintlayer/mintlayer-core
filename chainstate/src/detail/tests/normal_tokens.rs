@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::anyonecanspend_address;
-use crate::detail::tests::test_framework::TestFramework;
+use crate::detail::tests::test_framework::{TestFramework, TransactionBuilder};
 use crate::detail::transaction_verifier::error::ConnectTransactionError;
 use crate::detail::CheckBlockTransactionsError;
 use crate::{
@@ -24,6 +24,7 @@ use crate::{
 use chainstate_types::BlockIndex;
 use common::chain::block::BlockReward;
 use common::chain::config::TOKEN_MIN_ISSUANCE_FEE;
+use common::chain::Destination;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
@@ -33,7 +34,9 @@ use common::{
     },
     primitives::{time, Amount, Id, Idable},
 };
+// use rstest::rstest;
 use std::vec;
+// use test_utils::random::{make_seedable_rng, Seed};
 
 enum ParentBlock {
     BestBlock,
@@ -125,20 +128,41 @@ fn process_token_ex(
         .map(|result| (block, result))
 }
 
+// #[rstest]
+// #[trace]
+// #[case(Seed::from_entropy())]
+// fn token_issue_test(#[case] seed: Seed) {
 #[test]
 fn token_issue_test() {
-    utils::concurrency::model(|| {
-        let mut test_framework = TestFramework::default();
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let outpoint_source_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
 
         // Ticker is too long
-        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: b"TRY TO USE THE LONG NAME".to_vec(),
-            amount_to_issue: Amount::from_atoms(52292852472),
-            number_of_decimals: 1,
-            metadata_uri: b"https://some_site.meta".to_vec(),
-        })];
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::TokenIssuanceV1 {
+                            token_ticker: b"TRY TO USE THE LONG NAME".to_vec(),
+                            amount_to_issue: Amount::from_atoms(52292852472),
+                            number_of_decimals: 1,
+                            metadata_uri: b"https://some_site.meta".to_vec(),
+                        }),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
         assert!(matches!(
-            process_token(&mut test_framework, ParentBlock::BestBlock, values),
+            result,
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
                     TokensError::IssueErrorInvalidTicker(_, _)
@@ -147,14 +171,30 @@ fn token_issue_test() {
         ));
 
         // Ticker doesn't exist
-        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: b"".to_vec(),
-            amount_to_issue: Amount::from_atoms(52292852472),
-            number_of_decimals: 1,
-            metadata_uri: b"https://some_site.meta".to_vec(),
-        })];
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::TokenIssuanceV1 {
+                            token_ticker: b"".to_vec(),
+                            amount_to_issue: Amount::from_atoms(52292852472),
+                            number_of_decimals: 1,
+                            metadata_uri: b"https://some_site.meta".to_vec(),
+                        }),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
         assert!(matches!(
-            process_token(&mut test_framework, ParentBlock::BestBlock, values),
+            result,
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
                     TokensError::IssueErrorInvalidTicker(_, _)
@@ -163,14 +203,30 @@ fn token_issue_test() {
         ));
 
         // Ticker contain non alpha-numeric byte
-        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: "💖".as_bytes().to_vec(),
-            amount_to_issue: Amount::from_atoms(52292852472),
-            number_of_decimals: 1,
-            metadata_uri: b"https://some_site.meta".to_vec(),
-        })];
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::TokenIssuanceV1 {
+                            token_ticker: "💖".as_bytes().to_vec(),
+                            amount_to_issue: Amount::from_atoms(52292852472),
+                            number_of_decimals: 1,
+                            metadata_uri: b"https://some_site.meta".to_vec(),
+                        }),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
         assert!(matches!(
-            process_token(&mut test_framework, ParentBlock::BestBlock, values),
+            result,
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
                     TokensError::IssueErrorInvalidTicker(_, _)
@@ -179,14 +235,30 @@ fn token_issue_test() {
         ));
 
         // Issue amount is too low
-        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: "SOME".as_bytes().to_vec(),
-            amount_to_issue: Amount::from_atoms(0),
-            number_of_decimals: 1,
-            metadata_uri: b"https://some_site.meta".to_vec(),
-        })];
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::TokenIssuanceV1 {
+                            token_ticker: "SOME".as_bytes().to_vec(),
+                            amount_to_issue: Amount::from_atoms(0),
+                            number_of_decimals: 1,
+                            metadata_uri: b"https://some_site.meta".to_vec(),
+                        }),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
         assert!(matches!(
-            process_token(&mut test_framework, ParentBlock::BestBlock, values),
+            result,
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
                     TokensError::IssueErrorIncorrectAmount(_, _)
@@ -195,14 +267,30 @@ fn token_issue_test() {
         ));
 
         // Too many decimals
-        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: "SOME".as_bytes().to_vec(),
-            amount_to_issue: Amount::from_atoms(123456789),
-            number_of_decimals: 123,
-            metadata_uri: b"https://some_site.meta".to_vec(),
-        })];
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::TokenIssuanceV1 {
+                            token_ticker: "SOME".as_bytes().to_vec(),
+                            amount_to_issue: Amount::from_atoms(123456789),
+                            number_of_decimals: 123,
+                            metadata_uri: b"https://some_site.meta".to_vec(),
+                        }),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
         assert!(matches!(
-            process_token(&mut test_framework, ParentBlock::BestBlock, values),
+            result,
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
                     TokensError::IssueErrorTooManyDecimals(_, _)
@@ -211,14 +299,30 @@ fn token_issue_test() {
         ));
 
         // URI is too long
-        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: b"SOME".to_vec(),
-            amount_to_issue: Amount::from_atoms(52292852472),
-            number_of_decimals: 1,
-            metadata_uri: "https://some_site.meta".repeat(1024).as_bytes().to_vec(),
-        })];
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::TokenIssuanceV1 {
+                            token_ticker: b"SOME".to_vec(),
+                            amount_to_issue: Amount::from_atoms(52292852472),
+                            number_of_decimals: 1,
+                            metadata_uri: "https://some_site.meta".repeat(1024).as_bytes().to_vec(),
+                        }),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
         assert!(matches!(
-            process_token(&mut test_framework, ParentBlock::BestBlock, values),
+            result,
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
                     TokensError::IssueErrorIncorrectMetadataURI(_, _)
@@ -227,18 +331,33 @@ fn token_issue_test() {
         ));
 
         // Valid case
-        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let value = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
-        })];
-        let block_index =
-            process_token(&mut test_framework, ParentBlock::BestBlock, values.clone())
-                .unwrap()
-                .unwrap();
-        let block = test_framework.block(*block_index.block_id());
-        assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
+        });
+        let block_index = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id,
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        value.clone(),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+
+        let block = tf.block(*block_index.block_id());
+        assert_eq!(block.transactions()[0].outputs()[0].value(), &value);
     });
 }
 

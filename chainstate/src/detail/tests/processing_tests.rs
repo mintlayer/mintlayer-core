@@ -13,31 +13,43 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::atomic::Ordering, time::Duration};
+use std::{
+    sync::{atomic::Ordering, Arc},
+    time::Duration,
+};
 
 use chainstate_storage::BlockchainStorageRead;
+use chainstate_types::GenBlockIndex;
 use common::{
     chain::{
-        block::consensus_data::PoWData,
+        block::{consensus_data::PoWData, timestamp::BlockTimestamp, ConsensusData},
         config::{create_unit_test_config, Builder as ConfigBuilder},
         tokens::OutputValue,
-        ConsensusUpgrade, NetUpgrades, OutputPurpose, OutputSpentState, UpgradeVersion,
+        Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId,
+        OutputPurpose, OutputSpentState, TxOutput, UpgradeVersion,
     },
-    primitives::Compact,
+    primitives::{Amount, BlockHeight, Compact, Id, Idable},
     Uint256,
 };
 use consensus::{BlockIndexHandle, ConsensusPoWError, ConsensusVerificationError};
-use crypto::key::{KeyKind, PrivateKey};
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    random::Rng,
+};
+use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
     detail::{
         median_time::calculate_median_time_past,
         tests::{
             test_framework::{TestFramework, TestStore},
-            *,
+            TestBlockInfo,
         },
+        time_getter::TimeGetter,
+        CheckBlockError, OrphanCheckError,
     },
-    make_chainstate, ChainstateConfig,
+    make_chainstate, BlockError, BlockSource, ChainstateConfig,
 };
 
 #[test]
@@ -232,7 +244,7 @@ fn get_ancestor_invalid_height(#[case] seed: Seed) {
 
     let invalid_height = height + 1;
     assert_eq!(
-        PropertyQueryError::InvalidAncestorHeight {
+        chainstate_types::PropertyQueryError::InvalidAncestorHeight {
             ancestor_height: u64::try_from(invalid_height).unwrap().into(),
             block_height: u64::try_from(height).unwrap().into(),
         },
