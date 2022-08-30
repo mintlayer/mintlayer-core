@@ -8,30 +8,12 @@ use crate::{
 };
 
 use super::{
-    combine::combine_amount_delta, DelegationDataDelta, PoSAccountingDelta, PoolDataDelta,
+    combine::combine_amount_delta, sum_maps, DelegationDataDelta, PoSAccountingDelta, PoolDataDelta,
 };
 
 fn signed_to_unsigned_pair((k, v): (H256, SignedAmount)) -> Result<(H256, Amount), Error> {
     let v = v.into_unsigned().ok_or(Error::ArithmeticErrorToUnsignedFailed)?;
     Ok((k, v))
-}
-
-fn sum_maps(
-    mut m1: BTreeMap<H256, Amount>,
-    m2: BTreeMap<H256, SignedAmount>,
-) -> Result<BTreeMap<H256, Amount>, Error> {
-    for (k, v) in m2 {
-        let base_value = match m1.get(&k) {
-            Some(pv) => *pv,
-            None => Amount::from_atoms(0),
-        };
-        let base_amount = base_value.into_signed().ok_or(Error::ArithmeticErrorToUnsignedFailed)?;
-        let new_amount = (base_amount + v).ok_or(Error::ArithmeticErrorSumToSignedFailed)?;
-        let new_amount =
-            new_amount.into_unsigned().ok_or(Error::ArithmeticErrorToUnsignedFailed)?;
-        m1.insert(k, new_amount);
-    }
-    Ok(m1)
 }
 
 impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
