@@ -82,7 +82,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         }
 
         self.store.set_pool_balance(pool_id, pledge_amount)?;
-        self.store.set_pool_data(pool_id, &PoolData::new(decommission_key.clone()))?;
+        self.store.set_pool_data(pool_id, &PoolData::new(decommission_key))?;
 
         Ok(PoSAccountingUndo::CreatePool(CreatePoolUndo {
             input0_outpoint: input0_outpoint.clone(),
