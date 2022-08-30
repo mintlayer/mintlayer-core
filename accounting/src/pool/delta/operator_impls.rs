@@ -10,7 +10,7 @@ use crate::{
     error::Error,
     pool::{
         delegation::DelegationData,
-        helpers::make_pool_id,
+        helpers::{make_delegation_id, make_pool_id},
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
             PoSAccountingOperatorRead, PoSAccountingOperatorWrite, PoSAccountingUndo,
@@ -132,18 +132,57 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
 
     fn create_delegation_id(
         &mut self,
-        _target_pool: H256,
-        _spend_key: PublicKey,
-        _input0_outpoint: &OutPoint,
+        target_pool: H256,
+        spend_key: PublicKey,
+        input0_outpoint: &OutPoint,
     ) -> Result<(H256, PoSAccountingUndo), Error> {
-        todo!()
+        if !self.pool_exists(target_pool)? {
+            return Err(Error::DelegationCreationFailedPoolDoesNotExist);
+        }
+
+        let delegation_id = make_delegation_id(input0_outpoint);
+
+        {
+            let current_delegation_data = self.get_delegation_id_data(delegation_id)?;
+            if current_delegation_data.is_some() {
+                // This should never happen since it's based on an unspent input
+                return Err(Error::InvariantErrorDelegationCreationFailedIdAlreadyExists);
+            }
+        }
+
+        let delegation_data = DelegationData::new(target_pool, spend_key);
+
+        self.delegation_data.insert(
+            delegation_id,
+            super::DelegationDataDelta::Add(Box::new(delegation_data.clone())),
+        );
+
+        Ok((
+            delegation_id,
+            PoSAccountingUndo::CreateDelegationId(CreateDelegationIdUndo {
+                delegation_data,
+                input0_outpoint: input0_outpoint.clone(),
+            }),
+        ))
     }
 
     fn undo_create_delegation_id(
         &mut self,
-        _undo_data: CreateDelegationIdUndo,
+        undo_data: CreateDelegationIdUndo,
     ) -> Result<(), Error> {
-        todo!()
+        let delegation_id = make_delegation_id(&undo_data.input0_outpoint);
+
+        let removed_data = self
+            .get_delegation_id_data(delegation_id)?
+            .ok_or(Error::InvariantErrorDelegationIdUndoFailedNotFound)?;
+
+        if removed_data != undo_data.delegation_data {
+            return Err(Error::InvariantErrorDelegationIdUndoFailedDataConflict);
+        }
+
+        self.delegation_data.remove(&delegation_id);
+
+        Ok(())
     }
 
     fn delegate_staking(
