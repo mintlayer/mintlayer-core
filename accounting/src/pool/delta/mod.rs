@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use common::primitives::{signed_amount::SignedAmount, H256};
+use common::primitives::{signed_amount::SignedAmount, Amount, H256};
 use serialization::{Decode, Encode};
 
 use crate::error::Error;
@@ -10,6 +10,7 @@ use self::combine::{combine_delegation_data, combine_pool_data, combine_signed_a
 use super::{delegation::DelegationData, pool_data::PoolData, view::PoSAccountingView};
 
 mod combine;
+pub mod operator_impls;
 mod view_impl;
 
 #[derive(Clone)]
@@ -120,4 +121,23 @@ fn merge_balance<T: Ord>(
         None => None,
     };
     Ok(())
+}
+
+// TODO: this is used in both operator and view impls. Find an appropriate place for it.
+fn sum_maps(
+    mut m1: BTreeMap<H256, Amount>,
+    m2: BTreeMap<H256, SignedAmount>,
+) -> Result<BTreeMap<H256, Amount>, Error> {
+    for (k, v) in m2 {
+        let base_value = match m1.get(&k) {
+            Some(pv) => *pv,
+            None => Amount::from_atoms(0),
+        };
+        let base_amount = base_value.into_signed().ok_or(Error::ArithmeticErrorToUnsignedFailed)?;
+        let new_amount = (base_amount + v).ok_or(Error::ArithmeticErrorSumToSignedFailed)?;
+        let new_amount =
+            new_amount.into_unsigned().ok_or(Error::ArithmeticErrorToUnsignedFailed)?;
+        m1.insert(k, new_amount);
+    }
+    Ok(m1)
 }
