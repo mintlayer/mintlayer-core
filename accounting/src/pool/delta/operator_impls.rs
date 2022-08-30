@@ -19,7 +19,7 @@ use crate::{
     },
 };
 
-use super::{combine::combine_amount_delta, sum_maps, PoSAccountingDelta};
+use super::{combine::combine_amount_delta, sum_maps, PoSAccountingDelta, PoolDataDelta};
 
 impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
     fn create_pool(
@@ -88,12 +88,46 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         Ok(())
     }
 
-    fn decommission_pool(&mut self, _pool_id: H256) -> Result<PoSAccountingUndo, Error> {
-        todo!()
+    fn decommission_pool(&mut self, pool_id: H256) -> Result<PoSAccountingUndo, Error> {
+        let last_amount = self
+            .get_pool_balance(pool_id)?
+            .ok_or(Error::AttemptedDecommissionNonexistingPoolBalance)?;
+
+        let pool_data = self
+            .get_pool_data(pool_id)?
+            .ok_or(Error::AttemptedDecommissionNonexistingPoolData)?;
+
+        self.pool_balances.remove(&pool_id);
+        self.pool_data.remove(&pool_id);
+
+        Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
+            pool_id,
+            last_amount,
+            pool_data,
+        }))
     }
 
-    fn undo_decommission_pool(&mut self, _undo_data: DecommissionPoolUndo) -> Result<(), Error> {
-        todo!()
+    fn undo_decommission_pool(&mut self, undo_data: DecommissionPoolUndo) -> Result<(), Error> {
+        let current_amount = self.get_pool_balance(undo_data.pool_id)?;
+        if current_amount.is_some() {
+            return Err(Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists);
+        }
+
+        let current_data = self.get_pool_data(undo_data.pool_id)?;
+        if current_data.is_some() {
+            return Err(Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists);
+        }
+
+        self.pool_balances.insert(
+            undo_data.pool_id,
+            undo_data.last_amount.into_signed().expect("TODO"),
+        );
+        self.pool_data.insert(
+            undo_data.pool_id,
+            PoolDataDelta::CreatePool(undo_data.pool_data),
+        );
+
+        Ok(())
     }
 
     fn create_delegation_id(
