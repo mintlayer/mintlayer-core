@@ -85,6 +85,7 @@ impl BlockUndo {
     }
 
     pub fn set_block_reward_undo(&mut self, reward_undo: BlockRewardUndo) {
+        debug_assert!(self.reward_undo.is_none());
         self.reward_undo = Some(reward_undo);
     }
 }

@@ -155,7 +155,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
             let undos = block
                 .transactions()
                 .iter()
-                .map(|tx| cache.spend_utxos_from_tx(tx, block_height).expect("should spend okay."))
+                .map(|tx| cache.connect_transaction(tx, block_height).expect("should spend okay."))
                 .collect_vec();
             BlockUndo::new(Default::default(), undos)
         };
@@ -281,7 +281,7 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
     let tx = block.transactions().get(0).unwrap();
 
     assert_eq!(
-        view.spend_utxos_from_tx(tx, BlockHeight::new(2)).unwrap_err(),
+        view.connect_transaction(tx, BlockHeight::new(2)).unwrap_err(),
         NoUtxoFound
     );
 }

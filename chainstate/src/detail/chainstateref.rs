@@ -557,7 +557,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     ) -> Result<TransactionVerifier<S>, BlockError> {
         let mut tx_verifier =
             TransactionVerifier::new(&self.db_tx, utxo_view.derive_cache(), self.chain_config);
-        block.transactions().iter().enumerate().try_for_each(|(tx_num, _tx)| {
+        block.transactions().iter().rev().enumerate().try_for_each(|(tx_num, _tx)| {
             tx_verifier.disconnect_transaction(BlockTransactableRef::Transaction(block, tx_num))
         })?;
         tx_verifier.disconnect_transaction(BlockTransactableRef::BlockReward(block))?;

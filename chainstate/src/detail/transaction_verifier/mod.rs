@@ -71,7 +71,7 @@ pub struct TransactionVerifier<'a, S> {
     chain_config: &'a ChainConfig,
 }
 
-impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
+impl<'a, S> TransactionVerifier<'a, S> {
     pub fn new(db_tx: &'a S, utxo_cache: UtxosCache<'a>, chain_config: &'a ChainConfig) -> Self {
         Self {
             db_tx,
@@ -566,14 +566,14 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 // verify input signatures
                 self.verify_signatures(tx, spend_height, median_time_past)?;
 
-                // mark tx index as spend
+                // mark tx index as spent
                 let spender = tx.get_id().into();
                 self.spend_tx_index(tx.inputs(), spender)?;
 
                 //spend utxos
                 let tx_undo = self
                     .utxo_cache
-                    .spend_utxos_from_tx(tx, *spend_height)
+                    .connect_transaction(tx, *spend_height)
                     .map_err(ConnectTransactionError::from)?;
 
                 // save spent utxos for undo
@@ -602,7 +602,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 // if block reward has no inputs then only outputs will be added to the utxo set
                 let reward_undo = self
                     .utxo_cache
-                    .spend_utxos_from_block_transactable(
+                    .connect_block_transactable(
                         &reward_transactable,
                         &block.get_id().into(),
                         *spend_height,
@@ -655,7 +655,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                         .tx_undos()
                         .get(tx_num)
                         .ok_or(ConnectTransactionError::MissingTxUndo(tx_num, block_id))?;
-                self.utxo_cache.unspend_utxos_from_tx(tx, tx_undo)?;
+                self.utxo_cache.disconnect_transaction(tx, tx_undo)?;
             }
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.block_reward_transactable();
@@ -678,7 +678,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 let reward_undo =
                     Self::fetch_block_undo(self.db_tx, &mut self.utxo_block_undo, &block.get_id())?
                         .block_reward_undo();
-                self.utxo_cache.unspend_utxos_from_block_transactable(
+                self.utxo_cache.disconnect_block_transactable(
                     &reward_transactable,
                     &block.get_id().into(),
                     reward_undo,

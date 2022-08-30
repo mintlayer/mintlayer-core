@@ -499,9 +499,9 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
 
     // create a new transaction
     let new_tx = Transaction::new(0x00, to_spend.clone(), vec![], 0).expect("should succeed");
-    // let's test `spend_utxos_from_tx`
+    // let's test `connect_transaction`
     let tx_undo = cache
-        .spend_utxos_from_tx(&new_tx, BlockHeight::new(2))
+        .connect_transaction(&new_tx, BlockHeight::new(2))
         .expect("should return txundo");
 
     // check that these utxos came from the tx's output
@@ -569,16 +569,16 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
         InputWitness::NoSignature(None),
     );
     let tx = Transaction::new(0x00, vec![input], create_tx_outputs(&mut rng, 1), 0x01).unwrap();
-    let undo1 = cache.spend_utxos_from_tx(&tx, BlockHeight::new(1)).unwrap();
+    let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
     assert!(undo1.inner().len() == 1);
 
     //undo spending
-    cache.unspend_utxos_from_tx(&tx, &undo1).unwrap();
+    cache.disconnect_transaction(&tx, &undo1).unwrap();
     assert!(cache.has_utxo_in_cache(&outpoint));
 
     //spend the transaction again
-    let undo2 = cache.spend_utxos_from_tx(&tx, BlockHeight::new(1)).unwrap();
+    let undo2 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
     assert_eq!(undo1, undo2);
 }
@@ -613,7 +613,7 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
 
     // spend the utxo in a block reward
     let undo1 = cache
-        .spend_utxos_from_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
+        .connect_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
         .expect("spend should succeed")
         .expect("block undo should contain value");
     assert!(!cache.has_utxo_in_cache(&outpoint));
@@ -621,13 +621,13 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
 
     //undo spending
     cache
-        .unspend_utxos_from_block_transactable(&reward, &block.get_id().into(), Some(&undo1))
+        .disconnect_block_transactable(&reward, &block.get_id().into(), Some(&undo1))
         .unwrap();
     assert!(cache.has_utxo_in_cache(&outpoint));
 
     //spend the reward again
     let undo2 = cache
-        .spend_utxos_from_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
+        .connect_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
         .expect("spend should succeed")
         .expect("block undo should contain value");
     assert!(!cache.has_utxo_in_cache(&outpoint));
@@ -654,20 +654,20 @@ fn check_pow_reward_spend_undo_spend(#[case] seed: Seed) {
 
     // spend the utxo in a block reward
     let undo1 = cache
-        .spend_utxos_from_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
+        .connect_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
         .expect("spend should succeed");
     assert!(cache.has_utxo_in_cache(&outpoint));
     assert!(undo1.is_none());
 
     //undo spending
     cache
-        .unspend_utxos_from_block_transactable(&reward, &block.get_id().into(), None)
+        .disconnect_block_transactable(&reward, &block.get_id().into(), None)
         .unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
 
     //spend the reward again
     let undo2 = cache
-        .spend_utxos_from_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
+        .connect_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
         .expect("spend should succeed");
     assert!(cache.has_utxo_in_cache(&outpoint));
     assert!(undo2.is_none());
@@ -703,14 +703,14 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
 
     // spend the utxo in a block reward
     let undo1 = cache
-        .spend_utxos_from_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
+        .connect_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
         .expect("spend should succeed")
         .expect("block undo should contain value");
     assert!(!cache.has_utxo_in_cache(&outpoint));
     assert!(undo1.inner().len() == 1);
 
     //undo spending
-    let res = cache.unspend_utxos_from_block_transactable(&reward, &block.get_id().into(), None);
+    let res = cache.disconnect_block_transactable(&reward, &block.get_id().into(), None);
     assert_eq!(
         res,
         Err(Error::MissingBlockRewardUndo(block.get_id().into()))

@@ -97,8 +97,8 @@ pub enum ConnectTransactionError {
     SerializationInvariantError(Id<Block>),
     #[error("Timelock rules violated")]
     TimeLockViolation,
-    #[error("Utxo invariant broken: `{0}`")]
-    UtxoInvariantBroken(String),
+    #[error("Utxo invariant broken")]
+    UtxoInvariantBroken,
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
@@ -136,12 +136,8 @@ impl From<utxo::Error> for ConnectTransactionError {
                 })
             }
             utxo::Error::DBError(error) => ConnectTransactionError::StorageError(error),
-            utxo::Error::FreshUtxoAlreadyExists => {
-                ConnectTransactionError::UtxoInvariantBroken(err.to_string())
-            }
-            utxo::Error::OverwritingUtxo => {
-                ConnectTransactionError::UtxoInvariantBroken(err.to_string())
-            }
+            utxo::Error::FreshUtxoAlreadyExists => ConnectTransactionError::UtxoInvariantBroken,
+            utxo::Error::OverwritingUtxo => ConnectTransactionError::UtxoInvariantBroken,
             utxo::Error::NoBlockchainHeightFound => {
                 ConnectTransactionError::BlockHeightArithmeticError
             }

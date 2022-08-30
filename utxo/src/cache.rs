@@ -140,7 +140,7 @@ impl<'a> UtxosCache<'a> {
 
     /// Marks the inputs of a transaction as 'spent', adds outputs to the utxo set.
     /// Returns a TxUndo if function is a success or an error if the tx's input cannot be spent.
-    pub fn spend_utxos_from_tx(
+    pub fn connect_transaction(
         &mut self,
         tx: &Transaction,
         height: BlockHeight,
@@ -154,7 +154,7 @@ impl<'a> UtxosCache<'a> {
     }
 
     // Marks outputs of a transaction as spent and inputs as unspent
-    pub fn unspend_utxos_from_tx(
+    pub fn disconnect_transaction(
         &mut self,
         tx: &Transaction,
         tx_undo: &TxUndo,
@@ -173,7 +173,7 @@ impl<'a> UtxosCache<'a> {
     /// Marks the inputs of a transactable block reward as 'spent', adds outputs to the utxo set.
     /// If BlockRewardTransactable has no inputs then just adds outputs to utxo set.
     /// Returns a BlockRewardUndo if function is a success or an error if the input cannot be spent.
-    pub fn spend_utxos_from_block_transactable(
+    pub fn connect_block_transactable(
         &mut self,
         reward_transactable: &BlockRewardTransactable,
         block_id: &Id<GenBlock>,
@@ -198,7 +198,7 @@ impl<'a> UtxosCache<'a> {
     }
 
     // Marks outputs of a block reward as spent and inputs as unspent.
-    pub fn unspend_utxos_from_block_transactable(
+    pub fn disconnect_block_transactable(
         &mut self,
         reward_transactable: &BlockRewardTransactable,
         block_id: &Id<GenBlock>,
@@ -239,7 +239,9 @@ impl<'a> UtxosCache<'a> {
                 if !possible_overwrite {
                     if !curr_entry.is_spent() {
                         // Attempted to overwrite an existing utxo
-                        return Err(Error::OverwritingUtxo);
+                        let e = Error::OverwritingUtxo;
+                        log::error!("{}", e.to_string());
+                        return Err(e);
                     }
                     // If the utxo exists in this cache as a 'spent' utxo and is DIRTY, then
                     // its spentness hasn't been flushed to the parent cache. We're
@@ -404,8 +406,9 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
                             // exists in the parent cache. If this ever happens, it means
                             // the FRESH flag was misapplied and there is a logic error in
                             // the calling code.
-                            log::error!("CRITICAL: An invariant in Utxo was broken");
-                            return Err(Error::FreshUtxoAlreadyExists);
+                            let e = Error::FreshUtxoAlreadyExists;
+                            log::error!("{}", e.to_string());
+                            return Err(e);
                         }
 
                         if parent_entry.is_fresh() && entry.is_spent() {

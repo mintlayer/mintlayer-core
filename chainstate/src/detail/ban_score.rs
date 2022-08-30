@@ -102,7 +102,7 @@ impl BanScore for ConnectTransactionError {
             &ConnectTransactionError::MissingBlockUndo(_) => 0,
             &ConnectTransactionError::MissingBlockRewardUndo(_) => 0,
             &ConnectTransactionError::MissingTxUndo(_, _) => 0,
-            &ConnectTransactionError::UtxoInvariantBroken(_) => 0,
+            &ConnectTransactionError::UtxoInvariantBroken => 0,
         }
     }
 }
