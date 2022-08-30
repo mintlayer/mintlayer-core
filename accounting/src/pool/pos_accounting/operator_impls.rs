@@ -247,4 +247,8 @@ impl<S: PoSAccountingStorageRead> PoSAccountingOperatorRead for PoSAccounting<S>
     fn get_delegation_id_data(&self, delegation_id: H256) -> Result<Option<DelegationData>, Error> {
         self.store.get_delegation_data(delegation_id).map_err(Error::from)
     }
+
+    fn get_pool_data(&self, pool_id: H256) -> Result<Option<PoolData>, Error> {
+        self.store.get_pool_data(pool_id).map_err(Error::from)
+    }
 }

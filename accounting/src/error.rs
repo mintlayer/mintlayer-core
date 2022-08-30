@@ -64,4 +64,10 @@ pub enum Error {
     DelegationDataCreatedMultipleTimes,
     #[error("Consencutive delegation data deletion")]
     DelegationDataDeletedMultipleTimes,
+    #[error("Remove non-existing delegation data")]
+    RemovingNonexistingDelegationData,
+    #[error("Remove non-existing pool data")]
+    RemovingNonexistingPoolData,
+    #[error("Failed to convert pledge value to signed")]
+    PledgeValueToSignedError,
 }

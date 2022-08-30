@@ -84,4 +84,6 @@ pub trait PoSAccountingOperatorRead {
     fn get_delegation_id_balance(&self, delegation_id: H256) -> Result<Option<Amount>, Error>;
 
     fn get_delegation_id_data(&self, delegation_id: H256) -> Result<Option<DelegationData>, Error>;
+
+    fn get_pool_data(&self, pool_id: H256) -> Result<Option<PoolData>, Error>;
 }
