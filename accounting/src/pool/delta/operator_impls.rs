@@ -120,7 +120,10 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
 
         self.pool_balances.insert(
             undo_data.pool_id,
-            undo_data.last_amount.into_signed().expect("TODO"),
+            undo_data
+                .last_amount
+                .into_signed()
+                .ok_or(Error::ArithmeticErrorToSignedFailed)?,
         );
         self.pool_data.insert(
             undo_data.pool_id,
@@ -187,14 +190,46 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
 
     fn delegate_staking(
         &mut self,
-        _delegation_target: H256,
-        _amount_to_delegate: Amount,
+        delegation_target: H256,
+        amount_to_delegate: Amount,
     ) -> Result<PoSAccountingUndo, Error> {
-        todo!()
+        let pool_id = *self
+            .get_delegation_id_data(delegation_target)?
+            .ok_or(Error::DelegationCreationFailedPoolDoesNotExist)?
+            .source_pool();
+
+        self.add_to_delegation_balance(delegation_target, amount_to_delegate)?;
+
+        self.add_balance_to_pool(pool_id, amount_to_delegate)?;
+
+        self.add_delegation_to_pool_share(pool_id, delegation_target, amount_to_delegate)?;
+
+        Ok(PoSAccountingUndo::DelegateStaking(DelegateStakingUndo {
+            delegation_target,
+            amount_to_delegate,
+        }))
     }
 
-    fn undo_delegate_staking(&mut self, _undo_data: DelegateStakingUndo) -> Result<(), Error> {
-        todo!()
+    fn undo_delegate_staking(&mut self, undo_data: DelegateStakingUndo) -> Result<(), Error> {
+        let pool_id = *self
+            .get_delegation_id_data(undo_data.delegation_target)?
+            .ok_or(Error::InvariantErrorDelegationUndoFailedDataNotFound)?
+            .source_pool();
+
+        self.undo_add_delegation_to_pool_share(
+            pool_id,
+            undo_data.delegation_target,
+            undo_data.amount_to_delegate,
+        )?;
+
+        self.undo_add_balance_to_pool(pool_id, undo_data.amount_to_delegate)?;
+
+        self.undo_add_to_delegation_balance(
+            undo_data.delegation_target,
+            undo_data.amount_to_delegate,
+        )?;
+
+        Ok(())
     }
 }
 

@@ -70,4 +70,6 @@ pub enum Error {
     RemovingNonexistingPoolData,
     #[error("Failed to convert pledge value to signed")]
     PledgeValueToSignedError,
+    #[error("Delegation undo failed; data not found")]
+    InvariantErrorDelegationUndoFailedDataNotFound,
 }

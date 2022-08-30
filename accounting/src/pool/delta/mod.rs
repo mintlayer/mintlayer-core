@@ -108,6 +108,117 @@ impl<'a> PoSAccountingDelta<'a> {
 
         Ok(())
     }
+
+    fn add_value_to_map_for_delegation<K: Ord>(
+        the_map: &mut BTreeMap<K, SignedAmount>,
+        key: K,
+        to_add: Amount,
+    ) -> Result<(), Error> {
+        let signed_amount_to_add =
+            to_add.into_signed().ok_or(Error::ArithmeticErrorToSignedFailed)?;
+        match the_map.entry(key) {
+            std::collections::btree_map::Entry::Vacant(e) => {
+                e.insert(signed_amount_to_add);
+            }
+            std::collections::btree_map::Entry::Occupied(mut e) => {
+                let current_amount = e.get();
+                let new_amount = (*current_amount + signed_amount_to_add)
+                    .ok_or(Error::DelegationBalanceAdditionError)?;
+                let _ = e.insert(new_amount);
+            }
+        }
+        Ok(())
+    }
+
+    fn sub_value_to_map_for_delegation<K: Ord>(
+        the_map: &mut BTreeMap<K, SignedAmount>,
+        key: K,
+        to_add: Amount,
+    ) -> Result<(), Error> {
+        let signed_amount_to_add =
+            to_add.into_signed().ok_or(Error::ArithmeticErrorToSignedFailed)?;
+        match the_map.entry(key) {
+            std::collections::btree_map::Entry::Vacant(e) => {
+                e.insert(signed_amount_to_add);
+            }
+            std::collections::btree_map::Entry::Occupied(mut e) => {
+                let current_amount = e.get();
+                let new_amount = (*current_amount - signed_amount_to_add)
+                    .ok_or(Error::InvariantErrorDelegationBalanceAdditionUndoError)?;
+                let _ = e.insert(new_amount);
+            }
+        }
+        Ok(())
+    }
+
+    fn add_to_delegation_balance(
+        &mut self,
+        delegation_target: H256,
+        amount_to_delegate: Amount,
+    ) -> Result<(), Error> {
+        Self::add_value_to_map_for_delegation(
+            &mut self.delegation_balances,
+            delegation_target,
+            amount_to_delegate,
+        )?;
+
+        Ok(())
+    }
+
+    fn undo_add_to_delegation_balance(
+        &mut self,
+        delegation_target: H256,
+        amount_to_delegate: Amount,
+    ) -> Result<(), Error> {
+        Self::sub_value_to_map_for_delegation(
+            &mut self.delegation_balances,
+            delegation_target,
+            amount_to_delegate,
+        )?;
+        Ok(())
+    }
+
+    fn add_balance_to_pool(&mut self, pool_id: H256, amount_to_add: Amount) -> Result<(), Error> {
+        Self::add_value_to_map_for_delegation(&mut self.pool_balances, pool_id, amount_to_add)?;
+        Ok(())
+    }
+
+    fn undo_add_balance_to_pool(
+        &mut self,
+        pool_id: H256,
+        amount_to_add: Amount,
+    ) -> Result<(), Error> {
+        Self::sub_value_to_map_for_delegation(&mut self.pool_balances, pool_id, amount_to_add)?;
+        Ok(())
+    }
+
+    fn add_delegation_to_pool_share(
+        &mut self,
+        pool_id: H256,
+        delegation_id: H256,
+        amount_to_add: Amount,
+    ) -> Result<(), Error> {
+        Self::add_value_to_map_for_delegation(
+            &mut self.pool_delegation_shares,
+            (pool_id, delegation_id),
+            amount_to_add,
+        )?;
+        Ok(())
+    }
+
+    fn undo_add_delegation_to_pool_share(
+        &mut self,
+        pool_id: H256,
+        delegation_id: H256,
+        amount_to_add: Amount,
+    ) -> Result<(), Error> {
+        Self::sub_value_to_map_for_delegation(
+            &mut self.pool_delegation_shares,
+            (pool_id, delegation_id),
+            amount_to_add,
+        )?;
+        Ok(())
+    }
 }
 
 fn merge_balance<T: Ord>(
