@@ -20,7 +20,7 @@ use std::sync::Mutex;
 use crate::detail::*;
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp},
+        block::timestamp::BlockTimestamp,
         config::create_regtest,
         signature::inputsig::InputWitness,
         tokens::{OutputValue, TokenData},

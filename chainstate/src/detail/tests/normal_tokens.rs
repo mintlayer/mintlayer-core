@@ -331,7 +331,7 @@ fn token_issue_test() {
         ));
 
         // Valid case
-        let value = OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
@@ -347,7 +347,7 @@ fn token_issue_test() {
                         InputWitness::NoSignature(None),
                     ))
                     .add_output(TxOutput::new(
-                        value.clone(),
+                        output_value.clone(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -357,60 +357,126 @@ fn token_issue_test() {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        assert_eq!(block.transactions()[0].outputs()[0].value(), &value);
+        assert_eq!(block.transactions()[0].outputs()[0].value(), &output_value);
     });
 }
 
 #[test]
 fn token_transfer_test() {
     utils::concurrency::model(|| {
-        let mut test_framework = TestFramework::default();
+        let mut tf = TestFramework::default();
+        let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
+
         // Issue a new token
-        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52_292_852_472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
-        })];
-        let block_index =
-            process_token(&mut test_framework, ParentBlock::BestBlock, values.clone())
-                .unwrap()
-                .unwrap();
-        let block = test_framework.block(*block_index.block_id());
+        });
+
+        let block_index = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        genesis_outpoint_id,
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        output_value.clone(),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+        let block = tf.block(*block_index.block_id());
         let token_id = token_id(&block.transactions()[0]).unwrap();
-        assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
+        assert_eq!(block.transactions()[0].outputs()[0].value(), &output_value);
+        let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
 
         // Try to transfer exceed amount
-        let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
-            token_id,
-            amount: Amount::from_atoms(987_654_321_123),
-        })];
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        issuance_outpoint_id.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::TokenTransferV1 {
+                            token_id,
+                            amount: Amount::from_atoms(987_654_321_123),
+                        }),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
         assert!(matches!(
-            process_token(&mut test_framework, ParentBlock::BestBlock, values),
+            result,
             Err(BlockError::StateUpdateFailed(
                 ConnectTransactionError::AttemptToPrintMoney(_, _)
             ))
         ));
 
         // Try to transfer token with wrong id
-        let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
-            token_id: TokenId::random(),
-            amount: Amount::from_atoms(123456789),
-        })];
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        issuance_outpoint_id.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::TokenTransferV1 {
+                            token_id: TokenId::random(),
+                            amount: Amount::from_atoms(123456789),
+                        }),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
         assert!(matches!(
-            process_token(&mut test_framework, ParentBlock::BestBlock, values),
+            result,
             Err(BlockError::StateUpdateFailed(
                 ConnectTransactionError::MissingOutputOrSpent
             ))
         ));
 
         // Try to transfer zero amount
-        let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
-            token_id,
-            amount: Amount::from_atoms(0),
-        })];
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        issuance_outpoint_id.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::TokenTransferV1 {
+                            token_id,
+                            amount: Amount::from_atoms(0),
+                        }),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
         assert!(matches!(
-            process_token(&mut test_framework, ParentBlock::BestBlock, values),
+            result,
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
                     TokensError::TransferZeroTokens(_, _)
@@ -419,11 +485,25 @@ fn token_transfer_test() {
         ));
 
         // Valid case - Transfer tokens
-        let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
-            token_id,
-            amount: Amount::from_atoms(123456789),
-        })];
-        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
+        let _ = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        issuance_outpoint_id,
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::TokenTransferV1 {
+                            token_id,
+                            amount: Amount::from_atoms(123456789),
+                        }),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process()
             .unwrap()
             .unwrap();
     })
@@ -432,41 +512,39 @@ fn token_transfer_test() {
 #[test]
 fn multiple_token_issuance_in_one_tx() {
     utils::concurrency::model(|| {
-        let mut test_framework = TestFramework::default();
-        let parent_block_id = test_framework.best_block_id();
-        let test_block_info = TestBlockInfo::from_id(&test_framework.chainstate, parent_block_id);
-        let receiver = anyonecanspend_address();
+        let mut tf = TestFramework::default();
+        let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
+
+        // Issue a couple of tokens
         let issuance_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         });
-        // Create a token issue transaction and block
-        let inputs = vec![TxInput::new(
-            test_block_info.txns[0].0.clone(),
-            0,
-            InputWitness::NoSignature(None),
-        )];
-        let outputs = vec![
-            TxOutput::new(
-                issuance_value.clone(),
-                OutputPurpose::Transfer(receiver.clone()),
-            ),
-            TxOutput::new(issuance_value, OutputPurpose::Transfer(receiver)),
-        ];
-        let block = Block::new(
-            vec![Transaction::new(0, inputs, outputs, 0).unwrap()],
-            parent_block_id,
-            BlockTimestamp::from_duration_since_epoch(time::get()),
-            ConsensusData::None,
-            BlockReward::new(Vec::new()),
-        )
-        .unwrap();
 
-        // Process it
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        genesis_outpoint_id.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        issuance_value.clone(),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .add_output(TxOutput::new(
+                        issuance_value,
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
         assert!(matches!(
-            test_framework.process_block(block, BlockSource::Local),
+            result,
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
                     TokensError::MultipleTokenIssuanceInTransaction(_, _)
@@ -475,15 +553,33 @@ fn multiple_token_issuance_in_one_tx() {
         ));
 
         // Valid issuance
-        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
-        })];
-        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
+        });
+        let block_index = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        genesis_outpoint_id,
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        output_value.clone(),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process()
             .unwrap()
             .unwrap();
+
+        let block = tf.block(*block_index.block_id());
+        assert_eq!(block.transactions()[0].outputs()[0].value(), &output_value);
     })
 }
 
