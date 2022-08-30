@@ -22,7 +22,6 @@ pub enum PoSAccountingUndo {
     CreatePool {
         input0_outpoint: OutPoint,
         pledge_amount: Amount,
-        decommission_key: PublicKey,
     },
     DecommissionPool {
         pool_id: H256,
@@ -85,7 +84,6 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         Ok(PoSAccountingUndo::CreatePool {
             input0_outpoint: input0_outpoint.clone(),
             pledge_amount,
-            decommission_key,
         })
     }
 
