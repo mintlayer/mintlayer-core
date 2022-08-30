@@ -14,6 +14,7 @@ use crate::{
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
             PoSAccountingOperatorRead, PoSAccountingOperatorWrite, PoSAccountingUndo,
+            SpendFromShareUndo,
         },
         pool_data::PoolData,
     },
@@ -196,20 +197,39 @@ impl<S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccounting<
     fn undo_delegate_staking(&mut self, undo_data: DelegateStakingUndo) -> Result<(), Error> {
         let pool_id = *self.get_delegation_data(undo_data.delegation_target)?.source_pool();
 
-        self.undo_add_delegation_to_pool_share(
+        self.sub_delegation_from_pool_share(
             pool_id,
             undo_data.delegation_target,
             undo_data.amount_to_delegate,
         )?;
 
-        self.undo_add_balance_to_pool(pool_id, undo_data.amount_to_delegate)?;
+        self.sub_balance_from_pool(pool_id, undo_data.amount_to_delegate)?;
 
-        self.undo_add_to_delegation_balance(
+        self.sub_from_delegation_balance(
             undo_data.delegation_target,
             undo_data.amount_to_delegate,
         )?;
 
         Ok(())
+    }
+
+    fn spend_share_from_delegation_id(
+        &mut self,
+        delegation_id: H256,
+        amount: Amount,
+    ) -> Result<PoSAccountingUndo, Error> {
+        let pool_id = *self.get_delegation_data(delegation_id)?.source_pool();
+
+        self.sub_delegation_from_pool_share(pool_id, delegation_id, amount)?;
+
+        self.sub_balance_from_pool(pool_id, amount)?;
+
+        self.sub_from_delegation_balance(delegation_id, amount)?;
+
+        Ok(PoSAccountingUndo::SpendFromShare(SpendFromShareUndo {
+            delegation_id,
+            amount,
+        }))
     }
 }
 

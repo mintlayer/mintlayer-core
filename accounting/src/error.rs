@@ -18,12 +18,18 @@ pub enum Error {
     DelegateToNonexistingId,
     #[error("Delegate to a non-existing pool")]
     DelegateToNonexistingPool,
-    #[error("Delegation arithmetic error")]
+    #[error("Delegation arithmetic add error")]
     DelegationBalanceAdditionError,
-    #[error("Pool balance arithmetic error")]
+    #[error("Delegation arithmetic sub error")]
+    DelegationBalanceSubtractionError,
+    #[error("Pool balance arithmetic add error")]
     PoolBalanceAdditionError,
-    #[error("Delegation shares arithmetic error")]
+    #[error("Pool balance arithmetic sub error")]
+    PoolBalanceSubtractionError,
+    #[error("Delegation shares arithmetic add error")]
     DelegationSharesAdditionError,
+    #[error("Delegation shares arithmetic sub error")]
+    DelegationSharesSubtractionError,
     #[error("Pool creation undo failed; pool balance cannot be found")]
     InvariantErrorPoolCreationReversalFailedBalanceNotFound,
     #[error("Pool creation undo failed; pool balance cannot be found")]

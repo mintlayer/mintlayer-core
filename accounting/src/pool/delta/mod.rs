@@ -130,7 +130,7 @@ impl<'a> PoSAccountingDelta<'a> {
         Ok(())
     }
 
-    fn sub_value_to_map_for_delegation<K: Ord>(
+    fn sub_value_from_map_for_delegation<K: Ord>(
         the_map: &mut BTreeMap<K, SignedAmount>,
         key: K,
         to_add: Amount,
@@ -165,12 +165,12 @@ impl<'a> PoSAccountingDelta<'a> {
         Ok(())
     }
 
-    fn undo_add_to_delegation_balance(
+    fn sub_from_delegation_balance(
         &mut self,
         delegation_target: H256,
         amount_to_delegate: Amount,
     ) -> Result<(), Error> {
-        Self::sub_value_to_map_for_delegation(
+        Self::sub_value_from_map_for_delegation(
             &mut self.delegation_balances,
             delegation_target,
             amount_to_delegate,
@@ -183,12 +183,8 @@ impl<'a> PoSAccountingDelta<'a> {
         Ok(())
     }
 
-    fn undo_add_balance_to_pool(
-        &mut self,
-        pool_id: H256,
-        amount_to_add: Amount,
-    ) -> Result<(), Error> {
-        Self::sub_value_to_map_for_delegation(&mut self.pool_balances, pool_id, amount_to_add)?;
+    fn sub_balance_from_pool(&mut self, pool_id: H256, amount_to_add: Amount) -> Result<(), Error> {
+        Self::sub_value_from_map_for_delegation(&mut self.pool_balances, pool_id, amount_to_add)?;
         Ok(())
     }
 
@@ -206,13 +202,13 @@ impl<'a> PoSAccountingDelta<'a> {
         Ok(())
     }
 
-    fn undo_add_delegation_to_pool_share(
+    fn sub_delegation_from_pool_share(
         &mut self,
         pool_id: H256,
         delegation_id: H256,
         amount_to_add: Amount,
     ) -> Result<(), Error> {
-        Self::sub_value_to_map_for_delegation(
+        Self::sub_value_from_map_for_delegation(
             &mut self.pool_delegation_shares,
             (pool_id, delegation_id),
             amount_to_add,

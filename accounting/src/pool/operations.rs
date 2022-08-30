@@ -29,11 +29,17 @@ pub struct DelegateStakingUndo {
     pub amount_to_delegate: Amount,
 }
 
+pub struct SpendFromShareUndo {
+    pub delegation_id: H256,
+    pub amount: Amount,
+}
+
 pub enum PoSAccountingUndo {
     CreatePool(CreatePoolUndo),
     DecommissionPool(DecommissionPoolUndo),
     CreateDelegationId(CreateDelegationIdUndo),
     DelegateStaking(DelegateStakingUndo),
+    SpendFromShare(SpendFromShareUndo),
 }
 
 use super::{delegation::DelegationData, pool_data::PoolData};
@@ -65,6 +71,12 @@ pub trait PoSAccountingOperatorWrite {
         amount_to_delegate: Amount,
     ) -> Result<PoSAccountingUndo, Error>;
     fn undo_delegate_staking(&mut self, undo_data: DelegateStakingUndo) -> Result<(), Error>;
+
+    fn spend_share_from_delegation_id(
+        &mut self,
+        delegation_id: H256,
+        amount: Amount,
+    ) -> Result<PoSAccountingUndo, Error>;
 }
 
 pub trait PoSAccountingOperatorRead {

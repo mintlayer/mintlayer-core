@@ -36,7 +36,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         Ok(())
     }
 
-    fn undo_add_to_delegation_balance(
+    fn sub_from_delegation_balance(
         &mut self,
         delegation_target: H256,
         amount_to_delegate: Amount,
@@ -45,8 +45,8 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
             .store
             .get_delegation_balance(delegation_target)?
             .ok_or(Error::DelegateToNonexistingId)?;
-        let new_amount =
-            (current_amount - amount_to_delegate).ok_or(Error::DelegationBalanceAdditionError)?;
+        let new_amount = (current_amount - amount_to_delegate)
+            .ok_or(Error::DelegationBalanceSubtractionError)?;
         self.store.set_delegation_balance(delegation_target, new_amount)?;
         Ok(())
     }
@@ -59,14 +59,10 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         Ok(())
     }
 
-    fn undo_add_balance_to_pool(
-        &mut self,
-        pool_id: H256,
-        amount_to_add: Amount,
-    ) -> Result<(), Error> {
+    fn sub_balance_from_pool(&mut self, pool_id: H256, amount_to_add: Amount) -> Result<(), Error> {
         let pool_amount =
             self.store.get_pool_balance(pool_id)?.ok_or(Error::DelegateToNonexistingPool)?;
-        let new_amount = (pool_amount - amount_to_add).ok_or(Error::PoolBalanceAdditionError)?;
+        let new_amount = (pool_amount - amount_to_add).ok_or(Error::PoolBalanceSubtractionError)?;
         self.store.set_pool_balance(pool_id, new_amount)?;
         Ok(())
     }
@@ -87,7 +83,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         Ok(())
     }
 
-    fn undo_add_delegation_to_pool_share(
+    fn sub_delegation_from_pool_share(
         &mut self,
         pool_id: H256,
         delegation_id: H256,
@@ -98,7 +94,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
             .get_pool_delegation_share(pool_id, delegation_id)?
             .ok_or(Error::InvariantErrorDelegationShareNotFound)?;
         let new_amount =
-            (current_amount - amount_to_add).ok_or(Error::DelegationSharesAdditionError)?;
+            (current_amount - amount_to_add).ok_or(Error::DelegationSharesSubtractionError)?;
         if new_amount > Amount::from_atoms(0) {
             self.store.set_pool_delegation_share(pool_id, delegation_id, new_amount)?;
         } else {
