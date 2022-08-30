@@ -147,14 +147,19 @@ impl Libp2pBackend {
         address: Multiaddr,
         response: oneshot::Sender<crate::Result<()>>,
     ) -> crate::Result<()> {
-        log::trace!("dial peer ({peer_id}) at address {address}");
+        log::info!("dial peer ({peer_id}) at address {address}");
 
         match self.swarm.dial(address.clone()) {
             Ok(_) => {
+                log::info!("dial succeeded");
                 self.swarm.behaviour_mut().connmgr.dialing(peer_id, address);
+                log::info!("conn mgr behaviour mut call done");
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
             }
-            Err(err) => response.send(Err(err.into())).map_err(|_| P2pError::ChannelClosed),
+            Err(err) => {
+                log::info!("dial failed");
+                response.send(Err(err.into())).map_err(|_| P2pError::ChannelClosed)
+            }
         }
     }
 

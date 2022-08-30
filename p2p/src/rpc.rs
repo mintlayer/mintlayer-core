@@ -54,7 +54,9 @@ where
     <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
 {
     async fn connect(&self, addr: String) -> rpc::Result<()> {
+        logging::log::info!("call async mut connect");
         let res = self.call_async_mut(|this| Box::pin(this.connect(addr))).await;
+        logging::log::info!("result received: {res:?}");
         handle_error(res)
     }
 

@@ -56,6 +56,7 @@ where
         <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
     {
         let (tx, rx) = oneshot::channel();
+        log::info!("send connect event to peer manager");
         self.p2p
             .tx_swarm
             .send(event::SwarmEvent::Connect(
@@ -65,6 +66,7 @@ where
                 tx,
             ))
             .map_err(|_| P2pError::ChannelClosed)?;
+        log::info!("event send, wait for response");
         rx.await.map_err(P2pError::from)?
     }
 

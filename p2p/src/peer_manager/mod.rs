@@ -316,6 +316,7 @@ where
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
+        log::info!("send connect message to backend");
         self.peer_connectivity_handle.connect(address).await
     }
 
@@ -427,9 +428,10 @@ where
                     // Handle events from an outside controller (rpc, for example) that sets/gets values for PeerManager
                     //
                     event::SwarmEvent::Connect(addr, response) => {
-                        log::debug!("try to establish outbound connection to peer at address {addr}");
+                        log::info!("try to establish outbound connection to peer at address {addr}");
 
-                        let res = self.connect(addr.clone()).await.map(|_| {
+                        let res = self.connect(addr.clone()).await.map(|res| {
+                            log::info!("result received for connect {res:?}");
                             self.pending.insert(addr.clone(), Some(response));
                         });
                         self.handle_result(None, res).await?;

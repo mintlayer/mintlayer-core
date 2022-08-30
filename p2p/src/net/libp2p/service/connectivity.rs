@@ -178,7 +178,7 @@ where
     types::IdentifyInfoWrapper: TryInto<net::types::PeerInfo<T>, Error = P2pError>,
 {
     async fn connect(&mut self, addr: T::Address) -> crate::Result<()> {
-        log::debug!("try to establish an outbound connection, address {addr}");
+        log::info!("try to establish an outbound connection, address {addr}");
 
         let peer_id = PeerId::try_from_multiaddr(&addr).ok_or_else(|| {
             P2pError::ConversionError(ConversionError::InvalidAddress(addr.to_string()))
@@ -191,6 +191,8 @@ where
             peer_addr: addr.clone(),
             response: tx,
         })?;
+
+        log::info!("event sent to libp2p backend, wait for response");
 
         rx.await.map_err(P2pError::from)?.map_err(P2pError::from)
     }
