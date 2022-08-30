@@ -302,7 +302,7 @@ pub fn create_rand_block_undo(
         tx_undo.push(TxUndo::new(tx_utxos));
     }
 
-    BlockUndo::new(reward_undo, tx_undo)
+    BlockUndo::new(Some(reward_undo), tx_undo)
 }
 
 #[cfg(not(loom))]

@@ -516,21 +516,20 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         db_tx: &'a S,
         utxo_block_undo: &'b mut BTreeMap<Id<Block>, BlockUndoEntry>,
         block_id: &Id<Block>,
-    ) -> &'b BlockUndo {
-        &utxo_block_undo
-            .entry(*block_id)
-            .or_insert_with(|| {
+    ) -> Result<&'b BlockUndo, ConnectTransactionError> {
+        match utxo_block_undo.entry(*block_id) {
+            Entry::Occupied(entry) => (Ok(&entry.into_mut().undo)),
+            Entry::Vacant(entry) => {
                 let block_undo = db_tx
-                    .get_undo_data(*block_id)
-                    .map_err(|_| ConnectTransactionError::MissingBlockUndo(*block_id))
-                    .expect("Can't get block undo data")
-                    .expect("Block undo should be initialized");
-                BlockUndoEntry {
+                    .get_undo_data(*block_id)?
+                    .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
+                let block_entry = entry.insert(BlockUndoEntry {
                     undo: block_undo,
                     is_fresh: false,
-                }
-            })
-            .undo
+                });
+                Ok(&block_entry.undo)
+            }
+        }
     }
 
     fn get_or_create_block_undo(&mut self, block_id: &Id<Block>) -> &mut BlockUndo {
@@ -652,7 +651,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 }
 
                 let tx_undo =
-                    Self::fetch_block_undo(self.db_tx, &mut self.utxo_block_undo, &block_id)
+                    Self::fetch_block_undo(self.db_tx, &mut self.utxo_block_undo, &block_id)?
                         .tx_undos()
                         .get(tx_num)
                         .ok_or(ConnectTransactionError::MissingTxUndo(tx_num, block_id))?;
@@ -677,7 +676,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 }
 
                 let reward_undo =
-                    Self::fetch_block_undo(self.db_tx, &mut self.utxo_block_undo, &block.get_id())
+                    Self::fetch_block_undo(self.db_tx, &mut self.utxo_block_undo, &block.get_id())?
                         .block_reward_undo();
                 self.utxo_cache.unspend_utxos_from_block_transactable(
                     &reward_transactable,

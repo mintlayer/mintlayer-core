@@ -60,12 +60,12 @@ impl TxUndo {
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct BlockUndo {
-    reward_undo: BlockRewardUndo,
+    reward_undo: Option<BlockRewardUndo>,
     tx_undos: Vec<TxUndo>,
 }
 
 impl BlockUndo {
-    pub fn new(reward_undo: BlockRewardUndo, tx_undos: Vec<TxUndo>) -> Self {
+    pub fn new(reward_undo: Option<BlockRewardUndo>, tx_undos: Vec<TxUndo>) -> Self {
         Self {
             tx_undos,
             reward_undo,
@@ -80,12 +80,12 @@ impl BlockUndo {
         self.tx_undos.push(tx_undo);
     }
 
-    pub fn block_reward_undo(&self) -> &BlockRewardUndo {
-        &self.reward_undo
+    pub fn block_reward_undo(&self) -> Option<&BlockRewardUndo> {
+        self.reward_undo.as_ref()
     }
 
     pub fn set_block_reward_undo(&mut self, reward_undo: BlockRewardUndo) {
-        self.reward_undo = reward_undo;
+        self.reward_undo = Some(reward_undo);
     }
 }
 
@@ -142,7 +142,7 @@ pub mod test {
         let reward_undo = BlockRewardUndo::new(vec![utxo5]);
 
         let blockundo = BlockUndo::new(
-            reward_undo.clone(),
+            Some(reward_undo.clone()),
             vec![tx_undo0.clone(), tx_undo1.clone()],
         );
 
@@ -152,6 +152,6 @@ pub mod test {
         assert_eq!(&tx_undo0, &inner[0]);
         assert_eq!(&tx_undo1, &inner[1]);
 
-        assert_eq!(&reward_undo, blockundo.block_reward_undo());
+        assert_eq!(&reward_undo, blockundo.block_reward_undo().unwrap());
     }
 }

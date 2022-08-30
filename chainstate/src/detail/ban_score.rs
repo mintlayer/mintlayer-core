@@ -100,6 +100,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::SerializationInvariantError(_) => 100,
             ConnectTransactionError::TimeLockViolation => 100,
             &ConnectTransactionError::MissingBlockUndo(_) => 0,
+            &ConnectTransactionError::MissingBlockRewardUndo(_) => 0,
             &ConnectTransactionError::MissingTxUndo(_, _) => 0,
             &ConnectTransactionError::UtxoInvariantBroken(_) => 0,
         }

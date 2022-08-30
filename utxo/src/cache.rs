@@ -190,8 +190,8 @@ impl<'a> UtxosCache<'a> {
             let source_id = OutPointSourceId::from(*block_id);
             for (idx, output) in outputs.iter().enumerate() {
                 let outpoint = OutPoint::new(source_id.clone(), idx as u32);
-                let utxo = Utxo::new(output.clone(), false, UtxoSource::Blockchain(height));
-                self.add_utxo(&outpoint, utxo, true)?; //true?
+                let utxo = Utxo::new(output.clone(), true, UtxoSource::Blockchain(height));
+                self.add_utxo(&outpoint, utxo, false)?;
             }
         }
         Ok(reward_undo)
@@ -202,7 +202,7 @@ impl<'a> UtxosCache<'a> {
         &mut self,
         reward_transactable: &BlockRewardTransactable,
         block_id: &Id<GenBlock>,
-        reward_undo: &BlockRewardUndo,
+        reward_undo: Option<&BlockRewardUndo>,
     ) -> Result<(), Error> {
         if let Some(outputs) = reward_transactable.outputs() {
             for (i, _) in outputs.iter().enumerate() {
@@ -212,7 +212,8 @@ impl<'a> UtxosCache<'a> {
         }
 
         if let Some(inputs) = reward_transactable.inputs() {
-            for (tx_in, utxo) in inputs.iter().zip(reward_undo.inner().iter()) {
+            let block_undo = reward_undo.ok_or(Error::MissingBlockRewardUndo(*block_id))?;
+            for (tx_in, utxo) in inputs.iter().zip(block_undo.inner().iter()) {
                 self.add_utxo(tx_in.outpoint(), utxo.clone(), false)?;
             }
         }

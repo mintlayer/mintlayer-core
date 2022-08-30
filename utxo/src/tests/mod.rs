@@ -31,7 +31,9 @@ use crate::{
 use common::{
     chain::{
         block::{
-            consensus_data::PoSData, timestamp::BlockTimestamp, Block, BlockReward, ConsensusData,
+            consensus_data::{PoSData, PoWData},
+            timestamp::BlockTimestamp,
+            Block, BlockReward, ConsensusData,
         },
         signature::inputsig::InputWitness,
         OutPoint, OutPointSourceId, Transaction, TxInput,
@@ -341,7 +343,7 @@ fn spend_utxo_test(#[case] seed: Seed) {
     check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                                   None);
     check_spend_utxo(&mut rng, Present, Absent,  None,                               Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
     check_spend_utxo(&mut rng, Present, Spent,   Some((IsFresh::Yes, IsDirty::No)),  Err(Error::UtxoAlreadySpent(id.clone())), None);
-    check_spend_utxo(&mut rng, Present, Spent,   Some((IsFresh::No, IsDirty::Yes)),  Err(Error::UtxoAlreadySpent(id.clone())), Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Present, Spent,   Some((IsFresh::No, IsDirty::Yes)),  Err(Error::UtxoAlreadySpent(id)),         Some((IsFresh::No, IsDirty::Yes)));
     check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
     check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
     check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                                   None);
@@ -584,7 +586,7 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn check_reward_spend_undo_spend(#[case] seed: Seed) {
+fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut cache = UtxosCache::new_for_test(H256::random().into());
 
@@ -619,7 +621,7 @@ fn check_reward_spend_undo_spend(#[case] seed: Seed) {
 
     //undo spending
     cache
-        .unspend_utxos_from_block_transactable(&reward, &block.get_id().into(), &undo1)
+        .unspend_utxos_from_block_transactable(&reward, &block.get_id().into(), Some(&undo1))
         .unwrap();
     assert!(cache.has_utxo_in_cache(&outpoint));
 
@@ -630,4 +632,87 @@ fn check_reward_spend_undo_spend(#[case] seed: Seed) {
         .expect("block undo should contain value");
     assert!(!cache.has_utxo_in_cache(&outpoint));
     assert_eq!(undo1, undo2);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_pow_reward_spend_undo_spend(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let mut cache = UtxosCache::new_for_test(H256::random().into());
+
+    let block = Block::new(
+        vec![],
+        Id::new(H256::random()),
+        BlockTimestamp::from_int_seconds(1),
+        ConsensusData::PoW(PoWData::new(Compact(1), 1)),
+        BlockReward::new(create_tx_outputs(&mut rng, 1)),
+    )
+    .unwrap();
+    let reward = block.block_reward_transactable();
+    let outpoint = OutPoint::new(OutPointSourceId::BlockReward(block.get_id().into()), 0);
+
+    // spend the utxo in a block reward
+    let undo1 = cache
+        .spend_utxos_from_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
+        .expect("spend should succeed");
+    assert!(cache.has_utxo_in_cache(&outpoint));
+    assert!(undo1.is_none());
+
+    //undo spending
+    cache
+        .unspend_utxos_from_block_transactable(&reward, &block.get_id().into(), None)
+        .unwrap();
+    assert!(!cache.has_utxo_in_cache(&outpoint));
+
+    //spend the reward again
+    let undo2 = cache
+        .spend_utxos_from_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
+        .expect("spend should succeed");
+    assert!(cache.has_utxo_in_cache(&outpoint));
+    assert!(undo2.is_none());
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_missing_reward_undo(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let mut cache = UtxosCache::new_for_test(H256::random().into());
+
+    // add 1 utxo to the utxo set
+    let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
+    cache.add_utxo(&outpoint, utxo, false).unwrap();
+
+    let inputs = vec![TxInput::new(
+        outpoint.tx_id(),
+        outpoint.output_index(),
+        InputWitness::NoSignature(None),
+    )];
+    let outputs = create_tx_outputs(&mut rng, 1);
+
+    let block = Block::new(
+        vec![],
+        Id::new(H256::random()),
+        BlockTimestamp::from_int_seconds(1),
+        ConsensusData::PoS(PoSData::new(inputs, Compact(1))),
+        BlockReward::new(outputs),
+    )
+    .unwrap();
+    let reward = block.block_reward_transactable();
+
+    // spend the utxo in a block reward
+    let undo1 = cache
+        .spend_utxos_from_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
+        .expect("spend should succeed")
+        .expect("block undo should contain value");
+    assert!(!cache.has_utxo_in_cache(&outpoint));
+    assert!(undo1.inner().len() == 1);
+
+    //undo spending
+    let res = cache.unspend_utxos_from_block_transactable(&reward, &block.get_id().into(), None);
+    assert_eq!(
+        res,
+        Err(Error::MissingBlockRewardUndo(block.get_id().into()))
+    );
 }

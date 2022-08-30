@@ -15,8 +15,8 @@
 
 use common::{
     chain::{
-        block::Block, OutPointSourceId, SpendError, Spender, TxMainChainIndexError,
-        TxMainChainPosition,
+        block::{Block, GenBlock},
+        OutPointSourceId, SpendError, Spender, TxMainChainIndexError, TxMainChainPosition,
     },
     primitives::{Amount, Id},
 };
@@ -56,6 +56,8 @@ pub enum ConnectTransactionError {
     MissingTxUndo(usize, Id<Block>),
     #[error("While disconnecting a block, block undo info doesn't exist for block `{0}`")]
     MissingBlockUndo(Id<Block>),
+    #[error("While disconnecting a block, block reward undo info doesn't exist for block `{0}`")]
+    MissingBlockRewardUndo(Id<GenBlock>),
     #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     AttemptToPrintMoney(Amount, Amount),
     #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]
@@ -144,6 +146,9 @@ impl From<utxo::Error> for ConnectTransactionError {
                 ConnectTransactionError::BlockHeightArithmeticError
             }
             utxo::Error::NoUtxoFound => ConnectTransactionError::MissingOutputOrSpent,
+            utxo::Error::MissingBlockRewardUndo(id) => {
+                ConnectTransactionError::MissingBlockRewardUndo(id)
+            }
         }
     }
 }

@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use chainstate_types::storage_result;
-use common::chain::OutPointSourceId;
+use common::{
+    chain::{block::GenBlock, OutPointSourceId},
+    primitives::Id,
+};
 use thiserror::Error;
 
 #[derive(Error, Debug, Eq, PartialEq)]
@@ -31,6 +34,8 @@ pub enum Error {
     NoUtxoFound,
     #[error("Attempted to get the block height of a UTXO source that is based on the mempool")]
     NoBlockchainHeightFound,
+    #[error("Block reward undo info is missing while unspending the utxo for block `{0}`")]
+    MissingBlockRewardUndo(Id<GenBlock>),
     #[error("Database error: `{0}`")]
     DBError(storage_result::Error),
 }
