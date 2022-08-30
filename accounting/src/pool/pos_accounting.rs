@@ -18,29 +18,32 @@ use super::{
     view::PoSAccountingView,
 };
 
+pub struct CreatePoolUndo {
+    input0_outpoint: OutPoint,
+    pledge_amount: Amount,
+}
+
+pub struct CreateDelegationIdUndo {
+    delegation_data: DelegationData,
+    input0_outpoint: OutPoint,
+}
+
+pub struct DecommissionPoolUndo {
+    pool_id: H256,
+    last_amount: Amount,
+    pool_data: PoolData,
+}
+
+pub struct DelegateStakingUndo {
+    delegation_target: H256,
+    amount_to_delegate: Amount,
+}
+
 pub enum PoSAccountingUndo {
-    CreatePool {
-        input0_outpoint: OutPoint,
-        pledge_amount: Amount,
-    },
-    DecommissionPool {
-        pool_id: H256,
-        last_amount: Amount,
-        pool_data: PoolData,
-    },
-    CreateDelegationId {
-        delegation_data: DelegationData,
-        input0_outpoint: OutPoint,
-    },
-    AddDelegationBalance {
-        pool_id: H256,
-        delegation_id: H256,
-        amount_to_add: Amount,
-    },
-    DelegateStaking {
-        delegation_target: H256,
-        amount_to_delegate: Amount,
-    },
+    CreatePool(CreatePoolUndo),
+    DecommissionPool(DecommissionPoolUndo),
+    CreateDelegationId(CreateDelegationIdUndo),
+    DelegateStaking(DelegateStakingUndo),
 }
 
 pub struct PoSAccounting<S> {
@@ -81,24 +84,20 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         self.store.set_pool_balance(pool_id, pledge_amount)?;
         self.store.set_pool_data(pool_id, &PoolData::new(decommission_key.clone()))?;
 
-        Ok(PoSAccountingUndo::CreatePool {
+        Ok(PoSAccountingUndo::CreatePool(CreatePoolUndo {
             input0_outpoint: input0_outpoint.clone(),
             pledge_amount,
-        })
+        }))
     }
 
-    pub fn undo_create_pool(
-        &mut self,
-        input0_outpoint: &OutPoint,
-        pledge_amount: Amount,
-    ) -> Result<(), Error> {
-        let pool_id = make_pool_id(input0_outpoint);
+    pub fn undo_create_pool(&mut self, undo_data: CreatePoolUndo) -> Result<(), Error> {
+        let pool_id = make_pool_id(&undo_data.input0_outpoint);
 
         let amount = self.store.get_pool_balance(pool_id)?;
 
         match amount {
             Some(amount) => {
-                if amount != pledge_amount {
+                if amount != undo_data.pledge_amount {
                     return Err(Error::InvariantErrorPoolCreationReversalFailedAmountChanged);
                 }
             }
@@ -132,31 +131,26 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
         self.store.del_pool_balance(pool_id)?;
         self.store.del_pool_data(pool_id)?;
 
-        Ok(PoSAccountingUndo::DecommissionPool {
+        Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
             pool_id,
             last_amount,
             pool_data,
-        })
+        }))
     }
 
-    pub fn undo_decommission_pool(
-        &mut self,
-        pool_id: H256,
-        last_amount: Amount,
-        pool_data: &PoolData,
-    ) -> Result<(), Error> {
-        let current_amount = self.store.get_pool_balance(pool_id)?;
+    pub fn undo_decommission_pool(&mut self, undo_data: DecommissionPoolUndo) -> Result<(), Error> {
+        let current_amount = self.store.get_pool_balance(undo_data.pool_id)?;
         if current_amount.is_some() {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists);
         }
 
-        let current_data = self.store.get_pool_data(pool_id)?;
+        let current_data = self.store.get_pool_data(undo_data.pool_id)?;
         if current_data.is_some() {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists);
         }
 
-        self.store.set_pool_balance(pool_id, last_amount)?;
-        self.store.set_pool_data(pool_id, pool_data)?;
+        self.store.set_pool_balance(undo_data.pool_id, undo_data.last_amount)?;
+        self.store.set_pool_data(undo_data.pool_id, &undo_data.pool_data)?;
 
         Ok(())
     }
@@ -187,26 +181,25 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
 
         Ok((
             delegation_id,
-            PoSAccountingUndo::CreateDelegationId {
+            PoSAccountingUndo::CreateDelegationId(CreateDelegationIdUndo {
                 delegation_data,
                 input0_outpoint: input0_outpoint.clone(),
-            },
+            }),
         ))
     }
 
     pub fn undo_create_delegation_id(
         &mut self,
-        delegation_data: DelegationData,
-        input0_outpoint: &OutPoint,
+        undo_data: CreateDelegationIdUndo,
     ) -> Result<(), Error> {
-        let delegation_id = make_delegation_id(input0_outpoint);
+        let delegation_id = make_delegation_id(&undo_data.input0_outpoint);
 
         let removed_data = self
             .store
             .get_delegation_data(delegation_id)?
             .ok_or(Error::InvariantErrorDelegationIdUndoFailedNotFound)?;
 
-        if removed_data != delegation_data {
+        if removed_data != undo_data.delegation_data {
             return Err(Error::InvariantErrorDelegationIdUndoFailedDataConflict);
         }
 
@@ -314,24 +307,27 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
 
         self.add_delegation_to_pool_share(pool_id, delegation_target, amount_to_delegate)?;
 
-        Ok(PoSAccountingUndo::DelegateStaking {
+        Ok(PoSAccountingUndo::DelegateStaking(DelegateStakingUndo {
             delegation_target,
             amount_to_delegate,
-        })
+        }))
     }
 
-    pub fn undo_delegate_staking(
-        &mut self,
-        delegation_target: H256,
-        amount_to_delegate: Amount,
-    ) -> Result<(), Error> {
-        let pool_id = *self.get_delegation_data(delegation_target)?.source_pool();
+    pub fn undo_delegate_staking(&mut self, undo_data: DelegateStakingUndo) -> Result<(), Error> {
+        let pool_id = *self.get_delegation_data(undo_data.delegation_target)?.source_pool();
 
-        self.undo_add_delegation_to_pool_share(pool_id, delegation_target, amount_to_delegate)?;
+        self.undo_add_delegation_to_pool_share(
+            pool_id,
+            undo_data.delegation_target,
+            undo_data.amount_to_delegate,
+        )?;
 
-        self.undo_add_balance_to_pool(pool_id, amount_to_delegate)?;
+        self.undo_add_balance_to_pool(pool_id, undo_data.amount_to_delegate)?;
 
-        self.undo_add_to_delegation_balance(delegation_target, amount_to_delegate)?;
+        self.undo_add_to_delegation_balance(
+            undo_data.delegation_target,
+            undo_data.amount_to_delegate,
+        )?;
 
         Ok(())
     }
