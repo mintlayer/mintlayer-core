@@ -67,8 +67,8 @@ pub struct BlockUndo {
 impl BlockUndo {
     pub fn new(reward_undo: BlockRewardUndo, tx_undos: Vec<TxUndo>) -> Self {
         Self {
-            tx_undos: tx_undos,
-            reward_undo: reward_undo,
+            tx_undos,
+            reward_undo,
         }
     }
 

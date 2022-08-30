@@ -51,10 +51,10 @@ pub enum ConnectTransactionError {
     #[error("While disconnecting a block, output was erased in a previous step (possible in reorgs with no cache flushing)")]
     MissingOutputOrSpentOutputErasedOnDisconnect,
     #[error(
-        "While disconnecting a block, undo transaction number `{0}` does not exist in block `{1}`"
+        "While disconnecting a block, undo transaction number `{0}` doesn't exist for block `{1}`"
     )]
     MissingTxUndo(usize, Id<Block>),
-    #[error("While disconnecting a block, block undo info does not exist in block `{0}`")]
+    #[error("While disconnecting a block, block undo info doesn't exist for block `{0}`")]
     MissingBlockUndo(Id<Block>),
     #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     AttemptToPrintMoney(Amount, Amount),

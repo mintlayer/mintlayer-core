@@ -287,7 +287,7 @@ impl<'a> UtxosCache<'a> {
             self.utxos.insert(outpoint.clone(), new_entry);
         }
 
-        entry.take_utxo().ok_or(Error::UtxoAlreadySpent(outpoint.tx_id()))
+        entry.take_utxo().ok_or_else(|| Error::UtxoAlreadySpent(outpoint.tx_id()))
     }
 
     /// Checks whether utxo exists in the cache

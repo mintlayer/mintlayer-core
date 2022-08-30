@@ -77,7 +77,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
             db_tx,
             chain_config,
             tx_index_cache: BTreeMap::new(),
-            utxo_cache: utxo_cache,
+            utxo_cache,
             utxo_block_undo: BTreeMap::new(),
         }
     }
@@ -429,7 +429,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 SpendablePosition::Transaction(tx_pos) => {
                     let prev_tx = self
                         .db_tx
-                        .get_mainchain_tx_by_position(&tx_pos)
+                        .get_mainchain_tx_by_position(tx_pos)
                         .map_err(ConnectTransactionError::from)?
                         .ok_or_else(|| {
                             ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(
@@ -469,13 +469,13 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                         .map_err(|_| ConnectTransactionError::SignatureVerificationFailed)?;
                 }
                 SpendablePosition::BlockReward(block_id) => {
-                    let block_index = self.get_gen_block_index(&block_id)?.ok_or_else(|| {
+                    let block_index = self.get_gen_block_index(block_id)?.ok_or_else(|| {
                         // TODO get rid of the coercion
                         let block_id = Id::new(block_id.get());
                         ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(block_id)
                     })?;
 
-                    let outputs = self.block_reward_outputs(&block_id)?;
+                    let outputs = self.block_reward_outputs(block_id)?;
                     let output = outputs.get(input.outpoint().output_index() as usize).ok_or(
                         ConnectTransactionError::OutputIndexOutOfRange {
                             tx_id: None,
@@ -554,9 +554,9 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
                 let block_id = block.get_id();
-                let tx = block.transactions().get(tx_num).ok_or_else(|| {
-                    ConnectTransactionError::TxNumWrongInBlockOnConnect(tx_num, block_id)
-                })?;
+                let tx = block.transactions().get(tx_num).ok_or(
+                    ConnectTransactionError::TxNumWrongInBlockOnConnect(tx_num, block_id),
+                )?;
 
                 // pre-cache all inputs
                 self.precache_inputs(tx.inputs())?;
@@ -633,9 +633,9 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
                 let block_id = block.get_id();
-                let tx = block.transactions().get(tx_num).ok_or_else(|| {
-                    ConnectTransactionError::TxNumWrongInBlockOnDisconnect(tx_num, block_id)
-                })?;
+                let tx = block.transactions().get(tx_num).ok_or(
+                    ConnectTransactionError::TxNumWrongInBlockOnDisconnect(tx_num, block_id),
+                )?;
 
                 // pre-cache all inputs
                 self.precache_inputs(tx.inputs())?;
@@ -652,10 +652,10 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 }
 
                 let tx_undo =
-                    Self::fetch_block_undo(&self.db_tx, &mut self.utxo_block_undo, &block_id)
+                    Self::fetch_block_undo(self.db_tx, &mut self.utxo_block_undo, &block_id)
                         .tx_undos()
                         .get(tx_num)
-                        .ok_or_else(|| ConnectTransactionError::MissingTxUndo(tx_num, block_id))?;
+                        .ok_or(ConnectTransactionError::MissingTxUndo(tx_num, block_id))?;
                 self.utxo_cache.unspend_utxos_from_tx(tx, tx_undo)?;
             }
             BlockTransactableRef::BlockReward(block) => {
@@ -677,7 +677,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 }
 
                 let reward_undo =
-                    Self::fetch_block_undo(&self.db_tx, &mut self.utxo_block_undo, &block.get_id())
+                    Self::fetch_block_undo(self.db_tx, &mut self.utxo_block_undo, &block.get_id())
                         .block_reward_undo();
                 self.utxo_cache.unspend_utxos_from_block_transactable(
                     &reward_transactable,
