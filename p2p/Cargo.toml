@@ -14,6 +14,7 @@ sscanf = "0.3"
 thiserror = "1.0"
 void = "1.0"
 tap = "1.0"
+once_cell = "1.13"
 
 # local dependencies
 common = { path = "../common/" }

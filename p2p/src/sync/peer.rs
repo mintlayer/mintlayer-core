@@ -120,15 +120,21 @@ impl<T: NetworkingService> PeerContext<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::mock::{types, MockService};
+    use crate::net::mock::{
+        transport::{ChannelService, ChannelSocket},
+        types, MockService,
+    };
     use common::chain::block::{
         consensus_data::ConsensusData, timestamp::BlockTimestamp, BlockReward,
     };
     use std::net::SocketAddr;
 
-    fn new_mock_peersyncstate() -> PeerContext<MockService> {
-        let addr: SocketAddr = "[::1]:8888".parse().unwrap();
-        PeerContext::<MockService>::new(types::MockPeerId::from_socket_address(&addr))
+    fn new_mock_peersyncstate() -> PeerContext<MockService<ChannelService>> {
+        // TODO: FIXME:
+        //let addr: SocketAddr = "[::1]:8888".parse().unwrap();
+        PeerContext::<MockService<ChannelService>>::new(types::MockPeerId::from_socket_address::<
+            ChannelService,
+        >(&addr))
     }
 
     #[test]

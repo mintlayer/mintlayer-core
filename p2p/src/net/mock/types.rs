@@ -16,7 +16,6 @@
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
-    net::SocketAddr,
 };
 
 use tokio::sync::oneshot;
@@ -27,12 +26,12 @@ use serialization::{Decode, Encode};
 
 use crate::{
     error, message,
-    net::{self, types::Protocol},
+    net::{self, mock::transport::TransportService, types::Protocol},
 };
 
-pub enum Command {
+pub enum Command<T: TransportService> {
     Connect {
-        address: SocketAddr,
+        address: T::Address,
         response: oneshot::Sender<crate::Result<()>>,
     },
     Disconnect {
@@ -72,17 +71,17 @@ pub enum SyncingEvent {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum ConnectivityEvent {
+pub enum ConnectivityEvent<T: TransportService> {
     InboundAccepted {
-        address: SocketAddr,
+        address: T::Address,
         peer_info: MockPeerInfo,
     },
     OutboundAccepted {
-        address: SocketAddr,
+        address: T::Address,
         peer_info: MockPeerInfo,
     },
     ConnectionError {
-        address: SocketAddr,
+        address: T::Address,
         error: error::P2pError,
     },
     ConnectionClosed {
@@ -91,10 +90,10 @@ pub enum ConnectivityEvent {
 }
 
 // TODO: use two events, one for txs and one for blocks?
-pub enum PubSubEvent {
+pub enum PubSubEvent<T: TransportService> {
     /// Message received from one of the pubsub topics
     Announcement {
-        peer_id: SocketAddr,
+        peer_id: T::Address,
         topic: net::types::PubSubTopic,
         message: message::Announcement,
     },
@@ -131,7 +130,7 @@ impl MockPeerId {
         Self(rng.gen::<u64>())
     }
 
-    pub fn from_socket_address(addr: &SocketAddr) -> Self {
+    pub fn from_socket_address<T: TransportService>(addr: &T::Address) -> Self {
         let mut hasher = DefaultHasher::new();
         addr.hash(&mut hasher);
         Self(hasher.finish())

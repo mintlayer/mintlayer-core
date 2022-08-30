@@ -16,16 +16,15 @@
 pub mod backend;
 pub mod peer;
 pub mod request_manager;
+// TODO: FIXME: fix/remove the socket module.
 pub mod socket;
+pub mod transport;
 pub mod types;
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
-use tokio::{
-    net::TcpListener,
-    sync::{mpsc, oneshot},
-};
+use tokio::sync::{mpsc, oneshot};
 
 use logging::log;
 
@@ -35,47 +34,53 @@ use crate::{
     message,
     net::{
         self,
+        mock::transport::{SocketService, TransportService},
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent, ValidationResult},
         ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,
     },
 };
 
 #[derive(Debug)]
-pub struct MockService;
+pub struct MockService<T: TransportService + 'static>(PhantomData<T>);
 
 #[derive(Debug, Copy, Clone)]
 pub struct MockMessageId(u64);
 
-pub struct MockConnectivityHandle<T: NetworkingService> {
+pub struct MockConnectivityHandle<T: NetworkingService, U: TransportService> {
     /// Socket address of the network service provider
-    local_addr: SocketAddr,
+    local_addr: U::Address,
 
     /// Peer ID of local node
     peer_id: types::MockPeerId,
 
     /// TX channel for sending commands to mock backend
-    cmd_tx: mpsc::Sender<types::Command>,
+    cmd_tx: mpsc::Sender<types::Command<U>>,
 
     /// RX channel for receiving connectivity events from mock backend
-    conn_rx: mpsc::Receiver<types::ConnectivityEvent>,
+    conn_rx: mpsc::Receiver<types::ConnectivityEvent<U>>,
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
-pub struct MockPubSubHandle<T>
+pub struct MockPubSubHandle<T, U>
 where
     T: NetworkingService,
+    U: TransportService,
 {
     /// TX channel for sending commands to mock backend
-    _cmd_tx: mpsc::Sender<types::Command>,
+    _cmd_tx: mpsc::Sender<types::Command<U>>,
 
     /// RX channel for receiving pubsub events from mock backend
-    _pubsub_rx: mpsc::Receiver<types::PubSubEvent>,
+    _pubsub_rx: mpsc::Receiver<types::PubSubEvent<U>>,
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
-pub struct MockSyncingMessagingHandle<T: NetworkingService> {
+pub struct MockSyncingMessagingHandle<T, U>
+where
+    T: NetworkingService,
+    U: TransportService,
+{
     /// TX channel for sending commands to mock backend
-    cmd_tx: mpsc::Sender<types::Command>,
+    cmd_tx: mpsc::Sender<types::Command<U>>,
 
     /// RX channel for receiving syncing events
     sync_rx: mpsc::Receiver<types::SyncingEvent>,
@@ -100,14 +105,18 @@ where
 }
 
 #[async_trait]
-impl NetworkingService for MockService {
-    type Address = SocketAddr;
+impl<T> NetworkingService for MockService<T>
+where
+    T: TransportService,
+    T::Socket: SocketService<T>,
+{
+    type Address = T::Address;
     type PeerId = types::MockPeerId;
     type SyncingPeerRequestId = types::MockRequestId;
     type PubSubMessageId = MockMessageId;
-    type ConnectivityHandle = MockConnectivityHandle<Self>;
-    type PubSubHandle = MockPubSubHandle<Self>;
-    type SyncingMessagingHandle = MockSyncingMessagingHandle<Self>;
+    type ConnectivityHandle = MockConnectivityHandle<Self, T>;
+    type PubSubHandle = MockPubSubHandle<Self, T>;
+    type SyncingMessagingHandle = MockSyncingMessagingHandle<Self, T>;
 
     async fn start(
         addr: Self::Address,
@@ -122,11 +131,11 @@ impl NetworkingService for MockService {
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (pubsub_tx, _pubsub_rx) = mpsc::channel(16);
         let (sync_tx, sync_rx) = mpsc::channel(16);
-        let socket = TcpListener::bind(addr).await?;
+        let socket = T::bind(addr).await?;
         let local_addr = socket.local_addr().expect("to have bind address available");
 
         tokio::spawn(async move {
-            let mut backend = backend::Backend::new(
+            let mut backend = backend::Backend::<T>::new(
                 local_addr,
                 socket,
                 Arc::clone(&_config),
@@ -146,7 +155,7 @@ impl NetworkingService for MockService {
             Self::ConnectivityHandle {
                 local_addr,
                 cmd_tx: cmd_tx.clone(),
-                peer_id: types::MockPeerId::from_socket_address(&local_addr),
+                peer_id: types::MockPeerId::from_socket_address::<T>(&local_addr),
                 conn_rx,
                 _marker: Default::default(),
             },
@@ -165,10 +174,11 @@ impl NetworkingService for MockService {
 }
 
 #[async_trait]
-impl<T> ConnectivityService<T> for MockConnectivityHandle<T>
+impl<T, U> ConnectivityService<T> for MockConnectivityHandle<T, U>
 where
-    T: NetworkingService<Address = SocketAddr, PeerId = types::MockPeerId> + Send,
+    T: NetworkingService<Address = U::Address, PeerId = types::MockPeerId> + Send,
     types::MockPeerInfo: TryInto<net::types::PeerInfo<T>, Error = P2pError>,
+    U: TransportService,
 {
     async fn connect(&mut self, address: T::Address) -> crate::Result<()> {
         log::debug!(
@@ -248,9 +258,10 @@ where
 }
 
 #[async_trait]
-impl<T> PubSubService<T> for MockPubSubHandle<T>
+impl<T, U> PubSubService<T> for MockPubSubHandle<T, U>
 where
     T: NetworkingService<PeerId = types::MockPeerId> + Send,
+    U: TransportService,
 {
     async fn publish(&mut self, _announcement: message::Announcement) -> crate::Result<()> {
         todo!();
@@ -275,10 +286,11 @@ where
 }
 
 #[async_trait]
-impl<T> SyncingMessagingService<T> for MockSyncingMessagingHandle<T>
+impl<T, U> SyncingMessagingService<T> for MockSyncingMessagingHandle<T, U>
 where
     T: NetworkingService<PeerId = types::MockPeerId, SyncingPeerRequestId = types::MockRequestId>
         + Send,
+    U: TransportService,
 {
     async fn send_request(
         &mut self,

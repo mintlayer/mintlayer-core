@@ -21,18 +21,21 @@
 //! and advertise via the `Hello` message. Until the peer ID has been received, the
 //! peers are distinguished by their socket addresses.
 
+use std::{collections::HashMap, io::ErrorKind, sync::Arc};
+
 use crate::{
     error::{DialError, P2pError, PeerError},
     message,
-    net::mock::{peer, request_manager, socket, types},
+    net::mock::{
+        peer, request_manager,
+        transport::{SocketService, TransportService},
+        types,
+    },
 };
 use common::chain::ChainConfig;
 use futures::FutureExt;
 use logging::log;
-use std::sync::Arc;
-use std::{collections::HashMap, io::ErrorKind, net::SocketAddr};
 use tokio::{
-    net::{TcpListener, TcpStream},
     sync::{mpsc, oneshot},
     time::timeout,
 };
@@ -44,32 +47,32 @@ struct PeerContext {
 }
 
 #[derive(Debug)]
-enum ConnectionState {
+enum ConnectionState<T: TransportService> {
     /// Connection established for outbound connection
-    OutboundAccepted { address: SocketAddr },
+    OutboundAccepted { address: T::Address },
 
     /// Connection established for inbound connection
-    InboundAccepted { address: SocketAddr },
+    InboundAccepted { address: T::Address },
 }
 
-pub struct Backend {
+pub struct Backend<T: TransportService> {
     /// Socket address of the backend
-    address: SocketAddr,
+    address: T::Address,
 
     /// Socket for listening to incoming connections
-    socket: TcpListener,
+    socket: T::Socket,
 
     /// Chain config
     config: Arc<ChainConfig>,
 
     /// RX channel for receiving commands from the frontend
-    cmd_rx: mpsc::Receiver<types::Command>,
+    cmd_rx: mpsc::Receiver<types::Command<T>>,
 
     /// Active peers
     peers: HashMap<types::MockPeerId, PeerContext>,
 
     /// Pending connections
-    pending: HashMap<types::MockPeerId, (mpsc::Sender<types::MockEvent>, ConnectionState)>,
+    pending: HashMap<types::MockPeerId, (mpsc::Sender<types::MockEvent>, ConnectionState<T>)>,
 
     /// RX channel for receiving events from peers
     #[allow(clippy::type_complexity)]
@@ -79,13 +82,13 @@ pub struct Backend {
     ),
 
     /// TX channel for sending events to the frontend
-    conn_tx: mpsc::Sender<types::ConnectivityEvent>,
+    conn_tx: mpsc::Sender<types::ConnectivityEvent<T>>,
 
     /// TX channel for sending syncing events
     sync_tx: mpsc::Sender<types::SyncingEvent>,
 
     /// TX channel for sending events to the frontend
-    _pubsub_tx: mpsc::Sender<types::PubSubEvent>,
+    _pubsub_tx: mpsc::Sender<types::PubSubEvent<T>>,
 
     /// Timeout for outbound operations
     timeout: std::time::Duration,
@@ -97,15 +100,19 @@ pub struct Backend {
     request_mgr: request_manager::RequestManager,
 }
 
-impl Backend {
+impl<T> Backend<T>
+where
+    T: TransportService + 'static,
+    T::Socket: SocketService<T>,
+{
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        address: SocketAddr,
-        socket: TcpListener,
+        address: T::Address,
+        socket: T::Socket,
         config: Arc<ChainConfig>,
-        cmd_rx: mpsc::Receiver<types::Command>,
-        conn_tx: mpsc::Sender<types::ConnectivityEvent>,
-        _pubsub_tx: mpsc::Sender<types::PubSubEvent>,
+        cmd_rx: mpsc::Receiver<types::Command<T>>,
+        conn_tx: mpsc::Sender<types::ConnectivityEvent<T>>,
+        _pubsub_tx: mpsc::Sender<types::PubSubEvent<T>>,
         sync_tx: mpsc::Sender<types::SyncingEvent>,
         timeout: std::time::Duration,
     ) -> Self {
@@ -121,7 +128,7 @@ impl Backend {
             peers: HashMap::new(),
             pending: HashMap::new(),
             peer_chan: mpsc::channel(64),
-            local_peer_id: types::MockPeerId::from_socket_address(&address),
+            local_peer_id: types::MockPeerId::from_socket_address::<T>(&address),
             request_mgr: request_manager::RequestManager::new(),
         }
     }
@@ -133,14 +140,15 @@ impl Backend {
     /// `pending` to `peers` and the front-end is notified about the peer.
     async fn create_peer(
         &mut self,
-        socket: TcpStream,
+        socket: T::Socket,
         local_peer_id: types::MockPeerId,
         remote_peer_id: types::MockPeerId,
         role: peer::Role,
-        state: ConnectionState,
+        state: ConnectionState<T>,
     ) -> crate::Result<()> {
         let (tx, rx) = mpsc::channel(16);
-        let socket = socket::MockSocket::new(socket);
+        // TODO: FIXME:
+        //let socket = socket::MockSocket::new(socket);
 
         self.pending.insert(remote_peer_id, (tx, state));
 
@@ -149,7 +157,7 @@ impl Backend {
 
         tokio::spawn(async move {
             if let Err(err) =
-                peer::Peer::new(local_peer_id, remote_peer_id, role, config, socket, tx, rx)
+                peer::Peer::<T>::new(local_peer_id, remote_peer_id, role, config, socket, tx, rx)
                     .start()
                     .await
             {
@@ -163,7 +171,7 @@ impl Backend {
     /// Try to establish connection with a remote peer
     async fn connect(
         &mut self,
-        address: SocketAddr,
+        address: T::Address,
         response: oneshot::Sender<crate::Result<()>>,
     ) -> crate::Result<()> {
         if self.address == address {
@@ -176,13 +184,13 @@ impl Backend {
             response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
         }
 
-        match timeout(self.timeout, TcpStream::connect(address)).await {
+        match timeout(self.timeout, T::connect(address)).await {
             Ok(event) => match event {
                 Ok(socket) => {
                     self.create_peer(
                         socket,
                         self.local_peer_id,
-                        types::MockPeerId::from_socket_address(&address),
+                        types::MockPeerId::from_socket_address::<T>(&address),
                         peer::Role::Outbound,
                         ConnectionState::OutboundAccepted { address },
                     )
@@ -318,7 +326,7 @@ impl Backend {
                         self.create_peer(
                             info.0,
                             self.local_peer_id,
-                            types::MockPeerId::from_socket_address(&info.1),
+                            types::MockPeerId::from_socket_address::<T>(&info.1),
                             peer::Role::Inbound,
                             ConnectionState::InboundAccepted { address: info.1 }
                         ).await?;

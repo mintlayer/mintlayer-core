@@ -18,8 +18,10 @@ use p2p::{
     event::{PubSubControlEvent, SwarmEvent},
     message::Announcement,
     net::{
-        self, libp2p::Libp2pService, mock::MockService, ConnectivityService, NetworkingService,
-        PubSubService, SyncingMessagingService,
+        self,
+        libp2p::Libp2pService,
+        mock::{transport::ChannelService, MockService},
+        ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,
     },
     pubsub::PubSubMessageHandler,
     sync::BlockSyncManager,
@@ -157,5 +159,7 @@ async fn invalid_sync_block_libp2p() {
 
 #[tokio::test]
 async fn invalid_sync_block_mock() {
-    invalid_sync_block::<MockService>(make_mock_addr(), make_mock_addr()).await;
+    // TODO: FIXME:
+    //invalid_sync_block::<MockService>(make_mock_addr(), make_mock_addr()).await;
+    invalid_sync_block::<MockService<ChannelService>>(1, 2).await;
 }
