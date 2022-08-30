@@ -61,8 +61,31 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         }))
     }
 
-    fn undo_create_pool(&mut self, _undo_data: CreatePoolUndo) -> Result<(), Error> {
-        todo!()
+    fn undo_create_pool(&mut self, undo_data: CreatePoolUndo) -> Result<(), Error> {
+        let pool_id = make_pool_id(&undo_data.input0_outpoint);
+
+        let amount = self.get_pool_balance(pool_id)?;
+
+        match amount {
+            Some(amount) => {
+                if amount != undo_data.pledge_amount {
+                    return Err(Error::InvariantErrorPoolCreationReversalFailedAmountChanged);
+                }
+            }
+            None => return Err(Error::InvariantErrorPoolCreationReversalFailedBalanceNotFound),
+        }
+
+        let pool_data = self.get_pool_data(pool_id)?;
+        {
+            if pool_data.is_none() {
+                return Err(Error::InvariantErrorPoolCreationReversalFailedDataNotFound);
+            }
+        }
+
+        self.pool_balances.remove(&pool_id);
+        self.pool_data.remove(&pool_id);
+
+        Ok(())
     }
 
     fn decommission_pool(&mut self, _pool_id: H256) -> Result<PoSAccountingUndo, Error> {
