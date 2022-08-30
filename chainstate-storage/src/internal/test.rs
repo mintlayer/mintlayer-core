@@ -21,7 +21,7 @@ use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
-use utxo::{BlockUndo, TxUndo};
+use utxo::{BlockRewardUndo, BlockUndo, TxUndo};
 
 type TestStore = crate::inmemory::Store;
 
@@ -277,27 +277,32 @@ pub fn create_rand_block_undo(
     rng: &mut impl Rng,
     max_lim_of_utxos: u8,
     max_lim_of_tx_undos: u8,
-    block_height: BlockHeight,
 ) -> BlockUndo {
     let mut counter: u64 = 0;
 
-    let mut block_undo: Vec<TxUndo> = vec![];
+    let mut reward_utxos: Vec<Utxo> = vec![];
+    let utxo_rng = rng.gen_range(1..max_lim_of_utxos);
+    for i in 0..utxo_rng {
+        counter += u64::from(i);
+        reward_utxos.push(create_rand_utxo(rng, counter));
+    }
+    let reward_undo = BlockRewardUndo::new(reward_utxos);
 
+    let mut tx_undo = vec![];
     let undo_rng = rng.gen_range(1..max_lim_of_tx_undos);
     for _ in 0..undo_rng {
-        let mut tx_undo = vec![];
-
+        let mut tx_utxos = vec![];
         let utxo_rng = rng.gen_range(1..max_lim_of_utxos);
         for i in 0..utxo_rng {
             counter += u64::from(i);
 
-            tx_undo.push(create_rand_utxo(rng, counter));
+            tx_utxos.push(create_rand_utxo(rng, counter));
         }
 
-        block_undo.push(TxUndo::new(tx_undo));
+        tx_undo.push(TxUndo::new(tx_utxos));
     }
 
-    BlockUndo::new(block_undo, block_height)
+    BlockUndo::new(reward_undo, tx_undo)
 }
 
 #[cfg(not(loom))]
@@ -306,7 +311,7 @@ pub fn create_rand_block_undo(
 #[case(Seed::from_entropy())]
 fn undo_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let block_undo0 = create_rand_block_undo(&mut rng, 10, 5, BlockHeight::new(1));
+    let block_undo0 = create_rand_block_undo(&mut rng, 10, 5);
     // create id:
     let id0: Id<Block> = Id::new(H256::random());
 
@@ -325,7 +330,7 @@ fn undo_test(#[case] seed: Seed) {
 
     // insert, remove, and reinsert the next block_undo
 
-    let block_undo1 = create_rand_block_undo(&mut rng, 5, 10, BlockHeight::new(2));
+    let block_undo1 = create_rand_block_undo(&mut rng, 5, 10);
     // create id:
     let id1: Id<Block> = Id::new(H256::random());
 

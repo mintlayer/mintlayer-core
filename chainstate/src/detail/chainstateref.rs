@@ -528,9 +528,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         let mut tx_verifier =
             TransactionVerifier::new(&self.db_tx, utxo_view.derive_cache(), self.chain_config);
 
-        let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
-        tx_verifier.check_block_reward(block, block_subsidy)?;
-
         tx_verifier.connect_transaction(
             BlockTransactableRef::BlockReward(block),
             spend_height,
@@ -546,6 +543,9 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 blockreward_maturity,
             )?;
         }
+
+        let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
+        tx_verifier.check_block_reward(block, block_subsidy)?;
 
         Ok(tx_verifier)
     }

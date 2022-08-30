@@ -38,7 +38,7 @@ use common::{
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 use utils::ensure;
-use utxo::{BlockUndo, ConsumedUtxoCache, FlushableUtxoView, UtxosCache, UtxosDBMut, UtxosView};
+use utxo::{BlockUndo, ConsumedUtxoCache, FlushableUtxoView, UtxosCache, UtxosDBMut};
 
 use self::error::ConnectTransactionError;
 
@@ -219,6 +219,69 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         }
         Ok(())
     }
+    fn get_output_value(
+        outputs: &[TxOutput],
+        output_index: usize,
+        spender_id: Spender,
+    ) -> Result<&OutputValue, ConnectTransactionError> {
+        let output =
+            outputs
+                .get(output_index)
+                .ok_or(ConnectTransactionError::OutputIndexOutOfRange {
+                    tx_id: Some(spender_id),
+                    source_output_index: output_index,
+                })?;
+        Ok(output.value())
+    }
+
+    fn calculate_coins_total_inputs(
+        &self,
+        inputs: &[TxInput],
+    ) -> Result<Amount, ConnectTransactionError> {
+        let mut total = Amount::from_atoms(0);
+        for (_input_idx, input) in inputs.iter().enumerate() {
+            let outpoint = input.outpoint();
+            let tx_index = match self.tx_index_cache.get(&outpoint.tx_id()) {
+                Some(tx_index_op) => match tx_index_op {
+                    CachedInputsOperation::Write(tx_index) => tx_index,
+                    CachedInputsOperation::Read(tx_index) => tx_index,
+                    CachedInputsOperation::Erase => {
+                        return Err(ConnectTransactionError::PreviouslyCachedInputWasErased)
+                    }
+                },
+                None => return Err(ConnectTransactionError::PreviouslyCachedInputNotFound),
+            };
+            let output_index = outpoint.output_index() as usize;
+
+            let output_amount = match tx_index.position() {
+                common::chain::SpendablePosition::Transaction(tx_pos) => {
+                    let tx = self
+                        .db_tx
+                        .get_mainchain_tx_by_position(tx_pos)
+                        .map_err(ConnectTransactionError::from)?
+                        .ok_or_else(|| {
+                            ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(
+                                tx_pos.clone(),
+                            )
+                        })?;
+
+                    Self::get_output_value(tx.outputs(), output_index, tx.get_id().into())
+                        .cloned()?
+                }
+                common::chain::SpendablePosition::BlockReward(block_id) => {
+                    let outputs = self.block_reward_outputs(block_id)?;
+                    Self::get_output_value(&outputs, output_index, (*block_id).into()).cloned()?
+                }
+            };
+            match output_amount {
+                OutputValue::Coin(output_amount) => {
+                    total = (total + output_amount)
+                        .ok_or(ConnectTransactionError::InputAdditionError)?
+                }
+            }
+        }
+        Ok(total)
+    }
 
     fn check_transferred_amounts_and_get_fee(
         &self,
@@ -242,29 +305,6 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
             inputs_total,
             outputs_total,
         ))
-    }
-
-    fn calculate_coins_total_inputs(
-        &self,
-        inputs: &[TxInput],
-    ) -> Result<Amount, ConnectTransactionError> {
-        let amounts = inputs
-            .iter()
-            .map(|input| {
-                let utxo = self
-                    .utxo_cache
-                    .utxo(input.outpoint())
-                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
-                let amount = match utxo.output().value() {
-                    OutputValue::Coin(amount) => *amount,
-                };
-                Ok(amount)
-            })
-            .collect::<Result<Vec<Amount>, ConnectTransactionError>>()?;
-        amounts
-            .iter()
-            .try_fold(Amount::from_atoms(0), |total, amount| total + *amount)
-            .ok_or(ConnectTransactionError::OutputAdditionError)
     }
 
     fn calculate_coins_total_outputs(
