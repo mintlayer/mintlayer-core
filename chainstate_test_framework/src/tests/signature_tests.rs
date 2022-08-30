@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::primitives::Idable;
 use common::{
     chain::{
         signature::{
@@ -26,7 +27,8 @@ use common::{
 };
 use crypto::key::{KeyKind, PrivateKey};
 
-use crate::detail::tests::{test_framework::TransactionBuilder, *};
+use crate::TestFramework;
+use crate::TransactionBuilder;
 
 #[test]
 fn signed_tx() {
@@ -39,7 +41,7 @@ fn signed_tx() {
         // genesis block.
         let tx_1 = TransactionBuilder::new()
             .add_input(TxInput::new(
-                OutPointSourceId::BlockReward(tf.chainstate.chain_config.genesis_block_id()),
+                OutPointSourceId::BlockReward(tf.chainstate.get_chain_config().genesis_block_id()),
                 0,
                 InputWitness::NoSignature(None),
             ))

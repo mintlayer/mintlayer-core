@@ -22,9 +22,13 @@ mod transaction_builder;
 pub type TestStore = chainstate_storage::inmemory::Store;
 
 /// Chainstate instantiation for testing, using the in-memory storage backend
-pub type TestChainstate = crate::Chainstate<TestStore>;
+pub type TestChainstate = Box<dyn chainstate::chainstate_interface::ChainstateInterface>;
 
-pub use self::{
-    block_builder::BlockBuilder, framework::TestFramework, framework_builder::TestFrameworkBuilder,
+pub use {
+    block_builder::BlockBuilder, framework::anyonecanspend_address, framework::empty_witness,
+    framework::TestBlockInfo, framework::TestFramework, framework_builder::TestFrameworkBuilder,
     transaction_builder::TransactionBuilder,
 };
+
+#[cfg(test)]
+mod tests;

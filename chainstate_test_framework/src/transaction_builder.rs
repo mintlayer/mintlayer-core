@@ -14,11 +14,8 @@
 // limitations under the License.
 
 use common::{
-    chain::{
-        signature::inputsig::InputWitness, tokens::OutputValue, Destination, OutPointSourceId,
-        OutputPurpose, Transaction, TxInput, TxOutput,
-    },
-    primitives::{Amount, Id, H256},
+    chain::{tokens::OutputValue, Destination, OutputPurpose, Transaction, TxInput, TxOutput},
+    primitives::Amount,
 };
 
 /// The transaction builder.
@@ -84,6 +81,11 @@ impl TransactionBuilder {
 
 #[test]
 fn build_transaction() {
+    use common::chain::signature::inputsig::InputWitness;
+    use common::chain::OutPointSourceId;
+    use common::primitives::Id;
+    use common::primitives::H256;
+
     let flags = 1;
     let lock_time = 2;
     let input = TxInput::new(

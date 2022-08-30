@@ -6,6 +6,7 @@ use std::{
     time::Duration,
 };
 
+use common::time_getter::TimeGetter;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, GenBlock},
@@ -17,17 +18,12 @@ use common::{
     primitives::{time, Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 
-use crate::{
-    detail::{
-        median_time::calculate_median_time_past,
-        tests::{
-            anyonecanspend_address,
-            test_framework::{TestFramework, TransactionBuilder},
-        },
-        transaction_verifier::error::ConnectTransactionError,
-    },
-    BlockError, TimeGetter,
-};
+use crate::anyonecanspend_address;
+use crate::TestFramework;
+use crate::TransactionBuilder;
+use chainstate::BlockError;
+use chainstate::ChainstateError;
+use chainstate::ConnectTransactionError;
 
 #[test]
 fn output_lock_until_height() {
@@ -54,7 +50,9 @@ fn output_lock_until_height() {
                 )
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TimeLockViolation
+            ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
 
@@ -94,7 +92,9 @@ fn output_lock_until_height() {
                     )
                     .build_and_process()
                     .unwrap_err(),
-                BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::TimeLockViolation
+                ))
             );
             assert_eq!(
                 tf.best_block_index().block_height(),
@@ -169,7 +169,9 @@ fn output_lock_until_height_but_spend_at_same_block() {
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TimeLockViolation
+            ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
@@ -201,7 +203,9 @@ fn output_lock_for_block_count() {
                 )
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TimeLockViolation
+            ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
 
@@ -241,7 +245,9 @@ fn output_lock_for_block_count() {
                     )
                     .build_and_process()
                     .unwrap_err(),
-                BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::TimeLockViolation
+                ))
             );
             assert_eq!(
                 tf.best_block_index().block_height(),
@@ -309,7 +315,9 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TimeLockViolation
+            ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
@@ -340,7 +348,9 @@ fn output_lock_for_block_count_attempted_overflow() {
                 )
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(ConnectTransactionError::BlockHeightArithmeticError)
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::BlockHeightArithmeticError
+            ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
     });
@@ -385,8 +395,7 @@ fn output_lock_until_time() {
         // Skip the genesis block and the block that contains the locked output.
         for (block_time, height) in block_times.iter().skip(2).zip(expected_height..) {
             assert_eq!(
-                calculate_median_time_past(&tf.chainstate.make_db_tx_ro(), &tf.best_block_id())
-                    .as_int_seconds(),
+                tf.chainstate.calculate_median_time_past(&tf.best_block_id()).as_int_seconds(),
                 median_block_time(&block_times[..=height])
             );
 
@@ -402,7 +411,9 @@ fn output_lock_until_time() {
                     .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
                     .build_and_process()
                     .unwrap_err(),
-                BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::TimeLockViolation
+                ))
             );
             assert_eq!(
                 tf.best_block_index().block_height(),
@@ -480,7 +491,9 @@ fn output_lock_until_time_but_spend_at_same_block() {
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TimeLockViolation
+            ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
@@ -526,8 +539,7 @@ fn output_lock_for_seconds() {
         // Skip the genesis block and the block that contains the locked output.
         for (block_time, height) in block_times.iter().skip(2).zip(expected_height..) {
             assert_eq!(
-                calculate_median_time_past(&tf.chainstate.make_db_tx_ro(), &tf.best_block_id())
-                    .as_int_seconds(),
+                tf.chainstate.calculate_median_time_past(&tf.best_block_id()).as_int_seconds(),
                 median_block_time(&block_times[..=height])
             );
 
@@ -543,7 +555,9 @@ fn output_lock_for_seconds() {
                     .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
                     .build_and_process()
                     .unwrap_err(),
-                BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::TimeLockViolation
+                ))
             );
             assert_eq!(
                 tf.best_block_index().block_height(),
@@ -619,7 +633,9 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TimeLockViolation
+            ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
@@ -648,7 +664,9 @@ fn output_lock_for_seconds_attempted_overflow() {
                 )
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(ConnectTransactionError::BlockTimestampArithmeticError)
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::BlockTimestampArithmeticError
+            ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
     });

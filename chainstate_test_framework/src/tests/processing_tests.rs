@@ -13,9 +13,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::{sync::atomic::Ordering, time::Duration};
 
-use chainstate_storage::BlockchainStorageRead;
+use crate::TestFramework;
+use chainstate::BlockError;
+use chainstate::BlockSource;
+use chainstate::ChainstateError;
+use chainstate::CheckBlockError;
+use chainstate::OrphanCheckError;
+use chainstate_types::GenBlockIndex;
+use chainstate_types::PropertyQueryError;
+use common::chain::block::timestamp::BlockTimestamp;
+use common::chain::block::ConsensusData;
+use common::chain::Block;
+use common::chain::Destination;
+use common::chain::GenBlock;
+use common::chain::OutPointSourceId;
+use common::chain::TxOutput;
+use common::primitives::Amount;
+use common::primitives::BlockHeight;
+use common::primitives::Id;
+use common::primitives::Idable;
+use common::time_getter::TimeGetter;
 use common::{
     chain::{
         block::consensus_data::PoWData,
@@ -27,39 +47,16 @@ use common::{
     primitives::Compact,
     Uint256,
 };
-use consensus::{BlockIndexHandle, ConsensusPoWError, ConsensusVerificationError};
+use consensus::{ConsensusPoWError, ConsensusVerificationError};
 use crypto::key::{KeyKind, PrivateKey};
+use crypto::random::Rng;
+use test_utils::random::make_seedable_rng;
+use test_utils::random::Seed;
 
-use crate::{
-    detail::{
-        median_time::calculate_median_time_past,
-        tests::{
-            test_framework::{TestFramework, TestStore},
-            *,
-        },
-    },
-    make_chainstate, ChainstateConfig,
-};
-
-#[test]
-fn process_genesis_block() {
-    utils::concurrency::model(|| {
-        let mut tf = TestFramework::builder().build_no_genesis();
-        let genesis_id = tf.genesis().get_id();
-
-        tf.chainstate.process_genesis().unwrap();
-        let chainstate = tf.chainstate.make_db_tx_ro();
-
-        // Check the genesis block is properly set up
-        assert_eq!(tf.best_block_id(), genesis_id);
-        let genesis_index = chainstate.get_gen_block_index(&genesis_id.into()).unwrap().unwrap();
-        assert_eq!(genesis_index.block_height(), BlockHeight::from(0));
-        assert_eq!(genesis_index.block_id(), genesis_id);
-        let block_at_0 = chainstate.get_block_id_by_height(&BlockHeight::from(0)).unwrap().unwrap();
-        assert_eq!(block_at_0, genesis_id);
-        assert_eq!(genesis_index.chain_trust(), &Uint256::from_u64(0));
-    });
-}
+use crate::TestBlockInfo;
+use crate::TestStore;
+use chainstate::{make_chainstate, ChainstateConfig};
+use rstest::rstest;
 
 #[rstest]
 #[trace]
@@ -84,12 +81,14 @@ fn orphans_chains(#[case] seed: Seed) {
                 .build();
             assert_eq!(
                 tf.process_block(current_block.clone(), BlockSource::Local).unwrap_err(),
-                BlockError::OrphanCheckFailed(OrphanCheckError::LocalOrphan)
+                ChainstateError::ProcessBlockError(BlockError::OrphanCheckFailed(
+                    OrphanCheckError::LocalOrphan
+                ))
             );
             // The genesis block is still the best one, because we are processing orphan blocks.
             assert_eq!(tf.best_block_id(), tf.genesis().get_id());
-            assert!(tf.chainstate.orphan_blocks.is_already_an_orphan(&current_block.get_id()));
-            assert_eq!(tf.chainstate.orphan_blocks.len(), orphan_count);
+            assert!(tf.chainstate.is_already_an_orphan(&current_block.get_id()));
+            assert_eq!(tf.chainstate.orphans_count(), orphan_count);
         }
 
         // now we submit the missing block (at height 1), and we expect all blocks to be processed
@@ -101,7 +100,7 @@ fn orphans_chains(#[case] seed: Seed) {
         );
         let current_best = tf
             .best_block_id()
-            .classify(&tf.chainstate.chain_config)
+            .classify(&tf.chainstate.get_chain_config())
             .chain_block_id()
             .unwrap();
         assert_eq!(
@@ -109,18 +108,8 @@ fn orphans_chains(#[case] seed: Seed) {
             (MAX_ORPHANS_COUNT_IN_TEST as u64).into()
         );
         // There should be no more orphan blocks left.
-        assert_eq!(tf.chainstate.orphan_blocks.len(), 0);
+        assert_eq!(tf.chainstate.orphans_count(), 0);
     });
-}
-
-#[test]
-#[should_panic(expected = "Best block ID not initialized")]
-fn empty_chainstate_no_genesis() {
-    utils::concurrency::model(|| {
-        let tf = TestFramework::builder().build_no_genesis();
-        // This panics
-        let _ = tf.chainstate.query().get_best_block_id();
-    })
 }
 
 #[rstest]
@@ -138,7 +127,6 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         for tx in block.transactions() {
             assert_eq!(
                 tf.chainstate
-                    .chainstate_storage
                     .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
                     .unwrap(),
                 None
@@ -153,7 +141,6 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         for tx in block.transactions() {
             let tx_index = tf
                 .chainstate
-                .chainstate_storage
                 .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
                 .unwrap()
                 .unwrap();
@@ -179,7 +166,6 @@ fn straight_chain(#[case] seed: Seed) {
 
         let genesis_index = tf
             .chainstate
-            .make_db_tx_ro()
             .get_gen_block_index(&tf.genesis().get_id().into())
             .unwrap()
             .unwrap();
@@ -188,16 +174,13 @@ fn straight_chain(#[case] seed: Seed) {
         assert_eq!(genesis_index.chain_trust(), &Uint256::from_u64(0));
         assert_eq!(genesis_index.block_height(), BlockHeight::new(0));
 
-        let chain_config_clone = tf.chainstate.chain_config.clone();
+        let chain_config_clone = tf.chainstate.get_chain_config();
         let mut block_index =
             GenBlockIndex::Genesis(Arc::clone(chain_config_clone.genesis_block()));
-        let mut prev_block = TestBlockInfo::from_genesis(tf.genesis());
+        let mut prev_block = TestBlockInfo::from_genesis(&tf.genesis());
 
         for _ in 0..rng.gen_range(100..200) {
-            assert_eq!(
-                tf.chainstate.chainstate_storage.get_best_block_id().unwrap().unwrap(),
-                prev_block.id
-            );
+            assert_eq!(tf.chainstate.get_best_block_id().unwrap(), prev_block.id);
             let prev_block_id = block_index.block_id();
             let best_block_id = tf.best_block_id();
             assert_eq!(best_block_id, block_index.block_id());
@@ -233,12 +216,11 @@ fn get_ancestor_invalid_height(#[case] seed: Seed) {
 
     let invalid_height = height + 1;
     assert_eq!(
-        chainstate_types::PropertyQueryError::InvalidAncestorHeight {
+        ChainstateError::FailedToReadProperty(PropertyQueryError::InvalidAncestorHeight {
             ancestor_height: u64::try_from(invalid_height).unwrap().into(),
             block_height: u64::try_from(height).unwrap().into(),
-        },
+        }),
         tf.chainstate
-            .make_db_tx_ro()
             .get_ancestor(
                 &tf.best_block_index(),
                 u64::try_from(invalid_height).unwrap().into()
@@ -276,7 +258,6 @@ fn get_ancestor(#[case] seed: Seed) {
         assert_eq!(
             <Id<GenBlock>>::from(*tf.index_at(i as usize).block_id()),
             tf.chainstate
-                .make_db_tx()
                 .get_ancestor(&split, i.into())
                 .unwrap_or_else(|_| panic!("Ancestor of height {} not reached", i))
                 .block_id()
@@ -303,7 +284,6 @@ fn get_ancestor(#[case] seed: Seed) {
     assert_eq!(
         last_block_in_first_chain.block_id(),
         tf.chainstate
-            .make_db_tx()
             .get_ancestor(
                 &last_block_in_first_chain,
                 u64::try_from(FIRST_CHAIN_HEIGHT).unwrap().into()
@@ -315,7 +295,6 @@ fn get_ancestor(#[case] seed: Seed) {
     assert_eq!(
         ancestor.block_id(),
         tf.chainstate
-            .make_db_tx()
             .get_ancestor(
                 &last_block_in_first_chain,
                 u64::try_from(ANCESTOR_HEIGHT).unwrap().into()
@@ -327,7 +306,6 @@ fn get_ancestor(#[case] seed: Seed) {
     assert_eq!(
         ancestor_in_first_chain.block_id(),
         tf.chainstate
-            .make_db_tx()
             .get_ancestor(
                 &last_block_in_first_chain,
                 u64::try_from(ANCESTOR_IN_FIRST_CHAIN_HEIGHT).unwrap().into()
@@ -347,7 +325,6 @@ fn get_ancestor(#[case] seed: Seed) {
     assert_eq!(
         ancestor.block_id(),
         tf.chainstate
-            .make_db_tx_ro()
             .get_ancestor(
                 &tf.block_index(&last_block_in_second_chain),
                 u64::try_from(ANCESTOR_HEIGHT).unwrap().into()
@@ -371,7 +348,7 @@ fn last_common_ancestor(#[case] seed: Seed) {
 
     tf.create_chain(&tf.genesis().get_id().into(), SPLIT_HEIGHT, &mut rng)
         .expect("Chain creation to succeed");
-    let config_clone = tf.chainstate.chain_config.clone();
+    let config_clone = tf.chainstate.get_chain_config();
     let genesis = GenBlockIndex::Genesis(Arc::clone(config_clone.genesis_block()));
     let split = GenBlockIndex::Block(tf.index_at(SPLIT_HEIGHT).clone());
 
@@ -396,7 +373,6 @@ fn last_common_ancestor(#[case] seed: Seed) {
 
     assert_eq!(
         tf.chainstate
-            .make_db_tx()
             .last_common_ancestor(&last_block_in_first_chain, &last_block_in_second_chain)
             .unwrap()
             .block_id(),
@@ -405,7 +381,6 @@ fn last_common_ancestor(#[case] seed: Seed) {
 
     assert_eq!(
         tf.chainstate
-            .make_db_tx()
             .last_common_ancestor(&last_block_in_second_chain, &last_block_in_first_chain)
             .unwrap()
             .block_id(),
@@ -414,7 +389,6 @@ fn last_common_ancestor(#[case] seed: Seed) {
 
     assert_eq!(
         tf.chainstate
-            .make_db_tx()
             .last_common_ancestor(&last_block_in_first_chain, &last_block_in_first_chain)
             .unwrap()
             .block_id(),
@@ -422,11 +396,7 @@ fn last_common_ancestor(#[case] seed: Seed) {
     );
 
     assert_eq!(
-        tf.chainstate
-            .make_db_tx()
-            .last_common_ancestor(&genesis, &split)
-            .unwrap()
-            .block_id(),
+        tf.chainstate.last_common_ancestor(&genesis, &split).unwrap().block_id(),
         genesis.block_id()
     );
 }
@@ -477,7 +447,7 @@ fn consensus_type(#[case] seed: Seed) {
 
     let reward_lock_distance: i64 = tf
         .chainstate
-        .chain_config
+        .get_chain_config()
         .get_proof_of_work_config()
         .reward_maturity_distance()
         .into();
@@ -490,8 +460,10 @@ fn consensus_type(#[case] seed: Seed) {
             .with_consensus_data(ConsensusData::PoW(PoWData::new(Compact(0), 0)))
             .build_and_process()
             .unwrap_err(),
-        BlockError::CheckBlockFailed(CheckBlockError::ConsensusVerificationFailed(
-            ConsensusVerificationError::ConsensusTypeMismatch(..)
+        ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+            CheckBlockError::ConsensusVerificationFailed(
+                ConsensusVerificationError::ConsensusTypeMismatch(..)
+            )
         ))
     ));
 
@@ -506,8 +478,10 @@ fn consensus_type(#[case] seed: Seed) {
             .add_test_transaction(&mut rng)
             .build_and_process()
             .unwrap_err(),
-        BlockError::CheckBlockFailed(CheckBlockError::ConsensusVerificationFailed(
-            ConsensusVerificationError::ConsensusTypeMismatch(..)
+        ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+            CheckBlockError::ConsensusVerificationFailed(
+                ConsensusVerificationError::ConsensusTypeMismatch(..)
+            )
         ))
     ));
 
@@ -547,8 +521,10 @@ fn consensus_type(#[case] seed: Seed) {
 
     assert!(matches!(
         tf.process_block(mined_block, BlockSource::Local).unwrap_err(),
-        BlockError::CheckBlockFailed(CheckBlockError::ConsensusVerificationFailed(
-            ConsensusVerificationError::ConsensusTypeMismatch(..)
+        ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+            CheckBlockError::ConsensusVerificationFailed(
+                ConsensusVerificationError::ConsensusTypeMismatch(..)
+            )
         ))
     ));
 
@@ -564,14 +540,16 @@ fn consensus_type(#[case] seed: Seed) {
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build_and_process()
             .unwrap_err(),
-        BlockError::CheckBlockFailed(CheckBlockError::ConsensusVerificationFailed(
-            ConsensusVerificationError::ConsensusTypeMismatch(..)
+        ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+            CheckBlockError::ConsensusVerificationFailed(
+                ConsensusVerificationError::ConsensusTypeMismatch(..)
+            )
         ))
     ));
 
     let reward_lock_distance: i64 = tf
         .chainstate
-        .chain_config
+        .get_chain_config()
         .get_proof_of_work_config()
         .reward_maturity_distance()
         .into();
@@ -632,7 +610,7 @@ fn pow(#[case] seed: Seed) {
 
     let reward_lock_distance: i64 = tf
         .chainstate
-        .chain_config
+        .get_chain_config()
         .get_proof_of_work_config()
         .reward_maturity_distance()
         .into();
@@ -655,9 +633,9 @@ fn pow(#[case] seed: Seed) {
         .expect("generate invalid block");
     assert!(matches!(
         tf.process_block(random_invalid_block.clone(), BlockSource::Local),
-        Err(BlockError::CheckBlockFailed(
-            CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoWError(
-                ConsensusPoWError::InvalidPoW(_)
+        Err(ChainstateError::ProcessBlockError(
+            BlockError::CheckBlockFailed(CheckBlockError::ConsensusVerificationFailed(
+                ConsensusVerificationError::PoWError(ConsensusPoWError::InvalidPoW(_))
             ))
         ))
     ));
@@ -703,7 +681,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
 
     let reward_lock_distance: i64 = tf
         .chainstate
-        .chain_config
+        .get_chain_config()
         .get_proof_of_work_config()
         .reward_maturity_distance()
         .into();
@@ -741,22 +719,20 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
     };
     tf.process_block(block, BlockSource::Local).unwrap();
 
-    let block_index = tf.chainstate.query().get_best_block_index().unwrap().unwrap();
+    let block_index = tf.chainstate.get_best_block_index().unwrap();
     let block_index = match block_index {
         GenBlockIndex::Block(bi) => bi,
         GenBlockIndex::Genesis(_) => unreachable!(),
     };
 
     {
-        let block_reward = tf.chainstate.query().get_block_reward(&block_index).unwrap().unwrap();
+        let block_reward = tf.chainstate.get_block_reward(&block_index).unwrap().unwrap();
 
         assert_eq!(block_reward.outputs(), expected_block_reward);
     }
 
     {
-        let block_index_handle = &tf.chainstate.make_db_tx_ro() as &dyn BlockIndexHandle;
-
-        let block_reward = block_index_handle.get_block_reward(&block_index).unwrap().unwrap();
+        let block_reward = tf.chainstate.get_block_reward(&block_index).unwrap().unwrap();
 
         assert_eq!(block_reward.outputs(), expected_block_reward);
     }
@@ -783,30 +759,23 @@ fn blocks_from_the_future() {
 
         {
             // ensure no blocks are in chain, so that median time can be the genesis time
-            let current_height: u64 = tf
-                .chainstate
-                .query()
-                .get_best_block_index()
-                .unwrap()
-                .unwrap()
-                .block_height()
-                .into();
+            let current_height: u64 =
+                tf.chainstate.get_best_block_index().unwrap().block_height().into();
             assert_eq!(current_height, 0);
         }
 
         {
             // constrain the test to protect this test becoming legacy by changing the definition of median time for genesis
-            let chainstate_ref = tf.chainstate.make_db_tx_ro();
             assert_eq!(
-                calculate_median_time_past(&chainstate_ref, &tf.genesis().get_id().into()),
-                tf.chainstate.chain_config.genesis_block().timestamp()
+                tf.chainstate.calculate_median_time_past(&tf.genesis().get_id().into()),
+                tf.chainstate.get_chain_config().genesis_block().timestamp()
             );
         }
 
         {
             // submit a block on the threshold of being rejected for being from the future
             let max_future_offset =
-                tf.chainstate.chain_config.max_future_block_time_offset().as_secs();
+                tf.chainstate.get_chain_config().max_future_block_time_offset().as_secs();
 
             tf.make_block_builder()
                 .with_timestamp(BlockTimestamp::from_int_seconds(
@@ -820,7 +789,7 @@ fn blocks_from_the_future() {
         {
             // submit a block a second after the allowed threshold in the future
             let max_future_offset =
-                tf.chainstate.chain_config.max_future_block_time_offset().as_secs();
+                tf.chainstate.get_chain_config().max_future_block_time_offset().as_secs();
 
             assert_eq!(
                 tf.make_block_builder()
@@ -829,7 +798,9 @@ fn blocks_from_the_future() {
                     ))
                     .build_and_process()
                     .unwrap_err(),
-                BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture)
+                ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::BlockFromTheFuture
+                ))
             );
         }
 
@@ -842,7 +813,9 @@ fn blocks_from_the_future() {
                     ))
                     .build_and_process()
                     .unwrap_err(),
-                BlockError::CheckBlockFailed(CheckBlockError::BlockTimeOrderInvalid)
+                ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::BlockTimeOrderInvalid
+                ))
             );
         }
     });

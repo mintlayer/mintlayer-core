@@ -20,9 +20,14 @@ pub use interface::chainstate_interface_impl_delegation;
 
 pub mod rpc;
 
+pub use crate::detail::calculate_median_time_past;
+pub use crate::detail::CheckBlockError;
+pub use crate::detail::CheckBlockTransactionsError;
+pub use crate::detail::ConnectTransactionError;
+pub use crate::detail::OrphanCheckError;
 pub use crate::{
     config::ChainstateConfig,
-    detail::{ban_score, BlockError, BlockSource, Locator},
+    detail::{ban_score, BlockError, BlockSource, Locator, HEADER_LIMIT},
 };
 
 mod config;
@@ -38,7 +43,8 @@ use common::{
 
 use chainstate_interface::ChainstateInterface;
 use chainstate_interface_impl::ChainstateInterfaceImpl;
-use detail::{time_getter::TimeGetter, Chainstate};
+use common::time_getter::TimeGetter;
+use detail::Chainstate;
 
 #[derive(Debug, Clone)]
 pub enum ChainstateEvent {

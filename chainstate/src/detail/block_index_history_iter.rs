@@ -63,51 +63,128 @@ impl<'a, H: BlockIndexHandle> Iterator for BlockIndexHistoryIterator<'a, H> {
 
 #[cfg(test)]
 mod tests {
-    use common::primitives::{Idable, H256};
-
-    use crate::{detail::tests::TestFramework, BlockSource};
-
     use super::*;
+    use chainstate_storage::inmemory::Store;
+    use common::chain::block::timestamp::BlockTimestamp;
+    use common::chain::block::BlockReward;
+    use common::chain::block::ConsensusData;
+    use common::chain::config::Builder as ChainConfigBuilder;
+    use common::chain::config::ChainType;
+    use common::chain::Block;
+    use common::chain::Destination;
+    use common::chain::NetUpgrades;
+    use common::primitives::id::WithId;
+    use common::primitives::time;
+    use common::primitives::{Idable, H256};
+    use common::time_getter::TimeGetter;
+    use std::sync::Arc;
+
+    use crate::detail::Chainstate;
+    use crate::BlockSource;
+    use crate::ChainstateConfig;
 
     #[test]
     fn history_iteration() {
         utils::concurrency::model(|| {
-            let mut tf = TestFramework::default();
+            let chain_config = ChainConfigBuilder::new(ChainType::Mainnet)
+                .net_upgrades(NetUpgrades::unit_tests())
+                .genesis_unittest(Destination::AnyoneCanSpend)
+                .build();
+            let chainstate_config = ChainstateConfig::default();
+            let chainstate_storage = Store::new_empty().unwrap();
+            let time_getter = TimeGetter::default();
+            let mut chainstate = Chainstate::new(
+                Arc::new(chain_config),
+                chainstate_config,
+                chainstate_storage,
+                None,
+                time_getter,
+            )
+            .unwrap();
 
             // put three blocks in a chain after genesis
-            let block1 = tf.make_block_builder().build();
-            tf.process_block(block1.clone(), BlockSource::Local).unwrap();
+            let transactions = Vec::new();
+            let prev_block_hash = chainstate.query().get_best_block_id().unwrap();
+            let timestamp = BlockTimestamp::from_duration_since_epoch(time::get());
+            let reward = BlockReward::new(Vec::new());
 
-            let block2 = tf.make_block_builder().build();
-            tf.process_block(block2.clone(), BlockSource::Local).unwrap();
+            let block1 = Block::new(
+                transactions,
+                prev_block_hash,
+                timestamp,
+                ConsensusData::None,
+                reward,
+            )
+            .unwrap();
+            chainstate
+                .process_block(WithId::new(block1.clone()), BlockSource::Local)
+                .unwrap();
 
-            let block3 = tf.make_block_builder().build();
-            tf.process_block(block3.clone(), BlockSource::Local).unwrap();
+            let transactions = Vec::new();
+            let prev_block_hash = chainstate.query().get_best_block_id().unwrap();
+            let timestamp = BlockTimestamp::from_duration_since_epoch(time::get());
+            let reward = BlockReward::new(Vec::new());
+
+            let block2 = Block::new(
+                transactions,
+                prev_block_hash,
+                timestamp,
+                ConsensusData::None,
+                reward,
+            )
+            .unwrap();
+            chainstate
+                .process_block(WithId::new(block2.clone()), BlockSource::Local)
+                .unwrap();
+
+            let transactions = Vec::new();
+            let prev_block_hash = chainstate.query().get_best_block_id().unwrap();
+            let timestamp = BlockTimestamp::from_duration_since_epoch(time::get());
+            let reward = BlockReward::new(Vec::new());
+            let block3 = Block::new(
+                transactions,
+                prev_block_hash,
+                timestamp,
+                ConsensusData::None,
+                reward,
+            )
+            .unwrap();
+            chainstate
+                .process_block(WithId::new(block3.clone()), BlockSource::Local)
+                .unwrap();
 
             ///// test history iterator - start from tip
             {
-                let chainstate_ref = tf.chainstate.make_db_tx_ro();
+                let chainstate_ref = chainstate.make_db_tx_ro();
                 let mut iter =
                     BlockIndexHistoryIterator::new(block3.get_id().into(), &chainstate_ref);
                 assert_eq!(iter.next().unwrap().block_id(), block3.get_id());
                 assert_eq!(iter.next().unwrap().block_id(), block2.get_id());
                 assert_eq!(iter.next().unwrap().block_id(), block1.get_id());
-                assert_eq!(iter.next().unwrap().block_id(), tf.genesis().get_id());
+                assert_eq!(
+                    iter.next().unwrap().block_id(),
+                    chainstate.chain_config.genesis_block_id()
+                );
                 assert!(iter.next().is_none());
             }
 
             ///// test history iterator - start from genesis
             {
-                let chainstate_ref = tf.chainstate.make_db_tx_ro();
-                let mut iter =
-                    BlockIndexHistoryIterator::new(tf.genesis().get_id().into(), &chainstate_ref);
-                assert_eq!(iter.next().unwrap().block_id(), tf.genesis().get_id(),);
+                let chainstate_ref = chainstate.make_db_tx_ro();
+                let mut iter = BlockIndexHistoryIterator::new(
+                    chainstate.chain_config.genesis_block_id(),
+                    &chainstate_ref,
+                );
+                assert_eq!(
+                    iter.next().unwrap().block_id(),
+                    chainstate.chain_config.genesis_block_id()
+                );
                 assert!(iter.next().is_none());
             }
 
             ///// test history iterator - start from an invalid non-existing block id
             {
-                let chainstate_ref = tf.chainstate.make_db_tx_ro();
+                let chainstate_ref = chainstate.make_db_tx_ro();
                 let mut iter =
                     BlockIndexHistoryIterator::new(Id::new(H256::zero()), &chainstate_ref);
 

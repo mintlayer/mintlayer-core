@@ -14,10 +14,16 @@
 // limitations under the License.
 
 pub mod ban_score;
-pub mod time_getter;
 
 pub use self::error::*;
+pub use self::median_time::calculate_median_time_past;
 pub use chainstate_types::Locator;
+use common::time_getter::TimeGetter;
+pub use error::BlockError;
+pub use error::CheckBlockError;
+pub use error::CheckBlockTransactionsError;
+pub use error::OrphanCheckError;
+pub use transaction_verifier::ConnectTransactionError;
 
 mod block_index_history_iter;
 mod chainstateref;
@@ -44,7 +50,6 @@ use utxo::UtxosDBMut;
 use self::{
     orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut},
     query::ChainstateQuery,
-    time_getter::TimeGetter,
 };
 use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
 
@@ -52,7 +57,7 @@ type TxRw<'a, S> = <S as Transactional<'a>>::TransactionRw;
 type TxRo<'a, S> = <S as Transactional<'a>>::TransactionRo;
 type ChainstateEventHandler = EventHandler<ChainstateEvent>;
 
-const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
+pub const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 
@@ -92,7 +97,9 @@ impl<S: BlockchainStorage> Chainstate<S> {
     }
 
     #[must_use]
-    fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo<'_, S>, OrphanBlocksRef> {
+    pub(crate) fn make_db_tx_ro(
+        &self,
+    ) -> chainstateref::ChainstateRef<TxRo<'_, S>, OrphanBlocksRef> {
         let db_tx = self.chainstate_storage.transaction_ro();
         chainstateref::ChainstateRef::new_ro(
             &self.chain_config,
@@ -141,7 +148,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
         Ok(chainstate)
     }
 
-    fn new_no_genesis(
+    pub(crate) fn new_no_genesis(
         chain_config: Arc<ChainConfig>,
         chainstate_config: ChainstateConfig,
         chainstate_storage: S,
@@ -304,7 +311,20 @@ impl<S: BlockchainStorage> Chainstate<S> {
         chainstate_ref.check_block_header(&block)?;
         Ok(())
     }
-}
 
-#[cfg(test)]
-mod tests;
+    pub fn get_chain_config(&self) -> Arc<ChainConfig> {
+        self.chain_config.clone()
+    }
+
+    pub fn get_chainstate_config(&self) -> &ChainstateConfig {
+        &self.chainstate_config
+    }
+
+    pub fn get_orphan_blocks(&self) -> &OrphanBlocksPool {
+        &self.orphan_blocks
+    }
+
+    pub fn get_events_controller(&self) -> &EventsController<ChainstateEvent> {
+        &self.events_controller
+    }
+}

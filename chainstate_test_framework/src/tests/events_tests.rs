@@ -14,11 +14,25 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::Mutex;
 
-use crate::detail::tests::{
-    test_framework::{TestChainstate, TestFramework},
-    *,
-};
+use chainstate::BlockError;
+use chainstate::BlockSource;
+use chainstate::ChainstateError;
+use chainstate::ChainstateEvent;
+use chainstate::CheckBlockError;
+use chainstate::OrphanCheckError;
+use common::chain::block::timestamp::BlockTimestamp;
+use common::primitives::id::Idable;
+use common::primitives::BlockHeight;
+use crypto::random::Rng;
+use rstest::rstest;
+use test_utils::random::make_seedable_rng;
+use test_utils::random::Seed;
+
+use crate::framework_builder::OrphanErrorHandler;
+use crate::tests::EventList;
+use crate::{TestChainstate, TestFramework};
 
 type ErrorList = Arc<Mutex<Vec<BlockError>>>;
 
@@ -34,7 +48,7 @@ fn simple_subscribe(#[case] seed: Seed) {
 
         // Produce and process a block.
         let first_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
-        assert!(!tf.chainstate.events_controller.subscribers().is_empty());
+        assert!(!tf.chainstate.subscribers().is_empty());
         tf.process_block(first_block.clone(), BlockSource::Local).unwrap();
         tf.chainstate.wait_for_all_events();
 
@@ -77,7 +91,7 @@ fn several_subscribers(#[case] seed: Seed) {
 
         let block = tf.make_block_builder().add_test_transaction(&mut rng).build();
 
-        assert!(!tf.chainstate.events_controller.subscribers().is_empty());
+        assert!(!tf.chainstate.subscribers().is_empty());
         tf.process_block(block.clone(), BlockSource::Local).unwrap();
         tf.chainstate.wait_for_all_events();
 
@@ -102,7 +116,7 @@ fn several_subscribers_several_events(#[case] seed: Seed) {
         let blocks = rng.gen_range(8..128);
 
         let events = subscribe(&mut tf.chainstate, subscribers);
-        assert!(!tf.chainstate.events_controller.subscribers().is_empty());
+        assert!(!tf.chainstate.subscribers().is_empty());
 
         for _ in 0..blocks {
             let block = tf.make_block_builder().add_test_transaction(&mut rng).build();
@@ -126,12 +140,14 @@ fn orphan_block() {
         let mut tf = TestFramework::builder().with_orphan_error_hook(orphan_error_hook).build();
 
         let events = subscribe(&mut tf.chainstate, 1);
-        assert!(!tf.chainstate.events_controller.subscribers().is_empty());
+        assert!(!tf.chainstate.subscribers().is_empty());
 
         let block = tf.make_block_builder().make_orphan().build();
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
-            BlockError::OrphanCheckFailed(OrphanCheckError::LocalOrphan)
+            ChainstateError::ProcessBlockError(BlockError::OrphanCheckFailed(
+                OrphanCheckError::LocalOrphan
+            ))
         );
         tf.chainstate.wait_for_all_events();
         assert!(events.lock().unwrap().is_empty());
@@ -149,12 +165,12 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
         let mut tf = TestFramework::builder().with_orphan_error_hook(orphan_error_hook).build();
 
         let events = subscribe(&mut tf.chainstate, 1);
-        assert!(!tf.chainstate.events_controller.subscribers().is_empty());
+        assert!(!tf.chainstate.subscribers().is_empty());
 
         let first_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
         // Produce a block with a bad timestamp.
         let timestamp = tf.genesis().timestamp().as_int_seconds()
-            + tf.chainstate.chain_config.max_future_block_time_offset().as_secs();
+            + tf.chainstate.get_chain_config().max_future_block_time_offset().as_secs();
         let second_block = tf
             .make_block_builder()
             .with_parent(first_block.get_id().into())
@@ -164,7 +180,9 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
         // The second block isn't processed because its parent isn't known.
         assert_eq!(
             tf.process_block(second_block, BlockSource::Local).unwrap_err(),
-            BlockError::OrphanCheckFailed(OrphanCheckError::LocalOrphan)
+            ChainstateError::ProcessBlockError(BlockError::OrphanCheckFailed(
+                OrphanCheckError::LocalOrphan
+            ))
         );
         tf.chainstate.wait_for_all_events();
         assert!(events.lock().unwrap().is_empty());

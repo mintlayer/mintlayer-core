@@ -3,7 +3,7 @@ use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
     chain::{
         block::{BlockHeader, BlockReward},
-        Block, GenBlock,
+        Block, GenBlock, OutPointSourceId, TxMainChainIndex,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
@@ -61,6 +61,13 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateQuery<'a, S, O> {
         id: &Id<Block>,
     ) -> Result<Option<BlockIndex>, PropertyQueryError> {
         self.chainstate_ref.get_block_index(id)
+    }
+
+    pub fn get_gen_block_index(
+        &self,
+        id: &Id<GenBlock>,
+    ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
+        self.chainstate_ref.get_gen_block_index(id)
     }
 
     pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
@@ -142,5 +149,12 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateQuery<'a, S, O> {
             .collect::<Vec<_>>();
 
         Ok(res)
+    }
+
+    pub fn get_mainchain_tx_index(
+        &self,
+        tx_id: &OutPointSourceId,
+    ) -> Result<Option<TxMainChainIndex>, PropertyQueryError> {
+        self.chainstate_ref.get_mainchain_tx_index(tx_id)
     }
 }

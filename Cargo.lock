@@ -613,6 +613,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "chainstate_test_framework"
+version = "0.1.0"
+dependencies = [
+ "chainstate",
+ "chainstate-storage",
+ "chainstate-types",
+ "common",
+ "consensus",
+ "crypto",
+ "hex",
+ "itertools",
+ "logging",
+ "rstest",
+ "serialization",
+ "test-utils",
+ "utils",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
