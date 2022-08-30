@@ -62,7 +62,10 @@ impl<'a> PoSAccountingDelta<'a> {
 /// If only signed is present, we convert it to unsigned and return it (only delta found)
 /// If both found, we add them and return them as unsigned
 /// Errors can happen when doing conversions; which can uncover inconsistency issues
-fn delta_add(lhs: &Option<Amount>, rhs: &Option<SignedAmount>) -> Result<Option<Amount>, Error> {
+fn amount_delta_add(
+    lhs: &Option<Amount>,
+    rhs: &Option<SignedAmount>,
+) -> Result<Option<Amount>, Error> {
     match (lhs, rhs) {
         (None, None) => Ok(None),
         (None, Some(v)) => Ok(Some(
@@ -105,7 +108,7 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
     fn get_pool_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error> {
         let parent_balance = self.parent.get_pool_balance(pool_id)?;
         let local_delta = self.pool_balances.get(&pool_id).cloned();
-        delta_add(&parent_balance, &local_delta)
+        amount_delta_add(&parent_balance, &local_delta)
     }
 
     fn get_pool_data(&self, pool_id: H256) -> Result<Option<PoolData>, Error> {
@@ -141,7 +144,7 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
     fn get_delegation_balance(&self, delegation_id: H256) -> Result<Option<Amount>, Error> {
         let parent_amount = self.parent.get_delegation_balance(delegation_id)?;
         let local_amount = self.delegation_balances.get(&delegation_id).copied();
-        delta_add(&parent_amount, &local_amount)
+        amount_delta_add(&parent_amount, &local_amount)
     }
 
     fn get_delegation_data(&self, delegation_id: H256) -> Result<Option<DelegationData>, Error> {
@@ -162,6 +165,6 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
     ) -> Result<Option<Amount>, Error> {
         let parent_amount = self.parent.get_pool_delegation_share(pool_id, delegation_id)?;
         let local_amount = self.pool_delegation_shares.get(&(pool_id, delegation_id)).copied();
-        delta_add(&parent_amount, &local_amount)
+        amount_delta_add(&parent_amount, &local_amount)
     }
 }
