@@ -7,7 +7,7 @@ use crate::error::Error;
 
 use super::{delegation::DelegationData, pool_data::PoolData, view::PoSAccountingView};
 
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone)]
 #[allow(dead_code)]
 enum PoolDataDelta {
     CreatePool(PoolData),
@@ -54,6 +54,104 @@ impl<'a> PoSAccountingDelta<'a> {
             Some(result)
         }
     }
+
+    fn merge_balance<T: Ord>(
+        map: &mut BTreeMap<T, SignedAmount>,
+        key: T,
+        other_amount: SignedAmount,
+    ) -> Result<(), Error> {
+        let current = map.get(&key);
+        match combine_signed_amount_delta(&current.copied(), &Some(other_amount))? {
+            Some(new_bal) => map.insert(key, new_bal),
+            None => None,
+        };
+        Ok(())
+    }
+
+    fn combine_pool_data(lhs: &PoolDataDelta, rhs: PoolDataDelta) -> Result<PoolDataDelta, Error> {
+        match (lhs, rhs) {
+            (PoolDataDelta::CreatePool(_), PoolDataDelta::CreatePool(_)) => {
+                Err(Error::PoolCreatedMultipleTimes)
+            }
+            (PoolDataDelta::CreatePool(_), PoolDataDelta::DecommissionPool) => {
+                Ok(PoolDataDelta::DecommissionPool)
+            }
+            (PoolDataDelta::DecommissionPool, PoolDataDelta::CreatePool(d)) => {
+                Ok(PoolDataDelta::CreatePool(d))
+            }
+            (PoolDataDelta::DecommissionPool, PoolDataDelta::DecommissionPool) => {
+                Err(Error::PoolDecommissionedMultipleTimes)
+            }
+        }
+    }
+
+    fn merge_pool_data(&mut self, key: H256, other_data: PoolDataDelta) -> Result<(), Error> {
+        let current = self.pool_data.get(&key);
+        let new_data = match current {
+            Some(current_data) => Self::combine_pool_data(current_data, other_data)?,
+            None => other_data,
+        };
+        self.pool_data.insert(key, new_data);
+        Ok(())
+    }
+
+    fn combine_delegation_data(
+        lhs: &DelegationDataDelta,
+        rhs: DelegationDataDelta,
+    ) -> Result<DelegationDataDelta, Error> {
+        match (lhs, rhs) {
+            (DelegationDataDelta::Add(_), DelegationDataDelta::Add(_)) => {
+                Err(Error::DelegationDataCreatedMultipleTimes)
+            }
+            (DelegationDataDelta::Add(_), DelegationDataDelta::Remove) => {
+                Ok(DelegationDataDelta::Remove)
+            }
+            (DelegationDataDelta::Remove, DelegationDataDelta::Add(d)) => {
+                Ok(DelegationDataDelta::Add(d))
+            }
+            (DelegationDataDelta::Remove, DelegationDataDelta::Remove) => {
+                Err(Error::DelegationDataDeletedMultipleTimes)
+            }
+        }
+    }
+
+    fn merge_delegation_data(
+        &mut self,
+        key: H256,
+        other_data: DelegationDataDelta,
+    ) -> Result<(), Error> {
+        let current = self.delegation_data.get(&key);
+        let new_data = match current {
+            Some(current_data) => Self::combine_delegation_data(current_data, other_data)?,
+            None => other_data,
+        };
+        self.delegation_data.insert(key, new_data);
+        Ok(())
+    }
+
+    pub fn merge_with_delta(&mut self, other: PoSAccountingDelta<'a>) -> Result<(), Error> {
+        other.pool_balances.into_iter().try_for_each(|(key, other_amount)| {
+            Self::merge_balance(&mut self.pool_balances, key, other_amount)
+        })?;
+        other
+            .pool_delegation_shares
+            .into_iter()
+            .try_for_each(|(key, other_del_shares)| {
+                Self::merge_balance(&mut self.pool_delegation_shares, key, other_del_shares)
+            })?;
+        other.delegation_balances.into_iter().try_for_each(|(key, other_del_balance)| {
+            Self::merge_balance(&mut self.delegation_balances, key, other_del_balance)
+        })?;
+        other
+            .pool_data
+            .into_iter()
+            .try_for_each(|(key, other_pool_data)| self.merge_pool_data(key, other_pool_data))?;
+        other.delegation_data.into_iter().try_for_each(|(key, other_del_data)| {
+            self.merge_delegation_data(key, other_del_data)
+        })?;
+
+        Ok(())
+    }
 }
 
 /// add two numbers that can be Some or None, one unsigned and another signed
@@ -62,7 +160,7 @@ impl<'a> PoSAccountingDelta<'a> {
 /// If only signed is present, we convert it to unsigned and return it (only delta found)
 /// If both found, we add them and return them as unsigned
 /// Errors can happen when doing conversions; which can uncover inconsistency issues
-fn amount_delta_add(
+fn combine_amount_delta(
     lhs: &Option<Amount>,
     rhs: &Option<SignedAmount>,
 ) -> Result<Option<Amount>, Error> {
@@ -76,6 +174,22 @@ fn amount_delta_add(
             let v1 = v1.into_signed().ok_or(Error::ArithmeticErrorToSignedFailed)?;
             let sum = (v1 + *v2).ok_or(Error::ArithmeticErrorDeltaAdditionFailed)?;
             let sum = sum.into_unsigned().ok_or(Error::ArithmeticErrorSumToUnsignedFailed)?;
+            Ok(Some(sum))
+        }
+    }
+}
+
+fn combine_signed_amount_delta(
+    lhs: &Option<SignedAmount>,
+    rhs: &Option<SignedAmount>,
+) -> Result<Option<SignedAmount>, Error> {
+    match (lhs, rhs) {
+        (None, None) => Ok(None),
+        (None, Some(v)) => Ok(Some(*v)),
+        (Some(v), None) => Ok(Some(*v)),
+        (Some(v1), Some(v2)) => {
+            let v1 = v1;
+            let sum = (*v1 + *v2).ok_or(Error::ArithmeticErrorDeltaAdditionFailed)?;
             Ok(Some(sum))
         }
     }
@@ -108,7 +222,7 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
     fn get_pool_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error> {
         let parent_balance = self.parent.get_pool_balance(pool_id)?;
         let local_delta = self.pool_balances.get(&pool_id).cloned();
-        amount_delta_add(&parent_balance, &local_delta)
+        combine_amount_delta(&parent_balance, &local_delta)
     }
 
     fn get_pool_data(&self, pool_id: H256) -> Result<Option<PoolData>, Error> {
@@ -144,7 +258,7 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
     fn get_delegation_balance(&self, delegation_id: H256) -> Result<Option<Amount>, Error> {
         let parent_amount = self.parent.get_delegation_balance(delegation_id)?;
         let local_amount = self.delegation_balances.get(&delegation_id).copied();
-        amount_delta_add(&parent_amount, &local_amount)
+        combine_amount_delta(&parent_amount, &local_amount)
     }
 
     fn get_delegation_data(&self, delegation_id: H256) -> Result<Option<DelegationData>, Error> {
@@ -165,6 +279,6 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
     ) -> Result<Option<Amount>, Error> {
         let parent_amount = self.parent.get_pool_delegation_share(pool_id, delegation_id)?;
         let local_amount = self.pool_delegation_shares.get(&(pool_id, delegation_id)).copied();
-        amount_delta_add(&parent_amount, &local_amount)
+        combine_amount_delta(&parent_amount, &local_amount)
     }
 }

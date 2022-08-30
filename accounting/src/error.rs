@@ -56,4 +56,12 @@ pub enum Error {
     ArithmeticErrorSumToUnsignedFailed,
     #[error("Arithemetic error; sum to signed failed")]
     ArithmeticErrorSumToSignedFailed,
+    #[error("Consencutive pool creation")]
+    PoolCreatedMultipleTimes,
+    #[error("Consencutive pool decommission")]
+    PoolDecommissionedMultipleTimes,
+    #[error("Consencutive delegation data creation")]
+    DelegationDataCreatedMultipleTimes,
+    #[error("Consencutive delegation data deletion")]
+    DelegationDataDeletedMultipleTimes,
 }
