@@ -325,7 +325,7 @@ async fn test_connect_with_timeout() {
         service.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionError {
             address: _,
-            error: P2pError::DialError(DialError::IoError(std::io::ErrorKind::ConnectionRefused))
+            error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut)
         })
     ));
 
@@ -340,7 +340,7 @@ async fn test_connect_with_timeout() {
     );
 
     // then create a socket that listens to the address and verify that it takes
-    // 2 seconds to get the `ConnectionRefused` error, as expected
+    // 2 seconds to get the `ConnectionRefusedOrTimedOut` error, as expected
     let _service = TcpListener::bind(format!("[::1]:{}", port)).await.unwrap();
     let start = std::time::SystemTime::now();
 
@@ -349,7 +349,7 @@ async fn test_connect_with_timeout() {
         service.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionError {
             address: _,
-            error: P2pError::DialError(DialError::IoError(std::io::ErrorKind::ConnectionRefused))
+            error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut)
         })
     ));
     assert!(std::time::SystemTime::now().duration_since(start).unwrap().as_secs() >= 2);
