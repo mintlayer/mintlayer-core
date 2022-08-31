@@ -53,7 +53,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         self.data.pool_balances.insert(pool_id, pledge_amount_delta);
         self.data.pool_data.insert(
             pool_id,
-            super::PoolDataDelta::CreatePool(PoolData::new(decommission_key)),
+            super::PoolDataDelta::CreatePool(PoolData::new(decommission_key, pledge_amount)),
         );
 
         Ok(PoSAccountingUndo::CreatePool(CreatePoolUndo {
