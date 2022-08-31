@@ -1,0 +1,78 @@
+name: functest
+
+env:
+  RUST_LOG: debug
+  CARGO_TERM_COLOR: always
+
+on:
+    push:
+      branches:
+        - master
+        - staging
+    pull_request:
+      branches:
+        - master
+        - staging
+
+jobs:
+  functest_windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install rust stable
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        default: true
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    - name: Run functional tests
+      run: cargo test --release -p mintlayer-test --test functional -- --ignored
+    - uses: actions/upload-artifact@v2
+      if: failure()
+      with:
+        name: windows-functional-test-artifacts
+        path: target/tmp
+
+  functest_ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install rust stable
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        default: true
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    - name: Run functional tests
+      run: cargo test --release -p mintlayer-test --test functional -- --ignored
+    - uses: actions/upload-artifact@v2
+      if: failure()
+      with:
+        name: ubuntu-functional-test-artifacts
+        path: target/tmp
+
+  functest_macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install rust stable
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        default: true
+    - name: Run functional tests
+      run: cargo test --release -p mintlayer-test --test functional -- --ignored
+    - uses: actions/upload-artifact@v2
+      if: failure()
+      with:
+        name: macos-functional-test-artifacts
+        path: target/tmp
