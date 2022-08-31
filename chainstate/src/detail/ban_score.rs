@@ -178,7 +178,7 @@ impl BanScore for utxo::Error {
             utxo::Error::OverwritingUtxo => 0,
             utxo::Error::FreshUtxoAlreadyExists => 0,
             utxo::Error::UtxoAlreadySpent(_) => 100,
-            utxo::Error::NoUtxoFound => 0,
+            utxo::Error::NoUtxoFound => 100,
             utxo::Error::NoBlockchainHeightFound => 0,
             utxo::Error::MissingBlockRewardUndo(_) => 0,
             utxo::Error::DBError(_) => 0,
