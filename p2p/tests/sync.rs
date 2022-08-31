@@ -13,6 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{
+    collections::{HashSet, VecDeque},
+    sync::Arc,
+};
+
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource};
 use common::{
     chain::{config::ChainConfig, GenBlock},
@@ -23,17 +28,21 @@ use p2p::{
     event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
     message::{BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response},
     net::{
-        self, libp2p::Libp2pService, mock::MockService, types::ConnectivityEvent,
+        self,
+        libp2p::Libp2pService,
+        mock::{
+            transport::{
+                ChannelAddressMock, ChannelNetworkMock, NetworkMock, TcpAddressMock, TcpNetworkMock,
+            },
+            MockService,
+        },
+        types::ConnectivityEvent,
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
     sync::BlockSyncManager,
     sync::SyncState,
 };
 use p2p_test_utils::{connect_services, make_libp2p_addr, make_mock_addr, TestBlockInfo};
-use std::{
-    collections::{HashSet, VecDeque},
-    sync::Arc,
-};
 use tokio::sync::mpsc;
 
 async fn make_sync_manager<T>(
@@ -641,11 +650,30 @@ async fn remote_local_diff_chains_local_higher_libp2p() {
         .await;
 }
 
+// TODO: FIXME:
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
 async fn remote_local_diff_chains_local_higher_mock() {
     remote_local_diff_chains_local_higher::<MockService>(make_mock_addr(), make_mock_addr()).await;
+}
+
+// TODO: FIXME:
+#[tokio::test]
+async fn remote_local_diff_chains_local_higher_mock_channels() {
+    let mut network = ChannelNetworkMock::new();
+    let addr_1 = network.add_peer();
+    let addr_2 = network.add_peer();
+    remote_local_diff_chains_local_higher::<MockService<ChannelAddressMock>>(addr_1, addr_2).await;
+}
+
+// TODO: FIXME:
+#[tokio::test]
+async fn remote_local_diff_chains_local_higher_mock_tcp() {
+    let mut network = TcpNetworkMock::new();
+    let addr_1 = network.add_peer();
+    let addr_2 = network.add_peer();
+    remote_local_diff_chains_local_higher::<MockService<TcpAddressMock>>(addr_1, addr_2).await;
 }
 
 // local and remote nodes are in different chains and remote has longer chain

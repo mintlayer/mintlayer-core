@@ -17,15 +17,19 @@ pub mod backend;
 pub mod peer;
 pub mod request_manager;
 pub mod socket;
+pub mod transport;
 pub mod types;
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    fmt::{Debug, Display},
+    hash::Hash,
+    marker::PhantomData,
+    net::SocketAddr,
+    sync::Arc,
+};
 
 use async_trait::async_trait;
-use tokio::{
-    net::TcpListener,
-    sync::{mpsc, oneshot},
-};
+use tokio::sync::{mpsc, oneshot};
 
 use logging::log;
 
@@ -35,13 +39,14 @@ use crate::{
     message,
     net::{
         self,
+        mock::transport::AddressMock,
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent, ValidationResult},
         ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,
     },
 };
 
 #[derive(Debug)]
-pub struct MockService;
+pub struct MockService<T: AddressMock>(PhantomData<T>);
 
 #[derive(Debug, Copy, Clone)]
 pub struct MockMessageId(u64);
@@ -58,7 +63,7 @@ pub struct MockConnectivityHandle<T: NetworkingService> {
 
     /// RX channel for receiving connectivity events from mock backend
     conn_rx: mpsc::Receiver<types::ConnectivityEvent>,
-    _marker: std::marker::PhantomData<fn() -> T>,
+    _marker: PhantomData<fn() -> T>,
 }
 
 pub struct MockPubSubHandle<T>
@@ -70,7 +75,7 @@ where
 
     /// RX channel for receiving pubsub events from mock backend
     _pubsub_rx: mpsc::Receiver<types::PubSubEvent>,
-    _marker: std::marker::PhantomData<fn() -> T>,
+    _marker: PhantomData<fn() -> T>,
 }
 
 pub struct MockSyncingMessagingHandle<T: NetworkingService> {
@@ -79,7 +84,7 @@ pub struct MockSyncingMessagingHandle<T: NetworkingService> {
 
     /// RX channel for receiving syncing events
     sync_rx: mpsc::Receiver<types::SyncingEvent>,
-    _marker: std::marker::PhantomData<fn() -> T>,
+    _marker: PhantomData<fn() -> T>,
 }
 
 impl<T> TryInto<net::types::PeerInfo<T>> for types::MockPeerInfo
@@ -100,8 +105,11 @@ where
 }
 
 #[async_trait]
-impl NetworkingService for MockService {
-    type Address = SocketAddr;
+impl<T> NetworkingService for MockService<T>
+where
+    T: AddressMock + Clone + Debug + Display + Eq + Hash + Send + Sync + ToString,
+{
+    type Address = T;
     type PeerId = types::MockPeerId;
     type SyncingPeerRequestId = types::MockRequestId;
     type PubSubMessageId = MockMessageId;
@@ -122,8 +130,9 @@ impl NetworkingService for MockService {
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (pubsub_tx, _pubsub_rx) = mpsc::channel(16);
         let (sync_tx, sync_rx) = mpsc::channel(16);
-        let socket = TcpListener::bind(addr).await?;
-        let local_addr = socket.local_addr().expect("to have bind address available");
+        let socket = addr.connect().await?;
+        // TODO: FIXME
+        //let local_addr = socket.local_addr().expect("to have bind address available");
 
         tokio::spawn(async move {
             let mut backend = backend::Backend::new(

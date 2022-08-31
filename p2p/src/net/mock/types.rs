@@ -122,10 +122,20 @@ impl std::fmt::Display for MockRequestId {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Encode, Decode)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Encode, Decode)]
 pub struct MockPeerId(u64);
 
 impl MockPeerId {
+    /// Creates a new peer id with the given value.
+    pub fn from_int(val: u64) -> Self {
+        Self(val)
+    }
+
+    pub fn into_int(self) -> u64 {
+        self.0
+    }
+    // TODO: Remove `random` and `from_socket_address`?
+
     pub fn random() -> Self {
         let mut rng = make_pseudo_rng();
         Self(rng.gen::<u64>())
