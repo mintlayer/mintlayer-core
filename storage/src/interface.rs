@@ -16,7 +16,8 @@
 //! High-level application-agnostic storage interface
 
 use crate::schema::{self, Schema};
-use storage_core::{backend, Backend, Data, DbIndex};
+use serialization::EncodeLike;
+use storage_core::{backend, Backend, DbIndex};
 
 /// The main storage type
 pub struct Storage<B: Backend, Sch> {
@@ -80,7 +81,7 @@ impl<'tx, B: Backend, Sch> TxImpl for TransactionRo<'tx, B, Sch> {
 
 impl<'tx, B: Backend, Sch: Schema> TransactionRo<'tx, B, Sch> {
     /// Get key-value map immutably (key-to-single-value only for now)
-    pub fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<'_, Self>
+    pub fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<Self, DbMap>
     where
         Sch: schema::HasDbMap<DbMap, I>,
     {
@@ -105,7 +106,7 @@ impl<'tx, B: Backend, Sch> TxImpl for TransactionRw<'tx, B, Sch> {
 
 impl<'tx, B: Backend, Sch: Schema> TransactionRw<'tx, B, Sch> {
     /// Get key-value map immutably (key-to-single-value only for now)
-    pub fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<Self>
+    pub fn get<DbMap: schema::DbMap, I>(&self) -> MapRef<Self, DbMap>
     where
         Sch: schema::HasDbMap<DbMap, I>,
     {
@@ -113,7 +114,7 @@ impl<'tx, B: Backend, Sch: Schema> TransactionRw<'tx, B, Sch> {
     }
 
     /// Get key-value map immutably (key-to-single-value only for now)
-    pub fn get_mut<DbMap: schema::DbMap, I>(&mut self) -> MapMut<Self>
+    pub fn get_mut<DbMap: schema::DbMap, I>(&mut self) -> MapMut<Self, DbMap>
     where
         Sch: schema::HasDbMap<DbMap, I>,
     {
@@ -132,56 +133,115 @@ impl<'tx, B: Backend, Sch: Schema> TransactionRw<'tx, B, Sch> {
 }
 
 /// Represents an immutable view of a key-value map
-pub struct MapRef<'tx, Tx: TxImpl> {
+pub struct MapRef<'tx, Tx: TxImpl, DbMap: schema::DbMap> {
     dbtx: &'tx Tx::Impl,
     idx: DbIndex,
+    _phantom: std::marker::PhantomData<fn() -> DbMap>,
 }
 
-impl<'tx, Tx: TxImpl> MapRef<'tx, Tx> {
+impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapRef<'tx, Tx, DbMap> {
     fn new(dbtx: &'tx Tx::Impl, idx: DbIndex) -> Self {
-        Self { dbtx, idx }
+        let _phantom = Default::default();
+        Self {
+            dbtx,
+            idx,
+            _phantom,
+        }
     }
 }
 
-impl<Tx: TxImpl> MapRef<'_, Tx>
+impl<Tx: TxImpl, DbMap: schema::DbMap> MapRef<'_, Tx, DbMap>
 where
     Tx::Impl: backend::ReadOps,
 {
-    pub fn get(&self, key: &[u8]) -> crate::Result<Option<&[u8]>> {
-        backend::ReadOps::get(self.dbtx, self.idx, key)
+    /// Get value associated with given key
+    pub fn get<K: EncodeLike<DbMap::Key>>(
+        &self,
+        key: K,
+    ) -> crate::Result<Option<Encoded<DbMap::Value>>> {
+        key.using_encoded(|key| {
+            backend::ReadOps::get(self.dbtx, self.idx, key).map(|x| x.map(Encoded::new))
+        })
     }
 }
 
 /// Represents a mutable view of a key-value map
-pub struct MapMut<'tx, Tx: TxImpl> {
+pub struct MapMut<'tx, Tx: TxImpl, DbMap: schema::DbMap> {
     dbtx: &'tx mut Tx::Impl,
     idx: DbIndex,
+    _phantom: std::marker::PhantomData<fn() -> DbMap>,
 }
 
-impl<'tx, Tx: TxImpl> MapMut<'tx, Tx> {
+impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapMut<'tx, Tx, DbMap> {
     fn new(dbtx: &'tx mut Tx::Impl, idx: DbIndex) -> Self {
-        Self { dbtx, idx }
+        let _phantom = Default::default();
+        Self {
+            dbtx,
+            idx,
+            _phantom,
+        }
     }
 }
 
-impl<Tx: TxImpl> MapMut<'_, Tx>
+impl<Tx: TxImpl, DbMap: schema::DbMap> MapMut<'_, Tx, DbMap>
 where
     Tx::Impl: backend::ReadOps,
 {
-    pub fn get(&self, key: &[u8]) -> crate::Result<Option<&[u8]>> {
-        backend::ReadOps::get(self.dbtx, self.idx, key)
+    /// Get value associated with given key
+    pub fn get<K: EncodeLike<DbMap::Key>>(
+        &self,
+        key: K,
+    ) -> crate::Result<Option<Encoded<DbMap::Value>>> {
+        key.using_encoded(|key| {
+            backend::ReadOps::get(self.dbtx, self.idx, key).map(|x| x.map(Encoded::new))
+        })
     }
 }
 
-impl<Tx: TxImpl> MapMut<'_, Tx>
+impl<Tx: TxImpl, DbMap: schema::DbMap> MapMut<'_, Tx, DbMap>
 where
     Tx::Impl: backend::ReadOps + backend::WriteOps,
 {
-    pub fn put(&mut self, key: Data, value: Data) -> crate::Result<()> {
-        backend::WriteOps::put(self.dbtx, self.idx, key, value)
+    /// Put a new value associated with given key. Overwrites the previous one.
+    pub fn put<K: EncodeLike<DbMap::Key>, V: EncodeLike<DbMap::Value>>(
+        &mut self,
+        key: K,
+        value: V,
+    ) -> crate::Result<()> {
+        backend::WriteOps::put(self.dbtx, self.idx, key.encode(), value.encode())
     }
 
-    pub fn del(&mut self, key: &[u8]) -> crate::Result<()> {
-        backend::WriteOps::del(self.dbtx, self.idx, key)
+    /// Remove value associated with given key.
+    pub fn del<K: EncodeLike<DbMap::Key>>(&mut self, key: K) -> crate::Result<()> {
+        key.using_encoded(|key| backend::WriteOps::del(self.dbtx, self.idx, key))
+    }
+}
+
+/// A SCALE-encoded representation of some type T
+///
+/// The user can basically do two useful things with this:
+/// 1. Ask for raw encoding as a byte string using [Self::bytes]
+/// 2. Get the decoded value using [Self::decode]
+#[derive(Eq, PartialEq, Debug)]
+pub struct Encoded<'a, T> {
+    bytes: &'a [u8],
+    _phantom: std::marker::PhantomData<fn() -> T>,
+}
+
+impl<'a, T: serialization::Decode> Encoded<'a, T> {
+    fn new(bytes: &'a [u8]) -> Self {
+        let _phantom = Default::default();
+        Self { bytes, _phantom }
+    }
+
+    /// Get encoded byte representation
+    pub fn bytes(&self) -> &'a [u8] {
+        self.bytes
+    }
+
+    /// Get the decoded object
+    pub fn decode(mut self) -> T {
+        serialization::DecodeAll::decode_all(&mut self.bytes)
+            .expect("db value encoding to be consistent")
     }
 }

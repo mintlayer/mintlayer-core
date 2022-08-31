@@ -10,6 +10,7 @@ default = [ 'inmemory' ]
 inmemory = [ 'storage-inmemory' ]
 
 [dependencies]
+serialization = { path = "../serialization" }
 storage-core = { path = "core" }
 storage-inmemory = { path = "inmemory", optional = true }
 
