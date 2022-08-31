@@ -53,7 +53,10 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         self.data.pool_balances.insert(pool_id, pledge_amount_delta);
         self.data.pool_data.insert(
             pool_id,
-            super::PoolDataDelta::CreatePool(PoolData::new(decommission_key, pledge_amount)),
+            super::PoolDataDelta::CreatePool(Box::new(PoolData::new(
+                decommission_key,
+                pledge_amount,
+            ))),
         );
 
         Ok(PoSAccountingUndo::CreatePool(CreatePoolUndo {
@@ -128,7 +131,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         );
         self.data.pool_data.insert(
             undo_data.pool_id,
-            PoolDataDelta::CreatePool(undo_data.pool_data),
+            PoolDataDelta::CreatePool(Box::new(undo_data.pool_data)),
         );
 
         Ok(())
@@ -321,7 +324,7 @@ impl<'a> PoSAccountingOperatorRead for PoSAccountingDelta<'a> {
         match (parent_data, local_data) {
             (None, None) => Ok(None),
             (None, Some(d)) => match d {
-                super::PoolDataDelta::CreatePool(d) => Ok(Some(d.clone())),
+                super::PoolDataDelta::CreatePool(d) => Ok(Some(*d.clone())),
                 super::PoolDataDelta::DecommissionPool => Err(Error::RemovingNonexistingPoolData),
             },
             (Some(p), None) => Ok(Some(p)),

@@ -19,7 +19,7 @@ mod view_impl;
 
 #[derive(Clone, Encode, Decode)]
 pub enum PoolDataDelta {
-    CreatePool(PoolData),
+    CreatePool(Box<PoolData>),
     DecommissionPool,
 }
 

@@ -27,7 +27,7 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
         let local_data = self.data.pool_data.get(&pool_id);
         match local_data {
             Some(d) => match d {
-                PoolDataDelta::CreatePool(d) => Ok(Some(d.clone())),
+                PoolDataDelta::CreatePool(d) => Ok(Some(*d.clone())),
                 PoolDataDelta::DecommissionPool => Ok(None),
             },
             None => self.parent.get_pool_data(pool_id),
