@@ -50,8 +50,8 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         let pledge_amount_delta =
             pledge_amount.into_signed().ok_or(Error::PledgeValueToSignedError)?;
 
-        self.pool_balances.insert(pool_id, pledge_amount_delta);
-        self.pool_data.insert(
+        self.data.pool_balances.insert(pool_id, pledge_amount_delta);
+        self.data.pool_data.insert(
             pool_id,
             super::PoolDataDelta::CreatePool(PoolData::new(decommission_key)),
         );
@@ -83,8 +83,8 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             }
         }
 
-        self.pool_balances.remove(&pool_id);
-        self.pool_data.remove(&pool_id);
+        self.data.pool_balances.remove(&pool_id);
+        self.data.pool_data.remove(&pool_id);
 
         Ok(())
     }
@@ -98,8 +98,8 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             .get_pool_data(pool_id)?
             .ok_or(Error::AttemptedDecommissionNonexistingPoolData)?;
 
-        self.pool_balances.remove(&pool_id);
-        self.pool_data.remove(&pool_id);
+        self.data.pool_balances.remove(&pool_id);
+        self.data.pool_data.remove(&pool_id);
 
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
             pool_id,
@@ -119,14 +119,14 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists);
         }
 
-        self.pool_balances.insert(
+        self.data.pool_balances.insert(
             undo_data.pool_id,
             undo_data
                 .last_amount
                 .into_signed()
                 .ok_or(Error::ArithmeticErrorToSignedFailed)?,
         );
-        self.pool_data.insert(
+        self.data.pool_data.insert(
             undo_data.pool_id,
             PoolDataDelta::CreatePool(undo_data.pool_data),
         );
@@ -156,7 +156,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
 
         let delegation_data = DelegationData::new(target_pool, spend_key);
 
-        self.delegation_data.insert(
+        self.data.delegation_data.insert(
             delegation_id,
             super::DelegationDataDelta::Add(Box::new(delegation_data.clone())),
         );
@@ -184,7 +184,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             return Err(Error::InvariantErrorDelegationIdUndoFailedDataConflict);
         }
 
-        self.delegation_data.remove(&delegation_id);
+        self.data.delegation_data.remove(&delegation_id);
 
         Ok(())
     }
@@ -280,25 +280,25 @@ impl<'a> PoSAccountingOperatorRead for PoSAccountingDelta<'a> {
         delegation_id: H256,
     ) -> Result<Option<Amount>, Error> {
         let parent_share = self.parent.get_pool_delegation_share(pool_id, delegation_id)?;
-        let local_share = self.pool_delegation_shares.get(&(pool_id, delegation_id));
+        let local_share = self.data.pool_delegation_shares.get(&(pool_id, delegation_id));
         combine_amount_delta(&parent_share, &local_share.copied())
     }
 
     fn get_pool_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error> {
         let parent_amount = self.parent.get_pool_balance(pool_id)?;
-        let local_amount = self.pool_balances.get(&pool_id);
+        let local_amount = self.data.pool_balances.get(&pool_id);
         combine_amount_delta(&parent_amount, &local_amount.copied())
     }
 
     fn get_delegation_id_balance(&self, delegation_id: H256) -> Result<Option<Amount>, Error> {
         let parent_amount = self.parent.get_delegation_balance(delegation_id)?;
-        let local_amount = self.delegation_balances.get(&delegation_id);
+        let local_amount = self.data.delegation_balances.get(&delegation_id);
         combine_amount_delta(&parent_amount, &local_amount.copied())
     }
 
     fn get_delegation_id_data(&self, delegation_id: H256) -> Result<Option<DelegationData>, Error> {
         let parent_data = self.parent.get_delegation_data(delegation_id)?;
-        let local_data = self.delegation_data.get(&delegation_id);
+        let local_data = self.data.delegation_data.get(&delegation_id);
         match (parent_data, local_data) {
             (None, None) => Ok(None),
             (None, Some(d)) => match d {
@@ -317,7 +317,7 @@ impl<'a> PoSAccountingOperatorRead for PoSAccountingDelta<'a> {
 
     fn get_pool_data(&self, pool_id: H256) -> Result<Option<PoolData>, Error> {
         let parent_data = self.parent.get_pool_data(pool_id)?;
-        let local_data = self.pool_data.get(&pool_id);
+        let local_data = self.data.pool_data.get(&pool_id);
         match (parent_data, local_data) {
             (None, None) => Ok(None),
             (None, Some(d)) => match d {

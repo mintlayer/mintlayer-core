@@ -19,12 +19,12 @@ fn signed_to_unsigned_pair((k, v): (H256, SignedAmount)) -> Result<(H256, Amount
 impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
     fn get_pool_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error> {
         let parent_balance = self.parent.get_pool_balance(pool_id)?;
-        let local_delta = self.pool_balances.get(&pool_id).cloned();
+        let local_delta = self.data.pool_balances.get(&pool_id).cloned();
         combine_amount_delta(&parent_balance, &local_delta)
     }
 
     fn get_pool_data(&self, pool_id: H256) -> Result<Option<PoolData>, Error> {
-        let local_data = self.pool_data.get(&pool_id);
+        let local_data = self.data.pool_data.get(&pool_id);
         match local_data {
             Some(d) => match d {
                 PoolDataDelta::CreatePool(d) => Ok(Some(d.clone())),
@@ -55,12 +55,12 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
 
     fn get_delegation_balance(&self, delegation_id: H256) -> Result<Option<Amount>, Error> {
         let parent_amount = self.parent.get_delegation_balance(delegation_id)?;
-        let local_amount = self.delegation_balances.get(&delegation_id).copied();
+        let local_amount = self.data.delegation_balances.get(&delegation_id).copied();
         combine_amount_delta(&parent_amount, &local_amount)
     }
 
     fn get_delegation_data(&self, delegation_id: H256) -> Result<Option<DelegationData>, Error> {
-        let local_data = self.delegation_data.get(&delegation_id);
+        let local_data = self.data.delegation_data.get(&delegation_id);
         match local_data {
             Some(d) => match d {
                 DelegationDataDelta::Add(d) => Ok(Some(*d.clone())),
@@ -76,7 +76,7 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
         delegation_id: H256,
     ) -> Result<Option<Amount>, Error> {
         let parent_amount = self.parent.get_pool_delegation_share(pool_id, delegation_id)?;
-        let local_amount = self.pool_delegation_shares.get(&(pool_id, delegation_id)).copied();
+        let local_amount = self.data.pool_delegation_shares.get(&(pool_id, delegation_id)).copied();
         combine_amount_delta(&parent_amount, &local_amount)
     }
 }

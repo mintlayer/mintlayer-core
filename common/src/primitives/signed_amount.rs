@@ -19,11 +19,13 @@ use std::iter::Sum;
 
 use super::{amount::UnsignedIntType, Amount};
 
+use serialization::{Decode, Encode};
+
 pub type SignedIntType = i128;
 
 /// A signed fixed-point type for amounts used in accounting, specifically
 /// The smallest unit of count is called an atom
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 #[must_use]
 pub struct SignedAmount {
     val: SignedIntType,

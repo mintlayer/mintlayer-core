@@ -5,54 +5,55 @@ use serialization::{Decode, Encode};
 
 use crate::error::Error;
 
-use self::combine::{combine_delegation_data, combine_pool_data, combine_signed_amount_delta};
+use self::{
+    combine::{combine_delegation_data, combine_pool_data, combine_signed_amount_delta},
+    data::PoSAccountingDeltaData,
+};
 
 use super::{delegation::DelegationData, pool_data::PoolData, view::PoSAccountingView};
 
 mod combine;
+pub mod data;
 pub mod operator_impls;
 mod view_impl;
 
-#[derive(Clone)]
-#[allow(dead_code)]
-enum PoolDataDelta {
+#[derive(Clone, Encode, Decode)]
+pub enum PoolDataDelta {
     CreatePool(PoolData),
     DecommissionPool,
 }
 
 #[derive(Clone, Encode, Decode)]
-#[allow(dead_code)]
-enum DelegationDataDelta {
+pub enum DelegationDataDelta {
     Add(Box<DelegationData>),
     Remove,
 }
 
-#[derive(Clone)]
 pub struct PoSAccountingDelta<'a> {
     parent: &'a dyn PoSAccountingView,
-    pool_data: BTreeMap<H256, PoolDataDelta>,
-    pool_balances: BTreeMap<H256, SignedAmount>,
-    pool_delegation_shares: BTreeMap<(H256, H256), SignedAmount>,
-    delegation_balances: BTreeMap<H256, SignedAmount>,
-    delegation_data: BTreeMap<H256, DelegationDataDelta>,
+    data: PoSAccountingDeltaData,
 }
 
 impl<'a> PoSAccountingDelta<'a> {
     pub fn new(parent: &'a dyn PoSAccountingView) -> Self {
         Self {
             parent,
-            pool_data: Default::default(),
-            pool_balances: Default::default(),
-            pool_delegation_shares: Default::default(),
-            delegation_balances: Default::default(),
-            delegation_data: Default::default(),
+            data: PoSAccountingDeltaData::new(),
         }
+    }
+
+    pub fn from_data(parent: &'a dyn PoSAccountingView, data: PoSAccountingDeltaData) -> Self {
+        Self { parent, data }
+    }
+
+    pub fn consume(self) -> PoSAccountingDeltaData {
+        self.data
     }
 
     fn get_cached_delegations_shares(&self, pool_id: H256) -> Option<BTreeMap<H256, SignedAmount>> {
         let range_start = (pool_id, H256::zero());
         let range_end = (pool_id, H256::repeat_byte(0xFF));
-        let range = self.pool_delegation_shares.range(range_start..=range_end);
+        let range = self.data.pool_delegation_shares.range(range_start..=range_end);
         let result = range.map(|((_pool_id, del_id), v)| (*del_id, *v)).collect::<BTreeMap<_, _>>();
         if result.is_empty() {
             None
@@ -62,12 +63,12 @@ impl<'a> PoSAccountingDelta<'a> {
     }
 
     fn merge_pool_data(&mut self, key: H256, other_data: PoolDataDelta) -> Result<(), Error> {
-        let current = self.pool_data.get(&key);
+        let current = self.data.pool_data.get(&key);
         let new_data = match current {
             Some(current_data) => combine_pool_data(current_data, other_data)?,
             None => other_data,
         };
-        self.pool_data.insert(key, new_data);
+        self.data.pool_data.insert(key, new_data);
         Ok(())
     }
 
@@ -76,33 +77,39 @@ impl<'a> PoSAccountingDelta<'a> {
         key: H256,
         other_data: DelegationDataDelta,
     ) -> Result<(), Error> {
-        let current = self.delegation_data.get(&key);
+        let current = self.data.delegation_data.get(&key);
         let new_data = match current {
             Some(current_data) => combine_delegation_data(current_data, other_data)?,
             None => other_data,
         };
-        self.delegation_data.insert(key, new_data);
+        self.data.delegation_data.insert(key, new_data);
         Ok(())
     }
 
     pub fn merge_with_delta(&mut self, other: PoSAccountingDelta<'a>) -> Result<(), Error> {
-        other.pool_balances.into_iter().try_for_each(|(key, other_amount)| {
-            merge_balance(&mut self.pool_balances, key, other_amount)
+        other.data.pool_balances.into_iter().try_for_each(|(key, other_amount)| {
+            merge_balance(&mut self.data.pool_balances, key, other_amount)
         })?;
         other
+            .data
             .pool_delegation_shares
             .into_iter()
             .try_for_each(|(key, other_del_shares)| {
-                merge_balance(&mut self.pool_delegation_shares, key, other_del_shares)
+                merge_balance(&mut self.data.pool_delegation_shares, key, other_del_shares)
             })?;
-        other.delegation_balances.into_iter().try_for_each(|(key, other_del_balance)| {
-            merge_balance(&mut self.delegation_balances, key, other_del_balance)
-        })?;
         other
+            .data
+            .delegation_balances
+            .into_iter()
+            .try_for_each(|(key, other_del_balance)| {
+                merge_balance(&mut self.data.delegation_balances, key, other_del_balance)
+            })?;
+        other
+            .data
             .pool_data
             .into_iter()
             .try_for_each(|(key, other_pool_data)| self.merge_pool_data(key, other_pool_data))?;
-        other.delegation_data.into_iter().try_for_each(|(key, other_del_data)| {
+        other.data.delegation_data.into_iter().try_for_each(|(key, other_del_data)| {
             self.merge_delegation_data(key, other_del_data)
         })?;
 
@@ -157,7 +164,7 @@ impl<'a> PoSAccountingDelta<'a> {
         amount_to_delegate: Amount,
     ) -> Result<(), Error> {
         Self::add_value_to_map_for_delegation(
-            &mut self.delegation_balances,
+            &mut self.data.delegation_balances,
             delegation_target,
             amount_to_delegate,
         )?;
@@ -171,7 +178,7 @@ impl<'a> PoSAccountingDelta<'a> {
         amount_to_delegate: Amount,
     ) -> Result<(), Error> {
         Self::sub_value_from_map_for_delegation(
-            &mut self.delegation_balances,
+            &mut self.data.delegation_balances,
             delegation_target,
             amount_to_delegate,
         )?;
@@ -179,12 +186,20 @@ impl<'a> PoSAccountingDelta<'a> {
     }
 
     fn add_balance_to_pool(&mut self, pool_id: H256, amount_to_add: Amount) -> Result<(), Error> {
-        Self::add_value_to_map_for_delegation(&mut self.pool_balances, pool_id, amount_to_add)?;
+        Self::add_value_to_map_for_delegation(
+            &mut self.data.pool_balances,
+            pool_id,
+            amount_to_add,
+        )?;
         Ok(())
     }
 
     fn sub_balance_from_pool(&mut self, pool_id: H256, amount_to_add: Amount) -> Result<(), Error> {
-        Self::sub_value_from_map_for_delegation(&mut self.pool_balances, pool_id, amount_to_add)?;
+        Self::sub_value_from_map_for_delegation(
+            &mut self.data.pool_balances,
+            pool_id,
+            amount_to_add,
+        )?;
         Ok(())
     }
 
@@ -195,7 +210,7 @@ impl<'a> PoSAccountingDelta<'a> {
         amount_to_add: Amount,
     ) -> Result<(), Error> {
         Self::add_value_to_map_for_delegation(
-            &mut self.pool_delegation_shares,
+            &mut self.data.pool_delegation_shares,
             (pool_id, delegation_id),
             amount_to_add,
         )?;
@@ -209,7 +224,7 @@ impl<'a> PoSAccountingDelta<'a> {
         amount_to_add: Amount,
     ) -> Result<(), Error> {
         Self::sub_value_from_map_for_delegation(
-            &mut self.pool_delegation_shares,
+            &mut self.data.pool_delegation_shares,
             (pool_id, delegation_id),
             amount_to_add,
         )?;
