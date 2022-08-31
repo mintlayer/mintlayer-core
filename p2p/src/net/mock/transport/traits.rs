@@ -34,7 +34,7 @@ pub trait TransportService: Sized {
     /// Creates a new socket and binds it to the given address.
     async fn bind(address: Self::Address) -> crate::Result<Self::Socket>;
 
-    /// Creates a new socket and try to establish a connection to `address`
+    /// Creates a new socket and try to establish a connection to the given `address`.
     async fn connect(address: Self::Address) -> crate::Result<Self::Socket>;
 }
 
@@ -55,6 +55,7 @@ pub trait SocketService<T: TransportService + 'static> {
     // TODO: FIXME: Different error type?
     async fn recv(&mut self) -> Result<Option<Message>, std::io::Error>;
 
+    // TODO: FIXME: Do we really need this?
     /// Returns the local address of the socket.
     fn local_addr(&self) -> crate::Result<T::Address>;
 }

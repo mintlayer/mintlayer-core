@@ -16,7 +16,7 @@
 use std::net::SocketAddr;
 
 use async_trait::async_trait;
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 
 use crate::net::mock::{
     transport::{SocketService, TransportService},
@@ -31,11 +31,12 @@ impl TransportService for TcpService {
     type Address = SocketAddr;
 
     async fn bind(address: Self::Address) -> crate::Result<Self::Socket> {
-        todo!()
+        // TODO: FIX error handling
+        Ok(TcpListener::bind(address).unwrap())
     }
 
     async fn connect(address: Self::Address) -> crate::Result<Self::Socket> {
-        todo!()
+        TcpStream::connect(address)
     }
 }
 
