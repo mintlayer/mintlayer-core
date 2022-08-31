@@ -8,9 +8,9 @@ use crate::{
     storage::PoSAccountingStorageRead,
 };
 
-use super::PoSAccounting;
+use super::PoSAccountingDBMut;
 
-impl<S: PoSAccountingStorageRead> PoSAccountingView for PoSAccounting<S> {
+impl<'a, S: PoSAccountingStorageRead> PoSAccountingView for PoSAccountingDBMut<'a, S> {
     fn get_pool_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error> {
         self.store.get_pool_balance(pool_id).map_err(Error::from)
     }

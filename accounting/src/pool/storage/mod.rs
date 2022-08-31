@@ -10,17 +10,17 @@ use super::delegation::DelegationData;
 pub mod operator_impls;
 pub mod view_impls;
 
-pub struct PoSAccounting<S> {
-    store: S,
+pub struct PoSAccountingDBMut<'a, S> {
+    store: &'a mut S,
 }
 
-impl<S> PoSAccounting<S> {
-    pub fn new_empty(store: S) -> Self {
+impl<'a, S> PoSAccountingDBMut<'a, S> {
+    pub fn new_empty(store: &'a mut S) -> Self {
         Self { store }
     }
 }
 
-impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
+impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
     fn add_to_delegation_balance(
         &mut self,
         delegation_target: H256,
@@ -104,7 +104,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccounting<S> {
     }
 }
 
-impl<S: PoSAccountingStorageRead> PoSAccounting<S> {
+impl<'a, S: PoSAccountingStorageRead> PoSAccountingDBMut<'a, S> {
     fn get_delegation_data(&self, delegation_target: H256) -> Result<DelegationData, Error> {
         let delegation_target = self
             .store

@@ -21,9 +21,9 @@ use crate::{
     storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
 };
 
-use super::PoSAccounting;
+use super::PoSAccountingDBMut;
 
-impl<S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccounting<S> {
+impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccountingDBMut<'a, S> {
     fn create_pool(
         &mut self,
         input0_outpoint: &OutPoint,
@@ -234,7 +234,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccounting<
     }
 }
 
-impl<S: PoSAccountingStorageRead> PoSAccountingOperatorRead for PoSAccounting<S> {
+impl<'a, S: PoSAccountingStorageRead> PoSAccountingOperatorRead for PoSAccountingDBMut<'a, S> {
     fn pool_exists(&self, pool_id: H256) -> Result<bool, Error> {
         self.store.get_pool_balance(pool_id).map_err(Error::from).map(|v| v.is_some())
     }
