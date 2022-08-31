@@ -58,7 +58,7 @@ pub struct MockConnectivityHandle<T: NetworkingService, U: TransportService> {
 
     /// RX channel for receiving connectivity events from mock backend
     conn_rx: mpsc::Receiver<types::ConnectivityEvent<U>>,
-    _marker: std::marker::PhantomData<fn() -> T>,
+    _marker: PhantomData<fn() -> T>,
 }
 
 pub struct MockPubSubHandle<T, U>
@@ -71,7 +71,7 @@ where
 
     /// RX channel for receiving pubsub events from mock backend
     _pubsub_rx: mpsc::Receiver<types::PubSubEvent<U>>,
-    _marker: std::marker::PhantomData<fn() -> T>,
+    _marker: PhantomData<fn() -> T>,
 }
 
 pub struct MockSyncingMessagingHandle<T, U>
@@ -84,7 +84,7 @@ where
 
     /// RX channel for receiving syncing events
     sync_rx: mpsc::Receiver<types::SyncingEvent>,
-    _marker: std::marker::PhantomData<fn() -> T>,
+    _marker: PhantomData<fn() -> T>,
 }
 
 impl<T> TryInto<net::types::PeerInfo<T>> for types::MockPeerInfo

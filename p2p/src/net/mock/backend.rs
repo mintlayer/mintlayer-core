@@ -147,8 +147,6 @@ where
         state: ConnectionState<T>,
     ) -> crate::Result<()> {
         let (tx, rx) = mpsc::channel(16);
-        // TODO: FIXME:
-        //let socket = socket::MockSocket::new(socket);
 
         self.pending.insert(remote_peer_id, (tx, state));
 

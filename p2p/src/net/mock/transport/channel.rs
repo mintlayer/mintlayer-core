@@ -14,35 +14,24 @@
 // limitations under the License.
 
 use once_cell::sync::Lazy;
-use tokio::sync::mpsc;
+use tokio::sync::{
+    mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+    oneshot,
+};
 
 use crate::net::mock::{types::Message, SocketService, TransportService};
 
-static NETWORK_HANDLE: Lazy<mpsc::UnboundedSender<SocketCommand>> = Lazy::new(|| {
-    let (tx, mut rx) = mpsc::unbounded_channel();
-    tokio::spawn(async move {
-        loop {
-            match rx.recv().await {
-                Some(cmd) => match cmd {
-                    SocketCommand::Connect(address) => {
-                        // TODO: check if peer with `address` has connected
-                    }
-                    SocketCommand::Bind(address) => {
-                        // TODO: check if `address` is free and if it is, bind this peer to that address
-                    }
-                },
-                None => {
-                    panic!("TODO")
-                }
-            }
-        }
-    });
-    tx
-});
+static NETWORK_HANDLE: Lazy<UnboundedSender<SocketCommand>> = Lazy::new(handle_connections);
 
-enum SocketCommand {
-    Connect(u64),
-    Bind(u64),
+struct SocketCommand {
+    address: u64,
+    response: oneshot::Sender<()>,
+    command: SocketCommandType,
+}
+
+enum SocketCommandType {
+    Connect,
+    Bind,
 }
 
 #[derive(Debug)]
@@ -56,7 +45,7 @@ impl TransportService for ChannelService {
     type Address = u64;
 
     async fn bind(address: Self::Address) -> crate::Result<Self::Socket> {
-        let tx: mpsc::UnboundedSender<SocketCommand> = NETWORK_HANDLE.clone();
+        let tx: UnboundedSender<SocketCommand> = NETWORK_HANDLE.clone();
         // TODO: FIXME:
         todo!();
     }
@@ -93,4 +82,27 @@ impl SocketService<ChannelService> for ChannelSocket {
         // TODO: FIXME:
         todo!();
     }
+}
+
+fn handle_connections() -> UnboundedSender<SocketCommand> {
+    let (tx, mut rx): (
+        UnboundedSender<SocketCommand>,
+        UnboundedReceiver<SocketCommand>,
+    ) = unbounded_channel();
+    tokio::spawn(async move {
+        loop {
+            match rx.recv().await {
+                Some(cmd) => match cmd.command {
+                    SocketCommandType::Connect => {
+                        // TODO: check if peer with `address` has connected
+                    }
+                    SocketCommandType::Bind => {
+                        // TODO: check if `address` is free and if it is, bind this peer to that address
+                    }
+                },
+                None => break,
+            }
+        }
+    });
+    tx
 }

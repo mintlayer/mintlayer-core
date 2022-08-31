@@ -132,9 +132,10 @@ mod tests {
     fn new_mock_peersyncstate() -> PeerContext<MockService<ChannelService>> {
         // TODO: FIXME:
         //let addr: SocketAddr = "[::1]:8888".parse().unwrap();
-        PeerContext::<MockService<ChannelService>>::new(types::MockPeerId::from_socket_address::<
-            ChannelService,
-        >(&addr))
+        // PeerContext::<MockService<ChannelService>>::new(types::MockPeerId::from_socket_address::<
+        //     ChannelService,
+        // >(&addr))
+        todo!()
     }
 
     #[test]
