@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_trait::async_trait;
 use once_cell::sync::Lazy;
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
@@ -37,9 +38,7 @@ enum SocketCommandType {
 #[derive(Debug)]
 pub struct ChannelService {}
 
-pub struct ChannelSocket {}
-
-#[async_trait::async_trait]
+#[async_trait]
 impl TransportService for ChannelService {
     type Socket = ChannelSocket;
     type Address = u64;
@@ -56,7 +55,9 @@ impl TransportService for ChannelService {
     }
 }
 
-#[async_trait::async_trait]
+pub struct ChannelSocket {}
+
+#[async_trait]
 impl SocketService<ChannelService> for ChannelSocket {
     async fn accept(&mut self) -> crate::Result<(ChannelSocket, u64)> {
         // TODO: FIXME:

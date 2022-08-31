@@ -23,7 +23,13 @@ use p2p::{
     event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
     message::{BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response},
     net::{
-        self, libp2p::Libp2pService, mock::MockService, types::ConnectivityEvent,
+        self,
+        libp2p::Libp2pService,
+        mock::{
+            transport::{ChannelService, TcpService},
+            MockService,
+        },
+        types::ConnectivityEvent,
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
     sync::BlockSyncManager,
@@ -646,6 +652,25 @@ async fn remote_local_diff_chains_local_higher_libp2p() {
 #[cfg(not(target_os = "macos"))]
 async fn remote_local_diff_chains_local_higher_mock() {
     remote_local_diff_chains_local_higher::<MockService>(make_mock_addr(), make_mock_addr()).await;
+}
+
+// TODO: FIXME: Example of different transports:
+#[tokio::test]
+async fn remote_local_diff_chains_local_higher_mock_tcp() {
+    remote_local_diff_chains_local_higher::<MockService<TcpService>>(
+        make_mock_addr(),
+        make_mock_addr(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn remote_local_diff_chains_local_higher_mock_channels() {
+    remote_local_diff_chains_local_higher::<MockService<ChannelService>>(
+        make_mock_addr(),
+        make_mock_addr(),
+    )
+    .await;
 }
 
 // local and remote nodes are in different chains and remote has longer chain
