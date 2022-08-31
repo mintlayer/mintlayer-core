@@ -54,7 +54,7 @@ where
         swarm.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionError {
             address: _,
-            error: P2pError::DialError(DialError::IoError(std::io::ErrorKind::ConnectionRefused))
+            error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut)
         })
     ));
 }
@@ -463,9 +463,7 @@ where
             res,
             Ok(net::types::ConnectivityEvent::ConnectionError {
                 address: _,
-                error: P2pError::DialError(DialError::IoError(
-                    std::io::ErrorKind::ConnectionRefused
-                )),
+                error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
             })
         )),
         Err(_err) => panic!("did not receive `ConnectionError` in time"),
@@ -531,9 +529,7 @@ where
     {
         Ok(res) => assert!(std::matches!(
             res.unwrap(),
-            Err(P2pError::DialError(DialError::IoError(
-                std::io::ErrorKind::ConnectionRefused
-            )))
+            Err(P2pError::DialError(DialError::ConnectionRefusedOrTimedOut))
         )),
         Err(_err) => panic!("did not receive `ConnectionError` in time"),
     }
