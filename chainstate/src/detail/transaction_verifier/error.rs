@@ -16,7 +16,7 @@
 use common::{
     chain::{
         block::{Block, GenBlock},
-        OutPointSourceId, SpendError, Spender, TxMainChainIndexError, TxMainChainPosition,
+        SpendError, Spender, TxMainChainIndexError, TxMainChainPosition,
     },
     primitives::{Amount, Id},
 };
@@ -97,8 +97,8 @@ pub enum ConnectTransactionError {
     SerializationInvariantError(Id<Block>),
     #[error("Timelock rules violated")]
     TimeLockViolation,
-    #[error("Utxo invariant broken")]
-    UtxoInvariantBroken,
+    #[error("Utxo error: {0}")]
+    UtxoError(#[from] utxo::Error),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
@@ -123,28 +123,6 @@ impl From<SpendError> for ConnectTransactionError {
                 tx_id,
                 source_output_index,
             },
-        }
-    }
-}
-impl From<utxo::Error> for ConnectTransactionError {
-    fn from(err: utxo::Error) -> Self {
-        match err {
-            utxo::Error::UtxoAlreadySpent(outpoint_id) => {
-                ConnectTransactionError::DoubleSpendAttempt(match outpoint_id {
-                    OutPointSourceId::Transaction(id) => Spender::from(id),
-                    OutPointSourceId::BlockReward(id) => Spender::from(id),
-                })
-            }
-            utxo::Error::DBError(error) => ConnectTransactionError::StorageError(error),
-            utxo::Error::FreshUtxoAlreadyExists => ConnectTransactionError::UtxoInvariantBroken,
-            utxo::Error::OverwritingUtxo => ConnectTransactionError::UtxoInvariantBroken,
-            utxo::Error::NoBlockchainHeightFound => {
-                ConnectTransactionError::BlockHeightArithmeticError
-            }
-            utxo::Error::NoUtxoFound => ConnectTransactionError::MissingOutputOrSpent,
-            utxo::Error::MissingBlockRewardUndo(id) => {
-                ConnectTransactionError::MissingBlockRewardUndo(id)
-            }
         }
     }
 }

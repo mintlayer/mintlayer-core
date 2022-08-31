@@ -574,7 +574,7 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
     assert!(undo1.inner().len() == 1);
 
     //undo spending
-    cache.disconnect_transaction(&tx, &undo1).unwrap();
+    cache.disconnect_transaction(&tx, undo1.clone()).unwrap();
     assert!(cache.has_utxo_in_cache(&outpoint));
 
     //spend the transaction again
@@ -621,7 +621,7 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
 
     //undo spending
     cache
-        .disconnect_block_transactable(&reward, &block.get_id().into(), Some(&undo1))
+        .disconnect_block_transactable(&reward, &block.get_id().into(), Some(undo1.clone()))
         .unwrap();
     assert!(cache.has_utxo_in_cache(&outpoint));
 

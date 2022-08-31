@@ -20,7 +20,7 @@ use common::{
 };
 use thiserror::Error;
 
-#[derive(Error, Debug, Eq, PartialEq)]
+#[derive(Error, Debug, Eq, PartialEq, Clone)]
 pub enum Error {
     #[error("Attempted to overwrite an existing utxo")]
     OverwritingUtxo,
@@ -37,11 +37,5 @@ pub enum Error {
     #[error("Block reward undo info is missing while unspending the utxo for block `{0}`")]
     MissingBlockRewardUndo(Id<GenBlock>),
     #[error("Database error: `{0}`")]
-    DBError(storage_result::Error),
-}
-
-impl From<storage_result::Error> for Error {
-    fn from(e: storage_result::Error) -> Self {
-        Error::DBError(e)
-    }
+    DBError(#[from] storage_result::Error),
 }

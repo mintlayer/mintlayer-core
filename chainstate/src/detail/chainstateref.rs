@@ -535,6 +535,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             blockreward_maturity,
         )?;
 
+        // TODO: add a test that checks the order in which txs are connected
         for (tx_num, _tx) in block.transactions().iter().enumerate() {
             tx_verifier.connect_transaction(
                 BlockTransactableRef::Transaction(block, tx_num),
@@ -557,6 +558,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     ) -> Result<TransactionVerifier<S>, BlockError> {
         let mut tx_verifier =
             TransactionVerifier::new(&self.db_tx, utxo_view.derive_cache(), self.chain_config);
+        // TODO: add a test that checks the order in which txs are disconnected
         block.transactions().iter().rev().enumerate().try_for_each(|(tx_num, _tx)| {
             tx_verifier.disconnect_transaction(BlockTransactableRef::Transaction(block, tx_num))
         })?;

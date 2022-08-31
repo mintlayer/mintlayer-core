@@ -27,6 +27,10 @@ impl BlockRewardUndo {
     pub fn inner(&self) -> &[Utxo] {
         &self.0
     }
+
+    pub fn into_inner(self) -> Vec<Utxo> {
+        self.0
+    }
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
@@ -80,6 +84,14 @@ impl BlockUndo {
         self.tx_undos.push(tx_undo);
     }
 
+    pub fn take_tx_undo(&mut self, tx_num: usize) -> Option<TxUndo> {
+        if tx_num < self.tx_undos.len() {
+            Some(self.tx_undos.remove(tx_num))
+        } else {
+            None
+        }
+    }
+
     pub fn block_reward_undo(&self) -> Option<&BlockRewardUndo> {
         self.reward_undo.as_ref()
     }
@@ -87,6 +99,10 @@ impl BlockUndo {
     pub fn set_block_reward_undo(&mut self, reward_undo: BlockRewardUndo) {
         debug_assert!(self.reward_undo.is_none());
         self.reward_undo = Some(reward_undo);
+    }
+
+    pub fn take_block_reward_undo(&mut self) -> Option<BlockRewardUndo> {
+        self.reward_undo.take()
     }
 }
 

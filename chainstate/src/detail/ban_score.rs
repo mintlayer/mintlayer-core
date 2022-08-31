@@ -101,8 +101,8 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::TimeLockViolation => 100,
             &ConnectTransactionError::MissingBlockUndo(_) => 0,
             &ConnectTransactionError::MissingBlockRewardUndo(_) => 0,
-            &ConnectTransactionError::MissingTxUndo(_, _) => 0,
-            &ConnectTransactionError::UtxoInvariantBroken => 0,
+            ConnectTransactionError::MissingTxUndo(_, _) => 0,
+            ConnectTransactionError::UtxoError(err) => err.ban_score(),
         }
     }
 }
@@ -168,6 +168,20 @@ impl BanScore for BlockSizeError {
             BlockSizeError::Header(_, _) => 100,
             BlockSizeError::SizeOfTxs(_, _) => 100,
             BlockSizeError::SizeOfSmartContracts(_, _) => 100,
+        }
+    }
+}
+
+impl BanScore for utxo::Error {
+    fn ban_score(&self) -> u32 {
+        match self {
+            utxo::Error::OverwritingUtxo => 0,
+            utxo::Error::FreshUtxoAlreadyExists => 0,
+            utxo::Error::UtxoAlreadySpent(_) => 100,
+            utxo::Error::NoUtxoFound => 0,
+            utxo::Error::NoBlockchainHeightFound => 0,
+            utxo::Error::MissingBlockRewardUndo(_) => 0,
+            utxo::Error::DBError(_) => 0,
         }
     }
 }

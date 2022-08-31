@@ -25,7 +25,6 @@ use common::{
     },
     primitives::{BlockHeight, Id, Idable},
 };
-use logging::log;
 use std::{
     collections::BTreeMap,
     fmt::{Debug, Formatter},
@@ -157,15 +156,15 @@ impl<'a> UtxosCache<'a> {
     pub fn disconnect_transaction(
         &mut self,
         tx: &Transaction,
-        tx_undo: &TxUndo,
+        tx_undo: TxUndo,
     ) -> Result<(), Error> {
         for (i, _) in tx.outputs().iter().enumerate() {
             let tx_outpoint = OutPoint::new(OutPointSourceId::from(tx.get_id()), i as u32);
             self.spend_utxo(&tx_outpoint)?;
         }
 
-        for (tx_in, utxo) in tx.inputs().iter().zip(tx_undo.inner().iter()) {
-            self.add_utxo(tx_in.outpoint(), utxo.clone(), false)?;
+        for (tx_in, utxo) in tx.inputs().iter().zip(tx_undo.into_inner().into_iter()) {
+            self.add_utxo(tx_in.outpoint(), utxo, false)?;
         }
         Ok(())
     }
@@ -202,7 +201,7 @@ impl<'a> UtxosCache<'a> {
         &mut self,
         reward_transactable: &BlockRewardTransactable,
         block_id: &Id<GenBlock>,
-        reward_undo: Option<&BlockRewardUndo>,
+        reward_undo: Option<BlockRewardUndo>,
     ) -> Result<(), Error> {
         if let Some(outputs) = reward_transactable.outputs() {
             for (i, _) in outputs.iter().enumerate() {
@@ -213,8 +212,8 @@ impl<'a> UtxosCache<'a> {
 
         if let Some(inputs) = reward_transactable.inputs() {
             let block_undo = reward_undo.ok_or(Error::MissingBlockRewardUndo(*block_id))?;
-            for (tx_in, utxo) in inputs.iter().zip(block_undo.inner().iter()) {
-                self.add_utxo(tx_in.outpoint(), utxo.clone(), false)?;
+            for (tx_in, utxo) in inputs.iter().zip(block_undo.into_inner().into_iter()) {
+                self.add_utxo(tx_in.outpoint(), utxo, false)?;
             }
         }
         Ok(())
@@ -239,9 +238,7 @@ impl<'a> UtxosCache<'a> {
                 if !possible_overwrite {
                     if !curr_entry.is_spent() {
                         // Attempted to overwrite an existing utxo
-                        let e = Error::OverwritingUtxo;
-                        log::error!("{}", e.to_string());
-                        return Err(e);
+                        return Err(Error::OverwritingUtxo);
                     }
                     // If the utxo exists in this cache as a 'spent' utxo and is DIRTY, then
                     // its spentness hasn't been flushed to the parent cache. We're
@@ -406,9 +403,7 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
                             // exists in the parent cache. If this ever happens, it means
                             // the FRESH flag was misapplied and there is a logic error in
                             // the calling code.
-                            let e = Error::FreshUtxoAlreadyExists;
-                            log::error!("{}", e.to_string());
-                            return Err(e);
+                            return Err(Error::FreshUtxoAlreadyExists);
                         }
 
                         if parent_entry.is_fresh() && entry.is_spent() {

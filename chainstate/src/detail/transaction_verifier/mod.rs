@@ -38,7 +38,10 @@ use common::{
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 use utils::ensure;
-use utxo::{BlockUndo, ConsumedUtxoCache, FlushableUtxoView, UtxosCache, UtxosDBMut};
+use utxo::{
+    BlockRewardUndo, BlockUndo, ConsumedUtxoCache, FlushableUtxoView, TxUndo, UtxosCache,
+    UtxosDBMut,
+};
 
 use self::error::ConnectTransactionError;
 
@@ -71,6 +74,8 @@ pub struct TransactionVerifier<'a, S> {
     chain_config: &'a ChainConfig,
 }
 
+// TODO: UtxoDB should be a member of TransactionVerifier and UtxoCache should be constructed from it.
+// Investigate how to solve borrows checker lifetime issues with that approach.
 impl<'a, S> TransactionVerifier<'a, S> {
     pub fn new(db_tx: &'a S, utxo_cache: UtxosCache<'a>, chain_config: &'a ChainConfig) -> Self {
         Self {
@@ -512,24 +517,48 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn fetch_block_undo<'b>(
-        db_tx: &'a S,
-        utxo_block_undo: &'b mut BTreeMap<Id<Block>, BlockUndoEntry>,
-        block_id: &Id<Block>,
-    ) -> Result<&'b BlockUndo, ConnectTransactionError> {
-        match utxo_block_undo.entry(*block_id) {
-            Entry::Occupied(entry) => (Ok(&entry.into_mut().undo)),
+    fn fetch_block_undo(&mut self, block_id: &Id<Block>) -> Result<(), ConnectTransactionError> {
+        match self.utxo_block_undo.entry(*block_id) {
+            Entry::Occupied(_) => (),
             Entry::Vacant(entry) => {
-                let block_undo = db_tx
+                let block_undo = self
+                    .db_tx
                     .get_undo_data(*block_id)?
                     .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
-                let block_entry = entry.insert(BlockUndoEntry {
+                entry.insert(BlockUndoEntry {
                     undo: block_undo,
                     is_fresh: false,
                 });
-                Ok(&block_entry.undo)
             }
         }
+        Ok(())
+    }
+
+    fn take_tx_undo(
+        &mut self,
+        block_id: &Id<Block>,
+        tx_num: usize,
+    ) -> Result<TxUndo, ConnectTransactionError> {
+        self.fetch_block_undo(block_id)?;
+        self.utxo_block_undo
+            .get_mut(block_id)
+            .expect("block undo should be available")
+            .undo
+            .take_tx_undo(tx_num)
+            .ok_or(ConnectTransactionError::MissingTxUndo(tx_num, *block_id))
+    }
+
+    fn take_block_reward_undo(
+        &mut self,
+        block_id: &Id<Block>,
+    ) -> Result<Option<BlockRewardUndo>, ConnectTransactionError> {
+        self.fetch_block_undo(block_id)?;
+        Ok(self
+            .utxo_block_undo
+            .get_mut(block_id)
+            .expect("block undo should be available")
+            .undo
+            .take_block_reward_undo())
     }
 
     fn get_or_create_block_undo(&mut self, block_id: &Id<Block>) -> &mut BlockUndo {
@@ -650,11 +679,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                         .map_err(ConnectTransactionError::from)?;
                 }
 
-                let tx_undo =
-                    Self::fetch_block_undo(self.db_tx, &mut self.utxo_block_undo, &block_id)?
-                        .tx_undos()
-                        .get(tx_num)
-                        .ok_or(ConnectTransactionError::MissingTxUndo(tx_num, block_id))?;
+                let tx_undo = self.take_tx_undo(&block_id, tx_num)?;
                 self.utxo_cache.disconnect_transaction(tx, tx_undo)?;
             }
             BlockTransactableRef::BlockReward(block) => {
@@ -675,9 +700,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     }
                 }
 
-                let reward_undo =
-                    Self::fetch_block_undo(self.db_tx, &mut self.utxo_block_undo, &block.get_id())?
-                        .block_reward_undo();
+                let reward_undo = self.take_block_reward_undo(&block.get_id())?;
                 self.utxo_cache.disconnect_block_transactable(
                     &reward_transactable,
                     &block.get_id().into(),
