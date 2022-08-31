@@ -4044,6 +4044,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "storage-backend-test-suite"
+version = "0.1.0"
+dependencies = [
+ "libtest-mimic",
+ "proptest",
+ "storage-core",
+ "utils",
+]
+
+[[package]]
 name = "storage-core"
 version = "0.1.0"
 dependencies = [
@@ -4056,6 +4066,7 @@ dependencies = [
 name = "storage-inmemory"
 version = "0.1.0"
 dependencies = [
+ "storage-backend-test-suite",
  "storage-core",
  "utils",
 ]

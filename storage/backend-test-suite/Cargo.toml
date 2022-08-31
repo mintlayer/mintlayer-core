@@ -1,0 +1,12 @@
+[package]
+name = "storage-backend-test-suite"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+storage-core = { path = "../core" }
+utils = { path = "../../utils" }
+
+libtest-mimic = "0.5"
+proptest = "1.0"
