@@ -572,7 +572,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             TransactionVerifier::new(&self.db_tx, utxo_view.derive_cache(), self.chain_config);
 
         // TODO: add a test that checks the order in which txs are disconnected
-        block.transactions().iter().rev().enumerate().try_for_each(|(tx_num, _)| {
+        block.transactions().iter().enumerate().rev().try_for_each(|(tx_num, _)| {
             tx_verifier.disconnect_transactable(BlockTransactableRef::Transaction(block, tx_num))
         })?;
         tx_verifier.disconnect_transactable(BlockTransactableRef::BlockReward(block))?;
