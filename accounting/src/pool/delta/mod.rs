@@ -34,6 +34,22 @@ pub struct PoSAccountingDelta<'a> {
     data: PoSAccountingDeltaData,
 }
 
+#[allow(dead_code)]
+pub struct PoolDataDeltaUndo {
+    data: PoolDataDelta,
+}
+
+#[allow(dead_code)]
+pub struct DelegationDataDeltaUndo {
+    data: DelegationDataDelta,
+}
+
+#[allow(dead_code)]
+pub struct DeltaMergeUndo {
+    pool_data_undo: BTreeMap<H256, PoolDataDeltaUndo>,
+    delegation_data_undo: BTreeMap<H256, DelegationDataDeltaUndo>,
+}
+
 impl<'a> PoSAccountingDelta<'a> {
     pub fn new(parent: &'a dyn PoSAccountingView) -> Self {
         Self {
@@ -62,38 +78,45 @@ impl<'a> PoSAccountingDelta<'a> {
         }
     }
 
-    fn merge_pool_data(&mut self, key: H256, other_data: PoolDataDelta) -> Result<(), Error> {
+    fn merge_pool_data(
+        &mut self,
+        key: H256,
+        other_data: PoolDataDelta,
+    ) -> Result<Option<PoolDataDeltaUndo>, Error> {
         let current = self.data.pool_data.get(&key);
         let new_data = match current {
             Some(current_data) => combine_pool_data(current_data, other_data)?,
             None => Some(other_data),
         };
-        match new_data {
-            Some(v) => self.data.pool_data.insert(key, v),
+        let undo = match new_data {
+            Some(v) => self.data.pool_data.insert(key, v).and(None),
             None => self.data.pool_data.remove(&key),
         };
-        Ok(())
+        Ok(undo.map(|data| PoolDataDeltaUndo { data }))
     }
 
     fn merge_delegation_data(
         &mut self,
         key: H256,
         other_data: DelegationDataDelta,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<DelegationDataDeltaUndo>, Error> {
         let current = self.data.delegation_data.get(&key);
         let new_data = match current {
             Some(current_data) => combine_delegation_data(current_data, other_data)?,
             None => Some(other_data),
         };
-        match new_data {
-            Some(v) => self.data.delegation_data.insert(key, v),
+        let undo = match new_data {
+            Some(v) => self.data.delegation_data.insert(key, v).and(None),
             None => self.data.delegation_data.remove(&key),
         };
 
-        Ok(())
+        Ok(undo.map(|data| DelegationDataDeltaUndo { data }))
     }
 
-    pub fn merge_with_delta(&mut self, other: PoSAccountingDelta<'a>) -> Result<(), Error> {
+    pub fn merge_with_delta(
+        &mut self,
+        other: PoSAccountingDelta<'a>,
+    ) -> Result<DeltaMergeUndo, Error> {
         other.data.pool_balances.into_iter().try_for_each(|(key, other_amount)| {
             merge_balance(&mut self.data.pool_balances, key, other_amount)
         })?;
@@ -111,16 +134,37 @@ impl<'a> PoSAccountingDelta<'a> {
             .try_for_each(|(key, other_del_balance)| {
                 merge_balance(&mut self.data.delegation_balances, key, other_del_balance)
             })?;
-        other
+
+        let pool_data_undo = other
             .data
             .pool_data
             .into_iter()
-            .try_for_each(|(key, other_pool_data)| self.merge_pool_data(key, other_pool_data))?;
-        other.data.delegation_data.into_iter().try_for_each(|(key, other_del_data)| {
-            self.merge_delegation_data(key, other_del_data)
-        })?;
+            .map(|(key, other_pool_data)| {
+                self.merge_pool_data(key, other_pool_data).map(|v| (key, v))
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+        let pool_data_undo = pool_data_undo
+            .into_iter()
+            .filter_map(|(k, v)| v.map(|v| (k, v)))
+            .collect::<BTreeMap<_, _>>();
 
-        Ok(())
+        let delegation_data_undo = other
+            .data
+            .delegation_data
+            .into_iter()
+            .map(|(key, other_del_data)| {
+                self.merge_delegation_data(key, other_del_data).map(|v| (key, v))
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+        let delegation_data_undo = delegation_data_undo
+            .into_iter()
+            .filter_map(|(k, v)| v.map(|v| (k, v)))
+            .collect::<BTreeMap<_, _>>();
+
+        Ok(DeltaMergeUndo {
+            pool_data_undo,
+            delegation_data_undo,
+        })
     }
 
     fn add_value_to_map_for_delegation<K: Ord>(
