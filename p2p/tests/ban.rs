@@ -150,12 +150,12 @@ where
     }
 }
 
-#[tokio::test]
-async fn invalid_sync_block_libp2p() {
-    invalid_sync_block::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
-}
-
-#[tokio::test]
-async fn invalid_sync_block_mock() {
-    invalid_sync_block::<MockService>(make_mock_addr(), make_mock_addr()).await;
-}
+// #[tokio::test]
+// async fn invalid_sync_block_libp2p() {
+//     invalid_sync_block::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+// }
+//
+// #[tokio::test]
+// async fn invalid_sync_block_mock() {
+//     invalid_sync_block::<MockService>(make_mock_addr(), make_mock_addr()).await;
+// }

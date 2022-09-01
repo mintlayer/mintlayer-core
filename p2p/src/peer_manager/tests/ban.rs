@@ -375,12 +375,12 @@ where
     }
 }
 
-#[tokio::test]
-async fn inbound_connection_invalid_magic_libp2p() {
-    inbound_connection_invalid_magic::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
-}
-
-#[tokio::test]
-async fn inbound_connection_invalid_magic_mock() {
-    inbound_connection_invalid_magic::<MockService>(make_mock_addr(), make_mock_addr()).await;
-}
+// #[tokio::test]
+// async fn inbound_connection_invalid_magic_libp2p() {
+//     inbound_connection_invalid_magic::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+// }
+//
+// #[tokio::test]
+// async fn inbound_connection_invalid_magic_mock() {
+//     inbound_connection_invalid_magic::<MockService>(make_mock_addr(), make_mock_addr()).await;
+// }

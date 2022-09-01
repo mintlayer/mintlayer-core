@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::SocketAddr;
+use std::{
+    fmt::{self, Display, Formatter},
+    net::SocketAddr,
+};
 
 use async_trait::async_trait;
 use bytes::{Buf, BytesMut};
@@ -42,15 +45,20 @@ impl TcpNetworkMock {
 impl NetworkMock for TcpNetworkMock {
     type Address = TcpAddressMock;
 
-    fn add_peer(&mut self) -> Self::Address {
-        TcpAddressMock::new("[::1]:0".parse().unwrap())
+    fn new(peers: usize) -> (Self, Vec<Self::Address>) {
+        todo!()
     }
+
+    // fn add_peer(&mut self) -> Self::Address {
+    //     TcpAddressMock::new("[::1]:0".parse().unwrap())
+    // }
 
     async fn run(self) {
         // We don't need to do anything special here.
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TcpAddressMock {
     address: SocketAddr,
 }
@@ -58,6 +66,13 @@ pub struct TcpAddressMock {
 impl TcpAddressMock {
     pub fn new(address: SocketAddr) -> Self {
         Self { address }
+    }
+}
+
+// TODO: FIXME:
+impl Display for TcpAddressMock {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        todo!()
     }
 }
 
@@ -178,28 +193,28 @@ impl Decoder for EncoderDecoder {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{message::*, net::mock::types};
-    use tokio::net::TcpListener;
-
-    #[tokio::test]
-    async fn test_mock_socket_send_recv() {
-        let addr: std::net::SocketAddr = "[::1]:0".parse().unwrap();
-        let server = TcpListener::bind(addr).await.unwrap();
-        let peer_fut = TcpStream::connect(server.local_addr().unwrap());
-
-        let (res1, res2) = tokio::join!(server.accept(), peer_fut);
-        let mut server_socket = MockSocket::new(res1.unwrap().0);
-        let mut peer_socket = MockSocket::new(res2.unwrap());
-
-        let msg = Message::Request {
-            request_id: types::MockRequestId::new(1337u64),
-            request: Request::BlockListRequest(BlockListRequest::new(vec![])),
-        };
-        peer_socket.send(msg.clone()).await.unwrap();
-
-        assert_eq!(server_socket.recv().await.unwrap().unwrap(), msg);
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::{message::*, net::mock::types};
+//     use tokio::net::TcpListener;
+//
+//     #[tokio::test]
+//     async fn test_mock_socket_send_recv() {
+//         let addr: std::net::SocketAddr = "[::1]:0".parse().unwrap();
+//         let server = TcpListener::bind(addr).await.unwrap();
+//         let peer_fut = TcpStream::connect(server.local_addr().unwrap());
+//
+//         let (res1, res2) = tokio::join!(server.accept(), peer_fut);
+//         let mut server_socket = MockSocket::new(res1.unwrap().0);
+//         let mut peer_socket = MockSocket::new(res2.unwrap());
+//
+//         let msg = Message::Request {
+//             request_id: types::MockRequestId::new(1337u64),
+//             request: Request::BlockListRequest(BlockListRequest::new(vec![])),
+//         };
+//         peer_socket.send(msg.clone()).await.unwrap();
+//
+//         assert_eq!(server_socket.recv().await.unwrap().unwrap(), msg);
+//     }
+// }

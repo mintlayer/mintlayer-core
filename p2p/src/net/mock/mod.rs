@@ -126,50 +126,55 @@ where
         Self::PubSubHandle,
         Self::SyncingMessagingHandle,
     )> {
-        let (cmd_tx, cmd_rx) = mpsc::channel(16);
-        let (conn_tx, conn_rx) = mpsc::channel(16);
-        let (pubsub_tx, _pubsub_rx) = mpsc::channel(16);
-        let (sync_tx, sync_rx) = mpsc::channel(16);
-        let socket = addr.connect().await?;
+        todo!();
+        // let (cmd_tx, cmd_rx) = mpsc::channel(16);
+        // let (conn_tx, conn_rx) = mpsc::channel(16);
+        // let (pubsub_tx, _pubsub_rx) = mpsc::channel(16);
+        // let (sync_tx, sync_rx) = mpsc::channel(16);
+        // TODO: FIXME:
+        //let socket = addr.connect().await?;
         // TODO: FIXME
         //let local_addr = socket.local_addr().expect("to have bind address available");
 
-        tokio::spawn(async move {
-            let mut backend = backend::Backend::new(
-                local_addr,
-                socket,
-                Arc::clone(&_config),
-                cmd_rx,
-                conn_tx,
-                pubsub_tx,
-                sync_tx,
-                std::time::Duration::from_secs(p2p_config.outbound_connection_timeout),
-            );
+        // // TODO: FIXME:
+        // tokio::spawn(async move {
+        //     let mut backend = backend::Backend::new(
+        //         local_addr,
+        //         socket,
+        //         Arc::clone(&_config),
+        //         cmd_rx,
+        //         conn_tx,
+        //         pubsub_tx,
+        //         sync_tx,
+        //         std::time::Duration::from_secs(p2p_config.outbound_connection_timeout),
+        //     );
+        //
+        //     if let Err(err) = backend.run().await {
+        //         log::error!("failed to run backend: {err}");
+        //     }
+        // });
 
-            if let Err(err) = backend.run().await {
-                log::error!("failed to run backend: {err}");
-            }
-        });
-
-        Ok((
-            Self::ConnectivityHandle {
-                local_addr,
-                cmd_tx: cmd_tx.clone(),
-                peer_id: types::MockPeerId::from_socket_address(&local_addr),
-                conn_rx,
-                _marker: Default::default(),
-            },
-            Self::PubSubHandle {
-                _cmd_tx: cmd_tx.clone(),
-                _pubsub_rx,
-                _marker: Default::default(),
-            },
-            Self::SyncingMessagingHandle {
-                cmd_tx,
-                sync_rx,
-                _marker: Default::default(),
-            },
-        ))
+        todo!();
+        todo!()
+        // Ok((
+        //     Self::ConnectivityHandle {
+        //         local_addr,
+        //         cmd_tx: cmd_tx.clone(),
+        //         peer_id: types::MockPeerId::from_socket_address(&local_addr),
+        //         conn_rx,
+        //         _marker: Default::default(),
+        //     },
+        //     Self::PubSubHandle {
+        //         _cmd_tx: cmd_tx.clone(),
+        //         _pubsub_rx,
+        //         _marker: Default::default(),
+        //     },
+        //     Self::SyncingMessagingHandle {
+        //         cmd_tx,
+        //         sync_rx,
+        //         _marker: Default::default(),
+        //     },
+        // ))
     }
 }
 
@@ -353,132 +358,132 @@ mod tests {
     use crate::net::types::{Protocol, ProtocolType};
     use common::primitives::semver::SemVer;
 
-    #[tokio::test]
-    async fn connect_to_remote() {
-        let config = Arc::new(common::chain::config::create_mainnet());
-        let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
-
-        let (mut conn1, _, _) = MockService::start(
-            p2p_test_utils::make_mock_addr(),
-            Arc::clone(&config),
-            Arc::clone(&p2p_config),
-        )
-        .await
-        .unwrap();
-
-        let (conn2, _, _) = MockService::start(
-            p2p_test_utils::make_mock_addr(),
-            Arc::clone(&config),
-            Arc::clone(&p2p_config),
-        )
-        .await
-        .unwrap();
-
-        let addr = conn2.local_addr().await.unwrap().unwrap();
-        assert_eq!(conn1.connect(addr).await, Ok(()));
-
-        if let Ok(net::types::ConnectivityEvent::OutboundAccepted { address, peer_info }) =
-            conn1.poll_next().await
-        {
-            assert_eq!(address, conn2.local_addr().await.unwrap().unwrap());
-            assert_eq!(
-                peer_info,
-                net::types::PeerInfo {
-                    peer_id: *conn2.peer_id(),
-                    magic_bytes: *config.magic_bytes(),
-                    version: common::primitives::semver::SemVer::new(0, 1, 0),
-                    agent: None,
-                    protocols: [
-                        Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
-                        Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
-                    ]
-                    .into_iter()
-                    .collect(),
-                }
-            );
-        } else {
-            panic!("invalid event received");
-        }
-    }
-
-    #[tokio::test]
-    async fn accept_incoming() {
-        let config = Arc::new(common::chain::config::create_mainnet());
-        let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
-
-        let (mut conn1, _, _) = MockService::start(
-            p2p_test_utils::make_mock_addr(),
-            Arc::clone(&config),
-            Arc::clone(&p2p_config),
-        )
-        .await
-        .unwrap();
-
-        let (mut conn2, _, _) = MockService::start(
-            p2p_test_utils::make_mock_addr(),
-            Arc::clone(&config),
-            Arc::clone(&p2p_config),
-        )
-        .await
-        .unwrap();
-
-        let bind_address = conn2.local_addr().await.unwrap().unwrap();
-        let (_res1, res2) = tokio::join!(conn1.connect(bind_address), conn2.poll_next());
-        match res2.unwrap() {
-            ConnectivityEvent::InboundAccepted {
-                address: _,
-                peer_info,
-            } => {
-                assert_eq!(peer_info.magic_bytes, *config.magic_bytes());
-                assert_eq!(
-                    peer_info.version,
-                    common::primitives::semver::SemVer::new(0, 1, 0),
-                );
-                assert_eq!(peer_info.agent, None);
-                assert_eq!(
-                    peer_info.protocols,
-                    [
-                        Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
-                        Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
-                    ]
-                    .into_iter()
-                    .collect()
-                );
-            }
-            _ => panic!("invalid event received, expected incoming connection"),
-        }
-    }
-
-    #[tokio::test]
-    async fn disconnect() {
-        let config = Arc::new(common::chain::config::create_mainnet());
-        let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
-
-        let (mut conn1, _, _) = MockService::start(
-            p2p_test_utils::make_mock_addr(),
-            Arc::clone(&config),
-            Arc::clone(&p2p_config),
-        )
-        .await
-        .unwrap();
-        let (mut conn2, _, _) =
-            MockService::start(p2p_test_utils::make_mock_addr(), config, p2p_config)
-                .await
-                .unwrap();
-
-        let (_res1, res2) = tokio::join!(
-            conn1.connect(conn2.local_addr().await.unwrap().unwrap()),
-            conn2.poll_next()
-        );
-
-        match res2.unwrap() {
-            ConnectivityEvent::InboundAccepted {
-                address: _,
-                peer_info,
-            } => {
-                assert_eq!(conn2.disconnect(peer_info.peer_id).await, Ok(()));
-            }
-            _ => panic!("invalid event received, expected incoming connection"),
-        }
-    }
+    // #[tokio::test]
+    // async fn connect_to_remote() {
+    //     let config = Arc::new(common::chain::config::create_mainnet());
+    //     let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
+    //
+    //     let (mut conn1, _, _) = MockService::start(
+    //         p2p_test_utils::make_mock_addr(),
+    //         Arc::clone(&config),
+    //         Arc::clone(&p2p_config),
+    //     )
+    //     .await
+    //     .unwrap();
+    //
+    //     let (conn2, _, _) = MockService::start(
+    //         p2p_test_utils::make_mock_addr(),
+    //         Arc::clone(&config),
+    //         Arc::clone(&p2p_config),
+    //     )
+    //     .await
+    //     .unwrap();
+    //
+    //     let addr = conn2.local_addr().await.unwrap().unwrap();
+    //     assert_eq!(conn1.connect(addr).await, Ok(()));
+    //
+    //     if let Ok(net::types::ConnectivityEvent::OutboundAccepted { address, peer_info }) =
+    //         conn1.poll_next().await
+    //     {
+    //         assert_eq!(address, conn2.local_addr().await.unwrap().unwrap());
+    //         assert_eq!(
+    //             peer_info,
+    //             net::types::PeerInfo {
+    //                 peer_id: *conn2.peer_id(),
+    //                 magic_bytes: *config.magic_bytes(),
+    //                 version: common::primitives::semver::SemVer::new(0, 1, 0),
+    //                 agent: None,
+    //                 protocols: [
+    //                     Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
+    //                     Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
+    //                 ]
+    //                 .into_iter()
+    //                 .collect(),
+    //             }
+    //         );
+    //     } else {
+    //         panic!("invalid event received");
+    //     }
+    // }
+    //
+    // #[tokio::test]
+    // async fn accept_incoming() {
+    //     let config = Arc::new(common::chain::config::create_mainnet());
+    //     let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
+    //
+    //     let (mut conn1, _, _) = MockService::start(
+    //         p2p_test_utils::make_mock_addr(),
+    //         Arc::clone(&config),
+    //         Arc::clone(&p2p_config),
+    //     )
+    //     .await
+    //     .unwrap();
+    //
+    //     let (mut conn2, _, _) = MockService::start(
+    //         p2p_test_utils::make_mock_addr(),
+    //         Arc::clone(&config),
+    //         Arc::clone(&p2p_config),
+    //     )
+    //     .await
+    //     .unwrap();
+    //
+    //     let bind_address = conn2.local_addr().await.unwrap().unwrap();
+    //     let (_res1, res2) = tokio::join!(conn1.connect(bind_address), conn2.poll_next());
+    //     match res2.unwrap() {
+    //         ConnectivityEvent::InboundAccepted {
+    //             address: _,
+    //             peer_info,
+    //         } => {
+    //             assert_eq!(peer_info.magic_bytes, *config.magic_bytes());
+    //             assert_eq!(
+    //                 peer_info.version,
+    //                 common::primitives::semver::SemVer::new(0, 1, 0),
+    //             );
+    //             assert_eq!(peer_info.agent, None);
+    //             assert_eq!(
+    //                 peer_info.protocols,
+    //                 [
+    //                     Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
+    //                     Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
+    //                 ]
+    //                 .into_iter()
+    //                 .collect()
+    //             );
+    //         }
+    //         _ => panic!("invalid event received, expected incoming connection"),
+    //     }
+    // }
+    //
+    // #[tokio::test]
+    // async fn disconnect() {
+    //     let config = Arc::new(common::chain::config::create_mainnet());
+    //     let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
+    //
+    //     let (mut conn1, _, _) = MockService::start(
+    //         p2p_test_utils::make_mock_addr(),
+    //         Arc::clone(&config),
+    //         Arc::clone(&p2p_config),
+    //     )
+    //     .await
+    //     .unwrap();
+    //     let (mut conn2, _, _) =
+    //         MockService::start(p2p_test_utils::make_mock_addr(), config, p2p_config)
+    //             .await
+    //             .unwrap();
+    //
+    //     let (_res1, res2) = tokio::join!(
+    //         conn1.connect(conn2.local_addr().await.unwrap().unwrap()),
+    //         conn2.poll_next()
+    //     );
+    //
+    //     match res2.unwrap() {
+    //         ConnectivityEvent::InboundAccepted {
+    //             address: _,
+    //             peer_info,
+    //         } => {
+    //             assert_eq!(conn2.disconnect(peer_info.peer_id).await, Ok(()));
+    //         }
+    //         _ => panic!("invalid event received, expected incoming connection"),
+    //     }
+    // }
 }

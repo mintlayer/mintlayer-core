@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    fmt::{self, Display, Formatter},
+};
 
 use async_trait::async_trait;
 use futures::{future, FutureExt};
@@ -46,14 +49,27 @@ impl ChannelNetworkMock {
 impl NetworkMock for ChannelNetworkMock {
     type Address = ChannelAddressMock;
 
-    fn add_peer(&mut self) -> Self::Address {
-        let new_peer = MockPeerId::from_int(
-            self.peers.keys().rev().next().map(|p| p.into_int() + 1).unwrap_or(0),
-        );
-        let (tx, rx) = unbounded_channel();
-        assert!(self.peers.insert(new_peer, rx).is_none());
-        ChannelAddressMock::new(tx)
+    fn new(peers: usize) -> (Self, Vec<Self::Address>) {
+        let (peers, addresses) = (0..peers)
+            .map(|i| {
+                let (tx, rx) = unbounded_channel();
+                (
+                    (MockPeerId::from_int(i as u64), rx),
+                    ChannelAddressMock::new(tx),
+                )
+            })
+            .unzip();
+        (Self { peers }, addresses)
     }
+
+    // fn add_peer(&mut self) -> Self::Address {
+    //     let new_peer = MockPeerId::from_int(
+    //         self.peers.keys().rev().next().map(|p| p.into_int() + 1).unwrap_or(0),
+    //     );
+    //     let (tx, rx) = unbounded_channel();
+    //     assert!(self.peers.insert(new_peer, rx).is_none());
+    //     ChannelAddressMock::new(tx)
+    // }
 
     async fn run(self) {
         tokio::spawn(async move {
@@ -70,6 +86,7 @@ impl NetworkMock for ChannelNetworkMock {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct ChannelAddressMock {
     tx: UnboundedSender<()>,
 }
@@ -89,6 +106,13 @@ impl AddressMock for ChannelAddressMock {
     }
 
     async fn connect(self) -> Result<Self::Connection, ()> {
+        todo!()
+    }
+}
+
+// TODO: FIXME:
+impl Display for ChannelAddressMock {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         todo!()
     }
 }
@@ -115,18 +139,18 @@ impl ConnectionMock for ChannelConnectionMock {
 mod tests {
     use super::*;
 
-    #[test]
-    fn add_peer() {
-        let mut network = ChannelNetworkMock::new();
-        assert!(network.peers.is_empty());
-
-        network.add_peer();
-        assert!(network.peers.contains_key(&MockPeerId::from_int(0)));
-
-        network.add_peer();
-        assert!(network.peers.contains_key(&MockPeerId::from_int(1)));
-
-        network.add_peer();
-        assert!(network.peers.contains_key(&MockPeerId::from_int(2)));
-    }
+    // #[test]
+    // fn add_peer() {
+    //     let mut network = ChannelNetworkMock::new();
+    //     assert!(network.peers.is_empty());
+    //
+    //     network.add_peer();
+    //     assert!(network.peers.contains_key(&MockPeerId::from_int(0)));
+    //
+    //     network.add_peer();
+    //     assert!(network.peers.contains_key(&MockPeerId::from_int(1)));
+    //
+    //     network.add_peer();
+    //     assert!(network.peers.contains_key(&MockPeerId::from_int(2)));
+    // }
 }

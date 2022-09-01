@@ -24,13 +24,17 @@ type Error = ();
 #[async_trait]
 pub trait NetworkMock {
     /// TODO: FIXME:
-    type Address: AddressMock;
+    type Address;
 
-    /// TODO: FIXME:
-    // For channels implementation this method generates a peer id (u64) and returns
-    // a tx part of the channel.
-    // Simply returns an address for the tcp implementation.
-    fn add_peer(&mut self) -> Self::Address;
+    fn new(peers: usize) -> (Self, Vec<Self::Address>)
+    where
+        Self: Sized;
+
+    // /// TODO: FIXME:
+    // // For channels implementation this method generates a peer id (u64) and returns
+    // // a tx part of the channel.
+    // // Simply returns an address for the tcp implementation.
+    // fn add_peer(&mut self) -> Self::Address;
 
     /// TODO: FIXME:
     // Spawns tokio task for the channels implementation, does nothing for TCP.
