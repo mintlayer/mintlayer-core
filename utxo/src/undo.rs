@@ -84,12 +84,8 @@ impl BlockUndo {
         self.tx_undos.push(tx_undo);
     }
 
-    pub fn take_tx_undo(&mut self, tx_num: usize) -> Option<TxUndo> {
-        if tx_num < self.tx_undos.len() {
-            Some(self.tx_undos.remove(tx_num))
-        } else {
-            None
-        }
+    pub fn pop_tx_undo(&mut self) -> Option<TxUndo> {
+        self.tx_undos.pop()
     }
 
     pub fn block_reward_undo(&self) -> Option<&BlockRewardUndo> {

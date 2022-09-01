@@ -540,11 +540,18 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         tx_num: usize,
     ) -> Result<TxUndo, ConnectTransactionError> {
         self.fetch_block_undo(block_id)?;
-        self.utxo_block_undo
+        let block_undo = &mut self
+            .utxo_block_undo
             .get_mut(block_id)
             .expect("block undo should be available")
-            .undo
-            .take_tx_undo(tx_num)
+            .undo;
+        debug_assert_eq!(
+            block_undo.tx_undos().len(),
+            tx_num + 1,
+            "only the last tx undo can be taken"
+        );
+        block_undo
+            .pop_tx_undo()
             .ok_or(ConnectTransactionError::MissingTxUndo(tx_num, *block_id))
     }
 
