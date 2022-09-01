@@ -161,7 +161,7 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let tx1_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(tf.genesis(), &mut rng, tx1_output_value);
-        let first_block = tf.make_block_builder().add_transaction(first_tx.clone()).build();
+        let first_block = tf.make_block_builder().add_transaction(first_tx).build();
         let first_block_id = first_block.get_id();
         tf.process_block(first_block, BlockSource::Local).unwrap();
         assert_eq!(tf.best_block_id(), first_block_id);
