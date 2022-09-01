@@ -40,10 +40,13 @@ use common::{
 use utils::ensure;
 use utxo::{
     BlockRewardUndo, BlockUndo, ConsumedUtxoCache, FlushableUtxoView, TxUndo, UtxosCache,
-    UtxosDBMut,
+    UtxosDBMut, UtxosView,
 };
 
 use self::error::ConnectTransactionError;
+
+pub struct Fee(pub Amount);
+pub struct Subsidy(pub Amount);
 
 struct BlockUndoEntry {
     undo: BlockUndo,
@@ -224,78 +227,15 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         }
         Ok(())
     }
-    fn get_output_value(
-        outputs: &[TxOutput],
-        output_index: usize,
-        spender_id: Spender,
-    ) -> Result<&OutputValue, ConnectTransactionError> {
-        let output =
-            outputs
-                .get(output_index)
-                .ok_or(ConnectTransactionError::OutputIndexOutOfRange {
-                    tx_id: Some(spender_id),
-                    source_output_index: output_index,
-                })?;
-        Ok(output.value())
-    }
-
-    fn calculate_coins_total_inputs(
-        &self,
-        inputs: &[TxInput],
-    ) -> Result<Amount, ConnectTransactionError> {
-        let mut total = Amount::from_atoms(0);
-        for (_input_idx, input) in inputs.iter().enumerate() {
-            let outpoint = input.outpoint();
-            let tx_index = match self.tx_index_cache.get(&outpoint.tx_id()) {
-                Some(tx_index_op) => match tx_index_op {
-                    CachedInputsOperation::Write(tx_index) => tx_index,
-                    CachedInputsOperation::Read(tx_index) => tx_index,
-                    CachedInputsOperation::Erase => {
-                        return Err(ConnectTransactionError::PreviouslyCachedInputWasErased)
-                    }
-                },
-                None => return Err(ConnectTransactionError::PreviouslyCachedInputNotFound),
-            };
-            let output_index = outpoint.output_index() as usize;
-
-            let output_amount = match tx_index.position() {
-                common::chain::SpendablePosition::Transaction(tx_pos) => {
-                    let tx = self
-                        .db_tx
-                        .get_mainchain_tx_by_position(tx_pos)
-                        .map_err(ConnectTransactionError::from)?
-                        .ok_or_else(|| {
-                            ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(
-                                tx_pos.clone(),
-                            )
-                        })?;
-
-                    Self::get_output_value(tx.outputs(), output_index, tx.get_id().into())
-                        .cloned()?
-                }
-                common::chain::SpendablePosition::BlockReward(block_id) => {
-                    let outputs = self.block_reward_outputs(block_id)?;
-                    Self::get_output_value(&outputs, output_index, (*block_id).into()).cloned()?
-                }
-            };
-            match output_amount {
-                OutputValue::Coin(output_amount) => {
-                    total = (total + output_amount)
-                        .ok_or(ConnectTransactionError::InputAdditionError)?
-                }
-            }
-        }
-        Ok(total)
-    }
 
     fn check_transferred_amounts_and_get_fee(
         &self,
         tx: &Transaction,
-    ) -> Result<Amount, ConnectTransactionError> {
+    ) -> Result<Fee, ConnectTransactionError> {
         let inputs = tx.inputs();
         let outputs = tx.outputs();
 
-        let inputs_total = self.calculate_coins_total_inputs(inputs)?;
+        let inputs_total = self.calculate_coins_total_inputs(inputs, tx.get_id().into())?;
         let outputs_total = Self::calculate_coins_total_outputs(outputs)?;
 
         if outputs_total > inputs_total {
@@ -306,10 +246,30 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         }
 
         let paid_fee = inputs_total - outputs_total;
-        paid_fee.ok_or(ConnectTransactionError::TxFeeTotalCalcFailed(
+        paid_fee.map(Fee).ok_or(ConnectTransactionError::TxFeeTotalCalcFailed(
             inputs_total,
             outputs_total,
         ))
+    }
+
+    fn calculate_coins_total_inputs(
+        &self,
+        inputs: &[TxInput],
+        spender: Spender,
+    ) -> Result<Amount, ConnectTransactionError> {
+        inputs
+            .iter()
+            .map(|input| {
+                self.utxo_cache
+                    .utxo(input.outpoint())
+                    .ok_or_else(|| ConnectTransactionError::DoubleSpendAttempt(spender.clone()))
+                    .map(|utxo| match utxo.output().value() {
+                        OutputValue::Coin(amount) => *amount,
+                    })
+            })
+            .try_fold(Amount::from_atoms(0), |total, amount| {
+                (total + amount?).ok_or(ConnectTransactionError::OutputAdditionError)
+            })
     }
 
     fn calculate_coins_total_outputs(
@@ -324,24 +284,12 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
             .ok_or(ConnectTransactionError::OutputAdditionError)
     }
 
-    fn calculate_block_total_fees(&self, block: &Block) -> Result<Amount, ConnectTransactionError> {
-        let total_fees = block
-            .transactions()
-            .iter()
-            .try_fold(Amount::from_atoms(0), |init, tx| {
-                init + self.check_transferred_amounts_and_get_fee(tx).ok()?
-            })
-            .ok_or_else(|| ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id()))?;
-        Ok(total_fees)
-    }
-
     pub fn check_block_reward(
         &self,
         block: &Block,
-        block_subsidy_at_height: Amount,
+        total_fees: Fee,
+        block_subsidy_at_height: Subsidy,
     ) -> Result<(), ConnectTransactionError> {
-        let total_fees = self.calculate_block_total_fees(block)?;
-
         let block_reward_transactable = block.block_reward_transactable();
 
         let inputs = block_reward_transactable.inputs();
@@ -349,7 +297,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
         let inputs_total = inputs.map_or_else(
             || Ok(Amount::from_atoms(0)),
-            |ins| self.calculate_coins_total_inputs(ins),
+            |ins| self.calculate_coins_total_inputs(ins, block.get_id().into()),
         )?;
         let outputs_total = outputs.map_or_else(
             || Ok(Amount::from_atoms(0)),
@@ -357,7 +305,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         )?;
 
         let max_allowed_outputs_total =
-            amount_sum!(inputs_total, block_subsidy_at_height, total_fees)
+            amount_sum!(inputs_total, block_subsidy_at_height.0, total_fees.0)
                 .ok_or_else(|| ConnectTransactionError::RewardAdditionError(block.get_id()))?;
 
         if outputs_total > max_allowed_outputs_total {
@@ -572,13 +520,14 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
             .undo
     }
 
-    pub fn connect_transaction(
+    pub fn connect_transactable(
         &mut self,
         spend_ref: BlockTransactableRef,
         spend_height: &BlockHeight,
         median_time_past: &BlockTimestamp,
         blockreward_maturity: &BlockDistance,
-    ) -> Result<(), ConnectTransactionError> {
+    ) -> Result<Option<Fee>, ConnectTransactionError> {
+        let mut fee: Option<Fee> = None;
         match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
                 let block_id = block.get_id();
@@ -590,7 +539,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 self.precache_inputs(tx.inputs())?;
 
                 // check for attempted money printing
-                let _ = self.check_transferred_amounts_and_get_fee(tx)?;
+                fee = Some(self.check_transferred_amounts_and_get_fee(tx)?);
 
                 // verify input signatures
                 self.verify_signatures(tx, spend_height, median_time_past)?;
@@ -648,10 +597,10 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         // add tx index to the cache
         self.add_tx_index(spend_ref)?;
 
-        Ok(())
+        Ok(fee)
     }
 
-    pub fn disconnect_transaction(
+    pub fn disconnect_transactable(
         &mut self,
         spend_ref: BlockTransactableRef,
     ) -> Result<(), ConnectTransactionError> {

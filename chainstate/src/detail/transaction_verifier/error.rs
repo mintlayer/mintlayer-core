@@ -74,7 +74,7 @@ pub enum ConnectTransactionError {
     BlockTimestampArithmeticError,
     #[error("Input addition error")]
     InputAdditionError,
-    #[error("Double-spend attempt")]
+    #[error("Double-spend attempt in `{0}`")]
     DoubleSpendAttempt(Spender),
     #[error("Input of tx {tx_id:?} has an out-of-range output index {source_output_index}")]
     OutputIndexOutOfRange {

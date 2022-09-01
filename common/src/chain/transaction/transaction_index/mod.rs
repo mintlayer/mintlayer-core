@@ -48,6 +48,15 @@ impl From<Id<GenBlock>> for Spender {
     }
 }
 
+impl std::fmt::Display for Spender {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Spender::RegularInput(id) => id.fmt(f),
+            Spender::BlockInput(id) => id.fmt(f),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum OutputSpentState {
     Unspent,

@@ -168,11 +168,11 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
 
         let tx2_output_value = rng.gen_range(100_000..200_000);
         let second_tx = tx_from_genesis(tf.genesis(), &mut rng, tx2_output_value);
-        let second_block = tf.make_block_builder().add_transaction(second_tx).build();
+        let second_block = tf.make_block_builder().add_transaction(second_tx.clone()).build();
         assert_eq!(
             tf.process_block(second_block, BlockSource::Local).unwrap_err(),
             BlockError::StateUpdateFailed(ConnectTransactionError::DoubleSpendAttempt(
-                Spender::RegularInput(first_tx.get_id())
+                Spender::RegularInput(second_tx.get_id())
             ))
         );
         assert_eq!(tf.best_block_id(), first_block_id);
