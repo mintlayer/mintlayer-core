@@ -20,7 +20,10 @@ use crate::{
     },
 };
 
-use super::{combine::combine_amount_delta, sum_maps, PoSAccountingDelta, PoolDataDelta};
+use super::{
+    combine::{combine_amount_delta, combine_data_with_delta},
+    sum_maps, DataDelta, PoSAccountingDelta,
+};
 
 impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
     fn create_pool(
@@ -53,10 +56,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         self.data.pool_balances.insert(pool_id, pledge_amount_delta);
         self.data.pool_data.insert(
             pool_id,
-            super::PoolDataDelta::CreatePool(Box::new(PoolData::new(
-                decommission_key,
-                pledge_amount,
-            ))),
+            DataDelta::Create(Box::new(PoolData::new(decommission_key, pledge_amount))),
         );
 
         Ok(PoSAccountingUndo::CreatePool(CreatePoolUndo {
@@ -131,7 +131,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         );
         self.data.pool_data.insert(
             undo_data.pool_id,
-            PoolDataDelta::CreatePool(Box::new(undo_data.pool_data)),
+            DataDelta::Create(Box::new(undo_data.pool_data)),
         );
 
         Ok(())
@@ -161,7 +161,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
 
         self.data.delegation_data.insert(
             delegation_id,
-            super::DelegationDataDelta::Add(Box::new(delegation_data.clone())),
+            DataDelta::Create(Box::new(delegation_data.clone())),
         );
 
         Ok((
@@ -299,39 +299,15 @@ impl<'a> PoSAccountingOperatorRead for PoSAccountingDelta<'a> {
         combine_amount_delta(&parent_amount, &local_amount.copied())
     }
 
-    fn get_delegation_id_data(&self, delegation_id: H256) -> Result<Option<DelegationData>, Error> {
-        let parent_data = self.parent.get_delegation_data(delegation_id)?;
-        let local_data = self.data.delegation_data.get(&delegation_id);
-        match (parent_data, local_data) {
-            (None, None) => Ok(None),
-            (None, Some(d)) => match d {
-                super::DelegationDataDelta::Add(d) => Ok(Some(*d.clone())),
-                super::DelegationDataDelta::Remove => Err(Error::RemovingNonexistingDelegationData),
-            },
-            (Some(p), None) => Ok(Some(p)),
-            (Some(_), Some(d)) => match d {
-                super::DelegationDataDelta::Add(_) => {
-                    Err(Error::DelegationDataCreatedMultipleTimes)
-                }
-                super::DelegationDataDelta::Remove => Ok(None),
-            },
-        }
+    fn get_delegation_id_data(&self, id: H256) -> Result<Option<DelegationData>, Error> {
+        let parent_data = self.parent.get_delegation_data(id)?;
+        let local_data = self.data.delegation_data.get(&id);
+        combine_data_with_delta(parent_data, local_data)
     }
 
-    fn get_pool_data(&self, pool_id: H256) -> Result<Option<PoolData>, Error> {
-        let parent_data = self.parent.get_pool_data(pool_id)?;
-        let local_data = self.data.pool_data.get(&pool_id);
-        match (parent_data, local_data) {
-            (None, None) => Ok(None),
-            (None, Some(d)) => match d {
-                super::PoolDataDelta::CreatePool(d) => Ok(Some(*d.clone())),
-                super::PoolDataDelta::DecommissionPool => Err(Error::RemovingNonexistingPoolData),
-            },
-            (Some(p), None) => Ok(Some(p)),
-            (Some(_), Some(d)) => match d {
-                super::PoolDataDelta::CreatePool(_) => Err(Error::PoolCreatedMultipleTimes),
-                super::PoolDataDelta::DecommissionPool => Ok(None),
-            },
-        }
+    fn get_pool_data(&self, id: H256) -> Result<Option<PoolData>, Error> {
+        let parent_data = self.parent.get_pool_data(id)?;
+        let local_data = self.data.pool_data.get(&id);
+        combine_data_with_delta(parent_data, local_data)
     }
 }

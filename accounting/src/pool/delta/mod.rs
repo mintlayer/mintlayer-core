@@ -6,7 +6,7 @@ use serialization::{Decode, Encode};
 use crate::error::Error;
 
 use self::{
-    combine::{combine_delegation_data, combine_pool_data, combine_signed_amount_delta},
+    combine::{combine_delta_data, combine_signed_amount_delta},
     data::PoSAccountingDeltaData,
 };
 
@@ -18,15 +18,14 @@ pub mod operator_impls;
 mod view_impl;
 
 #[derive(Clone, Encode, Decode)]
-pub enum PoolDataDelta {
-    CreatePool(Box<PoolData>),
-    DecommissionPool,
+pub enum DataDelta<T> {
+    Create(Box<T>),
+    Delete,
 }
 
-#[derive(Clone, Encode, Decode)]
-pub enum DelegationDataDelta {
-    Add(Box<DelegationData>),
-    Remove,
+#[allow(dead_code)]
+pub struct DataDeltaUndo<T> {
+    data: DataDelta<T>,
 }
 
 pub struct PoSAccountingDelta<'a> {
@@ -35,19 +34,9 @@ pub struct PoSAccountingDelta<'a> {
 }
 
 #[allow(dead_code)]
-pub struct PoolDataDeltaUndo {
-    data: PoolDataDelta,
-}
-
-#[allow(dead_code)]
-pub struct DelegationDataDeltaUndo {
-    data: DelegationDataDelta,
-}
-
-#[allow(dead_code)]
 pub struct DeltaMergeUndo {
-    pool_data_undo: BTreeMap<H256, PoolDataDeltaUndo>,
-    delegation_data_undo: BTreeMap<H256, DelegationDataDeltaUndo>,
+    pool_data_undo: BTreeMap<H256, DataDeltaUndo<PoolData>>,
+    delegation_data_undo: BTreeMap<H256, DataDeltaUndo<DelegationData>>,
 }
 
 impl<'a> PoSAccountingDelta<'a> {
@@ -78,39 +67,22 @@ impl<'a> PoSAccountingDelta<'a> {
         }
     }
 
-    fn merge_pool_data(
-        &mut self,
+    fn merge_delta_data<T>(
+        map: &mut BTreeMap<H256, DataDelta<T>>,
         key: H256,
-        other_data: PoolDataDelta,
-    ) -> Result<Option<PoolDataDeltaUndo>, Error> {
-        let current = self.data.pool_data.get(&key);
+        other_data: DataDelta<T>,
+    ) -> Result<Option<DataDeltaUndo<T>>, Error> {
+        let current = map.get(&key);
         let new_data = match current {
-            Some(current_data) => combine_pool_data(current_data, other_data)?,
+            Some(current_data) => combine_delta_data(current_data, other_data)?,
             None => Some(other_data),
         };
         let undo = match new_data {
-            Some(v) => self.data.pool_data.insert(key, v).and(None),
-            None => self.data.pool_data.remove(&key),
-        };
-        Ok(undo.map(|data| PoolDataDeltaUndo { data }))
-    }
-
-    fn merge_delegation_data(
-        &mut self,
-        key: H256,
-        other_data: DelegationDataDelta,
-    ) -> Result<Option<DelegationDataDeltaUndo>, Error> {
-        let current = self.data.delegation_data.get(&key);
-        let new_data = match current {
-            Some(current_data) => combine_delegation_data(current_data, other_data)?,
-            None => Some(other_data),
-        };
-        let undo = match new_data {
-            Some(v) => self.data.delegation_data.insert(key, v).and(None),
-            None => self.data.delegation_data.remove(&key),
+            Some(v) => map.insert(key, v).and(None),
+            None => map.remove(&key),
         };
 
-        Ok(undo.map(|data| DelegationDataDeltaUndo { data }))
+        Ok(undo.map(|data| DataDeltaUndo { data }))
     }
 
     pub fn merge_with_delta(
@@ -140,7 +112,8 @@ impl<'a> PoSAccountingDelta<'a> {
             .pool_data
             .into_iter()
             .map(|(key, other_pool_data)| {
-                self.merge_pool_data(key, other_pool_data).map(|v| (key, v))
+                Self::merge_delta_data(&mut self.data.pool_data, key, other_pool_data)
+                    .map(|v| (key, v))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
         let pool_data_undo = pool_data_undo
@@ -153,7 +126,8 @@ impl<'a> PoSAccountingDelta<'a> {
             .delegation_data
             .into_iter()
             .map(|(key, other_del_data)| {
-                self.merge_delegation_data(key, other_del_data).map(|v| (key, v))
+                Self::merge_delta_data(&mut self.data.delegation_data, key, other_del_data)
+                    .map(|v| (key, v))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
         let delegation_data_undo = delegation_data_undo

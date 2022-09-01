@@ -2,47 +2,38 @@ use common::primitives::{signed_amount::SignedAmount, Amount};
 
 use crate::error::Error;
 
-use super::{DelegationDataDelta, PoolDataDelta};
+use super::DataDelta;
 
-pub(super) fn combine_delegation_data(
-    lhs: &DelegationDataDelta,
-    rhs: DelegationDataDelta,
-) -> Result<Option<DelegationDataDelta>, Error> {
+pub(super) fn combine_delta_data<T>(
+    lhs: &DataDelta<T>,
+    rhs: DataDelta<T>,
+) -> Result<Option<DataDelta<T>>, Error> {
     match (lhs, rhs) {
-        (DelegationDataDelta::Add(_), DelegationDataDelta::Add(_)) => {
-            Err(Error::DelegationDataCreatedMultipleTimes)
-        }
-        (DelegationDataDelta::Add(_), DelegationDataDelta::Remove) => {
-            // if lhs had a creation, and we remove, this means nothing is left and there's a net zero left
+        (DataDelta::Create(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
+        (DataDelta::Create(_), DataDelta::Delete) => {
+            // if lhs had a creation, and we delete, this means nothing is left and there's a net zero to return
             Ok(None)
         }
-        (DelegationDataDelta::Remove, DelegationDataDelta::Add(d)) => {
-            Ok(Some(DelegationDataDelta::Add(d)))
-        }
-        (DelegationDataDelta::Remove, DelegationDataDelta::Remove) => {
-            Err(Error::DelegationDataDeletedMultipleTimes)
-        }
+        (DataDelta::Delete, DataDelta::Create(d)) => Ok(Some(DataDelta::Create(d))),
+        (DataDelta::Delete, DataDelta::Delete) => Err(Error::DeltaDataDeletedMultipleTimes),
     }
 }
 
-pub(super) fn combine_pool_data(
-    lhs: &PoolDataDelta,
-    rhs: PoolDataDelta,
-) -> Result<Option<PoolDataDelta>, Error> {
-    match (lhs, rhs) {
-        (PoolDataDelta::CreatePool(_), PoolDataDelta::CreatePool(_)) => {
-            Err(Error::PoolCreatedMultipleTimes)
-        }
-        (PoolDataDelta::CreatePool(_), PoolDataDelta::DecommissionPool) => {
-            // if lhs had a creation, and we decommission, this means nothing is left and there's a net zero left
-            Ok(None)
-        }
-        (PoolDataDelta::DecommissionPool, PoolDataDelta::CreatePool(d)) => {
-            Ok(Some(PoolDataDelta::CreatePool(d)))
-        }
-        (PoolDataDelta::DecommissionPool, PoolDataDelta::DecommissionPool) => {
-            Err(Error::PoolDecommissionedMultipleTimes)
-        }
+pub(super) fn combine_data_with_delta<T: Clone>(
+    parent_data: Option<T>,
+    local_data: Option<&DataDelta<T>>,
+) -> Result<Option<T>, Error> {
+    match (parent_data, local_data) {
+        (None, None) => Ok(None),
+        (None, Some(d)) => match d {
+            DataDelta::Create(d) => Ok(Some(*d.clone())),
+            DataDelta::Delete => Err(Error::RemovingNonexistingData),
+        },
+        (Some(p), None) => Ok(Some(p)),
+        (Some(_), Some(d)) => match d {
+            DataDelta::Create(_) => Err(Error::DataCreatedMultipleTimes),
+            DataDelta::Delete => Ok(None),
+        },
     }
 }
 

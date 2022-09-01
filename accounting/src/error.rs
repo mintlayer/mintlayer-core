@@ -62,20 +62,16 @@ pub enum Error {
     ArithmeticErrorSumToUnsignedFailed,
     #[error("Arithemetic error; sum to signed failed")]
     ArithmeticErrorSumToSignedFailed,
-    #[error("Consencutive pool creation")]
-    PoolCreatedMultipleTimes,
-    #[error("Consencutive pool decommission")]
-    PoolDecommissionedMultipleTimes,
-    #[error("Consencutive delegation data creation")]
-    DelegationDataCreatedMultipleTimes,
-    #[error("Consencutive delegation data deletion")]
-    DelegationDataDeletedMultipleTimes,
-    #[error("Remove non-existing delegation data")]
-    RemovingNonexistingDelegationData,
-    #[error("Remove non-existing pool data")]
-    RemovingNonexistingPoolData,
+    #[error("Consencutive data creation")]
+    DataCreatedMultipleTimes,
+    #[error("Remove non-existing data")]
+    RemovingNonexistingData,
     #[error("Failed to convert pledge value to signed")]
     PledgeValueToSignedError,
     #[error("Delegation undo failed; data not found")]
     InvariantErrorDelegationUndoFailedDataNotFound,
+    #[error("Consencutive data creation in delta combination")]
+    DeltaDataCreatedMultipleTimes,
+    #[error("Consencutive data deletion in delta combination")]
+    DeltaDataDeletedMultipleTimes,
 }

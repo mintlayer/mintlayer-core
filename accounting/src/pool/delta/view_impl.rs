@@ -7,9 +7,7 @@ use crate::{
     pool::{delegation::DelegationData, pool_data::PoolData, view::PoSAccountingView},
 };
 
-use super::{
-    combine::combine_amount_delta, sum_maps, DelegationDataDelta, PoSAccountingDelta, PoolDataDelta,
-};
+use super::{combine::combine_amount_delta, sum_maps, DataDelta, PoSAccountingDelta};
 
 fn signed_to_unsigned_pair((k, v): (H256, SignedAmount)) -> Result<(H256, Amount), Error> {
     let v = v.into_unsigned().ok_or(Error::ArithmeticErrorToUnsignedFailed)?;
@@ -27,8 +25,8 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
         let local_data = self.data.pool_data.get(&pool_id);
         match local_data {
             Some(d) => match d {
-                PoolDataDelta::CreatePool(d) => Ok(Some(*d.clone())),
-                PoolDataDelta::DecommissionPool => Ok(None),
+                DataDelta::Create(d) => Ok(Some(*d.clone())),
+                DataDelta::Delete => Ok(None),
             },
             None => self.parent.get_pool_data(pool_id),
         }
@@ -63,8 +61,8 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
         let local_data = self.data.delegation_data.get(&delegation_id);
         match local_data {
             Some(d) => match d {
-                DelegationDataDelta::Add(d) => Ok(Some(*d.clone())),
-                DelegationDataDelta::Remove => Ok(None),
+                DataDelta::Create(d) => Ok(Some(*d.clone())),
+                DataDelta::Delete => Ok(None),
             },
             None => self.parent.get_delegation_data(delegation_id),
         }
