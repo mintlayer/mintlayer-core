@@ -13,6 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{
+    collections::{HashSet, VecDeque},
+    sync::Arc,
+};
+
+use libp2p::Multiaddr;
+use tokio::sync::mpsc;
+
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource};
 use common::{
     chain::{config::ChainConfig, GenBlock},
@@ -26,7 +34,9 @@ use p2p::{
         self,
         libp2p::Libp2pService,
         mock::{
-            transport::{ChannelService, TcpService},
+            transport::{
+                ChannelTransport, MakeAddress, MakeChannelAddress, MakeTcpAddress, TcpTransport,
+            },
             MockService,
         },
         types::ConnectivityEvent,
@@ -36,11 +46,6 @@ use p2p::{
     sync::SyncState,
 };
 use p2p_test_utils::{connect_services, make_libp2p_addr, make_mock_addr, TestBlockInfo};
-use std::{
-    collections::{HashSet, VecDeque},
-    sync::Arc,
-};
-use tokio::sync::mpsc;
 
 async fn make_sync_manager<T>(
     addr: T::Address,
@@ -499,12 +504,16 @@ async fn local_ahead_by_12_blocks_mock() {
 
 // local and remote nodes are in the same chain but local is ahead of remote by 14 blocks
 // verify that remote nodes does a reorg
-async fn remote_local_diff_chains_local_higher<T>(addr1: T::Address, addr2: T::Address)
+async fn remote_local_diff_chains_local_higher<A, T>()
 where
+    A: MakeAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
@@ -641,37 +650,45 @@ where
     );
 }
 
+// TODO: FIXME: Move somewhere.
+struct MakeP2pAddress {}
+
+impl MakeAddress for MakeP2pAddress {
+    type Address = Multiaddr;
+
+    fn make_address() -> Self::Address {
+        "/ip6/::1/tcp/0".parse().unwrap()
+    }
+}
+
 #[tokio::test]
 async fn remote_local_diff_chains_local_higher_libp2p() {
-    remote_local_diff_chains_local_higher::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr())
-        .await;
+    remote_local_diff_chains_local_higher::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
-#[tokio::test]
-#[cfg(not(target_os = "macos"))]
-async fn remote_local_diff_chains_local_higher_mock() {
-    remote_local_diff_chains_local_higher::<MockService>(make_mock_addr(), make_mock_addr()).await;
-}
-
-// TODO: FIXME: Example of different transports:
 #[tokio::test]
 async fn remote_local_diff_chains_local_higher_mock_tcp() {
-    remote_local_diff_chains_local_higher::<MockService<TcpService>>(
-        make_mock_addr(),
-        make_mock_addr(),
-    )
-    .await;
+    remote_local_diff_chains_local_higher::<MakeTcpAddress, MockService<TcpTransport>>().await;
 }
 
 #[tokio::test]
 async fn remote_local_diff_chains_local_higher_mock_channels() {
-    remote_local_diff_chains_local_higher::<MockService<ChannelService>>(
-        make_mock_addr(),
-        make_mock_addr(),
-    )
-    .await;
+    remote_local_diff_chains_local_higher::<MakeChannelAddress, MockService<ChannelTransport>>()
+        .await;
 }
+
+// #[tokio::test]
+// async fn remote_local_diff_chains_local_higher_libp2p() {
+//     remote_local_diff_chains_local_higher::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr())
+//         .await;
+// }
+//
+// // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
+// #[tokio::test]
+// #[cfg(not(target_os = "macos"))]
+// async fn remote_local_diff_chains_local_higher_mock() {
+//     remote_local_diff_chains_local_higher::<MockService>(make_mock_addr(), make_mock_addr()).await;
+// }
 
 // local and remote nodes are in different chains and remote has longer chain
 // verify that local node does a reorg

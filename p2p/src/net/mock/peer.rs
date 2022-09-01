@@ -25,7 +25,7 @@ use crate::{
     error::{P2pError, ProtocolError},
     net::{
         mock::{
-            transport::{SocketService, TransportService},
+            transport::{Connection, Transport},
             types::{self, MockEvent, MockPeerId, PeerEvent},
         },
         types::{Protocol, ProtocolType},
@@ -37,7 +37,7 @@ pub enum Role {
     Outbound,
 }
 
-pub struct Peer<T: TransportService> {
+pub struct Peer<T: Transport> {
     /// Peer ID of the local node
     local_peer_id: MockPeerId,
 
@@ -51,7 +51,7 @@ pub struct Peer<T: TransportService> {
     role: Role,
 
     /// Peer socket
-    socket: T::Socket,
+    socket: T::Connection,
 
     /// TX channel for communicating with backend
     tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
@@ -62,15 +62,15 @@ pub struct Peer<T: TransportService> {
 
 impl<T> Peer<T>
 where
-    T: TransportService + 'static,
-    T::Socket: SocketService<T>,
+    T: Transport + 'static,
+    T::Connection: Connection<T>,
 {
     pub fn new(
         local_peer_id: MockPeerId,
         remote_peer_id: MockPeerId,
         role: Role,
         config: Arc<ChainConfig>,
-        socket: T::Socket,
+        socket: T::Connection,
         tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
         rx: mpsc::Receiver<MockEvent>,
     ) -> Self {
@@ -116,7 +116,10 @@ where
                             .collect(),
                         },
                     ))
-                    .await?;
+                    // TODO: FIXME:
+                    .await;
+                todo!();
+                //.await?;
 
                 self.tx
                     .send((
@@ -147,7 +150,10 @@ where
                         .into_iter()
                         .collect(),
                     }))
-                    .await?;
+                    // TODO: FIXME:
+                    .await;
+                todo!();
+                //.await?;
 
                 let (peer_id, network, version, protocols) = if let Ok(Some(
                     types::Message::Handshake(types::HandshakeMessage::HelloAck {
@@ -200,11 +206,11 @@ where
             tokio::select! {
                 event = self.rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     MockEvent::Disconnect => return self.destroy_peer().await,
-                    MockEvent::SendMessage(message) => self.socket.send(*message).await?,
+                    MockEvent::SendMessage(message) => todo!(), //self.socket.send(*message).await?,
                 },
                 event = self.socket.recv() => match event {
                     Err(err) => {
-                        log::info!("peer connection closed, reason {err}");
+                        log::info!("peer connection closed, reason {err:?}");
                         return self.destroy_peer().await;
                     }
                     Ok(None) => {},

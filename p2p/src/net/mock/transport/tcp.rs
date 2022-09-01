@@ -19,48 +19,55 @@ use async_trait::async_trait;
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::net::mock::{
-    transport::{SocketService, TransportService},
+    transport::{Connection, MakeAddress, Transport},
     types::Message,
 };
 
-pub struct TcpService {}
+pub struct MakeTcpAddress {}
 
-#[async_trait]
-impl TransportService for TcpService {
-    type Socket = TcpSocket;
+impl MakeAddress for MakeTcpAddress {
     type Address = SocketAddr;
 
-    async fn bind(address: Self::Address) -> crate::Result<Self::Socket> {
-        // TODO: FIX error handling
-        Ok(TcpListener::bind(address).unwrap())
-    }
-
-    async fn connect(address: Self::Address) -> crate::Result<Self::Socket> {
-        TcpStream::connect(address)
+    fn make_address() -> Self::Address {
+        "[::1]:0".parse().unwrap()
     }
 }
 
-struct TcpSocket {}
+#[derive(Debug)]
+pub struct TcpTransport {}
 
 #[async_trait]
-impl SocketService<TcpService> for TcpSocket {
-    async fn accept(&mut self) -> crate::Result<(TcpService::Socket, TcpService::Address)> {
+impl Transport for TcpTransport {
+    type Connection = TcpConnection;
+    type Address = SocketAddr;
+
+    async fn bind(address: Self::Address) -> Result<Self::Connection, super::Error> {
+        // TODO: FIX error handling
+        //Ok(TcpListener::bind(address).await.unwrap())
         todo!()
     }
 
-    async fn connect(&mut self) -> crate::Result<TcpService::Socket> {
+    async fn connect(address: Self::Address) -> Result<Self::Connection, super::Error> {
+        //TcpStream::connect(address)
+        todo!()
+    }
+}
+
+pub struct TcpConnection {}
+
+#[async_trait]
+impl Connection<TcpTransport> for TcpConnection {
+    type Stream = ();
+
+    async fn accept(&mut self) -> Result<(Self::Stream, SocketAddr), super::Error> {
         todo!()
     }
 
-    async fn send(&mut self, msg: Message) -> Result<(), std::io::Error> {
+    async fn send(&mut self, msg: Message) -> Result<(), super::Error> {
         todo!()
     }
 
-    async fn recv(&mut self) -> Result<Option<Message>, std::io::Error> {
-        todo!()
-    }
-
-    fn local_addr(&self) -> crate::Result<TcpService::Address> {
+    async fn recv(&mut self) -> Result<Option<Message>, super::Error> {
         todo!()
     }
 }

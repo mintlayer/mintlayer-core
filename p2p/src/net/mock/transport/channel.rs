@@ -20,7 +20,10 @@ use tokio::sync::{
     oneshot,
 };
 
-use crate::net::mock::{types::Message, SocketService, TransportService};
+use crate::net::mock::{
+    transport::{Connection, MakeAddress, Transport},
+    types::Message,
+};
 
 static NETWORK_HANDLE: Lazy<UnboundedSender<SocketCommand>> = Lazy::new(handle_connections);
 
@@ -35,51 +38,53 @@ enum SocketCommandType {
     Bind,
 }
 
-#[derive(Debug)]
-pub struct ChannelService {}
+pub struct MakeChannelAddress {}
 
-#[async_trait]
-impl TransportService for ChannelService {
-    type Socket = ChannelSocket;
+impl MakeAddress for MakeChannelAddress {
     type Address = u64;
 
-    async fn bind(address: Self::Address) -> crate::Result<Self::Socket> {
+    fn make_address() -> Self::Address {
+        todo!()
+    }
+}
+
+#[derive(Debug)]
+pub struct ChannelTransport {}
+
+#[async_trait]
+impl Transport for ChannelTransport {
+    type Connection = ChannelConnection;
+    type Address = u64;
+
+    async fn bind(address: Self::Address) -> Result<Self::Connection, super::Error> {
         let tx: UnboundedSender<SocketCommand> = NETWORK_HANDLE.clone();
         // TODO: FIXME:
         todo!();
     }
 
-    async fn connect(address: Self::Address) -> crate::Result<Self::Socket> {
+    async fn connect(address: Self::Address) -> Result<Self::Connection, super::Error> {
         // TODO: FIXME:
         todo!();
     }
 }
 
-pub struct ChannelSocket {}
+pub struct ChannelConnection {}
 
 #[async_trait]
-impl SocketService<ChannelService> for ChannelSocket {
-    async fn accept(&mut self) -> crate::Result<(ChannelSocket, u64)> {
+impl Connection<ChannelTransport> for ChannelConnection {
+    type Stream = ();
+
+    async fn accept(&mut self) -> Result<(Self::Stream, u64), super::Error> {
         // TODO: FIXME:
         todo!();
     }
 
-    async fn connect(&mut self) -> crate::Result<ChannelSocket> {
+    async fn send(&mut self, msg: Message) -> Result<(), super::Error> {
         // TODO: FIXME:
         todo!();
     }
 
-    async fn send(&mut self, msg: Message) -> Result<(), std::io::Error> {
-        // TODO: FIXME:
-        todo!();
-    }
-
-    async fn recv(&mut self) -> Result<Option<Message>, std::io::Error> {
-        // TODO: FIXME:
-        todo!();
-    }
-
-    fn local_addr(&self) -> crate::Result<u64> {
+    async fn recv(&mut self) -> Result<Option<Message>, super::Error> {
         // TODO: FIXME:
         todo!();
     }

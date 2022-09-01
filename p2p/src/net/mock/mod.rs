@@ -34,19 +34,19 @@ use crate::{
     message,
     net::{
         self,
-        mock::transport::{SocketService, TransportService},
+        mock::transport::{Connection, Transport},
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent, ValidationResult},
         ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,
     },
 };
 
 #[derive(Debug)]
-pub struct MockService<T: TransportService + 'static>(PhantomData<T>);
+pub struct MockService<T: Transport + 'static>(PhantomData<T>);
 
 #[derive(Debug, Copy, Clone)]
 pub struct MockMessageId(u64);
 
-pub struct MockConnectivityHandle<T: NetworkingService, U: TransportService> {
+pub struct MockConnectivityHandle<T: NetworkingService, U: Transport> {
     /// Socket address of the network service provider
     local_addr: U::Address,
 
@@ -64,7 +64,7 @@ pub struct MockConnectivityHandle<T: NetworkingService, U: TransportService> {
 pub struct MockPubSubHandle<T, U>
 where
     T: NetworkingService,
-    U: TransportService,
+    U: Transport,
 {
     /// TX channel for sending commands to mock backend
     _cmd_tx: mpsc::Sender<types::Command<U>>,
@@ -77,7 +77,7 @@ where
 pub struct MockSyncingMessagingHandle<T, U>
 where
     T: NetworkingService,
-    U: TransportService,
+    U: Transport,
 {
     /// TX channel for sending commands to mock backend
     cmd_tx: mpsc::Sender<types::Command<U>>,
@@ -107,8 +107,8 @@ where
 #[async_trait]
 impl<T> NetworkingService for MockService<T>
 where
-    T: TransportService,
-    T::Socket: SocketService<T>,
+    T: Transport,
+    T::Connection: Connection<T>,
 {
     type Address = T::Address;
     type PeerId = types::MockPeerId;
@@ -127,49 +127,52 @@ where
         Self::PubSubHandle,
         Self::SyncingMessagingHandle,
     )> {
-        let (cmd_tx, cmd_rx) = mpsc::channel(16);
-        let (conn_tx, conn_rx) = mpsc::channel(16);
-        let (pubsub_tx, _pubsub_rx) = mpsc::channel(16);
-        let (sync_tx, sync_rx) = mpsc::channel(16);
-        let socket = T::bind(addr).await?;
-        let local_addr = socket.local_addr().expect("to have bind address available");
+        // let (cmd_tx, cmd_rx) = mpsc::channel(16);
+        // let (conn_tx, conn_rx) = mpsc::channel(16);
+        // let (pubsub_tx, _pubsub_rx) = mpsc::channel(16);
+        // let (sync_tx, sync_rx) = mpsc::channel(16);
+        // TODO: FIXME:
+        //let socket = T::bind(addr).await?;
+        let socket = T::bind(addr).await.unwrap();
+        //let local_addr = socket.local_addr().expect("to have bind address available");
+        todo!()
 
-        tokio::spawn(async move {
-            let mut backend = backend::Backend::<T>::new(
-                local_addr,
-                socket,
-                Arc::clone(&_config),
-                cmd_rx,
-                conn_tx,
-                pubsub_tx,
-                sync_tx,
-                std::time::Duration::from_secs(p2p_config.outbound_connection_timeout),
-            );
-
-            if let Err(err) = backend.run().await {
-                log::error!("failed to run backend: {err}");
-            }
-        });
-
-        Ok((
-            Self::ConnectivityHandle {
-                local_addr,
-                cmd_tx: cmd_tx.clone(),
-                peer_id: types::MockPeerId::from_socket_address::<T>(&local_addr),
-                conn_rx,
-                _marker: Default::default(),
-            },
-            Self::PubSubHandle {
-                _cmd_tx: cmd_tx.clone(),
-                _pubsub_rx,
-                _marker: Default::default(),
-            },
-            Self::SyncingMessagingHandle {
-                cmd_tx,
-                sync_rx,
-                _marker: Default::default(),
-            },
-        ))
+        // tokio::spawn(async move {
+        //     let mut backend = backend::Backend::<T>::new(
+        //         local_addr,
+        //         socket,
+        //         Arc::clone(&_config),
+        //         cmd_rx,
+        //         conn_tx,
+        //         pubsub_tx,
+        //         sync_tx,
+        //         std::time::Duration::from_secs(p2p_config.outbound_connection_timeout),
+        //     );
+        //
+        //     if let Err(err) = backend.run().await {
+        //         log::error!("failed to run backend: {err}");
+        //     }
+        // });
+        //
+        // Ok((
+        //     Self::ConnectivityHandle {
+        //         local_addr,
+        //         cmd_tx: cmd_tx.clone(),
+        //         peer_id: types::MockPeerId::from_socket_address::<T>(&local_addr),
+        //         conn_rx,
+        //         _marker: Default::default(),
+        //     },
+        //     Self::PubSubHandle {
+        //         _cmd_tx: cmd_tx.clone(),
+        //         _pubsub_rx,
+        //         _marker: Default::default(),
+        //     },
+        //     Self::SyncingMessagingHandle {
+        //         cmd_tx,
+        //         sync_rx,
+        //         _marker: Default::default(),
+        //     },
+        // ))
     }
 }
 
@@ -178,7 +181,7 @@ impl<T, U> ConnectivityService<T> for MockConnectivityHandle<T, U>
 where
     T: NetworkingService<Address = U::Address, PeerId = types::MockPeerId> + Send,
     types::MockPeerInfo: TryInto<net::types::PeerInfo<T>, Error = P2pError>,
-    U: TransportService,
+    U: Transport,
 {
     async fn connect(&mut self, address: T::Address) -> crate::Result<()> {
         log::debug!(
@@ -261,7 +264,7 @@ where
 impl<T, U> PubSubService<T> for MockPubSubHandle<T, U>
 where
     T: NetworkingService<PeerId = types::MockPeerId> + Send,
-    U: TransportService,
+    U: Transport,
 {
     async fn publish(&mut self, _announcement: message::Announcement) -> crate::Result<()> {
         todo!();
@@ -290,7 +293,7 @@ impl<T, U> SyncingMessagingService<T> for MockSyncingMessagingHandle<T, U>
 where
     T: NetworkingService<PeerId = types::MockPeerId, SyncingPeerRequestId = types::MockRequestId>
         + Send,
-    U: TransportService,
+    U: Transport,
 {
     async fn send_request(
         &mut self,

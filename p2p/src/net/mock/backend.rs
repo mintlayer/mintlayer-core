@@ -28,7 +28,7 @@ use crate::{
     message,
     net::mock::{
         peer, request_manager,
-        transport::{SocketService, TransportService},
+        transport::{Connection, Transport},
         types,
     },
 };
@@ -47,7 +47,7 @@ struct PeerContext {
 }
 
 #[derive(Debug)]
-enum ConnectionState<T: TransportService> {
+enum ConnectionState<T: Transport> {
     /// Connection established for outbound connection
     OutboundAccepted { address: T::Address },
 
@@ -55,12 +55,12 @@ enum ConnectionState<T: TransportService> {
     InboundAccepted { address: T::Address },
 }
 
-pub struct Backend<T: TransportService> {
+pub struct Backend<T: Transport> {
     /// Socket address of the backend
     address: T::Address,
 
     /// Socket for listening to incoming connections
-    socket: T::Socket,
+    socket: T::Connection,
 
     /// Chain config
     config: Arc<ChainConfig>,
@@ -102,13 +102,13 @@ pub struct Backend<T: TransportService> {
 
 impl<T> Backend<T>
 where
-    T: TransportService + 'static,
-    T::Socket: SocketService<T>,
+    T: Transport + 'static,
+    T::Connection: Connection<T>,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         address: T::Address,
-        socket: T::Socket,
+        socket: T::Connection,
         config: Arc<ChainConfig>,
         cmd_rx: mpsc::Receiver<types::Command<T>>,
         conn_tx: mpsc::Sender<types::ConnectivityEvent<T>>,
@@ -140,7 +140,7 @@ where
     /// `pending` to `peers` and the front-end is notified about the peer.
     async fn create_peer(
         &mut self,
-        socket: T::Socket,
+        socket: T::Connection,
         local_peer_id: types::MockPeerId,
         remote_peer_id: types::MockPeerId,
         role: peer::Role,
@@ -198,7 +198,9 @@ where
                     .conn_tx
                     .send(types::ConnectivityEvent::ConnectionError {
                         address,
-                        error: err.into(),
+                        // TODO: FIXME:
+                        error: todo!(),
+                        //error: err.into(),
                     })
                     .await
                     .map_err(P2pError::from),
@@ -322,7 +324,9 @@ where
                 event = self.socket.accept() => match event {
                     Ok(info) => {
                         self.create_peer(
-                            info.0,
+                            // TODO: FIXME:
+                            todo!(),
+                            //info.0,
                             self.local_peer_id,
                             types::MockPeerId::from_socket_address::<T>(&info.1),
                             peer::Role::Inbound,

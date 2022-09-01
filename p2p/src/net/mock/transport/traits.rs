@@ -22,40 +22,54 @@ use async_trait::async_trait;
 
 use crate::net::mock::types::Message;
 
-// TODO: FIXME: Better description.
-/// An abstraction layer for creating "sockets" ("connections").
-#[async_trait]
-pub trait TransportService: Sized {
-    type Socket: Send;
-
+/// An interface for creating the address.
+pub trait MakeAddress {
     // TODO: FIXME: Remove Hash and Display?
     type Address: Copy + Clone + Debug + Display + Eq + Hash + Send + Sync + ToString;
 
-    /// Creates a new socket and binds it to the given address.
-    async fn bind(address: Self::Address) -> crate::Result<Self::Socket>;
-
-    /// Creates a new socket and try to establish a connection to the given `address`.
-    async fn connect(address: Self::Address) -> crate::Result<Self::Socket>;
+    /// Creates a new unused address.
+    fn make_address() -> Self::Address;
 }
 
-/// TODO: FIXME: Better description.
+/// An abstraction layer for creating and opening connections.
 #[async_trait]
-pub trait SocketService<T: TransportService + 'static> {
-    /// Accepts a new inbound connection.
-    async fn accept(&mut self) -> crate::Result<(T::Socket, T::Address)>;
+pub trait Transport {
+    // TODO: FIXME: Remove Hash and Display?
+    type Address: Copy + Clone + Debug + Display + Eq + Hash + Send + Sync + ToString;
 
-    /// Establishes a new outbound connection.
-    async fn connect(&mut self) -> crate::Result<T::Socket>;
+    /// A connection type.
+    type Connection;
+
+    /// Creates a new connection with the given address.
+    async fn bind(address: Self::Address) -> Result<Self::Connection, Error>;
+
+    /// Open a connection to the given address.
+    async fn connect(address: Self::Address) -> Result<Self::Connection, Error>;
+}
+
+/// An abstraction layer over some kind of network connection.
+#[async_trait]
+pub trait Connection<T: Transport>: Send {
+    /// TODO: FIXME:
+    type Stream;
+
+    /// Accepts a new inbound connection.
+    async fn accept(&mut self) -> Result<(Self::Stream, T::Address), Error>;
+
+    // /// Establishes a new outbound connection.
+    // async fn connect(&mut self) -> crate::Result<T::Socket>;
 
     /// Sends the given message to a remote peer.
-    // TODO: FIXME: Different error type?
-    async fn send(&mut self, msg: Message) -> Result<(), std::io::Error>;
+    async fn send(&mut self, msg: Message) -> Result<(), Error>;
 
     /// Receives a message from a remote peer.
-    // TODO: FIXME: Different error type?
-    async fn recv(&mut self) -> Result<Option<Message>, std::io::Error>;
+    async fn recv(&mut self) -> Result<Option<Message>, Error>;
 
-    // TODO: FIXME: Do we really need this?
-    /// Returns the local address of the socket.
-    fn local_addr(&self) -> crate::Result<T::Address>;
+    // // TODO: FIXME: Do we really need this?
+    // /// Returns the local address of the socket.
+    // fn local_addr(&self) -> crate::Result<T::Address>;
 }
+
+// TODO: FIXME: Figure out common errors for channel and tcp implementations.
+#[derive(Debug)]
+pub struct Error {}
