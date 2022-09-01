@@ -62,19 +62,19 @@ storage::decl_schema! {
     /// Database schema for blockchain storage
     Schema {
         /// Storage for individual values.
-        pub DBValue: Map<Vec<u8>, Vec<u8>>,
+        DBValue: Map<Vec<u8>, Vec<u8>>,
         /// Storage for blocks.
-        pub DBBlock: Map<Id<Block>, Block>,
+        DBBlock: Map<Id<Block>, Block>,
         /// Store tag for blocks indexes.
-        pub DBBlockIndex: Map<Id<Block>, BlockIndex>,
+        DBBlockIndex: Map<Id<Block>, BlockIndex>,
         /// Storage for transaction indices.
-        pub DBTxIndex: Map<OutPointSourceId, TxMainChainIndex>,
+        DBTxIndex: Map<OutPointSourceId, TxMainChainIndex>,
         /// Storage for block IDs indexed by block height.
-        pub DBBlockByHeight: Map<BlockHeight, Id<GenBlock>>,
+        DBBlockByHeight: Map<BlockHeight, Id<GenBlock>>,
         /// Store for Utxo Entries
-        pub DBUtxo: Map<OutPoint, Utxo>,
+        DBUtxo: Map<OutPoint, Utxo>,
         /// Store for BlockUndo
-        pub DBBlockUndo: Map<Id<Block>, BlockUndo>,
+        DBBlockUndo: Map<Id<Block>, BlockUndo>,
     }
 }
 
