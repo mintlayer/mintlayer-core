@@ -69,8 +69,8 @@ impl<'a> UtxosCache<'a> {
         // since the utxo does not exist in this view, try to check from parent.
         self.parent.and_then(|parent| {
             // if the utxo exists in parent:
-            // dirty is FALSE because this view does not have the utxo, therefore is different from parent
-            // fresh is FALSE because this view does not have the utxo but the parent has.
+            // dirty is 'No' because this view does not have the utxo, therefore is different from parent
+            // fresh is 'No' because this view does not have the utxo but the parent has.
             let entry = parent
                 .utxo(outpoint)
                 .map(|utxo| UtxoEntry::new(Some(utxo), IsFresh::No, IsDirty::No));
@@ -163,6 +163,7 @@ impl<'a> UtxosCache<'a> {
             self.spend_utxo(&tx_outpoint)?;
         }
 
+        assert_eq!(tx.inputs().len(), tx_undo.inner().len());
         for (tx_in, utxo) in tx.inputs().iter().zip(tx_undo.into_inner().into_iter()) {
             self.add_utxo(tx_in.outpoint(), utxo, false)?;
         }

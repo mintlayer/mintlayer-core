@@ -517,21 +517,25 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn fetch_block_undo(&mut self, block_id: &Id<Block>) -> Result<(), ConnectTransactionError> {
+    fn fetch_block_undo(
+        &mut self,
+        block_id: &Id<Block>,
+    ) -> Result<&mut BlockUndo, ConnectTransactionError> {
         match self.utxo_block_undo.entry(*block_id) {
-            Entry::Occupied(_) => (),
+            Entry::Occupied(entry) => Ok(&mut entry.into_mut().undo),
             Entry::Vacant(entry) => {
                 let block_undo = self
                     .db_tx
                     .get_undo_data(*block_id)?
                     .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
-                entry.insert(BlockUndoEntry {
-                    undo: block_undo,
-                    is_fresh: false,
-                });
+                Ok(&mut entry
+                    .insert(BlockUndoEntry {
+                        undo: block_undo,
+                        is_fresh: false,
+                    })
+                    .undo)
             }
         }
-        Ok(())
     }
 
     fn take_tx_undo(
@@ -539,12 +543,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         block_id: &Id<Block>,
         tx_num: usize,
     ) -> Result<TxUndo, ConnectTransactionError> {
-        self.fetch_block_undo(block_id)?;
-        let block_undo = &mut self
-            .utxo_block_undo
-            .get_mut(block_id)
-            .expect("block undo should be available")
-            .undo;
+        let block_undo = self.fetch_block_undo(block_id)?;
         debug_assert_eq!(
             block_undo.tx_undos().len(),
             tx_num + 1,
@@ -559,13 +558,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         &mut self,
         block_id: &Id<Block>,
     ) -> Result<Option<BlockRewardUndo>, ConnectTransactionError> {
-        self.fetch_block_undo(block_id)?;
-        Ok(self
-            .utxo_block_undo
-            .get_mut(block_id)
-            .expect("block undo should be available")
-            .undo
-            .take_block_reward_undo())
+        Ok(self.fetch_block_undo(block_id)?.take_block_reward_undo())
     }
 
     fn get_or_create_block_undo(&mut self, block_id: &Id<Block>) -> &mut BlockUndo {
