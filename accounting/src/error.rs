@@ -64,8 +64,10 @@ pub enum Error {
     ArithmeticErrorSumToSignedFailed,
     #[error("Consencutive data creation")]
     DataCreatedMultipleTimes,
+    #[error("Modify non-existing data")]
+    ModifyNonexistingData,
     #[error("Remove non-existing data")]
-    RemovingNonexistingData,
+    RemoveNonexistingData,
     #[error("Failed to convert pledge value to signed")]
     PledgeValueToSignedError,
     #[error("Delegation undo failed; data not found")]
@@ -74,6 +76,8 @@ pub enum Error {
     DeltaDataCreatedMultipleTimes,
     #[error("Consencutive data deletion in delta combination")]
     DeltaDataDeletedMultipleTimes,
+    #[error("Modification after deletion of data delta")]
+    DeltaDataModifyAfterDelete,
     #[error("Delta undo negation error")]
     DeltaUndoNegationError,
     #[error("Delta reverts merge failed due to duplicates")]

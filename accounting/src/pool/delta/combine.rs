@@ -4,17 +4,25 @@ use crate::error::Error;
 
 use super::DataDelta;
 
-pub(super) fn combine_delta_data<T>(
+pub(super) fn combine_delta_data<T: Clone>(
     lhs: &DataDelta<T>,
     rhs: DataDelta<T>,
 ) -> Result<Option<DataDelta<T>>, Error> {
     match (lhs, rhs) {
         (DataDelta::Create(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
+        (DataDelta::Create(_), DataDelta::Modify(d)) => Ok(Some(DataDelta::Create(d))),
         (DataDelta::Create(_), DataDelta::Delete) => {
             // if lhs had a creation, and we delete, this means nothing is left and there's a net zero to return
             Ok(None)
         }
+        (DataDelta::Modify(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
+        (DataDelta::Modify(_), DataDelta::Modify(d)) => Ok(Some(DataDelta::Modify(d))),
+        (DataDelta::Modify(_), DataDelta::Delete) => {
+            // if lhs had a modification, and we delete, this means nothing is left and there's a net zero to return
+            Ok(None)
+        }
         (DataDelta::Delete, DataDelta::Create(d)) => Ok(Some(DataDelta::Create(d))),
+        (DataDelta::Delete, DataDelta::Modify(_)) => Err(Error::DeltaDataModifyAfterDelete),
         (DataDelta::Delete, DataDelta::Delete) => Err(Error::DeltaDataDeletedMultipleTimes),
     }
 }
@@ -27,11 +35,13 @@ pub(super) fn combine_data_with_delta<T: Clone>(
         (None, None) => Ok(None),
         (None, Some(d)) => match d {
             DataDelta::Create(d) => Ok(Some(*d.clone())),
-            DataDelta::Delete => Err(Error::RemovingNonexistingData),
+            DataDelta::Modify(_) => Err(Error::ModifyNonexistingData),
+            DataDelta::Delete => Err(Error::RemoveNonexistingData),
         },
         (Some(p), None) => Ok(Some(p)),
         (Some(_), Some(d)) => match d {
             DataDelta::Create(_) => Err(Error::DataCreatedMultipleTimes),
+            DataDelta::Modify(d) => Ok(Some(*d.clone())),
             DataDelta::Delete => Ok(None),
         },
     }

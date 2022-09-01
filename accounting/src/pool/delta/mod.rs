@@ -20,6 +20,7 @@ mod view_impl;
 #[derive(Clone, Encode, Decode)]
 pub enum DataDelta<T> {
     Create(Box<T>),
+    Modify(Box<T>),
     Delete,
 }
 
@@ -84,7 +85,7 @@ impl<'a> PoSAccountingDelta<'a> {
         }
     }
 
-    fn merge_delta_data<T>(
+    fn merge_delta_data<T: Clone>(
         map: &mut BTreeMap<H256, DataDelta<T>>,
         key: H256,
         other_data: DataDelta<T>,
