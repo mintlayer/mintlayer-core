@@ -139,6 +139,14 @@ impl Sum<SignedAmount> for Option<SignedAmount> {
     }
 }
 
+impl std::ops::Neg for SignedAmount {
+    type Output = Option<Self>;
+
+    fn neg(self) -> Self::Output {
+        self.val.checked_neg().map(|n| SignedAmount { val: n })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{amount_sum, primitives::amount::UnsignedIntType};

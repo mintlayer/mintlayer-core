@@ -74,4 +74,8 @@ pub enum Error {
     DeltaDataCreatedMultipleTimes,
     #[error("Consencutive data deletion in delta combination")]
     DeltaDataDeletedMultipleTimes,
+    #[error("Delta undo negation error")]
+    DeltaUndoNegationError,
+    #[error("Delta reverts merge failed due to duplicates")]
+    DuplicatesInDeltaAndUndo,
 }

@@ -39,6 +39,23 @@ pub struct DeltaMergeUndo {
     delegation_data_undo: BTreeMap<H256, DataDeltaUndo<DelegationData>>,
 }
 
+pub enum DeltaUndoOp<T> {
+    Delta(DataDelta<T>),
+    Undo(DataDeltaUndo<T>),
+}
+
+impl<T> From<DataDelta<T>> for DeltaUndoOp<T> {
+    fn from(v: DataDelta<T>) -> Self {
+        Self::Delta(v)
+    }
+}
+
+impl<T> From<DataDeltaUndo<T>> for DeltaUndoOp<T> {
+    fn from(v: DataDeltaUndo<T>) -> Self {
+        Self::Undo(v)
+    }
+}
+
 impl<'a> PoSAccountingDelta<'a> {
     pub fn new(parent: &'a dyn PoSAccountingView) -> Self {
         Self {
