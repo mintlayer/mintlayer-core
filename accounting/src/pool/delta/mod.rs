@@ -66,9 +66,12 @@ impl<'a> PoSAccountingDelta<'a> {
         let current = self.data.pool_data.get(&key);
         let new_data = match current {
             Some(current_data) => combine_pool_data(current_data, other_data)?,
-            None => other_data,
+            None => Some(other_data),
         };
-        self.data.pool_data.insert(key, new_data);
+        match new_data {
+            Some(v) => self.data.pool_data.insert(key, v),
+            None => self.data.pool_data.remove(&key),
+        };
         Ok(())
     }
 
@@ -80,9 +83,13 @@ impl<'a> PoSAccountingDelta<'a> {
         let current = self.data.delegation_data.get(&key);
         let new_data = match current {
             Some(current_data) => combine_delegation_data(current_data, other_data)?,
-            None => other_data,
+            None => Some(other_data),
         };
-        self.data.delegation_data.insert(key, new_data);
+        match new_data {
+            Some(v) => self.data.delegation_data.insert(key, v),
+            None => self.data.delegation_data.remove(&key),
+        };
+
         Ok(())
     }
 

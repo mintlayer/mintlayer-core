@@ -7,16 +7,17 @@ use super::{DelegationDataDelta, PoolDataDelta};
 pub(super) fn combine_delegation_data(
     lhs: &DelegationDataDelta,
     rhs: DelegationDataDelta,
-) -> Result<DelegationDataDelta, Error> {
+) -> Result<Option<DelegationDataDelta>, Error> {
     match (lhs, rhs) {
         (DelegationDataDelta::Add(_), DelegationDataDelta::Add(_)) => {
             Err(Error::DelegationDataCreatedMultipleTimes)
         }
         (DelegationDataDelta::Add(_), DelegationDataDelta::Remove) => {
-            Ok(DelegationDataDelta::Remove)
+            // if lhs had a creation, and we remove, this means nothing is left and there's a net zero left
+            Ok(None)
         }
         (DelegationDataDelta::Remove, DelegationDataDelta::Add(d)) => {
-            Ok(DelegationDataDelta::Add(d))
+            Ok(Some(DelegationDataDelta::Add(d)))
         }
         (DelegationDataDelta::Remove, DelegationDataDelta::Remove) => {
             Err(Error::DelegationDataDeletedMultipleTimes)
@@ -27,16 +28,17 @@ pub(super) fn combine_delegation_data(
 pub(super) fn combine_pool_data(
     lhs: &PoolDataDelta,
     rhs: PoolDataDelta,
-) -> Result<PoolDataDelta, Error> {
+) -> Result<Option<PoolDataDelta>, Error> {
     match (lhs, rhs) {
         (PoolDataDelta::CreatePool(_), PoolDataDelta::CreatePool(_)) => {
             Err(Error::PoolCreatedMultipleTimes)
         }
         (PoolDataDelta::CreatePool(_), PoolDataDelta::DecommissionPool) => {
-            Ok(PoolDataDelta::DecommissionPool)
+            // if lhs had a creation, and we decommission, this means nothing is left and there's a net zero left
+            Ok(None)
         }
         (PoolDataDelta::DecommissionPool, PoolDataDelta::CreatePool(d)) => {
-            Ok(PoolDataDelta::CreatePool(d))
+            Ok(Some(PoolDataDelta::CreatePool(d)))
         }
         (PoolDataDelta::DecommissionPool, PoolDataDelta::DecommissionPool) => {
             Err(Error::PoolDecommissionedMultipleTimes)
