@@ -36,9 +36,9 @@ mod utxosdb_utxosview_impls {
         utxo(db, outpoint).is_some()
     }
 
-    pub fn best_block_hash<S: UtxosStorageRead>(db: &S) -> Option<Id<GenBlock>> {
+    pub fn best_block_hash<S: UtxosStorageRead>(db: &S) -> Id<GenBlock> {
         db.get_best_block_for_utxos().unwrap_or_else(|e| panic!("Database error while attempting to retrieve utxo set best block hash from the database: {}",
-        e))
+        e)).expect("Failed to get best block hash")
     }
 
     pub fn estimated_size<S: UtxosStorageRead>(_db: &S) -> Option<usize> {
@@ -62,7 +62,7 @@ impl<'a, S: UtxosStorageRead> UtxosView for UtxosDB<'a, S> {
     }
 
     fn best_block_hash(&self) -> Id<GenBlock> {
-        utxosdb_utxosview_impls::best_block_hash(self).expect("Failed to get best block hash")
+        utxosdb_utxosview_impls::best_block_hash(self)
     }
 
     fn estimated_size(&self) -> Option<usize> {
@@ -84,7 +84,7 @@ impl<'a, S: UtxosStorageWrite> UtxosView for UtxosDBMut<'a, S> {
     }
 
     fn best_block_hash(&self) -> Id<GenBlock> {
-        utxosdb_utxosview_impls::best_block_hash(self).expect("Failed to get best block hash")
+        utxosdb_utxosview_impls::best_block_hash(self)
     }
 
     fn estimated_size(&self) -> Option<usize> {

@@ -74,7 +74,7 @@ mod test {
         );
 
         // undo checking
-        let undo = create_rand_block_undo(&mut rng, 10, 10, BlockHeight::new(10));
+        let undo = create_rand_block_undo(&mut rng, 10, 10);
 
         assert!(db_interface.set_undo_data(block_id, &undo).is_ok());
         assert_eq!(db_interface.get_undo_data(block_id), Ok(Some(undo)));
