@@ -16,7 +16,7 @@
 //! High-level application-agnostic storage interface
 
 use crate::schema::{self, Schema};
-use serialization::EncodeLike;
+use serialization::{encoded::Encoded, EncodeLike};
 use storage_core::{backend, Backend, DbIndex};
 
 /// The main storage type
@@ -158,9 +158,10 @@ where
     pub fn get<K: EncodeLike<DbMap::Key>>(
         &self,
         key: K,
-    ) -> crate::Result<Option<Encoded<DbMap::Value>>> {
+    ) -> crate::Result<Option<Encoded<&[u8], DbMap::Value>>> {
         key.using_encoded(|key| {
-            backend::ReadOps::get(self.dbtx, self.idx, key).map(|x| x.map(Encoded::new))
+            backend::ReadOps::get(self.dbtx, self.idx, key)
+                .map(|x| x.map(Encoded::from_bytes_unchecked))
         })
     }
 }
@@ -191,9 +192,10 @@ where
     pub fn get<K: EncodeLike<DbMap::Key>>(
         &self,
         key: K,
-    ) -> crate::Result<Option<Encoded<DbMap::Value>>> {
+    ) -> crate::Result<Option<Encoded<&[u8], DbMap::Value>>> {
         key.using_encoded(|key| {
-            backend::ReadOps::get(self.dbtx, self.idx, key).map(|x| x.map(Encoded::new))
+            backend::ReadOps::get(self.dbtx, self.idx, key)
+                .map(|x| x.map(Encoded::from_bytes_unchecked))
         })
     }
 }
@@ -214,34 +216,5 @@ where
     /// Remove value associated with given key.
     pub fn del<K: EncodeLike<DbMap::Key>>(&mut self, key: K) -> crate::Result<()> {
         key.using_encoded(|key| backend::WriteOps::del(self.dbtx, self.idx, key))
-    }
-}
-
-/// A SCALE-encoded representation of some type T
-///
-/// The user can basically do two useful things with this:
-/// 1. Ask for raw encoding as a byte string using [Self::bytes]
-/// 2. Get the decoded value using [Self::decode]
-#[derive(Eq, PartialEq, Debug)]
-pub struct Encoded<'a, T> {
-    bytes: &'a [u8],
-    _phantom: std::marker::PhantomData<fn() -> T>,
-}
-
-impl<'a, T: serialization::Decode> Encoded<'a, T> {
-    fn new(bytes: &'a [u8]) -> Self {
-        let _phantom = Default::default();
-        Self { bytes, _phantom }
-    }
-
-    /// Get encoded byte representation
-    pub fn bytes(&self) -> &'a [u8] {
-        self.bytes
-    }
-
-    /// Get the decoded object
-    pub fn decode(mut self) -> T {
-        serialization::DecodeAll::decode_all(&mut self.bytes)
-            .expect("db value encoding to be consistent")
     }
 }
