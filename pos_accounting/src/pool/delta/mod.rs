@@ -334,7 +334,7 @@ fn merge_balance<T: Ord>(
     other_amount: SignedAmount,
 ) -> Result<(), Error> {
     let current = map.get(&key);
-    match combine_signed_amount_delta(&current.copied(), &Some(other_amount))? {
+    match combine_signed_amount_delta(&current.copied(), other_amount)? {
         Some(new_bal) => map.insert(key, new_bal),
         None => None,
     };
