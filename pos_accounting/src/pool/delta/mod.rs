@@ -60,6 +60,10 @@ impl<'a> PoSAccountingDelta<'a> {
         self.data
     }
 
+    pub fn data(&self) -> &PoSAccountingDeltaData {
+        &self.data
+    }
+
     fn get_cached_delegations_shares(&self, pool_id: H256) -> Option<BTreeMap<H256, SignedAmount>> {
         let range_start = (pool_id, H256::zero());
         let range_end = (pool_id, H256::repeat_byte(0xFF));
@@ -101,22 +105,22 @@ impl<'a> PoSAccountingDelta<'a> {
 
     pub fn merge_with_delta(
         &mut self,
-        other: PoSAccountingDelta<'a>,
+        other: PoSAccountingDeltaData,
     ) -> Result<DeltaMergeUndo, Error> {
-        merge_delta_amounts(&mut self.data.pool_balances, other.data.pool_balances)?;
+        merge_delta_amounts(&mut self.data.pool_balances, other.pool_balances)?;
         merge_delta_amounts(
             &mut self.data.pool_delegation_shares,
-            other.data.pool_delegation_shares,
+            other.pool_delegation_shares,
         )?;
         merge_delta_amounts(
             &mut self.data.delegation_balances,
-            other.data.delegation_balances,
+            other.delegation_balances,
         )?;
 
-        let pool_data_undo = merge_delta_data(&mut self.data.pool_data, other.data.pool_data)?;
+        let pool_data_undo = merge_delta_data(&mut self.data.pool_data, other.pool_data)?;
 
         let delegation_data_undo =
-            merge_delta_data(&mut self.data.delegation_data, other.data.delegation_data)?;
+            merge_delta_data(&mut self.data.delegation_data, other.delegation_data)?;
 
         Ok(DeltaMergeUndo {
             pool_data_undo,
