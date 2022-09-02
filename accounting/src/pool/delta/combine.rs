@@ -4,6 +4,7 @@ use crate::error::Error;
 
 use super::DataDelta;
 
+/// Given two deltas, combine them into one delta, this is the basic delta data composability function
 pub(super) fn combine_delta_data<T: Clone>(
     lhs: &DataDelta<T>,
     rhs: DataDelta<T>,
