@@ -556,8 +556,10 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                 let tokens_op = entry.into_mut();
                 *tokens_op = CachedTokensOperation::Erase;
             }
-            Entry::Vacant(entry) => {
-                entry.insert(CachedTokensOperation::Erase);
+            Entry::Vacant(_) => {
+                return Err(TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(
+                    token_id,
+                ))
             }
         }
         Ok(())

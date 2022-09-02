@@ -56,4 +56,6 @@ pub enum TokensError {
     BlockRewardInTokens,
     #[error("Invariant broken - duplicate token id in transaction {0} in block {1}")]
     InvariantBrokenDuplicateTokenId(Id<Transaction>, Id<Block>),
+    #[error("Invariant broken - attempt undo issuance on non-existent token {0}")]
+    InvariantBrokenUndoIssuanceOnNonexistentToken(TokenId),
 }

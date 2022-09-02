@@ -141,6 +141,7 @@ impl BanScore for TokensError {
             TokensError::AttemptToTransferBurnedTokens => 100,
             TokensError::BlockRewardInTokens => 100,
             TokensError::InvariantBrokenDuplicateTokenId(_, _) => 100,
+            TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_) => 100,
         }
     }
 }
