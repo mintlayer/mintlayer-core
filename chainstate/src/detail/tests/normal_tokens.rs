@@ -102,7 +102,7 @@ fn token_issue_test() {
             ))
         ));
 
-        // Ticker contain non alpha-numeric byte
+        // Ticker contain non alpha-numeric char
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -114,7 +114,7 @@ fn token_issue_test() {
                     ))
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::TokenIssuanceV1 {
-                            token_ticker: "💖".as_bytes().to_vec(),
+                            token_ticker: "💖🚁".as_bytes().to_vec(),
                             amount_to_issue: Amount::from_atoms(52292852472),
                             number_of_decimals: 1,
                             metadata_uri: b"https://some_site.meta".to_vec(),
@@ -581,7 +581,7 @@ fn transfer_split_and_combine_tokens() {
         let token_id = token_id(&block.transactions()[0]).unwrap();
 
         // Split tokens in outputs
-        let _ = tf
+        let split_block = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
@@ -607,13 +607,12 @@ fn transfer_split_and_combine_tokens() {
                     ))
                     .build(),
             )
-            .build_and_process()
-            .unwrap()
-            .unwrap();
-        let split_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
+            .build();
+        let split_outpoint_id = TestBlockInfo::from_block(&split_block).txns[0].0.clone();
+        tf.process_block(split_block, BlockSource::Local).unwrap().unwrap();
 
         // Collect these in one output
-        let _ = dbg!(tf
+        let _ = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
@@ -636,9 +635,9 @@ fn transfer_split_and_combine_tokens() {
                     ))
                     .build(),
             )
-            .build_and_process())
-        .unwrap()
-        .unwrap();
+            .build_and_process()
+            .unwrap()
+            .unwrap();
     })
 }
 
