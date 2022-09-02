@@ -235,7 +235,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         let inputs = tx.inputs();
         let outputs = tx.outputs();
 
-        let inputs_total = self.calculate_coins_total_inputs(inputs, tx.get_id().into())?;
+        let inputs_total = self.calculate_coins_total_inputs(inputs)?;
         let outputs_total = Self::calculate_coins_total_outputs(outputs)?;
 
         if outputs_total > inputs_total {
@@ -255,14 +255,13 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
     fn calculate_coins_total_inputs(
         &self,
         inputs: &[TxInput],
-        spender: Spender,
     ) -> Result<Amount, ConnectTransactionError> {
         inputs
             .iter()
             .map(|input| {
                 self.utxo_cache
                     .utxo(input.outpoint())
-                    .ok_or_else(|| ConnectTransactionError::DoubleSpendAttempt(spender.clone()))
+                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)
                     .map(|utxo| match utxo.output().value() {
                         OutputValue::Coin(amount) => *amount,
                     })
@@ -297,7 +296,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
         let inputs_total = inputs.map_or_else(
             || Ok(Amount::from_atoms(0)),
-            |ins| self.calculate_coins_total_inputs(ins, block.get_id().into()),
+            |ins| self.calculate_coins_total_inputs(ins),
         )?;
         let outputs_total = outputs.map_or_else(
             || Ok(Amount::from_atoms(0)),

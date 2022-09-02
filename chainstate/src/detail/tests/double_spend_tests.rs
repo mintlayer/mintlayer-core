@@ -18,7 +18,7 @@ use crate::detail::{
     transaction_verifier::error::ConnectTransactionError,
 };
 use common::{
-    chain::{tokens::OutputValue, OutPointSourceId, Spender, Transaction, TxInput, TxOutput},
+    chain::{tokens::OutputValue, OutPointSourceId, Transaction, TxInput, TxOutput},
     primitives::{Amount, Id},
 };
 
@@ -168,12 +168,10 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
 
         let tx2_output_value = rng.gen_range(100_000..200_000);
         let second_tx = tx_from_genesis(tf.genesis(), &mut rng, tx2_output_value);
-        let second_block = tf.make_block_builder().add_transaction(second_tx.clone()).build();
+        let second_block = tf.make_block_builder().add_transaction(second_tx).build();
         assert_eq!(
             tf.process_block(second_block, BlockSource::Local).unwrap_err(),
-            BlockError::StateUpdateFailed(ConnectTransactionError::DoubleSpendAttempt(
-                Spender::RegularInput(second_tx.get_id())
-            ))
+            BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
         );
         assert_eq!(tf.best_block_id(), first_block_id);
     });
