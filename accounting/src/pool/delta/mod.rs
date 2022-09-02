@@ -6,7 +6,7 @@ use serialization::{Decode, Encode};
 use crate::error::Error;
 
 use self::{
-    combine::{combine_delta_data, combine_signed_amount_delta},
+    combine::{combine_delta_data, combine_signed_amount_delta, DeltaMapOp},
     data::PoSAccountingDeltaData,
 };
 
@@ -93,11 +93,13 @@ impl<'a> PoSAccountingDelta<'a> {
         let current = map.get(&key);
         let new_data = match current {
             Some(current_data) => combine_delta_data(current_data, other_data)?,
-            None => Some(other_data),
+            None => DeltaMapOp::Write(other_data),
         };
+
+        // apply the change to the current map and create the undo data
         let undo = match new_data {
-            Some(v) => map.insert(key, v).and(None),
-            None => map.remove(&key),
+            DeltaMapOp::Write(v) => map.insert(key, v).and(None),
+            DeltaMapOp::Delete => map.remove(&key),
         };
 
         Ok(undo.map(|data| DataDeltaUndo { data }))

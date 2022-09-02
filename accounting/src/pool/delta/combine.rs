@@ -4,25 +4,33 @@ use crate::error::Error;
 
 use super::DataDelta;
 
+/// The outcome of combining two deltas for a given key upon the map that contains it
+pub enum DeltaMapOp<T> {
+    /// Write a specific value (for example, to write a Create or Modify operation)
+    Write(T),
+    /// Erase the value at the relevant key spot (for example, a modify followed by Erase yields nothing)
+    Delete,
+}
+
 /// Given two deltas, combine them into one delta, this is the basic delta data composability function
 pub(super) fn combine_delta_data<T: Clone>(
     lhs: &DataDelta<T>,
     rhs: DataDelta<T>,
-) -> Result<Option<DataDelta<T>>, Error> {
+) -> Result<DeltaMapOp<DataDelta<T>>, Error> {
     match (lhs, rhs) {
         (DataDelta::Create(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
-        (DataDelta::Create(_), DataDelta::Modify(d)) => Ok(Some(DataDelta::Create(d))),
+        (DataDelta::Create(_), DataDelta::Modify(d)) => Ok(DeltaMapOp::Write(DataDelta::Create(d))),
         (DataDelta::Create(_), DataDelta::Delete) => {
             // if lhs had a creation, and we delete, this means nothing is left and there's a net zero to return
-            Ok(None)
+            Ok(DeltaMapOp::Delete)
         }
         (DataDelta::Modify(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
-        (DataDelta::Modify(_), DataDelta::Modify(d)) => Ok(Some(DataDelta::Modify(d))),
+        (DataDelta::Modify(_), DataDelta::Modify(d)) => Ok(DeltaMapOp::Write(DataDelta::Modify(d))),
         (DataDelta::Modify(_), DataDelta::Delete) => {
             // if lhs had a modification, and we delete, this means nothing is left and there's a net zero to return
-            Ok(None)
+            Ok(DeltaMapOp::Delete)
         }
-        (DataDelta::Delete, DataDelta::Create(d)) => Ok(Some(DataDelta::Create(d))),
+        (DataDelta::Delete, DataDelta::Create(d)) => Ok(DeltaMapOp::Write(DataDelta::Create(d))),
         (DataDelta::Delete, DataDelta::Modify(_)) => Err(Error::DeltaDataModifyAfterDelete),
         (DataDelta::Delete, DataDelta::Delete) => Err(Error::DeltaDataDeletedMultipleTimes),
     }
