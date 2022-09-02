@@ -60,18 +60,21 @@ pub fn check_tokens_issuance_data(
 ) -> Result<(), TokensError> {
     // Check token name
     if token_ticker.len() > TOKEN_MAX_TICKER_LEN || token_ticker.is_empty() {
-        return Err(TokensError::IssueErrorInvalidTicker(tx_id, source_block_id));
+        return Err(TokensError::IssueErrorInvalidTickerLength(
+            tx_id,
+            source_block_id,
+        ));
     }
 
     // Is the name is ut8 and is it alphanumeric?
     let is_alphanumeric = String::from_utf8(token_ticker.to_vec())
-        .map_err(|_| TokensError::IssueErrorInvalidTicker(tx_id, source_block_id))?
+        .map_err(|_| TokensError::IssueErrorTickerHasNoneAlphaNumericChar(tx_id, source_block_id))?
         .chars()
         .all(char::is_alphanumeric);
 
     ensure!(
         is_alphanumeric,
-        TokensError::IssueErrorInvalidTicker(tx_id, source_block_id)
+        TokensError::IssueErrorTickerHasNoneAlphaNumericChar(tx_id, source_block_id)
     );
 
     // Check amount
@@ -91,12 +94,15 @@ pub fn check_tokens_issuance_data(
     }
 
     // Check URI
-    if metadata_uri.len() > TOKEN_MAX_URI_LEN || !String::from_utf8_lossy(metadata_uri).is_ascii() {
-        return Err(TokensError::IssueErrorIncorrectMetadataURI(
-            tx_id,
-            source_block_id,
-        ));
-    }
+    let is_ascii = String::from_utf8(metadata_uri.to_vec())
+        .map_err(|_| TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id))?
+        .chars()
+        .all(|ch| ch.is_alphanumeric() || ch.is_ascii_punctuation() || ch.is_ascii_control());
+
+    ensure!(
+        is_ascii && metadata_uri.len() <= TOKEN_MAX_URI_LEN,
+        TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id)
+    );
     Ok(())
 }
 

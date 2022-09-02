@@ -531,11 +531,20 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn register_tokens_issuance(&mut self, tx: &Transaction) -> Result<(), TokensError> {
+    fn register_tokens_issuance(
+        &mut self,
+        block_id: Id<Block>,
+        tx: &Transaction,
+    ) -> Result<(), TokensError> {
         let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
 
         let _tokens_op = match self.tokens_cache.entry(token_id) {
-            Entry::Occupied(entry) => entry.into_mut(), // TODO: Tokens already issued? Must we return error?
+            Entry::Occupied(_) => {
+                return Err(TokensError::MultipleTokenIssuanceInTransaction(
+                    tx.get_id(),
+                    block_id,
+                ));
+            }
             Entry::Vacant(entry) => entry.insert(CachedTokensOperation::Write(tx.get_id())),
         };
         Ok(())
@@ -601,7 +610,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                 let _ = self.check_transferred_amounts_and_get_fee(block.get_id(), tx)?;
 
                 // Register tokens if tx has issuance data
-                self.register_tokens_issuance(tx)?;
+                self.register_tokens_issuance(block.get_id(), tx)?;
 
                 // verify input signatures
                 self.verify_signatures(tx, spend_height, median_time_past)?;

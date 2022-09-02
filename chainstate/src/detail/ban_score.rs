@@ -99,7 +99,7 @@ impl BanScore for ConnectTransactionError {
             // Even though this is an invariant, we consider it a violation to be overly cautious
             ConnectTransactionError::SerializationInvariantError(_) => 100,
             ConnectTransactionError::TimeLockViolation => 100,
-            ConnectTransactionError::TokensError(tokens_error) => tokens_error.ban_score(),
+            ConnectTransactionError::TokensError(err) => err.ban_score(),
         }
     }
 }
@@ -124,7 +124,8 @@ impl BanScore for CheckBlockError {
 impl BanScore for TokensError {
     fn ban_score(&self) -> u32 {
         match self {
-            TokensError::IssueErrorInvalidTicker(_, _) => 100,
+            TokensError::IssueErrorInvalidTickerLength(_, _) => 100,
+            TokensError::IssueErrorTickerHasNoneAlphaNumericChar(_, _) => 100,
             TokensError::IssueErrorIncorrectAmount(_, _) => 100,
             TokensError::IssueErrorTooManyDecimals(_, _) => 100,
             TokensError::IssueErrorIncorrectMetadataURI(_, _) => 100,

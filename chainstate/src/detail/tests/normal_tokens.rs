@@ -53,7 +53,7 @@ fn token_issue_test() {
                             token_ticker: b"TRY TO USE THE LONG NAME".to_vec(),
                             amount_to_issue: Amount::from_atoms(52292852472),
                             number_of_decimals: 1,
-                            metadata_uri: b"https://some_site.meta".to_vec(),
+                            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
                         }),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -65,7 +65,7 @@ fn token_issue_test() {
             result,
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueErrorInvalidTicker(_, _)
+                    TokensError::IssueErrorInvalidTickerLength(_, _)
                 ))
             ))
         ));
@@ -85,7 +85,7 @@ fn token_issue_test() {
                             token_ticker: b"".to_vec(),
                             amount_to_issue: Amount::from_atoms(52292852472),
                             number_of_decimals: 1,
-                            metadata_uri: b"https://some_site.meta".to_vec(),
+                            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
                         }),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -97,7 +97,7 @@ fn token_issue_test() {
             result,
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueErrorInvalidTicker(_, _)
+                    TokensError::IssueErrorInvalidTickerLength(_, _)
                 ))
             ))
         ));
@@ -114,10 +114,10 @@ fn token_issue_test() {
                     ))
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::TokenIssuanceV1 {
-                            token_ticker: "💖🚁".as_bytes().to_vec(),
+                            token_ticker: "💖".as_bytes().to_vec(),
                             amount_to_issue: Amount::from_atoms(52292852472),
                             number_of_decimals: 1,
-                            metadata_uri: b"https://some_site.meta".to_vec(),
+                            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
                         }),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -129,7 +129,7 @@ fn token_issue_test() {
             result,
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueErrorInvalidTicker(_, _)
+                    TokensError::IssueErrorTickerHasNoneAlphaNumericChar(_, _)
                 ))
             ))
         ));
@@ -149,7 +149,7 @@ fn token_issue_test() {
                             token_ticker: "SOME".as_bytes().to_vec(),
                             amount_to_issue: Amount::from_atoms(0),
                             number_of_decimals: 1,
-                            metadata_uri: b"https://some_site.meta".to_vec(),
+                            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
                         }),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -181,7 +181,7 @@ fn token_issue_test() {
                             token_ticker: "SOME".as_bytes().to_vec(),
                             amount_to_issue: Amount::from_atoms(123456789),
                             number_of_decimals: 123,
-                            metadata_uri: b"https://some_site.meta".to_vec(),
+                            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
                         }),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -230,12 +230,44 @@ fn token_issue_test() {
             ))
         ));
 
+        // URI contain non alpha-numeric char
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::TokenIssuanceV1 {
+                            token_ticker: "SOME".as_bytes().to_vec(),
+                            amount_to_issue: Amount::from_atoms(52292852472),
+                            number_of_decimals: 1,
+                            metadata_uri: "https://💖🚁🌭.🦠🚀🚖🚧".as_bytes().to_vec(),
+                        }),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert!(matches!(
+            result,
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorIncorrectMetadataURI(_, _)
+                ))
+            ))
+        ));
+
         // Valid case
         let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: b"SOME".to_vec(),
+            token_ticker: "SOME".as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
-            metadata_uri: b"https://some_site.meta".to_vec(),
+            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
         });
         let block_index = tf
             .make_block_builder()
@@ -272,7 +304,7 @@ fn token_transfer_test() {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52_292_852_472),
             number_of_decimals: 1,
-            metadata_uri: b"https://some_site.meta".to_vec(),
+            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
         });
 
         let block_index = tf
@@ -420,7 +452,7 @@ fn multiple_token_issuance_in_one_tx() {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
-            metadata_uri: b"https://some_site.meta".to_vec(),
+            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
         });
 
         let result = tf
@@ -457,7 +489,7 @@ fn multiple_token_issuance_in_one_tx() {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
-            metadata_uri: b"https://some_site.meta".to_vec(),
+            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
         });
         let block_index = tf
             .make_block_builder()
@@ -496,7 +528,7 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
-            metadata_uri: b"https://some_site.meta".to_vec(),
+            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
         });
         let result = tf
             .make_block_builder()
@@ -555,7 +587,7 @@ fn transfer_split_and_combine_tokens() {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: TOTAL_TOKEN_VALUE,
             number_of_decimals: 1,
-            metadata_uri: b"https://52292852472.meta".to_vec(),
+            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
         });
         let block_index = tf
             .make_block_builder()
@@ -655,7 +687,7 @@ fn test_burn_tokens() {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: ISSUED_FUNDS,
             number_of_decimals: 1,
-            metadata_uri: b"https://some_site.meta".to_vec(),
+            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
         });
         let block_index = tf
             .make_block_builder()
@@ -850,7 +882,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: ISSUED_FUNDS,
             number_of_decimals: 1,
-            metadata_uri: b"https://some_site.meta".to_vec(),
+            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
         });
         let block_index = tf
             .make_block_builder()
@@ -1136,7 +1168,7 @@ fn test_attempt_to_print_tokens() {
             token_ticker: b"SOME".to_vec(),
             amount_to_issue: ISSUED_FUNDS,
             number_of_decimals: 1,
-            metadata_uri: b"https://some_site.meta".to_vec(),
+            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
         });
         let block_index = tf
             .make_block_builder()
@@ -1232,7 +1264,7 @@ fn test_attempt_to_mix_input_tokens() {
             token_ticker: b"FIRST".to_vec(),
             amount_to_issue: ISSUED_FUNDS,
             number_of_decimals: 1,
-            metadata_uri: b"https://some_site.meta".to_vec(),
+            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
         });
         let block_index = tf
             .make_block_builder()

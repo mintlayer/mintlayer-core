@@ -23,7 +23,9 @@ use thiserror::Error;
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum TokensError {
     #[error("Invalid ticker in issue transaction {0} in block {1}")]
-    IssueErrorInvalidTicker(Id<Transaction>, Id<Block>),
+    IssueErrorInvalidTickerLength(Id<Transaction>, Id<Block>),
+    #[error("Invalid ticker in issue transaction {0} in block {1}")]
+    IssueErrorTickerHasNoneAlphaNumericChar(Id<Transaction>, Id<Block>),
     #[error("Incorrect amount in issue transaction {0} in block {1}")]
     IssueErrorIncorrectAmount(Id<Transaction>, Id<Block>),
     #[error("Too many decimals in issue transaction {0} in block {1}")]
