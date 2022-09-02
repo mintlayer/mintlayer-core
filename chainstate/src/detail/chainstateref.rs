@@ -539,23 +539,20 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         debug_assert!(reward_fees.is_none());
 
         // TODO: add a test that checks the order in which txs are connected
-        let total_fees = block
-            .transactions()
-            .iter()
-            .enumerate()
-            .map(|(tx_num, _)| {
-                tx_verifier.connect_transactable(
+        let total_fees = block.transactions().iter().enumerate().try_fold(
+            Amount::from_atoms(0),
+            |total, (tx_num, _)| {
+                let fee = tx_verifier.connect_transactable(
                     BlockTransactableRef::Transaction(block, tx_num),
                     spend_height,
                     &median_time_past,
                     blockreward_maturity,
-                )
-            })
-            .try_fold(Amount::from_atoms(0), |total, fee| {
-                (total + fee?.expect("connect tx should return fees").0).ok_or_else(|| {
+                )?;
+                (total + fee.expect("connect tx should return fees").0).ok_or_else(|| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
                 })
-            })?;
+            },
+        )?;
 
         let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
         tx_verifier.check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))?;

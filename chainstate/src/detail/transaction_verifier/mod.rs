@@ -256,19 +256,16 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         &self,
         inputs: &[TxInput],
     ) -> Result<Amount, ConnectTransactionError> {
-        inputs
-            .iter()
-            .map(|input| {
-                self.utxo_cache
-                    .utxo(input.outpoint())
-                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)
-                    .map(|utxo| match utxo.output().value() {
-                        OutputValue::Coin(amount) => *amount,
-                    })
-            })
-            .try_fold(Amount::from_atoms(0), |total, amount| {
-                (total + amount?).ok_or(ConnectTransactionError::OutputAdditionError)
-            })
+        inputs.iter().try_fold(Amount::from_atoms(0), |total, input| {
+            let amount = self
+                .utxo_cache
+                .utxo(input.outpoint())
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent)
+                .map(|utxo| match utxo.output().value() {
+                    OutputValue::Coin(amount) => *amount,
+                })?;
+            (total + amount).ok_or(ConnectTransactionError::OutputAdditionError)
+        })
     }
 
     fn calculate_coins_total_outputs(
@@ -542,10 +539,6 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 // verify input signatures
                 self.verify_signatures(tx, spend_height, median_time_past)?;
 
-                // mark tx index as spent
-                let spender = tx.get_id().into();
-                self.spend_tx_index(tx.inputs(), spender)?;
-
                 //spend utxos
                 let tx_undo = self
                     .utxo_cache
@@ -554,6 +547,10 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
                 // save spent utxos for undo
                 self.get_or_create_block_undo(&block_id).push_tx_undo(tx_undo);
+
+                // mark tx index as spent
+                let spender = tx.get_id().into();
+                self.spend_tx_index(tx.inputs(), spender)?;
 
                 fee
             }
@@ -567,13 +564,12 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     // verify input signatures
                     self.verify_signatures(&reward_transactable, spend_height, median_time_past)?;
 
-                    let block_id = block.get_id().into();
-
                     // check maturity
-                    self.check_blockreward_maturity(&block_id, spend_height, blockreward_maturity)?;
-
-                    // mark tx index as spend
-                    self.spend_tx_index(inputs, block_id.into())?;
+                    self.check_blockreward_maturity(
+                        &block.get_id().into(),
+                        spend_height,
+                        blockreward_maturity,
+                    )?;
                 }
 
                 let fee = None;
@@ -593,6 +589,11 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     // save spent utxos for undo
                     self.get_or_create_block_undo(&block.get_id())
                         .set_block_reward_undo(reward_undo);
+                }
+
+                if let Some(inputs) = reward_transactable.inputs() {
+                    // mark tx index as spend
+                    self.spend_tx_index(inputs, block.get_id().into())?;
                 }
 
                 fee
@@ -618,6 +619,9 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     ConnectTransactionError::TxNumWrongInBlockOnDisconnect(tx_num, block_id),
                 )?;
 
+                let tx_undo = self.take_tx_undo(&block_id, tx_num)?;
+                self.utxo_cache.disconnect_transaction(tx, tx_undo)?;
+
                 // pre-cache all inputs
                 self.precache_inputs(tx.inputs())?;
 
@@ -631,12 +635,17 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                         .unspend(outpoint.output_index())
                         .map_err(ConnectTransactionError::from)?;
                 }
-
-                let tx_undo = self.take_tx_undo(&block_id, tx_num)?;
-                self.utxo_cache.disconnect_transaction(tx, tx_undo)?;
             }
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.block_reward_transactable();
+
+                let reward_undo = self.take_block_reward_undo(&block.get_id())?;
+                self.utxo_cache.disconnect_block_transactable(
+                    &reward_transactable,
+                    &block.get_id().into(),
+                    reward_undo,
+                )?;
+
                 if let Some(inputs) = reward_transactable.inputs() {
                     // pre-cache all inputs
                     self.precache_inputs(inputs)?;
@@ -652,13 +661,6 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                             .map_err(ConnectTransactionError::from)?;
                     }
                 }
-
-                let reward_undo = self.take_block_reward_undo(&block.get_id())?;
-                self.utxo_cache.disconnect_block_transactable(
-                    &reward_transactable,
-                    &block.get_id().into(),
-                    reward_undo,
-                )?;
             }
         }
 
