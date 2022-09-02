@@ -24,7 +24,7 @@ use common::{
         },
         Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
     },
-    primitives::{BlockDistance, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
     Uint256,
 };
 use consensus::{BlockIndexHandle, TransactionIndexHandle};
@@ -37,7 +37,9 @@ use crate::{BlockError, BlockSource, ChainstateConfig};
 
 use super::{
     orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
-    transaction_verifier::{BlockTransactableRef, TransactionVerifier},
+    transaction_verifier::{
+        error::ConnectTransactionError, BlockTransactableRef, Fee, Subsidy, TransactionVerifier,
+    },
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
 };
 
@@ -528,25 +530,32 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         let mut tx_verifier =
             TransactionVerifier::new(&self.db_tx, utxo_view.derive_cache(), self.chain_config);
 
-        tx_verifier.connect_transaction(
+        let reward_fees = tx_verifier.connect_transactable(
             BlockTransactableRef::BlockReward(block),
             spend_height,
             &median_time_past,
             blockreward_maturity,
         )?;
+        debug_assert!(reward_fees.is_none());
 
         // TODO: add a test that checks the order in which txs are connected
-        for (tx_num, _tx) in block.transactions().iter().enumerate() {
-            tx_verifier.connect_transaction(
-                BlockTransactableRef::Transaction(block, tx_num),
-                spend_height,
-                &median_time_past,
-                blockreward_maturity,
-            )?;
-        }
+        let total_fees = block.transactions().iter().enumerate().try_fold(
+            Amount::from_atoms(0),
+            |total, (tx_num, _)| {
+                let fee = tx_verifier.connect_transactable(
+                    BlockTransactableRef::Transaction(block, tx_num),
+                    spend_height,
+                    &median_time_past,
+                    blockreward_maturity,
+                )?;
+                (total + fee.expect("connect tx should return fees").0).ok_or_else(|| {
+                    ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
+                })
+            },
+        )?;
 
         let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
-        tx_verifier.check_block_reward(block, block_subsidy)?;
+        tx_verifier.check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))?;
 
         Ok(tx_verifier)
     }
@@ -558,11 +567,13 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     ) -> Result<TransactionVerifier<S>, BlockError> {
         let mut tx_verifier =
             TransactionVerifier::new(&self.db_tx, utxo_view.derive_cache(), self.chain_config);
+
         // TODO: add a test that checks the order in which txs are disconnected
-        block.transactions().iter().rev().enumerate().try_for_each(|(tx_num, _tx)| {
-            tx_verifier.disconnect_transaction(BlockTransactableRef::Transaction(block, tx_num))
+        block.transactions().iter().enumerate().rev().try_for_each(|(tx_num, _)| {
+            tx_verifier.disconnect_transactable(BlockTransactableRef::Transaction(block, tx_num))
         })?;
-        tx_verifier.disconnect_transaction(BlockTransactableRef::BlockReward(block))?;
+        tx_verifier.disconnect_transactable(BlockTransactableRef::BlockReward(block))?;
+
         Ok(tx_verifier)
     }
 }
