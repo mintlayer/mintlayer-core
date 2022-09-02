@@ -70,6 +70,64 @@ impl<'a> PoSAccountingDelta<'a> {
         }
     }
 
+    fn undo_merge_delta_data<K: Ord, T>(
+        map: &mut BTreeMap<K, DataDelta<T>>,
+        undo_data: BTreeMap<K, DataDeltaUndoOp<T>>,
+    ) -> Result<(), Error> {
+        for (key, data) in undo_data.into_iter() {
+            match data {
+                DataDeltaUndoOp::Write(undo) => map.insert(key, undo),
+                DataDeltaUndoOp::Erase => map.remove(&key),
+            };
+        }
+        Ok(())
+    }
+
+    pub fn undo_delta_merge(
+        &mut self,
+        already_merged: PoSAccountingDelta<'a>,
+        undo_data: DeltaMergeUndo,
+    ) -> Result<(), Error> {
+        already_merged
+            .data
+            .pool_balances
+            .into_iter()
+            .try_for_each(|(key, other_amount)| {
+                merge_balance(
+                    &mut self.data.pool_balances,
+                    key,
+                    (-other_amount).ok_or(Error::DeltaUndoNegationError)?,
+                )
+            })?;
+        already_merged.data.pool_delegation_shares.into_iter().try_for_each(
+            |(key, other_del_shares)| {
+                merge_balance(
+                    &mut self.data.pool_delegation_shares,
+                    key,
+                    (-other_del_shares).ok_or(Error::DeltaUndoNegationError)?,
+                )
+            },
+        )?;
+        already_merged.data.delegation_balances.into_iter().try_for_each(
+            |(key, other_del_balance)| {
+                merge_balance(
+                    &mut self.data.delegation_balances,
+                    key,
+                    (-other_del_balance).ok_or(Error::DeltaUndoNegationError)?,
+                )
+            },
+        )?;
+
+        Self::undo_merge_delta_data(&mut self.data.pool_data, undo_data.pool_data_undo)?;
+
+        Self::undo_merge_delta_data(
+            &mut self.data.delegation_data,
+            undo_data.delegation_data_undo,
+        )?;
+
+        Ok(())
+    }
+
     fn merge_delta_data<T: Clone>(
         map: &mut BTreeMap<H256, DataDelta<T>>,
         key: H256,
