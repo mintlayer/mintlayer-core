@@ -84,12 +84,12 @@ pub(super) fn combine_amount_delta(
 pub(super) fn combine_signed_amount_delta(
     lhs: &Option<SignedAmount>,
     rhs: SignedAmount,
-) -> Result<Option<SignedAmount>, Error> {
+) -> Result<SignedAmount, Error> {
     match lhs {
-        None => Ok(Some(rhs)),
+        None => Ok(rhs),
         Some(v1) => {
             let sum = (*v1 + rhs).ok_or(Error::ArithmeticErrorDeltaAdditionFailed)?;
-            Ok(Some(sum))
+            Ok(sum)
         }
     }
 }

@@ -331,10 +331,13 @@ fn merge_delta_balance<T: Ord>(
     other_amount: SignedAmount,
 ) -> Result<(), Error> {
     let current = map.get(&key);
-    match combine_signed_amount_delta(&current.copied(), other_amount)? {
-        Some(new_bal) => map.insert(key, new_bal),
-        None => None,
-    };
+    let new_bal = combine_signed_amount_delta(&current.copied(), other_amount)?;
+    if new_bal == SignedAmount::ZERO {
+        // if the new amount is zero, no need to have it at all since it has no effect
+        map.remove(&key);
+    } else {
+        map.insert(key, new_bal);
+    }
     Ok(())
 }
 

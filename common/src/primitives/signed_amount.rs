@@ -34,6 +34,7 @@ pub struct SignedAmount {
 impl SignedAmount {
     pub const MAX: Self = Self::from_atoms(SignedIntType::MAX);
     pub const MIN: Self = Self::from_atoms(SignedIntType::MIN);
+    pub const ZERO: Self = Self::from_atoms(0);
 
     pub const fn from_atoms(v: SignedIntType) -> Self {
         SignedAmount { val: v }
