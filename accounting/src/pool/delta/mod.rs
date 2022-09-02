@@ -98,7 +98,7 @@ impl<'a> PoSAccountingDelta<'a> {
 
         // apply the change to the current map and create the undo data
         let undo = match new_data {
-            DeltaMapOp::Write(v) => map.insert(key, v).and(None),
+            DeltaMapOp::Write(v) => map.insert(key, v),
             DeltaMapOp::Delete => map.remove(&key),
         };
 
