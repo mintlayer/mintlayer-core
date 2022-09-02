@@ -113,32 +113,10 @@ impl<'a> PoSAccountingDelta<'a> {
             other.data.delegation_balances,
         )?;
 
-        let pool_data_undo = other
-            .data
-            .pool_data
-            .into_iter()
-            .map(|(key, other_pool_data)| {
-                merge_delta_data(&mut self.data.pool_data, key, other_pool_data).map(|v| (key, v))
-            })
-            .collect::<Result<BTreeMap<_, _>, _>>()?;
-        let pool_data_undo = pool_data_undo
-            .into_iter()
-            .filter_map(|(k, v)| v.map(|v| (k, v)))
-            .collect::<BTreeMap<_, _>>();
+        let pool_data_undo = merge_delta_data(&mut self.data.pool_data, other.data.pool_data)?;
 
-        let delegation_data_undo = other
-            .data
-            .delegation_data
-            .into_iter()
-            .map(|(key, other_del_data)| {
-                merge_delta_data(&mut self.data.delegation_data, key, other_del_data)
-                    .map(|v| (key, v))
-            })
-            .collect::<Result<BTreeMap<_, _>, _>>()?;
-        let delegation_data_undo = delegation_data_undo
-            .into_iter()
-            .filter_map(|(k, v)| v.map(|v| (k, v)))
-            .collect::<BTreeMap<_, _>>();
+        let delegation_data_undo =
+            merge_delta_data(&mut self.data.delegation_data, other.data.delegation_data)?;
 
         Ok(DeltaMergeUndo {
             pool_data_undo,

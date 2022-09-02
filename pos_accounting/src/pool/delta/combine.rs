@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use common::primitives::{signed_amount::SignedAmount, Amount, H256};
+use common::primitives::{signed_amount::SignedAmount, Amount};
 
 use crate::error::Error;
 
@@ -109,9 +109,29 @@ pub fn undo_merge_delta_data<K: Ord, T>(
     Ok(())
 }
 
-pub fn merge_delta_data<T: Clone>(
-    map: &mut BTreeMap<H256, DataDelta<T>>,
-    key: H256,
+pub fn merge_delta_data<K: Ord + Copy, T: Clone>(
+    map: &mut BTreeMap<K, DataDelta<T>>,
+    delta_to_apply: BTreeMap<K, DataDelta<T>>,
+) -> Result<BTreeMap<K, DataDeltaUndoOp<T>>, Error> {
+    let data_undo = delta_to_apply
+        .into_iter()
+        .map(|(key, other_pool_data)| {
+            merge_delta_data_element(map, key, other_pool_data).map(|v| (key, v))
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()?;
+
+    // TODO: maybe we don't have to run Collect::<_>() twice, but dealing with Result<Option<A>> is tricky in a functional way
+    let data_undo = data_undo
+        .into_iter()
+        .filter_map(|(k, v)| v.map(|v| (k, v)))
+        .collect::<BTreeMap<_, _>>();
+
+    Ok(data_undo)
+}
+
+pub fn merge_delta_data_element<K: Ord, T: Clone>(
+    map: &mut BTreeMap<K, DataDelta<T>>,
+    key: K,
     other_data: DataDelta<T>,
 ) -> Result<Option<DataDeltaUndoOp<T>>, Error> {
     let current = map.get(&key);
@@ -142,7 +162,7 @@ pub fn merge_delta_amounts<K: Ord>(
 ) -> Result<(), Error> {
     delta_to_apply
         .into_iter()
-        .try_for_each(|(key, other_amount)| merge_delta_balance(map, key, other_amount))?;
+        .try_for_each(|(key, other_amount)| merge_delta_amount_element(map, key, other_amount))?;
 
     Ok(())
 }
@@ -153,7 +173,7 @@ pub fn undo_merge_delta_amounts<K: Ord>(
     delta_to_remove: BTreeMap<K, SignedAmount>,
 ) -> Result<(), Error> {
     delta_to_remove.into_iter().try_for_each(|(key, other_amount)| {
-        merge_delta_balance(
+        merge_delta_amount_element(
             map,
             key,
             (-other_amount).ok_or(Error::DeltaUndoNegationError)?,
@@ -163,7 +183,7 @@ pub fn undo_merge_delta_amounts<K: Ord>(
     Ok(())
 }
 
-pub fn merge_delta_balance<T: Ord>(
+pub fn merge_delta_amount_element<T: Ord>(
     map: &mut BTreeMap<T, SignedAmount>,
     key: T,
     other_amount: SignedAmount,
