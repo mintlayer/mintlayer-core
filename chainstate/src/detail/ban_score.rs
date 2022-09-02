@@ -131,7 +131,7 @@ impl BanScore for TokensError {
             TokensError::IssueErrorIncorrectMetadataURI(_, _) => 100,
             TokensError::MultipleTokenIssuanceInTransaction(_, _) => 100,
             TokensError::CoinOrTokenOverflow => 100,
-            TokensError::InsufficientTokenFees(_, _) => 0,
+            TokensError::InsufficientTokenFees(_, _) => 100,
             TokensError::BurnZeroTokens(_, _) => 100,
             TokensError::NoTxInMainChainByOutpoint => 100,
             TokensError::BlockRewardOutputCantBeUsedInTokenTx => 100,
