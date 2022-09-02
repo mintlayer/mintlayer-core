@@ -89,7 +89,7 @@ impl<'a> PoSAccountingDelta<'a> {
         delta_to_remove: BTreeMap<K, SignedAmount>,
     ) -> Result<(), Error> {
         delta_to_remove.into_iter().try_for_each(|(key, other_amount)| {
-            merge_balance(
+            merge_delta_balance(
                 map,
                 key,
                 (-other_amount).ok_or(Error::DeltaUndoNegationError)?,
@@ -161,21 +161,21 @@ impl<'a> PoSAccountingDelta<'a> {
         other: PoSAccountingDelta<'a>,
     ) -> Result<DeltaMergeUndo, Error> {
         other.data.pool_balances.into_iter().try_for_each(|(key, other_amount)| {
-            merge_balance(&mut self.data.pool_balances, key, other_amount)
+            merge_delta_balance(&mut self.data.pool_balances, key, other_amount)
         })?;
         other
             .data
             .pool_delegation_shares
             .into_iter()
             .try_for_each(|(key, other_del_shares)| {
-                merge_balance(&mut self.data.pool_delegation_shares, key, other_del_shares)
+                merge_delta_balance(&mut self.data.pool_delegation_shares, key, other_del_shares)
             })?;
         other
             .data
             .delegation_balances
             .into_iter()
             .try_for_each(|(key, other_del_balance)| {
-                merge_balance(&mut self.data.delegation_balances, key, other_del_balance)
+                merge_delta_balance(&mut self.data.delegation_balances, key, other_del_balance)
             })?;
 
         let pool_data_undo = other
@@ -328,7 +328,7 @@ impl<'a> PoSAccountingDelta<'a> {
     }
 }
 
-fn merge_balance<T: Ord>(
+fn merge_delta_balance<T: Ord>(
     map: &mut BTreeMap<T, SignedAmount>,
     key: T,
     other_amount: SignedAmount,
