@@ -83,39 +83,40 @@ impl<'a> PoSAccountingDelta<'a> {
         Ok(())
     }
 
+    /// Undo a merge with a delta of a balance; notice that we don't need undo data for this, since we can just flip the sign of the amount
+    fn undo_merge_delta_amount<K: Ord>(
+        map: &mut BTreeMap<K, SignedAmount>,
+        delta_to_remove: BTreeMap<K, SignedAmount>,
+    ) -> Result<(), Error> {
+        delta_to_remove.into_iter().try_for_each(|(key, other_amount)| {
+            merge_balance(
+                map,
+                key,
+                (-other_amount).ok_or(Error::DeltaUndoNegationError)?,
+            )
+        })?;
+
+        Ok(())
+    }
+
     pub fn undo_delta_merge(
         &mut self,
         already_merged: PoSAccountingDelta<'a>,
         undo_data: DeltaMergeUndo,
     ) -> Result<(), Error> {
-        already_merged
-            .data
-            .pool_balances
-            .into_iter()
-            .try_for_each(|(key, other_amount)| {
-                merge_balance(
-                    &mut self.data.pool_balances,
-                    key,
-                    (-other_amount).ok_or(Error::DeltaUndoNegationError)?,
-                )
-            })?;
-        already_merged.data.pool_delegation_shares.into_iter().try_for_each(
-            |(key, other_del_shares)| {
-                merge_balance(
-                    &mut self.data.pool_delegation_shares,
-                    key,
-                    (-other_del_shares).ok_or(Error::DeltaUndoNegationError)?,
-                )
-            },
+        Self::undo_merge_delta_amount(
+            &mut self.data.pool_balances,
+            already_merged.data.pool_balances,
         )?;
-        already_merged.data.delegation_balances.into_iter().try_for_each(
-            |(key, other_del_balance)| {
-                merge_balance(
-                    &mut self.data.delegation_balances,
-                    key,
-                    (-other_del_balance).ok_or(Error::DeltaUndoNegationError)?,
-                )
-            },
+
+        Self::undo_merge_delta_amount(
+            &mut self.data.pool_delegation_shares,
+            already_merged.data.pool_delegation_shares,
+        )?;
+
+        Self::undo_merge_delta_amount(
+            &mut self.data.delegation_balances,
+            already_merged.data.delegation_balances,
         )?;
 
         Self::undo_merge_delta_data(&mut self.data.pool_data, undo_data.pool_data_undo)?;
