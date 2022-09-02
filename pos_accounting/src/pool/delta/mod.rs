@@ -6,7 +6,9 @@ use serialization::{Decode, Encode};
 use crate::error::Error;
 
 use self::{
-    combine::{combine_delta_data, combine_signed_amount_delta, DeltaMapOp},
+    combine::{
+        merge_delta_balance, merge_delta_data, undo_merge_delta_amount, undo_merge_delta_data,
+    },
     data::PoSAccountingDeltaData,
 };
 
@@ -70,87 +72,31 @@ impl<'a> PoSAccountingDelta<'a> {
         }
     }
 
-    fn undo_merge_delta_data<K: Ord, T>(
-        map: &mut BTreeMap<K, DataDelta<T>>,
-        undo_data: BTreeMap<K, DataDeltaUndoOp<T>>,
-    ) -> Result<(), Error> {
-        for (key, data) in undo_data.into_iter() {
-            match data {
-                DataDeltaUndoOp::Write(undo) => map.insert(key, undo),
-                DataDeltaUndoOp::Erase => map.remove(&key),
-            };
-        }
-        Ok(())
-    }
-
-    /// Undo a merge with a delta of a balance; notice that we don't need undo data for this, since we can just flip the sign of the amount
-    fn undo_merge_delta_amount<K: Ord>(
-        map: &mut BTreeMap<K, SignedAmount>,
-        delta_to_remove: BTreeMap<K, SignedAmount>,
-    ) -> Result<(), Error> {
-        delta_to_remove.into_iter().try_for_each(|(key, other_amount)| {
-            merge_delta_balance(
-                map,
-                key,
-                (-other_amount).ok_or(Error::DeltaUndoNegationError)?,
-            )
-        })?;
-
-        Ok(())
-    }
-
     pub fn undo_delta_merge(
         &mut self,
         already_merged: PoSAccountingDeltaData,
         undo_data: DeltaMergeUndo,
     ) -> Result<(), Error> {
-        Self::undo_merge_delta_amount(&mut self.data.pool_balances, already_merged.pool_balances)?;
+        undo_merge_delta_amount(&mut self.data.pool_balances, already_merged.pool_balances)?;
 
-        Self::undo_merge_delta_amount(
+        undo_merge_delta_amount(
             &mut self.data.pool_delegation_shares,
             already_merged.pool_delegation_shares,
         )?;
 
-        Self::undo_merge_delta_amount(
+        undo_merge_delta_amount(
             &mut self.data.delegation_balances,
             already_merged.delegation_balances,
         )?;
 
-        Self::undo_merge_delta_data(&mut self.data.pool_data, undo_data.pool_data_undo)?;
+        undo_merge_delta_data(&mut self.data.pool_data, undo_data.pool_data_undo)?;
 
-        Self::undo_merge_delta_data(
+        undo_merge_delta_data(
             &mut self.data.delegation_data,
             undo_data.delegation_data_undo,
         )?;
 
         Ok(())
-    }
-
-    fn merge_delta_data<T: Clone>(
-        map: &mut BTreeMap<H256, DataDelta<T>>,
-        key: H256,
-        other_data: DataDelta<T>,
-    ) -> Result<Option<DataDeltaUndoOp<T>>, Error> {
-        let current = map.get(&key);
-
-        // create the operation/change that would modify the current delta and do the merge
-        let new_data = match current {
-            Some(current_data) => combine_delta_data(current_data, other_data)?,
-            None => DeltaMapOp::Write(other_data),
-        };
-
-        // apply the change to the current map and create the undo data
-        let undo = match new_data {
-            // when we insert to a map, undoing is restoring what was there beforehand, and erasing if it was empty
-            DeltaMapOp::Write(v) => match map.insert(key, v) {
-                Some(prev_value) => Some(DataDeltaUndoOp::Write(prev_value)),
-                None => Some(DataDeltaUndoOp::Erase),
-            },
-            // when we remove from a map, undoing is rewriting what we removed
-            DeltaMapOp::Delete => map.remove(&key).map(DataDeltaUndoOp::Write),
-        };
-
-        Ok(undo)
     }
 
     pub fn merge_with_delta(
@@ -180,8 +126,7 @@ impl<'a> PoSAccountingDelta<'a> {
             .pool_data
             .into_iter()
             .map(|(key, other_pool_data)| {
-                Self::merge_delta_data(&mut self.data.pool_data, key, other_pool_data)
-                    .map(|v| (key, v))
+                merge_delta_data(&mut self.data.pool_data, key, other_pool_data).map(|v| (key, v))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
         let pool_data_undo = pool_data_undo
@@ -194,7 +139,7 @@ impl<'a> PoSAccountingDelta<'a> {
             .delegation_data
             .into_iter()
             .map(|(key, other_del_data)| {
-                Self::merge_delta_data(&mut self.data.delegation_data, key, other_del_data)
+                merge_delta_data(&mut self.data.delegation_data, key, other_del_data)
                     .map(|v| (key, v))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
@@ -323,22 +268,6 @@ impl<'a> PoSAccountingDelta<'a> {
         )?;
         Ok(())
     }
-}
-
-fn merge_delta_balance<T: Ord>(
-    map: &mut BTreeMap<T, SignedAmount>,
-    key: T,
-    other_amount: SignedAmount,
-) -> Result<(), Error> {
-    let current = map.get(&key);
-    let new_bal = combine_signed_amount_delta(&current.copied(), other_amount)?;
-    if new_bal == SignedAmount::ZERO {
-        // if the new amount is zero, no need to have it at all since it has no effect
-        map.remove(&key);
-    } else {
-        map.insert(key, new_bal);
-    }
-    Ok(())
 }
 
 // TODO: this is used in both operator and view impls. Find an appropriate place for it.

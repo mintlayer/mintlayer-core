@@ -1,8 +1,10 @@
-use common::primitives::{signed_amount::SignedAmount, Amount};
+use std::collections::BTreeMap;
+
+use common::primitives::{signed_amount::SignedAmount, Amount, H256};
 
 use crate::error::Error;
 
-use super::DataDelta;
+use super::{DataDelta, DataDeltaUndoOp};
 
 /// The outcome of combining two deltas for a given key upon the map that contains it
 pub enum DeltaMapOp<T> {
@@ -92,4 +94,76 @@ pub(super) fn combine_signed_amount_delta(
             Ok(sum)
         }
     }
+}
+
+pub fn undo_merge_delta_data<K: Ord, T>(
+    map: &mut BTreeMap<K, DataDelta<T>>,
+    undo_data: BTreeMap<K, DataDeltaUndoOp<T>>,
+) -> Result<(), Error> {
+    for (key, data) in undo_data.into_iter() {
+        match data {
+            DataDeltaUndoOp::Write(undo) => map.insert(key, undo),
+            DataDeltaUndoOp::Erase => map.remove(&key),
+        };
+    }
+    Ok(())
+}
+
+/// Undo a merge with a delta of a balance; notice that we don't need undo data for this, since we can just flip the sign of the amount
+pub fn undo_merge_delta_amount<K: Ord>(
+    map: &mut BTreeMap<K, SignedAmount>,
+    delta_to_remove: BTreeMap<K, SignedAmount>,
+) -> Result<(), Error> {
+    delta_to_remove.into_iter().try_for_each(|(key, other_amount)| {
+        merge_delta_balance(
+            map,
+            key,
+            (-other_amount).ok_or(Error::DeltaUndoNegationError)?,
+        )
+    })?;
+
+    Ok(())
+}
+
+pub fn merge_delta_data<T: Clone>(
+    map: &mut BTreeMap<H256, DataDelta<T>>,
+    key: H256,
+    other_data: DataDelta<T>,
+) -> Result<Option<DataDeltaUndoOp<T>>, Error> {
+    let current = map.get(&key);
+
+    // create the operation/change that would modify the current delta and do the merge
+    let new_data = match current {
+        Some(current_data) => combine_delta_data(current_data, other_data)?,
+        None => DeltaMapOp::Write(other_data),
+    };
+
+    // apply the change to the current map and create the undo data
+    let undo = match new_data {
+        // when we insert to a map, undoing is restoring what was there beforehand, and erasing if it was empty
+        DeltaMapOp::Write(v) => match map.insert(key, v) {
+            Some(prev_value) => Some(DataDeltaUndoOp::Write(prev_value)),
+            None => Some(DataDeltaUndoOp::Erase),
+        },
+        // when we remove from a map, undoing is rewriting what we removed
+        DeltaMapOp::Delete => map.remove(&key).map(DataDeltaUndoOp::Write),
+    };
+
+    Ok(undo)
+}
+
+pub fn merge_delta_balance<T: Ord>(
+    map: &mut BTreeMap<T, SignedAmount>,
+    key: T,
+    other_amount: SignedAmount,
+) -> Result<(), Error> {
+    let current = map.get(&key);
+    let new_bal = combine_signed_amount_delta(&current.copied(), other_amount)?;
+    if new_bal == SignedAmount::ZERO {
+        // if the new amount is zero, no need to have it at all since it has no effect
+        map.remove(&key);
+    } else {
+        map.insert(key, new_bal);
+    }
+    Ok(())
 }
