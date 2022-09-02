@@ -101,22 +101,19 @@ impl<'a> PoSAccountingDelta<'a> {
 
     pub fn undo_delta_merge(
         &mut self,
-        already_merged: PoSAccountingDelta<'a>,
+        already_merged: PoSAccountingDeltaData,
         undo_data: DeltaMergeUndo,
     ) -> Result<(), Error> {
-        Self::undo_merge_delta_amount(
-            &mut self.data.pool_balances,
-            already_merged.data.pool_balances,
-        )?;
+        Self::undo_merge_delta_amount(&mut self.data.pool_balances, already_merged.pool_balances)?;
 
         Self::undo_merge_delta_amount(
             &mut self.data.pool_delegation_shares,
-            already_merged.data.pool_delegation_shares,
+            already_merged.pool_delegation_shares,
         )?;
 
         Self::undo_merge_delta_amount(
             &mut self.data.delegation_balances,
-            already_merged.data.delegation_balances,
+            already_merged.delegation_balances,
         )?;
 
         Self::undo_merge_delta_data(&mut self.data.pool_data, undo_data.pool_data_undo)?;
