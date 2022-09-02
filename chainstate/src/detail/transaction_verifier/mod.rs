@@ -15,7 +15,11 @@
 
 mod cached_operation;
 pub mod error;
-use self::{cached_operation::CachedTokensOperation, error::ConnectTransactionError};
+use self::{
+    cached_operation::CachedTokensOperation,
+    error::ConnectTransactionError,
+    utils::{register_tokens_issuance, unregister_token_issuance},
+};
 use ::utils::ensure;
 use cached_operation::CachedInputsOperation;
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
@@ -27,10 +31,7 @@ use common::{
         calculate_tx_index_from_block,
         config::TOKEN_MIN_ISSUANCE_FEE,
         signature::{verify_signature, Transactable},
-        tokens::{
-            get_tokens_issuance_count, is_tokens_issuance, token_id, CoinOrTokenId, OutputValue,
-            TokenId, TokensError,
-        },
+        tokens::{get_tokens_issuance_count, CoinOrTokenId, OutputValue, TokenId, TokensError},
         Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
         Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
     },
@@ -533,40 +534,6 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn register_tokens_issuance(
-        &mut self,
-        block_id: Id<Block>,
-        tx: &Transaction,
-    ) -> Result<(), TokensError> {
-        let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
-
-        let _tokens_op = match self.tokens_cache.entry(token_id) {
-            Entry::Occupied(_) => {
-                return Err(TokensError::InvariantBrokenDuplicateTokenId(
-                    tx.get_id(),
-                    block_id,
-                ));
-            }
-            Entry::Vacant(entry) => entry.insert(CachedTokensOperation::Write(tx.get_id())),
-        };
-        Ok(())
-    }
-
-    fn undo_issuance(&mut self, token_id: TokenId) -> Result<(), TokensError> {
-        match self.tokens_cache.entry(token_id) {
-            Entry::Occupied(entry) => {
-                let tokens_op = entry.into_mut();
-                *tokens_op = CachedTokensOperation::Erase;
-            }
-            Entry::Vacant(_) => {
-                return Err(TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(
-                    token_id,
-                ))
-            }
-        }
-        Ok(())
-    }
-
     fn spend(
         &mut self,
         inputs: &[TxInput],
@@ -614,7 +581,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                 let _ = self.check_transferred_amounts_and_get_fee(block.get_id(), tx)?;
 
                 // Register tokens if tx has issuance data
-                self.register_tokens_issuance(block.get_id(), tx)?;
+                register_tokens_issuance(&mut self.tokens_cache, block.get_id(), tx)?;
 
                 // verify input signatures
                 self.verify_signatures(tx, spend_height, median_time_past)?;
@@ -652,21 +619,6 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn unregister_token_issuance(
-        &mut self,
-        tx: &Transaction,
-    ) -> Result<(), ConnectTransactionError> {
-        let was_tokens_issued =
-            tx.outputs().iter().any(|output| is_tokens_issuance(output.value()));
-        if was_tokens_issued {
-            let token_id = token_id(tx).ok_or(ConnectTransactionError::TokensError(
-                TokensError::TokenIdCantBeCalculated,
-            ))?;
-            self.undo_issuance(token_id)?;
-        }
-        Ok(())
-    }
-
     pub fn disconnect_transaction(
         &mut self,
         spend_ref: BlockTransactableRef,
@@ -696,7 +648,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                 }
 
                 // Remove issued tokens
-                self.unregister_token_issuance(tx)?;
+                unregister_token_issuance(&mut self.tokens_cache, tx)?;
             }
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.block_reward_transactable();

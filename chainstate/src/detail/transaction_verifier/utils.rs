@@ -13,17 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{btree_map::Entry, BTreeMap};
 
 use common::{
     chain::{
-        tokens::{token_id, CoinOrTokenId, OutputValue, TokenData, TokensError},
-        Transaction,
+        tokens::{
+            is_tokens_issuance, token_id, CoinOrTokenId, OutputValue, TokenData, TokenId,
+            TokensError,
+        },
+        Block, Transaction,
     },
-    primitives::Amount,
+    primitives::{Amount, Id, Idable},
 };
 
-use super::error::ConnectTransactionError;
+use super::{cached_operation::CachedTokensOperation, error::ConnectTransactionError};
 
 pub fn insert_or_increase(
     total_amounts: &mut BTreeMap<CoinOrTokenId, Amount>,
@@ -125,4 +128,54 @@ pub fn get_input_coin_or_tokenid(
             }
         },
     })
+}
+
+pub fn register_tokens_issuance(
+    tokens_cache: &mut BTreeMap<TokenId, CachedTokensOperation>,
+    block_id: Id<Block>,
+    tx: &Transaction,
+) -> Result<(), TokensError> {
+    let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+
+    let _tokens_op = match tokens_cache.entry(token_id) {
+        Entry::Occupied(_) => {
+            return Err(TokensError::InvariantBrokenDuplicateTokenId(
+                tx.get_id(),
+                block_id,
+            ));
+        }
+        Entry::Vacant(entry) => entry.insert(CachedTokensOperation::Write(tx.get_id())),
+    };
+    Ok(())
+}
+pub fn unregister_token_issuance(
+    tokens_cache: &mut BTreeMap<TokenId, CachedTokensOperation>,
+    tx: &Transaction,
+) -> Result<(), ConnectTransactionError> {
+    let was_tokens_issued = tx.outputs().iter().any(|output| is_tokens_issuance(output.value()));
+    if was_tokens_issued {
+        let token_id = token_id(tx).ok_or(ConnectTransactionError::TokensError(
+            TokensError::TokenIdCantBeCalculated,
+        ))?;
+        undo_issuance(tokens_cache, token_id)?;
+    }
+    Ok(())
+}
+
+fn undo_issuance(
+    tokens_cache: &mut BTreeMap<TokenId, CachedTokensOperation>,
+    token_id: TokenId,
+) -> Result<(), TokensError> {
+    match tokens_cache.entry(token_id) {
+        Entry::Occupied(entry) => {
+            let tokens_op = entry.into_mut();
+            *tokens_op = CachedTokensOperation::Erase;
+        }
+        Entry::Vacant(_) => {
+            return Err(TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(
+                token_id,
+            ))
+        }
+    }
+    Ok(())
 }
