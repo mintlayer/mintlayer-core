@@ -54,4 +54,6 @@ pub enum TokensError {
     AttemptToTransferBurnedTokens,
     #[error("Block reward can't be paid by tokens")]
     BlockRewardInTokens,
+    #[error("Invariant broken - duplicate token id in transaction {0} in block {1}")]
+    InvariantBrokenDuplicateTokenId(Id<Transaction>, Id<Block>),
 }

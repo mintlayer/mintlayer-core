@@ -540,7 +540,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
 
         let _tokens_op = match self.tokens_cache.entry(token_id) {
             Entry::Occupied(_) => {
-                return Err(TokensError::MultipleTokenIssuanceInTransaction(
+                return Err(TokensError::InvariantBrokenDuplicateTokenId(
                     tx.get_id(),
                     block_id,
                 ));
