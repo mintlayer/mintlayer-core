@@ -15,7 +15,7 @@ pub enum DeltaMapOp<T> {
 }
 
 /// Given two deltas, combine them into one delta, this is the basic delta data composability function
-pub(super) fn combine_delta_data<T: Clone>(
+pub(super) fn combine_delta_data<T>(
     lhs: &DataDelta<T>,
     rhs: DataDelta<T>,
 ) -> Result<DeltaMapOp<DataDelta<T>>, Error> {
@@ -109,7 +109,7 @@ pub fn undo_merge_delta_data<K: Ord, T>(
     Ok(())
 }
 
-pub fn merge_delta_data<K: Ord + Copy, T: Clone>(
+pub fn merge_delta_data<K: Ord + Copy, T>(
     map: &mut BTreeMap<K, DataDelta<T>>,
     delta_to_apply: BTreeMap<K, DataDelta<T>>,
 ) -> Result<BTreeMap<K, DataDeltaUndoOp<T>>, Error> {
@@ -129,7 +129,7 @@ pub fn merge_delta_data<K: Ord + Copy, T: Clone>(
     Ok(data_undo)
 }
 
-pub fn merge_delta_data_element<K: Ord, T: Clone>(
+pub fn merge_delta_data_element<K: Ord, T>(
     map: &mut BTreeMap<K, DataDelta<T>>,
     key: K,
     other_data: DataDelta<T>,
