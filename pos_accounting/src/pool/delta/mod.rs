@@ -24,37 +24,22 @@ pub enum DataDelta<T> {
     Delete,
 }
 
-#[allow(dead_code)]
-pub struct DataDeltaUndo<T> {
-    data: DataDelta<T>,
-}
-
 pub struct PoSAccountingDelta<'a> {
     parent: &'a dyn PoSAccountingView,
     data: PoSAccountingDeltaData,
 }
 
+/// The operations we have to do in order to undo a delta
+pub enum DataDeltaUndoOp<T> {
+    Write(DataDelta<T>),
+    Erase,
+}
+
+/// All the operations we have to do to our accounting state to undo a delta
 #[allow(dead_code)]
 pub struct DeltaMergeUndo {
-    pool_data_undo: BTreeMap<H256, DataDeltaUndo<PoolData>>,
-    delegation_data_undo: BTreeMap<H256, DataDeltaUndo<DelegationData>>,
-}
-
-pub enum DeltaUndoOp<T> {
-    Delta(DataDelta<T>),
-    Undo(DataDeltaUndo<T>),
-}
-
-impl<T> From<DataDelta<T>> for DeltaUndoOp<T> {
-    fn from(v: DataDelta<T>) -> Self {
-        Self::Delta(v)
-    }
-}
-
-impl<T> From<DataDeltaUndo<T>> for DeltaUndoOp<T> {
-    fn from(v: DataDeltaUndo<T>) -> Self {
-        Self::Undo(v)
-    }
+    pool_data_undo: BTreeMap<H256, DataDeltaUndoOp<PoolData>>,
+    delegation_data_undo: BTreeMap<H256, DataDeltaUndoOp<DelegationData>>,
 }
 
 impl<'a> PoSAccountingDelta<'a> {
@@ -89,8 +74,10 @@ impl<'a> PoSAccountingDelta<'a> {
         map: &mut BTreeMap<H256, DataDelta<T>>,
         key: H256,
         other_data: DataDelta<T>,
-    ) -> Result<Option<DataDeltaUndo<T>>, Error> {
+    ) -> Result<Option<DataDeltaUndoOp<T>>, Error> {
         let current = map.get(&key);
+
+        // create the operation/change that would modify the current delta and do the merge
         let new_data = match current {
             Some(current_data) => combine_delta_data(current_data, other_data)?,
             None => DeltaMapOp::Write(other_data),
@@ -98,11 +85,19 @@ impl<'a> PoSAccountingDelta<'a> {
 
         // apply the change to the current map and create the undo data
         let undo = match new_data {
-            DeltaMapOp::Write(v) => map.insert(key, v),
-            DeltaMapOp::Delete => map.remove(&key),
+            // when we insert to a map, undoing is restoring what was there beforehand, and erasing if it was empty
+            DeltaMapOp::Write(v) => match map.insert(key, v) {
+                Some(prev_value) => Some(DataDeltaUndoOp::Write(prev_value)),
+                None => Some(DataDeltaUndoOp::Erase),
+            },
+            // when we remove from a map, undoing is rewriting what we removing
+            DeltaMapOp::Delete => match map.remove(&key) {
+                Some(prev_value) => Some(DataDeltaUndoOp::Write(prev_value)),
+                None => None,
+            },
         };
 
-        Ok(undo.map(|data| DataDeltaUndo { data }))
+        Ok(undo)
     }
 
     pub fn merge_with_delta(
