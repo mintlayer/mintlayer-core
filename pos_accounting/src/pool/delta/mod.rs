@@ -90,7 +90,7 @@ impl<'a> PoSAccountingDelta<'a> {
                 Some(prev_value) => Some(DataDeltaUndoOp::Write(prev_value)),
                 None => Some(DataDeltaUndoOp::Erase),
             },
-            // when we remove from a map, undoing is rewriting what we removing
+            // when we remove from a map, undoing is rewriting what we removed
             DeltaMapOp::Delete => map.remove(&key).map(DataDeltaUndoOp::Write),
         };
 
