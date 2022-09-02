@@ -527,8 +527,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         median_time_past: &BlockTimestamp,
         blockreward_maturity: &BlockDistance,
     ) -> Result<Option<Fee>, ConnectTransactionError> {
-        let mut fee: Option<Fee> = None;
-        match spend_ref {
+        let fee = match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
                 let block_id = block.get_id();
                 let tx = block.transactions().get(tx_num).ok_or(
@@ -539,7 +538,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 self.precache_inputs(tx.inputs())?;
 
                 // check for attempted money printing
-                fee = Some(self.check_transferred_amounts_and_get_fee(tx)?);
+                let fee = Some(self.check_transferred_amounts_and_get_fee(tx)?);
 
                 // verify input signatures
                 self.verify_signatures(tx, spend_height, median_time_past)?;
@@ -556,6 +555,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
                 // save spent utxos for undo
                 self.get_or_create_block_undo(&block_id).push_tx_undo(tx_undo);
+
+                fee
             }
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.block_reward_transactable();
@@ -576,6 +577,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     self.spend_tx_index(inputs, block_id.into())?;
                 }
 
+                let fee = None;
+
                 // spend inputs of the block reward
                 // if block reward has no inputs then only outputs will be added to the utxo set
                 let reward_undo = self
@@ -592,8 +595,10 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     self.get_or_create_block_undo(&block.get_id())
                         .set_block_reward_undo(reward_undo);
                 }
+
+                fee
             }
-        }
+        };
         // add tx index to the cache
         self.add_tx_index(spend_ref)?;
 
