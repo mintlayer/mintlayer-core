@@ -109,22 +109,6 @@ pub fn undo_merge_delta_data<K: Ord, T>(
     Ok(())
 }
 
-/// Undo a merge with a delta of a balance; notice that we don't need undo data for this, since we can just flip the sign of the amount
-pub fn undo_merge_delta_amount<K: Ord>(
-    map: &mut BTreeMap<K, SignedAmount>,
-    delta_to_remove: BTreeMap<K, SignedAmount>,
-) -> Result<(), Error> {
-    delta_to_remove.into_iter().try_for_each(|(key, other_amount)| {
-        merge_delta_balance(
-            map,
-            key,
-            (-other_amount).ok_or(Error::DeltaUndoNegationError)?,
-        )
-    })?;
-
-    Ok(())
-}
-
 pub fn merge_delta_data<T: Clone>(
     map: &mut BTreeMap<H256, DataDelta<T>>,
     key: H256,
@@ -150,6 +134,33 @@ pub fn merge_delta_data<T: Clone>(
     };
 
     Ok(undo)
+}
+
+pub fn merge_delta_amounts<K: Ord>(
+    map: &mut BTreeMap<K, SignedAmount>,
+    delta_to_apply: BTreeMap<K, SignedAmount>,
+) -> Result<(), Error> {
+    delta_to_apply
+        .into_iter()
+        .try_for_each(|(key, other_amount)| merge_delta_balance(map, key, other_amount))?;
+
+    Ok(())
+}
+
+/// Undo a merge with a delta of a balance; notice that we don't need undo data for this, since we can just flip the sign of the amount
+pub fn undo_merge_delta_amounts<K: Ord>(
+    map: &mut BTreeMap<K, SignedAmount>,
+    delta_to_remove: BTreeMap<K, SignedAmount>,
+) -> Result<(), Error> {
+    delta_to_remove.into_iter().try_for_each(|(key, other_amount)| {
+        merge_delta_balance(
+            map,
+            key,
+            (-other_amount).ok_or(Error::DeltaUndoNegationError)?,
+        )
+    })?;
+
+    Ok(())
 }
 
 pub fn merge_delta_balance<T: Ord>(

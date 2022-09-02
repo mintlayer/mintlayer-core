@@ -7,7 +7,7 @@ use crate::error::Error;
 
 use self::{
     combine::{
-        merge_delta_balance, merge_delta_data, undo_merge_delta_amount, undo_merge_delta_data,
+        merge_delta_amounts, merge_delta_data, undo_merge_delta_amounts, undo_merge_delta_data,
     },
     data::PoSAccountingDeltaData,
 };
@@ -77,14 +77,14 @@ impl<'a> PoSAccountingDelta<'a> {
         already_merged: PoSAccountingDeltaData,
         undo_data: DeltaMergeUndo,
     ) -> Result<(), Error> {
-        undo_merge_delta_amount(&mut self.data.pool_balances, already_merged.pool_balances)?;
+        undo_merge_delta_amounts(&mut self.data.pool_balances, already_merged.pool_balances)?;
 
-        undo_merge_delta_amount(
+        undo_merge_delta_amounts(
             &mut self.data.pool_delegation_shares,
             already_merged.pool_delegation_shares,
         )?;
 
-        undo_merge_delta_amount(
+        undo_merge_delta_amounts(
             &mut self.data.delegation_balances,
             already_merged.delegation_balances,
         )?;
@@ -103,23 +103,15 @@ impl<'a> PoSAccountingDelta<'a> {
         &mut self,
         other: PoSAccountingDelta<'a>,
     ) -> Result<DeltaMergeUndo, Error> {
-        other.data.pool_balances.into_iter().try_for_each(|(key, other_amount)| {
-            merge_delta_balance(&mut self.data.pool_balances, key, other_amount)
-        })?;
-        other
-            .data
-            .pool_delegation_shares
-            .into_iter()
-            .try_for_each(|(key, other_del_shares)| {
-                merge_delta_balance(&mut self.data.pool_delegation_shares, key, other_del_shares)
-            })?;
-        other
-            .data
-            .delegation_balances
-            .into_iter()
-            .try_for_each(|(key, other_del_balance)| {
-                merge_delta_balance(&mut self.data.delegation_balances, key, other_del_balance)
-            })?;
+        merge_delta_amounts(&mut self.data.pool_balances, other.data.pool_balances)?;
+        merge_delta_amounts(
+            &mut self.data.pool_delegation_shares,
+            other.data.pool_delegation_shares,
+        )?;
+        merge_delta_amounts(
+            &mut self.data.delegation_balances,
+            other.data.delegation_balances,
+        )?;
 
         let pool_data_undo = other
             .data
