@@ -43,7 +43,8 @@ use std::{
 
 mod utils;
 use self::utils::{
-    check_transferred_amount, filter_for_total_inputs, filter_for_total_outputs, insert_or_increase,
+    check_transferred_amount, get_input_coin_or_tokenid, get_output_coin_or_tokenid,
+    insert_or_increase,
 };
 
 /// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
@@ -255,7 +256,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         let mut total_amounts = BTreeMap::new();
         outputs
             .iter()
-            .filter_map(|output| filter_for_total_outputs(output.value()))
+            .filter_map(|output| get_output_coin_or_tokenid(output.value()))
             .try_for_each(|(key, amount)| insert_or_increase(&mut total_amounts, key, *amount))?;
         Ok(total_amounts)
     }
@@ -285,7 +286,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                     let output_value =
                         Self::get_output_value(tx.outputs(), output_index, tx.get_id().into())?;
 
-                    let (key, amount) = filter_for_total_inputs(output_value, &tx)?;
+                    let (key, amount) = get_input_coin_or_tokenid(output_value, &tx)?;
                     insert_or_increase(&mut result, key, amount)?
                 }
                 common::chain::SpendablePosition::BlockReward(block_id) => {
@@ -306,7 +307,8 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(result)
     }
 
-    fn get_paid_fee_unchecked(
+    // TODO(Anton): Probably this might be a better name
+    fn get_paid_fee_coins(
         inputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
         outputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
     ) -> Result<Amount, ConnectTransactionError> {
@@ -328,12 +330,12 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         let inputs_total_map = self.calculate_total_inputs(tx.inputs())?;
         let outputs_total_map = Self::calculate_total_outputs(tx.outputs())?;
 
-        let total_fee = check_transferred_amount(&inputs_total_map, &outputs_total_map)
-            .and_then(|_| Self::get_paid_fee_unchecked(&inputs_total_map, &outputs_total_map))?;
+        check_transferred_amount(&inputs_total_map, &outputs_total_map)?;
+        let total_fee = Self::get_paid_fee_coins(&inputs_total_map, &outputs_total_map)?;
 
         // Check is fee enough for issuance
         let issuance_count = get_tokens_issuance_count(tx.outputs());
-        if issuance_count == 1 && total_fee < TOKEN_MIN_ISSUANCE_FEE {
+        if issuance_count > 0 && total_fee < TOKEN_MIN_ISSUANCE_FEE {
             return Err(ConnectTransactionError::TokensError(
                 TokensError::InsufficientTokenFees(tx.get_id(), block_id),
             ));
