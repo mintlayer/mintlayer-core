@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::pool::delta::DataDelta;
+use super::DataDelta;
 
 /// The operations we have to do in order to undo a delta
 pub enum DataDeltaUndoOp<T> {

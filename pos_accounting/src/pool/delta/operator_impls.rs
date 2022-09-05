@@ -22,8 +22,8 @@ use crate::{
 
 use super::{
     combine::{combine_amount_delta, combine_data_with_delta},
-    delta_data_collection::undo::DataDeltaUndoOp,
-    sum_maps, DataDelta, PoSAccountingDelta,
+    delta_data_collection::{undo::DataDeltaUndoOp, DataDelta},
+    sum_maps, PoSAccountingDelta,
 };
 
 impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {

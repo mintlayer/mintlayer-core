@@ -2,7 +2,7 @@ use common::primitives::{signed_amount::SignedAmount, Amount};
 
 use crate::error::Error;
 
-use super::DataDelta;
+use super::delta_data_collection::DataDelta;
 
 pub(super) fn combine_data_with_delta<T: Clone>(
     parent_data: Option<T>,

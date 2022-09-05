@@ -7,7 +7,9 @@ use crate::{
     pool::{delegation::DelegationData, pool_data::PoolData, view::PoSAccountingView},
 };
 
-use super::{combine::combine_amount_delta, sum_maps, DataDelta, PoSAccountingDelta};
+use super::{
+    combine::combine_amount_delta, delta_data_collection::DataDelta, sum_maps, PoSAccountingDelta,
+};
 
 fn signed_to_unsigned_pair((k, v): (H256, SignedAmount)) -> Result<(H256, Amount), Error> {
     let v = v.into_unsigned().ok_or(Error::ArithmeticErrorToUnsignedFailed)?;

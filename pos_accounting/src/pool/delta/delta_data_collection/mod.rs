@@ -18,7 +18,13 @@ pub enum DeltaMapOp<T> {
 
 use self::undo::{DataDeltaUndoOp, DeltaDataUndoCollection};
 
-use super::DataDelta;
+#[derive(Clone, Encode, Decode)]
+pub enum DataDelta<T> {
+    Create(Box<T>),
+    Modify(Box<T>),
+    Delete,
+}
+
 #[derive(Clone, Encode, Decode)]
 pub struct DeltaDataCollection<K: Ord, T> {
     data: BTreeMap<K, DataDelta<T>>,

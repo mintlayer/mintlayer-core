@@ -16,13 +16,6 @@ pub mod delta_data_collection;
 pub mod operator_impls;
 mod view_impl;
 
-#[derive(Clone, Encode, Decode)]
-pub enum DataDelta<T> {
-    Create(Box<T>),
-    Modify(Box<T>),
-    Delete,
-}
-
 pub struct PoSAccountingDelta<'a> {
     parent: &'a dyn PoSAccountingView,
     data: PoSAccountingDeltaData,
