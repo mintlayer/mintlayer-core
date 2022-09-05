@@ -23,7 +23,7 @@ pub use internal::{utxo_db, Store};
 
 use chainstate_types::BlockIndex;
 use common::chain::block::BlockReward;
-use common::chain::tokens::TokenId;
+use common::chain::tokens::{TokenId, TokenIssuanceTransaction};
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::OutPointSourceId;
 use common::chain::{Block, GenBlock};
@@ -69,7 +69,7 @@ pub trait BlockchainStorageRead: UtxosStorageRead {
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
 
     /// Get token creation tx
-    fn get_token_info(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
+    fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
 }
 
 /// Modifying operations on persistent blockchain data
@@ -110,7 +110,11 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead + UtxosStorageWrite {
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 
     /// Set token creation tx
-    fn set_token_tx(&mut self, token_id: TokenId, tx_id: Id<Transaction>) -> crate::Result<()>;
+    fn set_token_tx(
+        &mut self,
+        token_id: TokenId,
+        tx_id: TokenIssuanceTransaction,
+    ) -> crate::Result<()>;
 
     // Remove token tx
     fn del_token_tx(&mut self, token_id: TokenId) -> crate::Result<()>;

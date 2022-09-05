@@ -23,6 +23,7 @@ use super::{
 use crate::{BlockError, BlockSource, ChainstateConfig};
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{get_skip_height, BlockIndex, GenBlockIndex, PropertyQueryError};
+use common::chain::tokens::TokenIssuanceTransaction;
 use common::{
     chain::{
         block::{
@@ -307,8 +308,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     pub fn get_token_info(
         &self,
         token_id: TokenId,
-    ) -> Result<Option<Id<common::chain::Transaction>>, PropertyQueryError> {
-        self.db_tx.get_token_info(token_id).map_err(PropertyQueryError::from)
+    ) -> Result<Option<TokenIssuanceTransaction>, PropertyQueryError> {
+        self.db_tx.get_token_tx(token_id).map_err(PropertyQueryError::from)
     }
 
     pub fn get_header_from_height(

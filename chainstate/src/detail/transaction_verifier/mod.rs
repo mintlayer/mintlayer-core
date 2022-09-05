@@ -739,7 +739,9 @@ impl<'a, S: BlockchainStorageWrite + 'a> TransactionVerifier<'a, S> {
         token_op: CachedTokensOperation,
     ) -> Result<(), ConnectTransactionError> {
         match token_op {
-            CachedTokensOperation::Write(ref tx_id) => db_tx.set_token_tx(token_id, *tx_id)?,
+            CachedTokensOperation::Write(ref tx_id) => {
+                db_tx.set_token_tx(token_id, tx_id.clone())?
+            }
             CachedTokensOperation::Read(_) => (),
             CachedTokensOperation::Erase => db_tx.del_token_tx(token_id)?,
         }

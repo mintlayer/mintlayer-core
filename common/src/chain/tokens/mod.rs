@@ -17,7 +17,7 @@ use serialization::{Decode, Encode};
 
 pub type TokenId = H256;
 pub type NftDataHash = Vec<u8>;
-use crate::primitives::{Amount, H256};
+use crate::primitives::{Amount, Id, Idable, H256};
 
 mod errors;
 mod rpc;
@@ -26,6 +26,30 @@ mod utils;
 pub use errors::TokensError;
 pub use rpc::*;
 pub use utils::*;
+
+use super::{Transaction, TxOutput};
+
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct TokenIssuanceTransaction {
+    tx: Transaction,
+    // When we implement ACL, we can add additional fields here
+}
+
+impl TokenIssuanceTransaction {
+    pub fn get_id(&self) -> Id<Transaction> {
+        self.tx.get_id()
+    }
+
+    pub fn outputs(&self) -> &Vec<TxOutput> {
+        self.tx.outputs()
+    }
+}
+
+impl From<Transaction> for TokenIssuanceTransaction {
+    fn from(tx: Transaction) -> Self {
+        Self { tx }
+    }
+}
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum CoinOrTokenId {

@@ -16,7 +16,7 @@
 //! A mock version of the blockchain storage.
 
 use chainstate_types::BlockIndex;
-use common::chain::tokens::TokenId;
+use common::chain::tokens::{TokenId, TokenIssuanceTransaction};
 use common::{
     chain::{
         block::BlockReward,
@@ -54,7 +54,7 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_info(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
+        fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
     }
 
     impl UtxosStorageRead for Store {
@@ -83,7 +83,7 @@ mockall::mock! {
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
-        fn set_token_tx(&mut self, token_id: TokenId, tx_id: Id<Transaction>) -> crate::Result<()>;
+        fn set_token_tx(&mut self, token_id: TokenId, issuance_tx: TokenIssuanceTransaction) -> crate::Result<()>;
         fn del_token_tx(&mut self, token_id: TokenId) -> crate::Result<()>;
     }
 
@@ -134,7 +134,7 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_info(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
+        fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
     }
 
     impl crate::UtxosStorageRead for StoreTxRo {
@@ -174,7 +174,7 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_info(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
+        fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
     }
 
     impl UtxosStorageRead for StoreTxRw {
@@ -204,7 +204,7 @@ mockall::mock! {
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
-        fn set_token_tx(&mut self, token_id: TokenId, tx_id: Id<Transaction>) -> crate::Result<()>;
+        fn set_token_tx(&mut self, token_id: TokenId, issuance_tx: TokenIssuanceTransaction) -> crate::Result<()>;
         fn del_token_tx(&mut self, token_id: TokenId) -> crate::Result<()>;
     }
 

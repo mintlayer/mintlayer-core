@@ -26,7 +26,7 @@ pub fn register_tokens_issuance(
                 block_id,
             ));
         }
-        Entry::Vacant(entry) => entry.insert(CachedTokensOperation::Write(tx.get_id())),
+        Entry::Vacant(entry) => entry.insert(CachedTokensOperation::Write(tx.clone().into())),
     };
     Ok(())
 }

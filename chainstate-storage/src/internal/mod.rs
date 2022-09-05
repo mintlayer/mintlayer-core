@@ -16,10 +16,10 @@
 pub mod utxo_db;
 
 use chainstate_types::BlockIndex;
-use common::chain::tokens::TokenId;
 use common::{
     chain::{
         block::BlockReward,
+        tokens::{TokenId, TokenIssuanceTransaction},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
         Block, GenBlock, OutPoint, OutPointSourceId,
     },
@@ -172,7 +172,7 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_info(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
+        fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
     }
 }
 
@@ -208,7 +208,7 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 
-        fn set_token_tx(&mut self, token_id: TokenId, tx_id: Id<Transaction>) -> crate::Result<()>;
+        fn set_token_tx(&mut self, token_id: TokenId, issuance_tx: TokenIssuanceTransaction) -> crate::Result<()>;
 
         fn del_token_tx(&mut self, token_id: TokenId) -> crate::Result<()>;
     }
@@ -303,7 +303,10 @@ macro_rules! impl_read_ops {
                 self.read::<DBBlockByHeight, _, _>(&height.encode())
             }
 
-            fn get_token_info(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>> {
+            fn get_token_tx(
+                &self,
+                token_id: TokenId,
+            ) -> crate::Result<Option<TokenIssuanceTransaction>> {
                 self.read::<DBTokensInfo, _, _>(&token_id.encode())
             }
         }
@@ -391,8 +394,12 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         self.0.get_mut::<DBBlockByHeight, _>().del(&height.encode()).map_err(Into::into)
     }
 
-    fn set_token_tx(&mut self, token_id: TokenId, tx_id: Id<Transaction>) -> crate::Result<()> {
-        self.write::<DBTokensInfo, _, _>(token_id.encode(), &tx_id)
+    fn set_token_tx(
+        &mut self,
+        token_id: TokenId,
+        issuance_tx: TokenIssuanceTransaction,
+    ) -> crate::Result<()> {
+        self.write::<DBTokensInfo, _, _>(token_id.encode(), &issuance_tx)
     }
 
     fn del_token_tx(&mut self, token_id: TokenId) -> crate::Result<()> {

@@ -14,17 +14,14 @@
 // limitations under the License.
 
 use super::error::ConnectTransactionError;
-use common::{
-    chain::{Spender, Transaction, TxMainChainIndex},
-    primitives::Id,
-};
+use common::chain::{tokens::TokenIssuanceTransaction, Spender, TxMainChainIndex};
 pub enum CachedOperation<T> {
     Write(T),
     Read(T),
     Erase,
 }
 
-pub type CachedTokensOperation = CachedOperation<Id<Transaction>>;
+pub type CachedTokensOperation = CachedOperation<TokenIssuanceTransaction>;
 pub type CachedInputsOperation = CachedOperation<TxMainChainIndex>;
 
 impl CachedInputsOperation {

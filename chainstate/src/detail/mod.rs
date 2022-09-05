@@ -24,8 +24,10 @@ use common::{
     chain::{
         block::{BlockHeader, BlockReward},
         config::ChainConfig,
-        tokens::{OutputValue, RPCTokenInfo, TokenData, TokenId, TokensError},
-        Block, GenBlock, OutPointSourceId, SpendablePosition, Transaction,
+        tokens::{
+            OutputValue, RPCTokenInfo, TokenData, TokenId, TokenIssuanceTransaction, TokensError,
+        },
+        Block, GenBlock, OutPointSourceId, SpendablePosition,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
@@ -419,15 +421,15 @@ impl<S: BlockchainStorage> Chainstate<S> {
     pub fn get_token_detail(
         &self,
         token_id: TokenId,
-    ) -> Result<(Id<Block>, Transaction), PropertyQueryError> {
+    ) -> Result<(Id<Block>, TokenIssuanceTransaction), PropertyQueryError> {
         let chainstate_ref = self.make_db_tx_ro();
 
         // Find issuance transaction id by token_id
-        let creation_tx_id = chainstate_ref.get_token_info(token_id)?.ok_or(
+        let creation_tx = chainstate_ref.get_token_info(token_id)?.ok_or(
             PropertyQueryError::TokensError(TokensError::TokensNotRegistered(token_id)),
         )?;
         let tx_index = chainstate_ref
-            .get_mainchain_tx_index(&OutPointSourceId::Transaction(creation_tx_id))?
+            .get_mainchain_tx_index(&OutPointSourceId::Transaction(creation_tx.get_id()))?
             .ok_or(PropertyQueryError::TokensError(
                 TokensError::TokensNotRegistered(token_id),
             ))?;
@@ -441,22 +443,8 @@ impl<S: BlockchainStorage> Chainstate<S> {
                 ))
             }
         };
-        let block = chainstate_ref
-            .get_block(*creation_block_id)?
-            .ok_or(PropertyQueryError::BlockNotFound(*creation_block_id))?;
 
-        // Find the transaction
-        Ok((
-            *creation_block_id,
-            block
-                .transactions()
-                .iter()
-                .find(|&tx| tx.get_id() == creation_tx_id)
-                .cloned()
-                .ok_or(PropertyQueryError::TokensError(
-                    TokensError::NoTxInMainChainByOutpoint,
-                ))?,
-        ))
+        Ok((*creation_block_id, creation_tx))
     }
 
     pub fn token_info(
