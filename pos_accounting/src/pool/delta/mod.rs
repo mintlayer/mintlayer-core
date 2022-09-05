@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use common::primitives::{signed_amount::SignedAmount, Amount, H256};
-use serialization::{Decode, Encode};
 
 use crate::error::Error;
 
