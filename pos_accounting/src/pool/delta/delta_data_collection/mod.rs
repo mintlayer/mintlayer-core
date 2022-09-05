@@ -3,6 +3,9 @@ use std::collections::BTreeMap;
 use serialization::{Decode, Encode};
 
 use crate::error::Error;
+
+pub mod undo;
+
 // TODO: move DataDeltaUndoOp here
 
 /// The outcome of combining two deltas for a given key upon the map that contains it
@@ -13,15 +16,7 @@ pub enum DeltaMapOp<T> {
     Delete,
 }
 
-/// The operations we have to do in order to undo a delta
-pub enum DataDeltaUndoOp<T> {
-    Write(DataDelta<T>),
-    Erase,
-}
-
-pub struct DeltaDataUndoCollection<K: Ord, T> {
-    data: BTreeMap<K, DataDeltaUndoOp<T>>,
-}
+use self::undo::{DataDeltaUndoOp, DeltaDataUndoCollection};
 
 use super::DataDelta;
 #[derive(Clone, Encode, Decode)]
@@ -48,7 +43,7 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
             .filter_map(|(k, v)| v.map(|v| (k, v)))
             .collect::<BTreeMap<_, _>>();
 
-        Ok(DeltaDataUndoCollection { data: data_undo })
+        Ok(DeltaDataUndoCollection::new(data_undo))
     }
 
     pub fn merge_delta_data_element(
@@ -82,7 +77,7 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
         &mut self,
         undo_data: DeltaDataUndoCollection<K, T>,
     ) -> Result<(), Error> {
-        for (key, data) in undo_data.data.into_iter() {
+        for (key, data) in undo_data.consume().into_iter() {
             self.undo_merge_delta_data_element(key, data)?
         }
         Ok(())

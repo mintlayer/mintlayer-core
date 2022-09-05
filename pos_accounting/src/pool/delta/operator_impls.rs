@@ -22,7 +22,7 @@ use crate::{
 
 use super::{
     combine::{combine_amount_delta, combine_data_with_delta},
-    delta_data_collection::DataDeltaUndoOp,
+    delta_data_collection::undo::DataDeltaUndoOp,
     sum_maps, DataDelta, PoSAccountingDelta,
 };
 

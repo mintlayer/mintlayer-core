@@ -5,7 +5,7 @@ use serialization::{Decode, Encode};
 
 use crate::error::Error;
 
-use self::{data::PoSAccountingDeltaData, delta_data_collection::DeltaDataUndoCollection};
+use self::{data::PoSAccountingDeltaData, delta_data_collection::undo::DeltaDataUndoCollection};
 
 use super::{delegation::DelegationData, pool_data::PoolData, view::PoSAccountingView};
 
