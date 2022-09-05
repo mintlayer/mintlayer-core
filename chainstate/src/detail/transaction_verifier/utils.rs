@@ -64,10 +64,11 @@ pub fn check_transferred_amount(
     Ok(())
 }
 
-pub fn get_output_token_id_and_amount(
-    output_value: &OutputValue,
-) -> Option<(CoinOrTokenId, &Amount)> {
-    match output_value {
+pub fn get_output_token_id_and_amount<'a>(
+    output_value: &'a OutputValue,
+    include_issuance: Option<&Transaction>,
+) -> Result<Option<(CoinOrTokenId, &'a Amount)>, TokensError> {
+    Ok(match output_value {
         OutputValue::Coin(amount) => Some((CoinOrTokenId::Coin, amount)),
         OutputValue::Token(token_data) => match token_data {
             TokenData::TokenTransferV1 { token_id, amount } => {
@@ -75,22 +76,22 @@ pub fn get_output_token_id_and_amount(
             }
             TokenData::TokenIssuanceV1 {
                 token_ticker: _,
-                amount_to_issue: _,
+                amount_to_issue,
                 number_of_decimals: _,
                 metadata_uri: _,
-            } => {
-                // TODO: Might be it's not necessary at all?
-                // if include_issuance {
-                // ...
-                // }
-                None
-            }
+            } => match include_issuance {
+                Some(tx) => {
+                    let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+                    Some((CoinOrTokenId::TokenId(token_id), amount_to_issue))
+                }
+                None => None,
+            },
             TokenData::TokenBurnV1 {
                 token_id,
                 amount_to_burn,
             } => Some((CoinOrTokenId::TokenId(*token_id), amount_to_burn)),
         },
-    }
+    })
 }
 
 pub fn get_input_token_id_and_amount(

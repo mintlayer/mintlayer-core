@@ -251,11 +251,22 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
     }
     fn calculate_total_outputs(
         outputs: &[TxOutput],
+        include_issuance: Option<&Transaction>,
     ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
         let mut total_amounts = BTreeMap::new();
-        outputs
+
+        let outputs_token_id_and_amount: Result<
+            Vec<Option<(CoinOrTokenId, &Amount)>>,
+            TokensError,
+        > = outputs
             .iter()
-            .filter_map(|output| get_output_token_id_and_amount(output.value()))
+            .map(|output| get_output_token_id_and_amount(output.value(), include_issuance))
+            .collect();
+
+        // We have two iterations due to error catching
+        outputs_token_id_and_amount?
+            .into_iter()
+            .flatten()
             .try_for_each(|(key, amount)| insert_or_increase(&mut total_amounts, key, *amount))?;
         Ok(total_amounts)
     }
@@ -326,7 +337,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         tx: &Transaction,
     ) -> Result<Amount, ConnectTransactionError> {
         let inputs_total_map = self.calculate_total_inputs(tx.inputs())?;
-        let outputs_total_map = Self::calculate_total_outputs(tx.outputs())?;
+        let outputs_total_map = Self::calculate_total_outputs(tx.outputs(), None)?;
 
         check_transferred_amount(&inputs_total_map, &outputs_total_map)?;
         let total_fee = Self::get_total_fee(&inputs_total_map, &outputs_total_map)?;
@@ -377,7 +388,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         let outputs_total = outputs.map_or_else(
             || Ok::<Amount, ConnectTransactionError>(Amount::from_atoms(0)),
             |outputs| {
-                Ok(Self::calculate_total_outputs(outputs)?
+                Ok(Self::calculate_total_outputs(outputs, None)?
                     .get(&CoinOrTokenId::Coin)
                     .cloned()
                     .unwrap_or(Amount::from_atoms(0)))
