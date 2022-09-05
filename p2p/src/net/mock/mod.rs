@@ -131,9 +131,8 @@ where
         // let (conn_tx, conn_rx) = mpsc::channel(16);
         // let (pubsub_tx, _pubsub_rx) = mpsc::channel(16);
         // let (sync_tx, sync_rx) = mpsc::channel(16);
+        let socket = T::bind(addr).await?;
         // TODO: FIXME:
-        //let socket = T::bind(addr).await?;
-        let socket = T::bind(addr).await.unwrap();
         //let local_addr = socket.local_addr().expect("to have bind address available");
         todo!()
 

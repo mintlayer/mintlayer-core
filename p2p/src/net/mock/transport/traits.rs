@@ -20,7 +20,7 @@ use std::{
 
 use async_trait::async_trait;
 
-use crate::net::mock::types::Message;
+use crate::{net::mock::types::Message, Result};
 
 /// An abstraction layer for creating and opening connections.
 #[async_trait]
@@ -33,10 +33,10 @@ pub trait Transport {
     type Connection;
 
     /// Creates a new connection with the given address.
-    async fn bind(address: Self::Address) -> Result<Self::Connection, Error>;
+    async fn bind(address: Self::Address) -> Result<Self::Connection>;
 
     /// Open a connection to the given address.
-    async fn connect(address: Self::Address) -> Result<Self::Connection, Error>;
+    async fn connect(address: Self::Address) -> Result<Self::Connection>;
 }
 
 /// An abstraction layer over some kind of network connection.
@@ -46,7 +46,7 @@ pub trait Connection<T: Transport>: Send {
     type Stream;
 
     /// Accepts a new inbound connection.
-    async fn accept(&mut self) -> Result<(Self::Stream, T::Address), Error>;
+    async fn accept(&mut self) -> Result<(Self::Stream, T::Address)>;
 
     // TODO: FIXME:
     // /// Establishes a new outbound connection.
@@ -61,12 +61,8 @@ pub trait Connection<T: Transport>: Send {
 #[async_trait]
 pub trait MessageStream<T: Transport> {
     /// Sends the given message to a remote peer.
-    async fn send(&mut self, msg: Message) -> Result<(), Error>;
+    async fn send(&mut self, msg: Message) -> Result<()>;
 
     /// Receives a message from a remote peer.
-    async fn recv(&mut self) -> Result<Option<Message>, Error>;
+    async fn recv(&mut self) -> Result<Option<Message>>;
 }
-
-// TODO: FIXME: Figure out common errors for channel and tcp implementations.
-#[derive(Debug)]
-pub struct Error {}

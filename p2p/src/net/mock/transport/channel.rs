@@ -20,9 +20,12 @@ use tokio::sync::{
     oneshot,
 };
 
-use crate::net::mock::{
-    transport::{Connection, MessageStream, Transport},
-    types::Message,
+use crate::{
+    net::mock::{
+        transport::{Connection, MessageStream, Transport},
+        types::Message,
+    },
+    Result,
 };
 
 static NETWORK_HANDLE: Lazy<UnboundedSender<SocketCommand>> = Lazy::new(handle_connections);
@@ -46,13 +49,13 @@ impl Transport for ChannelTransport {
     type Connection = ChannelConnection;
     type Address = u64;
 
-    async fn bind(address: Self::Address) -> Result<Self::Connection, super::Error> {
+    async fn bind(address: Self::Address) -> Result<Self::Connection> {
         let tx: UnboundedSender<SocketCommand> = NETWORK_HANDLE.clone();
         // TODO: FIXME:
         todo!();
     }
 
-    async fn connect(address: Self::Address) -> Result<Self::Connection, super::Error> {
+    async fn connect(address: Self::Address) -> Result<Self::Connection> {
         // TODO: FIXME:
         todo!();
     }
@@ -64,7 +67,7 @@ pub struct ChannelConnection {}
 impl Connection<ChannelTransport> for ChannelConnection {
     type Stream = ();
 
-    async fn accept(&mut self) -> Result<(Self::Stream, u64), super::Error> {
+    async fn accept(&mut self) -> Result<(Self::Stream, u64)> {
         // TODO: FIXME:
         todo!();
     }
@@ -74,12 +77,12 @@ pub struct ChannelMessageStream {}
 
 #[async_trait]
 impl MessageStream<ChannelTransport> for ChannelMessageStream {
-    async fn send(&mut self, msg: Message) -> Result<(), super::Error> {
+    async fn send(&mut self, msg: Message) -> Result<()> {
         // TODO: FIXME:
         todo!();
     }
 
-    async fn recv(&mut self) -> Result<Option<Message>, super::Error> {
+    async fn recv(&mut self) -> Result<Option<Message>> {
         // TODO: FIXME:
         todo!();
     }
@@ -106,4 +109,10 @@ fn handle_connections() -> UnboundedSender<SocketCommand> {
         }
     });
     tx
+}
+
+// TODO: FIXME: Add a test for connections map.
+#[cfg(test)]
+mod tests {
+    use super::*;
 }

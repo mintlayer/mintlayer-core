@@ -20,5 +20,5 @@ mod traits;
 pub use self::{
     channel::{ChannelConnection, ChannelMessageStream, ChannelTransport},
     tcp::{TcpConnection, TcpMessageStream, TcpTransport},
-    traits::{Connection, Error, MessageStream, Transport},
+    traits::{Connection, MessageStream, Transport},
 };
