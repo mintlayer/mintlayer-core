@@ -26,6 +26,7 @@ use crate::net::mock::types::Message;
 #[async_trait]
 pub trait Transport {
     // TODO: FIXME: Remove Hash and Display?
+    /// An address type.
     type Address: Copy + Clone + Debug + Display + Eq + Hash + Send + Sync + ToString;
 
     /// A connection type.
@@ -47,18 +48,23 @@ pub trait Connection<T: Transport>: Send {
     /// Accepts a new inbound connection.
     async fn accept(&mut self) -> Result<(Self::Stream, T::Address), Error>;
 
+    // TODO: FIXME:
     // /// Establishes a new outbound connection.
     // async fn connect(&mut self) -> crate::Result<T::Socket>;
 
+    // // TODO: FIXME: Do we really need this?
+    // /// Returns the local address of the socket.
+    // fn local_addr(&self) -> crate::Result<T::Address>;
+}
+
+/// An abstraction layer over some network stream that can be used to send and receive messages.
+#[async_trait]
+pub trait MessageStream<T: Transport> {
     /// Sends the given message to a remote peer.
     async fn send(&mut self, msg: Message) -> Result<(), Error>;
 
     /// Receives a message from a remote peer.
     async fn recv(&mut self) -> Result<Option<Message>, Error>;
-
-    // // TODO: FIXME: Do we really need this?
-    // /// Returns the local address of the socket.
-    // fn local_addr(&self) -> crate::Result<T::Address>;
 }
 
 // TODO: FIXME: Figure out common errors for channel and tcp implementations.

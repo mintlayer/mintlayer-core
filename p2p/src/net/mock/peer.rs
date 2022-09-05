@@ -86,106 +86,109 @@ where
     }
 
     async fn handshake(&mut self) -> crate::Result<()> {
-        match self.role {
-            Role::Inbound => {
-                let (peer_id, network, version, protocols) =
-                    if let Ok(Some(types::Message::Handshake(types::HandshakeMessage::Hello {
-                        peer_id,
-                        version,
-                        network,
-                        protocols,
-                    }))) = self.socket.recv().await
-                    {
-                        (peer_id, network, version, protocols)
-                    } else {
-                        return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-                    };
-
-                self.socket
-                    .send(types::Message::Handshake(
-                        types::HandshakeMessage::HelloAck {
-                            peer_id: self.local_peer_id,
-                            version: *self.config.version(),
-                            network: *self.config.magic_bytes(),
-                            // TODO: Replace the hard-coded values when ping and pubsub protocols are implemented for the mock interface.
-                            protocols: [
-                                Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
-                                Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
-                            ]
-                            .into_iter()
-                            .collect(),
-                        },
-                    ))
-                    // TODO: FIXME:
-                    .await;
-                todo!();
-                //.await?;
-
-                self.tx
-                    .send((
-                        self.remote_peer_id,
-                        types::PeerEvent::PeerInfoReceived {
-                            peer_id,
-                            network,
-                            version,
-                            protocols,
-                        },
-                    ))
-                    .await
-                    .map_err(P2pError::from)?;
-
-                self.remote_peer_id = peer_id;
-                Ok(())
-            }
-            Role::Outbound => {
-                self.socket
-                    .send(types::Message::Handshake(types::HandshakeMessage::Hello {
-                        peer_id: self.local_peer_id,
-                        version: *self.config.version(),
-                        network: *self.config.magic_bytes(),
-                        protocols: [
-                            Protocol::new(ProtocolType::PubSub, *self.config.version()),
-                            Protocol::new(ProtocolType::Ping, *self.config.version()),
-                        ]
-                        .into_iter()
-                        .collect(),
-                    }))
-                    // TODO: FIXME:
-                    .await;
-                todo!();
-                //.await?;
-
-                let (peer_id, network, version, protocols) = if let Ok(Some(
-                    types::Message::Handshake(types::HandshakeMessage::HelloAck {
-                        peer_id,
-                        version,
-                        network,
-                        protocols,
-                    }),
-                )) = self.socket.recv().await
-                {
-                    (peer_id, network, version, protocols)
-                } else {
-                    return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-                };
-
-                self.tx
-                    .send((
-                        self.remote_peer_id,
-                        types::PeerEvent::PeerInfoReceived {
-                            peer_id,
-                            network,
-                            version,
-                            protocols,
-                        },
-                    ))
-                    .await
-                    .map_err(P2pError::from)?;
-
-                self.remote_peer_id = peer_id;
-                Ok(())
-            }
-        }
+        // TODO: FIXME:
+        todo!();
+        todo!();
+        // match self.role {
+        //     Role::Inbound => {
+        //         let (peer_id, network, version, protocols) =
+        //             if let Ok(Some(types::Message::Handshake(types::HandshakeMessage::Hello {
+        //                 peer_id,
+        //                 version,
+        //                 network,
+        //                 protocols,
+        //             }))) = self.socket.recv().await
+        //             {
+        //                 (peer_id, network, version, protocols)
+        //             } else {
+        //                 return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+        //             };
+        //
+        //         self.socket
+        //             .send(types::Message::Handshake(
+        //                 types::HandshakeMessage::HelloAck {
+        //                     peer_id: self.local_peer_id,
+        //                     version: *self.config.version(),
+        //                     network: *self.config.magic_bytes(),
+        //                     // TODO: Replace the hard-coded values when ping and pubsub protocols are implemented for the mock interface.
+        //                     protocols: [
+        //                         Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
+        //                         Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
+        //                     ]
+        //                     .into_iter()
+        //                     .collect(),
+        //                 },
+        //             ))
+        //             // TODO: FIXME:
+        //             .await;
+        //         todo!();
+        //         //.await?;
+        //
+        //         self.tx
+        //             .send((
+        //                 self.remote_peer_id,
+        //                 types::PeerEvent::PeerInfoReceived {
+        //                     peer_id,
+        //                     network,
+        //                     version,
+        //                     protocols,
+        //                 },
+        //             ))
+        //             .await
+        //             .map_err(P2pError::from)?;
+        //
+        //         self.remote_peer_id = peer_id;
+        //         Ok(())
+        //     }
+        //     Role::Outbound => {
+        //         self.socket
+        //             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
+        //                 peer_id: self.local_peer_id,
+        //                 version: *self.config.version(),
+        //                 network: *self.config.magic_bytes(),
+        //                 protocols: [
+        //                     Protocol::new(ProtocolType::PubSub, *self.config.version()),
+        //                     Protocol::new(ProtocolType::Ping, *self.config.version()),
+        //                 ]
+        //                 .into_iter()
+        //                 .collect(),
+        //             }))
+        //             // TODO: FIXME:
+        //             .await;
+        //         todo!();
+        //         //.await?;
+        //
+        //         let (peer_id, network, version, protocols) = if let Ok(Some(
+        //             types::Message::Handshake(types::HandshakeMessage::HelloAck {
+        //                 peer_id,
+        //                 version,
+        //                 network,
+        //                 protocols,
+        //             }),
+        //         )) = self.socket.recv().await
+        //         {
+        //             (peer_id, network, version, protocols)
+        //         } else {
+        //             return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+        //         };
+        //
+        //         self.tx
+        //             .send((
+        //                 self.remote_peer_id,
+        //                 types::PeerEvent::PeerInfoReceived {
+        //                     peer_id,
+        //                     network,
+        //                     version,
+        //                     protocols,
+        //                 },
+        //             ))
+        //             .await
+        //             .map_err(P2pError::from)?;
+        //
+        //         self.remote_peer_id = peer_id;
+        //         Ok(())
+        //     }
+        // }
     }
 
     async fn destroy_peer(&mut self) -> crate::Result<()> {
@@ -203,30 +206,32 @@ where
         }
 
         loop {
-            tokio::select! {
-                event = self.rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
-                    MockEvent::Disconnect => return self.destroy_peer().await,
-                    MockEvent::SendMessage(message) => todo!(), //self.socket.send(*message).await?,
-                },
-                event = self.socket.recv() => match event {
-                    Err(err) => {
-                        log::info!("peer connection closed, reason {err:?}");
-                        return self.destroy_peer().await;
-                    }
-                    Ok(None) => {},
-                    Ok(Some(message)) => {
-                        self.tx
-                            .send((
-                                self.remote_peer_id,
-                                types::PeerEvent::MessageReceived {
-                                    message
-                                },
-                            ))
-                            .await
-                            .map_err(P2pError::from)?;
-                    }
-                }
-            }
+            // TODO: FIXME:
+            todo!();
+            // tokio::select! {
+            //     event = self.rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
+            //         MockEvent::Disconnect => return self.destroy_peer().await,
+            //         MockEvent::SendMessage(message) => todo!(), //self.socket.send(*message).await?,
+            //     },
+            //     event = self.socket.recv() => match event {
+            //         Err(err) => {
+            //             log::info!("peer connection closed, reason {err:?}");
+            //             return self.destroy_peer().await;
+            //         }
+            //         Ok(None) => {},
+            //         Ok(Some(message)) => {
+            //             self.tx
+            //                 .send((
+            //                     self.remote_peer_id,
+            //                     types::PeerEvent::MessageReceived {
+            //                         message
+            //                     },
+            //                 ))
+            //                 .await
+            //                 .map_err(P2pError::from)?;
+            //         }
+            //     }
+            // }
         }
     }
 }

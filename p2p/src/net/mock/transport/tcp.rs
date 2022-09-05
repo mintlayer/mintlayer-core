@@ -19,7 +19,7 @@ use async_trait::async_trait;
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::net::mock::{
-    transport::{Connection, Transport},
+    transport::{Connection, MessageStream, Transport},
     types::Message,
 };
 
@@ -52,7 +52,12 @@ impl Connection<TcpTransport> for TcpConnection {
     async fn accept(&mut self) -> Result<(Self::Stream, SocketAddr), super::Error> {
         todo!()
     }
+}
 
+pub struct TcpMessageStream {}
+
+#[async_trait]
+impl MessageStream<TcpTransport> for TcpMessageStream {
     async fn send(&mut self, msg: Message) -> Result<(), super::Error> {
         todo!()
     }

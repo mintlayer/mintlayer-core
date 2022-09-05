@@ -21,7 +21,7 @@ use tokio::sync::{
 };
 
 use crate::net::mock::{
-    transport::{Connection, Transport},
+    transport::{Connection, MessageStream, Transport},
     types::Message,
 };
 
@@ -68,7 +68,12 @@ impl Connection<ChannelTransport> for ChannelConnection {
         // TODO: FIXME:
         todo!();
     }
+}
 
+pub struct ChannelMessageStream {}
+
+#[async_trait]
+impl MessageStream<ChannelTransport> for ChannelMessageStream {
     async fn send(&mut self, msg: Message) -> Result<(), super::Error> {
         // TODO: FIXME:
         todo!();
