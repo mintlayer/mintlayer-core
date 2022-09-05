@@ -54,7 +54,7 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
+        fn get_token_info(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
     }
 
     impl UtxosStorageRead for Store {
@@ -134,7 +134,7 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
+        fn get_token_info(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
     }
 
     impl crate::UtxosStorageRead for StoreTxRo {
@@ -174,7 +174,7 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
+        fn get_token_info(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
     }
 
     impl UtxosStorageRead for StoreTxRw {

@@ -18,7 +18,7 @@ pub mod error;
 use self::{
     cached_operation::CachedTokensOperation,
     error::ConnectTransactionError,
-    utils::{register_tokens_issuance, unregister_token_issuance},
+    utils::{get_output_token_id_and_amount, register_tokens_issuance, unregister_token_issuance},
 };
 use ::utils::ensure;
 use cached_operation::CachedInputsOperation;
@@ -29,7 +29,6 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         calculate_tx_index_from_block,
-        config::TOKEN_MIN_ISSUANCE_FEE,
         signature::{verify_signature, Transactable},
         tokens::{get_tokens_issuance_count, CoinOrTokenId, OutputValue, TokenId, TokensError},
         Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
@@ -43,10 +42,7 @@ use std::{
 };
 
 mod utils;
-use self::utils::{
-    check_transferred_amount, get_input_coin_or_tokenid, get_output_coin_or_tokenid,
-    insert_or_increase,
-};
+use self::utils::{check_transferred_amount, get_input_token_id_and_amount, insert_or_increase};
 
 /// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -257,7 +253,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         let mut total_amounts = BTreeMap::new();
         outputs
             .iter()
-            .filter_map(|output| get_output_coin_or_tokenid(output.value()))
+            .filter_map(|output| get_output_token_id_and_amount(output.value()))
             .try_for_each(|(key, amount)| insert_or_increase(&mut total_amounts, key, *amount))?;
         Ok(total_amounts)
     }
@@ -287,7 +283,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                     let output_value =
                         Self::get_output_value(tx.outputs(), output_index, tx.get_id().into())?;
 
-                    let (key, amount) = get_input_coin_or_tokenid(output_value, &tx)?;
+                    let (key, amount) = get_input_token_id_and_amount(output_value, &tx)?;
                     insert_or_increase(&mut result, key, amount)?
                 }
                 common::chain::SpendablePosition::BlockReward(block_id) => {
@@ -336,7 +332,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
 
         // Check is fee enough for issuance
         let issuance_count = get_tokens_issuance_count(tx.outputs());
-        if issuance_count > 0 && total_fee < TOKEN_MIN_ISSUANCE_FEE {
+        if issuance_count > 0 && total_fee < self.chain_config.token_min_issuance_fee() {
             return Err(ConnectTransactionError::TokensError(
                 TokensError::InsufficientTokenFees(tx.get_id(), block_id),
             ));

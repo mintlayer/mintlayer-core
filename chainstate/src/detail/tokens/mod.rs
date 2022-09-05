@@ -15,9 +15,8 @@
 
 use common::{
     chain::{
-        config::{TOKEN_MAX_DEC_COUNT, TOKEN_MAX_TICKER_LEN, TOKEN_MAX_URI_LEN},
         tokens::{TokenData, TokensError},
-        Block, Transaction,
+        Block, ChainConfig, Transaction,
     },
     primitives::{Amount, Id, Idable},
 };
@@ -51,6 +50,7 @@ pub fn check_tokens_burn_data(
 }
 
 pub fn check_tokens_issuance_data(
+    chain_config: &ChainConfig,
     token_ticker: &[u8],
     amount_to_issue: &Amount,
     number_of_decimals: &u8,
@@ -59,7 +59,7 @@ pub fn check_tokens_issuance_data(
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
     // Check token name
-    if token_ticker.len() > TOKEN_MAX_TICKER_LEN || token_ticker.is_empty() {
+    if token_ticker.len() > chain_config.token_max_ticker_len() || token_ticker.is_empty() {
         return Err(TokensError::IssueErrorInvalidTickerLength(
             tx_id,
             source_block_id,
@@ -86,7 +86,7 @@ pub fn check_tokens_issuance_data(
     }
 
     // Check decimals
-    if number_of_decimals > &TOKEN_MAX_DEC_COUNT {
+    if number_of_decimals > &chain_config.token_max_dec_count() {
         return Err(TokensError::IssueErrorTooManyDecimals(
             tx_id,
             source_block_id,
@@ -100,13 +100,14 @@ pub fn check_tokens_issuance_data(
         .all(|ch| ch.is_alphanumeric() || ch.is_ascii_punctuation() || ch.is_ascii_control());
 
     ensure!(
-        is_ascii && metadata_uri.len() <= TOKEN_MAX_URI_LEN,
+        is_ascii && metadata_uri.len() <= chain_config.token_max_uri_len(),
         TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id)
     );
     Ok(())
 }
 
 pub fn check_tokens_data(
+    chain_config: &ChainConfig,
     token_data: &TokenData,
     tx: &Transaction,
     source_block_id: Id<Block>,
@@ -125,6 +126,7 @@ pub fn check_tokens_data(
             metadata_uri,
         } => {
             check_tokens_issuance_data(
+                chain_config,
                 token_ticker,
                 amount_to_issue,
                 number_of_decimals,

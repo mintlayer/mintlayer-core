@@ -28,7 +28,6 @@ use common::{
         block::{
             calculate_tx_merkle_root, calculate_witness_merkle_root, BlockHeader, BlockReward,
         },
-        config::TOKEN_MAX_ISSUANCE_ALLOWED,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId, TokensError},
         Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
     },
@@ -305,11 +304,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         self.get_gen_block_index(&self.get_best_block_id()?)
     }
 
-    pub fn get_token_tx(
+    pub fn get_token_info(
         &self,
         token_id: TokenId,
     ) -> Result<Option<Id<common::chain::Transaction>>, PropertyQueryError> {
-        self.db_tx.get_token_tx(token_id).map_err(PropertyQueryError::from)
+        self.db_tx.get_token_info(token_id).map_err(PropertyQueryError::from)
     }
 
     pub fn get_header_from_height(
@@ -500,7 +499,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             // We can't issue a few token types in one tx
             let issuance_count = get_tokens_issuance_count(tx.outputs());
             ensure!(
-                issuance_count <= TOKEN_MAX_ISSUANCE_ALLOWED,
+                issuance_count <= self.chain_config.token_max_issuance_allowed(),
                 CheckBlockTransactionsError::TokensError(
                     TokensError::MultipleTokenIssuanceInTransaction(tx.get_id(), block.get_id()),
                 )
@@ -513,7 +512,9 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     OutputValue::Coin(_) => None,
                     OutputValue::Token(token) => Some(token),
                 })
-                .try_for_each(|token| tokens::check_tokens_data(token, tx, block.get_id()))
+                .try_for_each(|token_data| {
+                    tokens::check_tokens_data(self.chain_config, token_data, tx, block.get_id())
+                })
                 .map_err(CheckBlockTransactionsError::TokensError)?;
         }
         Ok(())

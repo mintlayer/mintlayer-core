@@ -36,11 +36,6 @@ use std::time::Duration;
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
 pub const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
-pub const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
-pub const TOKEN_MAX_URI_LEN: usize = 1024;
-pub const TOKEN_MAX_DEC_COUNT: u8 = 18;
-pub const TOKEN_MAX_TICKER_LEN: usize = 5;
-pub const TOKEN_MAX_ISSUANCE_ALLOWED: usize = 1;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ChainType {
@@ -87,6 +82,11 @@ pub struct ChainConfig {
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
+    token_min_issuance_fee: Amount,
+    token_max_uri_len: usize,
+    token_max_dec_count: u8,
+    token_nax_ticker_len: usize,
+    token_max_issuance_allowed: usize,
 }
 
 impl ChainConfig {
@@ -158,6 +158,26 @@ impl ChainConfig {
         self.max_block_size_with_smart_contracts
     }
 
+    pub fn token_min_issuance_fee(&self) -> Amount {
+        self.token_min_issuance_fee
+    }
+
+    pub fn token_max_uri_len(&self) -> usize {
+        self.token_max_uri_len
+    }
+
+    pub fn token_max_dec_count(&self) -> u8 {
+        self.token_max_dec_count
+    }
+
+    pub fn token_max_ticker_len(&self) -> usize {
+        self.token_nax_ticker_len
+    }
+
+    pub fn token_max_issuance_allowed(&self) -> usize {
+        self.token_max_issuance_allowed
+    }
+
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
@@ -174,6 +194,11 @@ const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
 const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 524_288;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 524_288;
+const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
+const TOKEN_MAX_URI_LEN: usize = 1024;
+const TOKEN_MAX_DEC_COUNT: u8 = 18;
+const TOKEN_MAX_TICKER_LEN: usize = 5;
+const TOKEN_MAX_ISSUANCE_ALLOWED: usize = 1;
 
 fn create_mainnet_genesis() -> Genesis {
     use crate::chain::transaction::TxOutput;

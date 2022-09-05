@@ -22,7 +22,6 @@ use crate::{
 };
 use common::{
     chain::{
-        config::TOKEN_MIN_ISSUANCE_FEE,
         signature::inputsig::InputWitness,
         tokens::{token_id, OutputValue, TokenData, TokenId},
         Destination, OutputPurpose, TxInput, TxOutput,
@@ -884,6 +883,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
             number_of_decimals: 1,
             metadata_uri: "https://some_site.some".as_bytes().to_vec(),
         });
+        let token_min_issuance_fee = tf.chainstate.chain_config.token_min_issuance_fee();
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -898,7 +898,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        OutputValue::Coin(TOKEN_MIN_ISSUANCE_FEE),
+                        OutputValue::Coin(token_min_issuance_fee),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -1266,6 +1266,7 @@ fn test_attempt_to_mix_input_tokens() {
             number_of_decimals: 1,
             metadata_uri: "https://some_site.some".as_bytes().to_vec(),
         });
+        let token_min_issuance_fee = tf.chainstate.chain_config.token_min_issuance_fee();
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -1280,7 +1281,7 @@ fn test_attempt_to_mix_input_tokens() {
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        OutputValue::Coin((TOKEN_MIN_ISSUANCE_FEE * 2).unwrap()),
+                        OutputValue::Coin((token_min_issuance_fee * 2).unwrap()),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -1293,6 +1294,7 @@ fn test_attempt_to_mix_input_tokens() {
         let first_issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
         let first_token_id = token_id(&block.transactions()[0]).unwrap();
 
+        let token_min_issuance_fee = tf.chainstate.chain_config.token_min_issuance_fee();
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -1324,7 +1326,7 @@ fn test_attempt_to_mix_input_tokens() {
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        OutputValue::Coin(TOKEN_MIN_ISSUANCE_FEE),
+                        OutputValue::Coin(token_min_issuance_fee),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -1339,6 +1341,7 @@ fn test_attempt_to_mix_input_tokens() {
 
         // Try to spend sum of input tokens
 
+        let token_min_issuance_fee = tf.chainstate.chain_config.token_min_issuance_fee();
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -1366,7 +1369,7 @@ fn test_attempt_to_mix_input_tokens() {
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        OutputValue::Coin((TOKEN_MIN_ISSUANCE_FEE * 2).unwrap()),
+                        OutputValue::Coin((token_min_issuance_fee * 2).unwrap()),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
