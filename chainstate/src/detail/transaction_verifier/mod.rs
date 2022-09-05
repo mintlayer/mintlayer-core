@@ -16,9 +16,8 @@
 mod cached_operation;
 pub mod error;
 use self::{
-    cached_operation::CachedTokensOperation,
-    error::ConnectTransactionError,
-    utils::{get_output_token_id_and_amount, register_tokens_issuance, unregister_token_issuance},
+    cached_operation::CachedTokensOperation, error::ConnectTransactionError,
+    utils::get_output_token_id_and_amount,
 };
 use ::utils::ensure;
 use cached_operation::CachedInputsOperation;
@@ -40,6 +39,9 @@ use std::{
     collections::{btree_map::Entry, BTreeMap},
     sync::Arc,
 };
+
+mod tokens;
+use self::tokens::{register_tokens_issuance, unregister_token_issuance};
 
 mod utils;
 use self::utils::{check_transferred_amount, get_input_token_id_and_amount, insert_or_increase};
