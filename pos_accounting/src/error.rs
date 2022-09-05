@@ -18,6 +18,10 @@ pub enum Error {
     DelegateToNonexistingId,
     #[error("Delegate to a non-existing pool")]
     DelegateToNonexistingPool,
+    #[error("Addition error")]
+    AdditionError,
+    #[error("Subtraction error")]
+    SubError,
     #[error("Delegation arithmetic add error")]
     DelegationBalanceAdditionError,
     #[error("Delegation arithmetic sub error")]

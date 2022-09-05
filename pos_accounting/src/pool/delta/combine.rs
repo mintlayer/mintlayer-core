@@ -83,19 +83,6 @@ pub(super) fn combine_amount_delta(
     }
 }
 
-pub(super) fn combine_signed_amount_delta(
-    lhs: &Option<SignedAmount>,
-    rhs: SignedAmount,
-) -> Result<SignedAmount, Error> {
-    match lhs {
-        None => Ok(rhs),
-        Some(v1) => {
-            let sum = (*v1 + rhs).ok_or(Error::ArithmeticErrorDeltaAdditionFailed)?;
-            Ok(sum)
-        }
-    }
-}
-
 pub fn undo_merge_delta_data<K: Ord, T>(
     map: &mut BTreeMap<K, DataDelta<T>>,
     undo_data: BTreeMap<K, DataDeltaUndoOp<T>>,
@@ -154,47 +141,4 @@ pub fn merge_delta_data_element<K: Ord, T>(
     };
 
     Ok(undo)
-}
-
-pub fn merge_delta_amounts<K: Ord>(
-    map: &mut BTreeMap<K, SignedAmount>,
-    delta_to_apply: BTreeMap<K, SignedAmount>,
-) -> Result<(), Error> {
-    delta_to_apply
-        .into_iter()
-        .try_for_each(|(key, other_amount)| merge_delta_amount_element(map, key, other_amount))?;
-
-    Ok(())
-}
-
-/// Undo a merge with a delta of a balance; notice that we don't need undo data for this, since we can just flip the sign of the amount
-pub fn undo_merge_delta_amounts<K: Ord>(
-    map: &mut BTreeMap<K, SignedAmount>,
-    delta_to_remove: BTreeMap<K, SignedAmount>,
-) -> Result<(), Error> {
-    delta_to_remove.into_iter().try_for_each(|(key, other_amount)| {
-        merge_delta_amount_element(
-            map,
-            key,
-            (-other_amount).ok_or(Error::DeltaUndoNegationError)?,
-        )
-    })?;
-
-    Ok(())
-}
-
-pub fn merge_delta_amount_element<T: Ord>(
-    map: &mut BTreeMap<T, SignedAmount>,
-    key: T,
-    other_amount: SignedAmount,
-) -> Result<(), Error> {
-    let current = map.get(&key);
-    let new_bal = combine_signed_amount_delta(&current.copied(), other_amount)?;
-    if new_bal == SignedAmount::ZERO {
-        // if the new amount is zero, no need to have it at all since it has no effect
-        map.remove(&key);
-    } else {
-        map.insert(key, new_bal);
-    }
-    Ok(())
 }

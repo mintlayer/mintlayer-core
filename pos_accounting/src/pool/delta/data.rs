@@ -1,19 +1,19 @@
 use std::collections::BTreeMap;
 
-use common::primitives::{signed_amount::SignedAmount, H256};
+use common::primitives::H256;
 
 use crate::pool::{delegation::DelegationData, pool_data::PoolData};
 
-use super::DataDelta;
+use super::{delta_amount_collection::DeltaAmountCollection, DataDelta};
 
 use serialization::{Decode, Encode};
 
 #[derive(Clone, Encode, Decode)]
 pub struct PoSAccountingDeltaData {
     pub pool_data: BTreeMap<H256, DataDelta<PoolData>>,
-    pub pool_balances: BTreeMap<H256, SignedAmount>,
-    pub pool_delegation_shares: BTreeMap<(H256, H256), SignedAmount>,
-    pub delegation_balances: BTreeMap<H256, SignedAmount>,
+    pub pool_balances: DeltaAmountCollection<H256>,
+    pub pool_delegation_shares: DeltaAmountCollection<(H256, H256)>,
+    pub delegation_balances: DeltaAmountCollection<H256>,
     pub delegation_data: BTreeMap<H256, DataDelta<DelegationData>>,
 }
 

@@ -50,10 +50,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             }
         }
 
-        let pledge_amount_delta =
-            pledge_amount.into_signed().ok_or(Error::PledgeValueToSignedError)?;
-
-        self.data.pool_balances.insert(pool_id, pledge_amount_delta);
+        self.data.pool_balances.add_unsigned(pool_id, pledge_amount)?;
         self.data.pool_data.insert(
             pool_id,
             DataDelta::Create(Box::new(PoolData::new(decommission_key, pledge_amount))),
@@ -86,7 +83,6 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             }
         }
 
-        self.data.pool_balances.remove(&pool_id);
         self.data.pool_data.remove(&pool_id);
 
         Ok(())
@@ -101,7 +97,6 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             .get_pool_data(pool_id)?
             .ok_or(Error::AttemptedDecommissionNonexistingPoolData)?;
 
-        self.data.pool_balances.remove(&pool_id);
         self.data.pool_data.remove(&pool_id);
 
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
@@ -122,13 +117,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists);
         }
 
-        self.data.pool_balances.insert(
-            undo_data.pool_id,
-            undo_data
-                .last_amount
-                .into_signed()
-                .ok_or(Error::ArithmeticErrorToSignedFailed)?,
-        );
+        self.data.pool_balances.add_unsigned(undo_data.pool_id, undo_data.last_amount)?;
         self.data.pool_data.insert(
             undo_data.pool_id,
             DataDelta::Create(Box::new(undo_data.pool_data)),
@@ -283,19 +272,19 @@ impl<'a> PoSAccountingOperatorRead for PoSAccountingDelta<'a> {
         delegation_id: H256,
     ) -> Result<Option<Amount>, Error> {
         let parent_share = self.parent.get_pool_delegation_share(pool_id, delegation_id)?;
-        let local_share = self.data.pool_delegation_shares.get(&(pool_id, delegation_id));
+        let local_share = self.data.pool_delegation_shares.data().get(&(pool_id, delegation_id));
         combine_amount_delta(&parent_share, &local_share.copied())
     }
 
     fn get_pool_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error> {
         let parent_amount = self.parent.get_pool_balance(pool_id)?;
-        let local_amount = self.data.pool_balances.get(&pool_id);
+        let local_amount = self.data.pool_balances.data().get(&pool_id);
         combine_amount_delta(&parent_amount, &local_amount.copied())
     }
 
     fn get_delegation_id_balance(&self, delegation_id: H256) -> Result<Option<Amount>, Error> {
         let parent_amount = self.parent.get_delegation_balance(delegation_id)?;
-        let local_amount = self.data.delegation_balances.get(&delegation_id);
+        let local_amount = self.data.delegation_balances.data().get(&delegation_id);
         combine_amount_delta(&parent_amount, &local_amount.copied())
     }
 
