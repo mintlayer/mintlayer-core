@@ -121,7 +121,7 @@ impl<T: NetworkingService> PeerContext<T> {
 mod tests {
     use super::*;
     use crate::net::mock::{
-        transport::{ChannelService, ChannelSocket},
+        transport::{ChannelTransport, TcpTransport},
         types, MockService,
     };
     use common::chain::block::{
@@ -129,7 +129,7 @@ mod tests {
     };
     use std::net::SocketAddr;
 
-    fn new_mock_peersyncstate() -> PeerContext<MockService<ChannelService>> {
+    fn new_mock_peersyncstate() -> PeerContext<MockService<ChannelTransport>> {
         // TODO: FIXME:
         //let addr: SocketAddr = "[::1]:8888".parse().unwrap();
         // PeerContext::<MockService<ChannelService>>::new(types::MockPeerId::from_socket_address::<

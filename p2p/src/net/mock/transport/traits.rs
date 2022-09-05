@@ -22,15 +22,6 @@ use async_trait::async_trait;
 
 use crate::net::mock::types::Message;
 
-/// An interface for creating the address.
-pub trait MakeAddress {
-    // TODO: FIXME: Remove Hash and Display?
-    type Address: Copy + Clone + Debug + Display + Eq + Hash + Send + Sync + ToString;
-
-    /// Creates a new unused address.
-    fn make_address() -> Self::Address;
-}
-
 /// An abstraction layer for creating and opening connections.
 #[async_trait]
 pub trait Transport {

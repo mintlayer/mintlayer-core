@@ -15,6 +15,8 @@
 
 use std::{
     collections::{HashSet, VecDeque},
+    fmt::{Debug, Display},
+    net::SocketAddr,
     sync::Arc,
 };
 
@@ -34,9 +36,7 @@ use p2p::{
         self,
         libp2p::Libp2pService,
         mock::{
-            transport::{
-                ChannelTransport, MakeAddress, MakeChannelAddress, MakeTcpAddress, TcpTransport,
-            },
+            transport::{ChannelTransport, TcpTransport},
             MockService,
         },
         types::ConnectivityEvent,
@@ -506,7 +506,7 @@ async fn local_ahead_by_12_blocks_mock() {
 // verify that remote nodes does a reorg
 async fn remote_local_diff_chains_local_higher<A, T>()
 where
-    A: MakeAddress<Address = T::Address>,
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
@@ -648,17 +648,6 @@ where
         pubsub.try_recv(),
         Ok(PubSubControlEvent::InitialBlockDownloadDone),
     );
-}
-
-// TODO: FIXME: Move somewhere.
-struct MakeP2pAddress {}
-
-impl MakeAddress for MakeP2pAddress {
-    type Address = Multiaddr;
-
-    fn make_address() -> Self::Address {
-        "/ip6/::1/tcp/0".parse().unwrap()
-    }
 }
 
 #[tokio::test]
@@ -1410,4 +1399,47 @@ async fn test_connect_disconnect_resyncing_libp2p() {
 #[cfg(not(target_os = "macos"))]
 async fn test_connect_disconnect_resyncing_mock() {
     test_connect_disconnect_resyncing::<MockService>(make_mock_addr(), make_mock_addr()).await;
+}
+
+/// An interface for creating the address.
+///
+/// This abstraction layer is needed to uniformly create an address in the tests for different
+/// mocks transport implementations.
+pub trait MakeTestAddress {
+    // TODO: FIXME: Remove Hash and Display?
+    /// An address type.
+    type Address: Clone + Debug + Display + Eq + std::hash::Hash + Send + Sync + ToString;
+
+    /// Creates a new unused address.
+    fn make_address() -> Self::Address;
+}
+
+struct MakeP2pAddress {}
+
+impl MakeTestAddress for MakeP2pAddress {
+    type Address = Multiaddr;
+
+    fn make_address() -> Self::Address {
+        "/ip6/::1/tcp/0".parse().unwrap()
+    }
+}
+
+pub struct MakeTcpAddress {}
+
+impl MakeTestAddress for MakeTcpAddress {
+    type Address = SocketAddr;
+
+    fn make_address() -> Self::Address {
+        "[::1]:0".parse().unwrap()
+    }
+}
+
+pub struct MakeChannelAddress {}
+
+impl MakeTestAddress for MakeChannelAddress {
+    type Address = u64;
+
+    fn make_address() -> Self::Address {
+        todo!()
+    }
 }

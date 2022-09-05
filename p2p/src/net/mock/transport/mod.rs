@@ -18,7 +18,7 @@ mod tcp;
 mod traits;
 
 pub use self::{
-    channel::{ChannelConnection, ChannelTransport, MakeChannelAddress},
-    tcp::{MakeTcpAddress, TcpTransport},
-    traits::{Connection, Error, MakeAddress, Transport},
+    channel::{ChannelConnection, ChannelTransport},
+    tcp::TcpTransport,
+    traits::{Connection, Error, Transport},
 };

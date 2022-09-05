@@ -19,19 +19,9 @@ use async_trait::async_trait;
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::net::mock::{
-    transport::{Connection, MakeAddress, Transport},
+    transport::{Connection, Transport},
     types::Message,
 };
-
-pub struct MakeTcpAddress {}
-
-impl MakeAddress for MakeTcpAddress {
-    type Address = SocketAddr;
-
-    fn make_address() -> Self::Address {
-        "[::1]:0".parse().unwrap()
-    }
-}
 
 #[derive(Debug)]
 pub struct TcpTransport {}

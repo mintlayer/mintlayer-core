@@ -21,7 +21,7 @@ use tokio::sync::{
 };
 
 use crate::net::mock::{
-    transport::{Connection, MakeAddress, Transport},
+    transport::{Connection, Transport},
     types::Message,
 };
 
@@ -36,16 +36,6 @@ struct SocketCommand {
 enum SocketCommandType {
     Connect,
     Bind,
-}
-
-pub struct MakeChannelAddress {}
-
-impl MakeAddress for MakeChannelAddress {
-    type Address = u64;
-
-    fn make_address() -> Self::Address {
-        todo!()
-    }
 }
 
 #[derive(Debug)]
