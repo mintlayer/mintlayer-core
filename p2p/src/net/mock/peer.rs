@@ -25,7 +25,7 @@ use crate::{
     error::{P2pError, ProtocolError},
     net::{
         mock::{
-            transport::{Connection, Transport},
+            transport::{Listener, Transport},
             types::{self, MockEvent, MockPeerId, PeerEvent},
         },
         types::{Protocol, ProtocolType},
@@ -51,7 +51,7 @@ pub struct Peer<T: Transport> {
     role: Role,
 
     /// Peer socket
-    socket: T::Connection,
+    socket: T::Listener,
 
     /// TX channel for communicating with backend
     tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
@@ -63,14 +63,13 @@ pub struct Peer<T: Transport> {
 impl<T> Peer<T>
 where
     T: Transport + 'static,
-    T::Connection: Connection<T>,
 {
     pub fn new(
         local_peer_id: MockPeerId,
         remote_peer_id: MockPeerId,
         role: Role,
         config: Arc<ChainConfig>,
-        socket: T::Connection,
+        socket: T::Listener,
         tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
         rx: mpsc::Receiver<MockEvent>,
     ) -> Self {

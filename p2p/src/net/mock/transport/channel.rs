@@ -22,7 +22,7 @@ use tokio::sync::{
 
 use crate::{
     net::mock::{
-        transport::{Connection, MessageStream, Transport},
+        transport::{Listener, MessageStream, Transport},
         types::Message,
     },
     Result,
@@ -46,28 +46,26 @@ pub struct ChannelTransport {}
 
 #[async_trait]
 impl Transport for ChannelTransport {
-    type Connection = ChannelConnection;
+    type Listener = ChannelListener;
     type Address = u64;
 
-    async fn bind(address: Self::Address) -> Result<Self::Connection> {
+    async fn create(address: Self::Address) -> Result<Self::Listener> {
         let tx: UnboundedSender<SocketCommand> = NETWORK_HANDLE.clone();
         // TODO: FIXME:
         todo!();
     }
 
-    async fn connect(address: Self::Address) -> Result<Self::Connection> {
-        // TODO: FIXME:
-        todo!();
-    }
+    // async fn connect(address: Self::Address) -> Result<Self::Connection> {
+    //     // TODO: FIXME:
+    //     todo!();
+    // }
 }
 
-pub struct ChannelConnection {}
+pub struct ChannelListener {}
 
 #[async_trait]
-impl Connection<ChannelTransport> for ChannelConnection {
-    type Stream = ();
-
-    async fn accept(&mut self) -> Result<(Self::Stream, u64)> {
+impl Listener<ChannelMessageStream, u64> for ChannelListener {
+    async fn accept(&mut self) -> Result<(ChannelMessageStream, u64)> {
         // TODO: FIXME:
         todo!();
     }
@@ -76,7 +74,7 @@ impl Connection<ChannelTransport> for ChannelConnection {
 pub struct ChannelMessageStream {}
 
 #[async_trait]
-impl MessageStream<ChannelTransport> for ChannelMessageStream {
+impl MessageStream for ChannelMessageStream {
     async fn send(&mut self, msg: Message) -> Result<()> {
         // TODO: FIXME:
         todo!();

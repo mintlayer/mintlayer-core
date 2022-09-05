@@ -27,26 +27,26 @@ use crate::{net::mock::types::Message, Result};
 pub trait Transport {
     // TODO: FIXME: Remove Hash and Display?
     /// An address type.
-    type Address: Copy + Clone + Debug + Display + Eq + Hash + Send + Sync + ToString;
+    type Address: Clone + Debug + Display + Eq + Hash + Send + Sync + ToString;
 
     /// A connection type.
-    type Connection;
+    type Listener: Listener<Self::Stream, Self::Address>;
+
+    /// A messages stream.
+    type Stream: MessageStream;
 
     /// Creates a new connection with the given address.
-    async fn bind(address: Self::Address) -> Result<Self::Connection>;
+    async fn create(address: Self::Address) -> Result<Self::Listener>;
 
     /// Open a connection to the given address.
-    async fn connect(address: Self::Address) -> Result<Self::Connection>;
+    async fn connect(address: Self::Address) -> Result<Self::Stream>;
 }
 
 /// An abstraction layer over some kind of network connection.
 #[async_trait]
-pub trait Connection<T: Transport>: Send {
-    /// TODO: FIXME:
-    type Stream;
-
+pub trait Listener<Stream, Address>: Send {
     /// Accepts a new inbound connection.
-    async fn accept(&mut self) -> Result<(Self::Stream, T::Address)>;
+    async fn accept(&mut self) -> Result<(Stream, Address)>;
 
     // TODO: FIXME:
     // /// Establishes a new outbound connection.
@@ -59,7 +59,10 @@ pub trait Connection<T: Transport>: Send {
 
 /// An abstraction layer over some network stream that can be used to send and receive messages.
 #[async_trait]
-pub trait MessageStream<T: Transport> {
+pub trait MessageStream {
+    // /// Opens a stream connection to a remote host.
+    // async fn connect() -> Self;
+
     /// Sends the given message to a remote peer.
     async fn send(&mut self, msg: Message) -> Result<()>;
 

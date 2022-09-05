@@ -34,7 +34,7 @@ use crate::{
     message,
     net::{
         self,
-        mock::transport::{Connection, Transport},
+        mock::transport::{Listener, Transport},
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent, ValidationResult},
         ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,
     },
@@ -108,7 +108,6 @@ where
 impl<T> NetworkingService for MockService<T>
 where
     T: Transport,
-    T::Connection: Connection<T>,
 {
     type Address = T::Address;
     type PeerId = types::MockPeerId;

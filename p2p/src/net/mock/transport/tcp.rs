@@ -16,11 +16,11 @@
 use std::net::SocketAddr;
 
 use async_trait::async_trait;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpStream;
 
 use crate::{
     net::mock::{
-        transport::{Connection, MessageStream, Transport},
+        transport::{Listener, MessageStream, Transport},
         types::Message,
     },
     Result,
@@ -31,34 +31,33 @@ pub struct TcpTransport {}
 
 #[async_trait]
 impl Transport for TcpTransport {
-    type Connection = TcpConnection;
+    type Listener = TcpListener;
     type Address = SocketAddr;
 
-    async fn bind(address: Self::Address) -> Result<Self::Connection> {
-        Ok(TcpConnection::new(TcpListener::bind(address).await?))
+    async fn create(address: Self::Address) -> Result<Self::Listener> {
+        Ok(TcpListener::new(TcpListener::bind(address).await?))
     }
 
-    async fn connect(address: Self::Address) -> Result<Self::Connection> {
-        //TcpStream::connect(address)
-        todo!()
-    }
+    // async fn connect(address: Self::Address) -> Result<Self::Connection> {
+    //     //TcpStream::connect(address)
+    //     todo!()
+    // }
 }
 
-pub struct TcpConnection {
-    listener: TcpListener,
+// TODO: Remove wrapper?
+pub struct TcpListener {
+    listener: std::net::TcpListener,
 }
 
-impl TcpConnection {
+impl TcpListener {
     fn new(listener: TcpListener) -> Self {
         Self { listener }
     }
 }
 
 #[async_trait]
-impl Connection<TcpTransport> for TcpConnection {
-    type Stream = ();
-
-    async fn accept(&mut self) -> Result<(Self::Stream, SocketAddr)> {
+impl Listener<TcpMessageStream, SocketAddr> for TcpListener {
+    async fn accept(&mut self) -> Result<(TcpMessageStream, SocketAddr)> {
         todo!()
     }
 }
@@ -66,7 +65,7 @@ impl Connection<TcpTransport> for TcpConnection {
 pub struct TcpMessageStream {}
 
 #[async_trait]
-impl MessageStream<TcpTransport> for TcpMessageStream {
+impl MessageStream for TcpMessageStream {
     async fn send(&mut self, msg: Message) -> Result<()> {
         todo!()
     }

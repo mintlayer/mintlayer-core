@@ -28,7 +28,7 @@ use crate::{
     message,
     net::mock::{
         peer, request_manager,
-        transport::{Connection, Transport},
+        transport::{Listener, Transport},
         types,
     },
 };
@@ -60,7 +60,7 @@ pub struct Backend<T: Transport> {
     address: T::Address,
 
     /// Socket for listening to incoming connections
-    socket: T::Connection,
+    socket: T::Listener,
 
     /// Chain config
     config: Arc<ChainConfig>,
@@ -103,12 +103,11 @@ pub struct Backend<T: Transport> {
 impl<T> Backend<T>
 where
     T: Transport + 'static,
-    T::Connection: Connection<T>,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         address: T::Address,
-        socket: T::Connection,
+        socket: T::Listener,
         config: Arc<ChainConfig>,
         cmd_rx: mpsc::Receiver<types::Command<T>>,
         conn_tx: mpsc::Sender<types::ConnectivityEvent<T>>,
@@ -140,7 +139,7 @@ where
     /// `pending` to `peers` and the front-end is notified about the peer.
     async fn create_peer(
         &mut self,
-        socket: T::Connection,
+        socket: T::Listener,
         local_peer_id: types::MockPeerId,
         remote_peer_id: types::MockPeerId,
         role: peer::Role,
