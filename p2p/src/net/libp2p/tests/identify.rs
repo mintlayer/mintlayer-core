@@ -39,6 +39,9 @@ async fn test_identify_not_supported() {
         ),
         peer_id,
     )
+    .executor(Box::new(|fut| {
+        tokio::spawn(fut);
+    }))
     .build();
 
     connect_swarms::<behaviour::Libp2pBehaviour, ping::Behaviour>(&mut backend1.swarm, &mut swarm)

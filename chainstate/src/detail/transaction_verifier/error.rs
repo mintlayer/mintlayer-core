@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::Block, SpendError, Spender, TxMainChainIndexError, TxMainChainPosition},
+    chain::{
+        block::{Block, GenBlock},
+        SpendError, Spender, TxMainChainIndexError, TxMainChainPosition,
+    },
     primitives::{Amount, Id},
 };
 use thiserror::Error;
@@ -47,6 +50,14 @@ pub enum ConnectTransactionError {
     MissingOutputOrSpentOutputErasedOnConnect,
     #[error("While disconnecting a block, output was erased in a previous step (possible in reorgs with no cache flushing)")]
     MissingOutputOrSpentOutputErasedOnDisconnect,
+    #[error(
+        "While disconnecting a block, undo transaction number `{0}` doesn't exist for block `{1}`"
+    )]
+    MissingTxUndo(usize, Id<Block>),
+    #[error("While disconnecting a block, block undo info doesn't exist for block `{0}`")]
+    MissingBlockUndo(Id<Block>),
+    #[error("While disconnecting a block, block reward undo info doesn't exist for block `{0}`")]
+    MissingBlockRewardUndo(Id<GenBlock>),
     #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     AttemptToPrintMoney(Amount, Amount),
     #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]
@@ -63,7 +74,7 @@ pub enum ConnectTransactionError {
     BlockTimestampArithmeticError,
     #[error("Input addition error")]
     InputAdditionError,
-    #[error("Double-spend attempt")]
+    #[error("Double-spend attempt in `{0:?}`")]
     DoubleSpendAttempt(Spender),
     #[error("Input of tx {tx_id:?} has an out-of-range output index {source_output_index}")]
     OutputIndexOutOfRange {
@@ -86,6 +97,8 @@ pub enum ConnectTransactionError {
     SerializationInvariantError(Id<Block>),
     #[error("Timelock rules violated")]
     TimeLockViolation,
+    #[error("Utxo error: {0}")]
+    UtxoError(#[from] utxo::Error),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

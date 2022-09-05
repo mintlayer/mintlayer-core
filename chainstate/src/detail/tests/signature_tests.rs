@@ -30,7 +30,7 @@ use crate::detail::tests::{test_framework::TransactionBuilder, *};
 
 #[test]
 fn signed_tx() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let mut tf = TestFramework::default();
 
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);

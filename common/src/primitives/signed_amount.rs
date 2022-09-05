@@ -24,6 +24,7 @@ pub type SignedIntType = i128;
 /// A signed fixed-point type for amounts used in accounting, specifically
 /// The smallest unit of count is called an atom
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[must_use]
 pub struct SignedAmount {
     val: SignedIntType,
 }

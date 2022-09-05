@@ -144,10 +144,11 @@ mockall::mock! {
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
     }
 
-    impl storage::traits::TransactionRo for StoreTxRo {
-        type Error = crate::Error;
-        fn finalize(self) -> crate::Result<()>;
+    impl crate::TransactionRo for StoreTxRo {
+        fn close(self);
     }
+
+    impl crate::IsTransaction for StoreTxRo {}
 }
 
 mockall::mock! {
@@ -222,22 +223,23 @@ mockall::mock! {
         fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 
-    impl storage::traits::TransactionRw for StoreTxRw {
-        type Error = crate::Error;
-        fn abort(self) -> crate::Result<()>;
+    impl crate::TransactionRw for StoreTxRw {
+        fn abort(self);
         fn commit(self) -> crate::Result<()>;
     }
+
+    impl crate::IsTransaction for StoreTxRw {}
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{BlockchainStorageRead, BlockchainStorageWrite, Transactional};
+    use crate::{TransactionRo, TransactionRw};
     use common::{
         chain::block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         primitives::{Idable, H256},
     };
-    use storage::traits::{TransactionRo, TransactionRw};
 
     type TestStore = crate::inmemory::Store;
 
@@ -299,23 +301,21 @@ mod tests {
         });
 
         // Test some code against the mock
-        let tx_result = store.transaction_rw().run(|tx| {
-            let v = tx.get_storage_version()?;
-            tx.set_storage_version(v + 1)?;
-            storage::commit(())
-        });
-        assert_eq!(tx_result, Ok(()))
+        let mut tx = store.transaction_rw();
+        let v = tx.get_storage_version().unwrap();
+        tx.set_storage_version(v + 1).unwrap();
+        tx.commit().unwrap();
     }
 
     fn generic_test<BS: crate::BlockchainStorage>(store: &BS) {
         let tx = store.transaction_ro();
         let _ = tx.get_best_block_id();
-        let _ = tx.finalize();
+        tx.close();
     }
 
     #[test]
     fn use_generic_test() {
-        common::concurrency::model(|| {
+        utils::concurrency::model(|| {
             let store = TestStore::new_empty().unwrap();
             generic_test(&store);
         });
@@ -326,14 +326,15 @@ mod tests {
         store: &mut BS,
         block: &Block,
     ) -> &'static str {
-        let res: crate::Result<&'static str> = store.transaction_rw().run(|tx| {
+        (|| {
+            let mut tx = store.transaction_rw();
             // Get current best block ID
             let _best_id = match tx.get_best_block_id()? {
-                None => return storage::abort("top not set"),
+                None => return Ok("top not set"),
                 Some(best_id) => {
                     // Check the parent block is the current best block
                     if block.prev_block_id() != best_id {
-                        return storage::abort("not on top");
+                        return Ok("not on top");
                     }
                     best_id
                 }
@@ -342,9 +343,10 @@ mod tests {
             tx.add_block(block)?;
             // Set the best block ID
             tx.set_best_block_id(&block.get_id().into())?;
-            storage::commit("ok")
-        });
-        res.unwrap_or_else(|e| {
+            tx.commit()?;
+            Ok("ok")
+        })()
+        .unwrap_or_else(|e| {
             #[allow(unreachable_patterns)]
             match e {
                 crate::Error::Storage(e) => match e {
@@ -381,7 +383,7 @@ mod tests {
 
     #[test]
     fn attach_to_top_real_storage() {
-        common::concurrency::model(|| {
+        utils::concurrency::model(|| {
             let mut store = TestStore::new_empty().unwrap();
             let (_block0, block1) = sample_data();
             let _result = attach_block_to_top(&mut store, &block1);
@@ -416,7 +418,7 @@ mod tests {
         store.expect_transaction_rw().returning(move || {
             let mut tx = MockStoreTxRw::new();
             tx.expect_get_best_block_id().return_const(Ok(None));
-            tx.expect_abort().return_const(Ok(()));
+            tx.expect_abort().return_const(());
             tx
         });
 
@@ -432,7 +434,7 @@ mod tests {
         store.expect_transaction_rw().returning(move || {
             let mut tx = MockStoreTxRw::new();
             tx.expect_get_best_block_id().return_const(Ok(Some(top_id)));
-            tx.expect_abort().return_const(Ok(()));
+            tx.expect_abort().return_const(());
             tx
         });
 

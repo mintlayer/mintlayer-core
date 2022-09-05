@@ -20,21 +20,35 @@
 //!
 
 #![allow(rustdoc::private_intra_doc_links)]
+
+pub mod peerdb;
+
+use std::{
+    collections::{BTreeSet, HashMap},
+    fmt::Debug,
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
+};
+
+use futures::FutureExt;
+use tokio::sync::{mpsc, oneshot};
+
+use chainstate::ban_score::BanScore;
+use common::{chain::ChainConfig, primitives::semver::SemVer};
+use logging::log;
+use utils::ensure;
+
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event,
-    net::{self, ConnectivityService, NetworkingService},
+    net::{
+        self,
+        types::{Protocol, ProtocolType},
+        ConnectivityService, NetworkingService,
+    },
     P2pConfig,
 };
-use chainstate::ban_score::BanScore;
-use common::{chain::ChainConfig, primitives::semver};
-use futures::FutureExt;
-use logging::log;
-use std::{collections::HashMap, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
-use tokio::sync::{mpsc, oneshot};
-use utils::ensure;
-
-pub mod peerdb;
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
 const MAX_ACTIVE_CONNECTIONS: usize = 128;
@@ -115,50 +129,45 @@ where
         !self.peerdb.is_id_banned(peer_id)
     }
 
-    /// Verify protocol compatibility
+    /// Verifies the protocols compatibility.
     ///
-    /// Make sure that remote peer supports the same versions of the protocols that we do
-    /// and that they support the mandatory protocols which for now are configured to be:
+    /// Checks that the given set of protocols contains the following protocols with the exact
+    /// versions:
     ///
-    /// - `/meshsub/1.1.0`
-    /// - `/meshsub/1.0.0`
-    /// - `/ipfs/ping/1.0.0`
-    /// - `/ipfs/id/1.0.0`
-    /// - `/ipfs/id/push/1.0.0`
-    /// - `/mintlayer/sync/0.1.0`
+    /// - PubSub 1.1.0 or PubSub 1.0.0
+    /// - Ping 1.0.0
+    /// - Sync 0.1.0
     ///
-    /// If any of the procols are missing or if any of them have a different version,
+    /// If any of the protocols are missing or if any of them have a different version,
     /// the validation fails and connection must be closed.
     ///
     /// Either peer may support additional protocols which are not known to the other
     /// peer and that is totally fine. As long as the aforementioned protocols with
     /// matching versions are found, the protocol set has been validated successfully.
-    // TODO: create generic versions of the protocols when mock interface is supported again
-    // TODO: convert `protocols` to a hashset
-    // TODO: define better protocol id type
-    fn validate_supported_protocols(&self, protocols: &[T::ProtocolId]) -> bool {
-        const REQUIRED: &[&str] = &[
-            "/meshsub/1.1.0",
-            "/meshsub/1.0.0",
-            "/ipfs/ping/1.0.0",
-            "/ipfs/id/1.0.0",
-            "/ipfs/id/push/1.0.0",
-            "/mintlayer/sync/0.1.0",
+    fn validate_supported_protocols(&self, protocols: &BTreeSet<Protocol>) -> bool {
+        // We can work with any of these pubsub versions.
+        const ONE_OF: &[Protocol] = &[
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
         ];
 
-        for required_proto in REQUIRED {
-            if !protocols.iter().any(|proto| &proto.to_string().as_str() == required_proto) {
-                return false;
-            }
+        // All of these protocols are required.
+        const REQUIRED: &[Protocol] = &[
+            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+        ];
+
+        if !ONE_OF.iter().any(|p| protocols.contains(p)) {
+            return false;
         }
 
-        true
+        REQUIRED.iter().all(|p| protocols.contains(p))
     }
 
     /// Verify software version compatibility
     ///
     /// Make sure that local and remote peer have the same software version
-    fn validate_version(&self, version: &semver::SemVer) -> bool {
+    fn validate_version(&self, version: &SemVer) -> bool {
         // TODO: handle upgrades of versions
         version == self.chain_config.version()
     }

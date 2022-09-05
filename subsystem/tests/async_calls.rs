@@ -61,7 +61,7 @@ impl Counter {
 #[test]
 fn async_calls() {
     let runtime = helpers::init_test_runtime();
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         runtime.block_on(async {
             let mut app = subsystem::Manager::new("app");
             let logger = app.add_subsystem("logger", Logger::new("logging".to_string()));

@@ -31,10 +31,7 @@ use common::{
 };
 use futures::FutureExt;
 use logging::log;
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{mpsc, oneshot};
 use utils::ensure;
 
@@ -142,17 +139,26 @@ where
 
     /// Register peer to the `SyncManager`
     pub async fn register_peer(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
-        match self.peers.entry(peer_id) {
-            Entry::Occupied(_) => Err(P2pError::PeerError(PeerError::PeerAlreadyExists)),
-            Entry::Vacant(entry) => {
-                let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
-                entry.insert(peer::PeerContext::new_with_locator(
-                    peer_id,
-                    locator.clone(),
-                ));
-                self.send_header_request(peer_id, locator, 0).await
-            }
-        }
+        ensure!(
+            !self.peers.contains_key(&peer_id),
+            P2pError::PeerError(PeerError::PeerAlreadyExists),
+        );
+
+        let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
+
+        self.send_request(
+            peer_id,
+            message::Request::HeaderListRequest(message::HeaderListRequest::new(locator.clone())),
+            request::RequestType::GetHeaders,
+            0,
+        )
+        .await
+        .map(|_| {
+            self.peers.insert(
+                peer_id,
+                peer::PeerContext::new_with_locator(peer_id, locator),
+            );
+        })
     }
 
     /// Unregister peer from the `SyncManager`
@@ -163,10 +169,12 @@ where
     /// Process header request
     pub async fn process_header_request(
         &mut self,
-        _peer_id: T::PeerId,
+        peer_id: T::PeerId,
         request_id: T::SyncingPeerRequestId,
         locator: Locator,
     ) -> crate::Result<()> {
+        log::debug!("send header response to peer {peer_id}, request_id: {request_id:?}");
+
         // TODO: check if remote has already asked for these headers?
         let headers = self.chainstate_handle.call(move |this| this.get_headers(locator)).await??;
         self.send_header_response(request_id, headers).await
@@ -429,6 +437,7 @@ where
         Ok(())
     }
 
+    // TODO: refactor this
     pub async fn handle_error(
         &mut self,
         peer_id: T::PeerId,

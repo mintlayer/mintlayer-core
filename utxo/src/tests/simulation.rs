@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::test_helper::create_utxo;
-use crate::{FlushableUtxoView, Utxo, UtxosCache, UtxosView};
+use crate::{FlushableUtxoView, UtxosCache, UtxosView};
 use common::{chain::OutPoint, primitives::H256};
 use crypto::random::Rng;
 use rstest::rstest;
@@ -33,7 +33,7 @@ fn cache_simulation_test(
     #[case] iterations_per_cache: usize,
 ) {
     let mut rng = make_seedable_rng(seed);
-    let mut result: Vec<(OutPoint, Utxo)> = Vec::new();
+    let mut result: Vec<OutPoint> = Vec::new();
     let mut base = UtxosCache::new_for_test(H256::random().into());
 
     let new_cache = simulation_step(
@@ -46,7 +46,7 @@ fn cache_simulation_test(
     let consumed_cache = new_cache.unwrap().consume();
     base.batch_write(consumed_cache).expect("batch write must succeed");
 
-    for (outpoint, _) in &result {
+    for outpoint in &result {
         let has_utxo = base.has_utxo(outpoint);
         let utxo = base.utxo(outpoint);
         assert_eq!(has_utxo, utxo.is_some());
@@ -60,7 +60,7 @@ fn cache_simulation_test(
 // next step as a parent. After recursion stops the resulting cache is returned and flushed to the base.
 fn simulation_step<'a>(
     rng: &mut impl Rng,
-    result: &mut Vec<(OutPoint, Utxo)>,
+    result: &mut Vec<OutPoint>,
     parent: &'a UtxosCache,
     iterations_per_cache: usize,
     nested_level: usize,
@@ -88,31 +88,31 @@ fn populate_cache(
     rng: &mut impl Rng,
     cache: &mut UtxosCache,
     iterations_count: usize,
-    prev_result: &[(OutPoint, Utxo)],
-) -> Vec<(OutPoint, Utxo)> {
+    prev_result: &[OutPoint],
+) -> Vec<OutPoint> {
     let mut spent_an_entry = false;
     let mut added_an_entry = false;
     let mut removed_an_entry = false;
     let mut verified_full_cache = false;
     let mut missed_an_entry = false;
     let mut found_an_entry = false;
-    // track outpoints and utxos
-    let mut result: Vec<(OutPoint, Utxo)> = Vec::new();
+    // track outpoints
+    let mut result: Vec<OutPoint> = Vec::new();
 
     for i in 0..iterations_count {
-        // select outpoint and utxo from existing or create new
+        //select outpoint and utxo from existing or create new
         let flip = rng.gen_range(0..3);
         let (outpoint, utxo) = if flip == 0 && prev_result.len() > 1 {
             let outpoint_idx = rng.gen_range(0..prev_result.len());
-            (prev_result[outpoint_idx].0.clone(), None)
+            (prev_result[outpoint_idx].clone(), None)
         } else if flip == 1 && result.len() > 1 {
             let outpoint_idx = rng.gen_range(0..result.len());
-            (result[outpoint_idx].0.clone(), None)
+            (result[outpoint_idx].clone(), None)
         } else {
             let block_height = rng.gen_range(0..iterations_count);
             let (utxo, outpoint) = create_utxo(rng, block_height.try_into().unwrap());
 
-            result.push((outpoint.clone(), utxo.clone()));
+            result.push(outpoint.clone());
             (outpoint, Some(utxo))
         };
 
@@ -130,17 +130,17 @@ fn populate_cache(
         if i % 10 == 0 {
             if rng.gen::<bool>() && prev_result.len() > 1 {
                 let idx = rng.gen_range(0..prev_result.len());
-                let _ = cache.uncache(&prev_result[idx].0);
+                let _ = cache.uncache(&prev_result[idx]);
             } else if result.len() > 1 {
                 let idx = rng.gen_range(0..result.len());
-                let _ = cache.uncache(&result[idx].0);
+                let _ = cache.uncache(&result[idx]);
             }
             removed_an_entry = true;
         }
 
         // every 100 iterations check full cache
         if i % 100 == 0 {
-            for (outpoint, _) in &result {
+            for outpoint in &result {
                 let has_utxo = cache.has_utxo(outpoint);
                 let utxo = cache.utxo(outpoint);
                 assert_eq!(has_utxo, utxo.is_some());

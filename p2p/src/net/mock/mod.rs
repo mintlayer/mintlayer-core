@@ -13,6 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod backend;
+pub mod peer;
+pub mod request_manager;
+pub mod socket;
+pub mod types;
+
+use std::{net::SocketAddr, sync::Arc};
+
+use async_trait::async_trait;
+use tokio::{
+    net::TcpListener,
+    sync::{mpsc, oneshot},
+};
+
+use logging::log;
+
 use crate::{
     config,
     error::P2pError,
@@ -23,27 +39,12 @@ use crate::{
         ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,
     },
 };
-use async_trait::async_trait;
-use logging::log;
-use std::{hash::Hash, net::SocketAddr, sync::Arc};
-use tokio::{
-    net::TcpListener,
-    sync::{mpsc, oneshot},
-};
-
-pub mod backend;
-pub mod peer;
-pub mod socket;
-pub mod types;
 
 #[derive(Debug)]
 pub struct MockService;
 
 #[derive(Debug, Copy, Clone)]
 pub struct MockMessageId(u64);
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct MockRequestId(u64);
 
 pub struct MockConnectivityHandle<T: NetworkingService> {
     /// Socket address of the network service provider
@@ -72,20 +73,18 @@ where
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
-pub struct MockSyncingCodecHandle<T>
-where
-    T: NetworkingService,
-{
+pub struct MockSyncingMessagingHandle<T: NetworkingService> {
     /// TX channel for sending commands to mock backend
-    _cmd_tx: mpsc::Sender<types::Command>,
+    cmd_tx: mpsc::Sender<types::Command>,
 
-    _sync_rx: mpsc::Receiver<types::SyncingEvent>,
+    /// RX channel for receiving syncing events
+    sync_rx: mpsc::Receiver<types::SyncingEvent>,
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
 impl<T> TryInto<net::types::PeerInfo<T>> for types::MockPeerInfo
 where
-    T: NetworkingService<PeerId = types::MockPeerId, ProtocolId = String>,
+    T: NetworkingService<PeerId = types::MockPeerId>,
 {
     type Error = P2pError;
 
@@ -95,7 +94,7 @@ where
             magic_bytes: self.network,
             version: self.version,
             agent: None,
-            protocols: self.protocols.iter().map(|proto| proto.name()).cloned().collect::<Vec<_>>(),
+            protocols: self.protocols.into_iter().collect(),
         })
     }
 }
@@ -104,12 +103,11 @@ where
 impl NetworkingService for MockService {
     type Address = SocketAddr;
     type PeerId = types::MockPeerId;
-    type ProtocolId = String;
-    type SyncingPeerRequestId = MockRequestId;
+    type SyncingPeerRequestId = types::MockRequestId;
     type PubSubMessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self>;
     type PubSubHandle = MockPubSubHandle<Self>;
-    type SyncingMessagingHandle = MockSyncingCodecHandle<Self>;
+    type SyncingMessagingHandle = MockSyncingMessagingHandle<Self>;
 
     async fn start(
         addr: Self::Address,
@@ -123,7 +121,7 @@ impl NetworkingService for MockService {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (pubsub_tx, _pubsub_rx) = mpsc::channel(16);
-        let (sync_tx, _sync_rx) = mpsc::channel(16);
+        let (sync_tx, sync_rx) = mpsc::channel(16);
         let socket = TcpListener::bind(addr).await?;
         let local_addr = socket.local_addr().expect("to have bind address available");
 
@@ -158,8 +156,8 @@ impl NetworkingService for MockService {
                 _marker: Default::default(),
             },
             Self::SyncingMessagingHandle {
-                _cmd_tx: cmd_tx,
-                _sync_rx,
+                cmd_tx,
+                sync_rx,
                 _marker: Default::default(),
             },
         ))
@@ -277,34 +275,74 @@ where
 }
 
 #[async_trait]
-impl<T> SyncingMessagingService<T> for MockSyncingCodecHandle<T>
+impl<T> SyncingMessagingService<T> for MockSyncingMessagingHandle<T>
 where
-    T: NetworkingService<PeerId = types::MockPeerId, SyncingPeerRequestId = MockRequestId> + Send,
+    T: NetworkingService<PeerId = types::MockPeerId, SyncingPeerRequestId = types::MockRequestId>
+        + Send,
 {
     async fn send_request(
         &mut self,
-        _peer_id: T::PeerId,
-        _request: message::Request,
+        peer_id: T::PeerId,
+        request: message::Request,
     ) -> crate::Result<T::SyncingPeerRequestId> {
-        todo!();
+        let (tx, rx) = oneshot::channel();
+
+        self.cmd_tx
+            .send(types::Command::SendRequest {
+                peer_id,
+                message: request,
+                response: tx,
+            })
+            .await?;
+        rx.await?
     }
 
     async fn send_response(
         &mut self,
-        _request_id: T::SyncingPeerRequestId,
-        _response: message::Response,
+        request_id: T::SyncingPeerRequestId,
+        response: message::Response,
     ) -> crate::Result<()> {
-        todo!();
+        let (tx, rx) = oneshot::channel();
+
+        self.cmd_tx
+            .send(types::Command::SendResponse {
+                request_id,
+                message: response,
+                response: tx,
+            })
+            .await?;
+        rx.await?
     }
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent<T>> {
-        todo!();
+        match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
+            types::SyncingEvent::Request {
+                peer_id,
+                request_id,
+                request,
+            } => Ok(net::types::SyncingEvent::Request {
+                peer_id,
+                request_id,
+                request,
+            }),
+            types::SyncingEvent::Response {
+                peer_id,
+                request_id,
+                response,
+            } => Ok(net::types::SyncingEvent::Response {
+                peer_id,
+                request_id,
+                response,
+            }),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::net::types::{Protocol, ProtocolType};
+    use common::primitives::semver::SemVer;
 
     #[tokio::test]
     async fn connect_to_remote() {
@@ -341,7 +379,12 @@ mod tests {
                     magic_bytes: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     agent: None,
-                    protocols: vec!["floodsub".to_string(), "ping".to_string()],
+                    protocols: [
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
+                        Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
+                    ]
+                    .into_iter()
+                    .collect(),
                 }
             );
         } else {
@@ -385,7 +428,12 @@ mod tests {
                 assert_eq!(peer_info.agent, None);
                 assert_eq!(
                     peer_info.protocols,
-                    vec!["floodsub".to_string(), "ping".to_string()],
+                    [
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
+                        Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
+                    ]
+                    .into_iter()
+                    .collect()
                 );
             }
             _ => panic!("invalid event received, expected incoming connection"),

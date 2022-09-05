@@ -15,10 +15,11 @@
 
 use super::{in_memory::UtxosDBInMemoryImpl, *};
 use crate::{
-    flush_to_base,
     tests::test_helper::{convert_to_utxo, create_tx_inputs, create_tx_outputs, create_utxo},
     utxo_entry::{IsDirty, IsFresh, UtxoEntry},
-    ConsumedUtxoCache, FlushableUtxoView, UtxosCache, UtxosView,
+    ConsumedUtxoCache,
+    Error::*,
+    FlushableUtxoView, UtxosView,
 };
 use common::{
     chain::{
@@ -118,13 +119,11 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
     let num_of_txs = 1;
 
     // initializing the db with existing utxos.
-    let (db_interface, outpoints) = initialize_db(&mut rng, tx_outputs_size);
+    let (mut db_impl, outpoints) = initialize_db(&mut rng, tx_outputs_size);
     // create the TxInputs for spending.
     let expected_tx_inputs = create_tx_inputs(&mut rng, &outpoints);
-
     // create the UtxosDB.
-    let mut db_interface_clone = db_interface.clone();
-    let mut db = UtxosDBMut::new(&mut db_interface_clone);
+    let mut db = UtxosDBMut::new(&mut db_impl);
 
     // let's check that each tx_input exists in the db. Secure the spent utxos.
     let spent_utxos = expected_tx_inputs
@@ -139,20 +138,13 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
 
     // test the spend
     let (block, block_undo) = {
-        // create a view based on the db.
-
-        let mut parent_view = UtxosCache::new_for_test(H256::random().into());
-        db.0.internal_store().iter().for_each(|(outpoint, utxo)| {
-            parent_view.add_utxo(outpoint, utxo.clone(), false).unwrap();
-        });
-        parent_view.set_best_block(db.best_block_hash());
-
-        let mut view = parent_view.derive_cache();
+        // create a cache based on the db.
+        let mut cache = db.derive_cache();
 
         // create a new block to spend.
         let block = create_block(
             &mut rng,
-            db_interface.best_block_hash(),
+            cache.best_block_hash(),
             expected_tx_inputs.clone(),
             0,
             num_of_txs,
@@ -163,9 +155,9 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
             let undos = block
                 .transactions()
                 .iter()
-                .map(|tx| view.spend_utxos(tx, block_height).expect("should spend okay."))
+                .map(|tx| cache.connect_transaction(tx, block_height).expect("should spend okay."))
                 .collect_vec();
-            BlockUndo::new(undos, block_height)
+            BlockUndo::new(Default::default(), undos)
         };
 
         // check that the block_undo contains the same utxos recorded as "spent",
@@ -179,8 +171,9 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         }
 
         // flush to db
-        view.set_best_block(block.get_id().into());
-        flush_to_base(view, &mut db).unwrap();
+        cache.set_best_block(block.get_id().into());
+        let consumed_cache = cache.consume();
+        db.batch_write(consumed_cache).unwrap();
 
         (block, block_undo)
     };
@@ -193,12 +186,8 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
     // save the undo data to the db.
     {
         db.set_undo_data(block.get_id(), &block_undo).unwrap();
-
         // check that the block_undo retrieved from db is the same as the one being stored.
-        let block_undo_from_db = db
-            .get_undo_data(block.get_id())
-            .expect("getting undo data should not cause any problems");
-
+        let block_undo_from_db = db.get_undo_data(block.get_id()).unwrap();
         assert_eq!(block_undo_from_db.as_ref(), Some(&block_undo));
     }
 
@@ -216,10 +205,8 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         // get the best_block_id
         let current_best_block_id = db.best_block_hash();
 
-        println!("the current block id: {:?}", current_best_block_id);
-
         // the current best_block_id should be the block id..
-        //  assert_eq!(&current_best_block_id, &block.get_id());
+        assert_eq!(&current_best_block_id, &block.get_id());
 
         // get the block_undo.
         let block_undo = db
@@ -231,29 +218,24 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         assert_eq!(block_undo.tx_undos().len(), expected_tx_inputs.len());
 
         // let's create a view.
-        let mut view = UtxosCache::new_for_test(H256::random().into());
-        // set the best block to the previous one
-        {
-            view.set_best_block(block.prev_block_id());
-            // the best block id should be the same as the old one.
-            assert_eq!(view.best_block_hash(), block.prev_block_id());
-        }
+        let mut cache = db.derive_cache();
 
         // get the block txinputs, and add them to the view.
         block.transactions().iter().enumerate().for_each(|(idx, tx)| {
             // use the undo to get the utxos
-            let undo = block_undo.tx_undos().get(idx).expect("it should return undo");
+            let undo = block_undo.tx_undos().get(idx).unwrap();
             let undos = undo.inner();
 
             // add the undo utxos back to the view.
             tx.inputs().iter().enumerate().for_each(|(in_idx, input)| {
-                let utxo = undos.get(in_idx).expect("it should have utxo");
-                view.add_utxo(input.outpoint(), utxo.clone(), true).unwrap();
+                let utxo = undos.get(in_idx).unwrap();
+                cache.add_utxo(input.outpoint(), utxo.clone(), true).unwrap();
             });
         });
 
         // flush the view to the db.
-        flush_to_base(view, &mut db).unwrap();
+        let consumed_cache = cache.consume();
+        db.batch_write(consumed_cache).unwrap();
 
         // remove the block undo file
         db.del_undo_data(block.get_id()).unwrap();
@@ -267,116 +249,118 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         let expected_utxo = spent_utxos.get(idx);
         assert_eq!(res.as_ref(), expected_utxo);
     });
-
-    // For error testing: create dummy tx_inputs for spending.
-    {
-        let num_of_txs = 5;
-        let rnd = rng.gen_range(num_of_txs..20);
-
-        let tx_inputs: Vec<TxInput> = (0..rnd)
-            .into_iter()
-            .map(|i| {
-                let id: Id<GenBlock> = Id::new(H256::random());
-                let id = OutPointSourceId::BlockReward(id);
-
-                TxInput::new(id, i, InputWitness::NoSignature(None))
-            })
-            .collect();
-
-        let id = db.best_block_hash();
-
-        // Create a dummy block.
-        let block = create_block(&mut rng, id, tx_inputs, 0, num_of_txs as usize);
-
-        // Create a view.
-        let mut view = db.derive_cache();
-
-        let tx = block.transactions().get(0).expect("should return a transaction");
-
-        // try to spend that transaction
-        assert!(view.spend_utxos(tx, BlockHeight::new(2)).is_err());
-    }
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_utxo(#[case] seed: Seed) {
-    common::concurrency::model(move || {
-        let mut rng = make_seedable_rng(seed);
-        let utxos = create_utxo_entries(&mut rng, 10);
-        let new_best_block_hash = Id::new(H256::random());
+fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
+    let num_of_txs = 1;
+    let tx_outputs_size = 3;
 
-        let utxos = ConsumedUtxoCache {
-            container: utxos,
-            best_block: new_best_block_hash,
-        };
+    let mut rng = make_seedable_rng(seed);
 
-        let mut db_interface = UtxosDBInMemoryImpl::new(new_best_block_hash, Default::default());
-        let mut utxo_db = UtxosDBMut::new(&mut db_interface);
+    let (db_impl, _) = initialize_db(&mut rng, tx_outputs_size);
+    let db = UtxosDB::new(&db_impl);
 
-        // test batch_write
-        let res = utxo_db.batch_write(utxos.clone());
-        res.unwrap();
+    let tx_inputs: Vec<TxInput> = (0..rng.gen_range(num_of_txs..20))
+        .into_iter()
+        .map(|i| {
+            let id: Id<GenBlock> = Id::new(H256::random());
+            let id = OutPointSourceId::BlockReward(id);
 
-        // randomly get a key for checking
-        let keys = utxos.container.keys().collect_vec();
-        let key_index = rng.gen_range(0..keys.len());
-        let outpoint = keys[key_index].clone();
+            TxInput::new(id, i, InputWitness::NoSignature(None))
+        })
+        .collect();
 
-        // test the get_utxo
-        let utxo_opt = utxo_db.utxo(&outpoint);
+    let id = db.best_block_hash();
 
-        let outpoint_key = &outpoint;
-        let utxo_entry = utxos.container.get(outpoint_key).expect("an entry should be found");
-        assert_eq!(utxo_entry.utxo(), utxo_opt.as_ref());
+    // Create a block with 1 tx and 0 outputs in txs
+    let block = create_block(&mut rng, id, tx_inputs, 0, num_of_txs as usize);
+    let mut view = db.derive_cache();
+    let tx = block.transactions().get(0).unwrap();
 
-        // check has_utxo
-        assert!(utxo_db.has_utxo(&outpoint));
+    assert_eq!(
+        view.connect_transaction(tx, BlockHeight::new(2)).unwrap_err(),
+        NoUtxoFound
+    );
+}
 
-        //check the best block hash
-        assert_eq!(utxo_db.best_block_hash(), new_best_block_hash);
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_batch_write(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let utxos = create_utxo_entries(&mut rng, 10);
+    let new_best_block_hash = Id::new(H256::random());
 
-        // try to write a non-dirty utxo
-        {
-            let (utxo, outpoint) = create_utxo(&mut rng, 1);
-            let mut map = BTreeMap::new();
-            let entry = UtxoEntry::new(Some(utxo), IsFresh::No, IsDirty::No);
-            map.insert(outpoint.clone(), entry);
+    let mut db_interface = UtxosDBInMemoryImpl::new(new_best_block_hash, Default::default());
+    let mut utxo_db = UtxosDBMut::new(&mut db_interface);
 
-            let new_hash = Id::new(H256::random());
-            let another_cache = ConsumedUtxoCache {
-                container: map,
-                best_block: new_hash,
-            };
+    let utxos = ConsumedUtxoCache {
+        container: utxos,
+        best_block: new_best_block_hash,
+    };
 
-            utxo_db.batch_write(another_cache).expect("batch write should work");
+    utxo_db.batch_write(utxos.clone()).unwrap();
 
-            assert!(!utxo_db.has_utxo(&outpoint));
-        }
+    // randomly get a key for checking
+    let keys = utxos.container.keys().collect_vec();
+    let key_index = rng.gen_range(0..keys.len());
+    let outpoint = keys[key_index].clone();
 
-        // write down a spent utxo.
-        {
-            let key_index = rng.gen_range(0..keys.len());
-            let outpoint_key = keys[key_index];
-            let outpoint = outpoint_key;
-            let utxo = utxos
-                .container
-                .get(outpoint_key)
-                .expect("entry should exist")
-                .utxo()
-                .expect("utxo should exist");
+    // test the get_utxo
+    let utxo_opt = utxo_db.utxo(&outpoint);
+    let utxo_entry = utxos.container.get(&outpoint).expect("an entry should be found");
+    assert_eq!(utxo_entry.utxo(), utxo_opt.as_ref());
 
-            let mut parent = UtxosCache::new_for_test(utxo_db.best_block_hash());
-            parent.add_utxo(outpoint, utxo.clone(), false).unwrap();
+    // check has_utxo
+    assert!(utxo_db.has_utxo(&outpoint));
 
-            let mut child = UtxosCache::new(&parent);
-            child.spend_utxo(outpoint).unwrap();
+    //check the best block hash
+    assert_eq!(utxo_db.best_block_hash(), new_best_block_hash);
+}
 
-            let res = flush_to_base(child, &mut utxo_db);
-            res.unwrap();
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_flush_non_dirty_utxo(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
 
-            assert!(!utxo_db.has_utxo(outpoint));
-        }
-    });
+    let mut db_interface = UtxosDBInMemoryImpl::new(Id::new(H256::random()), Default::default());
+    let mut utxo_db = UtxosDBMut::new(&mut db_interface);
+
+    let (utxo, outpoint) = create_utxo(&mut rng, 1);
+    let mut map = BTreeMap::new();
+    let entry = UtxoEntry::new(Some(utxo), IsFresh::No, IsDirty::No);
+    map.insert(outpoint.clone(), entry);
+
+    let cache = ConsumedUtxoCache {
+        container: map,
+        best_block: Id::new(H256::random()),
+    };
+
+    utxo_db.batch_write(cache).unwrap();
+
+    assert!(!utxo_db.has_utxo(&outpoint));
+}
+
+#[test]
+fn try_flush_spent_utxo() {
+    let mut db_interface = UtxosDBInMemoryImpl::new(Id::new(H256::random()), Default::default());
+    let mut utxo_db = UtxosDBMut::new(&mut db_interface);
+
+    let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::random())), 0);
+    let mut map = BTreeMap::new();
+    let entry = UtxoEntry::new(None, IsFresh::No, IsDirty::Yes);
+    map.insert(outpoint.clone(), entry);
+
+    let cache = ConsumedUtxoCache {
+        container: map,
+        best_block: Id::new(H256::random()),
+    };
+
+    utxo_db.batch_write(cache).unwrap();
+
+    assert!(!utxo_db.has_utxo(&outpoint));
 }

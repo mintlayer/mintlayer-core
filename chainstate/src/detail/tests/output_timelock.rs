@@ -31,7 +31,7 @@ use crate::{
 
 #[test]
 fn output_lock_until_height() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let mut tf = TestFramework::default();
 
         let block_height_that_unlocks = 10;
@@ -132,7 +132,7 @@ fn output_lock_until_height() {
 
 #[test]
 fn output_lock_until_height_but_spend_at_same_block() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let mut tf = TestFramework::default();
 
         let block_height_that_unlocks = 10;
@@ -177,7 +177,7 @@ fn output_lock_until_height_but_spend_at_same_block() {
 
 #[test]
 fn output_lock_for_block_count() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let mut tf = TestFramework::default();
 
         let block_count_that_unlocks = 20;
@@ -275,7 +275,7 @@ fn output_lock_for_block_count() {
 
 #[test]
 fn output_lock_for_block_count_but_spend_at_same_block() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let mut tf = TestFramework::default();
 
         let block_count_that_unlocks = 10;
@@ -317,7 +317,7 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
 
 #[test]
 fn output_lock_for_block_count_attempted_overflow() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let mut tf = TestFramework::default();
 
         let block_count_that_unlocks = u64::MAX;
@@ -348,7 +348,7 @@ fn output_lock_for_block_count_attempted_overflow() {
 
 #[test]
 fn output_lock_until_time() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let current_time = Arc::new(AtomicU64::new(1));
         let current_time_ = Arc::clone(&current_time);
         let time_getter = TimeGetter::new(Arc::new(move || {
@@ -443,7 +443,7 @@ fn output_lock_until_time() {
 
 #[test]
 fn output_lock_until_time_but_spend_at_same_block() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let mut tf = TestFramework::default();
 
         let genesis_timestamp = tf.genesis().timestamp();
@@ -488,7 +488,7 @@ fn output_lock_until_time_but_spend_at_same_block() {
 
 #[test]
 fn output_lock_for_seconds() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let current_time = Arc::new(AtomicU64::new(1));
         let current_time_ = Arc::clone(&current_time);
         let time_getter = TimeGetter::new(Arc::new(move || {
@@ -585,7 +585,7 @@ fn output_lock_for_seconds() {
 
 #[test]
 fn output_lock_for_seconds_but_spend_at_same_block() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let mut tf = TestFramework::default();
 
         // create the first block, with a locked output
@@ -627,7 +627,7 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
 
 #[test]
 fn output_lock_for_seconds_attempted_overflow() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let mut tf = TestFramework::default();
 
         // create the first block, with a locked output

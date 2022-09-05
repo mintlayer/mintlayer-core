@@ -15,8 +15,58 @@
 
 #![deny(clippy::clone_on_ref_ptr)]
 
+use pool::MempoolInterface;
+
+use crate::config::GetMemoryUsage;
+use crate::config::GetTime;
+use crate::error::Error as MempoolError;
+use crate::pool::ChainState;
+use crate::pool::Mempool;
+
+mod config;
 pub mod error;
 mod feerate;
 pub mod pool;
+pub mod rpc;
 
-pub use error::Error as MempoolError;
+impl<C: 'static> subsystem::Subsystem for Box<dyn MempoolInterface<C>> {}
+
+#[allow(dead_code)]
+type MempoolHandle<C> = subsystem::Handle<Box<dyn MempoolInterface<C>>>;
+
+pub type Result<T> = core::result::Result<T, MempoolError>;
+
+#[derive(Debug)]
+pub struct DummyMempoolChainState;
+
+impl ChainState for DummyMempoolChainState {
+    fn contains_outpoint(&self, _outpoint: &common::chain::OutPoint) -> bool {
+        false
+    }
+    fn get_outpoint_value(
+        &self,
+        _outpoint: &common::chain::OutPoint,
+    ) -> core::result::Result<common::primitives::Amount, anyhow::Error> {
+        Err(anyhow::Error::msg("this is a dummy placeholder chainstate"))
+    }
+}
+
+pub fn make_mempool<C, T, M, H>(
+    chainstate: C,
+    chainstate_handle: H,
+    time_getter: T,
+    memory_usage_estimator: M,
+) -> crate::Result<Box<dyn MempoolInterface<C>>>
+where
+    C: ChainState + 'static + Send,
+    H: 'static + Send,
+    T: GetTime + 'static + Send,
+    M: GetMemoryUsage + 'static + Send,
+{
+    Ok(Box::new(Mempool::new(
+        chainstate,
+        chainstate_handle,
+        time_getter,
+        memory_usage_estimator,
+    )))
+}

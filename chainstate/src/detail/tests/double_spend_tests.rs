@@ -18,7 +18,7 @@ use crate::detail::{
     transaction_verifier::error::ConnectTransactionError,
 };
 use common::{
-    chain::{tokens::OutputValue, OutPointSourceId, Spender, Transaction, TxInput, TxOutput},
+    chain::{tokens::OutputValue, OutPointSourceId, Transaction, TxInput, TxOutput},
     primitives::{Amount, Id},
 };
 
@@ -38,7 +38,7 @@ use common::{
 #[trace]
 #[case(Seed::from_entropy())]
 fn spend_output_in_the_same_block(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
@@ -71,7 +71,7 @@ fn spend_output_in_the_same_block(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
@@ -110,7 +110,7 @@ fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn double_spend_tx_in_the_same_block(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
@@ -155,13 +155,13 @@ fn double_spend_tx_in_the_same_block(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn double_spend_tx_in_another_block(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
         let tx1_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(tf.genesis(), &mut rng, tx1_output_value);
-        let first_block = tf.make_block_builder().add_transaction(first_tx.clone()).build();
+        let first_block = tf.make_block_builder().add_transaction(first_tx).build();
         let first_block_id = first_block.get_id();
         tf.process_block(first_block, BlockSource::Local).unwrap();
         assert_eq!(tf.best_block_id(), first_block_id);
@@ -171,9 +171,7 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
         let second_block = tf.make_block_builder().add_transaction(second_tx).build();
         assert_eq!(
             tf.process_block(second_block, BlockSource::Local).unwrap_err(),
-            BlockError::StateUpdateFailed(ConnectTransactionError::DoubleSpendAttempt(
-                Spender::RegularInput(first_tx.get_id())
-            ))
+            BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
         );
         assert_eq!(tf.best_block_id(), first_block_id);
     });
@@ -195,7 +193,7 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn overspend_single_output(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
@@ -224,7 +222,7 @@ fn overspend_single_output(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn overspend_multiple_outputs(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
 
@@ -276,7 +274,7 @@ fn overspend_multiple_outputs(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn duplicate_input_in_the_same_tx(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
@@ -323,7 +321,7 @@ fn duplicate_input_in_the_same_tx(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn same_input_diff_sig_in_the_same_tx(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
@@ -382,7 +380,7 @@ fn same_input_diff_sig_in_the_same_tx(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn duplicate_tx_in_the_same_block(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);

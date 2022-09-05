@@ -15,7 +15,7 @@
 
 use serialization::{Decode, Encode};
 
-#[derive(Debug, PartialEq, Eq, Encode, Decode, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, Copy, Clone)]
 pub struct SemVer {
     pub major: u8,
     pub minor: u8,
@@ -23,7 +23,7 @@ pub struct SemVer {
 }
 
 impl SemVer {
-    pub fn new(major: u8, minor: u8, patch: u16) -> Self {
+    pub const fn new(major: u8, minor: u8, patch: u16) -> Self {
         Self {
             major,
             minor,
@@ -142,5 +142,17 @@ mod tests {
             Decode::decode(&mut &encoded[..]),
             Ok(SemVer::new(1, 2, 0x500))
         );
+    }
+
+    #[test]
+    fn ordering() {
+        assert!(SemVer::new(0, 0, 0) < SemVer::new(0, 0, 1));
+        assert!(SemVer::new(0, 0, u16::MAX) < SemVer::new(0, 1, 0));
+        assert!(SemVer::new(0, 1, 0) < SemVer::new(0, 1, 1));
+        assert!(SemVer::new(0, u8::MAX, 0) < SemVer::new(1, 0, 1));
+        assert!(SemVer::new(0, u8::MAX, u16::MAX) < SemVer::new(1, 0, 1));
+        assert!(SemVer::new(1, 0, 0) < SemVer::new(1, 0, 1));
+        assert!(SemVer::new(1, 0, 1) < SemVer::new(1, 1, 0));
+        assert!(SemVer::new(1, u8::MAX, u16::MAX) < SemVer::new(2, 0, 0));
     }
 }

@@ -25,7 +25,7 @@ use crate::{
 };
 use chainstate::{
     ban_score::BanScore,
-    chainstate_interface, BlockError,
+    chainstate_interface,
     ChainstateError::{FailedToInitializeChainstate, FailedToReadProperty, ProcessBlockError},
 };
 use common::{
@@ -115,7 +115,6 @@ where
         Ok(rx)
     }
 
-    /// Process block announcement from the network
     async fn process_block_announcement(
         &mut self,
         peer_id: T::PeerId,
@@ -135,42 +134,13 @@ where
             Err(err) => Err(err),
         };
 
-        let (validation_result, score) = match result {
-            Ok(_) => (ValidationResult::Accept, 0),
-            Err(ProcessBlockError(ref block_error)) => match block_error {
-                err @ BlockError::BlockAlreadyExists(_id) => {
-                    (ValidationResult::Accept, err.ban_score())
-                }
-                err @ BlockError::StorageError(_) => (ValidationResult::Ignore, err.ban_score()),
-                err @ BlockError::BestBlockLoadError(_) => {
-                    (ValidationResult::Ignore, err.ban_score())
-                }
-                err @ BlockError::InvariantErrorFailedToFindNewChainPath(_, _, _) => {
-                    (ValidationResult::Ignore, err.ban_score())
-                }
-                err @ BlockError::InvariantErrorInvalidTip => {
-                    (ValidationResult::Ignore, err.ban_score())
-                }
-                err @ BlockError::DatabaseCommitError(_, _, _) => {
-                    (ValidationResult::Ignore, err.ban_score())
-                }
-                err @ BlockError::OrphanCheckFailed(_err) => {
-                    (ValidationResult::Ignore, err.ban_score())
-                }
-                err @ BlockError::CheckBlockFailed(_err) => {
-                    (ValidationResult::Reject, err.ban_score())
-                }
-                err @ BlockError::StateUpdateFailed(_err) => {
-                    (ValidationResult::Ignore, err.ban_score())
-                }
-                err @ BlockError::PrevBlockNotFound => (ValidationResult::Reject, err.ban_score()),
-                err @ BlockError::BlockProofCalculationError(_) => {
-                    (ValidationResult::Reject, err.ban_score())
-                }
-                BlockError::ConsensusExtraDataError(_) => todo!(),
+        let score = match result {
+            Ok(_) => 0,
+            Err(e) => match e {
+                FailedToInitializeChainstate(_) => 0,
+                ProcessBlockError(err) => err.ban_score(),
+                FailedToReadProperty(_) => 0,
             },
-            Err(FailedToInitializeChainstate(_)) => (ValidationResult::Ignore, 0),
-            Err(FailedToReadProperty(_)) => (ValidationResult::Ignore, 0),
         };
 
         if score > 0 {
@@ -183,7 +153,7 @@ where
         }
 
         self.pubsub_handle
-            .report_validation_result(peer_id, message_id, validation_result)
+            .report_validation_result(peer_id, message_id, ValidationResult::Ignore)
             .await
     }
 

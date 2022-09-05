@@ -42,7 +42,7 @@ use crate::{
 
 #[test]
 fn process_genesis_block() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let mut tf = TestFramework::builder().build_no_genesis();
         let genesis_id = tf.genesis().get_id();
 
@@ -64,7 +64,7 @@ fn process_genesis_block() {
 #[trace]
 #[case(Seed::from_entropy())]
 fn orphans_chains(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
@@ -115,7 +115,7 @@ fn orphans_chains(#[case] seed: Seed) {
 #[test]
 #[should_panic(expected = "Best block ID not initialized")]
 fn empty_chainstate_no_genesis() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         let tf = TestFramework::builder().build_no_genesis();
         // This panics
         let _ = tf.chainstate.get_best_block_id();
@@ -126,7 +126,7 @@ fn empty_chainstate_no_genesis() {
 #[trace]
 #[case(Seed::from_entropy())]
 fn spend_inputs_simple(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
 
@@ -172,7 +172,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn straight_chain(#[case] seed: Seed) {
-    common::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
 
@@ -723,7 +723,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
 
 #[test]
 fn blocks_from_the_future() {
-    common::concurrency::model(|| {
+    utils::concurrency::model(|| {
         // In this test, processing a few correct blocks in a single chain
         let config = create_unit_test_config();
 

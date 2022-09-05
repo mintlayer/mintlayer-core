@@ -14,21 +14,36 @@
 // limitations under the License.
 
 pub mod simulation;
+pub mod simulation_with_undo;
 pub mod test_helper;
 
 use crate::{
     flush_to_base,
-    tests::test_helper::Presence::{self, *},
+    tests::test_helper::{
+        create_tx_outputs,
+        Presence::{self, *},
+    },
     utxo_entry::{IsDirty, IsFresh, UtxoEntry},
     ConsumedUtxoCache,
     Error::{self, *},
     FlushableUtxoView, Utxo, UtxoSource, UtxosCache, UtxosView,
 };
 use common::{
-    chain::{OutPoint, OutPointSourceId, Transaction, TxInput},
-    primitives::{BlockHeight, Id, Idable, H256},
+    chain::{
+        block::{
+            consensus_data::{PoSData, PoWData},
+            timestamp::BlockTimestamp,
+            Block, BlockReward, ConsensusData,
+        },
+        signature::inputsig::InputWitness,
+        OutPoint, OutPointSourceId, Transaction, TxInput,
+    },
+    primitives::{BlockHeight, Compact, Id, Idable, H256},
 };
-use crypto::random::{seq, Rng};
+use crypto::{
+    random::{seq, Rng},
+    vrf::{transcript::TranscriptAssembler, VRFKeyKind},
+};
 use itertools::Itertools;
 use rstest::rstest;
 use std::collections::BTreeMap;
@@ -78,7 +93,7 @@ fn check_spend_utxo(
     parent_presence: Presence,
     cache_presence: Presence,
     cache_flags: Option<(IsFresh, IsDirty)>,
-    spend_result: Result<(), Error>,
+    mut spend_result: Result<(), Error>,
     result_flags: Option<(IsFresh, IsDirty)>,
 ) {
     // initialize the parent cache.
@@ -105,6 +120,13 @@ fn check_spend_utxo(
         cache_flags,
         Some(parent_outpoint),
     );
+
+    // patch the spend result in case it's a double spend with proper outpoint
+    // which cannot be known beforehand
+    spend_result = spend_result.map_err(|err| match err {
+        UtxoAlreadySpent(_) => UtxoAlreadySpent(child_outpoint.tx_id()),
+        _ => err,
+    });
 
     // perform the spend_utxo
     let res = child.spend_utxo(&child_outpoint);
@@ -305,27 +327,29 @@ fn add_utxo_test(#[case] seed: Seed) {
 #[rustfmt::skip]
 fn spend_utxo_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
+    // just a dummy id for the compiler
+    let id = OutPointSourceId::Transaction(Id::new(H256::random()));
     /*
                               PARENT     CACHE
                               PRESENCE   PRESENCE  CACHE Flags          RESULT                       RESULT Flags
     */
-    check_spend_utxo(&mut rng, Absent,  Absent,  None,                               Err(Error::NoUtxoFound),      None);
-    check_spend_utxo(&mut rng, Absent,  Spent,   Some((IsFresh::Yes, IsDirty::No)),  Err(Error::UtxoAlreadySpent), None);
-    check_spend_utxo(&mut rng, Absent,  Spent,   Some((IsFresh::No, IsDirty::Yes)),  Err(Error::UtxoAlreadySpent), Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                       None);
-    check_spend_utxo(&mut rng, Spent,   Absent,  None,                               Err(Error::NoUtxoFound),      None);
-    check_spend_utxo(&mut rng, Spent,   Absent,  Some((IsFresh::Yes, IsDirty::No)),  Err(Error::NoUtxoFound),      None);
-    check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                       None);
-    check_spend_utxo(&mut rng, Present, Absent,  None,                               Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Present, Spent,   Some((IsFresh::Yes, IsDirty::No)),  Err(Error::UtxoAlreadySpent), None);
-    check_spend_utxo(&mut rng, Present, Spent,   Some((IsFresh::No, IsDirty::Yes)),  Err(Error::UtxoAlreadySpent), Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                       None);
+    check_spend_utxo(&mut rng, Absent,  Absent,  None,                               Err(Error::NoUtxoFound),                  None);
+    check_spend_utxo(&mut rng, Absent,  Spent,   Some((IsFresh::Yes, IsDirty::No)),  Err(Error::UtxoAlreadySpent(id.clone())), None);
+    check_spend_utxo(&mut rng, Absent,  Spent,   Some((IsFresh::No, IsDirty::Yes)),  Err(Error::UtxoAlreadySpent(id.clone())), Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                                   None);
+    check_spend_utxo(&mut rng, Spent,   Absent,  None,                               Err(Error::NoUtxoFound),                  None);
+    check_spend_utxo(&mut rng, Spent,   Absent,  Some((IsFresh::Yes, IsDirty::No)),  Err(Error::NoUtxoFound),                  None);
+    check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                                   None);
+    check_spend_utxo(&mut rng, Present, Absent,  None,                               Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Present, Spent,   Some((IsFresh::Yes, IsDirty::No)),  Err(Error::UtxoAlreadySpent(id.clone())), None);
+    check_spend_utxo(&mut rng, Present, Spent,   Some((IsFresh::No, IsDirty::Yes)),  Err(Error::UtxoAlreadySpent(id)),         Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                                   Some((IsFresh::No, IsDirty::Yes)));
+    check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                                   None);
 }
 
 #[rstest]
@@ -440,8 +464,6 @@ fn blockchain_or_mempool_utxo_test(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn multiple_update_utxos_test(#[case] seed: Seed) {
-    use common::chain::signature::inputsig::InputWitness;
-
     let mut rng = make_seedable_rng(seed);
     let mut cache = UtxosCache::new_for_test(H256::random().into());
 
@@ -453,7 +475,9 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
         0x01,
     )
     .unwrap();
-    assert!(cache.add_utxos(&tx, UtxoSource::Blockchain(BlockHeight::new(2)), false).is_ok());
+    assert!(cache
+        .add_utxos_from_tx(&tx, UtxoSource::Blockchain(BlockHeight::new(2)), false)
+        .is_ok());
 
     // check that the outputs of tx are added in the cache.
     tx.outputs().iter().enumerate().for_each(|(i, x)| {
@@ -478,8 +502,10 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
 
     // create a new transaction
     let new_tx = Transaction::new(0x00, to_spend.clone(), vec![], 0).expect("should succeed");
-    // let's test `spend_utxos`
-    let tx_undo = cache.spend_utxos(&new_tx, BlockHeight::new(2)).expect("should return txundo");
+    // let's test `connect_transaction`
+    let tx_undo = cache
+        .connect_transaction(&new_tx, BlockHeight::new(2))
+        .expect("should return txundo");
 
     // check that these utxos came from the tx's output
     tx_undo.inner().iter().for_each(|x| {
@@ -500,4 +526,202 @@ fn check_best_block_after_flush() {
     let expected_hash = cache2.best_block_hash();
     assert!(flush_to_base(cache2, &mut cache1).is_ok());
     assert_eq!(expected_hash, cache1.best_block_hash());
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_add_utxos_from_block_reward(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let mut cache = UtxosCache::new_for_test(H256::random().into());
+
+    let block_reward = BlockReward::new(test_helper::create_tx_outputs(&mut rng, 10));
+
+    let block_id = Id::new(H256::random());
+    assert!(cache
+        .add_utxos_from_block_reward(
+            &block_reward,
+            UtxoSource::Blockchain(BlockHeight::new(2)),
+            &block_id,
+            false
+        )
+        .is_ok());
+
+    block_reward.outputs().iter().enumerate().for_each(|(i, x)| {
+        let outpoint = OutPoint::new(OutPointSourceId::BlockReward(block_id), i as u32);
+        let utxo = cache.utxo(&outpoint).expect("utxo should exist");
+        assert_eq!(utxo.output(), x);
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_tx_spend_undo_spend(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let mut cache = UtxosCache::new_for_test(H256::random().into());
+
+    // add 1 utxo to the utxo set
+    let (utxo, outpoint) = test_helper::create_utxo(&mut rng, 1);
+    cache.add_utxo(&outpoint, utxo, false).unwrap();
+
+    // spend the utxo in a transaction
+    let input = TxInput::new(
+        outpoint.tx_id(),
+        outpoint.output_index(),
+        InputWitness::NoSignature(None),
+    );
+    let tx = Transaction::new(0x00, vec![input], create_tx_outputs(&mut rng, 1), 0x01).unwrap();
+    let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
+    assert!(!cache.has_utxo_in_cache(&outpoint));
+    assert!(undo1.inner().len() == 1);
+
+    //undo spending
+    cache.disconnect_transaction(&tx, undo1.clone()).unwrap();
+    assert!(cache.has_utxo_in_cache(&outpoint));
+
+    //spend the transaction again
+    let undo2 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
+    assert!(!cache.has_utxo_in_cache(&outpoint));
+    assert_eq!(undo1, undo2);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let mut cache = UtxosCache::new_for_test(H256::random().into());
+
+    // add 1 utxo to the utxo set
+    let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
+    cache.add_utxo(&outpoint, utxo, false).unwrap();
+
+    let inputs = vec![TxInput::new(
+        outpoint.tx_id(),
+        outpoint.output_index(),
+        InputWitness::NoSignature(None),
+    )];
+    let outputs = create_tx_outputs(&mut rng, 1);
+
+    let (sk, _pk) = crypto::vrf::VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+    let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+
+    let block = Block::new(
+        vec![],
+        Id::new(H256::random()),
+        BlockTimestamp::from_int_seconds(1),
+        ConsensusData::PoS(PoSData::new(inputs, vrf_data, Compact(1))),
+        BlockReward::new(outputs),
+    )
+    .unwrap();
+    let reward = block.block_reward_transactable();
+
+    // spend the utxo in a block reward
+    let undo1 = cache
+        .connect_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
+        .expect("spend should succeed")
+        .expect("block undo should contain value");
+    assert!(!cache.has_utxo_in_cache(&outpoint));
+    assert!(undo1.inner().len() == 1);
+
+    //undo spending
+    cache
+        .disconnect_block_transactable(&reward, &block.get_id().into(), Some(undo1.clone()))
+        .unwrap();
+    assert!(cache.has_utxo_in_cache(&outpoint));
+
+    //spend the reward again
+    let undo2 = cache
+        .connect_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
+        .expect("spend should succeed")
+        .expect("block undo should contain value");
+    assert!(!cache.has_utxo_in_cache(&outpoint));
+    assert_eq!(undo1, undo2);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_pow_reward_spend_undo_spend(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let mut cache = UtxosCache::new_for_test(H256::random().into());
+
+    let block = Block::new(
+        vec![],
+        Id::new(H256::random()),
+        BlockTimestamp::from_int_seconds(1),
+        ConsensusData::PoW(PoWData::new(Compact(1), 1)),
+        BlockReward::new(create_tx_outputs(&mut rng, 1)),
+    )
+    .unwrap();
+    let reward = block.block_reward_transactable();
+    let outpoint = OutPoint::new(OutPointSourceId::BlockReward(block.get_id().into()), 0);
+
+    // spend the utxo in a block reward
+    let undo1 = cache
+        .connect_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
+        .expect("spend should succeed");
+    assert!(cache.has_utxo_in_cache(&outpoint));
+    assert!(undo1.is_none());
+
+    //undo spending
+    cache
+        .disconnect_block_transactable(&reward, &block.get_id().into(), None)
+        .unwrap();
+    assert!(!cache.has_utxo_in_cache(&outpoint));
+
+    //spend the reward again
+    let undo2 = cache
+        .connect_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
+        .expect("spend should succeed");
+    assert!(cache.has_utxo_in_cache(&outpoint));
+    assert!(undo2.is_none());
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_missing_reward_undo(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let mut cache = UtxosCache::new_for_test(H256::random().into());
+
+    // add 1 utxo to the utxo set
+    let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
+    cache.add_utxo(&outpoint, utxo, false).unwrap();
+
+    let inputs = vec![TxInput::new(
+        outpoint.tx_id(),
+        outpoint.output_index(),
+        InputWitness::NoSignature(None),
+    )];
+    let outputs = create_tx_outputs(&mut rng, 1);
+
+    let (sk, _pk) = crypto::vrf::VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+    let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+
+    let block = Block::new(
+        vec![],
+        Id::new(H256::random()),
+        BlockTimestamp::from_int_seconds(1),
+        ConsensusData::PoS(PoSData::new(inputs, vrf_data, Compact(1))),
+        BlockReward::new(outputs),
+    )
+    .unwrap();
+    let reward = block.block_reward_transactable();
+
+    // spend the utxo in a block reward
+    let undo1 = cache
+        .connect_block_transactable(&reward, &block.get_id().into(), BlockHeight::new(1))
+        .expect("spend should succeed")
+        .expect("block undo should contain value");
+    assert!(!cache.has_utxo_in_cache(&outpoint));
+    assert!(undo1.inner().len() == 1);
+
+    //undo spending
+    let res = cache.disconnect_block_transactable(&reward, &block.get_id().into(), None);
+    assert_eq!(
+        res,
+        Err(Error::MissingBlockRewardUndo(block.get_id().into()))
+    );
 }

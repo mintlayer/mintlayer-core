@@ -103,6 +103,10 @@ impl BanScore for ConnectTransactionError {
             // Even though this is an invariant, we consider it a violation to be overly cautious
             ConnectTransactionError::SerializationInvariantError(_) => 100,
             ConnectTransactionError::TimeLockViolation => 100,
+            ConnectTransactionError::MissingBlockUndo(_) => 0,
+            ConnectTransactionError::MissingBlockRewardUndo(_) => 0,
+            ConnectTransactionError::MissingTxUndo(_, _) => 0,
+            ConnectTransactionError::UtxoError(err) => err.ban_score(),
         }
     }
 }
@@ -218,6 +222,20 @@ impl BanScore for ExtraConsensusDataError {
         match self {
             ExtraConsensusDataError::PoSKernelOutputRetrievalFailed(_) => 100,
             ExtraConsensusDataError::PoSRandomnessCalculationFailed(e) => e.ban_score(),
+        }
+    }
+}
+
+impl BanScore for utxo::Error {
+    fn ban_score(&self) -> u32 {
+        match self {
+            utxo::Error::OverwritingUtxo => 0,
+            utxo::Error::FreshUtxoAlreadyExists => 0,
+            utxo::Error::UtxoAlreadySpent(_) => 100,
+            utxo::Error::NoUtxoFound => 100,
+            utxo::Error::NoBlockchainHeightFound => 0,
+            utxo::Error::MissingBlockRewardUndo(_) => 0,
+            utxo::Error::DBError(_) => 0,
         }
     }
 }

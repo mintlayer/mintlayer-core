@@ -27,7 +27,7 @@ use common::{
         },
         Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
     },
-    primitives::{BlockDistance, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
     Uint256,
 };
 use consensus::{
@@ -36,13 +36,16 @@ use consensus::{
 };
 use logging::log;
 use utils::ensure;
+use utxo::{UtxosDB, UtxosView};
 
 use super::{median_time::calculate_median_time_past, time_getter::TimeGetterFn};
 use crate::{BlockError, BlockSource, ChainstateConfig};
 
 use super::{
     orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
-    transaction_verifier::{BlockTransactableRef, TransactionVerifier},
+    transaction_verifier::{
+        error::ConnectTransactionError, BlockTransactableRef, Fee, Subsidy, TransactionVerifier,
+    },
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
 };
 
@@ -107,7 +110,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionIndexHandle
     }
 }
 
-impl<'a, S: TransactionRw<Error = chainstate_storage::Error>, O> ChainstateRef<'a, S, O> {
+impl<'a, S: TransactionRw, O> ChainstateRef<'a, S, O> {
     pub fn commit_db_tx(self) -> chainstate_storage::Result<()> {
         self.db_tx.commit()
     }
@@ -529,7 +532,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     fn make_cache_with_connected_transactions(
-        &self,
+        &'a self,
+        utxo_view: &'a impl UtxosView,
         block: &Block,
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
@@ -537,38 +541,53 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
 
-        let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
-        tx_verifier.connect_transaction(
+        let mut tx_verifier =
+            TransactionVerifier::new(&self.db_tx, utxo_view.derive_cache(), self.chain_config);
+
+        let reward_fees = tx_verifier.connect_transactable(
             BlockTransactableRef::BlockReward(block),
             spend_height,
             &median_time_past,
             blockreward_maturity,
         )?;
+        debug_assert!(reward_fees.is_none());
 
-        for (tx_num, _tx) in block.transactions().iter().enumerate() {
-            tx_verifier.connect_transaction(
-                BlockTransactableRef::Transaction(block, tx_num),
-                spend_height,
-                &median_time_past,
-                blockreward_maturity,
-            )?;
-        }
+        // TODO: add a test that checks the order in which txs are connected
+        let total_fees = block.transactions().iter().enumerate().try_fold(
+            Amount::from_atoms(0),
+            |total, (tx_num, _)| {
+                let fee = tx_verifier.connect_transactable(
+                    BlockTransactableRef::Transaction(block, tx_num),
+                    spend_height,
+                    &median_time_past,
+                    blockreward_maturity,
+                )?;
+                (total + fee.expect("connect tx should return fees").0).ok_or_else(|| {
+                    ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
+                })
+            },
+        )?;
 
         let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
-        tx_verifier.check_block_reward(block, block_subsidy)?;
+        tx_verifier.check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))?;
 
         Ok(tx_verifier)
     }
 
     fn make_cache_with_disconnected_transactions(
-        &self,
+        &'a self,
+        utxo_view: &'a impl UtxosView,
         block: &Block,
     ) -> Result<TransactionVerifier<S>, BlockError> {
-        let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
-        block.transactions().iter().enumerate().try_for_each(|(tx_num, _tx)| {
-            tx_verifier.disconnect_transaction(BlockTransactableRef::Transaction(block, tx_num))
+        let mut tx_verifier =
+            TransactionVerifier::new(&self.db_tx, utxo_view.derive_cache(), self.chain_config);
+
+        // TODO: add a test that checks the order in which txs are disconnected
+        block.transactions().iter().enumerate().rev().try_for_each(|(tx_num, _)| {
+            tx_verifier.disconnect_transactable(BlockTransactableRef::Transaction(block, tx_num))
         })?;
-        tx_verifier.disconnect_transaction(BlockTransactableRef::BlockReward(block))?;
+        tx_verifier.disconnect_transactable(BlockTransactableRef::BlockReward(block))?;
+
         Ok(tx_verifier)
     }
 }
@@ -653,19 +672,26 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
-        let connected_txs =
-            self.make_cache_with_connected_transactions(block, spend_height, blockreward_maturity)?;
-        let consumed = connected_txs.consume()?;
+        let utxo_db = UtxosDB::new(&self.db_tx);
+        let connected_txs = self.make_cache_with_connected_transactions(
+            &utxo_db,
+            block,
+            spend_height,
+            blockreward_maturity,
+        )?;
 
+        let consumed = connected_txs.consume()?;
         TransactionVerifier::flush_to_storage(&mut self.db_tx, consumed)?;
+
         Ok(())
     }
 
     fn disconnect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
-        let cached_inputs = self.make_cache_with_disconnected_transactions(block)?;
+        let utxo_db = UtxosDB::new(&self.db_tx);
+        let cached_inputs = self.make_cache_with_disconnected_transactions(&utxo_db, block)?;
         let cached_inputs = cached_inputs.consume()?;
-
         TransactionVerifier::flush_to_storage(&mut self.db_tx, cached_inputs)?;
+
         Ok(())
     }
 

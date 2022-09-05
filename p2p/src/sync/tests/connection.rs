@@ -14,26 +14,19 @@
 // limitations under the License.
 
 use super::*;
-use p2p_test_utils::make_libp2p_addr;
-
-// handle peer connection event
-#[tokio::test]
-async fn test_peer_connected() {
-    let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
-
-    assert_eq!(mgr.register_peer(PeerId::random()).await, Ok(()));
-    assert_eq!(mgr.peers.len(), 1);
-}
+use crate::net::mock::{types::MockPeerId, MockService};
+use p2p_test_utils::{make_libp2p_addr, make_mock_addr};
 
 // handle peer reconnection
-#[tokio::test]
-async fn test_peer_reconnected() {
-    let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
+async fn test_peer_reconnected<T>(addr: T::Address, peer_id: T::PeerId)
+where
+    T: NetworkingService + 'static,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
+    let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
+    register_peer(&mut mgr, peer_id).await;
 
-    let peer_id = PeerId::random();
-    assert_eq!(mgr.register_peer(peer_id).await, Ok(()));
     assert_eq!(mgr.peers.len(), 1);
     assert_eq!(
         mgr.register_peer(peer_id).await,
@@ -41,22 +34,53 @@ async fn test_peer_reconnected() {
     );
 }
 
-// handle peer disconnection event
 #[tokio::test]
-async fn test_peer_disconnected() {
-    let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
+async fn test_peer_reconnected_libp2p() {
+    test_peer_reconnected::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
+}
+
+// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
+#[tokio::test]
+#[cfg(not(target_os = "macos"))]
+async fn test_peer_reconnected_mock() {
+    test_peer_reconnected::<MockService>(make_mock_addr(), MockPeerId::random()).await;
+}
+
+// handle peer disconnection event
+async fn test_peer_disconnected<T>(addr: T::Address, peer_id1: T::PeerId, peer_id2: T::PeerId)
+where
+    T: NetworkingService + 'static,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
+    let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
 
     // send Connected event to SyncManager
-    let peer_id = PeerId::random();
-
-    assert_eq!(mgr.register_peer(peer_id).await, Ok(()));
+    register_peer(&mut mgr, peer_id1).await;
     assert_eq!(mgr.peers.len(), 1);
 
     // no peer with this id exist, nothing happens
-    mgr.unregister_peer(PeerId::random());
+    mgr.unregister_peer(peer_id2);
     assert_eq!(mgr.peers.len(), 1);
 
-    mgr.unregister_peer(peer_id);
+    mgr.unregister_peer(peer_id1);
     assert!(mgr.peers.is_empty());
+}
+
+#[tokio::test]
+async fn test_peer_disconnected_libp2p() {
+    test_peer_disconnected::<Libp2pService>(make_libp2p_addr(), PeerId::random(), PeerId::random())
+        .await;
+}
+
+// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
+#[tokio::test]
+#[cfg(not(target_os = "macos"))]
+async fn test_peer_disconnected_mock() {
+    test_peer_disconnected::<MockService>(
+        make_mock_addr(),
+        MockPeerId::random(),
+        MockPeerId::random(),
+    )
+    .await;
 }

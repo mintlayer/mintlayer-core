@@ -8,10 +8,18 @@ license = "MIT"
 
 [dependencies]
 serialization = { path = '../serialization' }
+subsystem = { path = '../subsystem' }
+chainstate = { path = '../chainstate' }
 common = { path = '../common' }
 utils = { path = '../utils' }
 logging = { path = '../logging' }
+rpc = { path = '../rpc' }
+
 anyhow = "1.0"
+jsonrpsee = {version = "0.15", features = ["macros"]}
 thiserror = "1.0"
 lazy_static = "1.4"
 mockall = "0.11.0"
+
+[dev-dependencies]
+chainstate-storage = { path = '../chainstate-storage' }

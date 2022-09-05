@@ -42,6 +42,9 @@ use crate::{
     },
 };
 
+/// This is the direct implementation of the NetworkingService, however, it gets wrapped with Libp2pService,
+/// where the implementation of Libp2pService instantiates a new object from thi struct, and satisfies all
+/// NetworkingService requirements, and hence becomes the proper backend
 pub struct Libp2pBackend {
     /// Created libp2p swarm object
     pub(super) swarm: Swarm<behaviour::Libp2pBehaviour>,
@@ -225,8 +228,19 @@ impl Libp2pBackend {
     ) -> crate::Result<()> {
         log::trace!("send request to peer {peer_id}");
 
-        let request_id = self.swarm.behaviour_mut().sync.send_request(peer_id, request);
-        response.send(Ok(request_id)).map_err(|_| P2pError::ChannelClosed)
+        if !self.swarm.is_connected(peer_id) {
+            return response
+                .send(Err(P2pError::PeerError(PeerError::PeerDoesntExist)))
+                .map_err(|_| P2pError::ChannelClosed);
+        }
+
+        response
+            .send(Ok(self
+                .swarm
+                .behaviour_mut()
+                .sync
+                .send_request(peer_id, request)))
+            .map_err(|_| P2pError::ChannelClosed)
     }
 
     /// Send response to a received request
@@ -342,7 +356,7 @@ mod tests {
         identity, mplex, noise, ping,
         request_response::{ProtocolSupport, RequestResponse, RequestResponseConfig},
         swarm::SwarmBuilder,
-        tcp::TcpConfig,
+        tcp::{GenTcpConfig, TcpTransport},
         Transport,
     };
     use std::{
@@ -361,9 +375,7 @@ mod tests {
         let noise_keys =
             noise::Keypair::<noise::X25519Spec>::new().into_authentic(&id_keys).unwrap();
 
-        let transport = TcpConfig::new()
-            .nodelay(true)
-            .port_reuse(false)
+        let transport = TcpTransport::new(GenTcpConfig::new().nodelay(true))
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(mplex::MplexConfig::new())

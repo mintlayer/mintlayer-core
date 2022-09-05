@@ -42,6 +42,7 @@ pub type UnsignedIntType = u128;
 /// An unsigned fixed-point type for amounts
 /// The smallest unit of count is called an atom
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[must_use]
 pub struct Amount {
     #[codec(compact)]
     val: UnsignedIntType,

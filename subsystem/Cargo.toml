@@ -29,5 +29,5 @@ default-features = false
 features = [ "macros", "rt", "rt-multi-thread", "signal", "sync" ]
 
 [dev-dependencies]
-common = { path = "../common" }
+utils = { path = "../utils" }
 testing_logger = "0.1"

@@ -12,6 +12,7 @@ chainstate-storage = { path = "../chainstate-storage/" }
 common = { path = "../common/" }
 chainstate = { path = "../chainstate/" }
 logging = { path = "../logging/" }
+mempool = { path = "../mempool/" }
 p2p = { path = "../p2p/" }
 rpc = { path = "../rpc/" }
 subsystem = { path = "../subsystem/" }
@@ -19,7 +20,7 @@ subsystem = { path = "../subsystem/" }
 # External dependencies
 anyhow = "1.0"
 clap = { version = "3.1", features = ["derive"] }
-jsonrpsee = { version = "0.14", features = ["macros"] }
+jsonrpsee = { version = "0.15", features = ["macros"] }
 tokio = { version = "1.19", default-features = false }
 serde = { version = "1", features = ["derive"] }
 toml = "0.5"

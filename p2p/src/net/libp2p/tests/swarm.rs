@@ -20,8 +20,7 @@ use libp2p::{
     core::upgrade,
     identify, identity, mplex, noise,
     swarm::{DialError, SwarmBuilder, SwarmEvent},
-    tcp::TcpConfig,
-    PeerId, Swarm, Transport,
+    PeerId, Swarm,
 };
 use p2p_test_utils::make_libp2p_addr;
 
@@ -35,8 +34,7 @@ fn make_dummy_swarm() -> (PeerId, Swarm<identify::Identify>) {
         .map_err(|_| P2pError::Other("Failed to create Noise keys"))
         .unwrap();
 
-    let transport = TcpConfig::new()
-        .nodelay(true)
+    let transport = TokioTcpTransport::new(GenTcpConfig::new().nodelay(true))
         .upgrade(upgrade::Version::V1)
         .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
         .multiplex(mplex::MplexConfig::new())
@@ -53,10 +51,12 @@ fn make_dummy_swarm() -> (PeerId, Swarm<identify::Identify>) {
             )),
             peer_id,
         )
+        .executor(Box::new(|fut| {
+            tokio::spawn(fut);
+        }))
         .build(),
     )
 }
-
 #[tokio::test]
 async fn dial_then_disconnect() {
     let (_peer_id1, mut swarm1) = make_dummy_swarm();

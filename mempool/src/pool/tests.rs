@@ -99,10 +99,11 @@ impl MempoolStore {
     }
 }
 
-impl<T, M> MempoolImpl<ChainStateMock, T, M>
+impl<H, T, M> Mempool<ChainStateMock, H, T, M>
 where
-    T: GetTime,
-    M: GetMemoryUsage,
+    H: Send,
+    T: GetTime + Send,
+    M: GetMemoryUsage + Send,
 {
     fn available_outpoints(&self, allow_double_spend: bool) -> BTreeSet<ValuedOutPoint> {
         let mut available = self
@@ -282,9 +283,9 @@ impl TxGenerator {
         }
     }
 
-    fn generate_tx<T: GetTime, M: GetMemoryUsage>(
+    fn generate_tx<H: Send, T: GetTime + Send, M: GetMemoryUsage + Send>(
         &mut self,
-        mempool: &MempoolImpl<ChainStateMock, T, M>,
+        mempool: &Mempool<ChainStateMock, H, T, M>,
     ) -> anyhow::Result<Transaction> {
         self.coin_pool = mempool.available_outpoints(self.allow_double_spend);
         let fee = if let Some(tx_fee) = self.tx_fee {
@@ -446,6 +447,7 @@ fn add_single_tx() -> anyhow::Result<()> {
     assert!(!mempool.contains_transaction(&tx_id));
     let all_txs = mempool.get_all();
     assert_eq!(all_txs, Vec::<&Transaction>::new());
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -472,6 +474,7 @@ fn txs_sorted() -> anyhow::Result<()> {
     let mut fees_sorted = fees.clone();
     fees_sorted.sort_by(|a, b| b.cmp(a));
     assert_eq!(fees, fees_sorted);
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -487,13 +490,16 @@ fn tx_no_inputs() -> anyhow::Result<()> {
         mempool.add_transaction(tx),
         Err(Error::TxValidationError(TxValidationError::NoInputs))
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
-fn setup() -> MempoolImpl<ChainStateMock, SystemClock, SystemUsageEstimator> {
-    logging::init_logging::<&str>(None);
-    MempoolImpl::create(
+struct ChainstateInterfaceMock;
+fn setup() -> Mempool<ChainStateMock, ChainstateInterfaceMock, SystemClock, SystemUsageEstimator> {
+    let chainstate_interface = ChainstateInterfaceMock {};
+    Mempool::new(
         ChainStateMock::new(),
+        chainstate_interface,
         SystemClock {},
         SystemUsageEstimator {},
     )
@@ -510,6 +516,7 @@ fn tx_no_outputs() -> anyhow::Result<()> {
         mempool.add_transaction(tx),
         Err(Error::TxValidationError(TxValidationError::NoOutputs))
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -548,6 +555,7 @@ fn tx_duplicate_inputs() -> anyhow::Result<()> {
         mempool.add_transaction(tx),
         Err(Error::TxValidationError(TxValidationError::DuplicateInputs))
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -580,6 +588,7 @@ fn tx_already_in_mempool() -> anyhow::Result<()> {
             TxValidationError::TransactionAlreadyInMempool
         ))
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -621,6 +630,7 @@ fn outpoint_not_found() -> anyhow::Result<()> {
             TxValidationError::OutPointNotFound { .. }
         ))
     ));
+    mempool.store.assert_valid();
 
     Ok(())
 }
@@ -644,6 +654,7 @@ fn tx_too_big() -> anyhow::Result<()> {
             TxValidationError::ExceedsMaxBlockSize
         ))
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -687,6 +698,7 @@ fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Result<(), 
     );
     mempool.add_transaction(replacement)?;
     assert!(!mempool.contains_transaction(&original_id));
+    mempool.store.assert_valid();
 
     Ok(())
 }
@@ -731,6 +743,7 @@ fn try_replace_irreplaceable() -> anyhow::Result<()> {
 
     mempool.drop_transaction(&original_id);
     mempool.add_transaction(replacement)?;
+    mempool.store.assert_valid();
 
     Ok(())
 }
@@ -797,14 +810,15 @@ fn tx_replace_child() -> anyhow::Result<()> {
     let replacement_tx =
         tx_spend_input(&mempool, child_tx_input, replacement_fee, flags, locktime)?;
     mempool.add_transaction(replacement_tx)?;
+    mempool.store.assert_valid();
     Ok(())
 }
 
 // To test our validation of BIP125 Rule#4 (replacement transaction pays for its own bandwidth), we need to know the necessary relay fee before creating the transaction. The relay fee depends on the size of the transaction. The usual way to get the size of a transaction is to call `tx.encoded_size` but we cannot do this until we have created the transaction itself. To get around this cycle, we have precomputed the size of all transaction created by `tx_spend_input`. This value will be the same for all transactions created by this function.
 const TX_SPEND_INPUT_SIZE: usize = 213;
 
-fn tx_spend_input<T: GetTime, M: GetMemoryUsage>(
-    mempool: &MempoolImpl<ChainStateMock, T, M>,
+fn tx_spend_input<T: GetTime + Send, H: Send, M: GetMemoryUsage + Send>(
+    mempool: &Mempool<ChainStateMock, H, T, M>,
     input: TxInput,
     fee: impl Into<Option<Amount>>,
     flags: u32,
@@ -817,8 +831,8 @@ fn tx_spend_input<T: GetTime, M: GetMemoryUsage>(
     tx_spend_several_inputs(mempool, &[input], fee, flags, locktime)
 }
 
-fn tx_spend_several_inputs<T: GetTime, M: GetMemoryUsage>(
-    mempool: &MempoolImpl<ChainStateMock, T, M>,
+fn tx_spend_several_inputs<T: GetTime + Send, H: Send, M: GetMemoryUsage + Send>(
+    mempool: &Mempool<ChainStateMock, H, T, M>,
     inputs: &[TxInput],
     fee: Amount,
     flags: u32,
@@ -949,6 +963,7 @@ fn one_ancestor_replaceability_signal_is_enough() -> anyhow::Result<()> {
 
     mempool.add_transaction(replacing_tx)?;
     assert!(!mempool.contains_transaction(&replaced_tx_id));
+    mempool.store.assert_valid();
 
     Ok(())
 }
@@ -1015,8 +1030,8 @@ fn tx_mempool_entry() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn test_bip125_max_replacements<T: GetTime, M: GetMemoryUsage>(
-    mempool: &mut MempoolImpl<ChainStateMock, T, M>,
+fn test_bip125_max_replacements<H: Send, T: GetTime + Send, M: GetMemoryUsage + Send>(
+    mempool: &mut Mempool<ChainStateMock, H, T, M>,
     num_potential_replacements: usize,
 ) -> anyhow::Result<()> {
     let tx = TxGenerator::new()
@@ -1068,6 +1083,7 @@ fn too_many_conflicts() -> anyhow::Result<()> {
         err,
         Error::TxValidationError(TxValidationError::TooManyPotentialReplacements)
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1122,6 +1138,7 @@ fn spends_new_unconfirmed() -> anyhow::Result<()> {
             TxValidationError::SpendsNewUnconfirmedOutput
         ))
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1213,6 +1230,7 @@ fn pays_more_than_conflicts_with_descendants() -> anyhow::Result<()> {
     assert!(!mempool.contains_transaction(&replaced_id));
     assert!(!mempool.contains_transaction(&descendant1_id));
     assert!(!mempool.contains_transaction(&descendant2_id));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1250,8 +1268,9 @@ impl GetTime for MockClock {
 fn only_expired_entries_removed() -> anyhow::Result<()> {
     let mock_clock = MockClock::new();
 
-    let mut mempool = MempoolImpl::create(
+    let mut mempool = Mempool::new(
         ChainStateMock::new(),
+        ChainstateInterfaceMock {},
         mock_clock.clone(),
         SystemUsageEstimator {},
     );
@@ -1308,6 +1327,7 @@ fn only_expired_entries_removed() -> anyhow::Result<()> {
     mempool.add_transaction(child_1)?;
     assert!(!mempool.contains_transaction(&expired_tx_id));
     assert!(mempool.contains_transaction(&child_1_id));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1328,7 +1348,12 @@ fn rolling_fee() -> anyhow::Result<()> {
     mock_usage.expect_get_memory_usage().return_const(0usize);
 
     let chain_state = ChainStateMock::new();
-    let mut mempool = MempoolImpl::create(chain_state, mock_clock.clone(), mock_usage);
+    let mut mempool = Mempool::new(
+        chain_state,
+        ChainstateInterfaceMock {},
+        mock_clock.clone(),
+        mock_usage,
+    );
 
     let num_inputs = 1;
     let num_outputs = 3;
@@ -1512,6 +1537,7 @@ fn rolling_fee() -> anyhow::Result<()> {
         FeeRate::new(Amount::from_atoms(0))
     );
 
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1535,6 +1561,7 @@ fn different_size_txs() -> anyhow::Result<()> {
         mempool.add_transaction(tx)?;
     }
 
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1628,12 +1655,13 @@ fn descendant_score() -> anyhow::Result<()> {
     assert_eq!(entry_b.fees_with_descendants, entry_b.fee);
 
     check_txs_sorted_by_descendant_sore(&mempool);
+    mempool.store.assert_valid();
 
     Ok(())
 }
 
-fn check_txs_sorted_by_descendant_sore(
-    mempool: &MempoolImpl<ChainStateMock, SystemClock, SystemUsageEstimator>,
+fn check_txs_sorted_by_descendant_sore<H: Send>(
+    mempool: &Mempool<ChainStateMock, H, SystemClock, SystemUsageEstimator>,
 ) {
     let txs_by_descendant_score =
         mempool.store.txs_by_descendant_score.values().flatten().collect::<Vec<_>>();
@@ -1655,8 +1683,9 @@ fn descendant_of_expired_entry() -> anyhow::Result<()> {
     let mock_clock = MockClock::new();
     logging::init_logging::<&str>(None);
 
-    let mut mempool = MempoolImpl::create(
+    let mut mempool = Mempool::new(
         ChainStateMock::new(),
+        ChainstateInterfaceMock {},
         mock_clock.clone(),
         SystemUsageEstimator {},
     );
@@ -1698,6 +1727,7 @@ fn descendant_of_expired_entry() -> anyhow::Result<()> {
 
     assert!(!mempool.contains_transaction(&parent_id));
     assert!(!mempool.contains_transaction(&child_id));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1711,7 +1741,12 @@ fn mempool_full() -> anyhow::Result<()> {
         .return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
 
     let chain_state = ChainStateMock::new();
-    let mut mempool = MempoolImpl::create(chain_state, SystemClock, mock_usage);
+    let mut mempool = Mempool::new(
+        chain_state,
+        ChainstateInterfaceMock {},
+        SystemClock,
+        mock_usage,
+    );
 
     let tx = TxGenerator::new().generate_tx(&mempool)?;
     log::debug!("mempool_full: tx has is {}", tx.get_id().get());
@@ -1719,6 +1754,7 @@ fn mempool_full() -> anyhow::Result<()> {
         mempool.add_transaction(tx),
         Err(Error::MempoolFull)
     ));
+    mempool.store.assert_valid();
     Ok(())
 }
 
@@ -1768,5 +1804,6 @@ fn no_empty_bags_in_descendant_score_index() -> anyhow::Result<()> {
         mempool.drop_transaction(&id)
     }
     assert!(mempool.store.txs_by_descendant_score.is_empty());
+    mempool.store.assert_valid();
     Ok(())
 }
