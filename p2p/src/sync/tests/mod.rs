@@ -23,13 +23,9 @@ use libp2p::PeerId;
 use std::time::Duration;
 use tokio::time::timeout;
 
-#[cfg(test)]
 mod block_response;
-#[cfg(test)]
 mod connection;
-#[cfg(test)]
 mod header_response;
-#[cfg(test)]
 mod request_response;
 
 async fn make_sync_manager<T>(
