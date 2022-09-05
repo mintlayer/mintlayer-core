@@ -105,7 +105,7 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
 }
 
 /// Given two deltas, combine them into one delta, this is the basic delta data composability function
-pub(super) fn combine_delta_data<T>(
+fn combine_delta_data<T>(
     lhs: &DataDelta<T>,
     rhs: DataDelta<T>,
 ) -> Result<DeltaMapOp<DataDelta<T>>, Error> {
