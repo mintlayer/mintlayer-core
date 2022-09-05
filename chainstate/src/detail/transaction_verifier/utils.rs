@@ -67,8 +67,9 @@ pub fn check_transferred_amount(
     Ok(())
 }
 
-// TODO(Anton): Probably this might be a better name
-pub fn get_output_coin_or_tokenid(output_value: &OutputValue) -> Option<(CoinOrTokenId, &Amount)> {
+pub fn get_output_token_id_and_amount(
+    output_value: &OutputValue,
+) -> Option<(CoinOrTokenId, &Amount)> {
     match output_value {
         OutputValue::Coin(amount) => Some((CoinOrTokenId::Coin, amount)),
         OutputValue::Token(token_data) => match token_data {
@@ -95,8 +96,7 @@ pub fn get_output_coin_or_tokenid(output_value: &OutputValue) -> Option<(CoinOrT
     }
 }
 
-// TODO(Anton): Probably this might be a better name
-pub fn get_input_coin_or_tokenid(
+pub fn get_input_token_id_and_amount(
     output_value: &OutputValue,
     tx: &Transaction,
 ) -> Result<(CoinOrTokenId, Amount), ConnectTransactionError> {
