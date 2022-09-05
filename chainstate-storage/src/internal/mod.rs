@@ -172,7 +172,7 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
+        fn get_token_info(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
     }
 }
 
@@ -303,7 +303,7 @@ macro_rules! impl_read_ops {
                 self.read::<DBBlockByHeight, _, _>(&height.encode())
             }
 
-            fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>> {
+            fn get_token_info(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>> {
                 self.read::<DBTokensInfo, _, _>(&token_id.encode())
             }
         }
