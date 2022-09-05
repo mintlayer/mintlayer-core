@@ -148,7 +148,7 @@ impl BanScore for ConsensusVerificationError {
             ConsensusVerificationError::ConsensusTypeMismatch(_) => 100,
             ConsensusVerificationError::PoWError(err) => err.ban_score(),
             ConsensusVerificationError::UnsupportedConsensusType => 100,
-            &ConsensusVerificationError::PoSError(ref err) => err.ban_score(),
+            ConsensusVerificationError::PoSError(ref err) => err.ban_score(),
         }
     }
 }
