@@ -5,7 +5,7 @@ use serialization::{Decode, Encode};
 
 use crate::error::Error;
 
-use self::data::PoSAccountingDeltaData;
+use self::{data::PoSAccountingDeltaData, delta_data_collection::DeltaDataUndoCollection};
 
 use super::{delegation::DelegationData, pool_data::PoolData, view::PoSAccountingView};
 
@@ -28,17 +28,11 @@ pub struct PoSAccountingDelta<'a> {
     data: PoSAccountingDeltaData,
 }
 
-/// The operations we have to do in order to undo a delta
-pub enum DataDeltaUndoOp<T> {
-    Write(DataDelta<T>),
-    Erase,
-}
-
 /// All the operations we have to do to our accounting state to undo a delta
 #[allow(dead_code)]
 pub struct DeltaMergeUndo {
-    pool_data_undo: BTreeMap<H256, DataDeltaUndoOp<PoolData>>,
-    delegation_data_undo: BTreeMap<H256, DataDeltaUndoOp<DelegationData>>,
+    pool_data_undo: DeltaDataUndoCollection<H256, PoolData>,
+    delegation_data_undo: DeltaDataUndoCollection<H256, DelegationData>,
 }
 
 impl<'a> PoSAccountingDelta<'a> {

@@ -22,7 +22,8 @@ use crate::{
 
 use super::{
     combine::{combine_amount_delta, combine_data_with_delta},
-    sum_maps, DataDelta, DataDeltaUndoOp, PoSAccountingDelta,
+    delta_data_collection::DataDeltaUndoOp,
+    sum_maps, DataDelta, PoSAccountingDelta,
 };
 
 impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
@@ -120,6 +121,10 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         }
 
         self.data.pool_balances.add_unsigned(undo_data.pool_id, undo_data.last_amount)?;
+
+        // TODO: all DataDeltaUndoOp usages are intrusive and should not be allowed,
+        //       as undo should be generated from the delta operation and not be manually
+        //       injected from individual data elemenets
         self.data.pool_data.undo_merge_delta_data_element(
             undo_data.pool_id,
             DataDeltaUndoOp::Write(DataDelta::Create(Box::new(undo_data.pool_data))),

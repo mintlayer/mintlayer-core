@@ -13,7 +13,17 @@ pub enum DeltaMapOp<T> {
     Delete,
 }
 
-use super::{DataDelta, DataDeltaUndoOp};
+/// The operations we have to do in order to undo a delta
+pub enum DataDeltaUndoOp<T> {
+    Write(DataDelta<T>),
+    Erase,
+}
+
+pub struct DeltaDataUndoCollection<K: Ord, T> {
+    data: BTreeMap<K, DataDeltaUndoOp<T>>,
+}
+
+use super::DataDelta;
 #[derive(Clone, Encode, Decode)]
 pub struct DeltaDataCollection<K: Ord, T> {
     data: BTreeMap<K, DataDelta<T>>,
@@ -23,7 +33,7 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
     pub fn merge_delta_data(
         &mut self,
         delta_to_apply: Self,
-    ) -> Result<BTreeMap<K, DataDeltaUndoOp<T>>, Error> {
+    ) -> Result<DeltaDataUndoCollection<K, T>, Error> {
         let data_undo = delta_to_apply
             .data
             .into_iter()
@@ -38,7 +48,7 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
             .filter_map(|(k, v)| v.map(|v| (k, v)))
             .collect::<BTreeMap<_, _>>();
 
-        Ok(data_undo)
+        Ok(DeltaDataUndoCollection { data: data_undo })
     }
 
     pub fn merge_delta_data_element(
@@ -70,9 +80,9 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
 
     pub fn undo_merge_delta_data(
         &mut self,
-        undo_data: BTreeMap<K, DataDeltaUndoOp<T>>,
+        undo_data: DeltaDataUndoCollection<K, T>,
     ) -> Result<(), Error> {
-        for (key, data) in undo_data.into_iter() {
+        for (key, data) in undo_data.data.into_iter() {
             self.undo_merge_delta_data_element(key, data)?
         }
         Ok(())
