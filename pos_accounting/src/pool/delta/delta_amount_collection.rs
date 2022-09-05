@@ -33,8 +33,7 @@ impl<K: Ord> DeltaAmountCollection<K> {
         Ok(())
     }
 
-    // TODO: remove pub
-    pub fn merge_delta_amount_element(
+    fn merge_delta_amount_element(
         map: &mut BTreeMap<K, SignedAmount>,
         key: K,
         other_amount: SignedAmount,
@@ -50,8 +49,7 @@ impl<K: Ord> DeltaAmountCollection<K> {
         Ok(())
     }
 
-    // TODO: remove pub
-    pub(super) fn combine_signed_amount_delta(
+    fn combine_signed_amount_delta(
         lhs: &Option<SignedAmount>,
         rhs: SignedAmount,
     ) -> Result<SignedAmount, Error> {
