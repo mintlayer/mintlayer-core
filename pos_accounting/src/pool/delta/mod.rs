@@ -5,16 +5,14 @@ use serialization::{Decode, Encode};
 
 use crate::error::Error;
 
-use self::{
-    combine::{merge_delta_data, undo_merge_delta_data},
-    data::PoSAccountingDeltaData,
-};
+use self::data::PoSAccountingDeltaData;
 
 use super::{delegation::DelegationData, pool_data::PoolData, view::PoSAccountingView};
 
 mod combine;
 pub mod data;
 pub mod delta_amount_collection;
+pub mod delta_data_collection;
 pub mod operator_impls;
 mod view_impl;
 
@@ -90,12 +88,11 @@ impl<'a> PoSAccountingDelta<'a> {
             .delegation_balances
             .undo_merge_delta_amounts(already_merged.delegation_balances)?;
 
-        undo_merge_delta_data(&mut self.data.pool_data, undo_data.pool_data_undo)?;
+        self.data.pool_data.undo_merge_delta_data(undo_data.pool_data_undo)?;
 
-        undo_merge_delta_data(
-            &mut self.data.delegation_data,
-            undo_data.delegation_data_undo,
-        )?;
+        self.data
+            .delegation_data
+            .undo_merge_delta_data(undo_data.delegation_data_undo)?;
 
         Ok(())
     }
@@ -112,10 +109,10 @@ impl<'a> PoSAccountingDelta<'a> {
 
         self.data.delegation_balances.merge_delta_amounts(other.delegation_balances)?;
 
-        let pool_data_undo = merge_delta_data(&mut self.data.pool_data, other.pool_data)?;
+        let pool_data_undo = self.data.pool_data.merge_delta_data(other.pool_data)?;
 
         let delegation_data_undo =
-            merge_delta_data(&mut self.data.delegation_data, other.delegation_data)?;
+            self.data.delegation_data.merge_delta_data(other.delegation_data)?;
 
         Ok(DeltaMergeUndo {
             pool_data_undo,

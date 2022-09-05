@@ -22,7 +22,7 @@ use crate::{
 
 use super::{
     combine::{combine_amount_delta, combine_data_with_delta},
-    sum_maps, DataDelta, PoSAccountingDelta,
+    sum_maps, DataDelta, DataDeltaUndoOp, PoSAccountingDelta,
 };
 
 impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
@@ -51,10 +51,10 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         }
 
         self.data.pool_balances.add_unsigned(pool_id, pledge_amount)?;
-        self.data.pool_data.insert(
+        self.data.pool_data.merge_delta_data_element(
             pool_id,
             DataDelta::Create(Box::new(PoolData::new(decommission_key, pledge_amount))),
-        );
+        )?;
 
         Ok(PoSAccountingUndo::CreatePool(CreatePoolUndo {
             input0_outpoint: input0_outpoint.clone(),
@@ -83,7 +83,9 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             }
         }
 
-        self.data.pool_data.remove(&pool_id);
+        self.data
+            .pool_data
+            .undo_merge_delta_data_element(pool_id, DataDeltaUndoOp::Erase)?;
 
         Ok(())
     }
@@ -97,7 +99,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             .get_pool_data(pool_id)?
             .ok_or(Error::AttemptedDecommissionNonexistingPoolData)?;
 
-        self.data.pool_data.remove(&pool_id);
+        self.data.pool_data.merge_delta_data_element(pool_id, DataDelta::Delete)?;
 
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
             pool_id,
@@ -118,10 +120,10 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         }
 
         self.data.pool_balances.add_unsigned(undo_data.pool_id, undo_data.last_amount)?;
-        self.data.pool_data.insert(
+        self.data.pool_data.undo_merge_delta_data_element(
             undo_data.pool_id,
-            DataDelta::Create(Box::new(undo_data.pool_data)),
-        );
+            DataDeltaUndoOp::Write(DataDelta::Create(Box::new(undo_data.pool_data))),
+        )?;
 
         Ok(())
     }
@@ -148,10 +150,10 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
 
         let delegation_data = DelegationData::new(target_pool, spend_key);
 
-        self.data.delegation_data.insert(
+        self.data.delegation_data.merge_delta_data_element(
             delegation_id,
             DataDelta::Create(Box::new(delegation_data.clone())),
-        );
+        )?;
 
         Ok((
             delegation_id,
@@ -176,7 +178,9 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             return Err(Error::InvariantErrorDelegationIdUndoFailedDataConflict);
         }
 
-        self.data.delegation_data.remove(&delegation_id);
+        self.data
+            .delegation_data
+            .undo_merge_delta_data_element(delegation_id, DataDeltaUndoOp::Erase)?;
 
         Ok(())
     }
@@ -290,13 +294,13 @@ impl<'a> PoSAccountingOperatorRead for PoSAccountingDelta<'a> {
 
     fn get_delegation_id_data(&self, id: H256) -> Result<Option<DelegationData>, Error> {
         let parent_data = self.parent.get_delegation_data(id)?;
-        let local_data = self.data.delegation_data.get(&id);
+        let local_data = self.data.delegation_data.data().get(&id);
         combine_data_with_delta(parent_data, local_data)
     }
 
     fn get_pool_data(&self, id: H256) -> Result<Option<PoolData>, Error> {
         let parent_data = self.parent.get_pool_data(id)?;
-        let local_data = self.data.pool_data.get(&id);
+        let local_data = self.data.pool_data.data().get(&id);
         combine_data_with_delta(parent_data, local_data)
     }
 }

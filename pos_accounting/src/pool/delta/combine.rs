@@ -1,10 +1,8 @@
-use std::collections::BTreeMap;
-
 use common::primitives::{signed_amount::SignedAmount, Amount};
 
 use crate::error::Error;
 
-use super::{DataDelta, DataDeltaUndoOp};
+use super::DataDelta;
 
 /// The outcome of combining two deltas for a given key upon the map that contains it
 pub enum DeltaMapOp<T> {
@@ -12,30 +10,6 @@ pub enum DeltaMapOp<T> {
     Write(T),
     /// Erase the value at the relevant key spot (for example, a modify followed by Erase yields nothing)
     Delete,
-}
-
-/// Given two deltas, combine them into one delta, this is the basic delta data composability function
-pub(super) fn combine_delta_data<T>(
-    lhs: &DataDelta<T>,
-    rhs: DataDelta<T>,
-) -> Result<DeltaMapOp<DataDelta<T>>, Error> {
-    match (lhs, rhs) {
-        (DataDelta::Create(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
-        (DataDelta::Create(_), DataDelta::Modify(d)) => Ok(DeltaMapOp::Write(DataDelta::Create(d))),
-        (DataDelta::Create(_), DataDelta::Delete) => {
-            // if lhs had a creation, and we delete, this means nothing is left and there's a net zero to return
-            Ok(DeltaMapOp::Delete)
-        }
-        (DataDelta::Modify(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
-        (DataDelta::Modify(_), DataDelta::Modify(d)) => Ok(DeltaMapOp::Write(DataDelta::Modify(d))),
-        (DataDelta::Modify(_), DataDelta::Delete) => {
-            // if lhs had a modification, and we delete, this means nothing is left and there's a net zero to return
-            Ok(DeltaMapOp::Delete)
-        }
-        (DataDelta::Delete, DataDelta::Create(d)) => Ok(DeltaMapOp::Write(DataDelta::Create(d))),
-        (DataDelta::Delete, DataDelta::Modify(_)) => Err(Error::DeltaDataModifyAfterDelete),
-        (DataDelta::Delete, DataDelta::Delete) => Err(Error::DeltaDataDeletedMultipleTimes),
-    }
 }
 
 pub(super) fn combine_data_with_delta<T: Clone>(
@@ -81,64 +55,4 @@ pub(super) fn combine_amount_delta(
             Ok(Some(sum))
         }
     }
-}
-
-pub fn undo_merge_delta_data<K: Ord, T>(
-    map: &mut BTreeMap<K, DataDelta<T>>,
-    undo_data: BTreeMap<K, DataDeltaUndoOp<T>>,
-) -> Result<(), Error> {
-    for (key, data) in undo_data.into_iter() {
-        match data {
-            DataDeltaUndoOp::Write(undo) => map.insert(key, undo),
-            DataDeltaUndoOp::Erase => map.remove(&key),
-        };
-    }
-    Ok(())
-}
-
-pub fn merge_delta_data<K: Ord + Copy, T>(
-    map: &mut BTreeMap<K, DataDelta<T>>,
-    delta_to_apply: BTreeMap<K, DataDelta<T>>,
-) -> Result<BTreeMap<K, DataDeltaUndoOp<T>>, Error> {
-    let data_undo = delta_to_apply
-        .into_iter()
-        .map(|(key, other_pool_data)| {
-            merge_delta_data_element(map, key, other_pool_data).map(|v| (key, v))
-        })
-        .collect::<Result<BTreeMap<_, _>, _>>()?;
-
-    // TODO: maybe we don't have to run Collect::<_>() twice, but dealing with Result<Option<A>> is tricky in a functional way
-    let data_undo = data_undo
-        .into_iter()
-        .filter_map(|(k, v)| v.map(|v| (k, v)))
-        .collect::<BTreeMap<_, _>>();
-
-    Ok(data_undo)
-}
-
-pub fn merge_delta_data_element<K: Ord, T>(
-    map: &mut BTreeMap<K, DataDelta<T>>,
-    key: K,
-    other_data: DataDelta<T>,
-) -> Result<Option<DataDeltaUndoOp<T>>, Error> {
-    let current = map.get(&key);
-
-    // create the operation/change that would modify the current delta and do the merge
-    let new_data = match current {
-        Some(current_data) => combine_delta_data(current_data, other_data)?,
-        None => DeltaMapOp::Write(other_data),
-    };
-
-    // apply the change to the current map and create the undo data
-    let undo = match new_data {
-        // when we insert to a map, undoing is restoring what was there beforehand, and erasing if it was empty
-        DeltaMapOp::Write(v) => match map.insert(key, v) {
-            Some(prev_value) => Some(DataDeltaUndoOp::Write(prev_value)),
-            None => Some(DataDeltaUndoOp::Erase),
-        },
-        // when we remove from a map, undoing is rewriting what we removed
-        DeltaMapOp::Delete => map.remove(&key).map(DataDeltaUndoOp::Write),
-    };
-
-    Ok(undo)
 }

@@ -22,7 +22,7 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
     }
 
     fn get_pool_data(&self, pool_id: H256) -> Result<Option<PoolData>, Error> {
-        let local_data = self.data.pool_data.get(&pool_id);
+        let local_data = self.data.pool_data.data().get(&pool_id);
         match local_data {
             Some(d) => match d {
                 DataDelta::Create(d) => Ok(Some(*d.clone())),
@@ -59,7 +59,7 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
     }
 
     fn get_delegation_data(&self, delegation_id: H256) -> Result<Option<DelegationData>, Error> {
-        let local_data = self.data.delegation_data.get(&delegation_id);
+        let local_data = self.data.delegation_data.data().get(&delegation_id);
         match local_data {
             Some(d) => match d {
                 DataDelta::Create(d) => Ok(Some(*d.clone())),
