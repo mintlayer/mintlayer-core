@@ -4,14 +4,6 @@ use crate::error::Error;
 
 use super::DataDelta;
 
-/// The outcome of combining two deltas for a given key upon the map that contains it
-pub enum DeltaMapOp<T> {
-    /// Write a specific value (for example, to write a Create or Modify operation)
-    Write(T),
-    /// Erase the value at the relevant key spot (for example, a modify followed by Erase yields nothing)
-    Delete,
-}
-
 pub(super) fn combine_data_with_delta<T: Clone>(
     parent_data: Option<T>,
     local_data: Option<&DataDelta<T>>,
