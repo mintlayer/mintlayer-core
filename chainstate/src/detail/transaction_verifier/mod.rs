@@ -306,8 +306,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(result)
     }
 
-    // TODO(Anton): Probably this might be a better name
-    fn get_paid_fee_coins(
+    fn get_total_fee(
         inputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
         outputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
     ) -> Result<Amount, ConnectTransactionError> {
@@ -330,7 +329,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         let outputs_total_map = Self::calculate_total_outputs(tx.outputs())?;
 
         check_transferred_amount(&inputs_total_map, &outputs_total_map)?;
-        let total_fee = Self::get_paid_fee_coins(&inputs_total_map, &outputs_total_map)?;
+        let total_fee = Self::get_total_fee(&inputs_total_map, &outputs_total_map)?;
 
         // Check is fee enough for issuance
         let issuance_count = get_tokens_issuance_count(tx.outputs());
