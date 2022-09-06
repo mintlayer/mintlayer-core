@@ -35,9 +35,10 @@ pub trait MockTransport {
     /// A messages stream.
     type Stream: MockStream;
 
-    /// Creates a new connection with the given address.
+    /// Creates a new listener bound to the specified address.
     async fn bind(address: Self::Address) -> Result<Self::Listener>;
 
+    // TODO: FIXME:
     // /// Open a connection to the given address.
     // async fn connect(address: Self::Address) -> Result<Self::Stream>;
 }
@@ -60,6 +61,7 @@ pub trait MockListener<Stream, Address>: Send {
 /// An abstraction layer over some network stream that can be used to send and receive messages.
 #[async_trait]
 pub trait MockStream {
+    // TODO: FIXME:
     // /// Opens a stream connection to a remote host.
     // async fn connect() -> Self;
 

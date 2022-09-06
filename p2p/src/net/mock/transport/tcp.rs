@@ -32,11 +32,11 @@ pub struct TcpMockTransport {}
 #[async_trait]
 impl MockTransport for TcpMockTransport {
     type Address = SocketAddr;
-    type Listener = TcpMockListener;
-    type Stream = TcpMockStream;
+    type Listener = TcpListener;
+    type Stream = TcpStream;
 
     async fn bind(address: Self::Address) -> Result<Self::Listener> {
-        Ok(TcpMockListener::new(TcpListener::bind(address).await?))
+        TcpListener::bind(address).await.map_err(Into::into)
     }
 
     // async fn connect(address: Self::Address) -> Result<Self::Connection> {
@@ -45,28 +45,15 @@ impl MockTransport for TcpMockTransport {
     // }
 }
 
-// TODO: Remove wrapper?
-pub struct TcpMockListener {
-    listener: TcpListener,
-}
-
-impl TcpMockListener {
-    fn new(listener: TcpListener) -> Self {
-        Self { listener }
-    }
-}
-
 #[async_trait]
-impl MockListener<TcpMockStream, SocketAddr> for TcpMockListener {
-    async fn accept(&mut self) -> Result<(TcpMockStream, SocketAddr)> {
+impl MockListener<TcpStream, SocketAddr> for TcpListener {
+    async fn accept(&mut self) -> Result<(TcpStream, SocketAddr)> {
         todo!()
     }
 }
 
-pub struct TcpMockStream {}
-
 #[async_trait]
-impl MockStream for TcpMockStream {
+impl MockStream for TcpStream {
     async fn send(&mut self, msg: Message) -> Result<()> {
         todo!()
     }
