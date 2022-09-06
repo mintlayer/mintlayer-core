@@ -21,7 +21,7 @@ use p2p::{
         self,
         libp2p::Libp2pService,
         mock::{
-            transport::{ChannelTransport, TcpTransport},
+            transport::{ChannelMockTransport, TcpMockTransport},
             MockService,
         },
         ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,

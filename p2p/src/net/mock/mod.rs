@@ -34,19 +34,19 @@ use crate::{
     message,
     net::{
         self,
-        mock::transport::{Listener, Transport},
+        mock::transport::{MockListener, MockTransport},
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent, ValidationResult},
         ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,
     },
 };
 
 #[derive(Debug)]
-pub struct MockService<T: Transport + 'static>(PhantomData<T>);
+pub struct MockService<T: MockTransport + 'static>(PhantomData<T>);
 
 #[derive(Debug, Copy, Clone)]
 pub struct MockMessageId(u64);
 
-pub struct MockConnectivityHandle<T: NetworkingService, U: Transport> {
+pub struct MockConnectivityHandle<T: NetworkingService, U: MockTransport> {
     /// Socket address of the network service provider
     local_addr: U::Address,
 
@@ -64,7 +64,7 @@ pub struct MockConnectivityHandle<T: NetworkingService, U: Transport> {
 pub struct MockPubSubHandle<T, U>
 where
     T: NetworkingService,
-    U: Transport,
+    U: MockTransport,
 {
     /// TX channel for sending commands to mock backend
     _cmd_tx: mpsc::Sender<types::Command<U>>,
@@ -74,17 +74,17 @@ where
     _marker: PhantomData<fn() -> T>,
 }
 
-pub struct MockSyncingMessagingHandle<T, U>
+pub struct MockSyncingMessagingHandle<S, T>
 where
-    T: NetworkingService,
-    U: Transport,
+    S: NetworkingService,
+    T: MockTransport,
 {
     /// TX channel for sending commands to mock backend
-    cmd_tx: mpsc::Sender<types::Command<U>>,
+    cmd_tx: mpsc::Sender<types::Command<T>>,
 
     /// RX channel for receiving syncing events
     sync_rx: mpsc::Receiver<types::SyncingEvent>,
-    _marker: PhantomData<fn() -> T>,
+    _marker: PhantomData<fn() -> S>,
 }
 
 impl<T> TryInto<net::types::PeerInfo<T>> for types::MockPeerInfo
@@ -107,7 +107,7 @@ where
 #[async_trait]
 impl<T> NetworkingService for MockService<T>
 where
-    T: Transport,
+    T: MockTransport,
 {
     type Address = T::Address;
     type PeerId = types::MockPeerId;
@@ -175,13 +175,13 @@ where
 }
 
 #[async_trait]
-impl<T, U> ConnectivityService<T> for MockConnectivityHandle<T, U>
+impl<S, T> ConnectivityService<S> for MockConnectivityHandle<S, T>
 where
-    T: NetworkingService<Address = U::Address, PeerId = types::MockPeerId> + Send,
-    types::MockPeerInfo: TryInto<net::types::PeerInfo<T>, Error = P2pError>,
-    U: Transport,
+    S: NetworkingService<Address = T::Address, PeerId = types::MockPeerId> + Send,
+    types::MockPeerInfo: TryInto<net::types::PeerInfo<S>, Error = P2pError>,
+    T: MockTransport,
 {
-    async fn connect(&mut self, address: T::Address) -> crate::Result<()> {
+    async fn connect(&mut self, address: S::Address) -> crate::Result<()> {
         log::debug!(
             "try to establish outbound connection, address {:?}",
             address
@@ -198,7 +198,7 @@ where
         rx.await?
     }
 
-    async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+    async fn disconnect(&mut self, peer_id: S::PeerId) -> crate::Result<()> {
         log::debug!("close connection with remote, {peer_id}");
 
         let (tx, rx) = oneshot::channel();
@@ -212,15 +212,15 @@ where
         rx.await?
     }
 
-    async fn local_addr(&self) -> crate::Result<Option<T::Address>> {
-        Ok(Some(self.local_addr))
+    async fn local_addr(&self) -> crate::Result<Option<S::Address>> {
+        Ok(Some(self.local_addr.clone()))
     }
 
-    fn peer_id(&self) -> &T::PeerId {
+    fn peer_id(&self) -> &S::PeerId {
         &self.peer_id
     }
 
-    async fn ban_peer(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+    async fn ban_peer(&mut self, peer_id: S::PeerId) -> crate::Result<()> {
         log::debug!("ban remote peer, peer id {peer_id}");
 
         let (tx, rx) = oneshot::channel();
@@ -234,7 +234,7 @@ where
         rx.await?
     }
 
-    async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {
+    async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<S>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::ConnectivityEvent::OutboundAccepted { address, peer_info } => {
                 Ok(ConnectivityEvent::OutboundAccepted {
@@ -259,10 +259,10 @@ where
 }
 
 #[async_trait]
-impl<T, U> PubSubService<T> for MockPubSubHandle<T, U>
+impl<S, T> PubSubService<S> for MockPubSubHandle<S, T>
 where
-    T: NetworkingService<PeerId = types::MockPeerId> + Send,
-    U: Transport,
+    S: NetworkingService<PeerId = types::MockPeerId> + Send,
+    T: MockTransport,
 {
     async fn publish(&mut self, _announcement: message::Announcement) -> crate::Result<()> {
         todo!();
@@ -270,8 +270,8 @@ where
 
     async fn report_validation_result(
         &mut self,
-        _source: T::PeerId,
-        _msg_id: T::PubSubMessageId,
+        _source: S::PeerId,
+        _msg_id: S::PubSubMessageId,
         _result: ValidationResult,
     ) -> crate::Result<()> {
         todo!();
@@ -281,7 +281,7 @@ where
         todo!();
     }
 
-    async fn poll_next(&mut self) -> crate::Result<PubSubEvent<T>> {
+    async fn poll_next(&mut self) -> crate::Result<PubSubEvent<S>> {
         todo!();
     }
 }
@@ -291,7 +291,7 @@ impl<T, U> SyncingMessagingService<T> for MockSyncingMessagingHandle<T, U>
 where
     T: NetworkingService<PeerId = types::MockPeerId, SyncingPeerRequestId = types::MockRequestId>
         + Send,
-    U: Transport,
+    U: MockTransport,
 {
     async fn send_request(
         &mut self,

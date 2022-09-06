@@ -24,27 +24,27 @@ use crate::{net::mock::types::Message, Result};
 
 /// An abstraction layer for creating and opening connections.
 #[async_trait]
-pub trait Transport {
+pub trait MockTransport {
     // TODO: FIXME: Remove Hash and Display?
     /// An address type.
     type Address: Clone + Debug + Display + Eq + Hash + Send + Sync + ToString;
 
-    /// A connection type.
-    type Listener: Listener<Self::Stream, Self::Address>;
+    /// A listener type.
+    type Listener: MockListener<Self::Stream, Self::Address>;
 
     /// A messages stream.
-    type Stream: MessageStream;
+    type Stream: MockStream;
 
     /// Creates a new connection with the given address.
-    async fn create(address: Self::Address) -> Result<Self::Listener>;
+    async fn bind(address: Self::Address) -> Result<Self::Listener>;
 
-    /// Open a connection to the given address.
-    async fn connect(address: Self::Address) -> Result<Self::Stream>;
+    // /// Open a connection to the given address.
+    // async fn connect(address: Self::Address) -> Result<Self::Stream>;
 }
 
 /// An abstraction layer over some kind of network connection.
 #[async_trait]
-pub trait Listener<Stream, Address>: Send {
+pub trait MockListener<Stream, Address>: Send {
     /// Accepts a new inbound connection.
     async fn accept(&mut self) -> Result<(Stream, Address)>;
 
@@ -59,7 +59,7 @@ pub trait Listener<Stream, Address>: Send {
 
 /// An abstraction layer over some network stream that can be used to send and receive messages.
 #[async_trait]
-pub trait MessageStream {
+pub trait MockStream {
     // /// Opens a stream connection to a remote host.
     // async fn connect() -> Self;
 

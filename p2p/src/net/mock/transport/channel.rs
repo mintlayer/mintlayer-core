@@ -22,7 +22,7 @@ use tokio::sync::{
 
 use crate::{
     net::mock::{
-        transport::{Listener, MessageStream, Transport},
+        transport::{MockListener, MockStream, MockTransport},
         types::Message,
     },
     Result,
@@ -42,14 +42,15 @@ enum SocketCommandType {
 }
 
 #[derive(Debug)]
-pub struct ChannelTransport {}
+pub struct ChannelMockTransport {}
 
 #[async_trait]
-impl Transport for ChannelTransport {
-    type Listener = ChannelListener;
+impl MockTransport for ChannelMockTransport {
     type Address = u64;
+    type Listener = ChannelMockListener;
+    type Stream = ChannelMockStream;
 
-    async fn create(address: Self::Address) -> Result<Self::Listener> {
+    async fn bind(address: Self::Address) -> Result<Self::Listener> {
         let tx: UnboundedSender<SocketCommand> = NETWORK_HANDLE.clone();
         // TODO: FIXME:
         todo!();
@@ -61,20 +62,20 @@ impl Transport for ChannelTransport {
     // }
 }
 
-pub struct ChannelListener {}
+pub struct ChannelMockListener {}
 
 #[async_trait]
-impl Listener<ChannelMessageStream, u64> for ChannelListener {
-    async fn accept(&mut self) -> Result<(ChannelMessageStream, u64)> {
+impl MockListener<ChannelMockStream, u64> for ChannelMockListener {
+    async fn accept(&mut self) -> Result<(ChannelMockStream, u64)> {
         // TODO: FIXME:
         todo!();
     }
 }
 
-pub struct ChannelMessageStream {}
+pub struct ChannelMockStream {}
 
 #[async_trait]
-impl MessageStream for ChannelMessageStream {
+impl MockStream for ChannelMockStream {
     async fn send(&mut self, msg: Message) -> Result<()> {
         // TODO: FIXME:
         todo!();

@@ -28,7 +28,7 @@ use crate::{
     message,
     net::mock::{
         peer, request_manager,
-        transport::{Listener, Transport},
+        transport::{MockListener, MockTransport},
         types,
     },
 };
@@ -47,7 +47,7 @@ struct PeerContext {
 }
 
 #[derive(Debug)]
-enum ConnectionState<T: Transport> {
+enum ConnectionState<T: MockTransport> {
     /// Connection established for outbound connection
     OutboundAccepted { address: T::Address },
 
@@ -55,7 +55,7 @@ enum ConnectionState<T: Transport> {
     InboundAccepted { address: T::Address },
 }
 
-pub struct Backend<T: Transport> {
+pub struct Backend<T: MockTransport> {
     /// Socket address of the backend
     address: T::Address,
 
@@ -102,7 +102,7 @@ pub struct Backend<T: Transport> {
 
 impl<T> Backend<T>
 where
-    T: Transport + 'static,
+    T: MockTransport + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -115,8 +115,9 @@ where
         sync_tx: mpsc::Sender<types::SyncingEvent>,
         timeout: std::time::Duration,
     ) -> Self {
+        let local_peer_id = types::MockPeerId::from_socket_address::<T>(&address);
         Self {
-            address,
+            address: address,
             socket,
             cmd_rx,
             conn_tx,
@@ -127,7 +128,7 @@ where
             peers: HashMap::new(),
             pending: HashMap::new(),
             peer_chan: mpsc::channel(64),
-            local_peer_id: types::MockPeerId::from_socket_address::<T>(&address),
+            local_peer_id,
             request_mgr: request_manager::RequestManager::new(),
         }
     }
@@ -181,40 +182,43 @@ where
             response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
         }
 
-        match timeout(self.timeout, T::connect(address)).await {
-            Ok(event) => match event {
-                Ok(socket) => {
-                    self.create_peer(
-                        socket,
-                        self.local_peer_id,
-                        types::MockPeerId::from_socket_address::<T>(&address),
-                        peer::Role::Outbound,
-                        ConnectionState::OutboundAccepted { address },
-                    )
-                    .await
-                }
-                Err(err) => self
-                    .conn_tx
-                    .send(types::ConnectivityEvent::ConnectionError {
-                        address,
-                        // TODO: FIXME:
-                        error: todo!(),
-                        //error: err.into(),
-                    })
-                    .await
-                    .map_err(P2pError::from),
-            },
-            Err(_err) => self
-                .conn_tx
-                .send(types::ConnectivityEvent::ConnectionError {
-                    address,
-                    error: P2pError::DialError(DialError::IoError(
-                        std::io::ErrorKind::ConnectionRefused,
-                    )),
-                })
-                .await
-                .map_err(P2pError::from),
-        }
+        todo!();
+        todo!();
+
+        // match timeout(self.timeout, T::connect(address)).await {
+        //     Ok(event) => match event {
+        //         Ok(socket) => {
+        //             self.create_peer(
+        //                 socket,
+        //                 self.local_peer_id,
+        //                 types::MockPeerId::from_socket_address::<T>(&address),
+        //                 peer::Role::Outbound,
+        //                 ConnectionState::OutboundAccepted { address },
+        //             )
+        //             .await
+        //         }
+        //         Err(err) => self
+        //             .conn_tx
+        //             .send(types::ConnectivityEvent::ConnectionError {
+        //                 address,
+        //                 // TODO: FIXME:
+        //                 error: todo!(),
+        //                 //error: err.into(),
+        //             })
+        //             .await
+        //             .map_err(P2pError::from),
+        //     },
+        //     Err(_err) => self
+        //         .conn_tx
+        //         .send(types::ConnectivityEvent::ConnectionError {
+        //             address,
+        //             error: P2pError::DialError(DialError::IoError(
+        //                 std::io::ErrorKind::ConnectionRefused,
+        //             )),
+        //         })
+        //         .await
+        //         .map_err(P2pError::from),
+        // }
     }
 
     /// Disconnect remote peer

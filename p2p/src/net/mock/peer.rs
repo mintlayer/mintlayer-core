@@ -25,7 +25,7 @@ use crate::{
     error::{P2pError, ProtocolError},
     net::{
         mock::{
-            transport::{Listener, Transport},
+            transport::{MockListener, MockTransport},
             types::{self, MockEvent, MockPeerId, PeerEvent},
         },
         types::{Protocol, ProtocolType},
@@ -37,7 +37,7 @@ pub enum Role {
     Outbound,
 }
 
-pub struct Peer<T: Transport> {
+pub struct Peer<T: MockTransport> {
     /// Peer ID of the local node
     local_peer_id: MockPeerId,
 
@@ -62,7 +62,7 @@ pub struct Peer<T: Transport> {
 
 impl<T> Peer<T>
 where
-    T: Transport + 'static,
+    T: MockTransport + 'static,
 {
     pub fn new(
         local_peer_id: MockPeerId,

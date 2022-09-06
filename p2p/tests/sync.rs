@@ -36,7 +36,7 @@ use p2p::{
         self,
         libp2p::Libp2pService,
         mock::{
-            transport::{ChannelTransport, TcpTransport},
+            transport::{ChannelMockTransport, TcpMockTransport},
             MockService,
         },
         types::ConnectivityEvent,
@@ -658,13 +658,14 @@ async fn remote_local_diff_chains_local_higher_libp2p() {
 
 #[tokio::test]
 async fn remote_local_diff_chains_local_higher_mock_tcp() {
-    remote_local_diff_chains_local_higher::<MakeTcpAddress, MockService<TcpTransport>>().await;
+    remote_local_diff_chains_local_higher::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
 #[tokio::test]
 async fn remote_local_diff_chains_local_higher_mock_channels() {
-    remote_local_diff_chains_local_higher::<MakeChannelAddress, MockService<ChannelTransport>>()
-        .await;
+    remote_local_diff_chains_local_higher::<MakeChannelAddress, MockService<ChannelMockTransport>>(
+    )
+    .await;
 }
 
 // #[tokio::test]
