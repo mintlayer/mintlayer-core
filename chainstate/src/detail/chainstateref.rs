@@ -511,7 +511,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 .iter()
                 .filter_map(|output| match output.value() {
                     OutputValue::Coin(_) => None,
-                    OutputValue::Token(token) => Some(token),
+                    OutputValue::Token(token_data) => Some(token_data),
                 })
                 .try_for_each(|token_data| {
                     tokens::check_tokens_data(self.chain_config, token_data, tx, block.get_id())

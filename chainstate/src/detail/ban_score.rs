@@ -142,6 +142,7 @@ impl BanScore for TokensError {
             TokensError::BlockRewardInTokens => 100,
             TokensError::InvariantBrokenDuplicateTokenId(_, _) => 100,
             TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_) => 100,
+            TokensError::InvariantBrokenRegisterIssuanceOnNonexistentToken(_) => 100,
         }
     }
 }

@@ -656,7 +656,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                 }
 
                 // Remove issued tokens
-                unregister_token_issuance(&mut self.tokens_cache, tx)?;
+                unregister_token_issuance(&mut self.tokens_cache, tx, block.get_id())?;
             }
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.block_reward_transactable();
