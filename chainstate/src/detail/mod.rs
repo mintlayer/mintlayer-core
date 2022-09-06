@@ -38,7 +38,7 @@ use common::{
         config::ChainConfig,
         Block, GenBlock,
     },
-    primitives::{BlockDistance, BlockHeight, Id, Idable},
+    primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
 };
 use logging::log;
 use utils::eventhandler::{EventHandler, EventsController};
@@ -188,7 +188,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
     fn process_db_commit_error(
         &mut self,
         db_error: chainstate_storage::Error,
-        block: Block,
+        block: WithId<Block>,
         block_source: BlockSource,
         attempt_number: usize,
     ) -> Result<Option<BlockIndex>, BlockError> {
@@ -206,7 +206,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
 
     pub fn attempt_to_process_block(
         &mut self,
-        block: Block,
+        block: WithId<Block>,
         block_source: BlockSource,
         attempt_number: usize,
     ) -> Result<Option<BlockIndex>, BlockError> {
@@ -253,7 +253,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
     /// returns the block index of the new tip
     pub fn process_block(
         &mut self,
-        block: Block,
+        block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
         self.attempt_to_process_block(block, block_source, 0)
@@ -287,7 +287,10 @@ impl<S: BlockchainStorage> Chainstate<S> {
         Ok(())
     }
 
-    pub fn preliminary_block_check(&self, block: Block) -> Result<Block, BlockError> {
+    pub fn preliminary_block_check(
+        &self,
+        block: WithId<Block>,
+    ) -> Result<WithId<Block>, BlockError> {
         let chainstate_ref = self.make_db_tx_ro();
         chainstate_ref.check_block(&block)?;
         Ok(block)

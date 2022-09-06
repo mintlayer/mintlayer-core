@@ -59,7 +59,7 @@ impl TestFramework {
         source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
         let id = block.get_id();
-        let index = self.chainstate.process_block(block, source)?;
+        let index = self.chainstate.process_block(block.into(), source)?;
         self.block_indexes.push(index.clone().unwrap_or_else(|| {
             self.chainstate.chainstate_storage.get_block_index(&id).unwrap().unwrap()
         }));
