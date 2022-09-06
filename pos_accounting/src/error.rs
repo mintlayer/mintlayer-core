@@ -56,17 +56,17 @@ pub enum Error {
     InvariantErrorDelegationSharesAdditionUndoError,
     #[error("Delegation shares arithmetic undo error as it doesn't exist")]
     InvariantErrorDelegationShareNotFound,
-    #[error("Arithemetic error; conversion to unsigned failed")]
+    #[error("Arithmetic error; conversion to unsigned failed")]
     ArithmeticErrorToUnsignedFailed,
-    #[error("Arithemetic error; conversion to signed failed")]
+    #[error("Arithmetic error; conversion to signed failed")]
     ArithmeticErrorToSignedFailed,
-    #[error("Arithemetic error; delta signed addition failed")]
+    #[error("Arithmetic error; delta signed addition failed")]
     ArithmeticErrorDeltaAdditionFailed,
-    #[error("Arithemetic error; sum to unsigned failed")]
+    #[error("Arithmetic error; sum to unsigned failed")]
     ArithmeticErrorSumToUnsignedFailed,
-    #[error("Arithemetic error; sum to signed failed")]
+    #[error("Arithmetic error; sum to signed failed")]
     ArithmeticErrorSumToSignedFailed,
-    #[error("Consencutive data creation")]
+    #[error("Consecutive data creation")]
     DataCreatedMultipleTimes,
     #[error("Modify non-existing data")]
     ModifyNonexistingData,
@@ -76,9 +76,9 @@ pub enum Error {
     PledgeValueToSignedError,
     #[error("Delegation undo failed; data not found")]
     InvariantErrorDelegationUndoFailedDataNotFound,
-    #[error("Consencutive data creation in delta combination")]
+    #[error("Consecutive data creation in delta combination")]
     DeltaDataCreatedMultipleTimes,
-    #[error("Consencutive data deletion in delta combination")]
+    #[error("Consecutive data deletion in delta combination")]
     DeltaDataDeletedMultipleTimes,
     #[error("Modification after deletion of data delta")]
     DeltaDataModifyAfterDelete,

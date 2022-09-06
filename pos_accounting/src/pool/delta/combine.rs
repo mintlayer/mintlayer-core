@@ -48,3 +48,42 @@ pub(super) fn combine_amount_delta(
         }
     }
 }
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+    use common::primitives::{amount::UnsignedIntType, signed_amount::SignedIntType};
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_combine_data_with_delta() {
+        let some_data_create = Some(DataDelta::Create(Box::new(3)));
+        let some_data_modify = Some(DataDelta::Modify(Box::new(3)));
+
+        assert_eq!(combine_data_with_delta::<i32>(None, None),                      Ok(None));
+        assert_eq!(combine_data_with_delta(None,        some_data_create.as_ref()), Ok(Some(3)));
+        assert_eq!(combine_data_with_delta(None,        some_data_modify.as_ref()), Err(Error::ModifyNonexistingData));
+        assert_eq!(combine_data_with_delta::<i32>(None, Some(&DataDelta::Delete)),  Err(Error::RemoveNonexistingData));
+        assert_eq!(combine_data_with_delta(Some(1),     None),                      Ok(Some(1)));
+        assert_eq!(combine_data_with_delta(Some(2),     some_data_create.as_ref()), Err(Error::DataCreatedMultipleTimes));
+        assert_eq!(combine_data_with_delta(Some(2),     some_data_modify.as_ref()), Ok(Some(3)));
+        assert_eq!(combine_data_with_delta(Some(2),     Some(&DataDelta::Delete)),  Ok(None));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_combine_amount_delta() {
+        let amount = |v| Some(Amount::from_atoms(v));
+        let s_amount = |v| Some(SignedAmount::from_atoms(v));
+
+        assert_eq!(combine_amount_delta(&None,      &None),         Ok(None));
+        assert_eq!(combine_amount_delta(&None,      &s_amount(1)),  Ok(amount(1)));
+        assert_eq!(combine_amount_delta(&amount(1), &None),         Ok(amount(1)));
+        assert_eq!(combine_amount_delta(&amount(1), &s_amount(1)),  Ok(amount(2)));
+
+        assert_eq!(combine_amount_delta(&None,                                           &s_amount(-1)), Err(Error::ArithmeticErrorToUnsignedFailed));
+        assert_eq!(combine_amount_delta(&amount(1),                                      &s_amount(-2)), Err(Error::ArithmeticErrorSumToUnsignedFailed));
+        assert_eq!(combine_amount_delta(&amount(UnsignedIntType::MAX),                   &s_amount(1)),  Err(Error::ArithmeticErrorToSignedFailed));
+        assert_eq!(combine_amount_delta(&amount(SignedIntType::MAX.try_into().unwrap()), &s_amount(1)),  Err(Error::ArithmeticErrorDeltaAdditionFailed));
+    }
+}
