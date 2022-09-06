@@ -238,10 +238,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        message,
-        net::mock::{socket, types},
-    };
+    use crate::{message, net::mock::types};
     use chainstate::Locator;
     use common::primitives::semver::SemVer;
     use futures::FutureExt;

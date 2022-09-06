@@ -16,8 +16,6 @@
 pub mod backend;
 pub mod peer;
 pub mod request_manager;
-// TODO: FIXME: fix/remove the socket module.
-pub mod socket;
 pub mod transport;
 pub mod types;
 

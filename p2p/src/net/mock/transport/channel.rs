@@ -56,10 +56,10 @@ impl MockTransport for ChannelMockTransport {
         todo!();
     }
 
-    // async fn connect(address: Self::Address) -> Result<Self::Connection> {
-    //     // TODO: FIXME:
-    //     todo!();
-    // }
+    async fn connect(address: Self::Address) -> Result<Self::Stream> {
+        // TODO: FIXME:
+        todo!();
+    }
 }
 
 pub struct ChannelMockListener {}
@@ -68,6 +68,10 @@ pub struct ChannelMockListener {}
 impl MockListener<ChannelMockStream, u64> for ChannelMockListener {
     async fn accept(&mut self) -> Result<(ChannelMockStream, u64)> {
         // TODO: FIXME:
+        todo!();
+    }
+
+    fn local_address(&self) -> Result<u64> {
         todo!();
     }
 }
@@ -114,4 +118,27 @@ fn handle_connections() -> UnboundedSender<SocketCommand> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::net::{
+        message::{BlockListRequest, Request},
+        mock::types::MockRequestId,
+    };
+
+    #[tokio::test]
+    async fn send_recv() {
+        let address = 0;
+        let mut server = ChannelMockTransport::bind(address).await.unwrap();
+        let peer_fut = ChannelMockTransport::connect(server.local_address().unwrap());
+
+        let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
+        let mut server_stream = server_res.unwrap().0;
+        let mut peer_stream = peer_res.unwrap();
+
+        let msg = Message::Request {
+            request_id: MockRequestId::new(1337u64),
+            request: Request::BlockListRequest(BlockListRequest::new(vec![])),
+        };
+        peer_stream.send(msg.clone()).await.unwrap();
+
+        assert_eq!(server_stream.recv().await.unwrap().unwrap(), msg);
+    }
 }

@@ -38,9 +38,8 @@ pub trait MockTransport {
     /// Creates a new listener bound to the specified address.
     async fn bind(address: Self::Address) -> Result<Self::Listener>;
 
-    // TODO: FIXME:
-    // /// Open a connection to the given address.
-    // async fn connect(address: Self::Address) -> Result<Self::Stream>;
+    /// Open a connection to the given address.
+    async fn connect(address: Self::Address) -> Result<Self::Stream>;
 }
 
 /// An abstraction layer over some kind of network connection.
@@ -53,9 +52,8 @@ pub trait MockListener<Stream, Address>: Send {
     // /// Establishes a new outbound connection.
     // async fn connect(&mut self) -> crate::Result<T::Socket>;
 
-    // // TODO: FIXME: Do we really need this?
-    // /// Returns the local address of the socket.
-    // fn local_addr(&self) -> crate::Result<T::Address>;
+    /// Returns the local address of the listener.
+    fn local_address(&self) -> Result<Address>;
 }
 
 /// An abstraction layer over some network stream that can be used to send and receive messages.
