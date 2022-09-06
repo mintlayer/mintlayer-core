@@ -103,7 +103,7 @@ impl TestFramework {
     /// Returns the best block index.
     #[track_caller]
     pub fn best_block_index(&self) -> GenBlockIndex {
-        self.chainstate.get_best_block_index().unwrap().unwrap()
+        self.chainstate.query().get_best_block_index().unwrap().unwrap()
     }
 
     /// Return the best block identifier.
@@ -123,6 +123,7 @@ impl TestFramework {
     pub fn block_info(&self, height: u64) -> TestBlockInfo {
         let id = self
             .chainstate
+            .query()
             .get_block_id_from_height(&BlockHeight::from(height))
             .unwrap()
             .unwrap();
@@ -132,7 +133,7 @@ impl TestFramework {
     /// Returns a block corresponding to the specified identifier.
     #[track_caller]
     pub fn block(&self, id: Id<Block>) -> Block {
-        self.chainstate.get_block(id).unwrap().unwrap()
+        self.chainstate.query().get_block(id).unwrap().unwrap()
     }
 
     /// Returns a block index corresponding to the specified id.

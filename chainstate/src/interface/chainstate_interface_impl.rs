@@ -55,12 +55,14 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
 
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError> {
         self.chainstate
+            .query()
             .get_best_block_id()
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
     fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> Result<bool, ChainstateError> {
         self.chainstate
+            .query()
             .get_block_height_in_main_chain(&(*block_id).into())
             .map_err(ChainstateError::FailedToReadProperty)
             .map(|ht| ht.is_some())
@@ -71,6 +73,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         block_id: &Id<GenBlock>,
     ) -> Result<Option<BlockHeight>, ChainstateError> {
         self.chainstate
+            .query()
             .get_block_height_in_main_chain(block_id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
@@ -80,22 +83,28 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         height: &BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, ChainstateError> {
         self.chainstate
+            .query()
             .get_block_id_from_height(height)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ChainstateError> {
         self.chainstate
+            .query()
             .get_block(block_id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
     fn get_locator(&self) -> Result<Locator, ChainstateError> {
-        self.chainstate.get_locator().map_err(ChainstateError::FailedToReadProperty)
+        self.chainstate
+            .query()
+            .get_locator()
+            .map_err(ChainstateError::FailedToReadProperty)
     }
 
     fn get_headers(&self, locator: Locator) -> Result<Vec<BlockHeader>, ChainstateError> {
         self.chainstate
+            .query()
             .get_headers(locator)
             .map_err(ChainstateError::FailedToReadProperty)
     }
@@ -105,6 +114,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         headers: Vec<BlockHeader>,
     ) -> Result<Vec<BlockHeader>, ChainstateError> {
         self.chainstate
+            .query()
             .filter_already_existing_blocks(headers)
             .map_err(ChainstateError::FailedToReadProperty)
     }
@@ -112,6 +122,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
     fn get_best_block_height(&self) -> Result<BlockHeight, ChainstateError> {
         let best_block_index = self
             .chainstate
+            .query()
             .get_best_block_index()
             .map_err(ChainstateError::FailedToReadProperty)?
             .expect("Best block index could not be found");

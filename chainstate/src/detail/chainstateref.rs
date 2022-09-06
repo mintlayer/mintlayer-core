@@ -139,6 +139,10 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         }
     }
 
+    pub fn chain_config(&self) -> &ChainConfig {
+        &self.chain_config
+    }
+
     pub fn current_time(&self) -> std::time::Duration {
         (self.time_getter)()
     }
