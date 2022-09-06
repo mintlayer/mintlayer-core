@@ -35,7 +35,7 @@ use common::{
         Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
         Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
     },
-    primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 use utils::ensure;
 use utxo::{
@@ -57,8 +57,8 @@ struct BlockUndoEntry {
 /// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum BlockTransactableRef<'a> {
-    Transaction(&'a Block, usize),
-    BlockReward(&'a Block),
+    Transaction(&'a WithId<Block>, usize),
+    BlockReward(&'a WithId<Block>),
 }
 
 /// The change that a block has caused to the blockchain state
@@ -259,7 +259,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
     pub fn check_block_reward(
         &self,
-        block: &Block,
+        block: &WithId<Block>,
         total_fees: Fee,
         block_subsidy_at_height: Subsidy,
     ) -> Result<(), ConnectTransactionError> {
