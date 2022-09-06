@@ -66,7 +66,6 @@ impl BanScore for ConnectTransactionError {
             // this is zero because it's used when we add the outputs whose transactions we tested beforehand
             ConnectTransactionError::InvariantErrorTxNumWrongInBlock(_, _) => 0,
             ConnectTransactionError::OutputAlreadyPresentInInputsCache => 100,
-            ConnectTransactionError::ImmatureBlockRewardSpend => 100,
             ConnectTransactionError::PreviouslyCachedInputNotFound => 0,
             ConnectTransactionError::PreviouslyCachedInputWasErased => 100,
             ConnectTransactionError::InvariantBrokenAlreadyUnspent => 0,
@@ -120,6 +119,10 @@ impl BanScore for CheckBlockError {
             CheckBlockError::BlockSizeError(err) => err.ban_score(),
             CheckBlockError::CheckTransactionFailed(err) => err.ban_score(),
             CheckBlockError::ConsensusVerificationFailed(err) => err.ban_score(),
+            CheckBlockError::InvalidBlockRewardMaturityDistance(_, _, _) => 100,
+            CheckBlockError::InvalidBlockRewardMaturityDistanceValue(_, _) => 100,
+            CheckBlockError::InvalidBlockRewardMaturityTimelockType(_) => 100,
+            CheckBlockError::InvalidBlockRewardOutputType(_) => 100,
         }
     }
 }

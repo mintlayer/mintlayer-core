@@ -34,8 +34,6 @@ pub enum ConnectTransactionError {
     InvariantErrorTxNumWrongInBlock(usize, Id<Block>),
     #[error("Outputs already in the inputs cache")]
     OutputAlreadyPresentInInputsCache,
-    #[error("Block reward spent immaturely")]
-    ImmatureBlockRewardSpend,
     #[error("Input was cached, but could not be found")]
     PreviouslyCachedInputNotFound,
     #[error("Input was cached, but it is erased")]
