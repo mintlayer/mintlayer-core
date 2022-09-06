@@ -1447,7 +1447,9 @@ fn test_tokens_issuance_in_block_reward(#[case] seed: Seed) {
         const ISSUED_FUNDS: Amount = Amount::from_atoms(1_000_000);
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let (_, pub_key) = crypto::key::PrivateKey::new(crypto::key::KeyKind::RistrettoSchnorr);
 
+        // Check if it issuance
         let reward_output = TxOutput::new(
             OutputValue::Token(TokenData::TokenIssuanceV1 {
                 token_ticker: b"SOME".to_vec(),
@@ -1455,7 +1457,7 @@ fn test_tokens_issuance_in_block_reward(#[case] seed: Seed) {
                 number_of_decimals: 1,
                 metadata_uri: "https://some_site.some".as_bytes().to_vec(),
             }),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            OutputPurpose::Transfer(Destination::PublicKey(pub_key.clone())),
         );
         let block = tf
             .make_block_builder()
@@ -1463,13 +1465,60 @@ fn test_tokens_issuance_in_block_reward(#[case] seed: Seed) {
             .add_test_transaction(&mut rng)
             .build();
 
-        tf.process_block(block, BlockSource::Local).unwrap();
+        assert!(matches!(
+            tf.process_block(block, BlockSource::Local),
+            Err(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensError(TokensError::BlockRewardInTokens)
+            ))
+        ));
+
+        // Check if it transfer
+        let reward_output = TxOutput::new(
+            OutputValue::Token(TokenData::TokenTransferV1 {
+                token_id: TokenId::random(),
+                amount: Amount::from_atoms(123456789),
+            }),
+            OutputPurpose::Transfer(Destination::PublicKey(pub_key.clone())),
+        );
+        let block = tf
+            .make_block_builder()
+            .with_reward(vec![reward_output])
+            .add_test_transaction(&mut rng)
+            .build();
+
+        assert!(matches!(
+            tf.process_block(block, BlockSource::Local),
+            Err(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensError(TokensError::BlockRewardInTokens)
+            ))
+        ));
+
+        // Check if it burn
+        let reward_output = TxOutput::new(
+            OutputValue::Token(TokenData::TokenBurnV1 {
+                token_id: TokenId::random(),
+                amount_to_burn: Amount::from_atoms(123456789),
+            }),
+            OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+        );
+        let block = tf
+            .make_block_builder()
+            .with_reward(vec![reward_output])
+            .add_test_transaction(&mut rng)
+            .build();
+
+        assert!(matches!(
+            tf.process_block(block, BlockSource::Local),
+            Err(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensError(TokensError::BlockRewardInTokens)
+            ))
+        ));
     })
 }
 
 #[test]
 fn snapshot_testing_tokens_data() {
-    // If fields order of TokenData accidentally will be changed, snapshots cause fail 
+    // If fields order of TokenData accidentally will be changed, snapshots cause fail
     let mut hash_stream = id::DefaultHashAlgoStream::new();
 
     // Token issuance

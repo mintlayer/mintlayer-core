@@ -388,6 +388,14 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         let outputs_total = outputs.map_or_else(
             || Ok::<Amount, ConnectTransactionError>(Amount::from_atoms(0)),
             |outputs| {
+                if outputs.iter().any(|output| match output.value() {
+                    OutputValue::Coin(_) => false,
+                    OutputValue::Token(_) => true,
+                }) {
+                    return Err(ConnectTransactionError::TokensError(
+                        TokensError::BlockRewardInTokens,
+                    ));
+                }
                 Ok(Self::calculate_total_outputs(outputs, None)?
                     .get(&CoinOrTokenId::Coin)
                     .cloned()
