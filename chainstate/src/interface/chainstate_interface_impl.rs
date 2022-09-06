@@ -47,6 +47,12 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         Ok(())
     }
 
+    fn preliminary_header_check(&self, header: BlockHeader) -> Result<(), ChainstateError> {
+        self.chainstate
+            .preliminary_header_check(header)
+            .map_err(ChainstateError::ProcessBlockError)
+    }
+
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError> {
         self.chainstate
             .preliminary_block_check(block)

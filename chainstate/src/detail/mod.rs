@@ -34,7 +34,7 @@ use itertools::Itertools;
 use chainstate_storage::{BlockchainStorage, Transactional};
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
-    chain::{config::ChainConfig, Block},
+    chain::{block::BlockHeader, config::ChainConfig, Block},
     primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
 use logging::log;
@@ -294,6 +294,12 @@ impl<S: BlockchainStorage> Chainstate<S> {
         let chainstate_ref = self.make_db_tx_ro();
         chainstate_ref.check_block(&block)?;
         Ok(block)
+    }
+
+    pub fn preliminary_header_check(&self, block: BlockHeader) -> Result<(), BlockError> {
+        let chainstate_ref = self.make_db_tx_ro();
+        chainstate_ref.check_block_header(&block)?;
+        Ok(())
     }
 }
 
