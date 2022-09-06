@@ -26,7 +26,7 @@ use common::{
     chain::config::{
         Builder as ChainConfigBuilder, ChainConfig, ChainType, EmissionScheduleTabular,
     },
-    primitives::{semver::SemVer, BlockDistance},
+    primitives::semver::SemVer,
 };
 use logging::log;
 
@@ -156,7 +156,6 @@ async fn start(
 fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
     let ChainConfigOptions {
         chain_address_prefix,
-        chain_blockreward_maturity,
         chain_max_future_block_time_offset,
         chain_version,
         chain_target_block_spacing,
@@ -190,7 +189,6 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
     }
 
     update_builder!(address_prefix);
-    update_builder!(blockreward_maturity, BlockDistance::new);
     update_builder!(max_future_block_time_offset, Duration::from_secs);
     update_builder!(version, SemVer::try_from, map_err);
     update_builder!(target_block_spacing, Duration::from_secs);
