@@ -378,7 +378,33 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
+    pub fn check_block_header(&self, header: &BlockHeader) -> Result<(), CheckBlockError> {
+        self.check_header_size(header)?;
+
+        consensus::validate_consensus(self.chain_config, header, self)
+            .map_err(CheckBlockError::ConsensusVerificationFailed)?;
+
+        let prev_block_id = header.prev_block_id();
+        let median_time_past = calculate_median_time_past(self, prev_block_id);
+        ensure!(
+            header.timestamp() >= median_time_past,
+            CheckBlockError::BlockTimeOrderInvalid,
+        );
+
+        let max_future_offset = self.chain_config.max_future_block_time_offset();
+        let current_time = self.current_time();
+        let block_timestamp = header.timestamp();
+        ensure!(
+            block_timestamp.as_duration_since_epoch() <= current_time + *max_future_offset,
+            CheckBlockError::BlockFromTheFuture,
+        );
+
+        Ok(())
+    }
+
     fn check_block_detail(&self, block: &Block) -> Result<(), CheckBlockError> {
+        self.check_block_header(block.header())?;
+
         // MerkleTree root
         let merkle_tree_root = block.merkle_root();
         calculate_tx_merkle_root(block.body()).map_or(
@@ -405,25 +431,20 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             },
         )?;
 
-        let prev_block_id = block.prev_block_id();
-        let median_time_past = calculate_median_time_past(self, &prev_block_id);
-        ensure!(
-            block.timestamp() >= median_time_past,
-            CheckBlockError::BlockTimeOrderInvalid,
-        );
-
-        let max_future_offset = self.chain_config.max_future_block_time_offset();
-        let current_time = self.current_time();
-        let block_timestamp = block.timestamp();
-        ensure!(
-            block_timestamp.as_duration_since_epoch() <= current_time + *max_future_offset,
-            CheckBlockError::BlockFromTheFuture,
-        );
-
         self.check_transactions(block)
             .map_err(CheckBlockError::CheckTransactionFailed)?;
 
         self.check_block_size(block).map_err(CheckBlockError::BlockSizeError)?;
+
+        Ok(())
+    }
+
+    fn check_header_size(&self, header: &BlockHeader) -> Result<(), BlockSizeError> {
+        let size = header.header_size();
+        ensure!(
+            size <= self.chain_config.max_block_header_size(),
+            BlockSizeError::Header(size, self.chain_config.max_block_header_size())
+        );
 
         Ok(())
     }
@@ -507,8 +528,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     pub fn check_block(&self, block: &Block) -> Result<(), CheckBlockError> {
-        consensus::validate_consensus(self.chain_config, block.header(), self)
-            .map_err(CheckBlockError::ConsensusVerificationFailed)?;
+        self.check_block_header(block.header())?;
         self.check_block_detail(block)?;
         Ok(())
     }
