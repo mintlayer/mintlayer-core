@@ -20,6 +20,7 @@ use crate::{
     detail::{tests::TestBlockInfo, CheckBlockError, TokensError},
     BlockError, BlockSource,
 };
+use common::primitives::{id, Id};
 use common::{
     chain::{
         signature::inputsig::InputWitness,
@@ -28,6 +29,8 @@ use common::{
     },
     primitives::{Amount, Idable},
 };
+use crypto::hash::StreamHasher;
+use expect_test::expect;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
@@ -1436,16 +1439,71 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
     })
 }
 
-#[test]
-fn test_tokens_issuance_in_block_reward() {
-    utils::concurrency::model(|| {
-        // TODO: Add a test too that reorgs over a token issuance and see if all the data of that token will disappear from the mainchain.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_tokens_issuance_in_block_reward(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        const ISSUED_FUNDS: Amount = Amount::from_atoms(1_000_000);
+        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+
+        let reward_output = TxOutput::new(
+            OutputValue::Token(TokenData::TokenIssuanceV1 {
+                token_ticker: b"SOME".to_vec(),
+                amount_to_issue: ISSUED_FUNDS,
+                number_of_decimals: 1,
+                metadata_uri: "https://some_site.some".as_bytes().to_vec(),
+            }),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        );
+        let block = tf
+            .make_block_builder()
+            .with_reward(vec![reward_output])
+            .add_test_transaction(&mut rng)
+            .build();
+
+        tf.process_block(block, BlockSource::Local).unwrap();
     })
 }
 
 #[test]
 fn snapshot_testing_tokens_data() {
-    utils::concurrency::model(|| {
-        // TODO: Add tests, that will prevent change fields order
-    })
+    // If fields order of TokenData accidentally will be changed, snapshots cause fail 
+    let mut hash_stream = id::DefaultHashAlgoStream::new();
+
+    // Token issuance
+    let token_data = TokenData::TokenIssuanceV1 {
+        token_ticker: b"SOME".to_vec(),
+        amount_to_issue: Amount::from_atoms(123456789),
+        number_of_decimals: 123,
+        metadata_uri: "https://some_site.some".as_bytes().to_vec(),
+    };
+    id::hash_encoded_to(&token_data, &mut hash_stream);
+    expect![[r#"
+            0x7b0482a8a4ebe22005777f6380a8a10432758146c60e7f8b61a768d9152de3f0
+        "#]]
+    .assert_debug_eq(&Id::<TokenData>::new(hash_stream.finalize().into()).get());
+
+    // Token burn
+    let token_data = TokenData::TokenBurnV1 {
+        token_id: TokenId::zero(),
+        amount_to_burn: Amount::from_atoms(1234567890),
+    };
+    id::hash_encoded_to(&token_data, &mut hash_stream);
+    expect![[r#"
+            0xf33c5e6a8bc8575ee5f5f747f2fdb1f7c77f6dc17e7bca5b13f500f672f68b3c
+        "#]]
+    .assert_debug_eq(&Id::<TokenData>::new(hash_stream.finalize().into()).get());
+
+    // Token Transfer
+    let token_data = TokenData::TokenTransferV1 {
+        token_id: TokenId::zero(),
+        amount: Amount::from_atoms(1234567890),
+    };
+    id::hash_encoded_to(&token_data, &mut hash_stream);
+    expect![[r#"
+            0x988fb6c034fd307d609c24c2b9534c7bf370c198bf5229f83343d22669e84d4f
+        "#]]
+    .assert_debug_eq(&Id::<TokenData>::new(hash_stream.finalize().into()).get());
 }

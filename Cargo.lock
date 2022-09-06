@@ -563,6 +563,7 @@ dependencies = [
  "common",
  "consensus",
  "crypto",
+ "expect-test",
  "hex",
  "itertools",
  "jsonrpsee",
