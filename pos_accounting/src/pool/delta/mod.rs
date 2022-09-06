@@ -20,7 +20,7 @@ pub struct PoSAccountingDelta<'a> {
     data: PoSAccountingDeltaData,
 }
 
-/// All the operations we have to do to our accounting state to undo a delta
+/// All the operations we have to do with the accounting state to undo a delta
 #[allow(dead_code)]
 pub struct DeltaMergeUndo {
     pool_data_undo: DeltaDataUndoCollection<H256, PoolData>,
@@ -45,6 +45,14 @@ impl<'a> PoSAccountingDelta<'a> {
 
     pub fn data(&self) -> &PoSAccountingDeltaData {
         &self.data
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.data.pool_balances.data().is_empty()
+            && self.data.pool_data.data().is_empty()
+            && self.data.delegation_balances.data().is_empty()
+            && self.data.delegation_data.data().is_empty()
+            && self.data.pool_delegation_shares.data().is_empty()
     }
 
     fn get_cached_delegations_shares(&self, pool_id: H256) -> Option<BTreeMap<H256, SignedAmount>> {

@@ -8,7 +8,7 @@ use super::{
 
 use serialization::{Decode, Encode};
 
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug, PartialEq)]
 pub struct PoSAccountingDeltaData {
     pub pool_data: DeltaDataCollection<H256, PoolData>,
     pub pool_balances: DeltaAmountCollection<H256>,

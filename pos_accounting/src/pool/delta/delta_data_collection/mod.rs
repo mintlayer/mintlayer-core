@@ -26,12 +26,19 @@ pub enum DataDelta<T> {
     Delete,
 }
 
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug, PartialEq)]
 pub struct DeltaDataCollection<K: Ord, T> {
     data: BTreeMap<K, DataDelta<T>>,
 }
 
 impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
+    #[cfg(test)]
+    pub fn from_data<const N: usize>(data: [(K, DataDelta<T>); N]) -> Self {
+        Self {
+            data: BTreeMap::from(data),
+        }
+    }
+
     pub fn merge_delta_data(
         &mut self,
         delta_to_apply: Self,
@@ -168,24 +175,20 @@ pub mod test {
 
     #[test]
     fn test_merge_collections() {
-        let mut collection1 = DeltaDataCollection {
-            data: BTreeMap::from([
-                (1, DataDelta::Create(Box::new(10))),
-                (2, DataDelta::Modify(Box::new(20))),
-                (3, DataDelta::Delete),
-                (4, DataDelta::Create(Box::new(40))),
-            ]),
-        };
+        let mut collection1 = DeltaDataCollection::from_data([
+            (1, DataDelta::Create(Box::new(10))),
+            (2, DataDelta::Modify(Box::new(20))),
+            (3, DataDelta::Delete),
+            (4, DataDelta::Create(Box::new(40))),
+        ]);
         let collection1_origin = collection1.clone();
 
-        let collection2 = DeltaDataCollection {
-            data: BTreeMap::from([
-                (1, DataDelta::Modify(Box::new(11))),
-                (2, DataDelta::Modify(Box::new(21))),
-                (4, DataDelta::Delete),
-                (5, DataDelta::Delete),
-            ]),
-        };
+        let collection2 = DeltaDataCollection::from_data([
+            (1, DataDelta::Modify(Box::new(11))),
+            (2, DataDelta::Modify(Box::new(21))),
+            (4, DataDelta::Delete),
+            (5, DataDelta::Delete),
+        ]);
 
         let expected_data = BTreeMap::from([
             (1, DataDelta::Create(Box::new(11))),

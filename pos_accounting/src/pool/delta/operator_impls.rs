@@ -32,7 +32,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
         decommission_key: PublicKey,
-    ) -> Result<PoSAccountingUndo, Error> {
+    ) -> Result<(H256, PoSAccountingUndo), Error> {
         let pool_id = make_pool_id(input0_outpoint);
 
         {
@@ -57,10 +57,13 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             DataDelta::Create(Box::new(PoolData::new(decommission_key, pledge_amount))),
         )?;
 
-        Ok(PoSAccountingUndo::CreatePool(CreatePoolUndo {
-            input0_outpoint: input0_outpoint.clone(),
-            pledge_amount,
-        }))
+        Ok((
+            pool_id,
+            PoSAccountingUndo::CreatePool(CreatePoolUndo {
+                input0_outpoint: input0_outpoint.clone(),
+                pledge_amount,
+            }),
+        ))
     }
 
     fn undo_create_pool(&mut self, undo_data: CreatePoolUndo) -> Result<(), Error> {
@@ -76,6 +79,8 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             }
             None => return Err(Error::InvariantErrorPoolCreationReversalFailedBalanceNotFound),
         }
+
+        self.data.pool_balances.sub_unsigned(pool_id, undo_data.pledge_amount)?;
 
         let pool_data = self.get_pool_data(pool_id)?;
         {
@@ -100,6 +105,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             .get_pool_data(pool_id)?
             .ok_or(Error::AttemptedDecommissionNonexistingPoolData)?;
 
+        self.data.pool_balances.sub_unsigned(pool_id, last_amount)?;
         self.data.pool_data.merge_delta_data_element(pool_id, DataDelta::Delete)?;
 
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
@@ -259,7 +265,10 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
 
 impl<'a> PoSAccountingOperatorRead for PoSAccountingDelta<'a> {
     fn pool_exists(&self, pool_id: H256) -> Result<bool, Error> {
-        Ok(self.parent.get_pool_data(pool_id)?.is_some())
+        Ok(self
+            .get_pool_data(pool_id)?
+            .ok_or_else(|| self.parent.get_pool_data(pool_id))
+            .is_ok())
     }
 
     fn get_delegation_shares(

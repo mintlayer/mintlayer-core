@@ -29,7 +29,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
         decommission_key: PublicKey,
-    ) -> Result<PoSAccountingUndo, Error> {
+    ) -> Result<(H256, PoSAccountingUndo), Error> {
         let pool_id = make_pool_id(input0_outpoint);
 
         {
@@ -52,10 +52,13 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
         self.store
             .set_pool_data(pool_id, &PoolData::new(decommission_key, pledge_amount))?;
 
-        Ok(PoSAccountingUndo::CreatePool(CreatePoolUndo {
-            input0_outpoint: input0_outpoint.clone(),
-            pledge_amount,
-        }))
+        Ok((
+            pool_id,
+            PoSAccountingUndo::CreatePool(CreatePoolUndo {
+                input0_outpoint: input0_outpoint.clone(),
+                pledge_amount,
+            }),
+        ))
     }
 
     fn undo_create_pool(&mut self, undo_data: CreatePoolUndo) -> Result<(), Error> {
