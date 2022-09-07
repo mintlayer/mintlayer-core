@@ -16,6 +16,7 @@
 //! Application-level interface for the persistent blockchain storage.
 
 mod internal;
+mod is_transaction_seal;
 #[cfg(any(test, feature = "mock"))]
 pub mod mock;
 
@@ -25,8 +26,7 @@ use chainstate_types::BlockIndex;
 use common::chain::block::BlockReward;
 use common::chain::tokens::{TokenId, TokenIssuanceTransaction};
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
-use common::chain::OutPointSourceId;
-use common::chain::{Block, GenBlock};
+use common::chain::{Block, GenBlock, OutPointSourceId};
 use common::primitives::{BlockHeight, Id};
 use utxo::{UtxosStorageRead, UtxosStorageWrite};
 
@@ -120,14 +120,17 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead + UtxosStorageWrite {
     fn del_token_tx(&mut self, token_id: TokenId) -> crate::Result<()>;
 }
 
+/// Marker trait for types where read/write operations are run in a transaction
+pub trait IsTransaction: is_transaction_seal::Seal {}
+
 /// Operations on read-only transactions
-pub trait TransactionRo: BlockchainStorageRead {
+pub trait TransactionRo: BlockchainStorageRead + IsTransaction {
     /// Close the transaction
     fn close(self);
 }
 
 /// Operations on read-write transactions
-pub trait TransactionRw: BlockchainStorageWrite {
+pub trait TransactionRw: BlockchainStorageWrite + IsTransaction {
     /// Abort the transaction
     fn abort(self);
 

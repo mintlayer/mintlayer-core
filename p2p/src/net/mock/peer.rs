@@ -196,15 +196,24 @@ impl Peer {
             tokio::select! {
                 event = self.rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     MockEvent::Disconnect => return self.destroy_peer().await,
+                    MockEvent::SendMessage(message) => self.socket.send(*message).await?,
                 },
                 event = self.socket.recv() => match event {
                     Err(err) => {
                         log::info!("peer connection closed, reason {err}");
-                        self.destroy_peer().await?;
+                        return self.destroy_peer().await;
                     }
-                    Ok(None) => self.destroy_peer().await?,
-                    Ok(Some(_event)) => {
-                        // TODO: handle message
+                    Ok(None) => {},
+                    Ok(Some(message)) => {
+                        self.tx
+                            .send((
+                                self.remote_peer_id,
+                                types::PeerEvent::MessageReceived {
+                                    message
+                                },
+                            ))
+                            .await
+                            .map_err(P2pError::from)?;
                     }
                 }
             }
@@ -215,7 +224,10 @@ impl Peer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{message, net::mock::socket};
+    use crate::{
+        message,
+        net::mock::{socket, types},
+    };
     use chainstate::Locator;
     use common::primitives::semver::SemVer;
     use futures::FutureExt;
@@ -417,11 +429,12 @@ mod tests {
 
         assert!(socket2.recv().now_or_never().is_none());
         socket2
-            .send(types::Message::Request(
-                message::Request::HeaderListRequest(message::HeaderListRequest::new(Locator::new(
-                    vec![],
-                ))),
-            ))
+            .send(types::Message::Request {
+                request_id: types::MockRequestId::new(1337u64),
+                request: message::Request::HeaderListRequest(message::HeaderListRequest::new(
+                    Locator::new(vec![]),
+                )),
+            })
             .await
             .unwrap();
 

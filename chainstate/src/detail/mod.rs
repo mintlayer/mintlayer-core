@@ -13,42 +13,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use self::{
-    orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut},
-    time_getter::TimeGetter,
-};
-use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
-use chainstate_storage::{BlockchainStorage, Transactional};
-use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
-use common::{
-    chain::{
-        block::{BlockHeader, BlockReward},
-        config::ChainConfig,
-        tokens::{
-            OutputValue, RPCTokenInfo, TokenData, TokenId, TokenIssuanceTransaction, TokensError,
-        },
-        Block, GenBlock, OutPointSourceId, SpendablePosition,
-    },
-    primitives::{BlockDistance, BlockHeight, Id, Idable},
-};
-use itertools::Itertools;
-use logging::log;
-use std::sync::Arc;
-use utils::eventhandler::{EventHandler, EventsController};
-use utxo::UtxosDBMut;
-
 pub mod ban_score;
+pub mod time_getter;
+
+pub use self::error::*;
+pub use chainstate_types::Locator;
+
 mod block_index_history_iter;
 mod chainstateref;
 mod error;
 mod median_time;
 mod orphan_blocks;
-pub mod time_getter;
-mod tokens;
+pub mod query;
+pub mod tokens;
 mod transaction_verifier;
-pub use self::error::*;
-pub use chainstate_types::Locator;
-pub use error::*;
+
+use std::sync::Arc;
+
+use itertools::Itertools;
+
+use chainstate_storage::{BlockchainStorage, Transactional};
+use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+use common::{
+    chain::{
+        config::ChainConfig,
+        tokens::{
+            OutputValue, RPCTokenInfo, TokenData, TokenId, TokenIssuanceTransaction, TokensError,
+        },
+        Block, OutPointSourceId, SpendablePosition,
+    },
+    primitives::{BlockDistance, BlockHeight, Id, Idable},
+};
+use logging::log;
+use utils::eventhandler::{EventHandler, EventsController};
+use utxo::UtxosDBMut;
+
+use self::{
+    orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut},
+    query::ChainstateQuery,
+    time_getter::TimeGetter,
+};
+use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
 
 type TxRw<'a, S> = <S as Transactional<'a>>::TransactionRw;
 type TxRo<'a, S> = <S as Transactional<'a>>::TransactionRo;
@@ -103,6 +108,11 @@ impl<S: BlockchainStorage> Chainstate<S> {
             self.orphan_blocks.as_ro_ref(),
             self.time_getter.getter(),
         )
+    }
+
+    #[must_use]
+    pub fn query(&self) -> ChainstateQuery<TxRo<'_, S>, OrphanBlocksRef> {
+        ChainstateQuery::new(self.make_db_tx_ro())
     }
 
     pub fn subscribe_to_events(&mut self, handler: ChainstateEventHandler) {
@@ -291,131 +301,6 @@ impl<S: BlockchainStorage> Chainstate<S> {
         let chainstate_ref = self.make_db_tx_ro();
         chainstate_ref.check_block(&block)?;
         Ok(block)
-    }
-
-    pub fn get_best_block_id(&self) -> Result<Id<GenBlock>, PropertyQueryError> {
-        self.make_db_tx_ro().get_best_block_id()
-    }
-
-    #[allow(dead_code)]
-    pub fn get_block_reward(
-        &self,
-        block_index: &BlockIndex,
-    ) -> Result<Option<BlockReward>, PropertyQueryError> {
-        self.make_db_tx_ro().get_block_reward(block_index)
-    }
-
-    #[allow(dead_code)]
-    pub fn get_header_from_height(
-        &self,
-        height: &BlockHeight,
-    ) -> Result<Option<BlockHeader>, PropertyQueryError> {
-        self.make_db_tx_ro().get_header_from_height(height)
-    }
-
-    pub fn get_block_id_from_height(
-        &self,
-        height: &BlockHeight,
-    ) -> Result<Option<Id<GenBlock>>, PropertyQueryError> {
-        self.make_db_tx_ro()
-            .get_block_id_by_height(height)
-            .map(|res| res.map(Into::into))
-    }
-
-    pub fn get_block(&self, id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
-        self.make_db_tx_ro().get_block(id)
-    }
-
-    pub fn get_block_index(
-        &self,
-        id: &Id<Block>,
-    ) -> Result<Option<BlockIndex>, PropertyQueryError> {
-        self.make_db_tx_ro().get_block_index(id)
-    }
-
-    pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
-        self.make_db_tx_ro().get_best_block_index()
-    }
-
-    fn locator_tip_distances() -> impl Iterator<Item = BlockDistance> {
-        itertools::iterate(0, |&i| std::cmp::max(1, i * 2)).map(BlockDistance::new)
-    }
-
-    pub fn get_locator(&self) -> Result<Locator, PropertyQueryError> {
-        let chainstate_ref = self.make_db_tx_ro();
-        let best_block_index = chainstate_ref
-            .get_best_block_index()?
-            .ok_or(PropertyQueryError::BestBlockIndexNotFound)?;
-        let height = best_block_index.block_height();
-
-        let headers = Self::locator_tip_distances()
-            .map_while(|dist| height - dist)
-            .map(|ht| chainstate_ref.get_block_id_by_height(&ht));
-
-        itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
-            .map(Locator::new)
-    }
-
-    pub fn get_block_height_in_main_chain(
-        &self,
-        id: &Id<GenBlock>,
-    ) -> Result<Option<BlockHeight>, PropertyQueryError> {
-        self.make_db_tx_ro().get_block_height_in_main_chain(id)
-    }
-
-    pub fn get_headers(&self, locator: Locator) -> Result<Vec<BlockHeader>, PropertyQueryError> {
-        // use genesis block if no common ancestor with better block height is found
-        let chainstate_ref = self.make_db_tx_ro();
-        let mut best = BlockHeight::new(0);
-
-        for block_id in locator.iter() {
-            if let Some(block_index) = chainstate_ref.get_gen_block_index(block_id)? {
-                if chainstate_ref.is_block_in_main_chain(block_id)? {
-                    best = block_index.block_height();
-                    break;
-                }
-            }
-        }
-
-        // get headers until either the best block or header limit is reached
-        let best_height = chainstate_ref
-            .get_best_block_index()?
-            .expect("best block's height to exist")
-            .block_height();
-
-        let limit = std::cmp::min(
-            (best + HEADER_LIMIT).expect("BlockHeight limit reached"),
-            best_height,
-        );
-
-        let headers = itertools::iterate(best.next_height(), |iter| iter.next_height())
-            .take_while(|height| height <= &limit)
-            .map(|height| chainstate_ref.get_header_from_height(&height));
-        itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
-    }
-
-    pub fn filter_already_existing_blocks(
-        &self,
-        headers: Vec<BlockHeader>,
-    ) -> Result<Vec<BlockHeader>, PropertyQueryError> {
-        let first_block = headers.get(0).ok_or(PropertyQueryError::InvalidInputEmpty)?;
-        let config = &self.chain_config;
-        // verify that the first block attaches to our chain
-        if let Some(id) = first_block.prev_block_id().classify(config).chain_block_id() {
-            utils::ensure!(
-                self.get_block_index(&id)?.is_some(),
-                PropertyQueryError::BlockNotFound(id)
-            );
-        }
-
-        let res = headers
-            .into_iter()
-            .skip_while(|header| {
-                self.get_block_index(&header.get_id()).expect("Database failure").is_some()
-            })
-            .collect::<Vec<_>>();
-
-        Ok(res)
     }
 
     pub fn get_token_detail(

@@ -98,7 +98,7 @@ where
     /// * `request` - [`crate::message::Request`] containing the request
     /// * `request_type` - [`RequestType`] indicating the type, used for tracking progress
     /// * `retry_count` - how many times the request has been resent
-    async fn send_request(
+    pub async fn send_request(
         &mut self,
         peer_id: T::PeerId,
         request: message::Request,
@@ -137,6 +137,10 @@ where
             P2pError::PeerError(PeerError::PeerDoesntExist),
         );
 
+        log::trace!(
+            "send block request to {peer_id}, retry count {retry_count}, block id {block_id}"
+        );
+
         // send request to remote peer and start tracking its progress
         let (wanted_blocks, request_type) = self.make_block_request(vec![block_id]);
         self.send_request(peer_id, wanted_blocks, request_type, retry_count).await?;
@@ -168,6 +172,8 @@ where
             P2pError::PeerError(PeerError::PeerDoesntExist),
         );
 
+        log::trace!("send header request to {peer_id}, retry count {retry_count}");
+
         // send header request and start tracking its progress
         let (wanted_headers, request_type) = self.make_header_request(locator.clone());
         self.send_request(peer_id, wanted_headers, request_type, retry_count).await?;
@@ -192,6 +198,8 @@ where
         request_id: T::SyncingPeerRequestId,
         headers: Vec<BlockHeader>,
     ) -> crate::Result<()> {
+        log::trace!("send header response, request id {request_id:?}");
+
         // TODO: save sent header IDs somewhere and validate future requests against those?
         let message = self.make_header_response(headers);
         self.peer_sync_handle.send_response(request_id, message).await
@@ -210,6 +218,8 @@ where
         request_id: T::SyncingPeerRequestId,
         blocks: Vec<Block>,
     ) -> crate::Result<()> {
+        log::trace!("send block response, request id {request_id:?}");
+
         // TODO: save sent block IDs somewhere and validate future requests against those?
         let message = self.make_block_response(blocks);
         self.peer_sync_handle.send_response(request_id, message).await

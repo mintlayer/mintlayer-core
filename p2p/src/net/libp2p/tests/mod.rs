@@ -28,7 +28,7 @@ use libp2p::{
     request_response::*,
     swarm::NetworkBehaviour,
     swarm::{SwarmBuilder, SwarmEvent},
-    tcp::{GenTcpConfig, TcpTransport},
+    tcp::{GenTcpConfig, TokioTcpTransport},
     Multiaddr, Swarm, Transport,
 };
 use logging::log;
@@ -54,6 +54,8 @@ mod mdns;
 #[cfg(test)]
 mod ping;
 #[cfg(test)]
+mod request_response;
+#[cfg(test)]
 mod swarm;
 
 #[allow(dead_code)]
@@ -75,7 +77,7 @@ pub async fn make_libp2p(
         .into_authentic(&id_keys)
         .expect("noise keys not authentic");
 
-    let transport = TcpTransport::new(GenTcpConfig::new().nodelay(true).port_reuse(true))
+    let transport = TokioTcpTransport::new(GenTcpConfig::new().nodelay(true))
         .upgrade(upgrade::Version::V1)
         .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
         .multiplex(mplex::MplexConfig::new())
@@ -134,7 +136,11 @@ pub async fn make_libp2p(
         }
 
         // subscribes to our topic
-        SwarmBuilder::new(transport, behaviour, peer_id).build()
+        SwarmBuilder::new(transport, behaviour, peer_id)
+            .executor(Box::new(|fut| {
+                tokio::spawn(fut);
+            }))
+            .build()
     };
 
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
@@ -172,7 +178,7 @@ pub async fn make_libp2p_with_ping(
         .into_authentic(&id_keys)
         .expect("noise keys not authentic");
 
-    let transport = TcpTransport::new(GenTcpConfig::new().nodelay(true).port_reuse(true))
+    let transport = TokioTcpTransport::new(GenTcpConfig::new().nodelay(true))
         .upgrade(upgrade::Version::V1)
         .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
         .multiplex(mplex::MplexConfig::new())
@@ -226,7 +232,11 @@ pub async fn make_libp2p_with_ping(
         }
 
         // subscribes to our topic
-        SwarmBuilder::new(transport, behaviour, peer_id).build()
+        SwarmBuilder::new(transport, behaviour, peer_id)
+            .executor(Box::new(|fut| {
+                tokio::spawn(fut);
+            }))
+            .build()
     };
 
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
@@ -295,7 +305,7 @@ pub fn make_transport_and_keys() -> (Boxed<(PeerId, StreamMuxerBox)>, PeerId, id
         .expect("noise keys not authentic");
 
     (
-        TcpTransport::new(GenTcpConfig::new().nodelay(true).port_reuse(true))
+        TokioTcpTransport::new(GenTcpConfig::new().nodelay(true))
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(mplex::MplexConfig::new())

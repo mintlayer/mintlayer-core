@@ -24,6 +24,12 @@ pub trait DbMap: 'static {
 
     /// Expected size of values in the map. May be used for storage optimization.
     const SIZE_HINT: core::ops::Range<usize> = 0..usize::MAX;
+
+    /// Type of keys in the map
+    type Key: serialization::Codec;
+
+    /// Type of values stored in the map
+    type Value: serialization::Codec;
 }
 
 /// What constitutes a valid database schema
@@ -43,7 +49,7 @@ impl<M: DbMap, Rest: Schema> Schema for (M, Rest) {
     type DescIter = std::iter::Chain<std::iter::Once<MapDesc>, Rest::DescIter>;
     fn desc_iter() -> Self::DescIter {
         let map_desc = MapDesc {
-            name: M::NAME,
+            name: M::NAME.to_string(),
             size_hint: M::SIZE_HINT,
         };
         std::iter::once(map_desc).chain(Rest::desc_iter())
@@ -74,21 +80,32 @@ mod internal {
 #[macro_export]
 macro_rules! decl_schema {
     (
-        $svis:vis $schema:ident {
-            $($vis:vis $name:ident: $mul:ident),* $(,)?
+        $(#[$sch_attrs:meta])* $sch_vis:vis $schema:ident {
+            $($(#[$map_attrs:meta])* $map_vis:vis $name:ident: Map<$key:ty, $val:ty>),* $(,)?
         }
     ) => {
         $(
-            #[doc = concat!("Database map: `", stringify!($name), "`")]
-            $vis struct $name;
+            $(#[$map_attrs])*
+            #[doc = concat!("\n\nDatabase map ", $crate::decl_schema!(@DOC $name: $key, $val))]
+            $map_vis struct $name;
             impl $crate::schema::DbMap for $name {
                 const NAME: &'static str = stringify!($name);
+                type Key = $key;
+                type Value = $val;
             }
         )*
-        $svis type $schema = $crate::decl_schema!(@LIST $($name)*);
+
+        $(#[$sch_attrs])*
+        #[doc = concat!("\n\nDatabase schema `", stringify!($schema), "`\n\n")]
+        #[doc = "## Key-value mappings"]
+        #[doc = concat!($("* ", $crate::decl_schema!(@DOC $name: $key, $val), "\n"),*)]
+        $sch_vis type $schema = $crate::decl_schema!(@LIST $($name)*);
     };
     (@LIST) => { () };
     (@LIST $head:ident $($tail:ident)*) => { ($head, $crate::decl_schema!(@LIST $($tail)*)) };
+    (@DOC $name:ident: $key:ty, $val:ty) => {
+        concat!("[`", stringify!($name), "`]`: ", stringify!($key), " -> ", stringify!($val), "`")
+    }
 }
 
 #[cfg(test)]
@@ -97,9 +114,9 @@ mod test {
 
     decl_schema! {
         MySchema {
-            DBIdx0: Single,
-            DBIdx1: Single,
-            DBIdx2: Single,
+            DBIdx0: Map<u8, u16>,
+            DBIdx1: Map<u8, u32>,
+            DBIdx2: Map<u8, u64>,
         }
     }
 

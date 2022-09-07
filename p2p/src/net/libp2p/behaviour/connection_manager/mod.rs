@@ -143,9 +143,7 @@ impl ConnectionManager {
                 self.add_event(ConnectionManagerEvent::Behaviour(
                     BehaviourEvent::ConnectionError {
                         address: connection.addr().clone(),
-                        error: P2pError::DialError(DialError::IoError(
-                            std::io::ErrorKind::ConnectionRefused,
-                        )),
+                        error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
                     },
                 ));
             }
@@ -378,6 +376,8 @@ impl NetworkBehaviour for ConnectionManager {
         error: &Libp2pDialError,
     ) {
         if let Some(peer_id) = peer_id {
+            log::error!("Failed to dial peer: {error:?}");
+
             if let Err(err) = self.handle_dial_failure(&peer_id) {
                 if !std::matches!(error, Libp2pDialError::NoAddresses)
                     || err != P2pError::PeerError(PeerError::PeerDoesntExist)

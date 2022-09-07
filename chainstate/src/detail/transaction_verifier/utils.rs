@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use common::{
     chain::{
         tokens::{token_id, CoinOrTokenId, OutputValue, TokenData, TokensError},
-        Transaction,
+        Spender, Transaction, TxOutput,
     },
     primitives::Amount,
 };
@@ -29,12 +29,10 @@ pub fn insert_or_increase(
     total_amounts: &mut BTreeMap<CoinOrTokenId, Amount>,
     key: CoinOrTokenId,
     amount: Amount,
-) -> Result<(), ConnectTransactionError> {
+) -> Result<(), TokensError> {
     match total_amounts.get_mut(&key) {
         Some(value) => {
-            *value = (*value + amount).ok_or(ConnectTransactionError::TokensError(
-                TokensError::CoinOrTokenOverflow,
-            ))?;
+            *value = (*value + amount).ok_or(TokensError::CoinOrTokenOverflow)?;
         }
         None => {
             total_amounts.insert(key, amount);
@@ -126,4 +124,19 @@ pub fn get_input_token_id_and_amount(
             }
         },
     })
+}
+
+pub fn get_output_value(
+    outputs: &[TxOutput],
+    output_index: usize,
+    spender_id: Spender,
+) -> Result<&OutputValue, ConnectTransactionError> {
+    let output =
+        outputs
+            .get(output_index)
+            .ok_or(ConnectTransactionError::OutputIndexOutOfRange {
+                tx_id: Some(spender_id),
+                source_output_index: output_index,
+            })?;
+    Ok(output.value())
 }

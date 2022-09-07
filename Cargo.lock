@@ -2171,12 +2171,14 @@ dependencies = [
  "async-io",
  "futures",
  "futures-timer",
+ "if-addrs",
  "if-watch",
  "ipnet",
  "libc",
  "libp2p-core",
  "log",
  "socket2",
+ "tokio",
 ]
 
 [[package]]
@@ -4037,8 +4039,19 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 name = "storage"
 version = "0.1.0"
 dependencies = [
+ "serialization",
  "storage-core",
  "storage-inmemory",
+ "utils",
+]
+
+[[package]]
+name = "storage-backend-test-suite"
+version = "0.1.0"
+dependencies = [
+ "libtest-mimic",
+ "proptest",
+ "storage-core",
  "utils",
 ]
 
@@ -4055,6 +4068,7 @@ dependencies = [
 name = "storage-inmemory"
 version = "0.1.0"
 dependencies = [
+ "storage-backend-test-suite",
  "storage-core",
  "utils",
 ]

@@ -32,7 +32,7 @@
 //! // Here, we create just one index.
 //! storage::decl_schema! {
 //!     Schema {
-//!         MyMap: Single,
+//!         MyMap: Map<String, u64>,
 //!     }
 //! }
 //!
@@ -47,29 +47,29 @@
 //!     let mut map = tx.get_mut::<MyMap, _>();
 //!
 //!     // Associate the value "bar" with the key "foo"
-//!     map.put(b"foo".to_vec(), b"bar".to_vec())?;
+//!     map.put("foo", &1337)?;
 //!
 //!     // Get the value out again.
-//!     let val = map.get(b"foo")?;
-//!     assert_eq!(val, Some(&b"bar"[..]));
+//!     let val = map.get("foo")?;
+//!     assert_eq!(val.map(|x| x.decode()), Some(1337));
 //!
 //!     // End the transaction
 //!     tx.commit()?;
 //!
 //!     // Try writing a value but abort the transaction afterwards.
 //!     let mut tx = store.transaction_rw();
-//!     tx.get_mut::<MyMap, _>().put(b"baz".to_vec(), b"xyz".to_vec())?;
+//!     tx.get_mut::<MyMap, _>().put("baz", &42)?;
 //!     tx.abort();
 //!
 //!     // Transaction can return data. Values taken from the database have to be cloned
 //!     // in order for them to be available after the transaction terminates.
 //!     let tx = store.transaction_ro();
-//!     assert_eq!(tx.get::<MyMap, _>().get(b"baz")?, None);
+//!     assert_eq!(tx.get::<MyMap, _>().get("baz")?, None);
 //!     tx.close();
 //!
 //!     // Check the value we first inserted is still there.
 //!     let tx = store.transaction_ro();
-//!     assert_eq!(tx.get::<MyMap, _>().get(b"foo")?, Some(&b"bar"[..]));
+//!     assert_eq!(tx.get::<MyMap, _>().get("foo")?.map(|x| x.decode()), Some(1337));
 //!     tx.close();
 //!
 //!     Ok(())
@@ -94,10 +94,11 @@ pub use storage_inmemory as inmemory;
 #[cfg(test)]
 mod test {
     use super::*;
+    use storage_core::Data;
 
     decl_schema! {
         Schema {
-            MyMap: Single,
+            MyMap: Map<Data, Data>,
         }
     }
 
@@ -106,7 +107,7 @@ mod test {
         utils::concurrency::model(|| {
             let store = Storage::<_, Schema>::new(inmemory::InMemory::new()).unwrap();
             let tx = store.transaction_ro();
-            assert_eq!(tx.get::<MyMap, _>().get(b"foo".as_ref()), Ok(None));
+            assert_eq!(tx.get::<MyMap, _>().get(&b"foo".to_vec()), Ok(None));
         });
     }
 
@@ -115,7 +116,7 @@ mod test {
         utils::concurrency::model(|| {
             let store = Storage::<_, Schema>::new(inmemory::InMemory::new()).unwrap();
             let tx = store.transaction_rw();
-            assert_eq!(tx.get::<MyMap, _>().get(b"foo".as_ref()), Ok(None));
+            assert_eq!(tx.get::<MyMap, _>().get(&b"foo".to_vec()), Ok(None));
         });
     }
 }

@@ -118,8 +118,13 @@ mod test {
             }
 
             {
-                let current_height: u64 =
-                    chainstate.get_best_block_index().unwrap().unwrap().block_height().into();
+                let current_height: u64 = chainstate
+                    .query()
+                    .get_best_block_index()
+                    .unwrap()
+                    .unwrap()
+                    .block_height()
+                    .into();
                 assert_eq!(current_height, block_count as u64);
             }
 
@@ -193,8 +198,13 @@ mod test {
             chainstate.process_block(block5.clone(), BlockSource::Local).unwrap();
 
             {
-                let current_height: u64 =
-                    chainstate.get_best_block_index().unwrap().unwrap().block_height().into();
+                let current_height: u64 = chainstate
+                    .query()
+                    .get_best_block_index()
+                    .unwrap()
+                    .unwrap()
+                    .block_height()
+                    .into();
                 assert_eq!(current_height, 5);
             }
 

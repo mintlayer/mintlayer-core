@@ -14,20 +14,22 @@
 // limitations under the License.
 
 use super::*;
-use crate::message::*;
-use p2p_test_utils::make_libp2p_addr;
+use crate::{message::*, net::mock::MockService};
+use p2p_test_utils::{make_libp2p_addr, make_mock_addr};
 use std::{collections::HashSet, time::Duration};
 use tokio::time::timeout;
 
-#[tokio::test]
-async fn test_request_response() {
-    let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
-    let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
+async fn test_request_response<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + std::fmt::Debug + 'static,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
+    let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) = make_sync_manager::<T>(addr1).await;
+    let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) = make_sync_manager::<T>(addr2).await;
 
     // connect the two managers together so that they can exchange messages
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    connect_services::<T>(&mut conn1, &mut conn2).await;
 
     mgr1.peer_sync_handle
         .send_request(
@@ -61,14 +63,28 @@ async fn test_request_response() {
 }
 
 #[tokio::test]
-async fn test_multiple_requests_and_responses() {
-    let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
-    let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
+async fn test_request_response_libp2p() {
+    test_request_response::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+}
+
+// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
+#[tokio::test]
+#[cfg(not(target_os = "macos"))]
+async fn test_request_response_mock() {
+    test_request_response::<MockService>(make_mock_addr(), make_mock_addr()).await;
+}
+
+async fn test_multiple_requests_and_responses<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
+    let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) = make_sync_manager::<T>(addr1).await;
+    let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) = make_sync_manager::<T>(addr2).await;
 
     // connect the two managers together so that they can exchange messages
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    connect_services::<T>(&mut conn1, &mut conn2).await;
     let mut request_ids = HashSet::new();
 
     let id = mgr1
@@ -126,17 +142,32 @@ async fn test_multiple_requests_and_responses() {
     assert!(request_ids.is_empty());
 }
 
+#[tokio::test]
+async fn test_multiple_requests_and_responses_libp2p() {
+    test_multiple_requests_and_responses::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr())
+        .await;
+}
+
+// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
+#[tokio::test]
+#[cfg(not(target_os = "macos"))]
+async fn test_multiple_requests_and_responses_mock() {
+    test_multiple_requests_and_responses::<MockService>(make_mock_addr(), make_mock_addr()).await;
+}
+
 // receive getheaders before receiving `Connected` event from swarm manager
 // which makes the request to be rejected and to time out in the sender end
-#[tokio::test]
-async fn test_request_timeout_error() {
-    let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
-    let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
+async fn test_request_timeout_error<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
+    let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) = make_sync_manager::<T>(addr1).await;
+    let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) = make_sync_manager::<T>(addr2).await;
 
     // connect the two managers together so that they can exchange messages
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    connect_services::<T>(&mut conn1, &mut conn2).await;
     let peer2_id = *conn2.peer_id();
 
     tokio::spawn(async move {
@@ -180,20 +211,32 @@ async fn test_request_timeout_error() {
     }
 }
 
+#[tokio::test]
+async fn test_request_timeout_error_libp2p() {
+    test_request_timeout_error::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_request_timeout_error_mock() {
+    test_request_timeout_error::<MockService>(make_mock_addr(), make_mock_addr()).await;
+}
+
 // verify that if after three retries the remote peer still
 // hasn't responded to our request, the connection is closed
 //
 // marked as ignored as it takes quite a long time to complete
-#[ignore]
-#[tokio::test]
-async fn request_timeout() {
-    let (mut mgr1, mut conn1, _sync1, _pubsub1, mut swarm_rx) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
-    let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
+async fn request_timeout<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
+    let (mut mgr1, mut conn1, _sync1, _pubsub1, mut swarm_rx) = make_sync_manager::<T>(addr1).await;
+    let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) = make_sync_manager::<T>(addr2).await;
 
     // connect the two managers together so that they can exchange messages
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    connect_services::<T>(&mut conn1, &mut conn2).await;
     let _peer2_id = *conn2.peer_id();
 
     tokio::spawn(async move {
@@ -227,4 +270,16 @@ async fn request_timeout() {
             Ok(net::types::SyncingEvent::Request { .. } | net::types::SyncingEvent::Error { .. })
         ));
     }
+}
+
+#[tokio::test]
+#[ignore]
+async fn request_timeout_libp2p() {
+    request_timeout::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn request_timeout_mock() {
+    request_timeout::<MockService>(make_mock_addr(), make_mock_addr()).await;
 }

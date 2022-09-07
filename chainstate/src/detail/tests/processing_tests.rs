@@ -130,7 +130,7 @@ fn empty_chainstate_no_genesis() {
     utils::concurrency::model(|| {
         let tf = TestFramework::builder().build_no_genesis();
         // This panics
-        let _ = tf.chainstate.get_best_block_id();
+        let _ = tf.chainstate.query().get_best_block_id();
     })
 }
 
@@ -712,14 +712,14 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
     };
     tf.process_block(block, BlockSource::Local).unwrap();
 
-    let block_index = tf.chainstate.get_best_block_index().unwrap().unwrap();
+    let block_index = tf.chainstate.query().get_best_block_index().unwrap().unwrap();
     let block_index = match block_index {
         GenBlockIndex::Block(bi) => bi,
         GenBlockIndex::Genesis(_) => unreachable!(),
     };
 
     {
-        let block_reward = tf.chainstate.get_block_reward(&block_index).unwrap().unwrap();
+        let block_reward = tf.chainstate.query().get_block_reward(&block_index).unwrap().unwrap();
 
         assert_eq!(block_reward.outputs(), expected_block_reward);
     }
@@ -754,8 +754,14 @@ fn blocks_from_the_future() {
 
         {
             // ensure no blocks are in chain, so that median time can be the genesis time
-            let current_height: u64 =
-                tf.chainstate.get_best_block_index().unwrap().unwrap().block_height().into();
+            let current_height: u64 = tf
+                .chainstate
+                .query()
+                .get_best_block_index()
+                .unwrap()
+                .unwrap()
+                .block_height()
+                .into();
             assert_eq!(current_height, 0);
         }
 

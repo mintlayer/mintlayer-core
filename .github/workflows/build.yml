@@ -1,6 +1,6 @@
 name: build
 
-on: 
+on:
     push:
       branches:
         - master
@@ -12,6 +12,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_LOG: debug
 
 jobs:
 
@@ -65,6 +66,11 @@ jobs:
       run: cargo test mixed_sighash_types
     - name: Run functional tests
       run: cargo test --release -p mintlayer-test --test functional -- --ignored
+    - uses: actions/upload-artifact@v2
+      if: failure()
+      with:
+        name: windows-functional-test-artifacts
+        path: target/tmp
 
   build_ubuntu:
     runs-on: ubuntu-latest
@@ -90,6 +96,11 @@ jobs:
       run: cargo test mixed_sighash_types
     - name: Run functional tests
       run: cargo test --release -p mintlayer-test --test functional -- --ignored
+    - uses: actions/upload-artifact@v2
+      if: failure()
+      with:
+        name: ubuntu-functional-test-artifacts
+        path: target/tmp
 
   build_macos:
     runs-on: macos-latest
@@ -115,3 +126,9 @@ jobs:
       run: cargo test mixed_sighash_types
     - name: Run functional tests
       run: cargo test --release -p mintlayer-test --test functional -- --ignored
+    - uses: actions/upload-artifact@v2
+      if: failure()
+      with:
+        name: macos-functional-test-artifacts
+        path: target/tmp
+
