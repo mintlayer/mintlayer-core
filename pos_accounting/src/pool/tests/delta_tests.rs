@@ -167,12 +167,14 @@ fn check_create_pool() {
     let outpoint = OutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random())), 0);
     let (pool_id, undo) = delta.create_pool(&outpoint, pledged_amount, pub_key.clone()).unwrap();
 
+    // TODO: disambiguate function call
     assert_eq!(
         PoSAccountingView::get_pool_balance(&delta, pool_id)
             .expect("get_pool_balance ok")
             .expect("get_pool_balance some"),
         pledged_amount
     );
+    // TODO: disambiguate function call
     assert_eq!(
         PoSAccountingView::get_pool_data(&delta, pool_id)
             .expect("get_pool_data ok")
@@ -187,7 +189,7 @@ fn check_create_pool() {
         PoSAccountingUndo::CreatePool(u) => delta.undo_create_pool(u).unwrap(),
         _ => unreachable!(),
     }
-    assert!(delta.is_empty());
+    assert!(delta.data().is_empty());
 }
 
 #[test]
@@ -203,19 +205,21 @@ fn check_decommission_pool() {
 
     let undo = delta.decommission_pool(pool_id).unwrap();
 
-    assert!(delta.is_empty());
+    assert!(delta.data().is_empty());
 
     match undo {
         PoSAccountingUndo::DecommissionPool(u) => delta.undo_decommission_pool(u).unwrap(),
         _ => unreachable!(),
     }
 
+    // TODO: disambiguate function call
     assert_eq!(
         PoSAccountingView::get_pool_balance(&delta, pool_id)
             .expect("get_pool_balance ok")
             .expect("get_pool_balance some"),
         pledged_amount
     );
+    // TODO: disambiguate function call
     assert_eq!(
         PoSAccountingView::get_pool_data(&delta, pool_id)
             .expect("get_pool_data ok")
@@ -273,6 +277,7 @@ fn check_delegate_staking() {
     let delegated_amount = Amount::from_atoms(300);
     let undo = delta.delegate_staking(delegation_id, delegated_amount).unwrap();
 
+    // TODO: disambiguate function call
     assert_eq!(
         PoSAccountingView::get_delegation_balance(&delta, delegation_id)
             .expect("get_delegation_balance ok")
@@ -286,6 +291,7 @@ fn check_delegate_staking() {
             .expect("get_delegation_share some"),
         delegated_amount
     );
+    // TODO: disambiguate function call
     assert_eq!(
         PoSAccountingView::get_pool_balance(&delta, pool_id)
             .expect("get_pool_balance ok")
@@ -320,13 +326,14 @@ fn check_spend_share() {
     let spent_amount = Amount::from_atoms(50);
     delta.spend_share_from_delegation_id(delegation_id, spent_amount).unwrap();
 
+    // TODO: disambiguate function call
     assert_eq!(
         PoSAccountingView::get_delegation_balance(&delta, delegation_id)
             .expect("get_delegation_balance ok")
             .expect("get_delegation_balance some"),
         (delegated_amount - spent_amount).unwrap()
     );
-
+    // TODO: disambiguate function call
     assert_eq!(
         PoSAccountingView::get_pool_balance(&delta, pool_id)
             .expect("get_pool_balance ok")
@@ -334,3 +341,5 @@ fn check_spend_share() {
         ((pledged_amount + delegated_amount).unwrap() - spent_amount).unwrap()
     );
 }
+
+// TODO: increase test coverage (consider using proptest)

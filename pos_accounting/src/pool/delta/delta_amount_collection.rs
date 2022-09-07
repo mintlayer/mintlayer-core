@@ -6,12 +6,13 @@ use serialization::{Decode, Encode};
 
 use crate::error::Error;
 
-#[derive(Clone, Encode, Decode, Debug, PartialEq)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub struct DeltaAmountCollection<K: Ord> {
     data: BTreeMap<K, SignedAmount>,
 }
 
 impl<K: Ord> DeltaAmountCollection<K> {
+    #[cfg(test)]
     pub fn from_data<const N: usize>(data: [(K, SignedAmount); N]) -> Self {
         Self {
             data: BTreeMap::from(data),
@@ -108,10 +109,10 @@ pub mod test {
         let mut collection = DeltaAmountCollection {
             data: BTreeMap::new(),
         };
-        collection.merge_delta_amount_element(1, SignedAmount::from_atoms(1)).unwrap();
+        collection.merge_delta_amount_element('a', SignedAmount::from_atoms(1)).unwrap();
         assert_eq!(collection.data.len(), 1);
         assert_eq!(
-            collection.data.get(&1).unwrap(),
+            collection.data.get(&'a').unwrap(),
             &SignedAmount::from_atoms(1)
         )
     }
@@ -120,13 +121,13 @@ pub mod test {
     fn test_add_existing() {
         // 1 add 1 = 2
         let mut collection = DeltaAmountCollection {
-            data: BTreeMap::from([(1, SignedAmount::from_atoms(1))]),
+            data: BTreeMap::from([('a', SignedAmount::from_atoms(1))]),
         };
 
-        collection.merge_delta_amount_element(1, SignedAmount::from_atoms(1)).unwrap();
+        collection.merge_delta_amount_element('a', SignedAmount::from_atoms(1)).unwrap();
         assert_eq!(collection.data.len(), 1);
         assert_eq!(
-            collection.data.get(&1).unwrap(),
+            collection.data.get(&'a').unwrap(),
             &SignedAmount::from_atoms(2)
         )
     }
@@ -135,13 +136,15 @@ pub mod test {
     fn test_add_neg_existing() {
         // 2 add -1 = 1
         let mut collection = DeltaAmountCollection {
-            data: BTreeMap::from([(1, SignedAmount::from_atoms(2))]),
+            data: BTreeMap::from([('a', SignedAmount::from_atoms(2))]),
         };
 
-        collection.merge_delta_amount_element(1, SignedAmount::from_atoms(-1)).unwrap();
+        collection
+            .merge_delta_amount_element('a', SignedAmount::from_atoms(-1))
+            .unwrap();
         assert_eq!(collection.data.len(), 1);
         assert_eq!(
-            collection.data.get(&1).unwrap(),
+            collection.data.get(&'a').unwrap(),
             &SignedAmount::from_atoms(1)
         )
     }
@@ -150,14 +153,16 @@ pub mod test {
     fn test_add_with_other() {
         let mut collection = DeltaAmountCollection {
             data: BTreeMap::from([
-                (1, SignedAmount::from_atoms(1)),
-                (2, SignedAmount::from_atoms(3)),
+                ('a', SignedAmount::from_atoms(1)),
+                ('b', SignedAmount::from_atoms(3)),
             ]),
         };
 
-        collection.merge_delta_amount_element(1, SignedAmount::from_atoms(1)).unwrap();
-        let expected_data =
-            BTreeMap::from([(1, SignedAmount::from_atoms(2)), (2, SignedAmount::from_atoms(3))]);
+        collection.merge_delta_amount_element('a', SignedAmount::from_atoms(1)).unwrap();
+        let expected_data = BTreeMap::from([
+            ('a', SignedAmount::from_atoms(2)),
+            ('b', SignedAmount::from_atoms(3)),
+        ]);
         assert_eq!(collection.data, expected_data);
     }
 
@@ -165,30 +170,32 @@ pub mod test {
     fn test_add_zero_sum() {
         // 1 add -1 = remove
         let mut collection = DeltaAmountCollection {
-            data: BTreeMap::from([(1, SignedAmount::from_atoms(1))]),
+            data: BTreeMap::from([('a', SignedAmount::from_atoms(1))]),
         };
 
-        collection.merge_delta_amount_element(1, SignedAmount::from_atoms(-1)).unwrap();
+        collection
+            .merge_delta_amount_element('a', SignedAmount::from_atoms(-1))
+            .unwrap();
         assert!(collection.data.is_empty());
     }
 
     #[test]
     fn test_add_overflow() {
         let mut collection = DeltaAmountCollection {
-            data: BTreeMap::from([(1, SignedAmount::MAX)]),
+            data: BTreeMap::from([('a', SignedAmount::MAX)]),
         };
 
-        let res = collection.merge_delta_amount_element(1, SignedAmount::from_atoms(1));
+        let res = collection.merge_delta_amount_element('a', SignedAmount::from_atoms(1));
         assert_eq!(res, Err(Error::ArithmeticErrorDeltaAdditionFailed));
     }
 
     #[test]
     fn test_add_underflow() {
         let mut collection = DeltaAmountCollection {
-            data: BTreeMap::from([(1, SignedAmount::MIN)]),
+            data: BTreeMap::from([('a', SignedAmount::MIN)]),
         };
 
-        let res = collection.merge_delta_amount_element(1, SignedAmount::from_atoms(-1));
+        let res = collection.merge_delta_amount_element('a', SignedAmount::from_atoms(-1));
         assert_eq!(res, Err(Error::ArithmeticErrorDeltaAdditionFailed));
     }
 
@@ -196,13 +203,13 @@ pub mod test {
     fn test_add_unsign() {
         // 1 add 1 = 2
         let mut collection = DeltaAmountCollection {
-            data: BTreeMap::from([(1, SignedAmount::from_atoms(1))]),
+            data: BTreeMap::from([('a', SignedAmount::from_atoms(1))]),
         };
 
-        collection.add_unsigned(1, Amount::from_atoms(1)).unwrap();
+        collection.add_unsigned('a', Amount::from_atoms(1)).unwrap();
         assert_eq!(collection.data.len(), 1);
         assert_eq!(
-            collection.data.get(&1).unwrap(),
+            collection.data.get(&'a').unwrap(),
             &SignedAmount::from_atoms(2)
         )
     }
@@ -210,10 +217,10 @@ pub mod test {
     #[test]
     fn test_add_unsign_overflow() {
         let mut collection = DeltaAmountCollection {
-            data: BTreeMap::from([(1, SignedAmount::from_atoms(2))]),
+            data: BTreeMap::from([('a', SignedAmount::from_atoms(2))]),
         };
 
-        let res = collection.add_unsigned(1, Amount::MAX);
+        let res = collection.add_unsigned('a', Amount::MAX);
         assert_eq!(res, Err(Error::ArithmeticErrorToSignedFailed));
     }
 
@@ -221,13 +228,13 @@ pub mod test {
     fn test_sub_existing() {
         // 2 sub 1 = 1
         let mut collection = DeltaAmountCollection {
-            data: BTreeMap::from([(1, SignedAmount::from_atoms(2))]),
+            data: BTreeMap::from([('a', SignedAmount::from_atoms(2))]),
         };
 
-        collection.sub_unsigned(1, Amount::from_atoms(1)).unwrap();
+        collection.sub_unsigned('a', Amount::from_atoms(1)).unwrap();
         assert_eq!(collection.data.len(), 1);
         assert_eq!(
-            collection.data.get(&1).unwrap(),
+            collection.data.get(&'a').unwrap(),
             &SignedAmount::from_atoms(1)
         )
     }
@@ -236,44 +243,44 @@ pub mod test {
     fn test_sub_zero_sum() {
         // 1 sub 1 = remove
         let mut collection = DeltaAmountCollection {
-            data: BTreeMap::from([(1, SignedAmount::from_atoms(1))]),
+            data: BTreeMap::from([('a', SignedAmount::from_atoms(1))]),
         };
 
-        collection.sub_unsigned(1, Amount::from_atoms(1)).unwrap();
+        collection.sub_unsigned('a', Amount::from_atoms(1)).unwrap();
         assert!(collection.data.is_empty());
     }
 
     #[test]
     fn test_sub_unsigned_underflow() {
-        let mut collection = DeltaAmountCollection::from_data([(1, SignedAmount::from_atoms(2))]);
+        let mut collection = DeltaAmountCollection::from_data([('a', SignedAmount::from_atoms(2))]);
 
-        let res = collection.sub_unsigned(1, Amount::MAX);
+        let res = collection.sub_unsigned('a', Amount::MAX);
         assert_eq!(res, Err(Error::ArithmeticErrorToSignedFailed));
     }
 
     #[test]
     fn test_merge_collections() {
         let mut collection1 = DeltaAmountCollection::from_data([
-            (1, SignedAmount::from_atoms(1)),
-            (2, SignedAmount::from_atoms(2)),
-            (3, SignedAmount::from_atoms(2)),
-            (4, SignedAmount::from_atoms(2)),
+            ('a', SignedAmount::from_atoms(1)),
+            ('b', SignedAmount::from_atoms(2)),
+            ('c', SignedAmount::from_atoms(2)),
+            ('d', SignedAmount::from_atoms(2)),
         ]);
         let collection1_origin = collection1.clone();
 
         let collection2 = DeltaAmountCollection::from_data([
-            (1, SignedAmount::from_atoms(-1)),
-            (2, SignedAmount::from_atoms(2)),
-            (3, SignedAmount::from_atoms(-3)),
-            (5, SignedAmount::from_atoms(2)),
+            ('a', SignedAmount::from_atoms(-1)),
+            ('b', SignedAmount::from_atoms(2)),
+            ('c', SignedAmount::from_atoms(-3)),
+            ('e', SignedAmount::from_atoms(2)),
         ]);
         let collection2_clone = collection2.clone();
 
         let expected_data = BTreeMap::from([
-            (2, SignedAmount::from_atoms(4)),
-            (3, SignedAmount::from_atoms(-1)),
-            (4, SignedAmount::from_atoms(2)),
-            (5, SignedAmount::from_atoms(2)),
+            ('b', SignedAmount::from_atoms(4)),
+            ('c', SignedAmount::from_atoms(-1)),
+            ('d', SignedAmount::from_atoms(2)),
+            ('e', SignedAmount::from_atoms(2)),
         ]);
 
         collection1.merge_delta_amounts(collection2).unwrap();
@@ -282,4 +289,6 @@ pub mod test {
         collection1.undo_merge_delta_amounts(collection2_clone).unwrap();
         assert_eq!(collection1.data, collection1_origin.data);
     }
+
+    // TODO: increase test coverage (consider using proptest)
 }

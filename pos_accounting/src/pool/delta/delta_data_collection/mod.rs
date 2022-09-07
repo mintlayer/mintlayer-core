@@ -9,7 +9,7 @@ pub mod undo;
 // TODO: move DataDeltaUndoOp here
 
 /// The outcome of combining two deltas for a given key upon the map that contains it
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum DeltaMapOp<T> {
     /// Write a specific value (for example, to write a Create or Modify operation)
     Write(T),
@@ -19,14 +19,14 @@ pub enum DeltaMapOp<T> {
 
 use self::undo::{DataDeltaUndoOp, DeltaDataUndoCollection};
 
-#[derive(PartialEq, Clone, Encode, Decode, Debug)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub enum DataDelta<T> {
     Create(Box<T>),
     Modify(Box<T>),
     Delete,
 }
 
-#[derive(Clone, Encode, Decode, Debug, PartialEq)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub struct DeltaDataCollection<K: Ord, T> {
     data: BTreeMap<K, DataDelta<T>>,
 }
@@ -160,39 +160,39 @@ pub mod test {
         use DataDelta::{Create, Delete, Modify};
         let data = |v| Box::new(v);
 
-        assert_eq!(combine_delta_data(&Create(data(2)), Create(data(3))), Err(Error::DeltaDataCreatedMultipleTimes));
-        assert_eq!(combine_delta_data(&Create(data(2)), Modify(data(3))), Ok(DeltaMapOp::Write(DataDelta::Create(data(3)))));
-        assert_eq!(combine_delta_data(&Create(data(2)), Delete),          Ok(DeltaMapOp::Delete));
+        assert_eq!(combine_delta_data(&Create(data('a')), Create(data('b'))), Err(Error::DeltaDataCreatedMultipleTimes));
+        assert_eq!(combine_delta_data(&Create(data('a')), Modify(data('b'))), Ok(DeltaMapOp::Write(DataDelta::Create(data('b')))));
+        assert_eq!(combine_delta_data(&Create(data('a')), Delete),            Ok(DeltaMapOp::Delete));
 
-        assert_eq!(combine_delta_data(&Modify(data(2)), Create(data(3))), Err(Error::DeltaDataCreatedMultipleTimes));
-        assert_eq!(combine_delta_data(&Modify(data(2)), Modify(data(3))), Ok(DeltaMapOp::Write(DataDelta::Modify(data(3)))));
-        assert_eq!(combine_delta_data(&Modify(data(2)), Delete),          Ok(DeltaMapOp::Delete));
+        assert_eq!(combine_delta_data(&Modify(data('a')), Create(data('b'))), Err(Error::DeltaDataCreatedMultipleTimes));
+        assert_eq!(combine_delta_data(&Modify(data('a')), Modify(data('b'))), Ok(DeltaMapOp::Write(DataDelta::Modify(data('b')))));
+        assert_eq!(combine_delta_data(&Modify(data('a')), Delete),            Ok(DeltaMapOp::Delete));
 
-        assert_eq!(combine_delta_data(&Delete,          Create(data(3))), Ok(DeltaMapOp::Write(DataDelta::Create(data(3)))));
-        assert_eq!(combine_delta_data(&Delete,          Modify(data(3))), Err(Error::DeltaDataModifyAfterDelete));
-        assert_eq!(combine_delta_data::<i32>(&Delete,   Delete),          Err(Error::DeltaDataDeletedMultipleTimes));
+        assert_eq!(combine_delta_data(&Delete,            Create(data('b'))), Ok(DeltaMapOp::Write(DataDelta::Create(data('b')))));
+        assert_eq!(combine_delta_data(&Delete,            Modify(data('b'))), Err(Error::DeltaDataModifyAfterDelete));
+        assert_eq!(combine_delta_data::<char>(&Delete,    Delete),            Err(Error::DeltaDataDeletedMultipleTimes));
     }
 
     #[test]
     fn test_merge_collections() {
         let mut collection1 = DeltaDataCollection::from_data([
-            (1, DataDelta::Create(Box::new(10))),
-            (2, DataDelta::Modify(Box::new(20))),
+            (1, DataDelta::Create(Box::new('a'))),
+            (2, DataDelta::Modify(Box::new('b'))),
             (3, DataDelta::Delete),
-            (4, DataDelta::Create(Box::new(40))),
+            (4, DataDelta::Create(Box::new('d'))),
         ]);
         let collection1_origin = collection1.clone();
 
         let collection2 = DeltaDataCollection::from_data([
-            (1, DataDelta::Modify(Box::new(11))),
-            (2, DataDelta::Modify(Box::new(21))),
+            (1, DataDelta::Modify(Box::new('f'))),
+            (2, DataDelta::Modify(Box::new('g'))),
             (4, DataDelta::Delete),
             (5, DataDelta::Delete),
         ]);
 
         let expected_data = BTreeMap::from([
-            (1, DataDelta::Create(Box::new(11))),
-            (2, DataDelta::Modify(Box::new(21))),
+            (1, DataDelta::Create(Box::new('f'))),
+            (2, DataDelta::Modify(Box::new('g'))),
             (3, DataDelta::Delete),
             (5, DataDelta::Delete),
         ]);
@@ -203,4 +203,6 @@ pub mod test {
         collection1.undo_merge_delta_data(undo_data).unwrap();
         assert_eq!(collection1.data, collection1_origin.data);
     }
+
+    // TODO: increase test coverage (consider using proptest)
 }
