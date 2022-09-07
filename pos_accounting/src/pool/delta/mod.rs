@@ -20,8 +20,7 @@ pub struct PoSAccountingDelta<'a> {
     data: PoSAccountingDeltaData,
 }
 
-/// All the operations we have to do to our accounting state to undo a delta
-#[allow(dead_code)]
+/// All the operations we have to do with the accounting state to undo a delta
 pub struct DeltaMergeUndo {
     pool_data_undo: DeltaDataUndoCollection<H256, PoolData>,
     delegation_data_undo: DeltaDataUndoCollection<H256, DelegationData>,

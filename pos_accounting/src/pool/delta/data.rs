@@ -8,7 +8,7 @@ use super::{
 
 use serialization::{Decode, Encode};
 
-#[derive(Clone, Encode, Decode)]
+#[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
 pub struct PoSAccountingDeltaData {
     pub pool_data: DeltaDataCollection<H256, PoolData>,
     pub pool_balances: DeltaAmountCollection<H256>,
@@ -26,5 +26,15 @@ impl PoSAccountingDeltaData {
             delegation_balances: Default::default(),
             delegation_data: Default::default(),
         }
+    }
+
+    #[cfg(test)]
+    pub fn is_empty(&self) -> bool {
+        // TODO: implement derivable trait for this
+        self.pool_balances.data().is_empty()
+            && self.pool_data.data().is_empty()
+            && self.delegation_balances.data().is_empty()
+            && self.delegation_data.data().is_empty()
+            && self.pool_delegation_shares.data().is_empty()
     }
 }

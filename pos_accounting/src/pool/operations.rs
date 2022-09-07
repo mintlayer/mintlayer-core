@@ -50,7 +50,7 @@ pub trait PoSAccountingOperatorWrite {
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
         decommission_key: PublicKey,
-    ) -> Result<PoSAccountingUndo, Error>;
+    ) -> Result<(H256, PoSAccountingUndo), Error>;
     fn undo_create_pool(&mut self, undo_data: CreatePoolUndo) -> Result<(), Error>;
 
     fn decommission_pool(&mut self, pool_id: H256) -> Result<PoSAccountingUndo, Error>;

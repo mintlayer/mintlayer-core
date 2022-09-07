@@ -6,3 +6,6 @@ pub mod operations;
 pub mod pool_data;
 pub mod storage;
 pub mod view;
+
+#[cfg(test)]
+mod tests;
