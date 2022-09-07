@@ -45,12 +45,6 @@ pub struct DeltaDataCollection<K: Ord, T> {
 }
 
 impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
-    pub fn from_data<const N: usize>(data: [(K, DataDelta<T>); N]) -> Self {
-        Self {
-            data: BTreeMap::from(data),
-        }
-    }
-
     pub fn merge_delta_data(
         &mut self,
         delta_to_apply: Self,
@@ -130,6 +124,22 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
     }
 }
 
+impl<K: Ord, T> Default for DeltaDataCollection<K, T> {
+    fn default() -> Self {
+        Self {
+            data: Default::default(),
+        }
+    }
+}
+
+impl<K: Ord + Copy, T> FromIterator<(K, DataDelta<T>)> for DeltaDataCollection<K, T> {
+    fn from_iter<I: IntoIterator<Item = (K, DataDelta<T>)>>(iter: I) -> Self {
+        DeltaDataCollection {
+            data: BTreeMap::<K, DataDelta<T>>::from_iter(iter),
+        }
+    }
+}
+
 /// Given two deltas, combine them into one delta, this is the basic delta data composability function
 fn combine_delta_data<T>(
     lhs: &DataDelta<T>,
@@ -151,14 +161,6 @@ fn combine_delta_data<T>(
         (DataDelta::Delete, DataDelta::Create(d)) => Ok(DeltaMapOp::Write(DataDelta::Create(d))),
         (DataDelta::Delete, DataDelta::Modify(_)) => Err(Error::DeltaDataModifyAfterDelete),
         (DataDelta::Delete, DataDelta::Delete) => Err(Error::DeltaDataDeletedMultipleTimes),
-    }
-}
-
-impl<K: Ord, T> Default for DeltaDataCollection<K, T> {
-    fn default() -> Self {
-        Self {
-            data: Default::default(),
-        }
     }
 }
 
@@ -187,27 +189,36 @@ pub mod test {
 
     #[test]
     fn test_merge_collections() {
-        let mut collection1 = DeltaDataCollection::from_data([
-            (1, DataDelta::Create(Box::new('a'))),
-            (2, DataDelta::Modify(Box::new('b'))),
-            (3, DataDelta::Delete),
-            (4, DataDelta::Create(Box::new('d'))),
-        ]);
+        let mut collection1 = DeltaDataCollection::from_iter(
+            [
+                (1, DataDelta::Create(Box::new('a'))),
+                (2, DataDelta::Modify(Box::new('b'))),
+                (3, DataDelta::Delete),
+                (4, DataDelta::Create(Box::new('d'))),
+            ]
+            .into_iter(),
+        );
         let collection1_origin = collection1.clone();
 
-        let collection2 = DeltaDataCollection::from_data([
-            (1, DataDelta::Modify(Box::new('f'))),
-            (2, DataDelta::Modify(Box::new('g'))),
-            (4, DataDelta::Delete),
-            (5, DataDelta::Delete),
-        ]);
+        let collection2 = DeltaDataCollection::from_iter(
+            [
+                (1, DataDelta::Modify(Box::new('f'))),
+                (2, DataDelta::Modify(Box::new('g'))),
+                (4, DataDelta::Delete),
+                (5, DataDelta::Delete),
+            ]
+            .into_iter(),
+        );
 
-        let expected_data = BTreeMap::from([
-            (1, DataDelta::Create(Box::new('f'))),
-            (2, DataDelta::Modify(Box::new('g'))),
-            (3, DataDelta::Delete),
-            (5, DataDelta::Delete),
-        ]);
+        let expected_data = BTreeMap::from_iter(
+            [
+                (1, DataDelta::Create(Box::new('f'))),
+                (2, DataDelta::Modify(Box::new('g'))),
+                (3, DataDelta::Delete),
+                (5, DataDelta::Delete),
+            ]
+            .into_iter(),
+        );
 
         let undo_data = collection1.merge_delta_data(collection2).unwrap();
         assert_eq!(collection1.data, expected_data);

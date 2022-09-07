@@ -2,6 +2,8 @@
 pub enum Error {
     #[error("Accounting storage error")]
     StorageError(#[from] chainstate_types::storage_result::Error),
+    #[error("Base accounting error: {0}")]
+    AccountingError(#[from] accounting::Error),
     #[error("Pool already exists by balance")]
     InvariantErrorPoolBalanceAlreadyExists,
     #[error("Pool already exists by data")]
@@ -62,6 +64,4 @@ pub enum Error {
     InvariantErrorDelegationUndoFailedDataNotFound,
     #[error("Delta reverts merge failed due to duplicates")]
     DuplicatesInDeltaAndUndo,
-    #[error("Base accounting error: {0}")]
-    AccountingError(#[from] accounting::Error),
 }

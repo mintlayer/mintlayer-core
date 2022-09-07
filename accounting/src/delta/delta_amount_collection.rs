@@ -21,18 +21,12 @@ use serialization::{Decode, Encode};
 
 use crate::error::Error;
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
+#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub struct DeltaAmountCollection<K: Ord> {
     data: BTreeMap<K, SignedAmount>,
 }
 
 impl<K: Ord> DeltaAmountCollection<K> {
-    pub fn from_data<const N: usize>(data: [(K, SignedAmount); N]) -> Self {
-        Self {
-            data: BTreeMap::from(data),
-        }
-    }
-
     pub fn merge_delta_amounts(&mut self, delta_to_apply: Self) -> Result<(), Error> {
         delta_to_apply.data.into_iter().try_for_each(|(key, other_amount)| {
             self.merge_delta_amount_element(key, other_amount)
@@ -106,10 +100,10 @@ impl<K: Ord> DeltaAmountCollection<K> {
     }
 }
 
-impl<K: Ord> Default for DeltaAmountCollection<K> {
-    fn default() -> Self {
-        Self {
-            data: Default::default(),
+impl<K: Ord> FromIterator<(K, SignedAmount)> for DeltaAmountCollection<K> {
+    fn from_iter<I: IntoIterator<Item = (K, SignedAmount)>>(iter: I) -> Self {
+        DeltaAmountCollection {
+            data: BTreeMap::<K, SignedAmount>::from_iter(iter),
         }
     }
 }
@@ -266,7 +260,8 @@ pub mod test {
 
     #[test]
     fn test_sub_unsigned_underflow() {
-        let mut collection = DeltaAmountCollection::from_data([('a', SignedAmount::from_atoms(2))]);
+        let mut collection =
+            DeltaAmountCollection::from_iter([('a', SignedAmount::from_atoms(2))].into_iter());
 
         let res = collection.sub_unsigned('a', Amount::MAX);
         assert_eq!(res, Err(Error::ArithmeticErrorToSignedFailed));
@@ -274,28 +269,37 @@ pub mod test {
 
     #[test]
     fn test_merge_collections() {
-        let mut collection1 = DeltaAmountCollection::from_data([
-            ('a', SignedAmount::from_atoms(1)),
-            ('b', SignedAmount::from_atoms(2)),
-            ('c', SignedAmount::from_atoms(2)),
-            ('d', SignedAmount::from_atoms(2)),
-        ]);
+        let mut collection1 = DeltaAmountCollection::from_iter(
+            [
+                ('a', SignedAmount::from_atoms(1)),
+                ('b', SignedAmount::from_atoms(2)),
+                ('c', SignedAmount::from_atoms(2)),
+                ('d', SignedAmount::from_atoms(2)),
+            ]
+            .into_iter(),
+        );
         let collection1_origin = collection1.clone();
 
-        let collection2 = DeltaAmountCollection::from_data([
-            ('a', SignedAmount::from_atoms(-1)),
-            ('b', SignedAmount::from_atoms(2)),
-            ('c', SignedAmount::from_atoms(-3)),
-            ('e', SignedAmount::from_atoms(2)),
-        ]);
+        let collection2 = DeltaAmountCollection::from_iter(
+            [
+                ('a', SignedAmount::from_atoms(-1)),
+                ('b', SignedAmount::from_atoms(2)),
+                ('c', SignedAmount::from_atoms(-3)),
+                ('e', SignedAmount::from_atoms(2)),
+            ]
+            .into_iter(),
+        );
         let collection2_clone = collection2.clone();
 
-        let expected_data = BTreeMap::from([
-            ('b', SignedAmount::from_atoms(4)),
-            ('c', SignedAmount::from_atoms(-1)),
-            ('d', SignedAmount::from_atoms(2)),
-            ('e', SignedAmount::from_atoms(2)),
-        ]);
+        let expected_data = BTreeMap::from_iter(
+            [
+                ('b', SignedAmount::from_atoms(4)),
+                ('c', SignedAmount::from_atoms(-1)),
+                ('d', SignedAmount::from_atoms(2)),
+                ('e', SignedAmount::from_atoms(2)),
+            ]
+            .into_iter(),
+        );
 
         collection1.merge_delta_amounts(collection2).unwrap();
         assert_eq!(collection1.data, expected_data);
