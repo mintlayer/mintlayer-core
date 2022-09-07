@@ -51,7 +51,7 @@ pub struct Peer<T: MockTransport> {
     role: Role,
 
     /// Peer socket
-    socket: T::Listener,
+    socket: T::Stream,
 
     /// TX channel for communicating with backend
     tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
@@ -69,7 +69,7 @@ where
         remote_peer_id: MockPeerId,
         role: Role,
         config: Arc<ChainConfig>,
-        socket: T::Listener,
+        socket: T::Stream,
         tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
         rx: mpsc::Receiver<MockEvent>,
     ) -> Self {

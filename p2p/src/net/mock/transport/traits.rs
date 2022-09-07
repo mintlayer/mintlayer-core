@@ -27,7 +27,7 @@ use crate::{net::mock::types::Message, Result};
 pub trait MockTransport {
     // TODO: FIXME: Remove Hash and Display?
     /// An address type.
-    type Address: Clone + Debug + Display + Eq + Hash + Send + Sync + ToString;
+    type Address: Copy + Clone + Debug + Display + Eq + Hash + Send + Sync + ToString;
 
     /// A listener type.
     type Listener: MockListener<Self::Stream, Self::Address>;
@@ -58,7 +58,7 @@ pub trait MockListener<Stream, Address>: Send {
 
 /// An abstraction layer over some network stream that can be used to send and receive messages.
 #[async_trait]
-pub trait MockStream {
+pub trait MockStream: Send {
     // TODO: FIXME:
     // /// Opens a stream connection to a remote host.
     // async fn connect() -> Self;
