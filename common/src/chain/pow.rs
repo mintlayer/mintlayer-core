@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crate::chain::config::ChainType;
+use crate::primitives::BlockDistance;
 use crate::Uint256;
 use std::time::Duration;
 
@@ -27,6 +28,8 @@ pub struct PoWChainConfig {
     allow_min_difficulty_blocks: bool,
     /// The lowest possible difficulty
     limit: Uint256,
+    /// The distance required to pass to allow spending the block reward
+    reward_maturity_distance: BlockDistance,
 }
 
 impl PoWChainConfig {
@@ -35,6 +38,8 @@ impl PoWChainConfig {
             no_retargeting: no_retargeting(chain_type),
             allow_min_difficulty_blocks: allow_min_difficulty_blocks(chain_type),
             limit: limit(chain_type),
+            // If block time is 2 minutes (which is my goal eventually), then 500 is equivalent to 100 in bitcoin's 10 minutes.
+            reward_maturity_distance: BlockDistance::new(500),
         }
     }
 
@@ -48,6 +53,10 @@ impl PoWChainConfig {
 
     pub const fn limit(&self) -> Uint256 {
         self.limit
+    }
+
+    pub const fn reward_maturity_distance(&self) -> BlockDistance {
+        self.reward_maturity_distance
     }
 
     /// The difficulty changes every 2016 blocks, or approximately 2 weeks.

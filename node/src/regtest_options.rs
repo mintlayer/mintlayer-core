@@ -31,10 +31,6 @@ pub struct ChainConfigOptions {
     #[clap(long)]
     pub chain_address_prefix: Option<String>,
 
-    /// Block reward maturity.
-    #[clap(long)]
-    pub chain_blockreward_maturity: Option<i64>,
-
     /// The maximum future block offset in seconds.
     #[clap(long)]
     pub chain_max_future_block_time_offset: Option<u64>,

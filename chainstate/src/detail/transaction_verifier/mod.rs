@@ -35,7 +35,7 @@ use common::{
         Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
         Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
     },
-    primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 use utils::ensure;
 use utxo::{
@@ -57,8 +57,8 @@ struct BlockUndoEntry {
 /// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum BlockTransactableRef<'a> {
-    Transaction(&'a Block, usize),
-    BlockReward(&'a Block),
+    Transaction(&'a WithId<Block>, usize),
+    BlockReward(&'a WithId<Block>),
 }
 
 /// The change that a block has caused to the blockchain state
@@ -168,29 +168,6 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn check_blockreward_maturity(
-        &self,
-        spending_block_id: &Id<GenBlock>,
-        spend_height: &BlockHeight,
-        blockreward_maturity: &BlockDistance,
-    ) -> Result<(), ConnectTransactionError> {
-        let spending_block_id = match spending_block_id.classify(self.chain_config) {
-            GenBlockId::Block(id) => id,
-            // TODO Handle premine maturity here or using some other mechanism (output time lock)
-            GenBlockId::Genesis(_) => return Ok(()),
-        };
-        let source_block_index = self.db_tx.get_block_index(&spending_block_id)?;
-        let source_block_index = source_block_index
-            .ok_or(ConnectTransactionError::InvariantBrokenSourceBlockIndexNotFound)?;
-        let source_height = source_block_index.block_height();
-        let actual_distance = (*spend_height - source_height)
-            .ok_or(ConnectTransactionError::BlockHeightArithmeticError)?;
-        if actual_distance < *blockreward_maturity {
-            return Err(ConnectTransactionError::ImmatureBlockRewardSpend);
-        }
-        Ok(())
-    }
-
     fn get_from_cached_mut(
         &mut self,
         outpoint: &OutPoint,
@@ -282,7 +259,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
     pub fn check_block_reward(
         &self,
-        block: &Block,
+        block: &WithId<Block>,
         total_fees: Fee,
         block_subsidy_at_height: Subsidy,
     ) -> Result<(), ConnectTransactionError> {
@@ -521,7 +498,6 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         spend_ref: BlockTransactableRef,
         spend_height: &BlockHeight,
         median_time_past: &BlockTimestamp,
-        blockreward_maturity: &BlockDistance,
     ) -> Result<Option<Fee>, ConnectTransactionError> {
         let fee = match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
@@ -563,13 +539,6 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
                     // verify input signatures
                     self.verify_signatures(&reward_transactable, spend_height, median_time_past)?;
-
-                    // check maturity
-                    self.check_blockreward_maturity(
-                        &block.get_id().into(),
-                        spend_height,
-                        blockreward_maturity,
-                    )?;
                 }
 
                 let fee = None;

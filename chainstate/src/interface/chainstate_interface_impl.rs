@@ -16,7 +16,7 @@
 use chainstate_storage::BlockchainStorage;
 use common::{
     chain::block::{Block, BlockHeader, GenBlock},
-    primitives::{BlockHeight, Id},
+    primitives::{id::WithId, BlockHeight, Id},
 };
 use utils::eventhandler::EventHandler;
 
@@ -42,7 +42,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
 
     fn process_block(&mut self, block: Block, source: BlockSource) -> Result<(), ChainstateError> {
         self.chainstate
-            .process_block(block, source)
+            .process_block(block.into(), source)
             .map_err(ChainstateError::ProcessBlockError)?;
         Ok(())
     }
@@ -54,9 +54,11 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
     }
 
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError> {
-        self.chainstate
-            .preliminary_block_check(block)
-            .map_err(ChainstateError::ProcessBlockError)
+        let block = self
+            .chainstate
+            .preliminary_block_check(block.into())
+            .map_err(ChainstateError::ProcessBlockError)?;
+        Ok(WithId::take(block))
     }
 
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError> {
