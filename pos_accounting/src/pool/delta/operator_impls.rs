@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use accounting::{combine_amount_delta, combine_data_with_delta, DataDelta, DataDeltaUndoOp};
 use common::{
     chain::OutPoint,
     primitives::{Amount, H256},
@@ -20,11 +21,7 @@ use crate::{
     },
 };
 
-use super::{
-    combine::{combine_amount_delta, combine_data_with_delta},
-    delta_data_collection::{undo::DataDeltaUndoOp, DataDelta},
-    sum_maps, PoSAccountingDelta,
-};
+use super::{sum_maps, PoSAccountingDelta};
 
 impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
     fn create_pool(
@@ -291,30 +288,30 @@ impl<'a> PoSAccountingOperatorRead for PoSAccountingDelta<'a> {
     ) -> Result<Option<Amount>, Error> {
         let parent_share = self.parent.get_pool_delegation_share(pool_id, delegation_id)?;
         let local_share = self.data.pool_delegation_shares.data().get(&(pool_id, delegation_id));
-        combine_amount_delta(&parent_share, &local_share.copied())
+        combine_amount_delta(&parent_share, &local_share.copied()).map_err(Error::AccountingError)
     }
 
     fn get_pool_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error> {
         let parent_amount = self.parent.get_pool_balance(pool_id)?;
         let local_amount = self.data.pool_balances.data().get(&pool_id);
-        combine_amount_delta(&parent_amount, &local_amount.copied())
+        combine_amount_delta(&parent_amount, &local_amount.copied()).map_err(Error::AccountingError)
     }
 
     fn get_delegation_id_balance(&self, delegation_id: H256) -> Result<Option<Amount>, Error> {
         let parent_amount = self.parent.get_delegation_balance(delegation_id)?;
         let local_amount = self.data.delegation_balances.data().get(&delegation_id);
-        combine_amount_delta(&parent_amount, &local_amount.copied())
+        combine_amount_delta(&parent_amount, &local_amount.copied()).map_err(Error::AccountingError)
     }
 
     fn get_delegation_id_data(&self, id: H256) -> Result<Option<DelegationData>, Error> {
         let parent_data = self.parent.get_delegation_data(id)?;
         let local_data = self.data.delegation_data.data().get(&id);
-        combine_data_with_delta(parent_data, local_data)
+        combine_data_with_delta(parent_data, local_data).map_err(Error::AccountingError)
     }
 
     fn get_pool_data(&self, id: H256) -> Result<Option<PoolData>, Error> {
         let parent_data = self.parent.get_pool_data(id)?;
         let local_data = self.data.pool_data.data().get(&id);
-        combine_data_with_delta(parent_data, local_data)
+        combine_data_with_delta(parent_data, local_data).map_err(Error::AccountingError)
     }
 }

@@ -1,17 +1,15 @@
 use std::collections::BTreeMap;
 
+use accounting::DeltaDataUndoCollection;
 use common::primitives::{signed_amount::SignedAmount, Amount, H256};
 
 use crate::error::Error;
 
-use self::{data::PoSAccountingDeltaData, delta_data_collection::undo::DeltaDataUndoCollection};
+use self::data::PoSAccountingDeltaData;
 
 use super::{delegation::DelegationData, pool_data::PoolData, view::PoSAccountingView};
 
-mod combine;
 pub mod data;
-pub mod delta_amount_collection;
-pub mod delta_data_collection;
 pub mod operator_impls;
 mod view_impl;
 
@@ -113,6 +111,7 @@ impl<'a> PoSAccountingDelta<'a> {
         self.data
             .delegation_balances
             .add_unsigned(delegation_target, amount_to_delegate)
+            .map_err(Error::AccountingError)
     }
 
     fn sub_from_delegation_balance(
@@ -123,14 +122,21 @@ impl<'a> PoSAccountingDelta<'a> {
         self.data
             .delegation_balances
             .sub_unsigned(delegation_target, amount_to_delegate)
+            .map_err(Error::AccountingError)
     }
 
     fn add_balance_to_pool(&mut self, pool_id: H256, amount_to_add: Amount) -> Result<(), Error> {
-        self.data.pool_balances.add_unsigned(pool_id, amount_to_add)
+        self.data
+            .pool_balances
+            .add_unsigned(pool_id, amount_to_add)
+            .map_err(Error::AccountingError)
     }
 
     fn sub_balance_from_pool(&mut self, pool_id: H256, amount_to_add: Amount) -> Result<(), Error> {
-        self.data.pool_balances.sub_unsigned(pool_id, amount_to_add)
+        self.data
+            .pool_balances
+            .sub_unsigned(pool_id, amount_to_add)
+            .map_err(Error::AccountingError)
     }
 
     fn add_delegation_to_pool_share(
@@ -142,6 +148,7 @@ impl<'a> PoSAccountingDelta<'a> {
         self.data
             .pool_delegation_shares
             .add_unsigned((pool_id, delegation_id), amount_to_add)
+            .map_err(Error::AccountingError)
     }
 
     fn sub_delegation_from_pool_share(
@@ -153,6 +160,7 @@ impl<'a> PoSAccountingDelta<'a> {
         self.data
             .pool_delegation_shares
             .sub_unsigned((pool_id, delegation_id), amount_to_add)
+            .map_err(Error::AccountingError)
     }
 }
 
@@ -166,10 +174,15 @@ fn sum_maps(
             Some(pv) => *pv,
             None => Amount::from_atoms(0),
         };
-        let base_amount = base_value.into_signed().ok_or(Error::ArithmeticErrorToUnsignedFailed)?;
-        let new_amount = (base_amount + v).ok_or(Error::ArithmeticErrorSumToSignedFailed)?;
-        let new_amount =
-            new_amount.into_unsigned().ok_or(Error::ArithmeticErrorToUnsignedFailed)?;
+        let base_amount = base_value.into_signed().ok_or(Error::AccountingError(
+            accounting::Error::ArithmeticErrorToUnsignedFailed,
+        ))?;
+        let new_amount = (base_amount + v).ok_or(Error::AccountingError(
+            accounting::Error::ArithmeticErrorSumToSignedFailed,
+        ))?;
+        let new_amount = new_amount.into_unsigned().ok_or(Error::AccountingError(
+            accounting::Error::ArithmeticErrorToUnsignedFailed,
+        ))?;
         m1.insert(k, new_amount);
     }
     Ok(m1)

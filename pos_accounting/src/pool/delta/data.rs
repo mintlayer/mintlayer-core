@@ -1,10 +1,7 @@
+use accounting::{DeltaAmountCollection, DeltaDataCollection};
 use common::primitives::H256;
 
 use crate::pool::{delegation::DelegationData, pool_data::PoolData};
-
-use super::{
-    delta_amount_collection::DeltaAmountCollection, delta_data_collection::DeltaDataCollection,
-};
 
 use serialization::{Decode, Encode};
 

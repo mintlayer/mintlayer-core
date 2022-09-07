@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use accounting::{combine_amount_delta, DataDelta};
 use common::primitives::{signed_amount::SignedAmount, Amount, H256};
 
 use crate::{
@@ -7,12 +8,10 @@ use crate::{
     pool::{delegation::DelegationData, pool_data::PoolData, view::PoSAccountingView},
 };
 
-use super::{
-    combine::combine_amount_delta, delta_data_collection::DataDelta, sum_maps, PoSAccountingDelta,
-};
+use super::{sum_maps, PoSAccountingDelta};
 
 fn signed_to_unsigned_pair((k, v): (H256, SignedAmount)) -> Result<(H256, Amount), Error> {
-    let v = v.into_unsigned().ok_or(Error::ArithmeticErrorToUnsignedFailed)?;
+    let v = v.into_unsigned().ok_or(accounting::Error::ArithmeticErrorToUnsignedFailed)?;
     Ok((k, v))
 }
 
@@ -20,7 +19,7 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
     fn get_pool_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error> {
         let parent_balance = self.parent.get_pool_balance(pool_id)?;
         let local_delta = self.data.pool_balances.data().get(&pool_id).cloned();
-        combine_amount_delta(&parent_balance, &local_delta)
+        combine_amount_delta(&parent_balance, &local_delta).map_err(Error::AccountingError)
     }
 
     fn get_pool_data(&self, pool_id: H256) -> Result<Option<PoolData>, Error> {
@@ -57,7 +56,7 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
     fn get_delegation_balance(&self, delegation_id: H256) -> Result<Option<Amount>, Error> {
         let parent_amount = self.parent.get_delegation_balance(delegation_id)?;
         let local_amount = self.data.delegation_balances.data().get(&delegation_id).copied();
-        combine_amount_delta(&parent_amount, &local_amount)
+        combine_amount_delta(&parent_amount, &local_amount).map_err(Error::AccountingError)
     }
 
     fn get_delegation_data(&self, delegation_id: H256) -> Result<Option<DelegationData>, Error> {
@@ -80,6 +79,6 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
         let parent_amount = self.parent.get_pool_delegation_share(pool_id, delegation_id)?;
         let local_amount =
             self.data.pool_delegation_shares.data().get(&(pool_id, delegation_id)).copied();
-        combine_amount_delta(&parent_amount, &local_amount)
+        combine_amount_delta(&parent_amount, &local_amount).map_err(Error::AccountingError)
     }
 }

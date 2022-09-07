@@ -2,6 +2,8 @@
 pub enum Error {
     #[error("Accounting storage error")]
     StorageError(#[from] chainstate_types::storage_result::Error),
+    #[error("Base accounting error: {0}")]
+    AccountingError(#[from] accounting::Error),
     #[error("Pool already exists by balance")]
     InvariantErrorPoolBalanceAlreadyExists,
     #[error("Pool already exists by data")]
@@ -56,34 +58,10 @@ pub enum Error {
     InvariantErrorDelegationSharesAdditionUndoError,
     #[error("Delegation shares arithmetic undo error as it doesn't exist")]
     InvariantErrorDelegationShareNotFound,
-    #[error("Arithmetic error; conversion to unsigned failed")]
-    ArithmeticErrorToUnsignedFailed,
-    #[error("Arithmetic error; conversion to signed failed")]
-    ArithmeticErrorToSignedFailed,
-    #[error("Arithmetic error; delta signed addition failed")]
-    ArithmeticErrorDeltaAdditionFailed,
-    #[error("Arithmetic error; sum to unsigned failed")]
-    ArithmeticErrorSumToUnsignedFailed,
-    #[error("Arithmetic error; sum to signed failed")]
-    ArithmeticErrorSumToSignedFailed,
-    #[error("Consecutive data creation")]
-    DataCreatedMultipleTimes,
-    #[error("Modify non-existing data")]
-    ModifyNonexistingData,
-    #[error("Remove non-existing data")]
-    RemoveNonexistingData,
     #[error("Failed to convert pledge value to signed")]
     PledgeValueToSignedError,
     #[error("Delegation undo failed; data not found")]
     InvariantErrorDelegationUndoFailedDataNotFound,
-    #[error("Consecutive data creation in delta combination")]
-    DeltaDataCreatedMultipleTimes,
-    #[error("Consecutive data deletion in delta combination")]
-    DeltaDataDeletedMultipleTimes,
-    #[error("Modification after deletion of data delta")]
-    DeltaDataModifyAfterDelete,
-    #[error("Delta undo negation error")]
-    DeltaUndoNegationError,
     #[error("Delta reverts merge failed due to duplicates")]
     DuplicatesInDeltaAndUndo,
 }
