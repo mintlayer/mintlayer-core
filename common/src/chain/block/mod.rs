@@ -44,7 +44,7 @@ use crate::{
         transaction::Transaction,
     },
     primitives::{
-        id,
+        id::{self, WithId},
         merkle::{self, MerkleTreeFormError},
         Id, Idable, VersionTag, H256,
     },
@@ -236,6 +236,14 @@ impl Idable for Block {
         self.header().get_id()
     }
 }
+
+impl PartialEq for WithId<Block> {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_id() == other.get_id()
+    }
+}
+
+impl Eq for WithId<Block> {}
 
 #[cfg(test)]
 mod tests {

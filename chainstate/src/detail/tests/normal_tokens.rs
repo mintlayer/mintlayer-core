@@ -1467,8 +1467,8 @@ fn test_tokens_issuance_in_block_reward(#[case] seed: Seed) {
 
         assert!(matches!(
             tf.process_block(block, BlockSource::Local),
-            Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::BlockRewardInTokens)
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockRewardOutputType(_)
             ))
         ));
 
@@ -1488,8 +1488,8 @@ fn test_tokens_issuance_in_block_reward(#[case] seed: Seed) {
 
         assert!(matches!(
             tf.process_block(block, BlockSource::Local),
-            Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::BlockRewardInTokens)
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockRewardOutputType(_)
             ))
         ));
 
@@ -1509,8 +1509,8 @@ fn test_tokens_issuance_in_block_reward(#[case] seed: Seed) {
 
         assert!(matches!(
             tf.process_block(block, BlockSource::Local),
-            Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::BlockRewardInTokens)
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockRewardOutputType(_)
             ))
         ));
     })

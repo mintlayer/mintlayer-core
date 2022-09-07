@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, convert::TryInto, sync::Arc};
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{get_skip_height, BlockIndex, GenBlockIndex, PropertyQueryError};
@@ -26,7 +26,7 @@ use common::{
         tokens::{get_tokens_issuance_count, OutputValue, TokenId, TokensError},
         Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
     },
-    primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable},
     Uint256,
 };
 use consensus::{BlockIndexHandle, TransactionIndexHandle};
@@ -388,7 +388,87 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
-    fn check_block_detail(&self, block: &Block) -> Result<(), CheckBlockError> {
+    pub fn check_block_header(&self, header: &BlockHeader) -> Result<(), CheckBlockError> {
+        self.check_header_size(header)?;
+
+        consensus::validate_consensus(self.chain_config, header, self)
+            .map_err(CheckBlockError::ConsensusVerificationFailed)?;
+
+        let prev_block_id = header.prev_block_id();
+        let median_time_past = calculate_median_time_past(self, prev_block_id);
+        ensure!(
+            header.timestamp() >= median_time_past,
+            CheckBlockError::BlockTimeOrderInvalid,
+        );
+
+        let max_future_offset = self.chain_config.max_future_block_time_offset();
+        let current_time = self.current_time();
+        let block_timestamp = header.timestamp();
+        ensure!(
+            block_timestamp.as_duration_since_epoch() <= current_time + *max_future_offset,
+            CheckBlockError::BlockFromTheFuture,
+        );
+        Ok(())
+    }
+
+    fn check_block_reward_maturity_settings(&self, block: &Block) -> Result<(), CheckBlockError> {
+        // TODO: test every individual case
+        let required = block.consensus_data().reward_maturity_distance(self.chain_config);
+        for output in block.block_reward().outputs() {
+            match output.purpose() {
+                common::chain::OutputPurpose::Transfer(_) => {
+                    return Err(CheckBlockError::InvalidBlockRewardOutputType(
+                        block.get_id(),
+                    ))
+                }
+                common::chain::OutputPurpose::LockThenTransfer(_, tl) => match tl {
+                    common::chain::timelock::OutputTimeLock::UntilHeight(_) => {
+                        return Err(CheckBlockError::InvalidBlockRewardMaturityTimelockType(
+                            block.get_id(),
+                        ))
+                    }
+                    common::chain::timelock::OutputTimeLock::UntilTime(_) => {
+                        return Err(CheckBlockError::InvalidBlockRewardMaturityTimelockType(
+                            block.get_id(),
+                        ))
+                    }
+                    common::chain::timelock::OutputTimeLock::ForBlockCount(c) => {
+                        let cs: i64 = (*c).try_into().map_err(|_| {
+                            CheckBlockError::InvalidBlockRewardMaturityDistanceValue(
+                                block.get_id(),
+                                *c,
+                            )
+                        })?;
+                        let given = BlockDistance::new(cs);
+                        if given < required {
+                            return Err(CheckBlockError::InvalidBlockRewardMaturityDistance(
+                                block.get_id(),
+                                given,
+                                required,
+                            ));
+                        }
+                    }
+                    common::chain::timelock::OutputTimeLock::ForSeconds(_) => {
+                        return Err(CheckBlockError::InvalidBlockRewardMaturityTimelockType(
+                            block.get_id(),
+                        ))
+                    }
+                },
+                common::chain::OutputPurpose::StakeLock(_) => {
+                    return Err(CheckBlockError::InvalidBlockRewardOutputType(
+                        block.get_id(),
+                    ))
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn check_block_detail(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
+        self.check_block_header(block.header())?;
+
+        self.check_block_reward_maturity_settings(block)?;
+
         // MerkleTree root
         let merkle_tree_root = block.merkle_root();
         calculate_tx_merkle_root(block.body()).map_or(
@@ -415,25 +495,20 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             },
         )?;
 
-        let prev_block_id = block.prev_block_id();
-        let median_time_past = calculate_median_time_past(self, &prev_block_id);
-        ensure!(
-            block.timestamp() >= median_time_past,
-            CheckBlockError::BlockTimeOrderInvalid,
-        );
-
-        let max_future_offset = self.chain_config.max_future_block_time_offset();
-        let current_time = self.current_time();
-        let block_timestamp = block.timestamp();
-        ensure!(
-            block_timestamp.as_duration_since_epoch() <= current_time + *max_future_offset,
-            CheckBlockError::BlockFromTheFuture,
-        );
-
         self.check_transactions(block)
             .map_err(CheckBlockError::CheckTransactionFailed)?;
 
         self.check_block_size(block).map_err(CheckBlockError::BlockSizeError)?;
+
+        Ok(())
+    }
+
+    fn check_header_size(&self, header: &BlockHeader) -> Result<(), BlockSizeError> {
+        let size = header.header_size();
+        ensure!(
+            size <= self.chain_config.max_block_header_size(),
+            BlockSizeError::Header(size, self.chain_config.max_block_header_size())
+        );
 
         Ok(())
     }
@@ -542,7 +617,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(self.db_tx.get_block(*block_index.block_id())?)
     }
 
-    pub fn check_block(&self, block: &Block) -> Result<(), CheckBlockError> {
+    pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
         consensus::validate_consensus(self.chain_config, block.header(), self)
             .map_err(CheckBlockError::ConsensusVerificationFailed)?;
         self.check_block_detail(block)?;
@@ -560,9 +635,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     fn make_cache_with_connected_transactions(
         &'a self,
         utxo_view: &'a impl UtxosView,
-        block: &Block,
+        block: &WithId<Block>,
         spend_height: &BlockHeight,
-        blockreward_maturity: &BlockDistance,
     ) -> Result<TransactionVerifier<S>, BlockError> {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
@@ -574,7 +648,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             BlockTransactableRef::BlockReward(block),
             spend_height,
             &median_time_past,
-            blockreward_maturity,
         )?;
         debug_assert!(reward_fees.is_none());
 
@@ -586,7 +659,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     BlockTransactableRef::Transaction(block, tx_num),
                     spend_height,
                     &median_time_past,
-                    blockreward_maturity,
                 )?;
                 (total + fee.expect("connect tx should return fees").0).ok_or_else(|| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
@@ -603,7 +675,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     fn make_cache_with_disconnected_transactions(
         &'a self,
         utxo_view: &'a impl UtxosView,
-        block: &Block,
+        block: &WithId<Block>,
     ) -> Result<TransactionVerifier<S>, BlockError> {
         let mut tx_verifier =
             TransactionVerifier::new(&self.db_tx, utxo_view.derive_cache(), self.chain_config);
@@ -622,8 +694,8 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
     pub fn check_legitimate_orphan(
         &mut self,
         block_source: BlockSource,
-        block: Block,
-    ) -> Result<Block, OrphanCheckError> {
+        block: WithId<Block>,
+    ) -> Result<WithId<Block>, OrphanCheckError> {
         let prev_block_id = block.prev_block_id();
 
         let block_index_found = self
@@ -694,17 +766,12 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
 
     fn connect_transactions(
         &mut self,
-        block: &Block,
+        block: &WithId<Block>,
         spend_height: &BlockHeight,
-        blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
         let utxo_db = UtxosDB::new(&self.db_tx);
-        let connected_txs = self.make_cache_with_connected_transactions(
-            &utxo_db,
-            block,
-            spend_height,
-            blockreward_maturity,
-        )?;
+        let connected_txs =
+            self.make_cache_with_connected_transactions(&utxo_db, block, spend_height)?;
 
         let consumed = connected_txs.consume()?;
         TransactionVerifier::flush_to_storage(&mut self.db_tx, consumed)?;
@@ -712,7 +779,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         Ok(())
     }
 
-    fn disconnect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
+    fn disconnect_transactions(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
         let utxo_db = UtxosDB::new(&self.db_tx);
         let cached_inputs = self.make_cache_with_disconnected_transactions(&utxo_db, block)?;
         let cached_inputs = cached_inputs.consume()?;
@@ -730,11 +797,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         );
         let block = self.get_block_from_index(new_tip_block_index)?.expect("Inconsistent DB");
 
-        self.connect_transactions(
-            &block,
-            &new_tip_block_index.block_height(),
-            self.chain_config.blockreward_maturity(),
-        )?;
+        self.connect_transactions(&block.into(), &new_tip_block_index.block_height())?;
 
         self.db_tx.set_block_id_at_height(
             &new_tip_block_index.block_height(),
@@ -769,7 +832,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             .expect("Best block index not present in the database");
         let block = self.get_block_from_index(&block_index)?.expect("Inconsistent DB");
         // Disconnect transactions
-        self.disconnect_transactions(&block)?;
+        self.disconnect_transactions(&block.into())?;
         self.db_tx.set_best_block_id(block_index.prev_block_id())?;
         // Disconnect block
         self.db_tx.del_block_id_at_height(&block_index.block_height())?;
@@ -799,7 +862,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         Ok(None)
     }
 
-    fn add_to_block_index(&mut self, block: &Block) -> Result<BlockIndex, BlockError> {
+    fn add_to_block_index(&mut self, block: &WithId<Block>) -> Result<BlockIndex, BlockError> {
         match self.db_tx.get_block_index(&block.get_id()).map_err(BlockError::from)? {
             // this is not an error, because it's valid to have the header but not the whole block
             Some(bi) => return Ok(bi),
@@ -829,7 +892,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         Ok(block_index)
     }
 
-    pub fn accept_block(&mut self, block: &Block) -> Result<BlockIndex, BlockError> {
+    pub fn accept_block(&mut self, block: &WithId<Block>) -> Result<BlockIndex, BlockError> {
         let block_index = self.add_to_block_index(block)?;
         match self.db_tx.get_block(block.get_id()).map_err(BlockError::from)? {
             Some(_) => return Err(BlockError::BlockAlreadyExists(block.get_id())),
@@ -842,7 +905,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
     }
 
     /// Mark new block as an orphan
-    fn new_orphan_block(&mut self, block: Block) -> Result<(), OrphanCheckError> {
+    fn new_orphan_block(&mut self, block: WithId<Block>) -> Result<(), OrphanCheckError> {
         match self.orphan_blocks.add_block(block) {
             Ok(_) => Ok(()),
             Err(err) => err.into(),

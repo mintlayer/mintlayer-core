@@ -24,6 +24,7 @@ use common::{
     chain::{
         block::{consensus_data::PoWData, timestamp::BlockTimestamp, ConsensusData},
         config::{create_unit_test_config, Builder as ConfigBuilder},
+        timelock::OutputTimeLock,
         tokens::OutputValue,
         Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId,
         OutputPurpose, OutputSpentState, TxOutput, UpgradeVersion,
@@ -486,6 +487,13 @@ fn consensus_type(#[case] seed: Seed) {
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
     let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
 
+    let reward_lock_distance: i64 = tf
+        .chainstate
+        .chain_config
+        .get_proof_of_work_config()
+        .reward_maturity_distance()
+        .into();
+
     // The next block will have height 1. At this height, we are still under IgnoreConsensus, so
     // processing a block with PoWData will fail
     assert!(matches!(
@@ -524,7 +532,10 @@ fn consensus_type(#[case] seed: Seed) {
             .with_parent(prev_block.get_id().into())
             .with_reward(vec![TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(10)),
-                OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+                OutputPurpose::LockThenTransfer(
+                    Destination::PublicKey(pub_key),
+                    OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
+                ),
             )])
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
@@ -570,6 +581,13 @@ fn consensus_type(#[case] seed: Seed) {
         ))
     ));
 
+    let reward_lock_distance: i64 = tf
+        .chainstate
+        .chain_config
+        .get_proof_of_work_config()
+        .reward_maturity_distance()
+        .into();
+
     // Mining should work
     for i in 15..20 {
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
@@ -579,7 +597,10 @@ fn consensus_type(#[case] seed: Seed) {
             .with_parent(prev_block.get_id().into())
             .with_reward(vec![TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(10)),
-                OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+                OutputPurpose::LockThenTransfer(
+                    Destination::PublicKey(pub_key),
+                    OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
+                ),
             )])
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
@@ -621,6 +642,13 @@ fn pow(#[case] seed: Seed) {
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
     let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
 
+    let reward_lock_distance: i64 = tf
+        .chainstate
+        .chain_config
+        .get_proof_of_work_config()
+        .reward_maturity_distance()
+        .into();
+
     // Let's create a block with random (invalid) PoW data and see that it fails the consensus
     // checks
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
@@ -628,7 +656,10 @@ fn pow(#[case] seed: Seed) {
         .make_block_builder()
         .with_reward(vec![TxOutput::new(
             OutputValue::Coin(Amount::from_atoms(10)),
-            OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+            OutputPurpose::LockThenTransfer(
+                Destination::PublicKey(pub_key),
+                OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
+            ),
         )])
         .add_test_transaction(&mut rng)
         .build();
@@ -682,6 +713,13 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
     let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
 
+    let reward_lock_distance: i64 = tf
+        .chainstate
+        .chain_config
+        .get_proof_of_work_config()
+        .reward_maturity_distance()
+        .into();
+
     let block_reward_output_count = rng.gen::<usize>() % 20;
     let expected_block_reward = (0..block_reward_output_count)
         .map(|_| {
@@ -689,7 +727,10 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
             let pub_key = PrivateKey::new(KeyKind::RistrettoSchnorr).1;
             TxOutput::new(
                 OutputValue::Coin(amount),
-                OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+                OutputPurpose::LockThenTransfer(
+                    Destination::PublicKey(pub_key),
+                    OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
+                ),
             )
         })
         .collect::<Vec<_>>();

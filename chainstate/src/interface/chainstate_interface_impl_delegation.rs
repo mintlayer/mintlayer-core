@@ -21,6 +21,7 @@ use std::{
 use chainstate_types::Locator;
 use common::{
     chain::{
+        block::BlockHeader,
         tokens::{RPCTokenInfo, TokenId},
         Block, GenBlock,
     },
@@ -45,6 +46,10 @@ impl<
 
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError> {
         self.deref().preliminary_block_check(block)
+    }
+
+    fn preliminary_header_check(&self, header: BlockHeader) -> Result<(), ChainstateError> {
+        self.deref().preliminary_header_check(header)
     }
 
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError> {

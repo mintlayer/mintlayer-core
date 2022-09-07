@@ -17,7 +17,7 @@ use super::{orphan_blocks::OrphanAddError, transaction_verifier::error::ConnectT
 use chainstate_types::PropertyQueryError;
 use common::{
     chain::{tokens::TokensError, Block, GenBlock, Transaction},
-    primitives::Id,
+    primitives::{BlockDistance, Id},
 };
 use consensus::ConsensusVerificationError;
 use thiserror::Error;
@@ -68,6 +68,14 @@ pub enum CheckBlockError {
     CheckTransactionFailed(CheckBlockTransactionsError),
     #[error("Check transaction failed: {0}")]
     ConsensusVerificationFailed(ConsensusVerificationError),
+    #[error("Block reward maturity distance too short in block {0}: {1} < {2}")]
+    InvalidBlockRewardMaturityDistance(Id<Block>, BlockDistance, BlockDistance),
+    #[error("Block reward maturity distance invalid in block {0}: {1}")]
+    InvalidBlockRewardMaturityDistanceValue(Id<Block>, u64),
+    #[error("Invalid block reward output timelock type for block {0}")]
+    InvalidBlockRewardMaturityTimelockType(Id<Block>),
+    #[error("Invalid block reward output type for block {0}")]
+    InvalidBlockRewardOutputType(Id<Block>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

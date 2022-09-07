@@ -16,7 +16,7 @@
 use super::{OrphanAddError, OrphanBlocksPool};
 use common::{
     chain::{Block, GenBlock},
-    primitives::Id,
+    primitives::{id::WithId, Id},
 };
 
 pub trait OrphanBlocks {
@@ -26,8 +26,8 @@ pub trait OrphanBlocks {
 
 pub trait OrphanBlocksMut: OrphanBlocks {
     fn clear(&mut self);
-    fn add_block(&mut self, block: Block) -> Result<(), OrphanAddError>;
-    fn take_all_children_of(&mut self, block_id: &Id<GenBlock>) -> Vec<Block>;
+    fn add_block(&mut self, block: WithId<Block>) -> Result<(), OrphanAddError>;
+    fn take_all_children_of(&mut self, block_id: &Id<GenBlock>) -> Vec<WithId<Block>>;
 }
 
 pub struct OrphanBlocksRef<'a> {
@@ -75,11 +75,11 @@ impl<'a> OrphanBlocksMut for OrphanBlocksRefMut<'a> {
         self.inner.clear()
     }
 
-    fn add_block(&mut self, block: Block) -> Result<(), OrphanAddError> {
+    fn add_block(&mut self, block: WithId<Block>) -> Result<(), OrphanAddError> {
         self.inner.add_block(block)
     }
 
-    fn take_all_children_of(&mut self, block_id: &Id<GenBlock>) -> Vec<Block> {
+    fn take_all_children_of(&mut self, block_id: &Id<GenBlock>) -> Vec<WithId<Block>> {
         self.inner.take_all_children_of(block_id)
     }
 }
