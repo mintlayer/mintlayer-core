@@ -1,3 +1,18 @@
+// Copyright (c) 2021 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::collections::BTreeMap;
 
 use serialization::{Decode, Encode};
@@ -5,8 +20,6 @@ use serialization::{Decode, Encode};
 use crate::error::Error;
 
 pub mod undo;
-
-// TODO: move DataDeltaUndoOp here
 
 /// The outcome of combining two deltas for a given key upon the map that contains it
 #[derive(PartialEq, Eq, Debug)]
@@ -32,7 +45,6 @@ pub struct DeltaDataCollection<K: Ord, T> {
 }
 
 impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
-    #[cfg(test)]
     pub fn from_data<const N: usize>(data: [(K, DataDelta<T>); N]) -> Self {
         Self {
             data: BTreeMap::from(data),

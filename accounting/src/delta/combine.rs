@@ -1,10 +1,25 @@
+// Copyright (c) 2021 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use common::primitives::{signed_amount::SignedAmount, Amount};
 
 use crate::error::Error;
 
 use super::delta_data_collection::DataDelta;
 
-pub(super) fn combine_data_with_delta<T: Clone>(
+pub fn combine_data_with_delta<T: Clone>(
     parent_data: Option<T>,
     local_data: Option<&DataDelta<T>>,
 ) -> Result<Option<T>, Error> {
@@ -30,7 +45,7 @@ pub(super) fn combine_data_with_delta<T: Clone>(
 /// If only signed is present, we convert it to unsigned and return it (only delta found)
 /// If both found, we add them and return them as unsigned
 /// Errors can happen when doing conversions; which can uncover inconsistency issues
-pub(super) fn combine_amount_delta(
+pub fn combine_amount_delta(
     lhs: &Option<Amount>,
     rhs: &Option<SignedAmount>,
 ) -> Result<Option<Amount>, Error> {

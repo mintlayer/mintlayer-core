@@ -1,3 +1,4 @@
+use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
 use common::{
     chain::{OutPoint, OutPointSourceId},
     primitives::{signed_amount::SignedAmount, Amount, Id, H256},
@@ -8,12 +9,7 @@ use crate::{
     error::Error,
     pool::{
         delegation::DelegationData,
-        delta::{
-            data::PoSAccountingDeltaData,
-            delta_amount_collection::DeltaAmountCollection,
-            delta_data_collection::{DataDelta, DeltaDataCollection},
-            PoSAccountingDelta,
-        },
+        delta::{data::PoSAccountingDeltaData, PoSAccountingDelta},
         operations::{PoSAccountingOperatorRead, PoSAccountingOperatorWrite, PoSAccountingUndo},
         pool_data::PoolData,
         storage::PoSAccountingDBMut,
