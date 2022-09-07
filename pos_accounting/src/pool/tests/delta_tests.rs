@@ -2,7 +2,7 @@ use common::{
     chain::{OutPoint, OutPointSourceId},
     primitives::{signed_amount::SignedAmount, Amount, Id, H256},
 };
-use crypto::key::{KeyKind, PrivateKey};
+use crypto::key::{KeyKind, PrivateKey, PublicKey};
 
 use crate::{
     error::Error,
@@ -25,19 +25,23 @@ use crate::{
 fn create_pool(
     delta: &mut PoSAccountingDelta,
     pledged_amount: Amount,
-) -> Result<(H256, PoSAccountingUndo), Error> {
+) -> Result<(H256, PublicKey, PoSAccountingUndo), Error> {
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint = OutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random())), 0);
-    delta.create_pool(&outpoint, pledged_amount, pub_key.clone())
+    delta
+        .create_pool(&outpoint, pledged_amount, pub_key.clone())
+        .map(|(id, undo)| (id, pub_key, undo))
 }
 
 fn create_delegation_id(
     delta: &mut PoSAccountingDelta,
     target_pool: H256,
-) -> Result<(H256, PoSAccountingUndo), Error> {
+) -> Result<(H256, PublicKey, PoSAccountingUndo), Error> {
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint = OutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random())), 0);
-    delta.create_delegation_id(target_pool, pub_key.clone(), &outpoint)
+    delta
+        .create_delegation_id(target_pool, pub_key.clone(), &outpoint)
+        .map(|(id, undo)| (id, pub_key, undo))
 }
 
 #[test]
@@ -163,9 +167,7 @@ fn check_create_pool() {
     let mut delta = PoSAccountingDelta::new(&db);
 
     let pledged_amount = Amount::from_atoms(100);
-    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    let outpoint = OutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random())), 0);
-    let (pool_id, undo) = delta.create_pool(&outpoint, pledged_amount, pub_key.clone()).unwrap();
+    let (pool_id, pub_key, undo) = create_pool(&mut delta, pledged_amount).unwrap();
 
     // TODO: disambiguate function call
     assert_eq!(
@@ -199,9 +201,7 @@ fn check_decommission_pool() {
     let mut delta = PoSAccountingDelta::new(&db);
 
     let pledged_amount = Amount::from_atoms(100);
-    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    let outpoint = OutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random())), 0);
-    let (pool_id, _) = delta.create_pool(&outpoint, pledged_amount, pub_key.clone()).unwrap();
+    let (pool_id, pub_key, _) = create_pool(&mut delta, pledged_amount).unwrap();
 
     let undo = delta.decommission_pool(pool_id).unwrap();
 
@@ -238,12 +238,8 @@ fn check_delegation_id() {
     let mut delta = PoSAccountingDelta::new(&db);
 
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, _) = create_pool(&mut delta, pledged_amount).unwrap();
-
-    let (_, del_pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    let del_outpoint = OutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random())), 0);
-    let (delegation_id, undo) =
-        delta.create_delegation_id(pool_id, del_pub_key.clone(), &del_outpoint).unwrap();
+    let (pool_id, pub_key, _) = create_pool(&mut delta, pledged_amount).unwrap();
+    let (delegation_id, del_pub_key, undo) = create_delegation_id(&mut delta, pool_id).unwrap();
 
     assert_eq!(
         delta
@@ -262,6 +258,24 @@ fn check_delegation_id() {
         .get_delegation_data(delegation_id)
         .expect("get_delegation_data ok")
         .is_none());
+
+    // TODO: disambiguate function call
+    assert_eq!(
+        PoSAccountingView::get_pool_balance(&delta, pool_id)
+            .expect("get_pool_balance ok")
+            .expect("get_pool_balance some"),
+        pledged_amount
+    );
+    // TODO: disambiguate function call
+    assert_eq!(
+        PoSAccountingView::get_pool_data(&delta, pool_id)
+            .expect("get_pool_data ok")
+            .expect("get_pool_data some"),
+        PoolData::new(pub_key, pledged_amount)
+    );
+    assert!(delta.data().delegation_balances.data().is_empty());
+    assert!(delta.data().delegation_data.data().is_empty());
+    assert!(delta.data().pool_delegation_shares.data().is_empty());
 }
 
 #[test]
@@ -271,8 +285,8 @@ fn check_delegate_staking() {
     let mut delta = PoSAccountingDelta::new(&db);
 
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, _) = create_pool(&mut delta, pledged_amount).unwrap();
-    let (delegation_id, _) = create_delegation_id(&mut delta, pool_id).unwrap();
+    let (pool_id, pub_key, _) = create_pool(&mut delta, pledged_amount).unwrap();
+    let (delegation_id, del_pub_key, _) = create_delegation_id(&mut delta, pool_id).unwrap();
 
     let delegated_amount = Amount::from_atoms(300);
     let undo = delta.delegate_staking(delegation_id, delegated_amount).unwrap();
@@ -304,10 +318,29 @@ fn check_delegate_staking() {
         _ => unreachable!(),
     }
 
-    assert!(delta
-        .get_delegation_balance(delegation_id)
-        .expect("get_delegation_data ok")
-        .is_none());
+    assert_eq!(
+        delta
+            .get_delegation_data(delegation_id)
+            .expect("get_delegation_data ok")
+            .expect("get_delegation_data some"),
+        DelegationData::new(pool_id, del_pub_key)
+    );
+    // TODO: disambiguate function call
+    assert_eq!(
+        PoSAccountingView::get_pool_balance(&delta, pool_id)
+            .expect("get_pool_balance ok")
+            .expect("get_pool_balance some"),
+        pledged_amount
+    );
+    // TODO: disambiguate function call
+    assert_eq!(
+        PoSAccountingView::get_pool_data(&delta, pool_id)
+            .expect("get_pool_data ok")
+            .expect("get_pool_data some"),
+        PoolData::new(pub_key, pledged_amount)
+    );
+    assert!(delta.data().delegation_balances.data().is_empty());
+    assert!(delta.data().pool_delegation_shares.data().is_empty());
 }
 
 #[test]
@@ -317,8 +350,8 @@ fn check_spend_share() {
     let mut delta = PoSAccountingDelta::new(&db);
 
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, _) = create_pool(&mut delta, pledged_amount).unwrap();
-    let (delegation_id, _) = create_delegation_id(&mut delta, pool_id).unwrap();
+    let (pool_id, pub_key, _) = create_pool(&mut delta, pledged_amount).unwrap();
+    let (delegation_id, del_pub_key, _) = create_delegation_id(&mut delta, pool_id).unwrap();
 
     let delegated_amount = Amount::from_atoms(300);
     delta.delegate_staking(delegation_id, delegated_amount).unwrap();
@@ -339,6 +372,27 @@ fn check_spend_share() {
             .expect("get_pool_balance ok")
             .expect("get_pool_balance some"),
         ((pledged_amount + delegated_amount).unwrap() - spent_amount).unwrap()
+    );
+    // TODO: disambiguate function call
+    assert_eq!(
+        PoSAccountingView::get_pool_data(&delta, pool_id)
+            .expect("get_pool_data ok")
+            .expect("get_pool_data some"),
+        PoolData::new(pub_key, pledged_amount)
+    );
+    assert_eq!(
+        delta
+            .get_delegation_data(delegation_id)
+            .expect("get_delegation_data ok")
+            .expect("get_delegation_data some"),
+        DelegationData::new(pool_id, del_pub_key)
+    );
+    assert_eq!(
+        delta
+            .get_delegation_share(pool_id, delegation_id)
+            .expect("get_delegation_share ok")
+            .expect("get_delegation_share some"),
+        (delegated_amount - spent_amount).unwrap()
     );
 }
 
