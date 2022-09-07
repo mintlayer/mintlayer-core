@@ -54,7 +54,9 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
+        fn get_token_tx(&self, token_id: &TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
+
+        fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
     }
 
     impl UtxosStorageRead for Store {
@@ -83,8 +85,11 @@ mockall::mock! {
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
-        fn set_token_tx(&mut self, token_id: TokenId, issuance_tx: TokenIssuanceTransaction) -> crate::Result<()>;
-        fn del_token_tx(&mut self, token_id: TokenId) -> crate::Result<()>;
+
+        fn set_token_tx(&mut self, token_id: &TokenId, issuance_tx: &TokenIssuanceTransaction) -> crate::Result<()>;
+        fn del_token_tx(&mut self, token_id: &TokenId) -> crate::Result<()>;
+        fn set_token_id(&mut self, issuance_tx_id: &Id<Transaction>, token_id: &TokenId) -> crate::Result<()>;
+        fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for Store {
@@ -134,7 +139,8 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
+        fn get_token_tx(&self, token_id: &TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
+        fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
     }
 
     impl crate::UtxosStorageRead for StoreTxRo {
@@ -176,7 +182,8 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
+        fn get_token_tx(&self, token_id: &TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
+        fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
     }
 
     impl UtxosStorageRead for StoreTxRw {
@@ -206,8 +213,11 @@ mockall::mock! {
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
-        fn set_token_tx(&mut self, token_id: TokenId, issuance_tx: TokenIssuanceTransaction) -> crate::Result<()>;
-        fn del_token_tx(&mut self, token_id: TokenId) -> crate::Result<()>;
+        fn set_token_tx(&mut self, token_id: &TokenId, issuance_tx: &TokenIssuanceTransaction) -> crate::Result<()>;
+        fn del_token_tx(&mut self, token_id: &TokenId) -> crate::Result<()>;
+
+        fn set_token_id(&mut self, issuance_tx_id: &Id<Transaction>, token_id: &TokenId) -> crate::Result<()>;
+        fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for StoreTxRw {

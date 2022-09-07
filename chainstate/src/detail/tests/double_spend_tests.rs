@@ -171,9 +171,7 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
         let second_block = tf.make_block_builder().add_transaction(second_tx).build();
         assert_eq!(
             tf.process_block(second_block, BlockSource::Local).unwrap_err(),
-            BlockError::StateUpdateFailed(ConnectTransactionError::UtxoError(
-                utxo::Error::NoUtxoFound
-            ))
+            BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
         );
         assert_eq!(tf.best_block_id(), first_block_id);
     });

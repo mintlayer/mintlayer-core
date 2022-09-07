@@ -69,7 +69,10 @@ pub trait BlockchainStorageRead: UtxosStorageRead {
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
 
     /// Get token creation tx
-    fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
+    fn get_token_tx(&self, token_id: &TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
+
+    // Get token id by id of the creation tx
+    fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
 }
 
 /// Modifying operations on persistent blockchain data
@@ -112,12 +115,22 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead + UtxosStorageWrite {
     /// Set token creation tx
     fn set_token_tx(
         &mut self,
-        token_id: TokenId,
-        tx_id: TokenIssuanceTransaction,
+        token_id: &TokenId,
+        tx_id: &TokenIssuanceTransaction,
     ) -> crate::Result<()>;
 
     // Remove token tx
-    fn del_token_tx(&mut self, token_id: TokenId) -> crate::Result<()>;
+    fn del_token_tx(&mut self, token_id: &TokenId) -> crate::Result<()>;
+
+    // Binding Id of issuance tx with token id
+    fn set_token_id(
+        &mut self,
+        issuance_tx_id: &Id<Transaction>,
+        token_id: &TokenId,
+    ) -> crate::Result<()>;
+
+    // Remove token id
+    fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction

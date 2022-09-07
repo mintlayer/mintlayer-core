@@ -16,9 +16,8 @@
 mod cached_operation;
 pub mod error;
 use self::{
-    cached_operation::CachedTokensOperation,
-    error::ConnectTransactionError,
-    utils::{get_output_token_id_and_amount, get_output_value},
+    cached_operation::CachedTokensOperation, error::ConnectTransactionError,
+    utils::get_output_token_id_and_amount,
 };
 use ::utils::ensure;
 use cached_operation::CachedInputsOperation;
@@ -236,63 +235,36 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         Ok(total_amounts)
     }
 
-    fn get_tx_index_from_cache(
-        &self,
-        outpoint: &OutPoint,
-    ) -> Result<&TxMainChainIndex, ConnectTransactionError> {
-        let tx_index = match self.tx_index_cache.get(&outpoint.tx_id()) {
-            Some(tx_index_op) => match tx_index_op {
-                CachedInputsOperation::Write(tx_index) => tx_index,
-                CachedInputsOperation::Read(tx_index) => tx_index,
-                CachedInputsOperation::Erase => {
-                    return Err(ConnectTransactionError::PreviouslyCachedInputWasErased)
-                }
-            },
-            None => return Err(ConnectTransactionError::PreviouslyCachedInputNotFound),
-        };
-        Ok(tx_index)
-    }
-
     fn calculate_total_inputs(
         &self,
         inputs: &[TxInput],
     ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
         let mut result = BTreeMap::new();
 
-        for input in inputs.iter() {
-            let outpoint = input.outpoint();
-            let output_index = outpoint.output_index() as usize;
+        for input in inputs {
+            let utxo = self
+                .utxo_cache
+                .utxo(input.outpoint())
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
-            match self.get_tx_index_from_cache(outpoint)?.position() {
-                common::chain::SpendablePosition::Transaction(tx_pos) => {
-                    let tx = self
-                        .db_tx
-                        .get_mainchain_tx_by_position(tx_pos)
-                        .map_err(ConnectTransactionError::from)?
-                        .ok_or_else(|| {
-                            ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(
-                                tx_pos.clone(),
-                            )
-                        })?;
+            match input.outpoint().tx_id() {
+                OutPointSourceId::Transaction(issuance_tx_id) => {
+                    let token_id = self.db_tx.get_token_id(&issuance_tx_id)?;
 
-                    let utxo = self
-                        .utxo_cache
-                        .utxo(input.outpoint())
-                        .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
-
-                    let (key, amount) = get_input_token_id_and_amount(utxo.output().value(), &tx)?;
+                    let (key, amount) =
+                        get_input_token_id_and_amount(utxo.output().value(), token_id)?;
                     insert_or_increase(&mut result, key, amount)?
                 }
-                common::chain::SpendablePosition::BlockReward(block_id) => {
-                    let outputs = self.block_reward_outputs(block_id)?;
-                    match get_output_value(&outputs, output_index, (*block_id).into())? {
-                        OutputValue::Coin(amount) => {
-                            insert_or_increase(&mut result, CoinOrTokenId::Coin, *amount)?
+                OutPointSourceId::BlockReward(_) => {
+                    let (key, amount) = get_input_token_id_and_amount(utxo.output().value(), None)?;
+                    match key {
+                        CoinOrTokenId::Coin => {
+                            insert_or_increase(&mut result, CoinOrTokenId::Coin, amount)?
                         }
-                        OutputValue::Token(_) => {
+                        CoinOrTokenId::TokenId(_) => {
                             return Err(ConnectTransactionError::TokensError(
                                 TokensError::BlockRewardInTokens,
-                            ));
+                            ))
                         }
                     }
                 }
@@ -805,11 +777,18 @@ impl<'a, S: BlockchainStorageWrite + 'a> TransactionVerifier<'a, S> {
         token_op: CachedTokensOperation,
     ) -> Result<(), ConnectTransactionError> {
         match token_op {
-            CachedTokensOperation::Write(ref tx_id) => {
-                db_tx.set_token_tx(token_id, tx_id.clone())?
+            CachedTokensOperation::Write(ref issuance_tx) => {
+                db_tx.set_token_tx(&token_id, issuance_tx)?;
+                db_tx.set_token_id(&issuance_tx.get_id(), &token_id)?;
             }
             CachedTokensOperation::Read(_) => (),
-            CachedTokensOperation::Erase => db_tx.del_token_tx(token_id)?,
+            CachedTokensOperation::Erase => {
+                let issuance_tx = db_tx.get_token_tx(&token_id)?.ok_or(
+                    TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(token_id),
+                )?;
+                db_tx.del_token_tx(&token_id)?;
+                db_tx.del_token_id(&issuance_tx.get_id())?;
+            }
         }
         Ok(())
     }

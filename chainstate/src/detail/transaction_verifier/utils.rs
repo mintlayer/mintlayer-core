@@ -17,8 +17,8 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        tokens::{token_id, CoinOrTokenId, OutputValue, TokenData, TokensError},
-        Spender, Transaction, TxOutput,
+        tokens::{token_id, CoinOrTokenId, OutputValue, TokenData, TokenId, TokensError},
+        Transaction,
     },
     primitives::Amount,
 };
@@ -94,7 +94,7 @@ pub fn get_output_token_id_and_amount<'a>(
 
 pub fn get_input_token_id_and_amount(
     output_value: &OutputValue,
-    tx: &Transaction,
+    token_id: Option<TokenId>,
 ) -> Result<(CoinOrTokenId, Amount), ConnectTransactionError> {
     Ok(match output_value {
         OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
@@ -107,12 +107,11 @@ pub fn get_input_token_id_and_amount(
                 amount_to_issue,
                 number_of_decimals: _,
                 metadata_uri: _,
-            } => {
-                let token_id = token_id(tx).ok_or(ConnectTransactionError::TokensError(
+            } => token_id
+                .map(|token_id| (CoinOrTokenId::TokenId(token_id), *amount_to_issue))
+                .ok_or(ConnectTransactionError::TokensError(
                     TokensError::TokenIdCantBeCalculated,
-                ))?;
-                (CoinOrTokenId::TokenId(token_id), *amount_to_issue)
-            }
+                ))?,
             TokenData::TokenBurnV1 {
                 token_id: _,
                 amount_to_burn: _,
@@ -124,19 +123,4 @@ pub fn get_input_token_id_and_amount(
             }
         },
     })
-}
-
-pub fn get_output_value(
-    outputs: &[TxOutput],
-    output_index: usize,
-    spender_id: Spender,
-) -> Result<&OutputValue, ConnectTransactionError> {
-    let output =
-        outputs
-            .get(output_index)
-            .ok_or(ConnectTransactionError::OutputIndexOutOfRange {
-                tx_id: Some(spender_id),
-                source_output_index: output_index,
-            })?;
-    Ok(output.value())
 }
