@@ -15,7 +15,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{fmt::Debug, net::SocketAddr, sync::Arc, time::Duration};
 
 use libp2p::Multiaddr;
 use tokio::{
@@ -276,16 +276,8 @@ pub async fn add_more_blocks(
 /// This abstraction layer is needed to uniformly create an address in the tests for different
 /// mocks transport implementations.
 pub trait MakeTestAddress {
-    // TODO: FIXME: Remove Hash and Display?
     /// An address type.
-    type Address: Clone
-        + std::fmt::Debug
-        + std::fmt::Display
-        + Eq
-        + std::hash::Hash
-        + Send
-        + Sync
-        + ToString;
+    type Address: Clone + Debug + Eq + std::hash::Hash + Send + Sync + ToString;
 
     /// Creates a new unused address.
     fn make_address() -> Self::Address;
