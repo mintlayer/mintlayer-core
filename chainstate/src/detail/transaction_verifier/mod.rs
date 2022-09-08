@@ -224,7 +224,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         outputs: &[TxOutput],
         include_issuance: Option<&Transaction>,
     ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
-        let amounts: Result<Vec<Option<(CoinOrTokenId, Amount)>>, _> = outputs
+        let amounts: Result<Vec<_>, _> = outputs
             .iter()
             .map(|output| get_output_token_id_and_amount(output.value(), include_issuance))
             .collect();
