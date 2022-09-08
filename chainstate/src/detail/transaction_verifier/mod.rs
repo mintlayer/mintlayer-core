@@ -52,8 +52,7 @@ use self::tokens::{register_tokens_issuance, unregister_token_issuance};
 mod utils;
 use self::utils::{check_transferred_amount, get_input_token_id_and_amount, insert_or_increase};
 
-
-// TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee` 
+// TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee`
 //       that essentially belongs to this type, but return Amount
 #[derive(PartialOrd, PartialEq, Eq, Ord)]
 pub struct Fee(pub Amount);
@@ -786,9 +785,9 @@ impl<'a, S: BlockchainStorageWrite + 'a> TransactionVerifier<'a, S> {
             }
             CachedTokensOperation::Read(_) => (),
             CachedTokensOperation::Erase => {
-                let issuance_tx = db_tx.get_token_tx(&token_id)?.ok_or(
-                    TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(token_id),
-                )?;
+                let issuance_tx = db_tx
+                    .get_token_tx(&token_id)?
+                    .ok_or(TokensError::InvariantBrokenFlushNonexistentToken(token_id))?;
                 db_tx.del_token_tx(&token_id)?;
                 db_tx.del_token_id(&issuance_tx.get_id())?;
             }

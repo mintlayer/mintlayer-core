@@ -60,4 +60,6 @@ pub enum TokensError {
     InvariantBrokenUndoIssuanceOnNonexistentToken(TokenId),
     #[error("Invariant broken - attempt register issuance on non-existent token {0}")]
     InvariantBrokenRegisterIssuanceOnNonexistentToken(TokenId),
+    #[error("Invariant broken - flush non-existent token {0}")]
+    InvariantBrokenFlushNonexistentToken(TokenId),
 }
