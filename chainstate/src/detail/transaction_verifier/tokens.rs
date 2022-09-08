@@ -20,7 +20,7 @@ pub fn register_tokens_issuance(
     let was_tokens_issued = tx.outputs().iter().any(|output| is_tokens_issuance(output.value()));
     if was_tokens_issued {
         precache_issuance(tokens_cache, tx, block_id)?;
-        approve_issuance(tokens_cache, tx)?;
+        write_issuance(tokens_cache, tx)?;
     }
     Ok(())
 }
@@ -38,7 +38,7 @@ pub fn unregister_token_issuance(
     Ok(())
 }
 
-fn approve_issuance(
+fn write_issuance(
     tokens_cache: &mut BTreeMap<TokenId, CachedTokensOperation>,
     tx: &Transaction,
 ) -> Result<(), TokensError> {
