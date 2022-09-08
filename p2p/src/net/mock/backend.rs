@@ -197,18 +197,22 @@ where
                     .await
                 }
                 Err(error) => self
-                    .conn_tx
-                    .send(types::ConnectivityEvent::ConnectionError { address, error })
-                    .await
-                    .map_err(P2pError::from),
+                    log::error!("Failed to establish connection: {err}");
+
+                    self.conn_tx
+                        .send(types::ConnectivityEvent::ConnectionError {
+                            address,
+                            error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
+                        })
+                        .await
+                        .map_err(P2pError::from)
+                }
             },
             Err(_err) => self
                 .conn_tx
                 .send(types::ConnectivityEvent::ConnectionError {
                     address,
-                    error: P2pError::DialError(DialError::IoError(
-                        std::io::ErrorKind::ConnectionRefused,
-                    )),
+                    error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
                 })
                 .await
                 .map_err(P2pError::from),

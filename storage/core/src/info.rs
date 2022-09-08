@@ -16,7 +16,7 @@
 //! Low-level runtime database layout description
 
 /// Database index type, just a thin wrapper over usize
-#[derive(Eq, PartialEq, Clone, Copy, Debug)]
+#[derive(Eq, PartialEq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct DbIndex(usize);
 
 impl DbIndex {
@@ -35,14 +35,15 @@ impl DbIndex {
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct MapDesc {
     /// Key-value map name
-    pub name: &'static str,
+    pub name: String,
     /// Value size hint
     pub size_hint: core::ops::Range<usize>,
 }
 
 impl MapDesc {
-    pub const fn new(name: &'static str) -> Self {
+    pub fn new(name: impl Into<String>) -> Self {
         let size_hint = 0..usize::MAX;
+        let name = name.into();
         Self { name, size_hint }
     }
 }

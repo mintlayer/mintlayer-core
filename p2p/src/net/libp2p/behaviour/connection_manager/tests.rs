@@ -285,7 +285,7 @@ async fn handle_dial_failure() {
         Err(P2pError::PeerError(PeerError::PeerDoesntExist))
     );
 
-    // pending connections emit `ConnectionRefused` error
+    // pending connections emit `ConnectionRefusedOrTimedOut` error
     assert!(
         types::Connection::new(Multiaddr::empty(), types::ConnectionState::Dialing, None)
             .is_pending()
@@ -354,9 +354,7 @@ async fn handle_connection_refused() {
         Some(&types::ConnectionManagerEvent::Behaviour(
             types::BehaviourEvent::ConnectionError {
                 address: Multiaddr::empty(),
-                error: P2pError::DialError(DialError::IoError(
-                    std::io::ErrorKind::ConnectionRefused,
-                )),
+                error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
             },
         )),
     );

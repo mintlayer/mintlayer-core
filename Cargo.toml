@@ -11,6 +11,7 @@ edition = "2021"
 
 [workspace]
 members = [
+  "accounting",                   # Accounting and balances abstractions
   "common",                       # Everything else, until it's moved to another crate.
   "crypto",                       # Cryptographic primitives and their interfaces.
   "consensus",                    # Consensus related logic.
@@ -25,6 +26,7 @@ members = [
   "serialization/tagged",         # Serialization for direct/tagged encoding style.
   "serialization/tagged/derive",  # direct/tagged encoding style derive macros.
   "storage",                      # storage abstraction layer and its implementation.
+  "storage/backend-test-suite",   # Tests for validating storage backend implementations.
   "storage/core",                 # Core backend-agnostic storage abstraction.
   "storage/inmemory",             # In-memory storage backend implementation.
   "subsystem",                    # Utilities for working with concurrent subsystems.

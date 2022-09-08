@@ -11,3 +11,8 @@ storage-core = { path = "../core" }
 
 [dev-dependencies]
 utils = { path = "../../utils" }
+storage-backend-test-suite = { path = "../backend-test-suite" }
+
+[[test]]
+name = "backend"
+harness = false

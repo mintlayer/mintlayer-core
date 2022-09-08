@@ -68,7 +68,7 @@ pub trait TransactionalRw<'tx> {
 
 /// Storage backend internal implementation type
 pub trait BackendImpl:
-    'static + for<'tx> TransactionalRo<'tx> + for<'tx> TransactionalRw<'tx> + Send + Clone
+    'static + for<'tx> TransactionalRo<'tx> + for<'tx> TransactionalRw<'tx> + Send + Sync + Clone
 {
 }
 

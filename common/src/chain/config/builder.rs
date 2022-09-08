@@ -19,7 +19,7 @@ use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, Chain
 use crate::chain::{
     ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoWChainConfig, UpgradeVersion,
 };
-use crate::primitives::{id::WithId, semver::SemVer, BlockDistance, BlockHeight};
+use crate::primitives::{id::WithId, semver::SemVer, BlockHeight};
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -87,7 +87,6 @@ pub struct Builder {
     chain_type: ChainType,
     address_prefix: String,
     magic_bytes: [u8; 4],
-    blockreward_maturity: BlockDistance,
     max_future_block_time_offset: Duration,
     version: SemVer,
     target_block_spacing: Duration,
@@ -106,7 +105,6 @@ impl Builder {
         Self {
             chain_type,
             address_prefix: chain_type.default_address_prefix().to_string(),
-            blockreward_maturity: super::MAINNET_BLOCKREWARD_MATURITY,
             coin_decimals: Mlt::DECIMALS,
             magic_bytes: chain_type.default_magic_bytes(),
             version: SemVer::new(0, 1, 0),
@@ -133,7 +131,6 @@ impl Builder {
         let Self {
             chain_type,
             address_prefix,
-            blockreward_maturity,
             coin_decimals,
             magic_bytes,
             version,
@@ -167,7 +164,6 @@ impl Builder {
         ChainConfig {
             chain_type,
             address_prefix,
-            blockreward_maturity,
             coin_decimals,
             magic_bytes,
             version,
@@ -199,7 +195,6 @@ impl Builder {
     builder_method!(chain_type: ChainType);
     builder_method!(address_prefix: String);
     builder_method!(magic_bytes: [u8; 4]);
-    builder_method!(blockreward_maturity: BlockDistance);
     builder_method!(max_future_block_time_offset: Duration);
     builder_method!(version: SemVer);
     builder_method!(target_block_spacing: Duration);

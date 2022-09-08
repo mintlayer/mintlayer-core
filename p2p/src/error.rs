@@ -107,6 +107,8 @@ pub enum DialError {
     InvalidPeerId,
     #[error("PeerId doesn't match the PeerId of endpoint")]
     WrongPeerId,
+    #[error("Connection refused or timed out")]
+    ConnectionRefusedOrTimedOut,
     #[error("I/O error: `{0:?}`")]
     IoError(std::io::ErrorKind),
     #[error("Failed to negotiate transport protocol")]

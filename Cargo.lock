@@ -3,6 +3,16 @@
 version = 3
 
 [[package]]
+name = "accounting"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "parity-scale-codec",
+ "serialization",
+ "thiserror",
+]
+
+[[package]]
 name = "adler"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4039,8 +4049,19 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 name = "storage"
 version = "0.1.0"
 dependencies = [
+ "serialization",
  "storage-core",
  "storage-inmemory",
+ "utils",
+]
+
+[[package]]
+name = "storage-backend-test-suite"
+version = "0.1.0"
+dependencies = [
+ "libtest-mimic",
+ "proptest",
+ "storage-core",
  "utils",
 ]
 
@@ -4057,6 +4078,7 @@ dependencies = [
 name = "storage-inmemory"
 version = "0.1.0"
 dependencies = [
+ "storage-backend-test-suite",
  "storage-core",
  "utils",
 ]

@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::chain::TxInput;
+use crate::chain::ChainConfig;
 use crate::primitives::Compact;
 use crate::Uint256;
+use crate::{chain::TxInput, primitives::BlockDistance};
 
 use serialization::{Decode, Encode};
 
@@ -35,6 +36,16 @@ impl ConsensusData {
             ConsensusData::None => Some(1u64.into()),
             ConsensusData::PoW(ref pow_data) => pow_data.get_block_proof(),
             ConsensusData::PoS(_) => Some(1u64.into()),
+        }
+    }
+
+    pub fn reward_maturity_distance(&self, chain_config: &ChainConfig) -> BlockDistance {
+        match self {
+            ConsensusData::None => BlockDistance::new(0),
+            ConsensusData::PoW(_) => {
+                chain_config.get_proof_of_work_config().reward_maturity_distance()
+            }
+            ConsensusData::PoS(_) => BlockDistance::new(2000),
         }
     }
 }

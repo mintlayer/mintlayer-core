@@ -14,10 +14,26 @@
 // limitations under the License.
 
 use crate::Utxo;
-use common::primitives::BlockHeight;
 use serialization::{Decode, Encode};
 
-#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
+#[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
+pub struct BlockRewardUndo(Vec<Utxo>);
+
+impl BlockRewardUndo {
+    pub fn new(utxos: Vec<Utxo>) -> Self {
+        Self(utxos)
+    }
+
+    pub fn inner(&self) -> &[Utxo] {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> Vec<Utxo> {
+        self.0
+    }
+}
+
+#[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct TxUndo(Vec<Utxo>);
 
 impl TxUndo {
@@ -46,26 +62,43 @@ impl TxUndo {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
+#[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct BlockUndo {
-    // determines at what height this undo file belongs to.
-    height: BlockHeight,
-    undos: Vec<TxUndo>,
+    reward_undo: Option<BlockRewardUndo>,
+    tx_undos: Vec<TxUndo>,
 }
 
 impl BlockUndo {
-    pub fn new(tx_undos: Vec<TxUndo>, height: BlockHeight) -> Self {
+    pub fn new(reward_undo: Option<BlockRewardUndo>, tx_undos: Vec<TxUndo>) -> Self {
         Self {
-            height,
-            undos: tx_undos,
+            tx_undos,
+            reward_undo,
         }
     }
+
     pub fn tx_undos(&self) -> &[TxUndo] {
-        &self.undos
+        &self.tx_undos
     }
 
-    pub fn height(&self) -> BlockHeight {
-        self.height
+    pub fn push_tx_undo(&mut self, tx_undo: TxUndo) {
+        self.tx_undos.push(tx_undo);
+    }
+
+    pub fn pop_tx_undo(&mut self) -> Option<TxUndo> {
+        self.tx_undos.pop()
+    }
+
+    pub fn block_reward_undo(&self) -> Option<&BlockRewardUndo> {
+        self.reward_undo.as_ref()
+    }
+
+    pub fn set_block_reward_undo(&mut self, reward_undo: BlockRewardUndo) {
+        debug_assert!(self.reward_undo.is_none());
+        self.reward_undo = Some(reward_undo);
+    }
+
+    pub fn take_block_reward_undo(&mut self) -> Option<BlockRewardUndo> {
+        self.reward_undo.take()
     }
 }
 
@@ -109,7 +142,6 @@ pub mod test {
     #[case(Seed::from_entropy())]
     fn block_undo_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let expected_height = BlockHeight::new(5);
         let (utxo0, _) = create_utxo(&mut rng, 0);
         let (utxo1, _) = create_utxo(&mut rng, 1);
         let tx_undo0 = TxUndo::new(vec![utxo0, utxo1]);
@@ -119,17 +151,20 @@ pub mod test {
         let (utxo4, _) = create_utxo(&mut rng, 4);
         let tx_undo1 = TxUndo::new(vec![utxo2, utxo3, utxo4]);
 
-        let blockundo = BlockUndo::new(vec![tx_undo0.clone(), tx_undo1.clone()], expected_height);
+        let (utxo5, _) = create_utxo(&mut rng, 5);
+        let reward_undo = BlockRewardUndo::new(vec![utxo5]);
+
+        let blockundo = BlockUndo::new(
+            Some(reward_undo.clone()),
+            vec![tx_undo0.clone(), tx_undo1.clone()],
+        );
 
         // check `inner()`
-        {
-            let inner = blockundo.tx_undos();
+        let inner = blockundo.tx_undos();
 
-            assert_eq!(&tx_undo0, &inner[0]);
-            assert_eq!(&tx_undo1, &inner[1]);
-        }
+        assert_eq!(&tx_undo0, &inner[0]);
+        assert_eq!(&tx_undo1, &inner[1]);
 
-        // check the height
-        assert_eq!(blockundo.height, expected_height);
+        assert_eq!(&reward_undo, blockundo.block_reward_undo().unwrap());
     }
 }

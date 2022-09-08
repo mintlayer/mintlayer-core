@@ -1290,6 +1290,7 @@ async fn two_remote_nodes_same_chains_new_blocks_mock_tcp() {
         .await;
 }
 
+// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 async fn two_remote_nodes_same_chains_new_blocks_mock_channels() {
     two_remote_nodes_same_chains_new_blocks::<MakeChannelAddress, MockService<ChannelMockTransport>>()

@@ -70,6 +70,3 @@ impl Default for InMemory {
         Self::new()
     }
 }
-
-#[cfg(test)]
-mod test;

@@ -13,9 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate_types::storage_result;
+use common::{
+    chain::{block::GenBlock, OutPointSourceId},
+    primitives::Id,
+};
 use thiserror::Error;
 
-#[derive(Error, Debug, Eq, PartialEq)]
+#[derive(Error, Debug, Eq, PartialEq, Clone)]
 pub enum Error {
     #[error("Attempted to overwrite an existing utxo")]
     OverwritingUtxo,
@@ -24,17 +29,13 @@ pub enum Error {
     )]
     FreshUtxoAlreadyExists,
     #[error("Attempted to spend a UTXO that's already spent")]
-    UtxoAlreadySpent,
+    UtxoAlreadySpent(OutPointSourceId),
     #[error("Attempted to spend a non-existing UTXO")]
     NoUtxoFound,
     #[error("Attempted to get the block height of a UTXO source that is based on the mempool")]
     NoBlockchainHeightFound,
+    #[error("Block reward undo info is missing while unspending the utxo for block `{0}`")]
+    MissingBlockRewardUndo(Id<GenBlock>),
     #[error("Database error: `{0}`")]
-    DBError(String),
-}
-
-impl From<chainstate_types::storage_result::Error> for Error {
-    fn from(e: chainstate_types::storage_result::Error) -> Self {
-        Error::DBError(format!("{:?}", e))
-    }
+    DBError(#[from] storage_result::Error),
 }

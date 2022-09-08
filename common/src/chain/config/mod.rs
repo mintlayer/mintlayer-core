@@ -30,7 +30,7 @@ use crate::chain::{Block, GenBlock, Genesis};
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::semver::SemVer;
-use crate::primitives::{Amount, BlockDistance, BlockHeight};
+use crate::primitives::{Amount, BlockHeight};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -74,7 +74,6 @@ pub struct ChainConfig {
     net_upgrades: NetUpgrades<UpgradeVersion>,
     magic_bytes: [u8; 4],
     genesis_block: Arc<WithId<Genesis>>,
-    blockreward_maturity: BlockDistance,
     max_future_block_time_offset: Duration,
     version: SemVer,
     target_block_spacing: Duration,
@@ -158,14 +157,8 @@ impl ChainConfig {
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
     }
-
-    pub const fn blockreward_maturity(&self) -> &BlockDistance {
-        &self.blockreward_maturity
-    }
 }
 
-// If block time is 2 minutes (which is my goal eventually), then 500 is equivalent to 100 in bitcoin's 10 minutes.
-const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
 // DSA allows us to have blocks up to 1mb
 const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 524_288;
