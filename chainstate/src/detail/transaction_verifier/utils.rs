@@ -46,8 +46,8 @@ pub fn check_transferred_amount(
     Ok(())
 }
 
-pub fn get_output_token_id_and_amount<'a>(
-    output_value: &'a OutputValue,
+pub fn get_output_token_id_and_amount(
+    output_value: &OutputValue,
     include_issuance: Option<&Transaction>,
 ) -> Result<Option<(CoinOrTokenId, Amount)>, TokensError> {
     Ok(match output_value {

@@ -254,11 +254,9 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     get_input_token_id_and_amount(utxo.output().value(), || Ok(None))?;
                 match key {
                     CoinOrTokenId::Coin => Ok((CoinOrTokenId::Coin, amount)),
-                    CoinOrTokenId::TokenId(_) => {
-                        return Err(ConnectTransactionError::TokensError(
-                            TokensError::TokensInBlockReward,
-                        ))
-                    }
+                    CoinOrTokenId::TokenId(_) => Err(ConnectTransactionError::TokensError(
+                        TokensError::TokensInBlockReward,
+                    )),
                 }
             }
         }
@@ -269,7 +267,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         inputs: &[TxInput],
     ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
         let amounts_vec: Result<Vec<_>, _> = inputs
-            .into_iter()
+            .iter()
             .map(|input| {
                 let utxo = self
                     .utxo_cache
