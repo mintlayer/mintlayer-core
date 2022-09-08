@@ -99,13 +99,7 @@ pub enum ConnectTransactionError {
     #[error("Utxo error: {0}")]
     UtxoError(#[from] utxo::Error),
     #[error("Tokens error: {0}")]
-    TokensError(TokensError),
-}
-
-impl From<TokensError> for ConnectTransactionError {
-    fn from(err: TokensError) -> Self {
-        ConnectTransactionError::TokensError(err)
-    }
+    TokensError(#[from] TokensError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
