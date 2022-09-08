@@ -22,9 +22,8 @@ use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct RPCTokenInfo {
+    // TODO: Add the controller public key to issuance data - https://github.com/mintlayer/mintlayer-core/issues/401
     pub token_id: TokenId,
-    // TODO: Should we return in RPC the owner info?
-    // pub owner: ,
     pub creation_tx_id: Id<Transaction>,
     pub creation_block_id: Id<Block>,
     pub token_ticker: Vec<u8>,
@@ -45,7 +44,6 @@ impl RPCTokenInfo {
     ) -> Self {
         Self {
             token_id,
-            // TODO: We have to add owner field here
             creation_tx_id,
             creation_block_id,
             token_ticker,
