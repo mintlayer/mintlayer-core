@@ -5,6 +5,7 @@ use common::{chain::tokens::TokensError, primitives::Amount};
 use super::{error::ConnectTransactionError, tokens::CoinOrTokenId};
 
 /// A temporary type used to accumulate token type vs amount
+#[must_use]
 pub struct AmountsMap {
     data: BTreeMap<CoinOrTokenId, Amount>,
 }
@@ -43,4 +44,46 @@ pub fn insert_or_increase(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use common::chain::tokens::TokenId;
+
+    use super::*;
+
+    #[test]
+    fn basic() {
+        utils::concurrency::model(|| {
+            let t1 = CoinOrTokenId::Coin;
+            let t2 = CoinOrTokenId::TokenId(TokenId::random());
+            let t3 = CoinOrTokenId::TokenId(TokenId::random());
+            let t4 = CoinOrTokenId::TokenId(TokenId::random());
+
+            assert_eq!(
+                AmountsMap::from_iter(
+                    vec![
+                        (t4, Amount::from_atoms(45)),
+                        (t1, Amount::from_atoms(10)),
+                        (t2, Amount::from_atoms(5)),
+                        (t1, Amount::from_atoms(15)),
+                        (t3, Amount::from_atoms(20)),
+                        (t3, Amount::from_atoms(25)),
+                        (t4, Amount::from_atoms(35)),
+                    ]
+                    .into_iter(),
+                )
+                .unwrap()
+                .consume(),
+                vec![
+                    (t1, Amount::from_atoms(25)),
+                    (t2, Amount::from_atoms(5)),
+                    (t3, Amount::from_atoms(45)),
+                    (t4, Amount::from_atoms(80))
+                ]
+                .into_iter()
+                .collect::<BTreeMap<_, _>>()
+            );
+        })
+    }
 }
