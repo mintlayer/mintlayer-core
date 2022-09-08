@@ -547,7 +547,7 @@ where
 #[tokio::test]
 async fn connection_timeout_libp2p() {
     connection_timeout::<Libp2pService>(
-        make_libp2p_addr(),
+        MakeP2pAddress::make_address(),
         format!("/ip4/255.255.255.255/tcp/8888/p2p/{}", PeerId::random())
             .parse()
             .unwrap(),
@@ -612,7 +612,7 @@ where
 #[tokio::test]
 async fn connection_timeout_rpc_notified_libp2p() {
     connection_timeout_rpc_notified::<Libp2pService>(
-        make_libp2p_addr(),
+        MakeP2pAddress::make_address(),
         format!("/ip4/255.255.255.255/tcp/8888/p2p/{}", PeerId::random())
             .parse()
             .unwrap(),

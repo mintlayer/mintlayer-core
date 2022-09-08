@@ -196,7 +196,7 @@ where
                     )
                     .await
                 }
-                Err(error) => self
+                Err(err) => {
                     log::error!("Failed to establish connection: {err}");
 
                     self.conn_tx
