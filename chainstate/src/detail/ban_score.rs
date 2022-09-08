@@ -146,7 +146,7 @@ impl BanScore for TokensError {
             TokensError::TokensNotRegistered(_) => 100,
             TokensError::TokenIdCantBeCalculated => 100,
             TokensError::AttemptToTransferBurnedTokens => 100,
-            TokensError::BlockRewardInTokens => 100,
+            TokensError::TokensInBlockReward => 100,
             TokensError::InvariantBrokenDuplicateTokenId(_, _) => 100,
             TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_) => 100,
             TokensError::InvariantBrokenRegisterIssuanceOnNonexistentToken(_) => 100,

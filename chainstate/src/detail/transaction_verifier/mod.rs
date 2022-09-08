@@ -250,22 +250,28 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
             match input.outpoint().tx_id() {
-                OutPointSourceId::Transaction(issuance_tx_id) => {
-                    let token_id = self.db_tx.get_token_id(&issuance_tx_id)?;
-
-                    let (key, amount) =
-                        get_input_token_id_and_amount(utxo.output().value(), token_id)?;
+                OutPointSourceId::Transaction(tx_id) => {
+                    let issuance_token_id_getter =
+                        || -> Result<Option<TokenId>, ConnectTransactionError> {
+                            // issuance transactions are unique, so we use them to get the token id
+                            Ok(self.db_tx.get_token_id(&tx_id)?)
+                        };
+                    let (key, amount) = get_input_token_id_and_amount(
+                        utxo.output().value(),
+                        issuance_token_id_getter,
+                    )?;
                     insert_or_increase(&mut result, key, amount)?
                 }
                 OutPointSourceId::BlockReward(_) => {
-                    let (key, amount) = get_input_token_id_and_amount(utxo.output().value(), None)?;
+                    let (key, amount) =
+                        get_input_token_id_and_amount(utxo.output().value(), || Ok(None))?;
                     match key {
                         CoinOrTokenId::Coin => {
                             insert_or_increase(&mut result, CoinOrTokenId::Coin, amount)?
                         }
                         CoinOrTokenId::TokenId(_) => {
                             return Err(ConnectTransactionError::TokensError(
-                                TokensError::BlockRewardInTokens,
+                                TokensError::TokensInBlockReward,
                             ))
                         }
                     }
@@ -338,7 +344,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     OutputValue::Token(_) => true,
                 }) {
                     return Err(ConnectTransactionError::TokensError(
-                        TokensError::BlockRewardInTokens,
+                        TokensError::TokensInBlockReward,
                     ));
                 }
                 Ok(Self::calculate_total_outputs(outputs, None)?

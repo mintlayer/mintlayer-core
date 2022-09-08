@@ -92,9 +92,11 @@ pub fn get_output_token_id_and_amount<'a>(
     })
 }
 
-pub fn get_input_token_id_and_amount(
+pub fn get_input_token_id_and_amount<
+    IssuanceTokenIdGetterFunc: Fn() -> Result<Option<TokenId>, ConnectTransactionError>,
+>(
     output_value: &OutputValue,
-    token_id: Option<TokenId>,
+    issuance_token_id_getter: IssuanceTokenIdGetterFunc,
 ) -> Result<(CoinOrTokenId, Amount), ConnectTransactionError> {
     Ok(match output_value {
         OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
@@ -107,7 +109,7 @@ pub fn get_input_token_id_and_amount(
                 amount_to_issue,
                 number_of_decimals: _,
                 metadata_uri: _,
-            } => token_id
+            } => issuance_token_id_getter()?
                 .map(|token_id| (CoinOrTokenId::TokenId(token_id), *amount_to_issue))
                 .ok_or(ConnectTransactionError::TokensError(
                     TokensError::TokenIdCantBeCalculated,
