@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use tokio::sync::mpsc;
+
 use p2p::{
     error::{P2pError, PublishError},
     event::{PubSubControlEvent, SwarmEvent},
@@ -29,9 +33,7 @@ use p2p::{
     pubsub::PubSubMessageHandler,
     sync::BlockSyncManager,
 };
-use p2p_test_utils::{connect_services, make_libp2p_addr, make_mock_addr, TestBlockInfo};
-use std::sync::Arc;
-use tokio::sync::mpsc;
+use p2p_test_utils::{connect_services, MakeP2pAddress, MakeTestAddress, TestBlockInfo};
 
 // start two libp2p services, spawn a `PubSubMessageHandler` for the first service,
 // publish an invalid block from the first service and verify that the `PeerManager`
@@ -44,10 +46,13 @@ async fn invalid_pubsub_block() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
-    let (mut conn1, pubsub, _sync) =
-        Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
-            .await
-            .unwrap();
+    let (mut conn1, pubsub, _sync) = Libp2pService::start(
+        MakeP2pAddress::make_address(),
+        Arc::clone(&config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
     let mut pubsub1 = PubSubMessageHandler::<Libp2pService>::new(
         Arc::clone(&config),
@@ -58,10 +63,13 @@ async fn invalid_pubsub_block() {
         &[net::types::PubSubTopic::Blocks],
     );
 
-    let (mut conn2, mut pubsub2, _) =
-        Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
-            .await
-            .unwrap();
+    let (mut conn2, mut pubsub2, _) = Libp2pService::start(
+        MakeP2pAddress::make_address(),
+        Arc::clone(&config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
     // connect the services together, spawn `pubsub1` into the background
     // and subscriber to events
@@ -157,7 +165,11 @@ where
 
 #[tokio::test]
 async fn invalid_sync_block_libp2p() {
-    invalid_sync_block::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+    invalid_sync_block::<Libp2pService>(
+        MakeP2pAddress::make_address(),
+        MakeP2pAddress::make_address(),
+    )
+    .await;
 }
 
 // #[tokio::test]

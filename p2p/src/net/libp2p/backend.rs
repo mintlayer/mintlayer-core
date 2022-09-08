@@ -359,6 +359,7 @@ mod tests {
         tcp::{GenTcpConfig, TcpTransport},
         Transport,
     };
+    use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
     use std::{
         collections::{HashMap, VecDeque},
         iter,
@@ -430,7 +431,7 @@ mod tests {
 
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx.send(types::Command::Listen {
-            addr: p2p_test_utils::make_libp2p_addr(),
+            addr: MakeP2pAddress::make_address(),
             response: tx,
         });
         assert!(res.is_ok());
@@ -455,7 +456,7 @@ mod tests {
 
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx.send(types::Command::Listen {
-            addr: p2p_test_utils::make_libp2p_addr(),
+            addr: MakeP2pAddress::make_address(),
             response: tx,
         });
         assert!(res.is_ok());
@@ -467,7 +468,7 @@ mod tests {
         // try to bind to the same interface again
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx.send(types::Command::Listen {
-            addr: p2p_test_utils::make_libp2p_addr(),
+            addr: MakeP2pAddress::make_address(),
             response: tx,
         });
         assert!(res.is_ok());

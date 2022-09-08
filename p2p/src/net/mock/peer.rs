@@ -25,7 +25,7 @@ use crate::{
     error::{P2pError, ProtocolError},
     net::{
         mock::{
-            transport::{MockListener, MockTransport},
+            transport::{MockStream, MockTransport},
             types::{self, MockEvent, MockPeerId, PeerEvent},
         },
         types::{Protocol, ProtocolType},
@@ -62,7 +62,7 @@ pub struct Peer<T: MockTransport> {
 
 impl<T> Peer<T>
 where
-    T: MockTransport + 'static,
+    T: MockTransport,
 {
     pub fn new(
         local_peer_id: MockPeerId,
@@ -85,109 +85,100 @@ where
     }
 
     async fn handshake(&mut self) -> crate::Result<()> {
-        // TODO: FIXME:
-        todo!();
-        todo!();
-        // match self.role {
-        //     Role::Inbound => {
-        //         let (peer_id, network, version, protocols) =
-        //             if let Ok(Some(types::Message::Handshake(types::HandshakeMessage::Hello {
-        //                 peer_id,
-        //                 version,
-        //                 network,
-        //                 protocols,
-        //             }))) = self.socket.recv().await
-        //             {
-        //                 (peer_id, network, version, protocols)
-        //             } else {
-        //                 return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-        //             };
-        //
-        //         self.socket
-        //             .send(types::Message::Handshake(
-        //                 types::HandshakeMessage::HelloAck {
-        //                     peer_id: self.local_peer_id,
-        //                     version: *self.config.version(),
-        //                     network: *self.config.magic_bytes(),
-        //                     // TODO: Replace the hard-coded values when ping and pubsub protocols are implemented for the mock interface.
-        //                     protocols: [
-        //                         Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
-        //                         Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
-        //                     ]
-        //                     .into_iter()
-        //                     .collect(),
-        //                 },
-        //             ))
-        //             // TODO: FIXME:
-        //             .await;
-        //         todo!();
-        //         //.await?;
-        //
-        //         self.tx
-        //             .send((
-        //                 self.remote_peer_id,
-        //                 types::PeerEvent::PeerInfoReceived {
-        //                     peer_id,
-        //                     network,
-        //                     version,
-        //                     protocols,
-        //                 },
-        //             ))
-        //             .await
-        //             .map_err(P2pError::from)?;
-        //
-        //         self.remote_peer_id = peer_id;
-        //         Ok(())
-        //     }
-        //     Role::Outbound => {
-        //         self.socket
-        //             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
-        //                 peer_id: self.local_peer_id,
-        //                 version: *self.config.version(),
-        //                 network: *self.config.magic_bytes(),
-        //                 protocols: [
-        //                     Protocol::new(ProtocolType::PubSub, *self.config.version()),
-        //                     Protocol::new(ProtocolType::Ping, *self.config.version()),
-        //                 ]
-        //                 .into_iter()
-        //                 .collect(),
-        //             }))
-        //             // TODO: FIXME:
-        //             .await;
-        //         todo!();
-        //         //.await?;
-        //
-        //         let (peer_id, network, version, protocols) = if let Ok(Some(
-        //             types::Message::Handshake(types::HandshakeMessage::HelloAck {
-        //                 peer_id,
-        //                 version,
-        //                 network,
-        //                 protocols,
-        //             }),
-        //         )) = self.socket.recv().await
-        //         {
-        //             (peer_id, network, version, protocols)
-        //         } else {
-        //             return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-        //         };
-        //
-        //         self.tx
-        //             .send((
-        //                 self.remote_peer_id,
-        //                 types::PeerEvent::PeerInfoReceived {
-        //                     peer_id,
-        //                     network,
-        //                     version,
-        //                     protocols,
-        //                 },
-        //             ))
-        //             .await
-        //             .map_err(P2pError::from)?;
-        //
-        //         self.remote_peer_id = peer_id;
-        //         Ok(())
-        //     }
-        // }
+        match self.role {
+            Role::Inbound => {
+                let (peer_id, network, version, protocols) =
+                    if let Ok(Some(types::Message::Handshake(types::HandshakeMessage::Hello {
+                        peer_id,
+                        version,
+                        network,
+                        protocols,
+                    }))) = self.socket.recv().await
+                    {
+                        (peer_id, network, version, protocols)
+                    } else {
+                        return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+                    };
+
+                self.socket
+                    .send(types::Message::Handshake(
+                        types::HandshakeMessage::HelloAck {
+                            peer_id: self.local_peer_id,
+                            version: *self.config.version(),
+                            network: *self.config.magic_bytes(),
+                            // TODO: Replace the hard-coded values when ping and pubsub protocols are implemented for the mock interface.
+                            protocols: [
+                                Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
+                                Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
+                            ]
+                            .into_iter()
+                            .collect(),
+                        },
+                    ))
+                    .await?;
+
+                self.tx
+                    .send((
+                        self.remote_peer_id,
+                        types::PeerEvent::PeerInfoReceived {
+                            peer_id,
+                            network,
+                            version,
+                            protocols,
+                        },
+                    ))
+                    .await
+                    .map_err(P2pError::from)?;
+
+                self.remote_peer_id = peer_id;
+                Ok(())
+            }
+            Role::Outbound => {
+                self.socket
+                    .send(types::Message::Handshake(types::HandshakeMessage::Hello {
+                        peer_id: self.local_peer_id,
+                        version: *self.config.version(),
+                        network: *self.config.magic_bytes(),
+                        protocols: [
+                            Protocol::new(ProtocolType::PubSub, *self.config.version()),
+                            Protocol::new(ProtocolType::Ping, *self.config.version()),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    }))
+                    .await?;
+
+                let (peer_id, network, version, protocols) = if let Ok(Some(
+                    types::Message::Handshake(types::HandshakeMessage::HelloAck {
+                        peer_id,
+                        version,
+                        network,
+                        protocols,
+                    }),
+                )) = self.socket.recv().await
+                {
+                    (peer_id, network, version, protocols)
+                } else {
+                    return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+                };
+
+                self.tx
+                    .send((
+                        self.remote_peer_id,
+                        types::PeerEvent::PeerInfoReceived {
+                            peer_id,
+                            network,
+                            version,
+                            protocols,
+                        },
+                    ))
+                    .await
+                    .map_err(P2pError::from)?;
+
+                self.remote_peer_id = peer_id;
+                Ok(())
+            }
+        }
     }
 
     async fn destroy_peer(&mut self) -> crate::Result<()> {
@@ -205,32 +196,30 @@ where
         }
 
         loop {
-            // TODO: FIXME:
-            todo!();
-            // tokio::select! {
-            //     event = self.rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
-            //         MockEvent::Disconnect => return self.destroy_peer().await,
-            //         MockEvent::SendMessage(message) => todo!(), //self.socket.send(*message).await?,
-            //     },
-            //     event = self.socket.recv() => match event {
-            //         Err(err) => {
-            //             log::info!("peer connection closed, reason {err:?}");
-            //             return self.destroy_peer().await;
-            //         }
-            //         Ok(None) => {},
-            //         Ok(Some(message)) => {
-            //             self.tx
-            //                 .send((
-            //                     self.remote_peer_id,
-            //                     types::PeerEvent::MessageReceived {
-            //                         message
-            //                     },
-            //                 ))
-            //                 .await
-            //                 .map_err(P2pError::from)?;
-            //         }
-            //     }
-            // }
+            tokio::select! {
+                event = self.rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
+                    MockEvent::Disconnect => return self.destroy_peer().await,
+                    MockEvent::SendMessage(message) => self.socket.send(*message).await?,
+                },
+                event = self.socket.recv() => match event {
+                    Err(err) => {
+                        log::info!("peer connection closed, reason {err:?}");
+                        return self.destroy_peer().await;
+                    }
+                    Ok(None) => {},
+                    Ok(Some(message)) => {
+                        self.tx
+                            .send((
+                                self.remote_peer_id,
+                                types::PeerEvent::MessageReceived {
+                                    message
+                                },
+                            ))
+                            .await
+                            .map_err(P2pError::from)?;
+                    }
+                }
+            }
         }
     }
 }
@@ -238,221 +227,284 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{message, net::mock::types};
+    use crate::{
+        message,
+        net::mock::{
+            transport::{ChannelMockTransport, MockListener, TcpMockTransport},
+            types,
+        },
+    };
     use chainstate::Locator;
     use common::primitives::semver::SemVer;
     use futures::FutureExt;
+    use p2p_test_utils::{MakeChannelAddress, MakeTcpAddress, MakeTestAddress};
 
-    // TODO: FIXME:
-    // #[tokio::test]
-    // async fn handshake_inbound() {
-    //     let (socket1, socket2) = p2p_test_utils::get_two_connected_sockets().await;
-    //     let socket1 = socket::MockSocket::new(socket1);
-    //     let mut socket2 = socket::MockSocket::new(socket2);
-    //     let config = Arc::new(common::chain::config::create_mainnet());
-    //     let (tx1, mut rx1) = mpsc::channel(16);
-    //     let (_tx2, rx2) = mpsc::channel(16);
-    //     let peer_id1 = MockPeerId::random();
-    //     let peer_id2 = MockPeerId::random();
-    //     let peer_id3 = MockPeerId::random();
-    //
-    //     let mut peer = Peer::new(
-    //         peer_id1,
-    //         peer_id3,
-    //         Role::Inbound,
-    //         Arc::clone(&config),
-    //         socket1,
-    //         tx1,
-    //         rx2,
-    //     );
-    //
-    //     let handle = tokio::spawn(async move {
-    //         peer.handshake().await.unwrap();
-    //         peer
-    //     });
-    //
-    //     assert!(socket2.recv().now_or_never().is_none());
-    //     assert!(socket2
-    //         .send(types::Message::Handshake(types::HandshakeMessage::Hello {
-    //             peer_id: peer_id2,
-    //             version: *config.version(),
-    //             network: *config.magic_bytes(),
-    //             protocols: [
-    //                 Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-    //                 Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-    //             ]
-    //             .into_iter()
-    //             .collect(),
-    //         }))
-    //         .await
-    //         .is_ok());
-    //
-    //     let _peer = handle.await;
-    //     assert_eq!(
-    //         rx1.try_recv(),
-    //         Ok((
-    //             peer_id3,
-    //             types::PeerEvent::PeerInfoReceived {
-    //                 peer_id: peer_id2,
-    //                 network: *config.magic_bytes(),
-    //                 version: *config.version(),
-    //                 protocols: [
-    //                     Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-    //                     Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-    //                 ]
-    //                 .into_iter()
-    //                 .collect(),
-    //             }
-    //         ))
-    //     );
-    // }
-    //
-    // #[tokio::test]
-    // async fn handshake_outbound() {
-    //     let (socket1, socket2) = p2p_test_utils::get_two_connected_sockets().await;
-    //     let socket1 = socket::MockSocket::new(socket1);
-    //     let mut socket2 = socket::MockSocket::new(socket2);
-    //     let config = Arc::new(common::chain::config::create_mainnet());
-    //     let (tx1, mut rx1) = mpsc::channel(16);
-    //     let (_tx2, rx2) = mpsc::channel(16);
-    //     let peer_id1 = MockPeerId::random();
-    //     let peer_id2 = MockPeerId::random();
-    //     let peer_id3 = MockPeerId::random();
-    //
-    //     let mut peer = Peer::new(
-    //         peer_id1,
-    //         peer_id3,
-    //         Role::Outbound,
-    //         Arc::clone(&config),
-    //         socket1,
-    //         tx1,
-    //         rx2,
-    //     );
-    //
-    //     let handle = tokio::spawn(async move {
-    //         peer.handshake().await.unwrap();
-    //         peer
-    //     });
-    //
-    //     if let Some(_message) = socket2.recv().await.unwrap() {
-    //         assert!(socket2
-    //             .send(types::Message::Handshake(
-    //                 types::HandshakeMessage::HelloAck {
-    //                     peer_id: peer_id2,
-    //                     version: *config.version(),
-    //                     network: *config.magic_bytes(),
-    //                     protocols: [
-    //                         Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-    //                         Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-    //                     ]
-    //                     .into_iter()
-    //                     .collect(),
-    //                 }
-    //             ))
-    //             .await
-    //             .is_ok());
-    //     }
-    //
-    //     let _peer = handle.await;
-    //     assert_eq!(
-    //         rx1.try_recv(),
-    //         Ok((
-    //             peer_id3,
-    //             types::PeerEvent::PeerInfoReceived {
-    //                 peer_id: peer_id2,
-    //                 network: *config.magic_bytes(),
-    //                 version: *config.version(),
-    //                 protocols: [
-    //                     Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-    //                     Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-    //                 ]
-    //                 .into_iter()
-    //                 .collect(),
-    //             }
-    //         ))
-    //     );
-    // }
-    //
-    // #[tokio::test]
-    // async fn handshake_different_network() {
-    //     let (socket1, socket2) = p2p_test_utils::get_two_connected_sockets().await;
-    //     let socket1 = socket::MockSocket::new(socket1);
-    //     let mut socket2 = socket::MockSocket::new(socket2);
-    //     let config = Arc::new(common::chain::config::create_mainnet());
-    //     let (tx1, _rx1) = mpsc::channel(16);
-    //     let (_tx2, rx2) = mpsc::channel(16);
-    //     let peer_id1 = MockPeerId::random();
-    //     let peer_id2 = MockPeerId::random();
-    //     let peer_id3 = MockPeerId::random();
-    //
-    //     let mut peer = Peer::new(
-    //         peer_id1,
-    //         peer_id3,
-    //         Role::Inbound,
-    //         Arc::clone(&config),
-    //         socket1,
-    //         tx1,
-    //         rx2,
-    //     );
-    //
-    //     let handle = tokio::spawn(async move { peer.handshake().await });
-    //
-    //     assert!(socket2.recv().now_or_never().is_none());
-    //     assert!(socket2
-    //         .send(types::Message::Handshake(types::HandshakeMessage::Hello {
-    //             peer_id: peer_id2,
-    //             version: *config.version(),
-    //             network: [1, 2, 3, 4],
-    //             protocols: [
-    //                 Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-    //                 Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-    //             ]
-    //             .into_iter()
-    //             .collect(),
-    //         }))
-    //         .await
-    //         .is_ok());
-    //
-    //     assert_eq!(handle.await.unwrap(), Ok(()));
-    // }
-    //
-    // #[tokio::test]
-    // async fn invalid_handshake_message() {
-    //     let (socket1, socket2) = p2p_test_utils::get_two_connected_sockets().await;
-    //     let socket1 = socket::MockSocket::new(socket1);
-    //     let mut socket2 = socket::MockSocket::new(socket2);
-    //     let config = Arc::new(common::chain::config::create_mainnet());
-    //     let (tx1, _rx1) = mpsc::channel(16);
-    //     let (_tx2, rx2) = mpsc::channel(16);
-    //     let peer_id1 = MockPeerId::random();
-    //     let peer_id2 = MockPeerId::random();
-    //
-    //     let mut peer = Peer::new(
-    //         peer_id1,
-    //         peer_id2,
-    //         Role::Inbound,
-    //         Arc::clone(&config),
-    //         socket1,
-    //         tx1,
-    //         rx2,
-    //     );
-    //
-    //     let handle = tokio::spawn(async move { peer.handshake().await });
-    //
-    //     assert!(socket2.recv().now_or_never().is_none());
-    //     socket2
-    //         .send(types::Message::Request {
-    //             request_id: types::MockRequestId::new(1337u64),
-    //             request: message::Request::HeaderListRequest(message::HeaderListRequest::new(
-    //                 Locator::new(vec![]),
-    //             )),
-    //         })
-    //         .await
-    //         .unwrap();
-    //
-    //     assert_eq!(
-    //         handle.await.unwrap(),
-    //         Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)),
-    //     );
-    // }
+    async fn handshake_inbound<A, T>()
+    where
+        A: MakeTestAddress<Address = T::Address>,
+        T: MockTransport,
+    {
+        let (socket1, mut socket2) = get_two_connected_sockets::<A, T>().await;
+        let config = Arc::new(common::chain::config::create_mainnet());
+        let (tx1, mut rx1) = mpsc::channel(16);
+        let (_tx2, rx2) = mpsc::channel(16);
+        let peer_id1 = MockPeerId::random();
+        let peer_id2 = MockPeerId::random();
+        let peer_id3 = MockPeerId::random();
+
+        let mut peer = Peer::<T>::new(
+            peer_id1,
+            peer_id3,
+            Role::Inbound,
+            Arc::clone(&config),
+            socket1,
+            tx1,
+            rx2,
+        );
+
+        let handle = tokio::spawn(async move {
+            peer.handshake().await.unwrap();
+            peer
+        });
+
+        assert!(socket2.recv().now_or_never().is_none());
+        assert!(socket2
+            .send(types::Message::Handshake(types::HandshakeMessage::Hello {
+                peer_id: peer_id2,
+                version: *config.version(),
+                network: *config.magic_bytes(),
+                protocols: [
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                ]
+                .into_iter()
+                .collect(),
+            }))
+            .await
+            .is_ok());
+
+        let _peer = handle.await;
+        assert_eq!(
+            rx1.try_recv(),
+            Ok((
+                peer_id3,
+                types::PeerEvent::PeerInfoReceived {
+                    peer_id: peer_id2,
+                    network: *config.magic_bytes(),
+                    version: *config.version(),
+                    protocols: [
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                    ]
+                    .into_iter()
+                    .collect(),
+                }
+            ))
+        );
+    }
+
+    #[tokio::test]
+    async fn handshake_inbound_tcp() {
+        handshake_inbound::<MakeTcpAddress, TcpMockTransport>().await;
+    }
+
+    #[tokio::test]
+    async fn handshake_inbound_channels() {
+        handshake_inbound::<MakeChannelAddress, ChannelMockTransport>().await;
+    }
+
+    async fn handshake_outbound<A, T>()
+    where
+        A: MakeTestAddress<Address = T::Address>,
+        T: MockTransport,
+    {
+        let (socket1, mut socket2) = get_two_connected_sockets::<A, T>().await;
+        let config = Arc::new(common::chain::config::create_mainnet());
+        let (tx1, mut rx1) = mpsc::channel(16);
+        let (_tx2, rx2) = mpsc::channel(16);
+        let peer_id1 = MockPeerId::random();
+        let peer_id2 = MockPeerId::random();
+        let peer_id3 = MockPeerId::random();
+
+        let mut peer = Peer::<T>::new(
+            peer_id1,
+            peer_id3,
+            Role::Outbound,
+            Arc::clone(&config),
+            socket1,
+            tx1,
+            rx2,
+        );
+
+        let handle = tokio::spawn(async move {
+            peer.handshake().await.unwrap();
+            peer
+        });
+
+        if let Some(_message) = socket2.recv().await.unwrap() {
+            assert!(socket2
+                .send(types::Message::Handshake(
+                    types::HandshakeMessage::HelloAck {
+                        peer_id: peer_id2,
+                        version: *config.version(),
+                        network: *config.magic_bytes(),
+                        protocols: [
+                            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    }
+                ))
+                .await
+                .is_ok());
+        }
+
+        let _peer = handle.await;
+        assert_eq!(
+            rx1.try_recv(),
+            Ok((
+                peer_id3,
+                types::PeerEvent::PeerInfoReceived {
+                    peer_id: peer_id2,
+                    network: *config.magic_bytes(),
+                    version: *config.version(),
+                    protocols: [
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                    ]
+                    .into_iter()
+                    .collect(),
+                }
+            ))
+        );
+    }
+
+    #[tokio::test]
+    async fn handshake_outbound_tcp() {
+        handshake_outbound::<MakeTcpAddress, TcpMockTransport>().await;
+    }
+
+    #[tokio::test]
+    async fn handshake_outbound_channels() {
+        handshake_outbound::<MakeChannelAddress, ChannelMockTransport>().await;
+    }
+
+    async fn handshake_different_network<A, T>()
+    where
+        A: MakeTestAddress<Address = T::Address>,
+        T: MockTransport,
+    {
+        let (socket1, mut socket2) = get_two_connected_sockets::<A, T>().await;
+        let config = Arc::new(common::chain::config::create_mainnet());
+        let (tx1, _rx1) = mpsc::channel(16);
+        let (_tx2, rx2) = mpsc::channel(16);
+        let peer_id1 = MockPeerId::random();
+        let peer_id2 = MockPeerId::random();
+        let peer_id3 = MockPeerId::random();
+
+        let mut peer = Peer::<T>::new(
+            peer_id1,
+            peer_id3,
+            Role::Inbound,
+            Arc::clone(&config),
+            socket1,
+            tx1,
+            rx2,
+        );
+
+        let handle = tokio::spawn(async move { peer.handshake().await });
+
+        assert!(socket2.recv().now_or_never().is_none());
+        assert!(socket2
+            .send(types::Message::Handshake(types::HandshakeMessage::Hello {
+                peer_id: peer_id2,
+                version: *config.version(),
+                network: [1, 2, 3, 4],
+                protocols: [
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                ]
+                .into_iter()
+                .collect(),
+            }))
+            .await
+            .is_ok());
+
+        assert_eq!(handle.await.unwrap(), Ok(()));
+    }
+
+    #[tokio::test]
+    async fn handshake_different_network_tcp() {
+        handshake_different_network::<MakeTcpAddress, TcpMockTransport>().await;
+    }
+
+    #[tokio::test]
+    async fn handshake_different_network_channels() {
+        handshake_different_network::<MakeChannelAddress, ChannelMockTransport>().await;
+    }
+
+    async fn invalid_handshake_message<A, T>()
+    where
+        A: MakeTestAddress<Address = T::Address>,
+        T: MockTransport,
+    {
+        let (socket1, mut socket2) = get_two_connected_sockets::<A, T>().await;
+        let config = Arc::new(common::chain::config::create_mainnet());
+        let (tx1, _rx1) = mpsc::channel(16);
+        let (_tx2, rx2) = mpsc::channel(16);
+        let peer_id1 = MockPeerId::random();
+        let peer_id2 = MockPeerId::random();
+
+        let mut peer = Peer::<T>::new(
+            peer_id1,
+            peer_id2,
+            Role::Inbound,
+            Arc::clone(&config),
+            socket1,
+            tx1,
+            rx2,
+        );
+
+        let handle = tokio::spawn(async move { peer.handshake().await });
+
+        assert!(socket2.recv().now_or_never().is_none());
+        socket2
+            .send(types::Message::Request {
+                request_id: types::MockRequestId::new(1337u64),
+                request: message::Request::HeaderListRequest(message::HeaderListRequest::new(
+                    Locator::new(vec![]),
+                )),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            handle.await.unwrap(),
+            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)),
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_handshake_message_tcp() {
+        invalid_handshake_message::<MakeTcpAddress, TcpMockTransport>().await;
+    }
+
+    #[tokio::test]
+    async fn invalid_handshake_message_channels() {
+        invalid_handshake_message::<MakeChannelAddress, ChannelMockTransport>().await;
+    }
+
+    pub async fn get_two_connected_sockets<A, T>() -> (T::Stream, T::Stream)
+    where
+        A: MakeTestAddress<Address = T::Address>,
+        T: MockTransport,
+    {
+        let addr = A::make_address();
+        let mut server = T::bind(addr).await.unwrap();
+        let peer_fut = T::connect(server.local_address().unwrap());
+
+        let (res1, res2) = tokio::join!(server.accept(), peer_fut);
+        (res1.unwrap().0, res2.unwrap())
+    }
 }

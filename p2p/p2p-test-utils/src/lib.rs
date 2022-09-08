@@ -15,6 +15,14 @@
 
 #![allow(clippy::unwrap_used)]
 
+use std::{net::SocketAddr, sync::Arc, time::Duration};
+
+use libp2p::Multiaddr;
+use tokio::{
+    net::{TcpListener, TcpStream},
+    time::timeout,
+};
+
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, BlockSource, ChainstateConfig,
 };
@@ -31,32 +39,7 @@ use common::{
     primitives::{time, Amount, Id, Idable},
 };
 use crypto::random::SliceRandom;
-use libp2p::Multiaddr;
 use p2p::net::{types::ConnectivityEvent, ConnectivityService, NetworkingService};
-use std::{net::SocketAddr, sync::Arc, time::Duration};
-use tokio::{
-    net::{TcpListener, TcpStream},
-    time::timeout,
-};
-
-// TODO: FIXME: REMOVE:
-pub fn make_libp2p_addr() -> Multiaddr {
-    "/ip6/::1/tcp/0".parse().unwrap()
-}
-
-// TODO: FIXME: REMOVE:
-pub fn make_mock_addr() -> SocketAddr {
-    "[::1]:0".parse().unwrap()
-}
-
-pub async fn get_two_connected_sockets() -> (TcpStream, TcpStream) {
-    let addr = make_mock_addr();
-    let server = TcpListener::bind(addr).await.unwrap();
-    let peer_fut = TcpStream::connect(server.local_addr().unwrap());
-
-    let (res1, res2) = tokio::join!(server.accept(), peer_fut);
-    (res1.unwrap().0, res2.unwrap())
-}
 
 pub async fn get_tcp_socket() -> TcpStream {
     let port: u16 = portpicker::pick_unused_port().expect("No ports free");

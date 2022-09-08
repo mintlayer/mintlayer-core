@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::{message::*, net::mock::MockService};
-use p2p_test_utils::{make_libp2p_addr, make_mock_addr};
+use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress};
 use std::{collections::HashSet, time::Duration};
 use tokio::time::timeout;
 
@@ -62,10 +62,10 @@ where
     }
 }
 
-#[tokio::test]
-async fn test_request_response_libp2p() {
-    test_request_response::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
-}
+// #[tokio::test]
+// async fn test_request_response_libp2p() {
+//     test_request_response::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+// }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
@@ -142,11 +142,11 @@ where
     assert!(request_ids.is_empty());
 }
 
-#[tokio::test]
-async fn test_multiple_requests_and_responses_libp2p() {
-    test_multiple_requests_and_responses::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr())
-        .await;
-}
+// #[tokio::test]
+// async fn test_multiple_requests_and_responses_libp2p() {
+//     test_multiple_requests_and_responses::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr())
+//         .await;
+// }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]

@@ -137,8 +137,6 @@ impl Decoder for EncoderDecoder {
     }
 }
 
-struct MessageEncoder {}
-
 impl Encoder<Message> for EncoderDecoder {
     type Error = P2pError;
 

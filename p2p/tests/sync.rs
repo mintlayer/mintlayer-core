@@ -46,8 +46,8 @@ use p2p::{
     sync::SyncState,
 };
 use p2p_test_utils::{
-    connect_services, make_libp2p_addr, make_mock_addr, MakeChannelAddress, MakeP2pAddress,
-    MakeTcpAddress, MakeTestAddress, TestBlockInfo,
+    connect_services, MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress,
+    TestBlockInfo,
 };
 
 async fn make_sync_manager<T>(
@@ -257,7 +257,11 @@ where
 
 #[tokio::test]
 async fn local_and_remote_in_sync_libp2p() {
-    local_and_remote_in_sync::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+    local_and_remote_in_sync::<Libp2pService>(
+        MakeP2pAddress::make_address(),
+        MakeP2pAddress::make_address(),
+    )
+    .await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
@@ -365,7 +369,11 @@ where
 
 #[tokio::test]
 async fn remote_ahead_by_7_blocks_libp2p() {
-    remote_ahead_by_7_blocks::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+    remote_ahead_by_7_blocks::<Libp2pService>(
+        MakeP2pAddress::make_address(),
+        MakeP2pAddress::make_address(),
+    )
+    .await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
@@ -495,7 +503,11 @@ where
 
 #[tokio::test]
 async fn local_ahead_by_12_blocks_libp2p() {
-    local_ahead_by_12_blocks::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+    local_ahead_by_12_blocks::<Libp2pService>(
+        MakeP2pAddress::make_address(),
+        MakeP2pAddress::make_address(),
+    )
+    .await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
@@ -673,7 +685,7 @@ async fn remote_local_diff_chains_local_higher_mock_channels() {
 
 // #[tokio::test]
 // async fn remote_local_diff_chains_local_higher_libp2p() {
-//     remote_local_diff_chains_local_higher::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr())
+//     remote_local_diff_chains_local_higher::<Libp2pService>(MakeP2pAddress::make_address(), MakeP2pAddress::make_address())
 //         .await;
 // }
 //
@@ -830,8 +842,11 @@ where
 
 #[tokio::test]
 async fn remote_local_diff_chains_remote_higher_libp2p() {
-    remote_local_diff_chains_remote_higher::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr())
-        .await;
+    remote_local_diff_chains_remote_higher::<Libp2pService>(
+        MakeP2pAddress::make_address(),
+        MakeP2pAddress::make_address(),
+    )
+    .await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
@@ -954,9 +969,9 @@ async fn two_remote_nodes_different_chains<T>(
 #[tokio::test]
 async fn two_remote_nodes_different_chains_libp2p() {
     two_remote_nodes_different_chains::<Libp2pService>(
-        make_libp2p_addr(),
-        make_libp2p_addr(),
-        make_libp2p_addr(),
+        MakeP2pAddress::make_address(),
+        MakeP2pAddress::make_address(),
+        MakeP2pAddress::make_address(),
     )
     .await;
 }
@@ -1099,9 +1114,9 @@ where
 #[tokio::test]
 async fn two_remote_nodes_same_chains_libp2p() {
     two_remote_nodes_same_chains::<Libp2pService>(
-        make_libp2p_addr(),
-        make_libp2p_addr(),
-        make_libp2p_addr(),
+        MakeP2pAddress::make_address(),
+        MakeP2pAddress::make_address(),
+        MakeP2pAddress::make_address(),
     )
     .await;
 }
@@ -1258,9 +1273,9 @@ async fn two_remote_nodes_same_chains_new_blocks<T>(
 #[tokio::test]
 async fn two_remote_nodes_same_chains_new_blocks_libp2p() {
     two_remote_nodes_same_chains_new_blocks::<Libp2pService>(
-        make_libp2p_addr(),
-        make_libp2p_addr(),
-        make_libp2p_addr(),
+        MakeP2pAddress::make_address(),
+        MakeP2pAddress::make_address(),
+        MakeP2pAddress::make_address(),
     )
     .await;
 }
@@ -1395,8 +1410,11 @@ where
 
 #[tokio::test]
 async fn test_connect_disconnect_resyncing_libp2p() {
-    test_connect_disconnect_resyncing::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr())
-        .await;
+    test_connect_disconnect_resyncing::<Libp2pService>(
+        MakeP2pAddress::make_address(),
+        MakeP2pAddress::make_address(),
+    )
+    .await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375

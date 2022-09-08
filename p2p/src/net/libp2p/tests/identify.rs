@@ -16,6 +16,7 @@
 use super::*;
 use crate::net::libp2p::behaviour;
 use libp2p::ping;
+use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 use std::time::Duration;
 
 #[tokio::test]
@@ -24,7 +25,7 @@ async fn test_identify_not_supported() {
     let (mut backend1, _cmd1, _conn1, _gossip1, _sync1) = make_libp2p(
         config.clone(),
         Default::default(),
-        p2p_test_utils::make_libp2p_addr(),
+        MakeP2pAddress::make_address(),
         &[],
     )
     .await;

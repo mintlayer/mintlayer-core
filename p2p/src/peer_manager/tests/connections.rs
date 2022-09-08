@@ -18,7 +18,7 @@ use std::{net::SocketAddr, sync::Arc};
 use libp2p::{Multiaddr, PeerId};
 
 use common::{chain::config, primitives::semver::SemVer};
-use p2p_test_utils::{make_libp2p_addr, make_mock_addr};
+use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress};
 
 use crate::{
     error::{DialError, P2pError, ProtocolError},
@@ -157,7 +157,7 @@ where
 #[tokio::test]
 async fn test_validate_supported_protocols() {
     let config = Arc::new(config::create_mainnet());
-    let swarm = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config).await;
+    let swarm = make_peer_manager::<Libp2pService>(MakeP2pAddress::make_address(), config).await;
 
     // all needed protocols
     assert!(swarm.validate_supported_protocols(&default_protocols()));
@@ -259,7 +259,11 @@ where
 
 #[tokio::test]
 async fn connect_inbound_same_network_libp2p() {
-    connect_inbound_same_network::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+    connect_inbound_same_network::<Libp2pService>(
+        MakeP2pAddress::make_address(),
+        MakeP2pAddress::make_address(),
+    )
+    .await;
 }
 
 #[tokio::test]

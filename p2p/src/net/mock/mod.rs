@@ -415,6 +415,7 @@ mod tests {
         connect_to_remote::<MakeTcpAddress, TcpMockTransport>().await;
     }
 
+    #[tokio::test]
     async fn connect_to_remote_channels() {
         connect_to_remote::<MakeChannelAddress, ChannelMockTransport>().await;
     }
@@ -516,11 +517,11 @@ mod tests {
 
     #[tokio::test]
     async fn disconnect_tcp() {
-        accept_incoming::<MakeTcpAddress, TcpMockTransport>().await;
+        disconnect::<MakeTcpAddress, TcpMockTransport>().await;
     }
 
     #[tokio::test]
     async fn disconnect_channels() {
-        accept_incoming::<MakeChannelAddress, ChannelMockTransport>().await;
+        disconnect::<MakeChannelAddress, ChannelMockTransport>().await;
     }
 }
