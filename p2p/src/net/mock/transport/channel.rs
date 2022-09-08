@@ -115,7 +115,6 @@ fn handle_connections() -> UnboundedSender<SocketCommand> {
     tx
 }
 
-// TODO: FIXME: Add a test for connections map.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -142,4 +141,6 @@ mod tests {
 
         assert_eq!(server_stream.recv().await.unwrap().unwrap(), msg);
     }
+
+    // TODO: FIXME: Add a tests for connections map.
 }
