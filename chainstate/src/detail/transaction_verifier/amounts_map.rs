@@ -1,26 +1,29 @@
 use std::collections::BTreeMap;
 
 use common::{chain::tokens::TokensError, primitives::Amount};
+use fallible_iterator::{FallibleIterator, IntoFallibleIterator};
 
 use super::{error::ConnectTransactionError, tokens::CoinOrTokenId};
 
 /// A temporary type used to accumulate token type vs amount
+#[derive(Debug)]
 #[must_use]
 pub struct AmountsMap {
     data: BTreeMap<CoinOrTokenId, Amount>,
 }
 
 impl AmountsMap {
-    pub fn from_iter<T: IntoIterator<Item = (CoinOrTokenId, Amount)>>(
+    pub fn from_fallible_iter<
+        T: IntoFallibleIterator<Item = (CoinOrTokenId, Amount), Error = ConnectTransactionError>,
+    >(
         iter: T,
     ) -> Result<Self, ConnectTransactionError> {
         let mut result = Self {
             data: BTreeMap::new(),
         };
 
-        for (t, v) in iter {
-            insert_or_increase(&mut result.data, t, v)?;
-        }
+        iter.into_fallible_iter()
+            .for_each(|(t, v)| insert_or_increase(&mut result.data, t, v).map_err(Into::into))?;
 
         Ok(result)
     }
@@ -60,30 +63,62 @@ mod tests {
             let t3 = CoinOrTokenId::TokenId(TokenId::random());
             let t4 = CoinOrTokenId::TokenId(TokenId::random());
 
-            assert_eq!(
-                AmountsMap::from_iter(
-                    vec![
-                        (t4, Amount::from_atoms(45)),
-                        (t1, Amount::from_atoms(10)),
-                        (t2, Amount::from_atoms(5)),
-                        (t1, Amount::from_atoms(15)),
-                        (t3, Amount::from_atoms(20)),
-                        (t3, Amount::from_atoms(25)),
-                        (t4, Amount::from_atoms(35)),
-                    ]
-                    .into_iter(),
-                )
-                .unwrap()
-                .consume(),
+            let data = fallible_iterator::convert(
                 vec![
-                    (t1, Amount::from_atoms(25)),
+                    (t4, Amount::from_atoms(45)),
+                    (t1, Amount::from_atoms(10)),
                     (t2, Amount::from_atoms(5)),
-                    (t3, Amount::from_atoms(45)),
-                    (t4, Amount::from_atoms(80))
+                    (t1, Amount::from_atoms(15)),
+                    (t3, Amount::from_atoms(20)),
+                    (t3, Amount::from_atoms(25)),
+                    (t4, Amount::from_atoms(35)),
                 ]
                 .into_iter()
-                .collect::<BTreeMap<_, _>>()
+                .map(Ok),
             );
+
+            let expected = vec![
+                (t1, Amount::from_atoms(25)),
+                (t2, Amount::from_atoms(5)),
+                (t3, Amount::from_atoms(45)),
+                (t4, Amount::from_atoms(80)),
+            ];
+
+            assert_eq!(
+                AmountsMap::from_fallible_iter(data).unwrap().consume(),
+                expected.into_iter().collect::<BTreeMap<_, _>>()
+            );
+        })
+    }
+
+    #[test]
+    fn with_error() {
+        utils::concurrency::model(|| {
+            let t1 = CoinOrTokenId::Coin;
+            let t2 = CoinOrTokenId::TokenId(TokenId::random());
+            let t3 = CoinOrTokenId::TokenId(TokenId::random());
+            let t4 = CoinOrTokenId::TokenId(TokenId::random());
+
+            let data = fallible_iterator::convert(
+                vec![
+                    (t4, Amount::from_atoms(45)),
+                    (t1, Amount::from_atoms(10)),
+                    (t2, Amount::from_atoms(5)),
+                    (t1, Amount::from_atoms(15)),
+                    (t3, Amount::from_atoms(20)),
+                    (t3, Amount::from_atoms(25)),
+                    (t4, Amount::from_atoms(35)),
+                ]
+                .into_iter()
+                .map(Ok)
+                .chain(vec![Err(
+                    ConnectTransactionError::InvariantBrokenAlreadyUnspent,
+                )]),
+            );
+
+            let expected = ConnectTransactionError::InvariantBrokenAlreadyUnspent;
+
+            assert_eq!(AmountsMap::from_fallible_iter(data).unwrap_err(), expected);
         })
     }
 }

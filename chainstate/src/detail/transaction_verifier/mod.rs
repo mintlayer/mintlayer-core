@@ -22,6 +22,7 @@ use self::{
 };
 use ::utils::ensure;
 use cached_operation::CachedInputsOperation;
+use fallible_iterator::FallibleIterator;
 
 use std::{
     collections::{btree_map::Entry, BTreeMap},
@@ -224,12 +225,12 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         outputs: &[TxOutput],
         include_issuance: Option<&Transaction>,
     ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
-        let amounts: Result<Vec<_>, _> = outputs
+        let iter = outputs
             .iter()
-            .map(|output| get_output_token_id_and_amount(output.value(), include_issuance))
-            .collect();
+            .map(|output| get_output_token_id_and_amount(output.value(), include_issuance));
+        let iter = fallible_iterator::convert(iter).filter_map(|el| Ok(el)).map_err(Into::into);
 
-        let result = AmountsMap::from_iter(amounts?.into_iter().flatten())?;
+        let result = AmountsMap::from_fallible_iter(iter)?;
         Ok(result.consume())
     }
 
@@ -266,18 +267,17 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         &self,
         inputs: &[TxInput],
     ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
-        let amounts_vec: Result<Vec<_>, _> = inputs
-            .iter()
-            .map(|input| {
-                let utxo = self
-                    .utxo_cache
-                    .utxo(input.outpoint())
-                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
-                self.amount_from_outpoint(input.outpoint().tx_id(), utxo)
-            })
-            .collect();
+        let iter = inputs.iter().map(|input| {
+            let utxo = self
+                .utxo_cache
+                .utxo(input.outpoint())
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+            self.amount_from_outpoint(input.outpoint().tx_id(), utxo)
+        });
 
-        let amounts_map = AmountsMap::from_iter(amounts_vec?.into_iter())?;
+        let iter = fallible_iterator::convert(iter);
+
+        let amounts_map = AmountsMap::from_fallible_iter(iter)?;
 
         Ok(amounts_map.consume())
     }
