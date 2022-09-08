@@ -46,7 +46,7 @@ pub fn check_transferred_amount(
     outputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
 ) -> Result<(), ConnectTransactionError> {
     for (coin_or_token_id, outputs_total) in outputs_total_map {
-        // Is coin or token exist in inputs?
+        // Does coin or token exist in inputs?
         let inputs_total = inputs_total_map
             .get(coin_or_token_id)
             .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;

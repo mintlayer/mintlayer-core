@@ -285,6 +285,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         inputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
         outputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
     ) -> Result<Fee, ConnectTransactionError> {
+        // TODO: fees should support tokens as well in the future
         let outputs_total =
             *outputs_total_map.get(&CoinOrTokenId::Coin).unwrap_or(&Amount::from_atoms(0));
         let inputs_total =
