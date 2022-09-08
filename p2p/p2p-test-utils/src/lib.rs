@@ -39,10 +39,12 @@ use tokio::{
     time::timeout,
 };
 
+// TODO: FIXME: REMOVE:
 pub fn make_libp2p_addr() -> Multiaddr {
     "/ip6/::1/tcp/0".parse().unwrap()
 }
 
+// TODO: FIXME: REMOVE:
 pub fn make_mock_addr() -> SocketAddr {
     "[::1]:0".parse().unwrap()
 }
@@ -284,4 +286,55 @@ pub async fn add_more_blocks(
 
     let blocks = create_n_blocks(config, base_block, nblocks);
     import_blocks(handle, blocks).await;
+}
+
+/// An interface for creating the address.
+///
+/// This abstraction layer is needed to uniformly create an address in the tests for different
+/// mocks transport implementations.
+pub trait MakeTestAddress {
+    // TODO: FIXME: Remove Hash and Display?
+    /// An address type.
+    type Address: Clone
+        + std::fmt::Debug
+        + std::fmt::Display
+        + Eq
+        + std::hash::Hash
+        + Send
+        + Sync
+        + ToString;
+
+    /// Creates a new unused address.
+    fn make_address() -> Self::Address;
+}
+
+pub struct MakeP2pAddress {}
+
+impl MakeTestAddress for MakeP2pAddress {
+    type Address = Multiaddr;
+
+    fn make_address() -> Self::Address {
+        "/ip6/::1/tcp/0".parse().unwrap()
+    }
+}
+
+pub struct MakeTcpAddress {}
+
+impl MakeTestAddress for MakeTcpAddress {
+    type Address = SocketAddr;
+
+    fn make_address() -> Self::Address {
+        "[::1]:0".parse().unwrap()
+    }
+}
+
+pub struct MakeChannelAddress {}
+
+impl MakeTestAddress for MakeChannelAddress {
+    type Address = u64;
+
+    fn make_address() -> Self::Address {
+        todo!();
+        todo!()
+    }
 }

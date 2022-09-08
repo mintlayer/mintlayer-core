@@ -24,7 +24,7 @@ use crate::{net::mock::types::Message, Result};
 
 /// An abstraction layer for creating and opening connections.
 #[async_trait]
-pub trait MockTransport {
+pub trait MockTransport: Send + Debug + 'static {
     // TODO: FIXME: Remove Hash and Display?
     /// An address type.
     type Address: Copy + Clone + Debug + Display + Eq + Hash + Send + Sync + ToString;

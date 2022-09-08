@@ -32,7 +32,7 @@ use crate::{config, error, message};
 /// [NetworkingService] provides the low-level network interface
 /// that each network service provider must implement
 #[async_trait]
-pub trait NetworkingService {
+pub trait NetworkingService: Debug + 'static {
     /// Generic socket address that the underlying implementation uses
     ///
     /// # Examples

@@ -23,6 +23,15 @@
 
 use std::{collections::HashMap, io::ErrorKind, sync::Arc};
 
+use futures::FutureExt;
+use tokio::{
+    sync::{mpsc, oneshot},
+    time::timeout,
+};
+
+use common::chain::ChainConfig;
+use logging::log;
+
 use crate::{
     error::{DialError, P2pError, PeerError},
     message,
@@ -31,13 +40,6 @@ use crate::{
         transport::{MockListener, MockTransport},
         types,
     },
-};
-use common::chain::ChainConfig;
-use futures::FutureExt;
-use logging::log;
-use tokio::{
-    sync::{mpsc, oneshot},
-    time::timeout,
 };
 
 #[derive(Debug)]
