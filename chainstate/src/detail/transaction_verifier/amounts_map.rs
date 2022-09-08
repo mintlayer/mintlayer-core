@@ -30,7 +30,7 @@ impl AmountsMap {
     }
 }
 
-pub fn insert_or_increase(
+fn insert_or_increase(
     total_amounts: &mut BTreeMap<CoinOrTokenId, Amount>,
     key: CoinOrTokenId,
     amount: Amount,
