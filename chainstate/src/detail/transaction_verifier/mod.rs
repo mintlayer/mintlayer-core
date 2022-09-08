@@ -307,6 +307,11 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         check_transferred_amount(&inputs_total_map, &outputs_total_map)?;
         let total_fee = Self::get_total_fee(&inputs_total_map, &outputs_total_map)?;
 
+        // TODO: the fee has the issue that it doesn't deduct the issuance fee from the total fee,
+        // which means that anyone issuing tokens will have a free-of-charge priority and a possibly
+        // huge transaction compared to what they would get for without the issuance.
+        // This has to be studied
+
         // Check is fee enough for issuance
         let issuance_count = get_tokens_issuance_count(tx.outputs());
         if issuance_count > 0 && total_fee < Fee(self.chain_config.token_min_issuance_fee()) {
