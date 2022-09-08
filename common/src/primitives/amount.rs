@@ -72,6 +72,7 @@ fn remove_right_most_zeros_and_decimal_point(s: String) -> String {
 
 impl Amount {
     pub const MAX: Self = Self::from_atoms(UnsignedIntType::MAX);
+    pub const ZERO: Self = Self::from_atoms(0);
 
     pub const fn from_atoms(v: UnsignedIntType) -> Self {
         Amount { val: v }
