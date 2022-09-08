@@ -105,7 +105,7 @@ impl<'a, S> TransactionVerifier<'a, S> {
     }
 }
 
-impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
+impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
     fn outpoint_source_id_from_spend_ref(
         spend_ref: BlockTransactableRef,
     ) -> Result<OutPointSourceId, ConnectTransactionError> {
@@ -215,7 +215,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                     .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
                 entry.insert(CachedInputsOperation::Read(tx_index));
             }
-        };
+        }
         Ok(())
     }
 
