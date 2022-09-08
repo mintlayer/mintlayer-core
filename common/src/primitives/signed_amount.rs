@@ -19,11 +19,13 @@ use std::iter::Sum;
 
 use super::{amount::UnsignedIntType, Amount};
 
+use serialization::{Decode, Encode};
+
 pub type SignedIntType = i128;
 
 /// A signed fixed-point type for amounts used in accounting, specifically
 /// The smallest unit of count is called an atom
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 #[must_use]
 pub struct SignedAmount {
     val: SignedIntType,
@@ -32,6 +34,7 @@ pub struct SignedAmount {
 impl SignedAmount {
     pub const MAX: Self = Self::from_atoms(SignedIntType::MAX);
     pub const MIN: Self = Self::from_atoms(SignedIntType::MIN);
+    pub const ZERO: Self = Self::from_atoms(0);
 
     pub const fn from_atoms(v: SignedIntType) -> Self {
         SignedAmount { val: v }
@@ -134,6 +137,14 @@ impl Sum<SignedAmount> for Option<SignedAmount> {
         I: Iterator<Item = SignedAmount>,
     {
         iter.try_fold(SignedAmount::from_atoms(0), std::ops::Add::add)
+    }
+}
+
+impl std::ops::Neg for SignedAmount {
+    type Output = Option<Self>;
+
+    fn neg(self) -> Self::Output {
+        self.val.checked_neg().map(|n| SignedAmount { val: n })
     }
 }
 

@@ -11,6 +11,7 @@ edition = "2021"
 
 [workspace]
 members = [
+  "accounting",                   # Accounting and balances abstractions
   "common",                       # Everything else, until it's moved to another crate.
   "crypto",                       # Cryptographic primitives and their interfaces.
   "consensus",                    # Consensus related logic.
