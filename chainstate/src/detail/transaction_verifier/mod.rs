@@ -52,6 +52,9 @@ use self::tokens::{register_tokens_issuance, unregister_token_issuance};
 mod utils;
 use self::utils::{check_transferred_amount, get_input_token_id_and_amount, insert_or_increase};
 
+
+// TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee` 
+//       that essentially belongs to this type, but return Amount
 #[derive(PartialOrd, PartialEq, Eq, Ord)]
 pub struct Fee(pub Amount);
 
