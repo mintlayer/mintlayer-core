@@ -16,7 +16,7 @@
 mod cached_operation;
 pub mod error;
 use self::{
-    cached_operation::CachedTokensOperation, error::ConnectTransactionError,
+    cached_operation::CachedTokensOperation, error::ConnectTransactionError, tokens::CoinOrTokenId,
     utils::get_output_token_id_and_amount,
 };
 use ::utils::ensure;
@@ -35,7 +35,7 @@ use common::{
         block::timestamp::BlockTimestamp,
         calculate_tx_index_from_block,
         signature::{verify_signature, Transactable},
-        tokens::{get_tokens_issuance_count, CoinOrTokenId, OutputValue, TokenId, TokensError},
+        tokens::{get_tokens_issuance_count, OutputValue, TokenId, TokensError},
         Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
         Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
     },

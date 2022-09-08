@@ -17,13 +17,13 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        tokens::{token_id, CoinOrTokenId, OutputValue, TokenData, TokenId, TokensError},
+        tokens::{token_id, OutputValue, TokenData, TokenId, TokensError},
         Transaction,
     },
     primitives::Amount,
 };
 
-use super::error::ConnectTransactionError;
+use super::{error::ConnectTransactionError, tokens::CoinOrTokenId};
 
 pub fn insert_or_increase(
     total_amounts: &mut BTreeMap<CoinOrTokenId, Amount>,

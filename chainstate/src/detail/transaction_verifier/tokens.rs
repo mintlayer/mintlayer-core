@@ -10,6 +10,12 @@ use common::{
 
 use super::cached_operation::CachedTokensOperation;
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum CoinOrTokenId {
+    Coin,
+    TokenId(TokenId),
+}
+
 // Token registration saves the token id in the database with the transaction that issued it, and possible some additional auxiliary data;
 // This helps in finding the relevant information of the token at any time in the future.
 pub fn register_tokens_issuance(
