@@ -52,16 +52,13 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
         let data_undo = delta_to_apply
             .data
             .into_iter()
-            .map(|(key, other_pool_data)| {
-                self.merge_delta_data_element(key, other_pool_data).map(|v| (key, v))
+            .filter_map(|(key, other_pool_data)| {
+                match self.merge_delta_data_element(key, other_pool_data).map(|v| (key, v)) {
+                    Err(e) => Some(Err(e)),
+                    Ok((k, v)) => Ok(v.map(|v| (k, v))).transpose(),
+                }
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
-
-        // TODO: maybe we don't have to run Collect::<_>() twice, but dealing with Result<Option<A>> is tricky in a functional way
-        let data_undo = data_undo
-            .into_iter()
-            .filter_map(|(k, v)| v.map(|v| (k, v)))
-            .collect::<BTreeMap<_, _>>();
 
         Ok(DeltaDataUndoCollection::new(data_undo))
     }

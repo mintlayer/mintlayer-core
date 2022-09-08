@@ -72,17 +72,17 @@ pub mod test {
     #[test]
     #[rustfmt::skip]
     fn test_combine_data_with_delta() {
-        let some_data_create = Some(DataDelta::Create(Box::new(3)));
-        let some_data_modify = Some(DataDelta::Modify(Box::new(3)));
+        let some_data_create = Some(DataDelta::Create(Box::new('b')));
+        let some_data_modify = Some(DataDelta::Modify(Box::new('b')));
 
-        assert_eq!(combine_data_with_delta::<i32>(None, None),                      Ok(None));
-        assert_eq!(combine_data_with_delta(None,        some_data_create.as_ref()), Ok(Some(3)));
-        assert_eq!(combine_data_with_delta(None,        some_data_modify.as_ref()), Err(Error::ModifyNonexistingData));
-        assert_eq!(combine_data_with_delta::<i32>(None, Some(&DataDelta::Delete)),  Err(Error::RemoveNonexistingData));
-        assert_eq!(combine_data_with_delta(Some(1),     None),                      Ok(Some(1)));
-        assert_eq!(combine_data_with_delta(Some(2),     some_data_create.as_ref()), Err(Error::DataCreatedMultipleTimes));
-        assert_eq!(combine_data_with_delta(Some(2),     some_data_modify.as_ref()), Ok(Some(3)));
-        assert_eq!(combine_data_with_delta(Some(2),     Some(&DataDelta::Delete)),  Ok(None));
+        assert_eq!(combine_data_with_delta::<i32>(None,   None),                      Ok(None));
+        assert_eq!(combine_data_with_delta(None,          some_data_create.as_ref()), Ok(Some('b')));
+        assert_eq!(combine_data_with_delta(None,          some_data_modify.as_ref()), Err(Error::ModifyNonexistingData));
+        assert_eq!(combine_data_with_delta::<i32>(None,   Some(&DataDelta::Delete)),  Err(Error::RemoveNonexistingData));
+        assert_eq!(combine_data_with_delta(Some('a'),     None),                      Ok(Some('a')));
+        assert_eq!(combine_data_with_delta(Some('a'),     some_data_create.as_ref()), Err(Error::DataCreatedMultipleTimes));
+        assert_eq!(combine_data_with_delta(Some('a'),     some_data_modify.as_ref()), Ok(Some('b')));
+        assert_eq!(combine_data_with_delta(Some('a'),     Some(&DataDelta::Delete)),  Ok(None));
     }
 
     #[test]
