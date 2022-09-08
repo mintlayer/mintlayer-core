@@ -46,7 +46,7 @@ impl<'f> BlockBuilder<'f> {
     /// Creates a new builder instance.
     pub fn new(framework: &'f mut TestFramework) -> Self {
         let transactions = Vec::new();
-        let prev_block_hash = framework.chainstate.get_best_block_id().unwrap();
+        let prev_block_hash = framework.chainstate.query().get_best_block_id().unwrap();
         let timestamp = BlockTimestamp::from_duration_since_epoch(time::get());
         let consensus_data = ConsensusData::None;
         let reward = BlockReward::new(Vec::new());

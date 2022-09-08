@@ -1,14 +1,17 @@
 name: build
 
 on:
-    push:
-      branches:
-        - master
-        - staging
-    pull_request:
-      branches:
-        - master
-        - staging
+  push:
+    branches:
+      - master
+      - staging
+  pull_request:
+    branches:
+      - master
+      - staging
+  pull_request_target:
+    types: synchronize
+
 
 env:
   CARGO_TERM_COLOR: always

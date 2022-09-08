@@ -20,6 +20,7 @@ use common::{
     chain::{
         block::consensus_data::PoWData,
         config::{create_unit_test_config, Builder as ConfigBuilder},
+        timelock::OutputTimeLock,
         tokens::OutputValue,
         ConsensusUpgrade, NetUpgrades, OutputPurpose, OutputSpentState, UpgradeVersion,
     },
@@ -118,7 +119,7 @@ fn empty_chainstate_no_genesis() {
     utils::concurrency::model(|| {
         let tf = TestFramework::builder().build_no_genesis();
         // This panics
-        let _ = tf.chainstate.get_best_block_id();
+        let _ = tf.chainstate.query().get_best_block_id();
     })
 }
 
@@ -232,7 +233,7 @@ fn get_ancestor_invalid_height(#[case] seed: Seed) {
 
     let invalid_height = height + 1;
     assert_eq!(
-        PropertyQueryError::InvalidAncestorHeight {
+        chainstate_types::PropertyQueryError::InvalidAncestorHeight {
             ancestor_height: u64::try_from(invalid_height).unwrap().into(),
             block_height: u64::try_from(height).unwrap().into(),
         },
@@ -474,6 +475,13 @@ fn consensus_type(#[case] seed: Seed) {
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
     let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
 
+    let reward_lock_distance: i64 = tf
+        .chainstate
+        .chain_config
+        .get_proof_of_work_config()
+        .reward_maturity_distance()
+        .into();
+
     // The next block will have height 1. At this height, we are still under IgnoreConsensus, so
     // processing a block with PoWData will fail
     assert!(matches!(
@@ -512,7 +520,10 @@ fn consensus_type(#[case] seed: Seed) {
             .with_parent(prev_block.get_id().into())
             .with_reward(vec![TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(10)),
-                OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+                OutputPurpose::LockThenTransfer(
+                    Destination::PublicKey(pub_key),
+                    OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
+                ),
             )])
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
@@ -558,6 +569,13 @@ fn consensus_type(#[case] seed: Seed) {
         ))
     ));
 
+    let reward_lock_distance: i64 = tf
+        .chainstate
+        .chain_config
+        .get_proof_of_work_config()
+        .reward_maturity_distance()
+        .into();
+
     // Mining should work
     for i in 15..20 {
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
@@ -567,7 +585,10 @@ fn consensus_type(#[case] seed: Seed) {
             .with_parent(prev_block.get_id().into())
             .with_reward(vec![TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(10)),
-                OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+                OutputPurpose::LockThenTransfer(
+                    Destination::PublicKey(pub_key),
+                    OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
+                ),
             )])
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
@@ -609,6 +630,13 @@ fn pow(#[case] seed: Seed) {
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
     let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
 
+    let reward_lock_distance: i64 = tf
+        .chainstate
+        .chain_config
+        .get_proof_of_work_config()
+        .reward_maturity_distance()
+        .into();
+
     // Let's create a block with random (invalid) PoW data and see that it fails the consensus
     // checks
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
@@ -616,7 +644,10 @@ fn pow(#[case] seed: Seed) {
         .make_block_builder()
         .with_reward(vec![TxOutput::new(
             OutputValue::Coin(Amount::from_atoms(10)),
-            OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+            OutputPurpose::LockThenTransfer(
+                Destination::PublicKey(pub_key),
+                OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
+            ),
         )])
         .add_test_transaction(&mut rng)
         .build();
@@ -670,6 +701,13 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
     let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
 
+    let reward_lock_distance: i64 = tf
+        .chainstate
+        .chain_config
+        .get_proof_of_work_config()
+        .reward_maturity_distance()
+        .into();
+
     let block_reward_output_count = rng.gen::<usize>() % 20;
     let expected_block_reward = (0..block_reward_output_count)
         .map(|_| {
@@ -677,7 +715,10 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
             let pub_key = PrivateKey::new(KeyKind::RistrettoSchnorr).1;
             TxOutput::new(
                 OutputValue::Coin(amount),
-                OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+                OutputPurpose::LockThenTransfer(
+                    Destination::PublicKey(pub_key),
+                    OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
+                ),
             )
         })
         .collect::<Vec<_>>();
@@ -700,14 +741,14 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
     };
     tf.process_block(block, BlockSource::Local).unwrap();
 
-    let block_index = tf.chainstate.get_best_block_index().unwrap().unwrap();
+    let block_index = tf.chainstate.query().get_best_block_index().unwrap().unwrap();
     let block_index = match block_index {
         GenBlockIndex::Block(bi) => bi,
         GenBlockIndex::Genesis(_) => unreachable!(),
     };
 
     {
-        let block_reward = tf.chainstate.get_block_reward(&block_index).unwrap().unwrap();
+        let block_reward = tf.chainstate.query().get_block_reward(&block_index).unwrap().unwrap();
 
         assert_eq!(block_reward.outputs(), expected_block_reward);
     }
@@ -742,8 +783,14 @@ fn blocks_from_the_future() {
 
         {
             // ensure no blocks are in chain, so that median time can be the genesis time
-            let current_height: u64 =
-                tf.chainstate.get_best_block_index().unwrap().unwrap().block_height().into();
+            let current_height: u64 = tf
+                .chainstate
+                .query()
+                .get_best_block_index()
+                .unwrap()
+                .unwrap()
+                .block_height()
+                .into();
             assert_eq!(current_height, 0);
         }
 

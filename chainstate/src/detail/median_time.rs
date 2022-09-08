@@ -114,12 +114,17 @@ mod test {
             );
 
             for block in &blocks {
-                chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
+                chainstate.process_block(block.clone().into(), BlockSource::Local).unwrap();
             }
 
             {
-                let current_height: u64 =
-                    chainstate.get_best_block_index().unwrap().unwrap().block_height().into();
+                let current_height: u64 = chainstate
+                    .query()
+                    .get_best_block_index()
+                    .unwrap()
+                    .unwrap()
+                    .block_height()
+                    .into();
                 assert_eq!(current_height, block_count as u64);
             }
 
@@ -186,15 +191,20 @@ mod test {
             let block4 = make_block(block3.get_id().into(), block4_time);
             let block5 = make_block(block4.get_id().into(), block5_time);
 
-            chainstate.process_block(block1.clone(), BlockSource::Local).unwrap();
-            chainstate.process_block(block2.clone(), BlockSource::Local).unwrap();
-            chainstate.process_block(block3.clone(), BlockSource::Local).unwrap();
-            chainstate.process_block(block4.clone(), BlockSource::Local).unwrap();
-            chainstate.process_block(block5.clone(), BlockSource::Local).unwrap();
+            chainstate.process_block(block1.clone().into(), BlockSource::Local).unwrap();
+            chainstate.process_block(block2.clone().into(), BlockSource::Local).unwrap();
+            chainstate.process_block(block3.clone().into(), BlockSource::Local).unwrap();
+            chainstate.process_block(block4.clone().into(), BlockSource::Local).unwrap();
+            chainstate.process_block(block5.clone().into(), BlockSource::Local).unwrap();
 
             {
-                let current_height: u64 =
-                    chainstate.get_best_block_index().unwrap().unwrap().block_height().into();
+                let current_height: u64 = chainstate
+                    .query()
+                    .get_best_block_index()
+                    .unwrap()
+                    .unwrap()
+                    .block_height()
+                    .into();
                 assert_eq!(current_height, 5);
             }
 

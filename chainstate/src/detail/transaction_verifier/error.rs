@@ -34,8 +34,6 @@ pub enum ConnectTransactionError {
     InvariantErrorTxNumWrongInBlock(usize, Id<Block>),
     #[error("Outputs already in the inputs cache")]
     OutputAlreadyPresentInInputsCache,
-    #[error("Block reward spent immaturely")]
-    ImmatureBlockRewardSpend,
     #[error("Input was cached, but could not be found")]
     PreviouslyCachedInputNotFound,
     #[error("Input was cached, but it is erased")]
@@ -74,7 +72,7 @@ pub enum ConnectTransactionError {
     BlockTimestampArithmeticError,
     #[error("Input addition error")]
     InputAdditionError,
-    #[error("Double-spend attempt")]
+    #[error("Double-spend attempt in `{0:?}`")]
     DoubleSpendAttempt(Spender),
     #[error("Input of tx {tx_id:?} has an out-of-range output index {source_output_index}")]
     OutputIndexOutOfRange {

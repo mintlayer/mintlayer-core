@@ -52,16 +52,13 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
         let data_undo = delta_to_apply
             .data
             .into_iter()
-            .map(|(key, other_pool_data)| {
-                self.merge_delta_data_element(key, other_pool_data).map(|v| (key, v))
+            .filter_map(|(key, other_pool_data)| {
+                match self.merge_delta_data_element(key, other_pool_data).map(|v| (key, v)) {
+                    Err(e) => Some(Err(e)),
+                    Ok((k, v)) => Ok(v.map(|v| (k, v))).transpose(),
+                }
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
-
-        // TODO: maybe we don't have to run Collect::<_>() twice, but dealing with Result<Option<A>> is tricky in a functional way
-        let data_undo = data_undo
-            .into_iter()
-            .filter_map(|(k, v)| v.map(|v| (k, v)))
-            .collect::<BTreeMap<_, _>>();
 
         Ok(DeltaDataUndoCollection::new(data_undo))
     }
@@ -172,19 +169,18 @@ pub mod test {
     #[rustfmt::skip]
     fn test_combine_delta_data() {
         use DataDelta::{Create, Delete, Modify};
-        let data = |v| Box::new(v);
 
-        assert_eq!(combine_delta_data(&Create(data('a')), Create(data('b'))), Err(Error::DeltaDataCreatedMultipleTimes));
-        assert_eq!(combine_delta_data(&Create(data('a')), Modify(data('b'))), Ok(DeltaMapOp::Write(DataDelta::Create(data('b')))));
-        assert_eq!(combine_delta_data(&Create(data('a')), Delete),            Ok(DeltaMapOp::Delete));
+        assert_eq!(combine_delta_data(&Create(Box::new('a')), Create(Box::new('b'))), Err(Error::DeltaDataCreatedMultipleTimes));
+        assert_eq!(combine_delta_data(&Create(Box::new('a')), Modify(Box::new('b'))), Ok(DeltaMapOp::Write(DataDelta::Create(Box::new('b')))));
+        assert_eq!(combine_delta_data(&Create(Box::new('a')), Delete),                Ok(DeltaMapOp::Delete));
 
-        assert_eq!(combine_delta_data(&Modify(data('a')), Create(data('b'))), Err(Error::DeltaDataCreatedMultipleTimes));
-        assert_eq!(combine_delta_data(&Modify(data('a')), Modify(data('b'))), Ok(DeltaMapOp::Write(DataDelta::Modify(data('b')))));
-        assert_eq!(combine_delta_data(&Modify(data('a')), Delete),            Ok(DeltaMapOp::Delete));
+        assert_eq!(combine_delta_data(&Modify(Box::new('a')), Create(Box::new('b'))), Err(Error::DeltaDataCreatedMultipleTimes));
+        assert_eq!(combine_delta_data(&Modify(Box::new('a')), Modify(Box::new('b'))), Ok(DeltaMapOp::Write(DataDelta::Modify(Box::new('b')))));
+        assert_eq!(combine_delta_data(&Modify(Box::new('a')), Delete),                Ok(DeltaMapOp::Delete));
 
-        assert_eq!(combine_delta_data(&Delete,            Create(data('b'))), Ok(DeltaMapOp::Write(DataDelta::Create(data('b')))));
-        assert_eq!(combine_delta_data(&Delete,            Modify(data('b'))), Err(Error::DeltaDataModifyAfterDelete));
-        assert_eq!(combine_delta_data::<char>(&Delete,    Delete),            Err(Error::DeltaDataDeletedMultipleTimes));
+        assert_eq!(combine_delta_data(&Delete,                Create(Box::new('b'))), Ok(DeltaMapOp::Write(DataDelta::Create(Box::new('b')))));
+        assert_eq!(combine_delta_data(&Delete,                Modify(Box::new('b'))), Err(Error::DeltaDataModifyAfterDelete));
+        assert_eq!(combine_delta_data::<char>(&Delete,        Delete),                Err(Error::DeltaDataDeletedMultipleTimes));
     }
 
     #[test]
