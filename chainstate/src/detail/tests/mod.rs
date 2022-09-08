@@ -18,6 +18,7 @@ pub use self::test_framework::TestFramework;
 use std::sync::Mutex;
 
 use crate::detail::*;
+use chainstate_storage::BlockchainStorageRead;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
@@ -57,14 +58,15 @@ fn anyonecanspend_address() -> Destination {
     Destination::AnyoneCanSpend
 }
 
-fn create_utxo_data(
+fn create_utxo_data<'a, S: BlockchainStorageRead>(
+    db_tx: &'a S,
     outsrc: OutPointSourceId,
     index: usize,
     output: &TxOutput,
     rng: &mut impl Rng,
 ) -> Option<(TxInput, TxOutput)> {
     Some((
-        TxInput::new(outsrc, index as u32, empty_witness(rng)),
+        TxInput::new(outsrc.clone(), index as u32, empty_witness(rng)),
         match output.value() {
             OutputValue::Coin(output_value) => {
                 let spent_value = Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
@@ -85,20 +87,21 @@ fn create_utxo_data(
                 ),
                 TokenData::TokenIssuanceV1 {
                     token_ticker: _,
-                    amount_to_issue: _,
+                    amount_to_issue,
                     number_of_decimals: _,
                     metadata_uri: _,
-                } => todo!("Add token_id here and use below code"),
-                // TxOutput::new(
-                //     OutputValue::Asset(AssetData::TokenTransferV1 {
-                //         token_id: match outsrc {
-                //             OutPointSourceId::Transaction(prev_tx) => token_id(prev_tx)?,
-                //             OutPointSourceId::BlockReward(_) => return None,
-                //         },
-                //         amount: *amount_to_issue,
-                //     }),
-                //     OutputPurpose::Transfer(anyonecanspend_address()),
-                // )
+                } => TxOutput::new(
+                    OutputValue::Token(TokenData::TokenTransferV1 {
+                        token_id: match outsrc {
+                            OutPointSourceId::Transaction(prev_tx) => {
+                                db_tx.get_token_id(&prev_tx).unwrap().unwrap()
+                            }
+                            OutPointSourceId::BlockReward(_) => return None,
+                        },
+                        amount: *amount_to_issue,
+                    }),
+                    OutputPurpose::Transfer(anyonecanspend_address()),
+                ),
                 TokenData::TokenBurnV1 {
                     token_id: _,
                     amount_to_burn: _,
@@ -140,7 +143,6 @@ impl TestBlockInfo {
     }
 
     fn from_id(cs: &test_framework::TestChainstate, id: Id<GenBlock>) -> Self {
-        use chainstate_storage::BlockchainStorageRead;
         match id.classify(&cs.chain_config) {
             GenBlockId::Genesis(_) => Self::from_genesis(cs.chain_config.genesis_block()),
             GenBlockId::Block(id) => {
@@ -151,14 +153,17 @@ impl TestBlockInfo {
     }
 }
 
-fn create_new_outputs(
+fn create_new_outputs<'a, S: BlockchainStorageRead>(
+    db_tx: &'a S,
     srcid: OutPointSourceId,
     outs: &[TxOutput],
     rng: &mut impl Rng,
 ) -> Vec<(TxInput, TxOutput)> {
     outs.iter()
         .enumerate()
-        .filter_map(move |(index, output)| create_utxo_data(srcid.clone(), index, output, rng))
+        .filter_map(move |(index, output)| {
+            create_utxo_data(db_tx, srcid.clone(), index, output, rng)
+        })
         .collect()
 }
 

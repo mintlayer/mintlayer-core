@@ -182,10 +182,11 @@ impl<'f> BlockBuilder<'f> {
         parent: TestBlockInfo,
         rng: &mut impl Rng,
     ) -> (Vec<TxInput>, Vec<TxOutput>) {
+        let db_tx = &self.framework.chainstate.chainstate_storage;
         parent
             .txns
             .into_iter()
-            .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
+            .flat_map(|(s, o)| create_new_outputs(db_tx, s, &o, rng))
             .unzip()
     }
 }
