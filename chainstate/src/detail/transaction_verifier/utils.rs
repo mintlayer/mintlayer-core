@@ -25,6 +25,30 @@ use common::{
 
 use super::{error::ConnectTransactionError, tokens::CoinOrTokenId};
 
+pub struct AmountsMap {
+    data: BTreeMap<CoinOrTokenId, Amount>,
+}
+
+impl AmountsMap {
+    pub fn from_iter<T: IntoIterator<Item = (CoinOrTokenId, Amount)>>(
+        iter: T,
+    ) -> Result<Self, ConnectTransactionError> {
+        let mut result = Self {
+            data: BTreeMap::new(),
+        };
+
+        for (t, v) in iter {
+            insert_or_increase(&mut result.data, t, v)?;
+        }
+
+        Ok(result)
+    }
+
+    pub fn consume(self) -> BTreeMap<CoinOrTokenId, Amount> {
+        self.data
+    }
+}
+
 pub fn insert_or_increase(
     total_amounts: &mut BTreeMap<CoinOrTokenId, Amount>,
     key: CoinOrTokenId,
@@ -65,12 +89,12 @@ pub fn check_transferred_amount(
 pub fn get_output_token_id_and_amount<'a>(
     output_value: &'a OutputValue,
     include_issuance: Option<&Transaction>,
-) -> Result<Option<(CoinOrTokenId, &'a Amount)>, TokensError> {
+) -> Result<Option<(CoinOrTokenId, Amount)>, TokensError> {
     Ok(match output_value {
-        OutputValue::Coin(amount) => Some((CoinOrTokenId::Coin, amount)),
+        OutputValue::Coin(amount) => Some((CoinOrTokenId::Coin, *amount)),
         OutputValue::Token(token_data) => match token_data {
             TokenData::TokenTransferV1 { token_id, amount } => {
-                Some((CoinOrTokenId::TokenId(*token_id), amount))
+                Some((CoinOrTokenId::TokenId(*token_id), *amount))
             }
             TokenData::TokenIssuanceV1 {
                 token_ticker: _,
@@ -80,14 +104,14 @@ pub fn get_output_token_id_and_amount<'a>(
             } => match include_issuance {
                 Some(tx) => {
                     let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
-                    Some((CoinOrTokenId::TokenId(token_id), amount_to_issue))
+                    Some((CoinOrTokenId::TokenId(token_id), *amount_to_issue))
                 }
                 None => None,
             },
             TokenData::TokenBurnV1 {
                 token_id,
                 amount_to_burn,
-            } => Some((CoinOrTokenId::TokenId(*token_id), amount_to_burn)),
+            } => Some((CoinOrTokenId::TokenId(*token_id), *amount_to_burn)),
         },
     })
 }

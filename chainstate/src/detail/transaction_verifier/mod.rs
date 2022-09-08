@@ -16,8 +16,10 @@
 mod cached_operation;
 pub mod error;
 use self::{
-    cached_operation::CachedTokensOperation, error::ConnectTransactionError, tokens::CoinOrTokenId,
-    utils::get_output_token_id_and_amount,
+    cached_operation::CachedTokensOperation,
+    error::ConnectTransactionError,
+    tokens::CoinOrTokenId,
+    utils::{get_output_token_id_and_amount, AmountsMap},
 };
 use ::utils::ensure;
 use cached_operation::CachedInputsOperation;
@@ -42,7 +44,7 @@ use common::{
     primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 use utxo::{
-    BlockRewardUndo, BlockUndo, ConsumedUtxoCache, FlushableUtxoView, TxUndo, UtxosCache,
+    BlockRewardUndo, BlockUndo, ConsumedUtxoCache, FlushableUtxoView, TxUndo, Utxo, UtxosCache,
     UtxosDBMut, UtxosView,
 };
 
@@ -50,7 +52,7 @@ mod tokens;
 use self::tokens::{register_tokens_issuance, unregister_token_issuance};
 
 mod utils;
-use self::utils::{check_transferred_amount, get_input_token_id_and_amount, insert_or_increase};
+use self::utils::{check_transferred_amount, get_input_token_id_and_amount};
 
 // TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee`
 //       that essentially belongs to this type, but return Amount
@@ -223,62 +225,64 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         outputs: &[TxOutput],
         include_issuance: Option<&Transaction>,
     ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
-        let mut total_amounts = BTreeMap::new();
-
-        outputs
+        let amounts: Result<Vec<Option<(CoinOrTokenId, Amount)>>, _> = outputs
             .iter()
             .map(|output| get_output_token_id_and_amount(output.value(), include_issuance))
-            .try_for_each(|item| {
-                item?.map(|(coin_or_token, amount)| {
-                    insert_or_increase(&mut total_amounts, coin_or_token, *amount)
-                });
-                Ok::<(), TokensError>(())
-            })?;
-        Ok(total_amounts)
+            .collect();
+
+        let result = AmountsMap::from_iter(amounts?.into_iter().flatten())?;
+        Ok(result.consume())
+    }
+
+    fn amount_from_outpoint(
+        &self,
+        tx_id: OutPointSourceId,
+        utxo: Utxo,
+    ) -> Result<(CoinOrTokenId, Amount), ConnectTransactionError> {
+        match tx_id {
+            OutPointSourceId::Transaction(tx_id) => {
+                let issuance_token_id_getter =
+                    || -> Result<Option<TokenId>, ConnectTransactionError> {
+                        // issuance transactions are unique, so we use them to get the token id
+                        Ok(self.db_tx.get_token_id(&tx_id)?)
+                    };
+                let (key, amount) =
+                    get_input_token_id_and_amount(utxo.output().value(), issuance_token_id_getter)?;
+                Ok((key, amount))
+            }
+            OutPointSourceId::BlockReward(_) => {
+                let (key, amount) =
+                    get_input_token_id_and_amount(utxo.output().value(), || Ok(None))?;
+                match key {
+                    CoinOrTokenId::Coin => Ok((CoinOrTokenId::Coin, amount)),
+                    CoinOrTokenId::TokenId(_) => {
+                        return Err(ConnectTransactionError::TokensError(
+                            TokensError::TokensInBlockReward,
+                        ))
+                    }
+                }
+            }
+        }
     }
 
     fn calculate_total_inputs(
         &self,
         inputs: &[TxInput],
     ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
-        let mut result = BTreeMap::new();
+        let amounts_vec: Result<Vec<_>, _> = inputs
+            .into_iter()
+            .map(|input| {
+                let utxo = self
+                    .utxo_cache
+                    .utxo(input.outpoint())
+                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+                self.amount_from_outpoint(input.outpoint().tx_id(), utxo)
+            })
+            .collect();
 
-        for input in inputs {
-            let utxo = self
-                .utxo_cache
-                .utxo(input.outpoint())
-                .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+        let amounts_map = AmountsMap::from_iter(amounts_vec?.into_iter())?;
 
-            match input.outpoint().tx_id() {
-                OutPointSourceId::Transaction(tx_id) => {
-                    let issuance_token_id_getter =
-                        || -> Result<Option<TokenId>, ConnectTransactionError> {
-                            // issuance transactions are unique, so we use them to get the token id
-                            Ok(self.db_tx.get_token_id(&tx_id)?)
-                        };
-                    let (key, amount) = get_input_token_id_and_amount(
-                        utxo.output().value(),
-                        issuance_token_id_getter,
-                    )?;
-                    insert_or_increase(&mut result, key, amount)?
-                }
-                OutPointSourceId::BlockReward(_) => {
-                    let (key, amount) =
-                        get_input_token_id_and_amount(utxo.output().value(), || Ok(None))?;
-                    match key {
-                        CoinOrTokenId::Coin => {
-                            insert_or_increase(&mut result, CoinOrTokenId::Coin, amount)?
-                        }
-                        CoinOrTokenId::TokenId(_) => {
-                            return Err(ConnectTransactionError::TokensError(
-                                TokensError::TokensInBlockReward,
-                            ))
-                        }
-                    }
-                }
-            }
-        }
-        Ok(result)
+        Ok(amounts_map.consume())
     }
 
     fn get_total_fee(
