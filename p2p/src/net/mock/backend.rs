@@ -119,7 +119,7 @@ where
     ) -> Self {
         let local_peer_id = types::MockPeerId::from_socket_address::<T>(&address);
         Self {
-            address: address,
+            address,
             socket,
             cmd_rx,
             conn_tx,

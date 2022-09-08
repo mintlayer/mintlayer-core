@@ -358,11 +358,12 @@ mod tests {
     };
     use common::primitives::semver::SemVer;
     use p2p_test_utils::{MakeChannelAddress, MakeTcpAddress, MakeTestAddress};
+    use std::fmt::Debug;
 
     async fn connect_to_remote<A, T>()
     where
         A: MakeTestAddress<Address = T::Address>,
-        T: MockTransport,
+        T: MockTransport + Debug,
     {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());

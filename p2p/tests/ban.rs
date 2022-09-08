@@ -33,7 +33,10 @@ use p2p::{
     pubsub::PubSubMessageHandler,
     sync::BlockSyncManager,
 };
-use p2p_test_utils::{connect_services, MakeP2pAddress, MakeTestAddress, TestBlockInfo};
+use p2p_test_utils::{
+    connect_services, MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress,
+    TestBlockInfo,
+};
 
 // start two libp2p services, spawn a `PubSubMessageHandler` for the first service,
 // publish an invalid block from the first service and verify that the `PeerManager`
@@ -112,14 +115,18 @@ async fn invalid_pubsub_block() {
 }
 
 // start two networking services and give an invalid block, verify that `PeerManager` is informed
-async fn invalid_sync_block<T>(addr1: T::Address, addr2: T::Address)
+async fn invalid_sync_block<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let (_tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
     let (tx_pubsub, _rx_pubsub) = mpsc::unbounded_channel();
     let (tx_swarm, mut rx_swarm) = mpsc::unbounded_channel();
@@ -165,16 +172,15 @@ where
 
 #[tokio::test]
 async fn invalid_sync_block_libp2p() {
-    invalid_sync_block::<Libp2pService>(
-        MakeP2pAddress::make_address(),
-        MakeP2pAddress::make_address(),
-    )
-    .await;
+    invalid_sync_block::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// #[tokio::test]
-// async fn invalid_sync_block_mock() {
-//     // TODO: FIXME:
-//     //invalid_sync_block::<MockService>(make_mock_addr(), make_mock_addr()).await;
-//     invalid_sync_block::<MockService<ChannelService>>(1, 2).await;
-// }
+#[tokio::test]
+async fn invalid_sync_block_mock_tcp() {
+    invalid_sync_block::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+async fn invalid_sync_block_mock_channels() {
+    invalid_sync_block::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+}

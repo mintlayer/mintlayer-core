@@ -13,18 +13,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
-use crate::{message::*, net::mock::MockService};
-use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress};
 use std::{collections::HashSet, time::Duration};
+
 use tokio::time::timeout;
 
-async fn test_request_response<T>(addr1: T::Address, addr2: T::Address)
+use super::*;
+use crate::{
+    message::*,
+    net::mock::{
+        transport::{ChannelMockTransport, TcpMockTransport},
+        MockService,
+    },
+};
+use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress};
+
+async fn test_request_response<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) = make_sync_manager::<T>(addr1).await;
     let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) = make_sync_manager::<T>(addr2).await;
 
@@ -62,24 +74,33 @@ where
     }
 }
 
-// #[tokio::test]
-// async fn test_request_response_libp2p() {
-//     test_request_response::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
-// }
+#[tokio::test]
+async fn test_request_response_libp2p() {
+    test_request_response::<MakeP2pAddress, Libp2pService>().await;
+}
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn test_request_response_mock() {
-    test_request_response::<MockService>(make_mock_addr(), make_mock_addr()).await;
+async fn test_request_response_mock_tcp() {
+    test_request_response::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
-async fn test_multiple_requests_and_responses<T>(addr1: T::Address, addr2: T::Address)
+#[tokio::test]
+async fn test_request_response_mock_channels() {
+    test_request_response::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+}
+
+async fn test_multiple_requests_and_responses<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) = make_sync_manager::<T>(addr1).await;
     let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) = make_sync_manager::<T>(addr2).await;
 
@@ -142,27 +163,36 @@ where
     assert!(request_ids.is_empty());
 }
 
-// #[tokio::test]
-// async fn test_multiple_requests_and_responses_libp2p() {
-//     test_multiple_requests_and_responses::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr())
-//         .await;
-// }
+#[tokio::test]
+async fn test_multiple_requests_and_responses_libp2p() {
+    test_multiple_requests_and_responses::<MakeP2pAddress, Libp2pService>().await;
+}
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn test_multiple_requests_and_responses_mock() {
-    test_multiple_requests_and_responses::<MockService>(make_mock_addr(), make_mock_addr()).await;
+async fn test_multiple_requests_and_responses_mock_tcp() {
+    test_multiple_requests_and_responses::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+async fn test_multiple_requests_and_responses_mock_channels() {
+    test_multiple_requests_and_responses::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+        .await;
 }
 
 // receive getheaders before receiving `Connected` event from swarm manager
 // which makes the request to be rejected and to time out in the sender end
-async fn test_request_timeout_error<T>(addr1: T::Address, addr2: T::Address)
+async fn test_request_timeout_error<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) = make_sync_manager::<T>(addr1).await;
     let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) = make_sync_manager::<T>(addr2).await;
 
@@ -211,28 +241,37 @@ where
     }
 }
 
-// TODO: FIXME:
-// #[tokio::test]
-// async fn test_request_timeout_error_libp2p() {
-//     test_request_timeout_error::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
-// }
-//
-// #[tokio::test]
-// #[ignore]
-// async fn test_request_timeout_error_mock() {
-//     test_request_timeout_error::<MockService>(make_mock_addr(), make_mock_addr()).await;
-// }
+#[tokio::test]
+async fn test_request_timeout_error_libp2p() {
+    test_request_timeout_error::<MakeP2pAddress, Libp2pService>().await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_request_timeout_error_mock_tcp() {
+    test_request_timeout_error::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_request_timeout_error_mock_channels() {
+    test_request_timeout_error::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+}
 
 // verify that if after three retries the remote peer still
 // hasn't responded to our request, the connection is closed
 //
 // marked as ignored as it takes quite a long time to complete
-async fn request_timeout<T>(addr1: T::Address, addr2: T::Address)
+async fn request_timeout<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let (mut mgr1, mut conn1, _sync1, _pubsub1, mut swarm_rx) = make_sync_manager::<T>(addr1).await;
     let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) = make_sync_manager::<T>(addr2).await;
 
@@ -273,15 +312,20 @@ where
     }
 }
 
-// TODO: FIXME:
-// #[tokio::test]
-// #[ignore]
-// async fn request_timeout_libp2p() {
-//     request_timeout::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
-// }
-//
-// #[tokio::test]
-// #[ignore]
-// async fn request_timeout_mock() {
-//     request_timeout::<MockService>(make_mock_addr(), make_mock_addr()).await;
-// }
+#[tokio::test]
+#[ignore]
+async fn request_timeout_libp2p() {
+    request_timeout::<MakeP2pAddress, Libp2pService>().await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn request_timeout_mock_tcp() {
+    request_timeout::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn request_timeout_mock_channels() {
+    request_timeout::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+}

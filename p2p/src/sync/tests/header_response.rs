@@ -14,19 +14,26 @@
 // limitations under the License.
 
 use super::*;
-use crate::net::mock::{types::MockPeerId, MockService};
+use crate::net::mock::{
+    transport::{ChannelMockTransport, TcpMockTransport},
+    types::MockPeerId,
+    MockService,
+};
 use crypto::random::{Rng, SliceRandom};
 use p2p_test_utils::{
     MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress, TestBlockInfo,
 };
 
 // response contains more than 2000 headers
-async fn too_many_headers<T>(addr: T::Address, peer_id: T::PeerId)
+async fn too_many_headers<A, T>(peer_id: T::PeerId)
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr = A::make_address();
+
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
     register_peer(&mut mgr, peer_id).await;
@@ -46,25 +53,34 @@ where
     );
 }
 
-// #[tokio::test]
-// async fn too_many_headers_libp2p() {
-//     too_many_headers::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
-// }
+#[tokio::test]
+async fn too_many_headers_libp2p() {
+    too_many_headers::<MakeP2pAddress, Libp2pService>(PeerId::random()).await;
+}
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn too_many_headers_mock() {
-    too_many_headers::<MockService>(make_mock_addr(), MockPeerId::random()).await;
+async fn too_many_headers_mock_TCP() {
+    too_many_headers::<MakeTcpAddress, MockService<TcpMockTransport>>(MockPeerId::random()).await;
+}
+
+#[tokio::test]
+async fn too_many_headers_mock_channels() {
+    too_many_headers::<MakeChannelAddress, MockService<ChannelMockTransport>>(MockPeerId::random())
+        .await;
 }
 
 // header response is empty
-async fn empty_response<T>(addr: T::Address, peer_id: T::PeerId)
+async fn empty_response<A, T>(peer_id: T::PeerId)
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr = A::make_address();
+
     let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
     register_peer(&mut mgr, peer_id).await;
 
@@ -74,25 +90,34 @@ where
     );
 }
 
-// #[tokio::test]
-// async fn empty_response_libp2p() {
-//     empty_response::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
-// }
+#[tokio::test]
+async fn empty_response_libp2p() {
+    empty_response::<MakeP2pAddress, Libp2pService>(PeerId::random()).await;
+}
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn empty_response_mock() {
-    empty_response::<MockService>(make_mock_addr(), MockPeerId::random()).await;
+async fn empty_response_mock_tcp() {
+    empty_response::<MakeTcpAddress, MockService<TcpMockTransport>>(MockPeerId::random()).await;
+}
+
+#[tokio::test]
+async fn empty_response_mock_channels() {
+    empty_response::<MakeChannelAddress, MockService<ChannelMockTransport>>(MockPeerId::random())
+        .await;
 }
 
 // valid response with headers in order and the first header attaching to local chain
-async fn valid_response<T>(addr: T::Address, peer_id: T::PeerId)
+async fn valid_response<A, T>(peer_id: T::PeerId)
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr = A::make_address();
+
     let mut rng = crypto::random::make_pseudo_rng();
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
@@ -115,25 +140,34 @@ where
     );
 }
 
-// #[tokio::test]
-// async fn valid_response_libp2p() {
-//     valid_response::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
-// }
+#[tokio::test]
+async fn valid_response_libp2p() {
+    valid_response::<MakeP2pAddress, Libp2pService>(PeerId::random()).await;
+}
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn valid_response_mock() {
-    valid_response::<MockService>(make_mock_addr(), MockPeerId::random()).await;
+async fn valid_response_mock_tcp() {
+    valid_response::<MakeTcpAddress, MockService<TcpMockTransport>>(MockPeerId::random()).await;
+}
+
+#[tokio::test]
+async fn valid_response_mock_channles() {
+    valid_response::<MakeChannelAddress, MockService<ChannelMockTransport>>(MockPeerId::random())
+        .await;
 }
 
 // the first header doesn't attach to local chain
-async fn header_doesnt_attach_to_local_chain<T>(addr: T::Address, peer_id: T::PeerId)
+async fn header_doesnt_attach_to_local_chain<A, T>(peer_id: T::PeerId)
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr = A::make_address();
+
     let mut rng = crypto::random::make_pseudo_rng();
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
@@ -155,27 +189,39 @@ where
     );
 }
 
-// #[tokio::test]
-// async fn header_doesnt_attach_to_local_chain_libp2p() {
-//     header_doesnt_attach_to_local_chain::<Libp2pService>(make_libp2p_addr(), PeerId::random())
-//         .await;
-// }
+#[tokio::test]
+async fn header_doesnt_attach_to_local_chain_libp2p() {
+    header_doesnt_attach_to_local_chain::<MakeP2pAddress, Libp2pService>(PeerId::random()).await;
+}
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn header_doesnt_attach_to_local_chain_mock() {
-    header_doesnt_attach_to_local_chain::<MockService>(make_mock_addr(), MockPeerId::random())
-        .await;
+async fn header_doesnt_attach_to_local_chain_mock_tcp() {
+    header_doesnt_attach_to_local_chain::<MakeTcpAddress, MockService<TcpMockTransport>>(
+        MockPeerId::random(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn header_doesnt_attach_to_local_chain_mock_channel() {
+    header_doesnt_attach_to_local_chain::<MakeChannelAddress, MockService<ChannelMockTransport>>(
+        MockPeerId::random(),
+    )
+    .await;
 }
 
 // valid headers but they are not in order
-async fn headers_not_in_order<T>(addr: T::Address, peer_id: T::PeerId)
+async fn headers_not_in_order<A, T>(peer_id: T::PeerId)
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr = A::make_address();
+
     let mut rng = crypto::random::make_pseudo_rng();
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
@@ -198,25 +244,37 @@ where
     );
 }
 
-// #[tokio::test]
-// async fn headers_not_in_order_libp2p() {
-//     headers_not_in_order::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
-// }
+#[tokio::test]
+async fn headers_not_in_order_libp2p() {
+    headers_not_in_order::<MakeP2pAddress, Libp2pService>(PeerId::random()).await;
+}
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn headers_not_in_order_mock() {
-    headers_not_in_order::<MockService>(make_mock_addr(), MockPeerId::random()).await;
+async fn headers_not_in_order_mock_tcp() {
+    headers_not_in_order::<MakeTcpAddress, MockService<TcpMockTransport>>(MockPeerId::random())
+        .await;
+}
+
+#[tokio::test]
+async fn headers_not_in_order_mock_channels() {
+    headers_not_in_order::<MakeChannelAddress, MockService<ChannelMockTransport>>(
+        MockPeerId::random(),
+    )
+    .await;
 }
 
 // peer state is incorrect to be sending header responses
-async fn invalid_state<T>(addr: T::Address, peer_id: T::PeerId)
+async fn invalid_state<A, T>(peer_id: T::PeerId)
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr = A::make_address();
+
     let mut rng = crypto::random::make_pseudo_rng();
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
@@ -240,25 +298,34 @@ where
     );
 }
 
-// #[tokio::test]
-// async fn invalid_state_libp2p() {
-//     invalid_state::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
-// }
+#[tokio::test]
+async fn invalid_state_libp2p() {
+    invalid_state::<MakeP2pAddress, Libp2pService>(PeerId::random()).await;
+}
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn invalid_state_mock() {
-    invalid_state::<MockService>(make_mock_addr(), MockPeerId::random()).await;
+async fn invalid_state_mock_tcp() {
+    invalid_state::<MakeTcpAddress, MockService<TcpMockTransport>>(MockPeerId::random()).await;
+}
+
+#[tokio::test]
+async fn invalid_state_mock_channels() {
+    invalid_state::<MakeChannelAddress, MockService<ChannelMockTransport>>(MockPeerId::random())
+        .await;
 }
 
 // peer doesn't exist
-async fn peer_doesnt_exist<T>(addr: T::Address, peer_id: T::PeerId)
+async fn peer_doesnt_exist<A, T>(peer_id: T::PeerId)
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr = A::make_address();
+
     let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
 
     assert_eq!(
@@ -267,14 +334,19 @@ where
     );
 }
 
-// #[tokio::test]
-// async fn peer_doesnt_exist_libp2p() {
-//     peer_doesnt_exist::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
-// }
+#[tokio::test]
+async fn peer_doesnt_exist_libp2p() {
+    peer_doesnt_exist::<MakeP2pAddress, Libp2pService>(PeerId::random()).await;
+}
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn peer_doesnt_exist_mock() {
-    peer_doesnt_exist::<MockService>(make_mock_addr(), MockPeerId::random()).await;
+async fn peer_doesnt_exist_mock_tcp() {
+    peer_doesnt_exist::<MakeTcpAddress, MockService<TcpMockTransport>>(MockPeerId::random()).await;
+}
+
+#[tokio::test]
+async fn peer_doesnt_exist_mock_channels() {
+    peer_doesnt_exist::<MakeChannelAddress, MockService<ChannelMockTransport>>(MockPeerId::random()).await;
 }

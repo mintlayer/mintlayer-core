@@ -280,6 +280,8 @@ pub trait MakeTestAddress {
     type Address: Clone + Debug + Eq + std::hash::Hash + Send + Sync + ToString;
 
     /// Creates a new unused address.
+    ///
+    /// This should work similar to requesting a port of number 0 when opening a TCP connection.
     fn make_address() -> Self::Address;
 }
 
@@ -309,7 +311,6 @@ impl MakeTestAddress for MakeChannelAddress {
     type Address = u64;
 
     fn make_address() -> Self::Address {
-        todo!();
-        todo!()
+        0
     }
 }

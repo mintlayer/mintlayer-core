@@ -15,12 +15,10 @@
 
 use std::{
     collections::{HashSet, VecDeque},
-    fmt::{Debug, Display},
-    net::SocketAddr,
+    fmt::Debug,
     sync::Arc,
 };
 
-use libp2p::Multiaddr;
 use tokio::sync::mpsc;
 
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource};
@@ -217,13 +215,17 @@ where
     mgr.check_state().await
 }
 
-async fn local_and_remote_in_sync<T>(addr1: T::Address, addr2: T::Address)
+async fn local_and_remote_in_sync<A, T>()
 where
-    T: NetworkingService + 'static,
+    A: MakeTestAddress<Address = T::Address>,
+    T: NetworkingService + Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     logging::init_logging::<&str>(None);
+
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
@@ -257,30 +259,35 @@ where
 
 #[tokio::test]
 async fn local_and_remote_in_sync_libp2p() {
-    local_and_remote_in_sync::<Libp2pService>(
-        MakeP2pAddress::make_address(),
-        MakeP2pAddress::make_address(),
-    )
-    .await;
+    local_and_remote_in_sync::<MakeP2pAddress, Libp2pService>().await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn local_and_remote_in_sync_mock() {
-    local_and_remote_in_sync::<MockService>(make_mock_addr(), make_mock_addr()).await;
+async fn local_and_remote_in_sync_mock_tcp() {
+    local_and_remote_in_sync::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+async fn local_and_remote_in_sync_mock_channels() {
+    local_and_remote_in_sync::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
 }
 
 // local and remote nodes are in the same chain but remote is ahead 7 blocks
 //
 // this the remote node is synced first and as it's ahead of local node,
 // no blocks are downloaded whereas loca node downloads the 7 new blocks from remote
-async fn remote_ahead_by_7_blocks<T>(addr1: T::Address, addr2: T::Address)
+async fn remote_ahead_by_7_blocks<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
@@ -369,27 +376,32 @@ where
 
 #[tokio::test]
 async fn remote_ahead_by_7_blocks_libp2p() {
-    remote_ahead_by_7_blocks::<Libp2pService>(
-        MakeP2pAddress::make_address(),
-        MakeP2pAddress::make_address(),
-    )
-    .await;
+    remote_ahead_by_7_blocks::<MakeP2pAddress, Libp2pService>().await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn remote_ahead_by_7_blocks_mock() {
-    remote_ahead_by_7_blocks::<MockService>(make_mock_addr(), make_mock_addr()).await;
+async fn remote_ahead_by_7_blocks_mock_tcp() {
+    remote_ahead_by_7_blocks::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+async fn remote_ahead_by_7_blocks_mock_channels() {
+    remote_ahead_by_7_blocks::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
 }
 
 // local and remote nodes are in the same chain but local is ahead of remote by 12 blocks
-async fn local_ahead_by_12_blocks<T>(addr1: T::Address, addr2: T::Address)
+async fn local_ahead_by_12_blocks<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
@@ -503,18 +515,19 @@ where
 
 #[tokio::test]
 async fn local_ahead_by_12_blocks_libp2p() {
-    local_ahead_by_12_blocks::<Libp2pService>(
-        MakeP2pAddress::make_address(),
-        MakeP2pAddress::make_address(),
-    )
-    .await;
+    local_ahead_by_12_blocks::<MakeP2pAddress, Libp2pService>().await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn local_ahead_by_12_blocks_mock() {
-    local_ahead_by_12_blocks::<MockService>(make_mock_addr(), make_mock_addr()).await;
+async fn local_ahead_by_12_blocks_mock_tcp() {
+    local_ahead_by_12_blocks::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+async fn local_ahead_by_12_blocks_mock_channels() {
+    local_ahead_by_12_blocks::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
 }
 
 // local and remote nodes are in the same chain but local is ahead of remote by 14 blocks
@@ -522,7 +535,7 @@ async fn local_ahead_by_12_blocks_mock() {
 async fn remote_local_diff_chains_local_higher<A, T>()
 where
     A: MakeTestAddress<Address = T::Address>,
-    T: NetworkingService,
+    T: NetworkingService + Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
@@ -671,6 +684,8 @@ async fn remote_local_diff_chains_local_higher_libp2p() {
     remote_local_diff_chains_local_higher::<MakeP2pAddress, Libp2pService>().await;
 }
 
+// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
+#[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn remote_local_diff_chains_local_higher_mock_tcp() {
     remote_local_diff_chains_local_higher::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
@@ -683,27 +698,18 @@ async fn remote_local_diff_chains_local_higher_mock_channels() {
     .await;
 }
 
-// #[tokio::test]
-// async fn remote_local_diff_chains_local_higher_libp2p() {
-//     remote_local_diff_chains_local_higher::<Libp2pService>(MakeP2pAddress::make_address(), MakeP2pAddress::make_address())
-//         .await;
-// }
-//
-// // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
-// #[tokio::test]
-// #[cfg(not(target_os = "macos"))]
-// async fn remote_local_diff_chains_local_higher_mock() {
-//     remote_local_diff_chains_local_higher::<MockService>(make_mock_addr(), make_mock_addr()).await;
-// }
-
 // local and remote nodes are in different chains and remote has longer chain
 // verify that local node does a reorg
-async fn remote_local_diff_chains_remote_higher<T>(addr1: T::Address, addr2: T::Address)
+async fn remote_local_diff_chains_remote_higher<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
@@ -842,29 +848,32 @@ where
 
 #[tokio::test]
 async fn remote_local_diff_chains_remote_higher_libp2p() {
-    remote_local_diff_chains_remote_higher::<Libp2pService>(
-        MakeP2pAddress::make_address(),
-        MakeP2pAddress::make_address(),
-    )
-    .await;
+    remote_local_diff_chains_remote_higher::<MakeP2pAddress, Libp2pService>().await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn remote_local_diff_chains_remote_higher_mock() {
-    remote_local_diff_chains_remote_higher::<MockService>(make_mock_addr(), make_mock_addr()).await;
+async fn remote_local_diff_chains_remote_higher_mock_tcp() {
+    remote_local_diff_chains_remote_higher::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
-async fn two_remote_nodes_different_chains<T>(
-    addr1: T::Address,
-    addr2: T::Address,
-    addr3: T::Address,
-) where
+#[tokio::test]
+async fn remote_local_diff_chains_remote_higher_mock_channels() {
+    remote_local_diff_chains_remote_higher::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+}
+
+async fn two_remote_nodes_different_chains<A, T>()
+where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+    let addr3 = A::make_address();
+
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2, handle3) = init_chainstate_3(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
@@ -968,32 +977,33 @@ async fn two_remote_nodes_different_chains<T>(
 
 #[tokio::test]
 async fn two_remote_nodes_different_chains_libp2p() {
-    two_remote_nodes_different_chains::<Libp2pService>(
-        MakeP2pAddress::make_address(),
-        MakeP2pAddress::make_address(),
-        MakeP2pAddress::make_address(),
-    )
-    .await;
+    two_remote_nodes_different_chains::<MakeP2pAddress, Libp2pService>().await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn two_remote_nodes_different_chains_mock() {
-    two_remote_nodes_different_chains::<MockService>(
-        make_mock_addr(),
-        make_mock_addr(),
-        make_mock_addr(),
-    )
-    .await;
+async fn two_remote_nodes_different_chains_mock_tcp() {
+    two_remote_nodes_different_chains::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
-async fn two_remote_nodes_same_chains<T>(addr1: T::Address, addr2: T::Address, addr3: T::Address)
+#[tokio::test]
+async fn two_remote_nodes_different_chains_mock_channels() {
+    two_remote_nodes_different_chains::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+        .await;
+}
+
+async fn two_remote_nodes_same_chains<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+    let addr3 = A::make_address();
+
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2, handle3) = init_chainstate_3(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
@@ -1113,35 +1123,32 @@ where
 
 #[tokio::test]
 async fn two_remote_nodes_same_chains_libp2p() {
-    two_remote_nodes_same_chains::<Libp2pService>(
-        MakeP2pAddress::make_address(),
-        MakeP2pAddress::make_address(),
-        MakeP2pAddress::make_address(),
-    )
-    .await;
+    two_remote_nodes_same_chains::<MakeP2pAddress, Libp2pService>().await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn two_remote_nodes_same_chains_mock() {
-    two_remote_nodes_same_chains::<MockService>(
-        make_mock_addr(),
-        make_mock_addr(),
-        make_mock_addr(),
-    )
-    .await;
+async fn two_remote_nodes_same_chains_mock_tcp() {
+    two_remote_nodes_same_chains::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
-async fn two_remote_nodes_same_chains_new_blocks<T>(
-    addr1: T::Address,
-    addr2: T::Address,
-    addr3: T::Address,
-) where
+#[tokio::test]
+async fn two_remote_nodes_same_chains_mock_channels() {
+    two_remote_nodes_same_chains::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+}
+
+async fn two_remote_nodes_same_chains_new_blocks<A, T>()
+where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+    let addr3 = A::make_address();
+
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2, handle3) = init_chainstate_3(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
@@ -1272,35 +1279,36 @@ async fn two_remote_nodes_same_chains_new_blocks<T>(
 
 #[tokio::test]
 async fn two_remote_nodes_same_chains_new_blocks_libp2p() {
-    two_remote_nodes_same_chains_new_blocks::<Libp2pService>(
-        MakeP2pAddress::make_address(),
-        MakeP2pAddress::make_address(),
-        MakeP2pAddress::make_address(),
-    )
-    .await;
+    two_remote_nodes_same_chains_new_blocks::<MakeP2pAddress, Libp2pService>().await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn two_remote_nodes_same_chains_new_blocks_mock() {
-    two_remote_nodes_same_chains_new_blocks::<MockService>(
-        make_mock_addr(),
-        make_mock_addr(),
-        make_mock_addr(),
-    )
-    .await;
+async fn two_remote_nodes_same_chains_new_blocks_mock_tcp() {
+    two_remote_nodes_same_chains_new_blocks::<MakeTcpAddress, MockService<TcpMockTransport>>()
+        .await;
+}
+
+#[tokio::test]
+async fn two_remote_nodes_same_chains_new_blocks_mock_channels() {
+    two_remote_nodes_same_chains_new_blocks::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+        .await;
 }
 
 // // connect two nodes, they are in sync so no blocks are downloaded
 // // then disconnect them, add more blocks to remote chains and reconnect the nodes
 // // verify that local node downloads the blocks and after that they are in sync
-async fn test_connect_disconnect_resyncing<T>(addr1: T::Address, addr2: T::Address)
+async fn test_connect_disconnect_resyncing<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
@@ -1410,16 +1418,18 @@ where
 
 #[tokio::test]
 async fn test_connect_disconnect_resyncing_libp2p() {
-    test_connect_disconnect_resyncing::<Libp2pService>(
-        MakeP2pAddress::make_address(),
-        MakeP2pAddress::make_address(),
-    )
-    .await;
+    test_connect_disconnect_resyncing::<MakeP2pAddress, Libp2pService>().await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn test_connect_disconnect_resyncing_mock() {
-    test_connect_disconnect_resyncing::<MockService>(make_mock_addr(), make_mock_addr()).await;
+async fn test_connect_disconnect_resyncing_mock_tcp() {
+    test_connect_disconnect_resyncing::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+async fn test_connect_disconnect_resyncing_mock_channels() {
+    test_connect_disconnect_resyncing::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+        .await;
 }
