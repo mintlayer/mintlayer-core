@@ -1398,6 +1398,12 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
 
         let mut tf = TestFramework::default();
         // Issue a new token
+        let issuance_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
+            token_ticker: b"SOME".to_vec(),
+            amount_to_issue: ISSUED_FUNDS,
+            number_of_decimals: 1,
+            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
+        });
         let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
         let block_index = tf
             .make_block_builder()
@@ -1409,12 +1415,7 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     ))
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenIssuanceV1 {
-                            token_ticker: b"SOME".to_vec(),
-                            amount_to_issue: ISSUED_FUNDS,
-                            number_of_decimals: 1,
-                            metadata_uri: "https://some_site.some".as_bytes().to_vec(),
-                        }),
+                        issuance_value.clone(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -1430,12 +1431,19 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let (issuance_block_id, issuance_tx) = tf.chainstate.get_token_detail(token_id).unwrap();
         assert!(issuance_block.get_id() == issuance_block_id);
         assert!(issuance_block.transactions()[0].get_id() == issuance_tx.get_id());
+        let issuance_tx = &issuance_block.transactions()[0].outputs()[0];
+        assert_eq!(issuance_tx.value(), &issuance_value);
 
         // Cause reorg
         tf.create_chain(&tf.genesis().get_id().into(), 5, &mut rng).unwrap();
 
         // Check that tokens not in storage
-        tf.chainstate.get_token_detail(token_id).unwrap_err();
+        assert!(matches!(
+            tf.chainstate.get_token_detail(token_id),
+            Err(chainstate_types::PropertyQueryError::TokensError(
+                TokensError::TokensNotRegistered(_)
+            ))
+        ));
     })
 }
 
