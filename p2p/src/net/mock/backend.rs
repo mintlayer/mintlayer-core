@@ -319,9 +319,7 @@ where
                 event = self.socket.accept() => match event {
                     Ok(info) => {
                         self.create_peer(
-                            // TODO: FIXME:
-                            todo!(),
-                            //info.0,
+                            info.0,
                             self.local_peer_id,
                             types::MockPeerId::from_socket_address::<T>(&info.1),
                             peer::Role::Inbound,

@@ -28,6 +28,7 @@ use crate::{
     Result,
 };
 
+// TODO: FIXME: Check `once_cell` safety.
 static NETWORK_HANDLE: Lazy<UnboundedSender<SocketCommand>> = Lazy::new(handle_connections);
 
 struct SocketCommand {
