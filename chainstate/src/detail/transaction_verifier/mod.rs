@@ -13,13 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod amounts_map;
 mod cached_operation;
 pub mod error;
 use self::{
-    cached_operation::CachedTokensOperation,
-    error::ConnectTransactionError,
-    tokens::CoinOrTokenId,
-    utils::{get_output_token_id_and_amount, AmountsMap},
+    amounts_map::AmountsMap, cached_operation::CachedTokensOperation,
+    error::ConnectTransactionError, tokens::CoinOrTokenId, utils::get_output_token_id_and_amount,
 };
 use ::utils::ensure;
 use cached_operation::CachedInputsOperation;
