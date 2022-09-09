@@ -7,9 +7,9 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serialization = { path = "../serialization" }
-common = { path = "../common/" }
-storage = { path = "../storage/" }
+serialization = { path = "../../serialization" }
+common = { path = "../../common/" }
+storage = { path = "../../storage/" }
 thiserror = "1.0"
 
 parity-scale-codec = "3.1"
