@@ -16,7 +16,7 @@ crypto = { path = '../crypto' }
 serialization = {path = "../serialization"}
 utils = { path = '../utils' }
 
-#[dev-dependencies]
+[dev-dependencies]
 hex = "0.4"
 itertools = "0.10"
 
