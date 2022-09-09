@@ -580,6 +580,7 @@ dependencies = [
  "jsonrpsee",
  "logging",
  "mockall",
+ "rand 0.8.5",
  "replace_with",
  "rpc",
  "rstest",
