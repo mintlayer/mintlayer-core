@@ -15,8 +15,12 @@
 
 //! High-level application-agnostic storage interface
 
+mod internal;
+
+use internal::{EntryIterator, TxImpl};
+
 use crate::schema::{self, Schema};
-use serialization::{encoded::Encoded, EncodeLike};
+use serialization::{encoded::Encoded, Encode, EncodeLike};
 use storage_core::{backend, Backend, DbIndex};
 
 /// The main storage type
@@ -63,20 +67,10 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
     }
 }
 
-/// Map high-level transaction type to the backend-specific implementation type
-pub trait TxImpl {
-    /// The implementation type
-    type Impl;
-}
-
 /// A read-only transaction
 pub struct TransactionRo<'tx, B: Backend, Sch> {
     dbtx: <Self as TxImpl>::Impl,
     _schema: core::marker::PhantomData<Sch>,
-}
-
-impl<'tx, B: Backend, Sch> TxImpl for TransactionRo<'tx, B, Sch> {
-    type Impl = <B::Impl as backend::TransactionalRo<'tx>>::TxRo;
 }
 
 impl<'tx, B: Backend, Sch: Schema> TransactionRo<'tx, B, Sch> {
@@ -98,10 +92,6 @@ impl<'tx, B: Backend, Sch: Schema> TransactionRo<'tx, B, Sch> {
 pub struct TransactionRw<'tx, B: Backend, Sch> {
     dbtx: <Self as TxImpl>::Impl,
     _schema: core::marker::PhantomData<Sch>,
-}
-
-impl<'tx, B: Backend, Sch> TxImpl for TransactionRw<'tx, B, Sch> {
-    type Impl = <B::Impl as backend::TransactionalRw<'tx>>::TxRw;
 }
 
 impl<'tx, B: Backend, Sch: Schema> TransactionRw<'tx, B, Sch> {
@@ -133,7 +123,7 @@ impl<'tx, B: Backend, Sch: Schema> TransactionRw<'tx, B, Sch> {
 }
 
 /// Represents an immutable view of a key-value map
-pub struct MapRef<'tx, Tx: TxImpl, DbMap: schema::DbMap> {
+pub struct MapRef<'tx, Tx: internal::TxImpl, DbMap: schema::DbMap> {
     dbtx: &'tx Tx::Impl,
     idx: DbIndex,
     _phantom: std::marker::PhantomData<fn() -> DbMap>,
@@ -159,10 +149,16 @@ where
         &self,
         key: K,
     ) -> crate::Result<Option<Encoded<&[u8], DbMap::Value>>> {
-        key.using_encoded(|key| {
-            backend::ReadOps::get(self.dbtx, self.idx, key)
-                .map(|x| x.map(Encoded::from_bytes_unchecked))
-        })
+        internal::get::<DbMap, _, _>(self.dbtx, self.idx, key)
+    }
+
+    /// Iterator over entries with key starting with given prefix
+    pub fn prefix_iter<Pfx>(&self, prefix: &Pfx) -> crate::Result<impl '_ + EntryIterator<DbMap>>
+    where
+        Pfx: Encode,
+        DbMap::Key: HasPrefix<Pfx>,
+    {
+        internal::prefix_iter(self.dbtx, self.idx, prefix.encode())
     }
 }
 
@@ -193,10 +189,16 @@ where
         &self,
         key: K,
     ) -> crate::Result<Option<Encoded<&[u8], DbMap::Value>>> {
-        key.using_encoded(|key| {
-            backend::ReadOps::get(self.dbtx, self.idx, key)
-                .map(|x| x.map(Encoded::from_bytes_unchecked))
-        })
+        internal::get::<DbMap, _, _>(self.dbtx, self.idx, key)
+    }
+
+    /// Iterator over entries with key starting with given prefix
+    pub fn prefix_iter<Pfx>(&self, prefix: &Pfx) -> crate::Result<impl '_ + EntryIterator<DbMap>>
+    where
+        Pfx: Encode,
+        DbMap::Key: HasPrefix<Pfx>,
+    {
+        internal::prefix_iter(self.dbtx, self.idx, prefix.encode())
     }
 }
 
@@ -218,3 +220,13 @@ where
         key.using_encoded(|key| backend::WriteOps::del(self.dbtx, self.idx, key))
     }
 }
+
+/// Marker asserting type `Pfx` is an encoding prefix of `Self`
+pub trait HasPrefix<Pfx: Encode>: Encode {}
+
+// The unit type is a prefix of everything
+impl<T: Encode> HasPrefix<()> for T {}
+// Tuples can be broken down into parts. Up to 3-tuples for now, can be extended as needed
+impl<T: Encode, U: Encode> HasPrefix<(T,)> for (T, U) {}
+impl<T: Encode, U: Encode, W: Encode> HasPrefix<(T,)> for (T, U, W) {}
+impl<T: Encode, U: Encode, W: Encode> HasPrefix<(T, U)> for (T, U, W) {}
