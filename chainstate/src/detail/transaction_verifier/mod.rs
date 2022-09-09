@@ -602,7 +602,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 // verify input signatures
                 self.verify_signatures(tx, spend_height, median_time_past)?;
 
-                //spend utxos
+                // spend utxos
                 let tx_undo = self
                     .utxo_cache
                     .connect_transaction(tx, *spend_height)
