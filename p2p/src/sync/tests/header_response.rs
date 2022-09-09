@@ -61,7 +61,7 @@ async fn too_many_headers_libp2p() {
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn too_many_headers_mock_TCP() {
+async fn too_many_headers_mock_tcp() {
     too_many_headers::<MakeTcpAddress, MockService<TcpMockTransport>>(MockPeerId::random()).await;
 }
 
