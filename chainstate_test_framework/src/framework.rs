@@ -39,14 +39,6 @@ pub struct TestFramework {
 }
 
 impl TestFramework {
-    /// Creates a new test framework
-    pub fn new(chainstate: TestChainstate, block_indexes: Vec<BlockIndex>) -> Self {
-        Self {
-            chainstate,
-            block_indexes,
-        }
-    }
-
     /// Creates a new test framework instance using a builder api.
     pub fn builder() -> TestFrameworkBuilder {
         TestFrameworkBuilder::new()
