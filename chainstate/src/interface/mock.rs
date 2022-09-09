@@ -38,7 +38,7 @@ mockall::mock! {
 
     impl ChainstateInterface for ChainstateInterfaceMock {
         fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>);
-        fn process_block(&mut self, block: Block, source: BlockSource) -> Result<(), ChainstateError>;
+        fn process_block(&mut self, block: Block, source: BlockSource) -> Result<Option<BlockIndex>, ChainstateError>;
         fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
         fn preliminary_header_check(&self, header: BlockHeader) -> Result<(), ChainstateError>;
         fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError>;

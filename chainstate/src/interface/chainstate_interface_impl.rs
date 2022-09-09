@@ -48,11 +48,14 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         self.chainstate.subscribe_to_events(handler)
     }
 
-    fn process_block(&mut self, block: Block, source: BlockSource) -> Result<(), ChainstateError> {
+    fn process_block(
+        &mut self,
+        block: Block,
+        source: BlockSource,
+    ) -> Result<Option<BlockIndex>, ChainstateError> {
         self.chainstate
             .process_block(block.into(), source)
-            .map_err(ChainstateError::ProcessBlockError)?;
-        Ok(())
+            .map_err(ChainstateError::ProcessBlockError)
     }
 
     fn preliminary_header_check(&self, header: BlockHeader) -> Result<(), ChainstateError> {

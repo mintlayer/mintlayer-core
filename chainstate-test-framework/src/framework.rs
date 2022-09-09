@@ -56,13 +56,13 @@ impl TestFramework {
         source: BlockSource,
     ) -> Result<Option<BlockIndex>, ChainstateError> {
         let id = block.get_id();
-        self.chainstate.process_block(block, source)?;
+        let block_index_result = self.chainstate.process_block(block, source)?;
         let index = match self.chainstate.get_gen_block_index(&id.into()).unwrap().unwrap() {
             GenBlockIndex::Genesis(..) => panic!("we have processed a block"),
             GenBlockIndex::Block(block_index) => block_index,
         };
         self.block_indexes.push(index.clone());
-        Ok(Some(index))
+        Ok(block_index_result)
     }
 
     /// Creates and processes a given amount of blocks. Returns the id of the last produced block.

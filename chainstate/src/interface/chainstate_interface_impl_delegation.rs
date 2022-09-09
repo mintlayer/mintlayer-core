@@ -44,7 +44,11 @@ impl<
         self.deref_mut().subscribe_to_events(handler)
     }
 
-    fn process_block(&mut self, block: Block, source: BlockSource) -> Result<(), ChainstateError> {
+    fn process_block(
+        &mut self,
+        block: Block,
+        source: BlockSource,
+    ) -> Result<Option<BlockIndex>, ChainstateError> {
         self.deref_mut().process_block(block, source)
     }
 
