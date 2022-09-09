@@ -1440,6 +1440,7 @@ fn test_attempt_to_mix_input_tokens(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
     utils::concurrency::model(move || {
+        use chainstate_storage::BlockchainStorageRead;
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
 
@@ -1450,9 +1451,11 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
         });
+        let genesis_id = tf.genesis().get_id();
         let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
         let block_index = tf
             .make_block_builder()
+            .with_parent(genesis_id.into())
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(TxInput::new(
@@ -1485,6 +1488,29 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
 
         // Cause reorg
         tf.create_chain(&tf.genesis().get_id().into(), 5, &mut rng).unwrap();
+
+        // Check that reorg happened
+        let height = block_index.block_height();
+        assert!(tf
+            .chainstate
+            .chainstate_storage
+            .get_block_id_by_height(&height)
+            .unwrap()
+            .map_or(false, |id| &id
+                .classify(&tf.chainstate.chain_config)
+                .chain_block_id()
+                .unwrap()
+                != block_index.block_id()));
+
+        // Check that issuance transaction in the storage is removed
+        assert!(tf
+            .chainstate
+            .chainstate_storage
+            .get_mainchain_tx_index(&common::chain::OutPointSourceId::Transaction(
+                issuance_tx.get_id()
+            ))
+            .unwrap()
+            .is_none());
 
         // Check that tokens not in storage
         assert!(matches!(
