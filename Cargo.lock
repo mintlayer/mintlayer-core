@@ -612,6 +612,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "chainstate-test-framework"
+version = "0.1.0"
+dependencies = [
+ "chainstate",
+ "chainstate-storage",
+ "chainstate-types",
+ "common",
+ "consensus",
+ "crypto",
+ "hex",
+ "itertools",
+ "logging",
+ "serialization",
+ "test-utils",
+ "utils",
+]
+
+[[package]]
+name = "chainstate-tests"
+version = "0.1.0"
+dependencies = [
+ "chainstate",
+ "chainstate-test-framework",
+ "chainstate-types",
+ "common",
+ "consensus",
+ "crypto",
+ "hex",
+ "itertools",
+ "logging",
+ "rstest",
+ "serialization",
+ "test-utils",
+ "utils",
+]
+
+[[package]]
 name = "chainstate-types"
 version = "0.1.0"
 dependencies = [

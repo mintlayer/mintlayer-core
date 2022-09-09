@@ -23,13 +23,13 @@ use common::{
 };
 use crypto::random::Rng;
 
-use crate::{
-    detail::{
-        tests::{create_new_outputs, test_framework::TestFramework, TestBlockInfo},
-        BlockIndex,
-    },
-    Block, BlockError, BlockSource, GenBlock,
-};
+use crate::framework::create_new_outputs;
+use crate::framework::TestBlockInfo;
+use crate::TestFramework;
+use chainstate::{BlockSource, ChainstateError};
+use chainstate_types::BlockIndex;
+use common::chain::Block;
+use common::chain::GenBlock;
 
 /// The block builder that allows construction and processing of a block.
 pub struct BlockBuilder<'f> {
@@ -46,7 +46,7 @@ impl<'f> BlockBuilder<'f> {
     /// Creates a new builder instance.
     pub fn new(framework: &'f mut TestFramework) -> Self {
         let transactions = Vec::new();
-        let prev_block_hash = framework.chainstate.query().get_best_block_id().unwrap();
+        let prev_block_hash = framework.chainstate.get_best_block_id().unwrap();
         let timestamp = BlockTimestamp::from_duration_since_epoch(time::get());
         let consensus_data = ConsensusData::None;
         let reward = BlockReward::new(Vec::new());
@@ -164,7 +164,7 @@ impl<'f> BlockBuilder<'f> {
     }
 
     /// Constructs a block and processes it by the chainstate.
-    pub fn build_and_process(self) -> Result<Option<BlockIndex>, BlockError> {
+    pub fn build_and_process(self) -> Result<Option<BlockIndex>, ChainstateError> {
         let block = Block::new(
             self.transactions,
             self.prev_block_hash,

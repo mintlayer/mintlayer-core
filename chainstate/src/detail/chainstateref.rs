@@ -17,6 +17,7 @@ use std::{collections::BTreeSet, convert::TryInto, sync::Arc};
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{get_skip_height, BlockIndex, GenBlockIndex, PropertyQueryError};
+use common::time_getter::TimeGetterFn;
 use common::{
     chain::{
         block::{
@@ -32,7 +33,7 @@ use logging::log;
 use utils::ensure;
 use utxo::{UtxosDB, UtxosView};
 
-use super::{median_time::calculate_median_time_past, time_getter::TimeGetterFn};
+use super::median_time::calculate_median_time_past;
 use crate::{BlockError, BlockSource, ChainstateConfig};
 
 use super::{

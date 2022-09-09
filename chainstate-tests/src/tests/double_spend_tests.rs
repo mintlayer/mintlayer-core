@@ -13,10 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::detail::{
-    tests::{test_framework::TransactionBuilder, TestFramework, *},
-    transaction_verifier::error::ConnectTransactionError,
-};
+use super::*;
+use chainstate::BlockError;
+use chainstate::BlockSource;
+use chainstate::ChainstateError;
+use chainstate::CheckBlockError;
+use chainstate::CheckBlockTransactionsError;
+use chainstate::ConnectTransactionError;
+use chainstate_test_framework::anyonecanspend_address;
+use chainstate_test_framework::empty_witness;
+use chainstate_test_framework::TestFramework;
+use chainstate_test_framework::TransactionBuilder;
+use common::primitives::Idable;
 use common::{
     chain::{tokens::OutputValue, OutPointSourceId, Transaction, TxInput, TxOutput},
     primitives::{Amount, Id},
@@ -43,7 +51,7 @@ fn spend_output_in_the_same_block(#[case] seed: Seed) {
 
         let mut rng = make_seedable_rng(seed);
         let tx1_output_value = rng.gen_range(100_000..200_000);
-        let first_tx = tx_from_genesis(tf.genesis(), &mut rng, tx1_output_value);
+        let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
         let block = tf.make_block_builder().with_transactions(vec![first_tx, second_tx]).build();
@@ -76,7 +84,7 @@ fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
 
         let mut rng = make_seedable_rng(seed);
         let tx1_output_value = rng.gen_range(100_000..200_000);
-        let first_tx = tx_from_genesis(tf.genesis(), &mut rng, tx1_output_value);
+        let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
         assert_eq!(
@@ -84,7 +92,9 @@ fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
                 .with_transactions(vec![second_tx, first_tx])
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::MissingOutputOrSpent
+            ))
         );
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
     });
@@ -115,7 +125,7 @@ fn double_spend_tx_in_the_same_block(#[case] seed: Seed) {
 
         let mut rng = make_seedable_rng(seed);
         let tx1_output_value = rng.gen_range(100_000..200_000);
-        let first_tx = tx_from_genesis(tf.genesis(), &mut rng, tx1_output_value);
+        let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
         let third_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
@@ -126,8 +136,10 @@ fn double_spend_tx_in_the_same_block(#[case] seed: Seed) {
         let block_id = block.get_id();
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
-            BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                CheckBlockTransactionsError::DuplicateInputInBlock(block_id)
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::DuplicateInputInBlock(block_id)
+                )
             ))
         );
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
@@ -160,18 +172,20 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
 
         let mut rng = make_seedable_rng(seed);
         let tx1_output_value = rng.gen_range(100_000..200_000);
-        let first_tx = tx_from_genesis(tf.genesis(), &mut rng, tx1_output_value);
+        let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
         let first_block = tf.make_block_builder().add_transaction(first_tx).build();
         let first_block_id = first_block.get_id();
         tf.process_block(first_block, BlockSource::Local).unwrap();
         assert_eq!(tf.best_block_id(), first_block_id);
 
         let tx2_output_value = rng.gen_range(100_000..200_000);
-        let second_tx = tx_from_genesis(tf.genesis(), &mut rng, tx2_output_value);
+        let second_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx2_output_value);
         let second_block = tf.make_block_builder().add_transaction(second_tx).build();
         assert_eq!(
             tf.process_block(second_block, BlockSource::Local).unwrap_err(),
-            BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::MissingOutputOrSpent
+            ))
         );
         assert_eq!(tf.best_block_id(), first_block_id);
     });
@@ -199,7 +213,7 @@ fn overspend_single_output(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let tx1_output_value = rng.gen_range(1000..2000);
         let tx2_output_value = rng.gen_range(100_000..200_000);
-        let first_tx = tx_from_genesis(tf.genesis(), &mut rng, tx1_output_value);
+        let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, tx2_output_value);
 
         assert_eq!(
@@ -207,9 +221,11 @@ fn overspend_single_output(#[case] seed: Seed) {
                 .with_transactions(vec![first_tx, second_tx])
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(
-                Amount::from_atoms(tx1_output_value),
-                Amount::from_atoms(tx2_output_value)
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToPrintMoney(
+                    Amount::from_atoms(tx1_output_value),
+                    Amount::from_atoms(tx2_output_value)
+                )
             ))
         );
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
@@ -227,7 +243,7 @@ fn overspend_multiple_outputs(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let tx1_output_value = rng.gen_range(1000..2000);
-        let tx1 = tx_from_genesis(tf.genesis(), &mut rng, tx1_output_value);
+        let tx1 = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
 
         let tx2_output_value = tx1_output_value - 1;
         let tx2_output = TxOutput::new(
@@ -248,9 +264,11 @@ fn overspend_multiple_outputs(#[case] seed: Seed) {
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(
-                Amount::from_atoms(tx1_output_value),
-                Amount::from_atoms(tx2_output_value * 2)
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToPrintMoney(
+                    Amount::from_atoms(tx1_output_value),
+                    Amount::from_atoms(tx2_output_value * 2)
+                )
             ))
         );
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
@@ -279,7 +297,7 @@ fn duplicate_input_in_the_same_tx(#[case] seed: Seed) {
 
         let mut rng = make_seedable_rng(seed);
         let tx1_output_value = rng.gen_range(100_000..200_000);
-        let first_tx = tx_from_genesis(tf.genesis(), &mut rng, tx1_output_value);
+        let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
 
         let input = TxInput::new(first_tx.get_id().into(), 0, InputWitness::NoSignature(None));
         let second_tx = TransactionBuilder::new()
@@ -296,8 +314,13 @@ fn duplicate_input_in_the_same_tx(#[case] seed: Seed) {
         let block_id = block.get_id();
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
-            BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                CheckBlockTransactionsError::DuplicateInputInTransaction(second_tx_id, block_id)
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::DuplicateInputInTransaction(
+                        second_tx_id,
+                        block_id
+                    )
+                )
             ))
         );
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
@@ -326,7 +349,7 @@ fn same_input_diff_sig_in_the_same_tx(#[case] seed: Seed) {
 
         let mut rng = make_seedable_rng(seed);
         let tx1_output_value = rng.gen_range(100_000..200_000);
-        let first_tx = tx_from_genesis(tf.genesis(), &mut rng, tx1_output_value);
+        let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
 
         let input1 = TxInput::new(
             first_tx.get_id().into(),
@@ -352,8 +375,13 @@ fn same_input_diff_sig_in_the_same_tx(#[case] seed: Seed) {
         let block_id = block.get_id();
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
-            BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                CheckBlockTransactionsError::DuplicateInputInTransaction(second_tx_id, block_id)
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::DuplicateInputInTransaction(
+                        second_tx_id,
+                        block_id
+                    )
+                )
             ))
         );
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
@@ -384,7 +412,7 @@ fn duplicate_tx_in_the_same_block(#[case] seed: Seed) {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
-        let first_tx = tx_from_genesis(tf.genesis(), &mut rng, 1);
+        let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, 1);
 
         let second_tx = TransactionBuilder::new().build();
         let second_tx_id = second_tx.get_id();
@@ -396,8 +424,13 @@ fn duplicate_tx_in_the_same_block(#[case] seed: Seed) {
         let block_id = block.get_id();
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
-            BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                CheckBlockTransactionsError::DuplicatedTransactionInBlock(second_tx_id, block_id)
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::DuplicatedTransactionInBlock(
+                        second_tx_id,
+                        block_id
+                    )
+                )
             ))
         );
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
