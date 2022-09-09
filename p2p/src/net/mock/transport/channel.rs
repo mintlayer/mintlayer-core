@@ -13,106 +13,133 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{collections::BTreeMap, sync::Mutex};
+
 use async_trait::async_trait;
 use once_cell::sync::Lazy;
 use tokio::sync::{
     mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-    oneshot,
+    oneshot::{self, Sender},
 };
 
 use crate::{
+    error::DialError,
     net::mock::{
         transport::{MockListener, MockStream, MockTransport},
         types::Message,
     },
-    Result,
+    P2pError, Result,
 };
 
-// TODO: FIXME: Check `once_cell` safety.
-static NETWORK_HANDLE: Lazy<UnboundedSender<SocketCommand>> = Lazy::new(handle_connections);
+type Address = u64;
+type MessageSender = UnboundedSender<Message>;
+type MessageReceiver = UnboundedReceiver<Message>;
+type AcceptResponse = (MessageSender, MessageReceiver);
 
-struct SocketCommand {
-    address: u64,
-    response: oneshot::Sender<()>,
-    command: SocketCommandType,
-}
+/// Zero address has special meaning: bind to a free address.
+const ZERO_ADDRESS: Address = 0;
 
-enum SocketCommandType {
-    Connect,
-    Bind,
-}
+static CONNECTIONS: Lazy<Mutex<BTreeMap<Address, UnboundedSender<Sender<AcceptResponse>>>>> =
+    Lazy::new(|| Mutex::new(BTreeMap::new()));
 
 #[derive(Debug)]
 pub struct ChannelMockTransport {}
 
 #[async_trait]
 impl MockTransport for ChannelMockTransport {
-    type Address = u64;
+    type Address = Address;
     type Listener = ChannelMockListener;
     type Stream = ChannelMockStream;
 
     async fn bind(address: Self::Address) -> Result<Self::Listener> {
-        let tx: UnboundedSender<SocketCommand> = NETWORK_HANDLE.clone();
-        // TODO: FIXME:
-        todo!();
+        let mut connections = CONNECTIONS.lock().expect("Connections mutex is poisoned");
+
+        let address = if address == ZERO_ADDRESS {
+            connections.iter().next_back().map(|(&a, _)| a).unwrap_or(1)
+        } else {
+            address
+        };
+
+        let (sender, receiver) = unbounded_channel();
+        assert!(connections.insert(address, sender).is_none());
+
+        Ok(Self::Listener { address, receiver })
     }
 
     async fn connect(address: Self::Address) -> Result<Self::Stream> {
-        // TODO: FIXME:
-        todo!();
+        // A connection can only be established to a known address.
+        debug_assert_ne!(ZERO_ADDRESS, address);
+
+        let server_sender = CONNECTIONS
+            .lock()
+            .expect("Connections mutex is poisoned")
+            .get(&address)
+            .ok_or(P2pError::DialError(DialError::NoAddresses))?
+            .clone();
+        let (connect_sender, connect_receiver) = oneshot::channel();
+        server_sender
+            .send(connect_sender)
+            .map_err(|_| P2pError::DialError(DialError::NoAddresses))?;
+        let (sender, receiver) = connect_receiver.await.map_err(|_| P2pError::ChannelClosed)?;
+
+        Ok(Self::Stream { sender, receiver })
     }
 }
 
-pub struct ChannelMockListener {}
+pub struct ChannelMockListener {
+    address: Address,
+    receiver: UnboundedReceiver<Sender<AcceptResponse>>,
+}
 
 #[async_trait]
-impl MockListener<ChannelMockStream, u64> for ChannelMockListener {
-    async fn accept(&mut self) -> Result<(ChannelMockStream, u64)> {
-        // TODO: FIXME:
-        todo!();
+impl MockListener<ChannelMockStream, Address> for ChannelMockListener {
+    async fn accept(&mut self) -> Result<(ChannelMockStream, Address)> {
+        let response_sender = self.receiver.recv().await.ok_or(P2pError::ChannelClosed)?;
+
+        let (server_sender, server_receiver) = unbounded_channel();
+        let (peer_sender, peer_receiver) = unbounded_channel();
+        response_sender
+            .send((peer_sender, server_receiver))
+            .map_err(|_| P2pError::ChannelClosed)?;
+
+        Ok((
+            ChannelMockStream {
+                sender: server_sender,
+                receiver: peer_receiver,
+            },
+            self.address,
+        ))
     }
 
-    fn local_address(&self) -> Result<u64> {
-        todo!();
+    fn local_address(&self) -> Result<Address> {
+        Ok(self.address)
     }
 }
 
-pub struct ChannelMockStream {}
+impl Drop for ChannelMockListener {
+    fn drop(&mut self) {
+        assert!(CONNECTIONS
+            .lock()
+            .expect("Connections mutex is poisoned")
+            .remove(&self.address)
+            .is_some());
+    }
+}
+
+pub struct ChannelMockStream {
+    sender: MessageSender,
+    receiver: MessageReceiver,
+}
 
 #[async_trait]
 impl MockStream for ChannelMockStream {
     async fn send(&mut self, msg: Message) -> Result<()> {
-        // TODO: FIXME:
-        todo!();
+        self.sender.send(msg).map_err(|_| P2pError::ChannelClosed)
     }
 
     async fn recv(&mut self) -> Result<Option<Message>> {
-        // TODO: FIXME:
-        todo!();
+        Ok(self.receiver.recv().await)
     }
-}
-
-fn handle_connections() -> UnboundedSender<SocketCommand> {
-    let (tx, mut rx): (
-        UnboundedSender<SocketCommand>,
-        UnboundedReceiver<SocketCommand>,
-    ) = unbounded_channel();
-    tokio::spawn(async move {
-        loop {
-            match rx.recv().await {
-                Some(cmd) => match cmd.command {
-                    SocketCommandType::Connect => {
-                        // TODO: check if peer with `address` has connected
-                    }
-                    SocketCommandType::Bind => {
-                        // TODO: check if `address` is free and if it is, bind this peer to that address
-                    }
-                },
-                None => break,
-            }
-        }
-    });
-    tx
 }
 
 #[cfg(test)]
@@ -141,6 +168,4 @@ mod tests {
 
         assert_eq!(server_stream.recv().await.unwrap().unwrap(), msg);
     }
-
-    // TODO: FIXME: Add a tests for connections map.
 }
