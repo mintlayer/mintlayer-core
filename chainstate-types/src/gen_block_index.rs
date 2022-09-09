@@ -66,4 +66,11 @@ impl GenBlockIndex {
             GenBlockIndex::Genesis(_g) => &Uint256::ZERO,
         }
     }
+
+    pub fn prev_block_id(&self) -> Option<Id<GenBlock>> {
+        match self {
+            GenBlockIndex::Block(b) => Some(*b.prev_block_id()),
+            GenBlockIndex::Genesis(..) => None,
+        }
+    }
 }

@@ -43,7 +43,7 @@ use utxo::{
     UtxosDBMut, UtxosView,
 };
 
-use self::error::ConnectTransactionError;
+pub use self::error::ConnectTransactionError;
 
 pub struct Fee(pub Amount);
 pub struct Subsidy(pub Amount);
