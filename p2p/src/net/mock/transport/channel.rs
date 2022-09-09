@@ -55,7 +55,7 @@ impl MockTransport for ChannelMockTransport {
         let mut connections = CONNECTIONS.lock().expect("Connections mutex is poisoned");
 
         let address = if address == ZERO_ADDRESS {
-            connections.iter().next_back().map(|(&a, _)| a).unwrap_or(1)
+            connections.iter().next_back().map(|(&a, _)| a + 1).unwrap_or(1)
         } else {
             address
         };
