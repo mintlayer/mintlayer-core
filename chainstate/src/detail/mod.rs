@@ -313,19 +313,19 @@ impl<S: BlockchainStorage> Chainstate<S> {
         Ok(())
     }
 
-    pub fn get_chain_config(&self) -> Arc<ChainConfig> {
-        self.chain_config.clone()
+    pub fn chain_config(&self) -> &Arc<ChainConfig> {
+        &self.chain_config
     }
 
-    pub fn get_chainstate_config(&self) -> &ChainstateConfig {
+    pub fn chainstate_config(&self) -> &ChainstateConfig {
         &self.chainstate_config
     }
 
-    pub fn get_orphan_blocks(&self) -> &OrphanBlocksPool {
+    pub fn orphan_blocks_pool(&self) -> &OrphanBlocksPool {
         &self.orphan_blocks
     }
 
-    pub fn get_events_controller(&self) -> &EventsController<ChainstateEvent> {
+    pub fn events_controller(&self) -> &EventsController<ChainstateEvent> {
         &self.events_controller
     }
 }

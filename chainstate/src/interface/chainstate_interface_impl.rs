@@ -172,11 +172,11 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
     }
 
     fn get_chain_config(&self) -> Arc<ChainConfig> {
-        Arc::clone(&self.chainstate.get_chain_config())
+        Arc::clone(self.chainstate.chain_config())
     }
 
     fn get_chainstate_config(&self) -> ChainstateConfig {
-        self.chainstate.get_chainstate_config().clone()
+        self.chainstate.chainstate_config().clone()
     }
 
     fn wait_for_all_events(&self) {
@@ -194,7 +194,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
     }
 
     fn subscribers(&self) -> &Vec<EventHandler<ChainstateEvent>> {
-        self.chainstate.get_events_controller().subscribers()
+        self.chainstate.events_controller().subscribers()
     }
 
     fn calculate_median_time_past(
@@ -205,11 +205,11 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
     }
 
     fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool {
-        self.chainstate.get_orphan_blocks().is_already_an_orphan(block_id)
+        self.chainstate.orphan_blocks_pool().is_already_an_orphan(block_id)
     }
 
     fn orphans_count(&self) -> usize {
-        self.chainstate.get_orphan_blocks().len()
+        self.chainstate.orphan_blocks_pool().len()
     }
 
     fn get_ancestor(
