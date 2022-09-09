@@ -82,6 +82,3 @@ pub fn make_chainstate<S: chainstate_storage::BlockchainStorage + 'static>(
     let cons_interface = ChainstateInterfaceImpl::new(cons);
     Ok(Box::new(cons_interface))
 }
-
-#[cfg(test)]
-mod test;

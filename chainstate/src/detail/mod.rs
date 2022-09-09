@@ -149,7 +149,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
         Ok(chainstate)
     }
 
-    pub(crate) fn new_no_genesis(
+    fn new_no_genesis(
         chain_config: Arc<ChainConfig>,
         chainstate_config: ChainstateConfig,
         chainstate_storage: S,
@@ -329,3 +329,6 @@ impl<S: BlockchainStorage> Chainstate<S> {
         &self.events_controller
     }
 }
+
+#[cfg(test)]
+mod test;

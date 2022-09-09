@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crate::detail::query::locator_tip_distances;
+use crate::interface::chainstate_interface_impl::ChainstateInterfaceImpl;
 
 use super::*;
 use chainstate_storage::inmemory::Store;
