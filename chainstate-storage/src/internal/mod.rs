@@ -76,8 +76,9 @@ storage::decl_schema! {
         DBUtxo: Map<OutPoint, Utxo>,
         /// Store for BlockUndo
         DBBlockUndo: Map<Id<Block>, BlockUndo>,
-        // Store for token's info
+        /// Store for token's info; created on issuance
         DBTokensIssuanceTx: Map<TokenId, TokenIssuanceTransaction>,
+        /// Store of issuance tx id vs token id
         DBTokensIndex: Map<Id<Transaction>, TokenId>,
     }
 }
