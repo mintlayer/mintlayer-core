@@ -319,6 +319,7 @@ fn token_transfer_tes(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        // To have possibility to send exceed tokens amount than we have, let's limit the max issuance tokens amount
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX - 1));
         let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
 
@@ -610,7 +611,8 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
-        let total_funds = Amount::from_atoms(rng.gen_range(1234..u128::MAX - 1));
+        // Due to transfer a piece of funds, let's limit the start range value
+        let total_funds = Amount::from_atoms(rng.gen_range(4..u128::MAX - 1));
         let quarter_funds = (total_funds / 4).unwrap();
 
         // Issue a new token
@@ -712,7 +714,8 @@ fn test_burn_tokens(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
-        let total_funds = Amount::from_atoms(rng.gen_range(1234..u128::MAX - 1));
+        // Due to burn a piece of funds, let's limit the start range value
+        let total_funds = Amount::from_atoms(rng.gen_range(4..u128::MAX - 1));
         // Round down
         let half_funds = (total_funds / 2).unwrap();
         let quarter_funds = (total_funds / 4).unwrap();
@@ -1202,7 +1205,8 @@ fn test_attempt_to_print_tokens(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
-        let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
+        // To avoid CoinOrTokenOverflow, random value can't be more than u128::MAX / 2
+        let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX / 2));
 
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
@@ -1302,7 +1306,7 @@ fn test_attempt_to_mix_input_tokens(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
-
+        // To have possibility to send exceed tokens amount than we have, let's limit the max issuance tokens amount
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX - 1));
         // Issuance a few different tokens
         let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
