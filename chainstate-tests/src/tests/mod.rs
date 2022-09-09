@@ -16,8 +16,8 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use crate::TestFramework;
 use chainstate::BlockSource;
+use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
         config::create_regtest, signature::inputsig::InputWitness, Block, GenBlock, Genesis,

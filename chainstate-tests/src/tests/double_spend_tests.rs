@@ -14,16 +14,16 @@
 // limitations under the License.
 
 use super::*;
-use crate::anyonecanspend_address;
-use crate::empty_witness;
-use crate::TestFramework;
-use crate::TransactionBuilder;
 use chainstate::BlockError;
 use chainstate::BlockSource;
 use chainstate::ChainstateError;
 use chainstate::CheckBlockError;
 use chainstate::CheckBlockTransactionsError;
 use chainstate::ConnectTransactionError;
+use chainstate_test_framework::anyonecanspend_address;
+use chainstate_test_framework::empty_witness;
+use chainstate_test_framework::TestFramework;
+use chainstate_test_framework::TransactionBuilder;
 use common::primitives::Idable;
 use common::{
     chain::{tokens::OutputValue, OutPointSourceId, Transaction, TxInput, TxOutput},

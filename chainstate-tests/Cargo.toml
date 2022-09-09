@@ -1,26 +1,22 @@
 [package]
-name = "chainstate_test_framework"
+name = "chainstate-tests"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rstest = "0.15"
-
+chainstate-test-framework = { path = '../chainstate-test-framework' }
 chainstate = { path = '../chainstate' }
-chainstate-storage = { path = '../chainstate-storage' }
 chainstate-types = { path = '../chainstate-types' }
 common = { path = '../common' }
+test-utils = {path = '../test-utils'}
 crypto = { path = '../crypto' }
 serialization = {path = "../serialization"}
 utils = { path = '../utils' }
-
-[dev-dependencies]
-hex = "0.4"
-itertools = "0.10"
-
 consensus = {path = "../consensus"}
 logging = { path = '../logging' }
-test-utils = {path = '../test-utils'}
 
+rstest = "0.15"
+hex = "0.4"
+itertools = "0.10"

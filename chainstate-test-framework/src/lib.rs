@@ -26,9 +26,6 @@ pub type TestChainstate = Box<dyn chainstate::chainstate_interface::ChainstateIn
 
 pub use {
     block_builder::BlockBuilder, framework::anyonecanspend_address, framework::empty_witness,
-    framework::TestBlockInfo, framework::TestFramework, framework_builder::TestFrameworkBuilder,
-    transaction_builder::TransactionBuilder,
+    framework::TestBlockInfo, framework::TestFramework, framework_builder::OrphanErrorHandler,
+    framework_builder::TestFrameworkBuilder, transaction_builder::TransactionBuilder,
 };
-
-#[cfg(test)]
-mod tests;

@@ -16,12 +16,12 @@
 use std::sync::Arc;
 use std::{sync::atomic::Ordering, time::Duration};
 
-use crate::TestFramework;
 use chainstate::BlockError;
 use chainstate::BlockSource;
 use chainstate::ChainstateError;
 use chainstate::CheckBlockError;
 use chainstate::OrphanCheckError;
+use chainstate_test_framework::TestFramework;
 use chainstate_types::GenBlockIndex;
 use chainstate_types::PropertyQueryError;
 use common::chain::block::timestamp::BlockTimestamp;
@@ -53,9 +53,9 @@ use crypto::random::Rng;
 use test_utils::random::make_seedable_rng;
 use test_utils::random::Seed;
 
-use crate::TestBlockInfo;
-use crate::TestStore;
 use chainstate::{make_chainstate, ChainstateConfig};
+use chainstate_test_framework::TestBlockInfo;
+use chainstate_test_framework::TestStore;
 use rstest::rstest;
 
 #[rstest]

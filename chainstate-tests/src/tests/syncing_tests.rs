@@ -17,10 +17,10 @@ use std::iter;
 
 use chainstate::BlockSource;
 
-use crate::TestBlockInfo;
-use crate::TestFramework;
 use chainstate::ChainstateError;
 use chainstate::HEADER_LIMIT;
+use chainstate_test_framework::TestBlockInfo;
+use chainstate_test_framework::TestFramework;
 use chainstate_types::PropertyQueryError;
 use common::chain::GenBlock;
 use common::primitives::BlockDistance;

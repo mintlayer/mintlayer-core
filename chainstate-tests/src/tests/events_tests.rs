@@ -30,9 +30,9 @@ use rstest::rstest;
 use test_utils::random::make_seedable_rng;
 use test_utils::random::Seed;
 
-use crate::framework_builder::OrphanErrorHandler;
 use crate::tests::EventList;
-use crate::{TestChainstate, TestFramework};
+use chainstate_test_framework::OrphanErrorHandler;
+use chainstate_test_framework::{TestChainstate, TestFramework};
 
 type ErrorList = Arc<Mutex<Vec<BlockError>>>;
 

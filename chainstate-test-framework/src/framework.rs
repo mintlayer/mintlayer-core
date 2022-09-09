@@ -198,12 +198,12 @@ use common::chain::OutPointSourceId;
 // (https://github.com/mintlayer/mintlayer-core/issues/312).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestBlockInfo {
-    pub(crate) txns: Vec<(OutPointSourceId, Vec<TxOutput>)>,
-    pub(crate) id: Id<GenBlock>,
+    pub txns: Vec<(OutPointSourceId, Vec<TxOutput>)>,
+    pub id: Id<GenBlock>,
 }
 
 impl TestBlockInfo {
-    pub(crate) fn from_block(blk: &Block) -> Self {
+    pub fn from_block(blk: &Block) -> Self {
         let txns = blk
             .transactions()
             .iter()
@@ -218,14 +218,14 @@ impl TestBlockInfo {
         Self { txns, id }
     }
 
-    pub(crate) fn from_genesis(genesis: &Genesis) -> Self {
+    pub fn from_genesis(genesis: &Genesis) -> Self {
         let id: Id<GenBlock> = genesis.get_id().into();
         let outsrc = OutPointSourceId::BlockReward(id);
         let txns = vec![(outsrc, genesis.utxos().to_vec())];
         Self { txns, id }
     }
 
-    pub(crate) fn from_id(cs: &TestChainstate, id: Id<GenBlock>) -> Self {
+    pub fn from_id(cs: &TestChainstate, id: Id<GenBlock>) -> Self {
         match id.classify(&cs.get_chain_config()) {
             GenBlockId::Genesis(_) => Self::from_genesis(cs.get_chain_config().genesis_block()),
             GenBlockId::Block(id) => {

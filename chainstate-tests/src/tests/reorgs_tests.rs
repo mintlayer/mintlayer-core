@@ -19,12 +19,12 @@ use std::sync::Mutex;
 use common::chain::OutputSpentState;
 
 use crate::tests::EventList;
-use crate::TestFramework;
 use chainstate::BlockError;
 use chainstate::BlockSource;
 use chainstate::ChainstateError;
 use chainstate::ChainstateEvent;
 use chainstate::ConnectTransactionError;
+use chainstate_test_framework::TestFramework;
 use common::chain::Block;
 use common::chain::GenBlock;
 use common::chain::OutPointSourceId;

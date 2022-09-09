@@ -18,12 +18,12 @@ use common::{
     primitives::{time, Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 
-use crate::anyonecanspend_address;
-use crate::TestFramework;
-use crate::TransactionBuilder;
 use chainstate::BlockError;
 use chainstate::ChainstateError;
 use chainstate::ConnectTransactionError;
+use chainstate_test_framework::anyonecanspend_address;
+use chainstate_test_framework::TestFramework;
+use chainstate_test_framework::TransactionBuilder;
 
 #[test]
 fn output_lock_until_height() {
