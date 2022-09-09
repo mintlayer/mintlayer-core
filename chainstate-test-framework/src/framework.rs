@@ -61,7 +61,7 @@ impl TestFramework {
             GenBlockIndex::Genesis(..) => panic!("we have processed a block"),
             GenBlockIndex::Block(block_index) => block_index,
         };
-        self.block_indexes.push(index.clone());
+        self.block_indexes.push(index);
         Ok(block_index_result)
     }
 
