@@ -412,7 +412,7 @@ fn check_block_status(
         }
     }
 
-    let block_index = tf.chainstate.get_block_index(&(*block_id)).unwrap().unwrap();
+    let block_index = tf.chainstate.get_block_index(block_id).unwrap().unwrap();
     assert_eq!(*block_index.prev_block_id(), *prev_block_id);
     assert_eq!(block_index.block_height(), BlockHeight::new(height));
     check_block_at_height(tf, block_index.block_height().next_height(), next_block_id);
