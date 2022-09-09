@@ -7,8 +7,8 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chainstate-storage = {path = '../chainstate-storage'}
-chainstate-types = {path = '../chainstate-types'}
+chainstate-storage = {path = './storage'}
+chainstate-types = {path = './types'}
 common = {path = '../common'}
 crypto = {path = '../crypto'}
 logging = {path = '../logging'}

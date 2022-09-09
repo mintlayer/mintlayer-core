@@ -51,7 +51,7 @@ features = ["codec"]
 
 [dev-dependencies]
 portpicker = "0.1"
-chainstate-storage = { path = "../chainstate-storage" }
+chainstate-storage = { path = "../chainstate/storage" }
 crypto = { path = "../crypto/" }
 
 [dev-dependencies.p2p-test-utils]
