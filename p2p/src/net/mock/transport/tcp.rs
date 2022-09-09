@@ -84,7 +84,7 @@ impl MockStream for TcpMockStream {
     async fn send(&mut self, msg: Message) -> Result<()> {
         let mut buf = bytes::BytesMut::new();
         EncoderDecoder {}.encode(msg, &mut buf)?;
-        self.stream.write(&buf).await?;
+        self.stream.write_all(&buf).await?;
         Ok(())
     }
 
