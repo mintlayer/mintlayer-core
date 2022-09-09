@@ -97,6 +97,7 @@ pub fn check_tokens_issuance_data(
     let is_ascii = String::from_utf8(metadata_uri.to_vec())
         .map_err(|_| TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id))?
         .chars()
+        // TODO: this is probably an invalid way to validate URLs. Find the proper way to do this in rust.
         .all(|ch| ch.is_alphanumeric() || ch.is_ascii_punctuation() || ch.is_ascii_control());
 
     ensure!(
