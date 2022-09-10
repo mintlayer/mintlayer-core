@@ -39,7 +39,7 @@ use libp2p::{
     request_response::*,
     swarm::{
         ConnectionHandler, IntoConnectionHandler, NetworkBehaviour as Libp2pNetworkBehaviour,
-        NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
+        NetworkBehaviourAction, PollParameters,
     },
 };
 use logging::log;
@@ -72,7 +72,7 @@ use sync_codec::{
 #[derive(libp2p::NetworkBehaviour)]
 #[behaviour(
     out_event = "Libp2pBehaviourEvent",
-    event_process = true,
+//    event_process = true,
     poll_method = "poll"
 )]
 pub struct Libp2pBehaviour {
@@ -185,6 +185,15 @@ impl Libp2pBehaviour {
     }
 }
 
+impl From<identify::IdentifyEvent> for Libp2pBehaviourEvent {
+    fn from(event: identify::IdentifyEvent) -> Self {
+        //Libp2pBehaviourEvent::Gossipsub(event)
+        todo!();
+        todo!()
+    }
+}
+
+/*
 impl NetworkBehaviourEventProcess<identify::IdentifyEvent> for Libp2pBehaviour {
     /// Libp2p handles retrieving identifying information from a new peer
     /// This function implements what to do with information received from a peer
@@ -445,3 +454,4 @@ impl NetworkBehaviourEventProcess<discovery::DiscoveryEvent> for Libp2pBehaviour
         }
     }
 }
+*/

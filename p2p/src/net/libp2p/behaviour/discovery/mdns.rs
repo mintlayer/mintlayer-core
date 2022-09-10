@@ -30,7 +30,7 @@ use std::task::{Context, Poll};
 
 pub enum Mdns {
     /// mDNS has been enabled
-    Enabled(Box<mdns::Mdns>),
+    Enabled(Box<mdns::TokioMdns>),
 
     /// mDNS has been disabled
     Disabled,
@@ -43,7 +43,7 @@ impl Mdns {
                 query_interval,
                 enable_ipv6_mdns_discovery,
             } => {
-                match mdns::Mdns::new(mdns::MdnsConfig {
+                match mdns::TokioMdns::new(mdns::MdnsConfig {
                     ttl: Default::default(),
                     query_interval: std::time::Duration::from_millis(*query_interval),
                     enable_ipv6: *enable_ipv6_mdns_discovery,
@@ -87,7 +87,7 @@ impl Mdns {
     ) -> Poll<
         NetworkBehaviourAction<
             mdns::MdnsEvent,
-            <mdns::Mdns as SwarmNetworkBehaviour>::ConnectionHandler,
+            <mdns::TokioMdns as SwarmNetworkBehaviour>::ConnectionHandler,
         >,
     > {
         match self {

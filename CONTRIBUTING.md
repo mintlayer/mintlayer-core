@@ -5,7 +5,11 @@ if you fix a bug feel free to create a pr to merge your fix, if you want to add 
 
 ## Setup
 
-Follow [these instructions](https://www.rust-lang.org/tools/install) to install rust which is required to build Mintlayer.
+There are several prerequisites to build Mintlayer:
+
+- Follow [these instructions](https://www.rust-lang.org/tools/install) to install rust.
+
+- Use [these instructions](https://github.com/protocolbuffers/protobuf#protocol-compiler-installation) to install Protocol Buffers Compiler (protoc).
 
 ## MIPS
 
