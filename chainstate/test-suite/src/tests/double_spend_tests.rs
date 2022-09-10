@@ -432,6 +432,35 @@ fn duplicate_tx_in_the_same_block(#[case] seed: Seed) {
     });
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn duplicate_odd_tx_in_the_same_block(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+
+        let mut rng = make_seedable_rng(seed);
+        let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, 1);
+        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
+        let third_tx = tx_from_tx(&second_tx, rng.gen_range(1000..2000));
+
+        let block = tf
+            .make_block_builder()
+            .with_transactions(vec![first_tx, second_tx, third_tx.clone(), third_tx])
+            .build();
+        let block_id = block.get_id();
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::DuplicateInputInBlock(block_id)
+                )
+            ))
+        );
+        assert_eq!(tf.best_block_id(), tf.genesis().get_id());
+    });
+}
+
 // Creates a transaction with an input based on the first transaction from the genesis block.
 fn tx_from_genesis(genesis: &Genesis, rng: &mut impl Rng, output_value: u128) -> Transaction {
     TransactionBuilder::new()

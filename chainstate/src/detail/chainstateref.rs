@@ -497,52 +497,33 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
-        // check for duplicate inputs (see CVE-2018-17144)
-        // check for empty inputs/outputs
-        {
-            let mut block_inputs = BTreeSet::new();
-            for tx in block.transactions() {
-                if tx.inputs().is_empty() || tx.outputs().is_empty() {
-                    return Err(
-                        CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
-                            tx.get_id(),
-                            block.get_id(),
-                        ),
-                    );
-                }
-
-                let mut tx_inputs = BTreeSet::new();
-                for input in tx.inputs() {
-                    ensure!(
-                        tx_inputs.insert(input.outpoint()),
-                        CheckBlockTransactionsError::DuplicateInputInTransaction(
-                            tx.get_id(),
-                            block.get_id()
-                        )
-                    );
-                    ensure!(
-                        block_inputs.insert(input.outpoint()),
-                        CheckBlockTransactionsError::DuplicateInputInBlock(block.get_id())
-                    );
-                }
+        // Note: duplicate txs are detected through duplicate inputs
+        let mut block_inputs = BTreeSet::new();
+        for tx in block.transactions() {
+            // check for empty inputs/outputs
+            if tx.inputs().is_empty() || tx.outputs().is_empty() {
+                return Err(
+                    CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
+                        tx.get_id(),
+                        block.get_id(),
+                    ),
+                );
             }
-        }
 
-        {
-            // check duplicate transactions
-            let mut txs_ids = BTreeSet::new();
-            for tx in block.transactions() {
-                let tx_id = tx.get_id();
-                let already_in_tx_id = txs_ids.get(&tx_id);
-                match already_in_tx_id {
-                    Some(_) => {
-                        return Err(CheckBlockTransactionsError::DuplicatedTransactionInBlock(
-                            tx_id,
-                            block.get_id(),
-                        ))
-                    }
-                    None => txs_ids.insert(tx_id),
-                };
+            // check for duplicate inputs (see CVE-2018-17144)
+            let mut tx_inputs = BTreeSet::new();
+            for input in tx.inputs() {
+                ensure!(
+                    tx_inputs.insert(input.outpoint()),
+                    CheckBlockTransactionsError::DuplicateInputInTransaction(
+                        tx.get_id(),
+                        block.get_id()
+                    )
+                );
+                ensure!(
+                    block_inputs.insert(input.outpoint()),
+                    CheckBlockTransactionsError::DuplicateInputInBlock(block.get_id())
+                );
             }
         }
 
