@@ -16,47 +16,35 @@
 use std::sync::Arc;
 use std::{sync::atomic::Ordering, time::Duration};
 
-use chainstate::BlockError;
-use chainstate::BlockSource;
-use chainstate::ChainstateError;
-use chainstate::CheckBlockError;
-use chainstate::OrphanCheckError;
-use chainstate_test_framework::TestFramework;
-use chainstate_types::GenBlockIndex;
-use chainstate_types::PropertyQueryError;
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::block::ConsensusData;
-use common::chain::Block;
-use common::chain::Destination;
-use common::chain::GenBlock;
-use common::chain::OutPointSourceId;
-use common::chain::TxOutput;
-use common::primitives::Amount;
-use common::primitives::BlockHeight;
-use common::primitives::Id;
-use common::primitives::Idable;
-use common::time_getter::TimeGetter;
+use chainstate::{
+    make_chainstate, BlockError, BlockSource, ChainstateConfig, ChainstateError, CheckBlockError,
+    CheckBlockTransactionsError, OrphanCheckError,
+};
+use chainstate_test_framework::{
+    anyonecanspend_address, empty_witness, TestBlockInfo, TestFramework, TestStore,
+    TransactionBuilder,
+};
+use chainstate_types::{GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
-        block::consensus_data::PoWData,
+        block::{consensus_data::PoWData, timestamp::BlockTimestamp, ConsensusData},
         config::{create_unit_test_config, Builder as ConfigBuilder},
         timelock::OutputTimeLock,
         tokens::OutputValue,
-        ConsensusUpgrade, NetUpgrades, OutputPurpose, OutputSpentState, UpgradeVersion,
+        Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId,
+        OutputPurpose, OutputSpentState, TxInput, TxOutput, UpgradeVersion,
     },
-    primitives::Compact,
+    primitives::{Amount, BlockHeight, Compact, Id, Idable},
+    time_getter::TimeGetter,
     Uint256,
 };
 use consensus::{ConsensusPoWError, ConsensusVerificationError};
-use crypto::key::{KeyKind, PrivateKey};
-use crypto::random::Rng;
-use test_utils::random::make_seedable_rng;
-use test_utils::random::Seed;
-
-use chainstate::{make_chainstate, ChainstateConfig};
-use chainstate_test_framework::TestBlockInfo;
-use chainstate_test_framework::TestStore;
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    random::Rng,
+};
 use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
 
 #[rstest]
 #[trace]
@@ -834,6 +822,95 @@ fn mainnet_initialization() {
         Default::default(),
     )
     .unwrap();
+}
+
+#[test]
+fn empty_inputs_in_tx() {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+
+        let first_tx = TransactionBuilder::new().build();
+        let first_tx_id = first_tx.get_id();
+
+        let block = tf.make_block_builder().with_transactions(vec![first_tx]).build();
+        let block_id = block.get_id();
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
+                        first_tx_id,
+                        block_id
+                    )
+                )
+            ))
+        );
+        assert_eq!(tf.best_block_id(), tf.genesis().get_id());
+    });
+}
+
+#[test]
+fn empty_outputs_in_tx() {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+
+        let first_tx = TransactionBuilder::new()
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(1)),
+                OutputPurpose::Transfer(anyonecanspend_address()),
+            ))
+            .build();
+        let first_tx_id = first_tx.get_id();
+
+        let block = tf.make_block_builder().with_transactions(vec![first_tx]).build();
+        let block_id = block.get_id();
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
+                        first_tx_id,
+                        block_id
+                    )
+                )
+            ))
+        );
+        assert_eq!(tf.best_block_id(), tf.genesis().get_id());
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn burn_inputs_in_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+
+        let mut rng = make_seedable_rng(seed);
+        let first_tx = TransactionBuilder::new()
+            .add_input(TxInput::new(
+                OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                0,
+                empty_witness(&mut rng),
+            ))
+            .build();
+        let first_tx_id = first_tx.get_id();
+
+        let block = tf.make_block_builder().with_transactions(vec![first_tx]).build();
+        let block_id = block.get_id();
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
+                        first_tx_id,
+                        block_id
+                    )
+                )
+            ))
+        );
+        assert_eq!(tf.best_block_id(), tf.genesis().get_id());
+    });
 }
 
 fn make_invalid_pow_block(

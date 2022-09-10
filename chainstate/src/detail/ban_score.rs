@@ -134,6 +134,7 @@ impl BanScore for CheckBlockTransactionsError {
             CheckBlockTransactionsError::DuplicateInputInTransaction(_, _) => 100,
             CheckBlockTransactionsError::DuplicateInputInBlock(_) => 100,
             CheckBlockTransactionsError::DuplicatedTransactionInBlock(_, _) => 100,
+            CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(_, _) => 100,
         }
     }
 }

@@ -413,9 +413,7 @@ fn duplicate_tx_in_the_same_block(#[case] seed: Seed) {
 
         let mut rng = make_seedable_rng(seed);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, 1);
-
-        let second_tx = TransactionBuilder::new().build();
-        let second_tx_id = second_tx.get_id();
+        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
         let block = tf
             .make_block_builder()
@@ -426,10 +424,7 @@ fn duplicate_tx_in_the_same_block(#[case] seed: Seed) {
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::DuplicatedTransactionInBlock(
-                        second_tx_id,
-                        block_id
-                    )
+                    CheckBlockTransactionsError::DuplicateInputInBlock(block_id)
                 )
             ))
         );

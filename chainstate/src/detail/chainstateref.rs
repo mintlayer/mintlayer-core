@@ -455,45 +455,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
-    fn check_block_detail(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
-        self.check_block_header(block.header())?;
-
-        self.check_block_reward_maturity_settings(block)?;
-
-        // MerkleTree root
-        let merkle_tree_root = block.merkle_root();
-        calculate_tx_merkle_root(block.body()).map_or(
-            Err(CheckBlockError::MerkleRootMismatch),
-            |merkle_tree| {
-                ensure!(
-                    merkle_tree_root == merkle_tree,
-                    CheckBlockError::MerkleRootMismatch
-                );
-                Ok(())
-            },
-        )?;
-
-        // Witness merkle root
-        let witness_merkle_root = block.witness_merkle_root();
-        calculate_witness_merkle_root(block.body()).map_or(
-            Err(CheckBlockError::WitnessMerkleRootMismatch),
-            |witness_merkle| {
-                ensure!(
-                    witness_merkle_root == witness_merkle,
-                    CheckBlockError::WitnessMerkleRootMismatch,
-                );
-                Ok(())
-            },
-        )?;
-
-        self.check_transactions(block)
-            .map_err(CheckBlockError::CheckTransactionFailed)?;
-
-        self.check_block_size(block).map_err(CheckBlockError::BlockSizeError)?;
-
-        Ok(())
-    }
-
     fn check_header_size(&self, header: &BlockHeader) -> Result<(), BlockSizeError> {
         let size = header.header_size();
         ensure!(
@@ -537,9 +498,19 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         // check for duplicate inputs (see CVE-2018-17144)
+        // check for empty inputs/outputs
         {
             let mut block_inputs = BTreeSet::new();
             for tx in block.transactions() {
+                if tx.inputs().is_empty() || tx.outputs().is_empty() {
+                    return Err(
+                        CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
+                            tx.get_id(),
+                            block.get_id(),
+                        ),
+                    );
+                }
+
                 let mut tx_inputs = BTreeSet::new();
                 for input in tx.inputs() {
                     ensure!(
@@ -583,9 +554,41 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
-        consensus::validate_consensus(self.chain_config, block.header(), self)
-            .map_err(CheckBlockError::ConsensusVerificationFailed)?;
-        self.check_block_detail(block)?;
+        self.check_block_header(block.header())?;
+
+        self.check_block_reward_maturity_settings(block)?;
+
+        // MerkleTree root
+        let merkle_tree_root = block.merkle_root();
+        calculate_tx_merkle_root(block.body()).map_or(
+            Err(CheckBlockError::MerkleRootMismatch),
+            |merkle_tree| {
+                ensure!(
+                    merkle_tree_root == merkle_tree,
+                    CheckBlockError::MerkleRootMismatch
+                );
+                Ok(())
+            },
+        )?;
+
+        // Witness merkle root
+        let witness_merkle_root = block.witness_merkle_root();
+        calculate_witness_merkle_root(block.body()).map_or(
+            Err(CheckBlockError::WitnessMerkleRootMismatch),
+            |witness_merkle| {
+                ensure!(
+                    witness_merkle_root == witness_merkle,
+                    CheckBlockError::WitnessMerkleRootMismatch,
+                );
+                Ok(())
+            },
+        )?;
+
+        self.check_block_size(block).map_err(CheckBlockError::BlockSizeError)?;
+
+        self.check_transactions(block)
+            .map_err(CheckBlockError::CheckTransactionFailed)?;
+
         Ok(())
     }
 
