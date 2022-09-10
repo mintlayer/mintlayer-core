@@ -271,9 +271,15 @@ fn build_test_framework() {
 fn process_block() {
     use crate::TransactionBuilder;
     let mut tf = TestFramework::default();
+    let gen_block_id = tf.genesis().get_id();
     tf.make_block_builder()
         .add_transaction(
             TransactionBuilder::new()
+                .add_input(TxInput::new(
+                    OutPointSourceId::BlockReward(<Id<GenBlock>>::from(gen_block_id)),
+                    0,
+                    InputWitness::NoSignature(None),
+                ))
                 .add_output(TxOutput::new(
                     OutputValue::Coin(Amount::from_atoms(0)),
                     OutputPurpose::Transfer(Destination::AnyoneCanSpend),
