@@ -18,6 +18,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clean
+      - uses: arduino/setup-protoc@v1
       - uses: actions-rs/cargo@v1
         with:
           command: test

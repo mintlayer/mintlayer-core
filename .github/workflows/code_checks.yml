@@ -12,6 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - run: rustup component add clippy
+      - uses: arduino/setup-protoc@v1
 
       # Checks enabled everywhere, including tests, benchmarks
       - uses: actions-rs/clippy-check@v1
