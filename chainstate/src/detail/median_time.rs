@@ -42,7 +42,8 @@ pub fn calculate_median_time_past<H: BlockIndexHandle>(
 
 #[cfg(test)]
 mod test {
-    use crate::{detail::time_getter::TimeGetter, BlockSource, Chainstate, ChainstateConfig};
+    use crate::{BlockSource, Chainstate, ChainstateConfig};
+    use common::time_getter::TimeGetter;
 
     use super::*;
     use chainstate_storage::inmemory::Store;

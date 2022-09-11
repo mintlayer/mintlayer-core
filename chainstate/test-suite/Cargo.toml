@@ -1,0 +1,28 @@
+[package]
+name = "chainstate-test-suite"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chainstate-test-framework = { path = '../test-framework' }
+chainstate = { path = '../' }
+chainstate-types = { path = '../types' }
+common = { path = '../../common' }
+test-utils = {path = '../../test-utils'}
+crypto = { path = '../../crypto' }
+serialization = { path = '../../serialization' }
+utils = { path = '../../utils' }
+consensus = { path = '../../consensus' }
+logging = { path = '../../logging' }
+
+rstest = "0.15"
+hex = "0.4"
+itertools = "0.10"
+
+[dev-dependencies]
+rstest = "0.15"
+expect-test = "1.3"
+rand = "0.8.4"

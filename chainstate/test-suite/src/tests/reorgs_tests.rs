@@ -13,15 +13,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::sync::Mutex;
 
-use chainstate_storage::BlockchainStorageRead;
 use common::chain::OutputSpentState;
 
-use crate::detail::{
-    tests::{test_framework::TestFramework, *},
-    transaction_verifier::error::ConnectTransactionError,
-};
+use crate::tests::EventList;
+use chainstate::BlockError;
+use chainstate::BlockSource;
+use chainstate::ChainstateError;
+use chainstate::ChainstateEvent;
+use chainstate::ConnectTransactionError;
+use chainstate_test_framework::TestFramework;
+use common::chain::Block;
+use common::chain::GenBlock;
+use common::chain::OutPointSourceId;
+use common::chain::Transaction;
+use common::primitives::BlockHeight;
+use common::primitives::Id;
+use common::primitives::Idable;
+use crypto::random::Rng;
+use rstest::rstest;
+use test_utils::random::make_seedable_rng;
+use test_utils::random::Seed;
 
 // Produce `genesis -> a` chain, then a parallel `genesis -> b -> c` that should trigger a reorg.
 #[rstest]
@@ -122,7 +136,9 @@ fn check_spend_tx_in_failed_block(tf: &mut TestFramework, events: &EventList, rn
     // Cause reorg on a failed block
     assert_eq!(
         tf.create_chain(&(*tf.index_at(12).block_id()).into(), 1, rng).unwrap_err(),
-        BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
+        ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+            ConnectTransactionError::MissingOutputOrSpent
+        ))
     );
 }
 
@@ -157,7 +173,9 @@ fn check_spend_tx_in_other_fork(tf: &mut TestFramework, rng: &mut impl Rng) {
     // Cause reorg on a failed block
     assert_eq!(
         tf.create_chain(&block_id.into(), 10, rng).unwrap_err(),
-        BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
+        ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+            ConnectTransactionError::MissingOutputOrSpent
+        ))
     );
 }
 
@@ -182,7 +200,9 @@ fn check_fork_that_double_spends(tf: &mut TestFramework, rng: &mut impl Rng) {
             .add_double_spend_transaction(block.get_id().into(), spend_from, rng)
             .build_and_process()
             .unwrap_err(),
-        BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
+        ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+            ConnectTransactionError::MissingOutputOrSpent
+        ))
     );
 }
 
@@ -381,12 +401,7 @@ fn check_block_status(
     if spend_status != TestSpentStatus::NotInMainchain {
         match tf.block_indexes.iter().find(|x| x.block_id() == block_id) {
             Some(block_index) => {
-                let block = tf
-                    .chainstate
-                    .chainstate_storage
-                    .get_block(*block_index.block_id())
-                    .unwrap()
-                    .unwrap();
+                let block = tf.chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
                 for tx in block.transactions() {
                     check_spend_status(tf, tx, &spend_status);
                 }
@@ -397,8 +412,8 @@ fn check_block_status(
         }
     }
 
-    let block_index = tf.chainstate.chainstate_storage.get_block_index(block_id).unwrap().unwrap();
-    assert_eq!(block_index.prev_block_id(), prev_block_id);
+    let block_index = tf.chainstate.get_block_index(block_id).unwrap().unwrap();
+    assert_eq!(*block_index.prev_block_id(), *prev_block_id);
     assert_eq!(block_index.block_height(), BlockHeight::new(height));
     check_block_at_height(tf, block_index.block_height().next_height(), next_block_id);
 }
@@ -409,8 +424,7 @@ fn check_block_at_height(
     expected_block_id: Option<&Id<Block>>,
 ) {
     if expected_block_id.is_some() {
-        let real_next_block_id =
-            tf.chainstate.chainstate_storage.get_block_id_by_height(&block_height).unwrap();
+        let real_next_block_id = tf.chainstate.get_block_id_from_height(&block_height).unwrap();
         let expected_block_id: Option<Id<GenBlock>> = expected_block_id.map(|id| (*id).into());
         assert_eq!(real_next_block_id, expected_block_id);
     }
@@ -420,8 +434,7 @@ fn is_block_in_main_chain(tf: &TestFramework, block_id: &Id<Block>) -> bool {
     let block_index = tf.block_index(&(*block_id).into());
     let height = block_index.block_height();
     tf.chainstate
-        .chainstate_storage
-        .get_block_id_by_height(&height)
+        .get_block_id_from_height(&height)
         .unwrap()
         .map_or(false, |id| id == block_index.block_id())
 }
@@ -438,11 +451,8 @@ fn spent_status(
     tx_id: &Id<Transaction>,
     output_index: u32,
 ) -> Option<OutputSpentState> {
-    let tx_index = tf
-        .chainstate
-        .chainstate_storage
-        .get_mainchain_tx_index(&OutPointSourceId::from(*tx_id))
-        .unwrap()?;
+    let tx_index =
+        tf.chainstate.get_mainchain_tx_index(&OutPointSourceId::from(*tx_id)).unwrap()?;
     tx_index.get_spent_state(output_index).ok()
 }
 

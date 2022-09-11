@@ -13,13 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::detail::tests::test_framework::{TestFramework, TransactionBuilder};
-use crate::detail::transaction_verifier::error::ConnectTransactionError;
-use crate::detail::CheckBlockTransactionsError;
-use crate::{
-    detail::{tests::TestBlockInfo, CheckBlockError, TokensError},
-    BlockError, BlockSource,
-};
+use chainstate::{BlockError, BlockSource, ChainstateError};
+use chainstate::{CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError};
+use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
+use common::chain::tokens::TokensError;
 use common::primitives::{id, Id};
 use common::{
     chain::{
@@ -50,7 +47,7 @@ fn random_string<RNG: Rng, R: SampleRange<usize>>(rng: &mut RNG, range_len: R) -
 fn token_issue_test(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let mut rng = make_seedable_rng(seed);
 
         // Ticker is too long
@@ -80,9 +77,11 @@ fn token_issue_test(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueErrorInvalidTickerLength(_, _)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(
+                        TokensError::IssueErrorInvalidTickerLength(_, _)
+                    )
                 ))
             ))
         ));
@@ -112,9 +111,11 @@ fn token_issue_test(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueErrorInvalidTickerLength(_, _)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(
+                        TokensError::IssueErrorInvalidTickerLength(_, _)
+                    )
                 ))
             ))
         ));
@@ -144,9 +145,11 @@ fn token_issue_test(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueErrorTickerHasNoneAlphaNumericChar(_, _)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(
+                        TokensError::IssueErrorTickerHasNoneAlphaNumericChar(_, _)
+                    )
                 ))
             ))
         ));
@@ -176,9 +179,11 @@ fn token_issue_test(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueErrorIncorrectAmount(_, _)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(
+                        TokensError::IssueErrorIncorrectAmount(_, _)
+                    )
                 ))
             ))
         ));
@@ -208,9 +213,11 @@ fn token_issue_test(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueErrorTooManyDecimals(_, _)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(
+                        TokensError::IssueErrorTooManyDecimals(_, _)
+                    )
                 ))
             ))
         ));
@@ -242,9 +249,11 @@ fn token_issue_test(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueErrorIncorrectMetadataURI(_, _)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(
+                        TokensError::IssueErrorIncorrectMetadataURI(_, _)
+                    )
                 ))
             ))
         ));
@@ -274,9 +283,11 @@ fn token_issue_test(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::IssueErrorIncorrectMetadataURI(_, _)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(
+                        TokensError::IssueErrorIncorrectMetadataURI(_, _)
+                    )
                 ))
             ))
         ));
@@ -321,7 +332,7 @@ fn token_transfer_tes(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         // To have possibility to send exceed tokens amount than we have, let's limit the max issuance tokens amount
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX - 1));
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
 
         // Issue a new token
         let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
@@ -377,8 +388,8 @@ fn token_transfer_tes(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(_, _)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
             ))
         ));
 
@@ -405,8 +416,8 @@ fn token_transfer_tes(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
             ))
         ));
 
@@ -433,9 +444,9 @@ fn token_transfer_tes(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::TransferZeroTokens(_, _)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(TokensError::TransferZeroTokens(_, _))
                 ))
             ))
         ));
@@ -473,7 +484,7 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
 
         // Issue a couple of tokens
         let issuance_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
@@ -505,9 +516,11 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
             .build_and_process();
         assert!(matches!(
             result,
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
-                    TokensError::MultipleTokenIssuanceInTransaction(_, _)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(
+                        TokensError::MultipleTokenIssuanceInTransaction(_, _)
+                    )
                 ))
             ))
         ));
@@ -576,13 +589,15 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
         // Try to process tx with insufficient token fees
         assert!(matches!(
             result,
-            Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(_, _))
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::StateUpdateFailed(ConnectTransactionError::TokensError(
+                    TokensError::InsufficientTokenFees(_, _)
+                ))
             ))
         ));
 
         // Valid issuance
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let _ = tf
             .make_block_builder()
             .add_transaction(
@@ -616,7 +631,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
         let quarter_funds = (total_funds / 4).unwrap();
 
         // Issue a new token
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
@@ -721,7 +736,7 @@ fn test_burn_tokens(#[case] seed: Seed) {
         let quarter_funds = (total_funds / 4).unwrap();
 
         // Issue a new token
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
@@ -774,8 +789,8 @@ fn test_burn_tokens(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(_, _)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
             ))
         ));
 
@@ -890,8 +905,10 @@ fn test_burn_tokens(#[case] seed: Seed) {
             .build_and_process();
         assert!(matches!(
             result,
-            Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::AttemptToTransferBurnedTokens)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::StateUpdateFailed(ConnectTransactionError::TokensError(
+                    TokensError::AttemptToTransferBurnedTokens
+                ))
             ))
         ));
     })
@@ -918,14 +935,14 @@ fn test_reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         // Issue a new token
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
         });
-        let token_min_issuance_fee = tf.chainstate.chain_config.token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -1014,8 +1031,10 @@ fn test_reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::AttemptToTransferBurnedTokens)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::StateUpdateFailed(ConnectTransactionError::TokensError(
+                    TokensError::AttemptToTransferBurnedTokens
+                ))
             ))
         ));
 
@@ -1191,8 +1210,8 @@ fn test_reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
             ))
         ));
     })
@@ -1209,7 +1228,7 @@ fn test_attempt_to_print_tokens(#[case] seed: Seed) {
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX / 2));
 
         // Issue a new token
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
@@ -1269,8 +1288,8 @@ fn test_attempt_to_print_tokens(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(_, _)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
             ))
         ));
 
@@ -1309,14 +1328,14 @@ fn test_attempt_to_mix_input_tokens(#[case] seed: Seed) {
         // To have possibility to send exceed tokens amount than we have, let's limit the max issuance tokens amount
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX - 1));
         // Issuance a few different tokens
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
         });
-        let token_min_issuance_fee = tf.chainstate.chain_config.token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -1344,7 +1363,7 @@ fn test_attempt_to_mix_input_tokens(#[case] seed: Seed) {
         let first_issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
         let first_token_id = token_id(&block.transactions()[0]).unwrap();
 
-        let token_min_issuance_fee = tf.chainstate.chain_config.token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -1391,7 +1410,7 @@ fn test_attempt_to_mix_input_tokens(#[case] seed: Seed) {
 
         // Try to spend sum of input tokens
 
-        let token_min_issuance_fee = tf.chainstate.chain_config.token_min_issuance_fee();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -1428,8 +1447,8 @@ fn test_attempt_to_mix_input_tokens(#[case] seed: Seed) {
 
         assert!(matches!(
             result,
-            Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToPrintMoney(_, _)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
             ))
         ));
     })
@@ -1440,7 +1459,6 @@ fn test_attempt_to_mix_input_tokens(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        use chainstate_storage::BlockchainStorageRead;
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
 
@@ -1452,7 +1470,7 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
         });
         let genesis_id = tf.genesis().get_id();
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let block_index = tf
             .make_block_builder()
             .with_parent(genesis_id.into())
@@ -1491,21 +1509,17 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
 
         // Check that reorg happened
         let height = block_index.block_height();
-        assert!(tf
-            .chainstate
-            .chainstate_storage
-            .get_block_id_by_height(&height)
-            .unwrap()
-            .map_or(false, |id| &id
-                .classify(&tf.chainstate.chain_config)
+        assert!(
+            tf.chainstate.get_block_id_from_height(&height).unwrap().map_or(false, |id| &id
+                .classify(&tf.chainstate.get_chain_config())
                 .chain_block_id()
                 .unwrap()
-                != block_index.block_id()));
+                != block_index.block_id())
+        );
 
         // Check that issuance transaction in the storage is removed
         assert!(tf
             .chainstate
-            .chainstate_storage
             .get_mainchain_tx_index(&common::chain::OutPointSourceId::Transaction(
                 issuance_tx.get_id()
             ))
@@ -1513,19 +1527,16 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
             .is_none());
 
         // Check that tokens not in storage
-        assert!(tf
-            .chainstate
-            .chainstate_storage
-            .get_token_id(&issuance_tx.get_id())
-            .unwrap()
-            .is_none());
+        assert!(tf.chainstate.get_token_id(&issuance_tx.get_id()).unwrap().is_none());
 
-        assert!(tf.chainstate.chainstate_storage.get_token_tx(&token_id).unwrap().is_none());
+        assert!(tf.chainstate.get_token_tx(&token_id).unwrap().is_none());
 
         assert!(matches!(
             tf.chainstate.get_token_detail(token_id),
-            Err(chainstate_types::PropertyQueryError::TokensError(
-                TokensError::TokensNotRegistered(_)
+            Err(ChainstateError::FailedToReadProperty(
+                chainstate_types::PropertyQueryError::TokensError(
+                    TokensError::TokensNotRegistered(_)
+                )
             ))
         ));
     })
@@ -1559,8 +1570,8 @@ fn test_tokens_issuance_in_block_reward(#[case] seed: Seed) {
 
         assert!(matches!(
             tf.process_block(block, BlockSource::Local),
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::InvalidBlockRewardOutputType(_)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::InvalidBlockRewardOutputType(_))
             ))
         ));
 
@@ -1580,8 +1591,8 @@ fn test_tokens_issuance_in_block_reward(#[case] seed: Seed) {
 
         assert!(matches!(
             tf.process_block(block, BlockSource::Local),
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::InvalidBlockRewardOutputType(_)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::InvalidBlockRewardOutputType(_))
             ))
         ));
 
@@ -1601,8 +1612,8 @@ fn test_tokens_issuance_in_block_reward(#[case] seed: Seed) {
 
         assert!(matches!(
             tf.process_block(block, BlockSource::Local),
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::InvalidBlockRewardOutputType(_)
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::InvalidBlockRewardOutputType(_))
             ))
         ));
     })

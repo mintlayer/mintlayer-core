@@ -16,6 +16,7 @@ members = [
   "crypto",                       # Cryptographic primitives and their interfaces.
   "consensus",                    # Consensus related logic.
   "chainstate",                   # Code on chainstate of blocks and transactions.
+  "chainstate/test-suite",        # Tests for the chainstate, separated to make use of the chainstate test framework.
   "script",                       # Bitcoin script and its interfaces.
   "logging",                      # Logging engine and its interfaces.
   "mempool",                      # Mempool interface and implementation.
@@ -60,10 +61,10 @@ default-members = [
 [dependencies]
 common = { path = "common"}
 storage = { path = "storage"}
-chainstate-storage = { path = "chainstate-storage"}
+chainstate-storage = { path = "chainstate/storage"}
 crypto = { path = "crypto"}
 chainstate = { path = "chainstate"}
-chainstate-types = { path = "chainstate-types"}
+chainstate-types = { path = "chainstate/types"}
 script = { path = "script"}
 logging = { path = "logging"}
 mempool = { path = "mempool"}

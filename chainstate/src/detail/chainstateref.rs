@@ -18,6 +18,8 @@ use std::{collections::BTreeSet, convert::TryInto, sync::Arc};
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{get_skip_height, BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::chain::tokens::TokenIssuanceTransaction;
+use common::chain::Transaction;
+use common::time_getter::TimeGetterFn;
 use common::{
     chain::{
         block::{
@@ -34,7 +36,7 @@ use logging::log;
 use utils::ensure;
 use utxo::{UtxosDB, UtxosView};
 
-use super::{median_time::calculate_median_time_past, time_getter::TimeGetterFn};
+use super::median_time::calculate_median_time_past;
 use crate::detail::tokens::check_tokens_data;
 use crate::{BlockError, BlockSource, ChainstateConfig};
 
@@ -315,11 +317,18 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         self.get_gen_block_index(&self.get_best_block_id()?)
     }
 
-    pub fn get_token_info(
+    pub fn get_token_tx(
         &self,
         token_id: &TokenId,
     ) -> Result<Option<TokenIssuanceTransaction>, PropertyQueryError> {
         self.db_tx.get_token_tx(token_id).map_err(PropertyQueryError::from)
+    }
+
+    pub fn get_token_id(
+        &self,
+        tx_id: &Id<Transaction>,
+    ) -> Result<Option<TokenId>, PropertyQueryError> {
+        self.db_tx.get_token_id(tx_id).map_err(PropertyQueryError::from)
     }
 
     pub fn get_header_from_height(

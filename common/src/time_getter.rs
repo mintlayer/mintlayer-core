@@ -13,18 +13,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_builder;
-mod framework;
-mod framework_builder;
-mod transaction_builder;
+use crate::primitives::time;
+use std::{sync::Arc, time::Duration};
 
-/// Storage backend used for testing (the in-memory backend)
-pub type TestStore = chainstate_storage::inmemory::Store;
+pub type TimeGetterFn = dyn Fn() -> Duration + Send + Sync;
 
-/// Chainstate instantiation for testing, using the in-memory storage backend
-pub type TestChainstate = crate::Chainstate<TestStore>;
+/// A function wrapper that contains the function that will be used to get the current time in chainstate
+pub struct TimeGetter {
+    f: Arc<TimeGetterFn>,
+}
 
-pub use self::{
-    block_builder::BlockBuilder, framework::TestFramework, framework_builder::TestFrameworkBuilder,
-    transaction_builder::TransactionBuilder,
-};
+impl TimeGetter {
+    pub fn new(f: Arc<TimeGetterFn>) -> Self {
+        Self { f }
+    }
+
+    pub fn get_time(&self) -> Duration {
+        (self.f)()
+    }
+
+    pub fn getter(&self) -> &TimeGetterFn {
+        &*self.f
+    }
+}
+
+impl Default for TimeGetter {
+    fn default() -> Self {
+        Self::new(Arc::new(time::get))
+    }
+}

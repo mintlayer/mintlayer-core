@@ -19,6 +19,13 @@ use std::{
 };
 
 use chainstate_types::Locator;
+use chainstate_types::{BlockIndex, GenBlockIndex};
+use common::chain::{
+    block::{timestamp::BlockTimestamp, BlockReward},
+    config::ChainConfig,
+    tokens::TokenIssuanceTransaction,
+    OutPointSourceId, TxMainChainIndex,
+};
 use common::{
     chain::{
         block::BlockHeader,
@@ -27,7 +34,9 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
+use utils::eventhandler::EventHandler;
 
+use crate::ChainstateConfig;
 use crate::{
     chainstate_interface::ChainstateInterface, BlockSource, ChainstateError, ChainstateEvent,
 };
@@ -40,7 +49,11 @@ impl<
         self.deref_mut().subscribe_to_events(handler)
     }
 
-    fn process_block(&mut self, block: Block, source: BlockSource) -> Result<(), ChainstateError> {
+    fn process_block(
+        &mut self,
+        block: Block,
+        source: BlockSource,
+    ) -> Result<Option<BlockIndex>, ChainstateError> {
         self.deref_mut().process_block(block, source)
     }
 
@@ -100,10 +113,105 @@ impl<
         self.deref().filter_already_existing_blocks(headers)
     }
 
+    fn get_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError> {
+        self.deref().get_block_index(id)
+    }
+
+    fn get_gen_block_index(
+        &self,
+        id: &Id<GenBlock>,
+    ) -> Result<Option<GenBlockIndex>, ChainstateError> {
+        self.deref().get_gen_block_index(id)
+    }
+
+    fn get_best_block_index(&self) -> Result<chainstate_types::GenBlockIndex, ChainstateError> {
+        self.deref().get_best_block_index()
+    }
+
+    fn get_chain_config(&self) -> Arc<ChainConfig> {
+        self.deref().get_chain_config()
+    }
+
+    fn get_chainstate_config(&self) -> ChainstateConfig {
+        self.deref().get_chainstate_config()
+    }
+
+    fn wait_for_all_events(&self) {
+        self.deref().wait_for_all_events()
+    }
+
+    fn get_mainchain_tx_index(
+        &self,
+        tx_id: &OutPointSourceId,
+    ) -> Result<Option<TxMainChainIndex>, ChainstateError> {
+        self.deref().get_mainchain_tx_index(tx_id)
+    }
+
+    fn subscribers(&self) -> &Vec<EventHandler<ChainstateEvent>> {
+        self.deref().subscribers()
+    }
+
+    fn calculate_median_time_past(&self, starting_block: &Id<GenBlock>) -> BlockTimestamp {
+        self.deref().calculate_median_time_past(starting_block)
+    }
+
+    fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool {
+        self.deref().is_already_an_orphan(block_id)
+    }
+
+    fn orphans_count(&self) -> usize {
+        self.deref().orphans_count()
+    }
+
+    fn get_ancestor(
+        &self,
+        block_index: &GenBlockIndex,
+        ancestor_height: BlockHeight,
+    ) -> Result<GenBlockIndex, ChainstateError> {
+        self.deref().get_ancestor(block_index, ancestor_height)
+    }
+
+    fn last_common_ancestor(
+        &self,
+        first_block_index: &GenBlockIndex,
+        second_block_index: &GenBlockIndex,
+    ) -> Result<GenBlockIndex, ChainstateError> {
+        self.deref().last_common_ancestor(first_block_index, second_block_index)
+    }
+
+    fn get_block_reward(
+        &self,
+        block_index: &chainstate_types::BlockIndex,
+    ) -> Result<Option<BlockReward>, ChainstateError> {
+        self.deref().get_block_reward(block_index)
+    }
+
     fn token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, ChainstateError> {
         self.deref().token_info(token_id)
     }
+
+    fn get_token_detail(
+        &self,
+        token_id: TokenId,
+    ) -> Result<(Id<Block>, TokenIssuanceTransaction), ChainstateError> {
+        self.deref().get_token_detail(token_id)
+    }
+
+    fn get_token_id(
+        &self,
+        tx_id: &Id<common::chain::Transaction>,
+    ) -> Result<Option<TokenId>, ChainstateError> {
+        self.deref().get_token_id(tx_id)
+    }
+
+    fn get_token_tx(
+        &self,
+        token_id: &TokenId,
+    ) -> Result<Option<common::chain::tokens::TokenIssuanceTransaction>, ChainstateError> {
+        self.deref().get_token_tx(token_id)
+    }
 }
+
 #[cfg(test)]
 mod tests {
 
@@ -115,10 +223,8 @@ mod tests {
         primitives::BlockHeight,
     };
 
-    use crate::{
-        chainstate_interface::ChainstateInterface, detail::time_getter::TimeGetter,
-        make_chainstate, ChainstateConfig,
-    };
+    use crate::{chainstate_interface::ChainstateInterface, make_chainstate, ChainstateConfig};
+    use common::time_getter::TimeGetter;
 
     fn test_interface_ref<C: ChainstateInterface>(chainstate: &C, chain_config: &ChainConfig) {
         assert_eq!(

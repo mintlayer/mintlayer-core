@@ -16,6 +16,7 @@
 pub mod address;
 pub mod chain;
 pub mod primitives;
+pub mod time_getter;
 pub mod uint;
 
 #[macro_use]

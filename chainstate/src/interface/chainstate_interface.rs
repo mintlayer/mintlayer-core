@@ -15,19 +15,29 @@
 
 use std::sync::Arc;
 
+use crate::ChainstateConfig;
+use chainstate_types::{BlockIndex, GenBlockIndex};
+use common::chain::tokens::TokenIssuanceTransaction;
+use common::chain::Transaction;
 use common::{
     chain::{
-        block::{Block, BlockHeader, GenBlock},
+        block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
         tokens::{RPCTokenInfo, TokenId},
+        ChainConfig, OutPointSourceId, TxMainChainIndex,
     },
     primitives::{BlockHeight, Id},
 };
+use utils::eventhandler::EventHandler;
 
 use crate::{detail::BlockSource, ChainstateError, ChainstateEvent, Locator};
 
 pub trait ChainstateInterface: Send {
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>);
-    fn process_block(&mut self, block: Block, source: BlockSource) -> Result<(), ChainstateError>;
+    fn process_block(
+        &mut self,
+        block: Block,
+        source: BlockSource,
+    ) -> Result<Option<BlockIndex>, ChainstateError>;
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
     fn preliminary_header_check(&self, header: BlockHeader) -> Result<(), ChainstateError>;
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError>;
@@ -63,6 +73,47 @@ pub trait ChainstateInterface: Send {
         headers: Vec<BlockHeader>,
     ) -> Result<Vec<BlockHeader>, ChainstateError>;
 
+    fn get_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError>;
+    fn get_gen_block_index(
+        &self,
+        id: &Id<GenBlock>,
+    ) -> Result<Option<GenBlockIndex>, ChainstateError>;
+    fn get_best_block_index(&self) -> Result<GenBlockIndex, ChainstateError>;
+
+    fn get_chain_config(&self) -> Arc<ChainConfig>;
+    fn get_chainstate_config(&self) -> ChainstateConfig;
+    fn wait_for_all_events(&self);
+    fn get_mainchain_tx_index(
+        &self,
+        tx_id: &OutPointSourceId,
+    ) -> Result<Option<TxMainChainIndex>, ChainstateError>;
+    fn subscribers(&self) -> &Vec<EventHandler<ChainstateEvent>>;
+    fn calculate_median_time_past(&self, starting_block: &Id<GenBlock>) -> BlockTimestamp;
+    fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool;
+    fn orphans_count(&self) -> usize;
+    fn get_ancestor(
+        &self,
+        block_index: &GenBlockIndex,
+        ancestor_height: BlockHeight,
+    ) -> Result<GenBlockIndex, ChainstateError>;
+    fn last_common_ancestor(
+        &self,
+        first_block_index: &GenBlockIndex,
+        second_block_index: &GenBlockIndex,
+    ) -> Result<GenBlockIndex, ChainstateError>;
+    fn get_block_reward(
+        &self,
+        block_index: &BlockIndex,
+    ) -> Result<Option<BlockReward>, ChainstateError>;
     /// Returns token info by token_id
     fn token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, ChainstateError>;
+    fn get_token_detail(
+        &self,
+        token_id: TokenId,
+    ) -> Result<(Id<Block>, TokenIssuanceTransaction), ChainstateError>;
+    fn get_token_tx(
+        &self,
+        token_id: &TokenId,
+    ) -> Result<Option<TokenIssuanceTransaction>, ChainstateError>;
+    fn get_token_id(&self, tx_id: &Id<Transaction>) -> Result<Option<TokenId>, ChainstateError>;
 }

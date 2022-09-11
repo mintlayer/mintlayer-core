@@ -68,6 +68,8 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         let block_data = hex::decode(block_hex).map_err(rpc::Error::to_call_error)?;
         let block = Block::decode(&mut &block_data[..]).map_err(rpc::Error::to_call_error)?;
         let res = self.call_mut(move |this| this.process_block(block, BlockSource::Local)).await;
+        // remove the block index from the return value
+        let res = res.map(|v| v.map(|_bi| ()));
         handle_error(res)
     }
 
