@@ -183,7 +183,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         self.db_tx.get_mainchain_tx_index(tx_id).map_err(PropertyQueryError::from)
     }
 
-    fn get_mainchain_tx_by_position(
+    pub fn get_mainchain_tx_by_position(
         &self,
         tx_index: &common::chain::TxMainChainPosition,
     ) -> Result<Option<common::chain::Transaction>, PropertyQueryError> {

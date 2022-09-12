@@ -318,10 +318,11 @@ where
     }
 
     async fn create_entry(&self, tx: Transaction) -> Result<TxMempoolEntry, TxValidationError> {
+        // Genesis transaction has no parent, hence the first filter_map
         let parents = tx
             .inputs()
             .iter()
-            .map(|input| *input.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
+            .filter_map(|input| input.outpoint().tx_id().get_tx_id().cloned())
             .filter_map(|id| self.store.txs_by_id.contains_key(&id.get()).then(|| id))
             .collect::<BTreeSet<_>>();
 

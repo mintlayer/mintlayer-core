@@ -20,7 +20,11 @@ use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::block::BlockReward;
 use common::chain::config::ChainConfig;
+use common::chain::signature::Transactable;
+use common::chain::tokens::OutputValue;
 use common::chain::tokens::TokenAuxiliaryData;
+use common::chain::GenBlockId;
+use common::chain::SpendablePosition;
 use common::chain::TxInput;
 use common::chain::{OutPointSourceId, Transaction, TxMainChainIndex};
 use std::collections::BTreeSet;
@@ -28,7 +32,6 @@ use std::collections::BTreeSet;
 use chainstate_types::PropertyQueryError;
 use common::chain::OutPoint;
 use common::chain::OutputSpentState;
-use common::primitives::Amount;
 use common::{
     chain::{
         block::{Block, BlockHeader, GenBlock},
@@ -312,11 +315,88 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         Ok(available_inputs)
     }
 
+    // FIXME proper errors
     fn get_outpoint_value(
         &self,
-        _outpoint: &common::chain::OutPoint,
+        outpoint: &common::chain::OutPoint,
     ) -> Result<common::primitives::Amount, ChainstateError> {
-        Ok(Amount::from_atoms(0))
+        let tx_index = self
+            .chainstate
+            .make_db_tx_ro()
+            .get_mainchain_tx_index(&outpoint.tx_id())
+            .map_err(ChainstateError::FailedToReadProperty)?
+            .ok_or(ChainstateError::FailedToReadProperty(
+                PropertyQueryError::TxNotFound,
+            ))?;
+        match tx_index.position() {
+            SpendablePosition::Transaction(tx_pos) => {
+                let prev_tx = self
+                    .chainstate
+                    .make_db_tx_ro()
+                    .get_mainchain_tx_by_position(tx_pos)
+                    .map_err(ChainstateError::FailedToReadProperty)?
+                    .ok_or(ChainstateError::FailedToReadProperty(
+                        PropertyQueryError::TxNotFound,
+                    ))?;
+                let output = prev_tx.outputs().get(outpoint.output_index() as usize).ok_or(
+                    ChainstateError::FailedToReadProperty(
+                        PropertyQueryError::OutpointIndexOutOfRange,
+                    ),
+                )?;
+                Ok(match output.value() {
+                    OutputValue::Coin(amount) => *amount,
+                    _ => todo!(),
+                })
+            }
+            SpendablePosition::BlockReward(block_id) => {
+                match block_id.classify(&*self.get_chain_config()) {
+                    GenBlockId::Genesis(_) => {
+                        let rewards = self
+                            .get_chain_config()
+                            .genesis_block()
+                            .block_reward_transactable()
+                            .outputs()
+                            .unwrap_or(&[])
+                            .to_vec();
+                        let output = rewards.get(outpoint.output_index() as usize).ok_or(
+                            ChainstateError::FailedToReadProperty(
+                                PropertyQueryError::OutpointIndexOutOfRange,
+                            ),
+                        )?;
+                        Ok(match output.value() {
+                            OutputValue::Coin(amount) => *amount,
+                            _ => todo!(),
+                        })
+                    }
+                    // TODO: Getting the whole block just for reward outputs isn't optimal. See the
+                    // https://github.com/mintlayer/mintlayer-core/issues/344 issue for details.
+                    GenBlockId::Block(id) => {
+                        let block_index = self.get_block_index(&id)?.ok_or(
+                            ChainstateError::FailedToReadProperty(
+                                PropertyQueryError::BestBlockIndexNotFound,
+                            ),
+                        )?;
+
+                        let rewards = self
+                            .get_block_reward(&block_index)?
+                            .ok_or(ChainstateError::FailedToReadProperty(
+                                PropertyQueryError::BestBlockNotFound,
+                            ))?
+                            .outputs()
+                            .to_vec();
+                        let output = rewards.get(outpoint.output_index() as usize).ok_or(
+                            ChainstateError::FailedToReadProperty(
+                                PropertyQueryError::OutpointIndexOutOfRange,
+                            ),
+                        )?;
+                        Ok(match output.value() {
+                            OutputValue::Coin(amount) => *amount,
+                            _ => todo!(),
+                        })
+                    }
+                }
+            }
+        }
     }
 
     fn confirmed_outpoints(&self) -> Result<BTreeSet<OutPoint>, ChainstateError> {
