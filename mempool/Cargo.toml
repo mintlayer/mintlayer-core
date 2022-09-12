@@ -31,4 +31,7 @@ features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"]
 
 [dev-dependencies]
 chainstate-storage = { path = '../chainstate/storage' }
+chainstate-test-framework = { path = '../chainstate/test-framework' }
+crypto = { path = '../crypto' }
+test-utils = {path = '../test-utils'}
 

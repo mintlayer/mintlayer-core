@@ -15,6 +15,10 @@ use super::*;
 use chainstate::make_chainstate;
 use chainstate::BlockSource;
 use chainstate::ChainstateConfig;
+use chainstate_test_framework::anyonecanspend_address;
+use chainstate_test_framework::empty_witness;
+use chainstate_test_framework::TestFramework;
+use chainstate_test_framework::TransactionBuilder;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::block::BlockReward;
 use common::chain::block::ConsensusData;
@@ -31,6 +35,8 @@ use common::{
 use core::panic;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use test_utils::random::make_seedable_rng;
+use test_utils::random::Seed;
 
 mod utils;
 
@@ -48,12 +54,24 @@ fn dummy_size() {
 
 #[tokio::test]
 async fn real_size() -> anyhow::Result<()> {
-    let mempool = setup().await;
-    let tx = TxGenerator::new()
-        .with_num_inputs(1)
-        .with_num_outputs(400)
-        .generate_tx(&mempool)
-        .await?;
+    let seed = Seed::from_entropy();
+    let tf = TestFramework::default();
+    let mut rng = make_seedable_rng(seed);
+    let genesis = tf.genesis();
+    let mut tx_builder = TransactionBuilder::new().add_input(TxInput::new(
+        OutPointSourceId::BlockReward(genesis.get_id().into()),
+        0,
+        empty_witness(&mut rng),
+    ));
+
+    for _ in 0..400 {
+        tx_builder = tx_builder.add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(1)),
+            OutputPurpose::Transfer(anyonecanspend_address()),
+        ));
+    }
+
+    let tx = tx_builder.build();
     log::debug!("real size of tx {}", tx.encoded_size());
     Ok(())
 }
