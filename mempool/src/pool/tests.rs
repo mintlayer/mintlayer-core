@@ -183,6 +183,7 @@ impl TxGenerator {
         self
     }
 
+    // TODO allow_double_spend is never true, we can get rid of this field
     fn new() -> Self {
         Self {
             coin_pool: BTreeSet::new(),
