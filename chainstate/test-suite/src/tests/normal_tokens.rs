@@ -326,7 +326,7 @@ fn token_issue_test(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn token_transfer_tes(#[case] seed: Seed) {
+fn token_transfer_test(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);

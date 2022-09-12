@@ -312,7 +312,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         // huge transaction compared to what they would get for without the issuance.
         // This has to be studied
 
-        // Check is fee enough for issuance
+        // Check if the fee is enough for issuance
         let issuance_count = get_tokens_issuance_count(tx.outputs());
         if issuance_count > 0 && total_fee < Fee(self.chain_config.token_min_issuance_fee()) {
             return Err(ConnectTransactionError::TokensError(
