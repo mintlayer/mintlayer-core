@@ -473,45 +473,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
-    fn check_block_detail(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
-        self.check_block_header(block.header())?;
-
-        self.check_block_reward_maturity_settings(block)?;
-
-        // MerkleTree root
-        let merkle_tree_root = block.merkle_root();
-        calculate_tx_merkle_root(block.body()).map_or(
-            Err(CheckBlockError::MerkleRootMismatch),
-            |merkle_tree| {
-                ensure!(
-                    merkle_tree_root == merkle_tree,
-                    CheckBlockError::MerkleRootMismatch
-                );
-                Ok(())
-            },
-        )?;
-
-        // Witness merkle root
-        let witness_merkle_root = block.witness_merkle_root();
-        calculate_witness_merkle_root(block.body()).map_or(
-            Err(CheckBlockError::WitnessMerkleRootMismatch),
-            |witness_merkle| {
-                ensure!(
-                    witness_merkle_root == witness_merkle,
-                    CheckBlockError::WitnessMerkleRootMismatch,
-                );
-                Ok(())
-            },
-        )?;
-
-        self.check_transactions(block)
-            .map_err(CheckBlockError::CheckTransactionFailed)?;
-
-        self.check_block_size(block).map_err(CheckBlockError::BlockSizeError)?;
-
-        Ok(())
-    }
-
     fn check_header_size(&self, header: &BlockHeader) -> Result<(), BlockSizeError> {
         let size = header.header_size();
         ensure!(
@@ -575,20 +536,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
-    fn check_duplicate_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
-        let mut txs_ids = BTreeSet::new();
-        for tx in block.transactions() {
-            let tx_id = tx.get_id();
-            if !txs_ids.insert(tx_id) {
-                return Err(CheckBlockTransactionsError::DuplicatedTransactionInBlock(
-                    tx_id,
-                    block.get_id(),
-                ));
-            }
-        }
-        Ok(())
-    }
-
     fn check_tokens_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         for tx in block.transactions() {
             // We can't issue a few token types in one tx
@@ -617,7 +564,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         self.check_duplicate_inputs(block)?;
-        self.check_duplicate_txs(block)?;
         self.check_tokens_txs(block)?;
         Ok(())
     }
@@ -627,9 +573,41 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
-        consensus::validate_consensus(self.chain_config, block.header(), self)
-            .map_err(CheckBlockError::ConsensusVerificationFailed)?;
-        self.check_block_detail(block)?;
+        self.check_block_header(block.header())?;
+
+        self.check_block_size(block).map_err(CheckBlockError::BlockSizeError)?;
+
+        self.check_block_reward_maturity_settings(block)?;
+
+        // MerkleTree root
+        let merkle_tree_root = block.merkle_root();
+        calculate_tx_merkle_root(block.body()).map_or(
+            Err(CheckBlockError::MerkleRootMismatch),
+            |merkle_tree| {
+                ensure!(
+                    merkle_tree_root == merkle_tree,
+                    CheckBlockError::MerkleRootMismatch
+                );
+                Ok(())
+            },
+        )?;
+
+        // Witness merkle root
+        let witness_merkle_root = block.witness_merkle_root();
+        calculate_witness_merkle_root(block.body()).map_or(
+            Err(CheckBlockError::WitnessMerkleRootMismatch),
+            |witness_merkle| {
+                ensure!(
+                    witness_merkle_root == witness_merkle,
+                    CheckBlockError::WitnessMerkleRootMismatch,
+                );
+                Ok(())
+            },
+        )?;
+
+        self.check_transactions(block)
+            .map_err(CheckBlockError::CheckTransactionFailed)?;
+
         Ok(())
     }
 

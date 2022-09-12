@@ -308,13 +308,12 @@ fn process_block() {
     use crate::TransactionBuilder;
 
     let mut tf = TestFramework::default();
-    let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-
+    let gen_block_id = tf.genesis().get_id();
     tf.make_block_builder()
         .add_transaction(
             TransactionBuilder::new()
                 .add_input(TxInput::new(
-                    outpoint_source_id,
+                    OutPointSourceId::BlockReward(<Id<GenBlock>>::from(gen_block_id)),
                     0,
                     InputWitness::NoSignature(None),
                 ))
