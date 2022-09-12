@@ -797,12 +797,9 @@ impl<'a, S: BlockchainStorageWrite + 'a> TransactionVerifier<'a, S> {
                 db_tx.set_token_id(&issuance_tx.get_id(), &token_id)?;
             }
             CachedTokensOperation::Read(_) => (),
-            CachedTokensOperation::Erase => {
-                let issuance_tx = db_tx
-                    .get_token_tx(&token_id)?
-                    .ok_or(TokensError::InvariantBrokenFlushNonexistentToken(token_id))?;
+            CachedTokensOperation::Erase(issuance_tx) => {
                 db_tx.del_token_tx(&token_id)?;
-                db_tx.del_token_id(&issuance_tx.get_id())?;
+                db_tx.del_token_id(&issuance_tx)?;
             }
         }
         Ok(())

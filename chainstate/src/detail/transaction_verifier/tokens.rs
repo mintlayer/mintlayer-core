@@ -69,7 +69,7 @@ fn undo_issuance(
     match tokens_cache.entry(token_id) {
         Entry::Occupied(entry) => {
             let tokens_op = entry.into_mut();
-            *tokens_op = CachedTokensOperation::Erase;
+            *tokens_op = CachedTokensOperation::Erase(tx.get_id());
         }
         Entry::Vacant(_) => {
             return Err(TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(
