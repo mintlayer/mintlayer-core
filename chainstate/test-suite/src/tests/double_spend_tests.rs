@@ -29,6 +29,7 @@ use common::{
     chain::{tokens::OutputValue, OutPointSourceId, Transaction, TxInput, TxOutput},
     primitives::{Amount, Id},
 };
+use crypto::random::SliceRandom;
 
 // Process a block where the second transaction uses the first one as input.
 //
@@ -415,10 +416,12 @@ fn duplicate_tx_in_the_same_block(#[case] seed: Seed) {
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, 1);
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
-        let block = tf
-            .make_block_builder()
-            .with_transactions(vec![first_tx, second_tx.clone(), second_tx])
-            .build();
+        let txs = vec![first_tx, second_tx];
+        let tx_duplicate = txs.choose(&mut rng).unwrap().clone();
+        let mut txs = txs.into_iter().chain(vec![tx_duplicate]).collect::<Vec<_>>();
+        txs.shuffle(&mut rng);
+
+        let block = tf.make_block_builder().with_transactions(txs).build();
         let block_id = block.get_id();
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
@@ -444,10 +447,12 @@ fn duplicate_odd_tx_in_the_same_block(#[case] seed: Seed) {
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
         let third_tx = tx_from_tx(&second_tx, rng.gen_range(1000..2000));
 
-        let block = tf
-            .make_block_builder()
-            .with_transactions(vec![first_tx, second_tx, third_tx.clone(), third_tx])
-            .build();
+        let txs = vec![first_tx, second_tx, third_tx];
+        let tx_duplicate = txs.choose(&mut rng).unwrap().clone();
+        let mut txs = txs.into_iter().chain(vec![tx_duplicate]).collect::<Vec<_>>();
+        txs.shuffle(&mut rng);
+
+        let block = tf.make_block_builder().with_transactions(txs).build();
         let block_id = block.get_id();
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
