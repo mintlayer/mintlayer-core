@@ -1543,7 +1543,7 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         // Check that tokens not in storage
         assert!(tf.chainstate.get_token_id(&issuance_tx.get_id()).unwrap().is_none());
 
-        assert!(tf.chainstate.get_token_tx(&token_id).unwrap().is_none());
+        assert!(tf.chainstate.get_token_info(&token_id).unwrap().is_none());
 
         assert!(matches!(
             tf.chainstate.get_token_detail(token_id),

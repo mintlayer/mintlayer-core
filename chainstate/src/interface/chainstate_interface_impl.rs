@@ -266,12 +266,12 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn get_token_tx(
+    fn get_token_info(
         &self,
         token_id: &TokenId,
     ) -> Result<Option<TokenIssuanceTransaction>, ChainstateError> {
         self.chainstate
-            .get_token_tx(token_id)
+            .get_token_info(token_id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 

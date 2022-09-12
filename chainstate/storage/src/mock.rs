@@ -54,7 +54,7 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_tx(&self, token_id: &TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
+        fn get_token_info(&self, token_id: &TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
 
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
     }
@@ -139,7 +139,7 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_tx(&self, token_id: &TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
+        fn get_token_info(&self, token_id: &TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
     }
 
@@ -182,7 +182,7 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_tx(&self, token_id: &TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
+        fn get_token_info(&self, token_id: &TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
     }
 

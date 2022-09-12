@@ -204,11 +204,11 @@ impl<
         self.deref().get_token_id(tx_id)
     }
 
-    fn get_token_tx(
+    fn get_token_info(
         &self,
         token_id: &TokenId,
     ) -> Result<Option<common::chain::tokens::TokenIssuanceTransaction>, ChainstateError> {
-        self.deref().get_token_tx(token_id)
+        self.deref().get_token_info(token_id)
     }
 }
 

@@ -111,7 +111,7 @@ pub trait ChainstateInterface: Send {
         &self,
         token_id: TokenId,
     ) -> Result<(Id<Block>, TokenIssuanceTransaction), ChainstateError>;
-    fn get_token_tx(
+    fn get_token_info(
         &self,
         token_id: &TokenId,
     ) -> Result<Option<TokenIssuanceTransaction>, ChainstateError>;

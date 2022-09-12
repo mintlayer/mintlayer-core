@@ -324,9 +324,12 @@ impl<S: BlockchainStorage> Chainstate<S> {
         let chainstate_ref = self.make_db_tx_ro();
 
         // Find issuance transaction id by token_id
-        let creation_tx = chainstate_ref.get_token_tx(&token_id)?.ok_or(
-            PropertyQueryError::TokensError(TokensError::TokensNotRegistered(token_id)),
-        )?;
+        let creation_tx =
+            chainstate_ref
+                .get_token_info(&token_id)?
+                .ok_or(PropertyQueryError::TokensError(
+                    TokensError::TokensNotRegistered(token_id),
+                ))?;
         let tx_index = chainstate_ref
             .get_mainchain_tx_index(&OutPointSourceId::Transaction(creation_tx.get_id()))?
             .ok_or(PropertyQueryError::TokensError(
@@ -387,12 +390,12 @@ impl<S: BlockchainStorage> Chainstate<S> {
             }))
     }
 
-    pub fn get_token_tx(
+    pub fn get_token_info(
         &self,
         token_id: &TokenId,
     ) -> Result<Option<TokenIssuanceTransaction>, PropertyQueryError> {
         let chainstate_ref = self.make_db_tx_ro();
-        chainstate_ref.get_token_tx(token_id)
+        chainstate_ref.get_token_info(token_id)
     }
 
     pub fn get_token_id(

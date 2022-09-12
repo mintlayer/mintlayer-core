@@ -317,11 +317,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         self.get_gen_block_index(&self.get_best_block_id()?)
     }
 
-    pub fn get_token_tx(
+    pub fn get_token_info(
         &self,
         token_id: &TokenId,
     ) -> Result<Option<TokenIssuanceTransaction>, PropertyQueryError> {
-        self.db_tx.get_token_tx(token_id).map_err(PropertyQueryError::from)
+        self.db_tx.get_token_info(token_id).map_err(PropertyQueryError::from)
     }
 
     pub fn get_token_id(

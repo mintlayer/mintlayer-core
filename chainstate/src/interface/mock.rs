@@ -109,7 +109,7 @@ mockall::mock! {
             &self,
             tx_id: &Id<common::chain::Transaction>,
         ) -> Result<Option<TokenId>, ChainstateError>;
-        fn get_token_tx(
+        fn get_token_info(
             &self,
             token_id: &TokenId,
         ) -> Result<Option<common::chain::tokens::TokenIssuanceTransaction>, ChainstateError>;
