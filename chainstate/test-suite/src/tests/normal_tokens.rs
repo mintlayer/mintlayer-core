@@ -32,7 +32,7 @@ use rand::distributions::uniform::SampleRange;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
-fn random_string<RNG: Rng, R: SampleRange<usize>>(rng: &mut RNG, range_len: R) -> String {
+fn random_string<R: SampleRange<usize>>(rng: &mut impl Rng, range_len: R) -> String {
     use rand::distributions::{Alphanumeric, DistString};
     if range_len.is_empty() {
         return String::new();
