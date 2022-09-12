@@ -537,6 +537,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
         self.check_block_header(block.header())?;
 
+        self.check_block_size(block).map_err(CheckBlockError::BlockSizeError)?;
+
         self.check_block_reward_maturity_settings(block)?;
 
         // MerkleTree root
@@ -564,8 +566,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 Ok(())
             },
         )?;
-
-        self.check_block_size(block).map_err(CheckBlockError::BlockSizeError)?;
 
         self.check_transactions(block)
             .map_err(CheckBlockError::CheckTransactionFailed)?;
