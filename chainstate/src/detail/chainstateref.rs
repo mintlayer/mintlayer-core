@@ -518,6 +518,14 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         // check for duplicate inputs (see CVE-2018-17144)
         let mut block_inputs = BTreeSet::new();
         for tx in block.transactions() {
+            if tx.inputs().is_empty() || tx.outputs().is_empty() {
+                return Err(
+                    CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
+                        tx.get_id(),
+                        block.get_id(),
+                    ),
+                );
+            }
             let mut tx_inputs = BTreeSet::new();
             for input in tx.inputs() {
                 ensure!(
@@ -563,6 +571,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+        // Note: duplicate txs are detected through duplicate inputs
         self.check_duplicate_inputs(block)?;
         self.check_tokens_txs(block)?;
         Ok(())

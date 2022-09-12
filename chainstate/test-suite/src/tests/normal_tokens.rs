@@ -564,6 +564,10 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
+        let genesis_info = TestBlockInfo::from_genesis(&tf.genesis());
+        let coins_value = genesis_info.txns[0].1[0].value().clone();
+        assert!(matches!(coins_value, OutputValue::Coin(_)));
+        let genesis_outpoint_id = genesis_info.txns[0].0.clone();
 
         // Issuance
         let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
@@ -572,23 +576,33 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
         });
-        let result = tf
+        let block = tf
             .make_block_builder()
             // All coins in inputs added to outputs, fee = 0 coins
-            .add_test_transaction(&mut rng)
             .add_transaction(
                 TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        genesis_outpoint_id,
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
                     .add_output(TxOutput::new(
                         output_value.clone(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
+                    .add_output(TxOutput::new(
+                        coins_value,
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
                     .build(),
             )
-            .build_and_process();
+            .build();
+
+        let result = tf.process_block(block, BlockSource::Local);
 
         // Try to process tx with insufficient token fees
         assert!(matches!(
-            result,
+            dbg!(result),
             Err(ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::TokensError(
                     TokensError::InsufficientTokenFees(_, _)
