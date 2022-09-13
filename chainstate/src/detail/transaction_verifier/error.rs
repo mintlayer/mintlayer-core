@@ -16,6 +16,7 @@
 use common::{
     chain::{
         block::{Block, GenBlock},
+        tokens::TokensError,
         SpendError, Spender, TxMainChainIndexError, TxMainChainPosition,
     },
     primitives::{Amount, Id},
@@ -97,6 +98,8 @@ pub enum ConnectTransactionError {
     TimeLockViolation,
     #[error("Utxo error: {0}")]
     UtxoError(#[from] utxo::Error),
+    #[error("Tokens error: {0}")]
+    TokensError(#[from] TokensError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

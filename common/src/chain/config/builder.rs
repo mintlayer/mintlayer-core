@@ -19,6 +19,7 @@ use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, Chain
 use crate::chain::{
     ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoWChainConfig, UpgradeVersion,
 };
+use crate::primitives::Amount;
 use crate::primitives::{id::WithId, semver::SemVer, BlockHeight};
 
 use std::collections::BTreeMap;
@@ -97,6 +98,10 @@ pub struct Builder {
     net_upgrades: NetUpgrades<UpgradeVersion>,
     genesis_block: GenesisBlockInit,
     emission_schedule: EmissionScheduleInit,
+    token_min_issuance_fee: Amount,
+    token_max_uri_len: usize,
+    token_max_dec_count: u8,
+    token_max_ticker_len: usize,
 }
 
 impl Builder {
@@ -116,6 +121,10 @@ impl Builder {
             genesis_block: chain_type.default_genesis_init(),
             emission_schedule: EmissionScheduleInit::Mainnet,
             net_upgrades: chain_type.default_net_upgrades(),
+            token_min_issuance_fee: super::TOKEN_MIN_ISSUANCE_FEE,
+            token_max_uri_len: super::TOKEN_MAX_URI_LEN,
+            token_max_dec_count: super::TOKEN_MAX_DEC_COUNT,
+            token_max_ticker_len: super::TOKEN_MAX_TICKER_LEN,
         }
     }
 
@@ -142,6 +151,10 @@ impl Builder {
             genesis_block,
             emission_schedule,
             net_upgrades,
+            token_min_issuance_fee,
+            token_max_uri_len,
+            token_max_dec_count,
+            token_max_ticker_len,
         } = self;
 
         let emission_schedule = match emission_schedule {
@@ -176,6 +189,10 @@ impl Builder {
             height_checkpoint_data: BTreeMap::new(),
             emission_schedule,
             net_upgrades,
+            token_min_issuance_fee,
+            token_max_uri_len,
+            token_max_dec_count,
+            token_max_ticker_len,
         }
     }
 }

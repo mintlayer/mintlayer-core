@@ -23,7 +23,8 @@ pub use error::BlockError;
 pub use error::CheckBlockError;
 pub use error::CheckBlockTransactionsError;
 pub use error::OrphanCheckError;
-pub use transaction_verifier::ConnectTransactionError;
+// TODO: ConnectTransactionError used in unit tests to check block processing results. We have to find more appropriate place for this error.
+pub use transaction_verifier::error::ConnectTransactionError;
 
 mod block_index_history_iter;
 mod chainstateref;
@@ -31,6 +32,7 @@ mod error;
 mod median_time;
 mod orphan_blocks;
 pub mod query;
+pub mod tokens;
 mod transaction_verifier;
 
 use std::sync::Arc;

@@ -20,9 +20,13 @@ use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::block::BlockReward;
 use common::chain::config::ChainConfig;
-use common::chain::{OutPointSourceId, TxMainChainIndex};
+use common::chain::tokens::TokenAuxiliaryData;
+use common::chain::{OutPointSourceId, Transaction, TxMainChainIndex};
 use common::{
-    chain::block::{Block, BlockHeader, GenBlock},
+    chain::{
+        block::{Block, BlockHeader, GenBlock},
+        tokens::{RPCTokenInfo, TokenId},
+    },
     primitives::{id::WithId, BlockHeight, Id},
 };
 use utils::eventhandler::EventHandler;
@@ -244,6 +248,36 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         self.chainstate
             .make_db_tx_ro()
             .get_block_reward(block_index)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn get_token_info_for_rpc(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<RPCTokenInfo>, ChainstateError> {
+        self.chainstate
+            .query()
+            .get_token_info_for_rpc(token_id)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn get_token_aux_data(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<TokenAuxiliaryData>, ChainstateError> {
+        self.chainstate
+            .query()
+            .get_token_aux_data(&token_id)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn get_token_id_from_issuance_tx(
+        &self,
+        tx_id: &Id<Transaction>,
+    ) -> Result<Option<TokenId>, ChainstateError> {
+        self.chainstate
+            .query()
+            .get_token_id_from_issuance_tx(tx_id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 }

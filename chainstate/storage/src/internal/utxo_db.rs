@@ -16,8 +16,10 @@
 #[cfg(test)]
 mod test {
     use crate::internal::test::create_rand_block_undo;
-    use common::chain::tokens::OutputValue;
-    use common::chain::{Block, Destination, OutPoint, OutPointSourceId, OutputPurpose, TxOutput};
+    use common::chain::{
+        tokens::OutputValue, Block, Destination, OutPoint, OutPointSourceId, OutputPurpose,
+        TxOutput,
+    };
     use common::primitives::{Amount, BlockHeight, Id, H256};
     use crypto::key::{KeyKind, PrivateKey};
     use crypto::random::Rng;

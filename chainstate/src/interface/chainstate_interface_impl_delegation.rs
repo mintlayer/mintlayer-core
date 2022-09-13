@@ -23,10 +23,15 @@ use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::{
     block::{timestamp::BlockTimestamp, BlockReward},
     config::ChainConfig,
+    tokens::TokenAuxiliaryData,
     OutPointSourceId, TxMainChainIndex,
 };
 use common::{
-    chain::{block::BlockHeader, Block, GenBlock},
+    chain::{
+        block::BlockHeader,
+        tokens::{RPCTokenInfo, TokenId},
+        Block, GenBlock,
+    },
     primitives::{BlockHeight, Id},
 };
 use utils::eventhandler::EventHandler;
@@ -179,6 +184,27 @@ impl<
         block_index: &chainstate_types::BlockIndex,
     ) -> Result<Option<BlockReward>, ChainstateError> {
         self.deref().get_block_reward(block_index)
+    }
+
+    fn get_token_info_for_rpc(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<RPCTokenInfo>, ChainstateError> {
+        self.deref().get_token_info_for_rpc(token_id)
+    }
+
+    fn get_token_aux_data(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<TokenAuxiliaryData>, ChainstateError> {
+        self.deref().get_token_aux_data(token_id)
+    }
+
+    fn get_token_id_from_issuance_tx(
+        &self,
+        tx_id: &Id<common::chain::Transaction>,
+    ) -> Result<Option<TokenId>, ChainstateError> {
+        self.deref().get_token_id_from_issuance_tx(tx_id)
     }
 }
 

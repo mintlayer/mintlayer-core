@@ -14,8 +14,7 @@
 // limitations under the License.
 
 use common::chain::signature::inputsig::InputWitness;
-use common::chain::tokens::OutputValue;
-use common::chain::transaction::*;
+use common::chain::{tokens::OutputValue, transaction::*};
 use common::primitives::{Amount, Id, Idable, H256};
 use expect_test::expect;
 

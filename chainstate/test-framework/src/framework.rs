@@ -15,10 +15,12 @@
 
 use chainstate::ChainstateError;
 use common::chain::signature::inputsig::InputWitness;
+use common::chain::tokens::TokenData;
 use common::chain::TxInput;
+use common::chain::TxOutput;
 use common::primitives::id::WithId;
 use common::{
-    chain::{tokens::OutputValue, Block, Destination, GenBlock, Genesis, OutputPurpose, TxOutput},
+    chain::{tokens::OutputValue, Block, Destination, GenBlock, Genesis, OutputPurpose},
     primitives::{Amount, Id, Idable},
 };
 use crypto::random::Rng;
@@ -146,13 +148,14 @@ impl TestFramework {
 }
 
 fn create_utxo_data(
+    chainstate: &TestChainstate,
     outsrc: OutPointSourceId,
     index: usize,
     output: &TxOutput,
     rng: &mut impl Rng,
 ) -> Option<(TxInput, TxOutput)> {
     Some((
-        TxInput::new(outsrc, index as u32, empty_witness(rng)),
+        TxInput::new(outsrc.clone(), index as u32, empty_witness(rng)),
         match output.value() {
             OutputValue::Coin(output_value) => {
                 let spent_value = Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
@@ -163,6 +166,36 @@ fn create_utxo_data(
                     OutputPurpose::Transfer(anyonecanspend_address()),
                 )
             }
+            OutputValue::Token(asset) => match asset {
+                TokenData::TokenTransferV1 {
+                    token_id: _,
+                    amount: _,
+                } => TxOutput::new(
+                    OutputValue::Token(asset.clone()),
+                    OutputPurpose::Transfer(anyonecanspend_address()),
+                ),
+                TokenData::TokenIssuanceV1 {
+                    token_ticker: _,
+                    amount_to_issue,
+                    number_of_decimals: _,
+                    metadata_uri: _,
+                } => TxOutput::new(
+                    OutputValue::Token(TokenData::TokenTransferV1 {
+                        token_id: match outsrc {
+                            OutPointSourceId::Transaction(prev_tx) => {
+                                chainstate.get_token_id_from_issuance_tx(&prev_tx).unwrap().unwrap()
+                            }
+                            OutPointSourceId::BlockReward(_) => return None,
+                        },
+                        amount: *amount_to_issue,
+                    }),
+                    OutputPurpose::Transfer(anyonecanspend_address()),
+                ),
+                TokenData::TokenBurnV1 {
+                    token_id: _,
+                    amount_to_burn: _,
+                } => return None,
+            },
         },
     ))
 }
@@ -179,13 +212,16 @@ pub fn anyonecanspend_address() -> Destination {
 }
 
 pub(crate) fn create_new_outputs(
+    chainstate: &TestChainstate,
     srcid: OutPointSourceId,
     outs: &[TxOutput],
     rng: &mut impl Rng,
 ) -> Vec<(TxInput, TxOutput)> {
     outs.iter()
         .enumerate()
-        .filter_map(move |(index, output)| create_utxo_data(srcid.clone(), index, output, rng))
+        .filter_map(move |(index, output)| {
+            create_utxo_data(chainstate, srcid.clone(), index, output, rng)
+        })
         .collect()
 }
 impl Default for TestFramework {
@@ -270,6 +306,7 @@ fn build_test_framework() {
 #[test]
 fn process_block() {
     use crate::TransactionBuilder;
+
     let mut tf = TestFramework::default();
     let gen_block_id = tf.genesis().get_id();
     tf.make_block_builder()

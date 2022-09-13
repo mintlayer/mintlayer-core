@@ -21,3 +21,7 @@ logging = { path = '../../logging' }
 rstest = "0.15"
 hex = "0.4"
 itertools = "0.10"
+
+[dev-dependencies]
+rstest = "0.15"
+expect-test = "1.3"

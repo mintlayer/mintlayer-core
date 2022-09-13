@@ -58,6 +58,7 @@ fn valued_outpoint(
     let outpoint = OutPoint::new(outpoint_source_id, outpoint_index);
     let value = match output.value() {
         OutputValue::Coin(coin) => *coin,
+        OutputValue::Token(_) => Amount::from_atoms(0),
     };
     ValuedOutPoint { outpoint, value }
 }
@@ -230,6 +231,7 @@ impl ChainState for ChainStateMock {
                     .ok_or_else(|| anyhow::anyhow!("outpoint index out of bounds"))
                     .map(|output| match output.value() {
                         OutputValue::Coin(coin) => *coin,
+                        OutputValue::Token(_) => Amount::from_atoms(0),
                     })
             })
     }

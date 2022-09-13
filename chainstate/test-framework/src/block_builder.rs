@@ -185,7 +185,7 @@ impl<'f> BlockBuilder<'f> {
         parent
             .txns
             .into_iter()
-            .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
+            .flat_map(|(s, o)| create_new_outputs(&self.framework.chainstate, s, &o, rng))
             .unzip()
     }
 }

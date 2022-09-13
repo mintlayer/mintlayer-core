@@ -15,7 +15,6 @@
 
 mod builder;
 pub mod emission_schedule;
-
 pub use builder::Builder;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleTabular, Mlt};
 
@@ -82,6 +81,10 @@ pub struct ChainConfig {
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
+    token_min_issuance_fee: Amount,
+    token_max_uri_len: usize,
+    token_max_dec_count: u8,
+    token_max_ticker_len: usize,
 }
 
 impl ChainConfig {
@@ -153,6 +156,22 @@ impl ChainConfig {
         self.max_block_size_with_smart_contracts
     }
 
+    pub fn token_min_issuance_fee(&self) -> Amount {
+        self.token_min_issuance_fee
+    }
+
+    pub fn token_max_uri_len(&self) -> usize {
+        self.token_max_uri_len
+    }
+
+    pub fn token_max_dec_count(&self) -> u8 {
+        self.token_max_dec_count
+    }
+
+    pub fn token_max_ticker_len(&self) -> usize {
+        self.token_max_ticker_len
+    }
+
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
@@ -163,6 +182,10 @@ impl ChainConfig {
 const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 524_288;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 524_288;
+const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
+const TOKEN_MAX_URI_LEN: usize = 1024;
+const TOKEN_MAX_DEC_COUNT: u8 = 18;
+const TOKEN_MAX_TICKER_LEN: usize = 5;
 
 fn create_mainnet_genesis() -> Genesis {
     use crate::chain::transaction::TxOutput;

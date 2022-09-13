@@ -17,12 +17,15 @@ use std::{collections::BTreeSet, convert::TryInto, sync::Arc};
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{get_skip_height, BlockIndex, GenBlockIndex, PropertyQueryError};
+use common::chain::tokens::TokenAuxiliaryData;
+use common::chain::Transaction;
 use common::time_getter::TimeGetterFn;
 use common::{
     chain::{
         block::{
             calculate_tx_merkle_root, calculate_witness_merkle_root, BlockHeader, BlockReward,
         },
+        tokens::{get_tokens_issuance_count, OutputValue, TokenId, TokensError},
         Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
     },
     primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable},
@@ -34,6 +37,7 @@ use utils::ensure;
 use utxo::{UtxosDB, UtxosView};
 
 use super::median_time::calculate_median_time_past;
+use crate::detail::tokens::check_tokens_data;
 use crate::{BlockError, BlockSource, ChainstateConfig};
 
 use super::{
@@ -216,7 +220,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(bid == Some(*block_id))
     }
 
-    /// Allow to read from storage the previous block and return itself BlockIndex
+    /// Read previous block from storage and return its BlockIndex
     fn get_previous_block_index(
         &self,
         block_index: &BlockIndex,
@@ -311,6 +315,20 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
         self.get_gen_block_index(&self.get_best_block_id()?)
+    }
+
+    pub fn get_token_aux_data(
+        &self,
+        token_id: &TokenId,
+    ) -> Result<Option<TokenAuxiliaryData>, PropertyQueryError> {
+        self.db_tx.get_token_aux_data(token_id).map_err(PropertyQueryError::from)
+    }
+
+    pub fn get_token_id(
+        &self,
+        tx_id: &Id<Transaction>,
+    ) -> Result<Option<TokenId>, PropertyQueryError> {
+        self.db_tx.get_token_id(tx_id).map_err(PropertyQueryError::from)
     }
 
     pub fn get_header_from_height(
@@ -496,11 +514,10 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
-    fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
-        // Note: duplicate txs are detected through duplicate inputs
+    fn check_duplicate_inputs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+        // check for duplicate inputs (see CVE-2018-17144)
         let mut block_inputs = BTreeSet::new();
         for tx in block.transactions() {
-            // check for empty inputs/outputs
             if tx.inputs().is_empty() || tx.outputs().is_empty() {
                 return Err(
                     CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
@@ -509,8 +526,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     ),
                 );
             }
-
-            // check for duplicate inputs (see CVE-2018-17144)
             let mut tx_inputs = BTreeSet::new();
             for input in tx.inputs() {
                 ensure!(
@@ -526,7 +541,39 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 );
             }
         }
+        Ok(())
+    }
 
+    fn check_tokens_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+        for tx in block.transactions() {
+            // We can't issue multiple tokens in a single tx
+            let issuance_count = get_tokens_issuance_count(tx.outputs());
+            ensure!(
+                issuance_count <= 1,
+                CheckBlockTransactionsError::TokensError(
+                    TokensError::MultipleTokenIssuanceInTransaction(tx.get_id(), block.get_id()),
+                )
+            );
+
+            // Check tokens
+            tx.outputs()
+                .iter()
+                .filter_map(|output| match output.value() {
+                    OutputValue::Coin(_) => None,
+                    OutputValue::Token(token_data) => Some(token_data),
+                })
+                .try_for_each(|token_data| {
+                    check_tokens_data(self.chain_config, token_data, tx, block.get_id())
+                })
+                .map_err(CheckBlockTransactionsError::TokensError)?;
+        }
+        Ok(())
+    }
+
+    fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+        // Note: duplicate txs are detected through duplicate inputs
+        self.check_duplicate_inputs(block)?;
+        self.check_tokens_txs(block)?;
         Ok(())
     }
 
