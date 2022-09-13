@@ -610,18 +610,31 @@ async fn outpoint_not_found() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn tx_too_big() -> anyhow::Result<()> {
-    let mut mempool = setup().await;
+    let seed = Seed::from_entropy();
+    let tf = TestFramework::default();
+    let mut rng = make_seedable_rng(seed);
+    let genesis = tf.genesis();
+
     let single_output_size = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(100)),
         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
     )
     .encoded_size();
     let too_many_outputs = MAX_BLOCK_SIZE_BYTES / single_output_size;
-    let tx = TxGenerator::new()
-        .with_num_outputs(too_many_outputs)
-        .generate_tx(&mempool)
-        .await
-        .expect("generate_tx failed");
+    let mut tx_builder = TransactionBuilder::new().add_input(TxInput::new(
+        OutPointSourceId::BlockReward(genesis.get_id().into()),
+        0,
+        empty_witness(&mut rng),
+    ));
+    for _ in 0..too_many_outputs {
+        tx_builder = tx_builder.add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(100)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+    }
+    let tx = tx_builder.build();
+    let mut mempool = setup_new(tf.chainstate()).await;
+
     assert!(matches!(
         mempool.add_transaction(tx).await,
         Err(Error::TxValidationError(
