@@ -423,7 +423,7 @@ fn token_transfer_test(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     ))
                     .add_output(TxOutput::new(
-                        output_value.clone(),
+                        output_value,
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
