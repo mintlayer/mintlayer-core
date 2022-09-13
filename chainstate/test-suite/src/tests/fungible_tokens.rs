@@ -1800,7 +1800,7 @@ fn test_tokens_issuance_in_block_reward(#[case] seed: Seed) {
 }
 
 #[test]
-fn snapshot_testing_tokens_data() {
+fn chosen_hashes_for_token_data() {
     // If fields order of TokenData accidentally will be changed, snapshots cause fail
     let mut hash_stream = id::DefaultHashAlgoStream::new();
 
