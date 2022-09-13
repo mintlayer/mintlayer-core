@@ -1021,7 +1021,7 @@ fn test_reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let issuance_data = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
@@ -1038,7 +1038,7 @@ fn test_reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     ))
                     .add_output(TxOutput::new(
-                        output_value,
+                        issuance_data,
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
