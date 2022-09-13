@@ -226,7 +226,7 @@ fn token_issue_test(#[case] seed: Seed) {
 
         // Too many decimals
         {
-            let decimal_count_to_use = tf.chainstate.get_chain_config().token_max_dec_count() + 1;
+            let decimals_count_to_use = tf.chainstate.get_chain_config().token_max_dec_count() + 1;
 
             let result = tf
                 .make_block_builder()
@@ -241,7 +241,7 @@ fn token_issue_test(#[case] seed: Seed) {
                             OutputValue::Token(TokenData::TokenIssuanceV1 {
                                 token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                                 amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
-                                number_of_decimals: decimal_count_to_use,
+                                number_of_decimals: decimals_count_to_use,
                                 metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
                             }),
                             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
