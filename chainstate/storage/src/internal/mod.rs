@@ -77,9 +77,9 @@ storage::decl_schema! {
         /// Store for BlockUndo
         DBBlockUndo: Map<Id<Block>, BlockUndo>,
         /// Store for token's info; created on issuance
-        DBTokensIssuanceTx: Map<TokenId, TokenAuxiliaryData>,
+        DBTokensAuxData: Map<TokenId, TokenAuxiliaryData>,
         /// Store of issuance tx id vs token id
-        DBTokensIndex: Map<Id<Transaction>, TokenId>,
+        DBIssuanceTxVsTokenId: Map<Id<Transaction>, TokenId>,
     }
 }
 
@@ -317,14 +317,14 @@ macro_rules! impl_read_ops {
                 &self,
                 token_id: &TokenId,
             ) -> crate::Result<Option<TokenAuxiliaryData>> {
-                self.read::<DBTokensIssuanceTx, _, _>(&token_id)
+                self.read::<DBTokensAuxData, _, _>(&token_id)
             }
 
             fn get_token_id(
                 &self,
                 issuance_tx_id: &Id<Transaction>,
             ) -> crate::Result<Option<TokenId>> {
-                self.read::<DBTokensIndex, _, _>(&issuance_tx_id)
+                self.read::<DBIssuanceTxVsTokenId, _, _>(&issuance_tx_id)
             }
         }
 
@@ -420,11 +420,11 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         token_id: &TokenId,
         data: &TokenAuxiliaryData,
     ) -> crate::Result<()> {
-        self.write::<DBTokensIssuanceTx, _, _, _>(token_id, &data)
+        self.write::<DBTokensAuxData, _, _, _>(token_id, &data)
     }
 
     fn del_token_aux_data(&mut self, token_id: &TokenId) -> crate::Result<()> {
-        self.0.get_mut::<DBTokensIssuanceTx, _>().del(&token_id).map_err(Into::into)
+        self.0.get_mut::<DBTokensAuxData, _>().del(&token_id).map_err(Into::into)
     }
 
     fn set_token_id(
@@ -432,11 +432,14 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         issuance_tx_id: &Id<Transaction>,
         token_id: &TokenId,
     ) -> crate::Result<()> {
-        self.write::<DBTokensIndex, _, _, _>(issuance_tx_id, token_id)
+        self.write::<DBIssuanceTxVsTokenId, _, _, _>(issuance_tx_id, token_id)
     }
 
     fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()> {
-        self.0.get_mut::<DBTokensIndex, _>().del(&issuance_tx_id).map_err(Into::into)
+        self.0
+            .get_mut::<DBIssuanceTxVsTokenId, _>()
+            .del(&issuance_tx_id)
+            .map_err(Into::into)
     }
 }
 
