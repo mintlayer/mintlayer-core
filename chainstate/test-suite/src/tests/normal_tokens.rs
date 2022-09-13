@@ -1550,7 +1550,7 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
             .unwrap()
             .is_none());
 
-        assert!(tf.chainstate.get_token_info_for_rpc(&token_id).unwrap().is_none());
+        assert!(tf.chainstate.get_token_info_for_rpc(token_id).unwrap().is_none());
 
         assert!(matches!(
             tf.chainstate.get_token_aux_data(token_id),
