@@ -231,7 +231,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         let iter = fallible_iterator::convert(iter).filter_map(Ok).map_err(Into::into);
 
         let result = AmountsMap::from_fallible_iter(iter)?;
-        Ok(result.consume())
+        Ok(result.take())
     }
 
     fn amount_from_outpoint(
@@ -277,7 +277,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
         let amounts_map = AmountsMap::from_fallible_iter(iter)?;
 
-        Ok(amounts_map.consume())
+        Ok(amounts_map.take())
     }
 
     fn get_total_fee(

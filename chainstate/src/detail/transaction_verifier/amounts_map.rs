@@ -28,7 +28,7 @@ impl AmountsMap {
         Ok(result)
     }
 
-    pub fn consume(self) -> BTreeMap<CoinOrTokenId, Amount> {
+    pub fn take(self) -> BTreeMap<CoinOrTokenId, Amount> {
         self.data
     }
 }
@@ -85,7 +85,7 @@ mod tests {
             ];
 
             assert_eq!(
-                AmountsMap::from_fallible_iter(data).unwrap().consume(),
+                AmountsMap::from_fallible_iter(data).unwrap().take(),
                 expected.into_iter().collect::<BTreeMap<_, _>>()
             );
         })
