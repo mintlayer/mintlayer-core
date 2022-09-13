@@ -571,7 +571,9 @@ async fn tx_already_in_mempool() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn outpoint_not_found() -> anyhow::Result<()> {
-    let mut mempool = setup().await;
+    let tf = TestFramework::default();
+    let chainstate = tf.chainstate();
+    let mut mempool = setup_new(chainstate).await;
 
     let outpoint_source_id = OutPointSourceId::from(mempool.chain_config.genesis_block_id());
 
@@ -1601,24 +1603,71 @@ async fn rolling_fee() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn different_size_txs() -> anyhow::Result<()> {
-    let mut mempool = setup().await;
-    let initial_tx = TxGenerator::new()
-        .with_num_inputs(1)
-        .with_num_outputs(10_000)
-        .generate_tx(&mempool)
-        .await?;
-    mempool.add_transaction(initial_tx).await?;
+    use std::time::Instant;
 
-    let target_txs = 100;
+    let seed = Seed::from_entropy();
+    let mut tf = TestFramework::default();
+    let genesis = tf.genesis();
+    let mut rng = make_seedable_rng(seed);
+
+    let mut tx_builder = TransactionBuilder::new().add_input(TxInput::new(
+        OutPointSourceId::BlockReward(genesis.get_id().into()),
+        0,
+        empty_witness(&mut rng),
+    ));
+    for _ in 0..10_000 {
+        tx_builder = tx_builder.add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(1_000)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+    }
+    let initial_tx = tx_builder.build();
+    let block = tf.make_block_builder().add_transaction(initial_tx.clone()).build();
+    tf.process_block(block, BlockSource::Local).expect("process_block");
+    let chainstate = tf.chainstate();
+    let mut mempool = setup_new(chainstate).await;
+
+    let target_txs = 10;
     for i in 0..target_txs {
-        let num_inputs = i + 1;
-        let num_outputs = i + 1;
-        let tx = TxGenerator::new()
-            .with_num_inputs(num_inputs)
-            .with_num_outputs(num_outputs)
-            .generate_tx(&mempool)
-            .await?;
+        let tx_i_start = Instant::now();
+        let num_inputs = 10 * (i + 1);
+        let num_outputs = 10 * (i + 1);
+        let mut tx_builder = TransactionBuilder::new();
+        for j in 0..num_inputs {
+            //eprintln!("index {}", 100 * i + j);
+            tx_builder = tx_builder.add_input(TxInput::new(
+                OutPointSourceId::Transaction(initial_tx.get_id()),
+                100 * i + j,
+                empty_witness(&mut rng),
+            ));
+        }
+        log::debug!(
+            "time spent building inputs of tx {} {:?}",
+            i,
+            tx_i_start.elapsed()
+        );
+
+        let before_outputs = Instant::now();
+        for _ in 0..num_outputs {
+            tx_builder = tx_builder.add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+        }
+        log::debug!(
+            "time spent building outputs of tx {} {:?}",
+            i,
+            before_outputs.elapsed()
+        );
+        let tx = tx_builder.build();
+        let before_adding_tx_i = Instant::now();
         mempool.add_transaction(tx).await?;
+        log::debug!(
+            "time spent adding tx {}: {:?}",
+            i,
+            before_adding_tx_i.elapsed()
+        );
+        log::debug!("Added tx {}", i);
     }
 
     mempool.store.assert_valid();
