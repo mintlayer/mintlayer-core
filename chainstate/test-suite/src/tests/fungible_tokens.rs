@@ -579,7 +579,7 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        issuance_value,
+                        issuance_value.clone(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -597,12 +597,6 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
         ));
 
         // Valid issuance
-        let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
-            amount_to_issue: total_funds,
-            number_of_decimals: rng.gen_range(1..18),
-            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -613,7 +607,7 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     ))
                     .add_output(TxOutput::new(
-                        output_value.clone(),
+                        issuance_value.clone(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -623,7 +617,10 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        assert_eq!(block.transactions()[0].outputs()[0].value(), &output_value);
+        assert_eq!(
+            block.transactions()[0].outputs()[0].value(),
+            &issuance_value
+        );
     })
 }
 
