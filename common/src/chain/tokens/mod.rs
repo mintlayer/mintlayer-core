@@ -64,7 +64,7 @@ pub enum TokenData {
     /// TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.
     #[codec(index = 1)]
     TokenTransferV1 { token_id: TokenId, amount: Amount },
-    /// A new token creation
+    /// New token creation
     #[codec(index = 2)]
     TokenIssuanceV1 {
         token_ticker: Vec<u8>,

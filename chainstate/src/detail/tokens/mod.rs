@@ -66,7 +66,7 @@ pub fn check_tokens_issuance_data(
         ));
     }
 
-    // Is the name is ut8 and is it alphanumeric?
+    // Check the name consists of alphanumeric characters only
     let is_alphanumeric = String::from_utf8(token_ticker.to_vec())
         .map_err(|_| TokensError::IssueErrorTickerHasNoneAlphaNumericChar(tx_id, source_block_id))?
         .chars()

@@ -101,7 +101,7 @@ pub struct Builder {
     token_min_issuance_fee: Amount,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
-    token_nax_ticker_len: usize,
+    token_max_ticker_len: usize,
     token_max_issuance_allowed: usize,
 }
 
@@ -125,7 +125,7 @@ impl Builder {
             token_min_issuance_fee: super::TOKEN_MIN_ISSUANCE_FEE,
             token_max_uri_len: super::TOKEN_MAX_URI_LEN,
             token_max_dec_count: super::TOKEN_MAX_DEC_COUNT,
-            token_nax_ticker_len: super::TOKEN_MAX_TICKER_LEN,
+            token_max_ticker_len: super::TOKEN_MAX_TICKER_LEN,
             token_max_issuance_allowed: super::TOKEN_MAX_ISSUANCE_ALLOWED,
         }
     }
@@ -156,7 +156,7 @@ impl Builder {
             token_min_issuance_fee,
             token_max_uri_len,
             token_max_dec_count,
-            token_nax_ticker_len,
+            token_max_ticker_len,
             token_max_issuance_allowed,
         } = self;
 
@@ -195,7 +195,7 @@ impl Builder {
             token_min_issuance_fee,
             token_max_uri_len,
             token_max_dec_count,
-            token_nax_ticker_len,
+            token_max_ticker_len,
             token_max_issuance_allowed,
         }
     }

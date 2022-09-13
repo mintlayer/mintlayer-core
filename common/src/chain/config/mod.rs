@@ -84,7 +84,7 @@ pub struct ChainConfig {
     token_min_issuance_fee: Amount,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
-    token_nax_ticker_len: usize,
+    token_max_ticker_len: usize,
     token_max_issuance_allowed: usize,
 }
 
@@ -170,7 +170,7 @@ impl ChainConfig {
     }
 
     pub fn token_max_ticker_len(&self) -> usize {
-        self.token_nax_ticker_len
+        self.token_max_ticker_len
     }
 
     pub fn token_max_issuance_allowed(&self) -> usize {
