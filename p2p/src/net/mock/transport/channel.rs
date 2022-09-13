@@ -143,8 +143,8 @@ impl MockStream for ChannelMockStream {
         self.receiver
             .recv()
             .await
-            .ok_or(io::Error::from(io::ErrorKind::UnexpectedEof).into())
-            .and_then(|m| Ok(Some(m)))
+            .ok_or_else(|| io::Error::from(io::ErrorKind::UnexpectedEof).into())
+            .map(Some)
     }
 }
 
