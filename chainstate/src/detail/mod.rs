@@ -47,7 +47,7 @@ use common::{
         block::BlockHeader,
         config::ChainConfig,
         tokens::{OutputValue, RPCTokenInfo, TokenAuxiliaryData, TokenData, TokenId, TokensError},
-        Block, OutPointSourceId, SpendablePosition,
+        Block,
     },
     primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
 };
@@ -318,42 +318,28 @@ impl<S: BlockchainStorage> Chainstate<S> {
     pub fn get_token_detail(
         &self,
         token_id: TokenId,
-    ) -> Result<(Id<Block>, TokenAuxiliaryData), PropertyQueryError> {
+    ) -> Result<TokenAuxiliaryData, PropertyQueryError> {
         let chainstate_ref = self.make_db_tx_ro();
 
         // Find issuance transaction id by token_id
-        let creation_tx =
+        let token_aux_data =
             chainstate_ref
                 .get_token_info(&token_id)?
                 .ok_or(PropertyQueryError::TokensError(
                     TokensError::TokensNotRegistered(token_id),
                 ))?;
-        let tx_index = chainstate_ref
-            .get_mainchain_tx_index(&OutPointSourceId::Transaction(creation_tx.get_id()))?
-            .ok_or(PropertyQueryError::TokensError(
-                TokensError::TokensNotRegistered(token_id),
-            ))?;
 
-        // Find a block where the transaction was issued
-        let creation_block_id = match tx_index.position() {
-            SpendablePosition::Transaction(tx) => tx.block_id(),
-            SpendablePosition::BlockReward(_) => {
-                return Err(PropertyQueryError::TokensError(
-                    TokensError::BlockRewardOutputCantBeUsedInTokenTx,
-                ))
-            }
-        };
-
-        Ok((*creation_block_id, creation_tx))
+        Ok(token_aux_data)
     }
 
     pub fn token_info(
         &self,
         token_id: TokenId,
     ) -> Result<Option<RPCTokenInfo>, PropertyQueryError> {
-        let (block_id, tx) = self.get_token_detail(token_id)?;
+        let token_aux_data = self.get_token_detail(token_id)?;
 
-        Ok(tx
+        Ok(token_aux_data
+            .issuance_tx()
             .outputs()
             .iter()
             // Filter tokens
@@ -370,8 +356,8 @@ impl<S: BlockchainStorage> Chainstate<S> {
                     metadata_uri,
                 } => Some(RPCTokenInfo::new(
                     token_id,
-                    tx.get_id(),
-                    block_id,
+                    token_aux_data.issuance_tx().get_id(),
+                    token_aux_data.issuance_block_id(),
                     token_ticker.clone(),
                     *amount_to_issue,
                     *number_of_decimals,

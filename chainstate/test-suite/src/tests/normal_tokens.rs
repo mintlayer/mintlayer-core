@@ -1509,14 +1509,17 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let token_id = token_id(&issuance_block.transactions()[0]).unwrap();
 
         // Check tokens available in storage
-        let (storage_block_id, storage_tx) = tf.chainstate.get_token_detail(token_id).unwrap();
+        let token_aux_data = tf.chainstate.get_token_aux_data(token_id).unwrap();
         // Check id
-        assert!(issuance_block.get_id() == storage_block_id);
+        assert!(issuance_block.get_id() == token_aux_data.issuance_block_id());
         let issuance_tx = &issuance_block.transactions()[0];
-        assert!(issuance_tx.get_id() == storage_tx.get_id());
+        assert!(issuance_tx.get_id() == token_aux_data.issuance_tx().get_id());
         // Check issuance storage in the chain and in the storage
         assert_eq!(issuance_tx.outputs()[0].value(), &issuance_value);
-        assert_eq!(storage_tx.outputs()[0].value(), &issuance_value);
+        assert_eq!(
+            token_aux_data.issuance_tx().outputs()[0].value(),
+            &issuance_value
+        );
 
         // Cause reorg
         tf.create_chain(&tf.genesis().get_id().into(), 5, &mut rng).unwrap();
@@ -1547,10 +1550,10 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
             .unwrap()
             .is_none());
 
-        assert!(tf.chainstate.get_token_info(&token_id).unwrap().is_none());
+        assert!(tf.chainstate.get_token_info_for_rpc(&token_id).unwrap().is_none());
 
         assert!(matches!(
-            tf.chainstate.get_token_detail(token_id),
+            tf.chainstate.get_token_aux_data(token_id),
             Err(ChainstateError::FailedToReadProperty(
                 chainstate_types::PropertyQueryError::TokensError(
                     TokensError::TokensNotRegistered(_)

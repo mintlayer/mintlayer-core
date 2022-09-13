@@ -29,7 +29,7 @@ pub fn register_tokens_issuance(
     let was_tokens_issued = tx.outputs().iter().any(|output| is_tokens_issuance(output.value()));
     if was_tokens_issued {
         precache_issuance(tokens_cache, tx, block_id)?;
-        write_issuance(tokens_cache, tx)?;
+        write_issuance(tokens_cache, block_id, tx)?;
     }
     Ok(())
 }
@@ -49,13 +49,15 @@ pub fn unregister_token_issuance(
 
 fn write_issuance(
     tokens_cache: &mut BTreeMap<TokenId, CachedTokensOperation>,
+    block_id: Id<Block>,
     tx: &Transaction,
 ) -> Result<(), TokensError> {
     let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
     match tokens_cache.entry(token_id) {
         Entry::Occupied(entry) => {
             let tokens_op = entry.into_mut();
-            *tokens_op = CachedTokensOperation::Write(TokenAuxiliaryData::new(tx.clone()));
+            *tokens_op =
+                CachedTokensOperation::Write(TokenAuxiliaryData::new(tx.clone(), block_id));
         }
         Entry::Vacant(_) => {
             return Err(TokensError::InvariantBrokenRegisterIssuanceOnNonexistentToken(token_id))
@@ -119,7 +121,7 @@ fn try_to_cache_issuance(
                     ));
                 }
                 Entry::Vacant(entry) => entry.insert(CachedTokensOperation::Read(
-                    TokenAuxiliaryData::new(tx.clone()),
+                    TokenAuxiliaryData::new(tx.clone(), block_id),
                 )),
             };
             Ok(())

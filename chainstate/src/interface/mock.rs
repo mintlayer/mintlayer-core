@@ -101,15 +101,15 @@ mockall::mock! {
             block_index: &BlockIndex,
         ) -> Result<Option<BlockReward>, ChainstateError>;
         fn token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, ChainstateError>;
-        fn get_token_detail(
+        fn get_token_aux_data(
             &self,
             token_id: TokenId,
-        ) -> Result<(Id<Block>, TokenAuxiliaryData), ChainstateError>;
+        ) -> Result<TokenAuxiliaryData, ChainstateError>;
         fn get_token_id_from_issuance_tx(
             &self,
             tx_id: &Id<common::chain::Transaction>,
         ) -> Result<Option<TokenId>, ChainstateError>;
-        fn get_token_info(
+        fn get_token_info_for_rpc(
             &self,
             token_id: &TokenId,
         ) -> Result<Option<common::chain::tokens::TokenAuxiliaryData>, ChainstateError>;

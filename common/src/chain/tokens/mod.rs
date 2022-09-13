@@ -17,7 +17,7 @@ use serialization::{Decode, Encode};
 
 pub type TokenId = H256;
 pub type NftDataHash = Vec<u8>;
-use crate::primitives::{Amount, Id, Idable, H256};
+use crate::primitives::{Amount, Id, H256};
 
 mod errors;
 mod rpc;
@@ -27,25 +27,29 @@ pub use errors::TokensError;
 pub use rpc::*;
 pub use utils::*;
 
-use super::{Transaction, TxOutput};
+use super::{Block, Transaction};
 
 // The data that is created when a token is issued to track it (and to update it with ACL commands)
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct TokenAuxiliaryData {
     issuance_tx: Transaction,
+    issuance_block_id: Id<Block>,
 }
 
 impl TokenAuxiliaryData {
-    pub fn new(issuance_tx: Transaction) -> Self {
-        Self { issuance_tx }
+    pub fn new(issuance_tx: Transaction, issuance_block_id: Id<Block>) -> Self {
+        Self {
+            issuance_tx,
+            issuance_block_id,
+        }
     }
 
-    pub fn get_id(&self) -> Id<Transaction> {
-        self.issuance_tx.get_id()
+    pub fn issuance_tx(&self) -> &Transaction {
+        &self.issuance_tx
     }
 
-    pub fn outputs(&self) -> &Vec<TxOutput> {
-        self.issuance_tx.outputs()
+    pub fn issuance_block_id(&self) -> Id<Block> {
+        self.issuance_block_id
     }
 }
 

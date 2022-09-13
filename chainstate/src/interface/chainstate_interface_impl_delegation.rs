@@ -190,11 +190,8 @@ impl<
         self.deref().token_info(token_id)
     }
 
-    fn get_token_detail(
-        &self,
-        token_id: TokenId,
-    ) -> Result<(Id<Block>, TokenAuxiliaryData), ChainstateError> {
-        self.deref().get_token_detail(token_id)
+    fn get_token_aux_data(&self, token_id: TokenId) -> Result<TokenAuxiliaryData, ChainstateError> {
+        self.deref().get_token_aux_data(token_id)
     }
 
     fn get_token_id_from_issuance_tx(
@@ -204,11 +201,11 @@ impl<
         self.deref().get_token_id_from_issuance_tx(tx_id)
     }
 
-    fn get_token_info(
+    fn get_token_info_for_rpc(
         &self,
         token_id: &TokenId,
     ) -> Result<Option<common::chain::tokens::TokenAuxiliaryData>, ChainstateError> {
-        self.deref().get_token_info(token_id)
+        self.deref().get_token_info_for_rpc(token_id)
     }
 }
 

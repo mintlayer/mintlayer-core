@@ -792,7 +792,7 @@ impl<'a, S: BlockchainStorageWrite + 'a> TransactionVerifier<'a, S> {
         match token_op {
             CachedTokensOperation::Write(ref issuance_tx) => {
                 db_tx.set_token_aux_data(&token_id, issuance_tx)?;
-                db_tx.set_token_id(&issuance_tx.get_id(), &token_id)?;
+                db_tx.set_token_id(&issuance_tx.issuance_tx().get_id(), &token_id)?;
             }
             CachedTokensOperation::Read(_) => (),
             CachedTokensOperation::Erase(issuance_tx) => {
