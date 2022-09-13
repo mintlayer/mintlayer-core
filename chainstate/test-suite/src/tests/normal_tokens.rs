@@ -225,38 +225,42 @@ fn token_issue_test(#[case] seed: Seed) {
         ));
 
         // Too many decimals
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id.clone(),
-                        0,
-                        InputWitness::NoSignature(None),
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenIssuanceV1 {
-                            token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
-                            amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
-                            number_of_decimals: 123,
-                            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-                        }),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .build(),
-            )
-            .build_and_process();
+        {
+            let decimal_count_to_use = tf.chainstate.get_chain_config().token_max_dec_count() + 1;
 
-        assert!(matches!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorTooManyDecimals(_, _)
-                    )
+            let result = tf
+                .make_block_builder()
+                .add_transaction(
+                    TransactionBuilder::new()
+                        .add_input(TxInput::new(
+                            outpoint_source_id.clone(),
+                            0,
+                            InputWitness::NoSignature(None),
+                        ))
+                        .add_output(TxOutput::new(
+                            OutputValue::Token(TokenData::TokenIssuanceV1 {
+                                token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
+                                amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
+                                number_of_decimals: decimal_count_to_use,
+                                metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+                            }),
+                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        ))
+                        .build(),
+                )
+                .build_and_process();
+
+            assert!(matches!(
+                result,
+                Err(ChainstateError::ProcessBlockError(
+                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                        CheckBlockTransactionsError::TokensError(
+                            TokensError::IssueErrorTooManyDecimals(_, _)
+                        )
+                    ))
                 ))
-            ))
-        ));
+            ));
+        }
 
         // URI is too long
         let result = tf
