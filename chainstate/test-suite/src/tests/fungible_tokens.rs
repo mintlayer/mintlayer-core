@@ -810,7 +810,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_burn_tokens(#[case] seed: Seed) {
+fn burn_tokens(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
@@ -1002,7 +1002,7 @@ fn test_burn_tokens(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
+fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
     //     B1 - C1 - D1
     //   /
     // A
@@ -1306,7 +1306,7 @@ fn test_reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_attempt_to_print_tokens_one_output(#[case] seed: Seed) {
+fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
@@ -1400,7 +1400,7 @@ fn test_attempt_to_print_tokens_one_output(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
+fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
@@ -1637,7 +1637,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
+fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
@@ -1725,7 +1725,7 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_tokens_issuance_in_block_reward(#[case] seed: Seed) {
+fn token_issuance_in_block_reward(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
