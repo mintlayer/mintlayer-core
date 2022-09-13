@@ -29,7 +29,7 @@ pub use utils::*;
 
 use super::{Block, Transaction};
 
-// The data that is created when a token is issued to track it (and to update it with ACL commands)
+/// The data that is created when a token is issued to track it (and to update it with ACL commands)
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct TokenAuxiliaryData {
     issuance_tx: Transaction,
