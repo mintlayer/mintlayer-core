@@ -183,7 +183,7 @@ fn create_utxo_data(
                     OutputValue::Token(TokenData::TokenTransferV1 {
                         token_id: match outsrc {
                             OutPointSourceId::Transaction(prev_tx) => {
-                                chainstate.get_token_id(&prev_tx).unwrap().unwrap()
+                                chainstate.get_token_id_from_issuance_tx(&prev_tx).unwrap().unwrap()
                             }
                             OutPointSourceId::BlockReward(_) => return None,
                         },

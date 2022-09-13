@@ -398,7 +398,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
         chainstate_ref.get_token_info(token_id)
     }
 
-    pub fn get_token_id(
+    pub fn get_token_id_from_issuance_tx(
         &self,
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TokenId>, PropertyQueryError> {
