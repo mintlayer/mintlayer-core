@@ -1501,7 +1501,7 @@ fn test_attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_attempt_to_mix_input_tokens(#[case] seed: Seed) {
+fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
