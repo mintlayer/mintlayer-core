@@ -19,7 +19,7 @@ use serialization::{Decode, Encode};
 
 use crate::error::Error;
 
-use self::undo::{DataDeltaUndoOp, DataDeltaUndoOpInternal, DeltaDataUndoCollection};
+use self::undo::*;
 
 pub mod undo;
 
@@ -52,11 +52,8 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
         let data_undo = delta_to_apply
             .data
             .into_iter()
-            .filter_map(|(key, other_pool_data)| {
-                match self.merge_delta_data_element(key, other_pool_data).map(|v| (key, v)) {
-                    Err(e) => Some(Err(e)),
-                    Ok((k, v)) => Ok(v.map(|v| (k, v))).transpose(),
-                }
+            .map(|(key, other_pool_data)| {
+                self.merge_delta_data_element(key, other_pool_data).map(|v| (key, v))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
 
@@ -67,7 +64,7 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
         &mut self,
         key: K,
         other_data: DataDelta<T>,
-    ) -> Result<Option<DataDeltaUndoOp<T>>, Error> {
+    ) -> Result<DataDeltaUndoOp<T>, Error> {
         let current = self.data.get(&key);
 
         // create the operation/change that would modify the current delta and do the merge
@@ -80,16 +77,15 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
         let undo = match new_data {
             // when we insert to a map, undoing is restoring what was there beforehand, and erasing if it was empty
             DeltaMapOp::Write(v) => match self.data.insert(key, v) {
-                Some(prev_value) => {
-                    Some(DataDeltaUndoOp(DataDeltaUndoOpInternal::Write(prev_value)))
-                }
-                None => Some(DataDeltaUndoOp(DataDeltaUndoOpInternal::Erase)),
+                Some(prev_value) => DataDeltaUndoOp(DataDeltaUndoOpInternal::Write(prev_value)),
+                None => DataDeltaUndoOp(DataDeltaUndoOpInternal::Erase),
             },
             // when we remove from a map, undoing is rewriting what we removed
             DeltaMapOp::Delete => self
                 .data
                 .remove(&key)
-                .map(|v| DataDeltaUndoOp(DataDeltaUndoOpInternal::Write(v))),
+                .map(|v| DataDeltaUndoOp(DataDeltaUndoOpInternal::Write(v)))
+                .expect("key should always be present"),
         };
 
         Ok(undo)

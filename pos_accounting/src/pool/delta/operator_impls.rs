@@ -58,7 +58,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             pool_id,
             PoSAccountingUndo::CreatePool(CreatePoolUndo {
                 pool_id,
-                data_undo: PoolDataUndo::DataDelta((pledge_amount, undo_data.expect("expect???"))),
+                data_undo: PoolDataUndo::DataDelta((pledge_amount, undo_data)),
             }),
         ))
     }
@@ -66,7 +66,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
     fn undo_create_pool(&mut self, undo: CreatePoolUndo) -> Result<(), Error> {
         let (pledge_amount, undo_data) = match undo.data_undo {
             PoolDataUndo::DataDelta(v) => v,
-            PoolDataUndo::Data(_) => unreachable!("this arm should never be executed"),
+            PoolDataUndo::Data(_) => unreachable!("incompatible PoolDataUndo supplied"),
         };
         let amount = self.get_pool_balance(undo.pool_id)?;
 
@@ -98,8 +98,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             .get_pool_balance(pool_id)?
             .ok_or(Error::AttemptedDecommissionNonexistingPoolBalance)?;
 
-        let _ = self
-            .get_pool_data(pool_id)?
+        self.get_pool_data(pool_id)?
             .ok_or(Error::AttemptedDecommissionNonexistingPoolData)?;
 
         self.data.pool_balances.sub_unsigned(pool_id, last_amount)?;
@@ -107,14 +106,14 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
 
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
             pool_id,
-            data_undo: PoolDataUndo::DataDelta((last_amount, data_undo.expect("expect???"))),
+            data_undo: PoolDataUndo::DataDelta((last_amount, data_undo)),
         }))
     }
 
     fn undo_decommission_pool(&mut self, undo: DecommissionPoolUndo) -> Result<(), Error> {
         let (last_amount, undo_data) = match undo.data_undo {
             PoolDataUndo::DataDelta(v) => v,
-            PoolDataUndo::Data(_) => unreachable!("this arm should never be executed"),
+            PoolDataUndo::Data(_) => unreachable!("incompatible PoolDataUndo supplied"),
         };
 
         let current_amount = self.get_pool_balance(undo.pool_id)?;
@@ -164,7 +163,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             delegation_id,
             PoSAccountingUndo::CreateDelegationId(CreateDelegationIdUndo {
                 delegation_id,
-                data_undo: DelegationDataUndo::DataDelta(data_undo.expect("???")),
+                data_undo: DelegationDataUndo::DataDelta(data_undo),
             }),
         ))
     }
@@ -172,11 +171,10 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
     fn undo_create_delegation_id(&mut self, undo: CreateDelegationIdUndo) -> Result<(), Error> {
         let undo_data = match undo.data_undo {
             DelegationDataUndo::DataDelta(v) => v,
-            DelegationDataUndo::Data(_) => unreachable!("this arm should never be executed"),
+            DelegationDataUndo::Data(_) => unreachable!("incompatible DelegationDataUndo supplied"),
         };
 
-        let _ = self
-            .get_delegation_id_data(undo.delegation_id)?
+        self.get_delegation_id_data(undo.delegation_id)?
             .ok_or(Error::InvariantErrorDelegationIdUndoFailedNotFound)?;
 
         self.data

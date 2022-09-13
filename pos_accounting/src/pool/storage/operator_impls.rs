@@ -66,7 +66,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
 
         let data_undo = match undo.data_undo {
             PoolDataUndo::Data(v) => v,
-            PoolDataUndo::DataDelta(_) => unreachable!("this arm should never be executed"),
+            PoolDataUndo::DataDelta(_) => unreachable!("incompatible PoolDataUndo supplied"),
         };
 
         match amount {
@@ -109,7 +109,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
     fn undo_decommission_pool(&mut self, undo: DecommissionPoolUndo) -> Result<(), Error> {
         let data_undo = match undo.data_undo {
             PoolDataUndo::Data(v) => v,
-            PoolDataUndo::DataDelta(_) => unreachable!("this arm should never be executed"),
+            PoolDataUndo::DataDelta(_) => unreachable!("incompatible PoolDataUndo supplied"),
         };
 
         let current_amount = self.store.get_pool_balance(undo.pool_id)?;
@@ -164,7 +164,9 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
     fn undo_create_delegation_id(&mut self, undo: CreateDelegationIdUndo) -> Result<(), Error> {
         let data_undo = match undo.data_undo {
             DelegationDataUndo::Data(v) => v,
-            DelegationDataUndo::DataDelta(_) => unreachable!("this arm should never be executed"),
+            DelegationDataUndo::DataDelta(_) => {
+                unreachable!("incompatible DelegationDataUndo supplied")
+            }
         };
 
         let removed_data = self
