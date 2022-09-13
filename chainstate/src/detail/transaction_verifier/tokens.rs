@@ -19,6 +19,8 @@ pub enum CoinOrTokenId {
     TokenId(TokenId),
 }
 
+// TODO: get rid of these mut map references parameters and use self-contained objects for testability
+
 // Token registration saves the token id in the database with the transaction that issued it, and possibly some additional auxiliary data;
 // This helps in finding the relevant information of the token at any time in the future.
 pub fn register_tokens_issuance(
