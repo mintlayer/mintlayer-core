@@ -1801,6 +1801,12 @@ async fn descendant_of_expired_entry() -> anyhow::Result<()> {
 #[tokio::test]
 async fn mempool_full() -> anyhow::Result<()> {
     logging::init_logging::<&str>(None);
+
+    let seed = Seed::from_entropy();
+    let tf = TestFramework::default();
+    let mut rng = make_seedable_rng(seed);
+    let genesis = tf.genesis();
+
     let mut mock_usage = MockGetMemoryUsage::new();
     mock_usage
         .expect_get_memory_usage()
@@ -1808,11 +1814,21 @@ async fn mempool_full() -> anyhow::Result<()> {
         .return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let chainstate_interface = start_chainstate(Arc::clone(&config)).await;
+    let chainstate_handle = start_chainstate_new(tf.chainstate()).await;
 
-    let mut mempool = Mempool::new(config, chainstate_interface, SystemClock, mock_usage);
+    let mut mempool = Mempool::new(config, chainstate_handle, SystemClock, mock_usage);
 
-    let tx = TxGenerator::new().generate_tx(&mempool).await?;
+    let tx = TransactionBuilder::new()
+        .add_input(TxInput::new(
+            OutPointSourceId::BlockReward(genesis.get_id().into()),
+            0,
+            empty_witness(&mut rng),
+        ))
+        .add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(100)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+        .build();
     log::debug!("mempool_full: tx has is {}", tx.get_id().get());
     assert!(matches!(
         mempool.add_transaction(tx).await,
