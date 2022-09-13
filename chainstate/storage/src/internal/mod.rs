@@ -19,7 +19,7 @@ use chainstate_types::BlockIndex;
 use common::{
     chain::{
         block::BlockReward,
-        tokens::{TokenId, TokenIssuanceTransaction},
+        tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
         Block, GenBlock, OutPoint, OutPointSourceId,
     },
@@ -77,7 +77,7 @@ storage::decl_schema! {
         /// Store for BlockUndo
         DBBlockUndo: Map<Id<Block>, BlockUndo>,
         /// Store for token's info; created on issuance
-        DBTokensIssuanceTx: Map<TokenId, TokenIssuanceTransaction>,
+        DBTokensIssuanceTx: Map<TokenId, TokenAuxiliaryData>,
         /// Store of issuance tx id vs token id
         DBTokensIndex: Map<Id<Transaction>, TokenId>,
     }
@@ -175,7 +175,7 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_info(&self, token_id: &TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
+        fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
 
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
     }
@@ -213,9 +213,9 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 
-        fn set_token_tx(&mut self, token_id: &TokenId, issuance_tx: &TokenIssuanceTransaction) -> crate::Result<()>;
+        fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> crate::Result<()>;
 
-        fn del_token_tx(&mut self, token_id: &TokenId) -> crate::Result<()>;
+        fn del_token_aux_data(&mut self, token_id: &TokenId) -> crate::Result<()>;
 
         fn set_token_id(&mut self, issuance_tx_id: &Id<Transaction>, token_id: &TokenId) -> crate::Result<()>;
 
@@ -313,10 +313,10 @@ macro_rules! impl_read_ops {
                 self.read::<DBBlockByHeight, _, _>(height)
             }
 
-            fn get_token_info(
+            fn get_token_aux_data(
                 &self,
                 token_id: &TokenId,
-            ) -> crate::Result<Option<TokenIssuanceTransaction>> {
+            ) -> crate::Result<Option<TokenAuxiliaryData>> {
                 self.read::<DBTokensIssuanceTx, _, _>(&token_id)
             }
 
@@ -415,15 +415,15 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         self.0.get_mut::<DBBlockByHeight, _>().del(height).map_err(Into::into)
     }
 
-    fn set_token_tx(
+    fn set_token_aux_data(
         &mut self,
         token_id: &TokenId,
-        issuance_tx: &TokenIssuanceTransaction,
+        data: &TokenAuxiliaryData,
     ) -> crate::Result<()> {
-        self.write::<DBTokensIssuanceTx, _, _, _>(token_id, &issuance_tx)
+        self.write::<DBTokensIssuanceTx, _, _, _>(token_id, &data)
     }
 
-    fn del_token_tx(&mut self, token_id: &TokenId) -> crate::Result<()> {
+    fn del_token_aux_data(&mut self, token_id: &TokenId) -> crate::Result<()> {
         self.0.get_mut::<DBTokensIssuanceTx, _>().del(&token_id).map_err(Into::into)
     }
 

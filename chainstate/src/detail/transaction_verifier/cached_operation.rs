@@ -15,7 +15,7 @@
 
 use super::error::ConnectTransactionError;
 use common::{
-    chain::{tokens::TokenIssuanceTransaction, Spender, Transaction, TxMainChainIndex},
+    chain::{tokens::TokenAuxiliaryData, Spender, Transaction, TxMainChainIndex},
     primitives::Id,
 };
 pub enum CachedInputsOperation {
@@ -25,8 +25,8 @@ pub enum CachedInputsOperation {
 }
 
 pub enum CachedTokensOperation {
-    Write(TokenIssuanceTransaction),
-    Read(TokenIssuanceTransaction),
+    Write(TokenAuxiliaryData),
+    Read(TokenAuxiliaryData),
     Erase(Id<Transaction>),
 }
 

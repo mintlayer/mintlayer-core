@@ -3,8 +3,8 @@ use std::collections::{btree_map::Entry, BTreeMap};
 use common::{
     chain::{
         tokens::{
-            is_tokens_issuance, token_id, OutputValue, TokenData, TokenId,
-            TokenIssuanceTransaction, TokensError,
+            is_tokens_issuance, token_id, OutputValue, TokenAuxiliaryData, TokenData, TokenId,
+            TokensError,
         },
         Block, Transaction,
     },
@@ -55,7 +55,7 @@ fn write_issuance(
     match tokens_cache.entry(token_id) {
         Entry::Occupied(entry) => {
             let tokens_op = entry.into_mut();
-            *tokens_op = CachedTokensOperation::Write(TokenIssuanceTransaction::new(tx.clone()));
+            *tokens_op = CachedTokensOperation::Write(TokenAuxiliaryData::new(tx.clone()));
         }
         Entry::Vacant(_) => {
             return Err(TokensError::InvariantBrokenRegisterIssuanceOnNonexistentToken(token_id))
@@ -119,7 +119,7 @@ fn try_to_cache_issuance(
                     ));
                 }
                 Entry::Vacant(entry) => entry.insert(CachedTokensOperation::Read(
-                    TokenIssuanceTransaction::new(tx.clone()),
+                    TokenAuxiliaryData::new(tx.clone()),
                 )),
             };
             Ok(())

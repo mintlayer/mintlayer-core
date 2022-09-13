@@ -16,7 +16,7 @@
 //! A mock version of the blockchain storage.
 
 use chainstate_types::BlockIndex;
-use common::chain::tokens::{TokenId, TokenIssuanceTransaction};
+use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::{
     chain::{
         block::BlockReward,
@@ -54,7 +54,7 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_info(&self, token_id: &TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
+        fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
 
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
     }
@@ -86,8 +86,8 @@ mockall::mock! {
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 
-        fn set_token_tx(&mut self, token_id: &TokenId, issuance_tx: &TokenIssuanceTransaction) -> crate::Result<()>;
-        fn del_token_tx(&mut self, token_id: &TokenId) -> crate::Result<()>;
+        fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> crate::Result<()>;
+        fn del_token_aux_data(&mut self, token_id: &TokenId) -> crate::Result<()>;
         fn set_token_id(&mut self, issuance_tx_id: &Id<Transaction>, token_id: &TokenId) -> crate::Result<()>;
         fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()>;
     }
@@ -139,7 +139,7 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_info(&self, token_id: &TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
+        fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
     }
 
@@ -182,7 +182,7 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_info(&self, token_id: &TokenId) -> crate::Result<Option<TokenIssuanceTransaction>>;
+        fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
     }
 
@@ -213,8 +213,8 @@ mockall::mock! {
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
-        fn set_token_tx(&mut self, token_id: &TokenId, issuance_tx: &TokenIssuanceTransaction) -> crate::Result<()>;
-        fn del_token_tx(&mut self, token_id: &TokenId) -> crate::Result<()>;
+        fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> crate::Result<()>;
+        fn del_token_aux_data(&mut self, token_id: &TokenId) -> crate::Result<()>;
 
         fn set_token_id(&mut self, issuance_tx_id: &Id<Transaction>, token_id: &TokenId) -> crate::Result<()>;
         fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()>;

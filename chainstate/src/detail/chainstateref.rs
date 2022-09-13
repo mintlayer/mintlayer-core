@@ -17,7 +17,7 @@ use std::{collections::BTreeSet, convert::TryInto, sync::Arc};
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{get_skip_height, BlockIndex, GenBlockIndex, PropertyQueryError};
-use common::chain::tokens::TokenIssuanceTransaction;
+use common::chain::tokens::TokenAuxiliaryData;
 use common::chain::Transaction;
 use common::time_getter::TimeGetterFn;
 use common::{
@@ -320,8 +320,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     pub fn get_token_info(
         &self,
         token_id: &TokenId,
-    ) -> Result<Option<TokenIssuanceTransaction>, PropertyQueryError> {
-        self.db_tx.get_token_info(token_id).map_err(PropertyQueryError::from)
+    ) -> Result<Option<TokenAuxiliaryData>, PropertyQueryError> {
+        self.db_tx.get_token_aux_data(token_id).map_err(PropertyQueryError::from)
     }
 
     pub fn get_token_id(

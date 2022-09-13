@@ -24,7 +24,7 @@ pub use internal::{utxo_db, Store};
 
 use chainstate_types::BlockIndex;
 use common::chain::block::BlockReward;
-use common::chain::tokens::{TokenId, TokenIssuanceTransaction};
+use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::{Block, GenBlock, OutPointSourceId};
 use common::primitives::{BlockHeight, Id};
@@ -69,8 +69,7 @@ pub trait BlockchainStorageRead: UtxosStorageRead {
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
 
     /// Get token creation tx
-    fn get_token_info(&self, token_id: &TokenId)
-        -> crate::Result<Option<TokenIssuanceTransaction>>;
+    fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
 
     // Get token id by id of the creation tx
     fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
@@ -113,15 +112,15 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead + UtxosStorageWrite {
     /// Remove block id from given mainchain height
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 
-    /// Set token creation tx
-    fn set_token_tx(
+    /// Set data associated with token issuance (and ACL changes in the future)
+    fn set_token_aux_data(
         &mut self,
         token_id: &TokenId,
-        tx_id: &TokenIssuanceTransaction,
+        data: &TokenAuxiliaryData,
     ) -> crate::Result<()>;
 
     // Remove token tx
-    fn del_token_tx(&mut self, token_id: &TokenId) -> crate::Result<()>;
+    fn del_token_aux_data(&mut self, token_id: &TokenId) -> crate::Result<()>;
 
     // Binding Id of issuance tx with token id
     fn set_token_id(

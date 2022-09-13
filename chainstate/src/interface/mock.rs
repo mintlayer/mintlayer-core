@@ -31,7 +31,7 @@ use crate::{detail::BlockSource, ChainstateError, ChainstateEvent, Locator};
 use chainstate_types::BlockIndex;
 use chainstate_types::GenBlockIndex;
 use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::tokens::TokenIssuanceTransaction;
+use common::chain::tokens::TokenAuxiliaryData;
 use common::chain::ChainConfig;
 use utils::eventhandler::EventHandler;
 
@@ -104,7 +104,7 @@ mockall::mock! {
         fn get_token_detail(
             &self,
             token_id: TokenId,
-        ) -> Result<(Id<Block>, TokenIssuanceTransaction), ChainstateError>;
+        ) -> Result<(Id<Block>, TokenAuxiliaryData), ChainstateError>;
         fn get_token_id_from_issuance_tx(
             &self,
             tx_id: &Id<common::chain::Transaction>,
@@ -112,6 +112,6 @@ mockall::mock! {
         fn get_token_info(
             &self,
             token_id: &TokenId,
-        ) -> Result<Option<common::chain::tokens::TokenIssuanceTransaction>, ChainstateError>;
+        ) -> Result<Option<common::chain::tokens::TokenAuxiliaryData>, ChainstateError>;
     }
 }

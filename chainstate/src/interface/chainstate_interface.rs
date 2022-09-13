@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use crate::ChainstateConfig;
 use chainstate_types::{BlockIndex, GenBlockIndex};
-use common::chain::tokens::TokenIssuanceTransaction;
+use common::chain::tokens::TokenAuxiliaryData;
 use common::chain::Transaction;
 use common::{
     chain::{
@@ -110,11 +110,11 @@ pub trait ChainstateInterface: Send {
     fn get_token_detail(
         &self,
         token_id: TokenId,
-    ) -> Result<(Id<Block>, TokenIssuanceTransaction), ChainstateError>;
+    ) -> Result<(Id<Block>, TokenAuxiliaryData), ChainstateError>;
     fn get_token_info(
         &self,
         token_id: &TokenId,
-    ) -> Result<Option<TokenIssuanceTransaction>, ChainstateError>;
+    ) -> Result<Option<TokenAuxiliaryData>, ChainstateError>;
     fn get_token_id_from_issuance_tx(
         &self,
         tx_id: &Id<Transaction>,

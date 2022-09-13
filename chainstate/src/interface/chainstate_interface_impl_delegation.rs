@@ -23,7 +23,7 @@ use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::{
     block::{timestamp::BlockTimestamp, BlockReward},
     config::ChainConfig,
-    tokens::TokenIssuanceTransaction,
+    tokens::TokenAuxiliaryData,
     OutPointSourceId, TxMainChainIndex,
 };
 use common::{
@@ -193,7 +193,7 @@ impl<
     fn get_token_detail(
         &self,
         token_id: TokenId,
-    ) -> Result<(Id<Block>, TokenIssuanceTransaction), ChainstateError> {
+    ) -> Result<(Id<Block>, TokenAuxiliaryData), ChainstateError> {
         self.deref().get_token_detail(token_id)
     }
 
@@ -207,7 +207,7 @@ impl<
     fn get_token_info(
         &self,
         token_id: &TokenId,
-    ) -> Result<Option<common::chain::tokens::TokenIssuanceTransaction>, ChainstateError> {
+    ) -> Result<Option<common::chain::tokens::TokenAuxiliaryData>, ChainstateError> {
         self.deref().get_token_info(token_id)
     }
 }

@@ -29,13 +29,13 @@ pub use utils::*;
 
 use super::{Transaction, TxOutput};
 
+// The data that is created when a token is issued to track it (and to update it with ACL commands)
 #[derive(Debug, Clone, Encode, Decode)]
-pub struct TokenIssuanceTransaction {
+pub struct TokenAuxiliaryData {
     issuance_tx: Transaction,
-    // When we implement ACL, we can add additional fields here
 }
 
-impl TokenIssuanceTransaction {
+impl TokenAuxiliaryData {
     pub fn new(issuance_tx: Transaction) -> Self {
         Self { issuance_tx }
     }

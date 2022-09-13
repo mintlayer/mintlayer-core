@@ -46,9 +46,7 @@ use common::{
     chain::{
         block::BlockHeader,
         config::ChainConfig,
-        tokens::{
-            OutputValue, RPCTokenInfo, TokenData, TokenId, TokenIssuanceTransaction, TokensError,
-        },
+        tokens::{OutputValue, RPCTokenInfo, TokenAuxiliaryData, TokenData, TokenId, TokensError},
         Block, OutPointSourceId, SpendablePosition,
     },
     primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
@@ -320,7 +318,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
     pub fn get_token_detail(
         &self,
         token_id: TokenId,
-    ) -> Result<(Id<Block>, TokenIssuanceTransaction), PropertyQueryError> {
+    ) -> Result<(Id<Block>, TokenAuxiliaryData), PropertyQueryError> {
         let chainstate_ref = self.make_db_tx_ro();
 
         // Find issuance transaction id by token_id
@@ -393,7 +391,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
     pub fn get_token_info(
         &self,
         token_id: &TokenId,
-    ) -> Result<Option<TokenIssuanceTransaction>, PropertyQueryError> {
+    ) -> Result<Option<TokenAuxiliaryData>, PropertyQueryError> {
         let chainstate_ref = self.make_db_tx_ro();
         chainstate_ref.get_token_info(token_id)
     }

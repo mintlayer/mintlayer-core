@@ -20,7 +20,7 @@ use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::block::BlockReward;
 use common::chain::config::ChainConfig;
-use common::chain::tokens::TokenIssuanceTransaction;
+use common::chain::tokens::TokenAuxiliaryData;
 use common::chain::{OutPointSourceId, Transaction, TxMainChainIndex};
 use common::{
     chain::{
@@ -260,7 +260,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
     fn get_token_detail(
         &self,
         token_id: TokenId,
-    ) -> Result<(Id<Block>, TokenIssuanceTransaction), ChainstateError> {
+    ) -> Result<(Id<Block>, TokenAuxiliaryData), ChainstateError> {
         self.chainstate
             .get_token_detail(token_id)
             .map_err(ChainstateError::FailedToReadProperty)
@@ -269,7 +269,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
     fn get_token_info(
         &self,
         token_id: &TokenId,
-    ) -> Result<Option<TokenIssuanceTransaction>, ChainstateError> {
+    ) -> Result<Option<TokenAuxiliaryData>, ChainstateError> {
         self.chainstate
             .get_token_info(token_id)
             .map_err(ChainstateError::FailedToReadProperty)
