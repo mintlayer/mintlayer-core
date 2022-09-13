@@ -186,8 +186,11 @@ impl<
         self.deref().get_block_reward(block_index)
     }
 
-    fn token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, ChainstateError> {
-        self.deref().token_info(token_id)
+    fn get_token_info_for_rpc(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<RPCTokenInfo>, ChainstateError> {
+        self.deref().get_token_info_for_rpc(token_id)
     }
 
     fn get_token_aux_data(
@@ -202,13 +205,6 @@ impl<
         tx_id: &Id<common::chain::Transaction>,
     ) -> Result<Option<TokenId>, ChainstateError> {
         self.deref().get_token_id_from_issuance_tx(tx_id)
-    }
-
-    fn get_token_info_for_rpc(
-        &self,
-        token_id: &TokenId,
-    ) -> Result<Option<common::chain::tokens::TokenAuxiliaryData>, ChainstateError> {
-        self.deref().get_token_info_for_rpc(token_id)
     }
 }
 

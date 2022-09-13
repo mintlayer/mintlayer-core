@@ -18,7 +18,6 @@ pub mod ban_score;
 pub use self::error::*;
 pub use self::median_time::calculate_median_time_past;
 pub use chainstate_types::Locator;
-use common::chain::Transaction;
 use common::time_getter::TimeGetter;
 pub use error::BlockError;
 pub use error::CheckBlockError;
@@ -41,14 +40,9 @@ use std::sync::Arc;
 use itertools::Itertools;
 
 use chainstate_storage::{BlockchainStorage, Transactional};
-use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
-    chain::{
-        block::BlockHeader,
-        config::ChainConfig,
-        tokens::{OutputValue, RPCTokenInfo, TokenAuxiliaryData, TokenData, TokenId, TokensError},
-        Block,
-    },
+    chain::{block::BlockHeader, config::ChainConfig, Block},
     primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
 };
 use logging::log;
@@ -313,66 +307,6 @@ impl<S: BlockchainStorage> Chainstate<S> {
         let chainstate_ref = self.make_db_tx_ro();
         chainstate_ref.check_block(&block)?;
         Ok(block)
-    }
-
-    pub fn get_token_info_for_rpc(
-        &self,
-        token_id: TokenId,
-    ) -> Result<Option<RPCTokenInfo>, PropertyQueryError> {
-        let token_aux_data = self.get_token_aux_data(&token_id)?.ok_or(
-            PropertyQueryError::TokensError(TokensError::TokensNotRegistered(token_id)),
-        )?;
-
-        Ok(token_aux_data
-            .issuance_tx()
-            .outputs()
-            .iter()
-            // Filter tokens
-            .filter_map(|output| match output.value() {
-                OutputValue::Coin(_) => None,
-                OutputValue::Token(token_data) => Some(token_data),
-            })
-            // Find issuance data and return RPCTokenInfo
-            .find_map(|token_data| match token_data {
-                TokenData::TokenIssuanceV1 {
-                    token_ticker,
-                    amount_to_issue,
-                    number_of_decimals,
-                    metadata_uri,
-                } => Some(RPCTokenInfo::new(
-                    token_id,
-                    token_aux_data.issuance_tx().get_id(),
-                    token_aux_data.issuance_block_id(),
-                    token_ticker.clone(),
-                    *amount_to_issue,
-                    *number_of_decimals,
-                    metadata_uri.clone(),
-                )),
-                TokenData::TokenTransferV1 {
-                    token_id: _,
-                    amount: _,
-                }
-                | TokenData::TokenBurnV1 {
-                    token_id: _,
-                    amount_to_burn: _,
-                } => None,
-            }))
-    }
-
-    pub fn get_token_aux_data(
-        &self,
-        token_id: &TokenId,
-    ) -> Result<Option<TokenAuxiliaryData>, PropertyQueryError> {
-        let chainstate_ref = self.make_db_tx_ro();
-        chainstate_ref.get_token_aux_data(token_id)
-    }
-
-    pub fn get_token_id_from_issuance_tx(
-        &self,
-        tx_id: &Id<Transaction>,
-    ) -> Result<Option<TokenId>, PropertyQueryError> {
-        let chainstate_ref = self.make_db_tx_ro();
-        chainstate_ref.get_token_id(tx_id)
     }
 
     pub fn preliminary_header_check(&self, block: BlockHeader) -> Result<(), BlockError> {

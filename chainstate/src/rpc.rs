@@ -85,7 +85,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     }
 
     async fn token_info(&self, token_id: TokenId) -> rpc::Result<Option<RPCTokenInfo>> {
-        handle_error(self.call(move |this| this.token_info(token_id)).await)
+        handle_error(self.call(move |this| this.get_token_info_for_rpc(token_id)).await)
     }
 }
 

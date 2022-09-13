@@ -106,14 +106,13 @@ pub trait ChainstateInterface: Send {
         block_index: &BlockIndex,
     ) -> Result<Option<BlockReward>, ChainstateError>;
     /// Returns token info by token_id
-    fn token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, ChainstateError>;
+    fn get_token_info_for_rpc(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<RPCTokenInfo>, ChainstateError>;
     fn get_token_aux_data(
         &self,
         token_id: TokenId,
-    ) -> Result<Option<TokenAuxiliaryData>, ChainstateError>;
-    fn get_token_info_for_rpc(
-        &self,
-        token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, ChainstateError>;
     fn get_token_id_from_issuance_tx(
         &self,

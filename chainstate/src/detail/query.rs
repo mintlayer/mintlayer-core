@@ -3,7 +3,8 @@ use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
     chain::{
         block::{BlockHeader, BlockReward},
-        Block, GenBlock, OutPointSourceId, TxMainChainIndex,
+        tokens::{OutputValue, RPCTokenInfo, TokenAuxiliaryData, TokenData, TokenId, TokensError},
+        Block, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
@@ -156,5 +157,63 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateQuery<'a, S, O> {
         tx_id: &OutPointSourceId,
     ) -> Result<Option<TxMainChainIndex>, PropertyQueryError> {
         self.chainstate_ref.get_mainchain_tx_index(tx_id)
+    }
+
+    pub fn get_token_info_for_rpc(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<RPCTokenInfo>, PropertyQueryError> {
+        let token_aux_data = self.get_token_aux_data(&token_id)?.ok_or(
+            PropertyQueryError::TokensError(TokensError::TokensNotRegistered(token_id)),
+        )?;
+
+        Ok(token_aux_data
+            .issuance_tx()
+            .outputs()
+            .iter()
+            // Filter tokens
+            .filter_map(|output| match output.value() {
+                OutputValue::Coin(_) => None,
+                OutputValue::Token(token_data) => Some(token_data),
+            })
+            // Find issuance data and return RPCTokenInfo
+            .find_map(|token_data| match token_data {
+                TokenData::TokenIssuanceV1 {
+                    token_ticker,
+                    amount_to_issue,
+                    number_of_decimals,
+                    metadata_uri,
+                } => Some(RPCTokenInfo::new(
+                    token_id,
+                    token_aux_data.issuance_tx().get_id(),
+                    token_aux_data.issuance_block_id(),
+                    token_ticker.clone(),
+                    *amount_to_issue,
+                    *number_of_decimals,
+                    metadata_uri.clone(),
+                )),
+                TokenData::TokenTransferV1 {
+                    token_id: _,
+                    amount: _,
+                }
+                | TokenData::TokenBurnV1 {
+                    token_id: _,
+                    amount_to_burn: _,
+                } => None,
+            }))
+    }
+
+    pub fn get_token_aux_data(
+        &self,
+        token_id: &TokenId,
+    ) -> Result<Option<TokenAuxiliaryData>, PropertyQueryError> {
+        self.chainstate_ref.get_token_aux_data(token_id)
+    }
+
+    pub fn get_token_id_from_issuance_tx(
+        &self,
+        tx_id: &Id<Transaction>,
+    ) -> Result<Option<TokenId>, PropertyQueryError> {
+        self.chainstate_ref.get_token_id(tx_id)
     }
 }
