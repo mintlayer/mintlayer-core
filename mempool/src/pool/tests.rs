@@ -12,6 +12,7 @@
 // limitations under the License.
 
 use super::*;
+use chainstate::chainstate_interface;
 use chainstate::make_chainstate;
 use chainstate::BlockSource;
 use chainstate::ChainstateConfig;
@@ -465,14 +466,42 @@ async fn setup() -> Mempool<SystemClock, SystemUsageEstimator> {
     )
 }
 
+async fn setup_new(
+    chainstate: Box<dyn chainstate_interface::ChainstateInterface>,
+) -> Mempool<SystemClock, SystemUsageEstimator> {
+    let config = Arc::new(common::chain::config::create_unit_test_config());
+    let chainstate_handle = start_chainstate_new(chainstate).await;
+    Mempool::new(
+        config,
+        chainstate_handle,
+        SystemClock {},
+        SystemUsageEstimator {},
+    )
+}
+
+pub async fn start_chainstate_new(
+    chainstate: Box<dyn chainstate_interface::ChainstateInterface>,
+) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
+    let mut man = subsystem::Manager::new("TODO");
+    let handle = man.add_subsystem("chainstate", chainstate);
+    tokio::spawn(async move { man.main().await });
+    handle
+}
+
 #[tokio::test]
 async fn tx_no_outputs() -> anyhow::Result<()> {
-    let mut mempool = setup().await;
-    let tx = TxGenerator::new()
-        .with_num_outputs(0)
-        .generate_tx(&mempool)
-        .await
-        .expect("generate_tx failed");
+    let seed = Seed::from_entropy();
+    let tf = TestFramework::default();
+    let mut rng = make_seedable_rng(seed);
+    let genesis = tf.genesis();
+    let tx = TransactionBuilder::new()
+        .add_input(TxInput::new(
+            OutPointSourceId::BlockReward(genesis.get_id().into()),
+            0,
+            empty_witness(&mut rng),
+        ))
+        .build();
+    let mut mempool = setup_new(tf.chainstate()).await;
     assert!(matches!(
         mempool.add_transaction(tx).await,
         Err(Error::TxValidationError(TxValidationError::NoOutputs))
