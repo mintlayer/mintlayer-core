@@ -393,7 +393,7 @@ fn token_transfer_test(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(TxInput::new(
-                        genesis_outpoint_id,
+                        genesis_outpoint_id.clone(),
                         0,
                         InputWitness::NoSignature(None),
                     ))
@@ -410,6 +410,31 @@ fn token_transfer_test(#[case] seed: Seed) {
         let token_id = token_id(&block.transactions()[0]).unwrap();
         assert_eq!(block.transactions()[0].outputs()[0].value(), &output_value);
         let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
+
+        // attempt double-spend
+        let result = tf
+            .make_block_builder()
+            .with_parent((*block_index.block_id()).into())
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        genesis_outpoint_id,
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        output_value.clone(),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::MissingOutputOrSpent
+            ))
+        );
 
         // Try to transfer exceed amount
         let result = tf
