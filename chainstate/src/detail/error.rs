@@ -88,8 +88,6 @@ pub enum CheckBlockTransactionsError {
     DuplicateInputInBlock(Id<Block>),
     #[error("Empty inputs or outputs in transaction found in block")]
     EmptyInputsOutputsInTransactionInBlock(Id<Transaction>, Id<Block>),
-    #[error("Duplicate transaction {0} found in block {1}")]
-    DuplicatedTransactionInBlock(Id<Transaction>, Id<Block>),
     #[error("Tokens error: {0}")]
     TokensError(TokensError),
 }
