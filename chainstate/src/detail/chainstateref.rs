@@ -220,7 +220,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(bid == Some(*block_id))
     }
 
-    /// Allow to read from storage the previous block and return itself BlockIndex
+    /// Read previous block from storage and return its BlockIndex
     fn get_previous_block_index(
         &self,
         block_index: &BlockIndex,
@@ -546,7 +546,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     fn check_tokens_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         for tx in block.transactions() {
-            // We can't issue a few token types in one tx
+            // We can't issue multiple tokens in a single tx
             let issuance_count = get_tokens_issuance_count(tx.outputs());
             ensure!(
                 issuance_count <= self.chain_config.token_max_issuance_allowed(),

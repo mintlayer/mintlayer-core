@@ -336,7 +336,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
                 TokensError::TokensNotRegistered(token_id),
             ))?;
 
-        // Find a block where the transaction was issued
+        // Find a block where the token was issued
         let creation_block_id = match tx_index.position() {
             SpendablePosition::Transaction(tx) => tx.block_id(),
             SpendablePosition::BlockReward(_) => {

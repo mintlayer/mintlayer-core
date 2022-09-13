@@ -35,7 +35,7 @@ pub fn check_transferred_amount(
             .get(coin_or_token_id)
             .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
-        // Does outputs exceed inputs?
+        // Do the outputs exceed inputs?
         if outputs_total > inputs_total {
             return Err(ConnectTransactionError::AttemptToPrintMoney(
                 *inputs_total,
@@ -102,7 +102,7 @@ pub fn get_input_token_id_and_amount<
                 token_id: _,
                 amount_to_burn: _,
             } => {
-                /* Tokens have burned and can't be transferred */
+                // Tokens have burned and can't be transferred
                 return Err(ConnectTransactionError::TokensError(
                     TokensError::AttemptToTransferBurnedTokens,
                 ));
