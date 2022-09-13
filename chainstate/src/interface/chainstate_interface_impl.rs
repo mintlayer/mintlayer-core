@@ -301,12 +301,8 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
                 .get_mainchain_tx_index(&input.outpoint().tx_id())
                 .map_err(ChainstateError::FailedToReadProperty)?;
             if let Some(index) = index {
-                if OutputSpentState::Unspent
-                    == index.get_spent_state(input.outpoint().output_index()).map_err(|_| {
-                        ChainstateError::FailedToReadProperty(
-                            PropertyQueryError::OutpointIndexOutOfRange,
-                        )
-                    })?
+                if let Ok(OutputSpentState::Unspent) =
+                    index.get_spent_state(input.outpoint().output_index())
                 {
                     available_inputs.push(input.clone())
                 }
@@ -316,6 +312,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
     }
 
     // FIXME proper errors
+    // FIXME this logic is copied from transaction verifier
     fn get_outpoint_value(
         &self,
         outpoint: &common::chain::OutPoint,

@@ -1813,8 +1813,9 @@ async fn mempool_full() -> anyhow::Result<()> {
         .times(1)
         .return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
 
-    let config = Arc::new(common::chain::config::create_unit_test_config());
-    let chainstate_handle = start_chainstate_new(tf.chainstate()).await;
+    let chainstate = tf.chainstate();
+    let config = chainstate.get_chain_config();
+    let chainstate_handle = start_chainstate_new(chainstate).await;
 
     let mut mempool = Mempool::new(config, chainstate_handle, SystemClock, mock_usage);
 
