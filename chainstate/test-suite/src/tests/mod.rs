@@ -33,7 +33,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 
 mod double_spend_tests;
 mod events_tests;
-mod normal_tokens;
+mod fungible_tokens;
 mod output_timelock;
 mod processing_tests;
 mod reorgs_tests;
