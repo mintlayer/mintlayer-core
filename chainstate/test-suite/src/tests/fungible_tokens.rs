@@ -1306,7 +1306,101 @@ fn test_reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_attempt_to_print_tokens(#[case] seed: Seed) {
+fn test_attempt_to_print_tokens_one_output(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        // To avoid CoinOrTokenOverflow, random value can't be more than u128::MAX / 2
+        let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX / 2));
+
+        // Issue a new token
+        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
+            token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
+            amount_to_issue: total_funds,
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
+        });
+        let block_index = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        genesis_outpoint_id,
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        output_value,
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+
+        let block = tf.block(*block_index.block_id());
+        let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
+        let token_id = token_id(&block.transactions()[0]).unwrap();
+
+        // Try to transfer a bunch of outputs where each separately do not exceed input tokens value, but a sum of outputs larger than inputs.
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        issuance_outpoint_id.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::TokenTransferV1 {
+                            token_id,
+                            amount: (total_funds + Amount::from_atoms(1)).unwrap(),
+                        }),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert!(matches!(
+            result,
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(_, _))
+            ))
+        ));
+
+        // Valid case - try to transfer correct amount of tokens
+        let _ = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        issuance_outpoint_id,
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::TokenTransferV1 {
+                            token_id,
+                            amount: total_funds,
+                        }),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
