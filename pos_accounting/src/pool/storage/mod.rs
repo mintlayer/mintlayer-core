@@ -29,7 +29,8 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         let current_amount = self
             .store
             .get_delegation_balance(delegation_target)?
-            .ok_or(Error::DelegateToNonexistingId)?;
+            .or(Some(Amount::ZERO))
+            .expect("balance should be available");
         let new_amount =
             (current_amount + amount_to_delegate).ok_or(Error::DelegationBalanceAdditionError)?;
         self.store.set_delegation_balance(delegation_target, new_amount)?;
@@ -47,7 +48,11 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
             .ok_or(Error::DelegateToNonexistingId)?;
         let new_amount = (current_amount - amount_to_delegate)
             .ok_or(Error::DelegationBalanceSubtractionError)?;
-        self.store.set_delegation_balance(delegation_target, new_amount)?;
+        if new_amount == Amount::ZERO {
+            self.store.del_delegation_balance(delegation_target)?;
+        } else {
+            self.store.set_delegation_balance(delegation_target, new_amount)?;
+        }
         Ok(())
     }
 

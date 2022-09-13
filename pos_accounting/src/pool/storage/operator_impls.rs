@@ -13,8 +13,8 @@ use crate::{
         helpers::{make_delegation_id, make_pool_id},
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
-            PoSAccountingOperatorRead, PoSAccountingOperatorWrite, PoSAccountingUndo,
-            SpendFromShareUndo,
+            DelegationDataUndo, PoSAccountingOperatorRead, PoSAccountingOperatorWrite,
+            PoSAccountingUndo, PoolDataUndo, SpendFromShareUndo,
         },
         pool_data::PoolData,
     },
@@ -47,53 +47,51 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
                 return Err(Error::InvariantErrorPoolDataAlreadyExists);
             }
         }
+        let pool_data = PoolData::new(decommission_key, pledge_amount);
 
         self.store.set_pool_balance(pool_id, pledge_amount)?;
-        self.store
-            .set_pool_data(pool_id, &PoolData::new(decommission_key, pledge_amount))?;
+        self.store.set_pool_data(pool_id, &pool_data)?;
 
         Ok((
             pool_id,
             PoSAccountingUndo::CreatePool(CreatePoolUndo {
-                input0_outpoint: input0_outpoint.clone(),
-                pledge_amount,
+                pool_id,
+                data_undo: PoolDataUndo::Data(pool_data),
             }),
         ))
     }
 
-    fn undo_create_pool(&mut self, undo_data: CreatePoolUndo) -> Result<(), Error> {
-        let pool_id = make_pool_id(&undo_data.input0_outpoint);
+    fn undo_create_pool(&mut self, undo: CreatePoolUndo) -> Result<(), Error> {
+        let amount = self.store.get_pool_balance(undo.pool_id)?;
 
-        let amount = self.store.get_pool_balance(pool_id)?;
+        let data_undo = match undo.data_undo {
+            PoolDataUndo::Data(v) => v,
+            PoolDataUndo::DataDelta(_) => unreachable!("this arm should never be executed"),
+        };
 
         match amount {
             Some(amount) => {
-                if amount != undo_data.pledge_amount {
+                if amount != data_undo.pledge_amount() {
                     return Err(Error::InvariantErrorPoolCreationReversalFailedAmountChanged);
                 }
             }
             None => return Err(Error::InvariantErrorPoolCreationReversalFailedBalanceNotFound),
         }
 
-        let pool_data = self.store.get_pool_data(pool_id)?;
+        let pool_data = self.store.get_pool_data(undo.pool_id)?;
         {
             if pool_data.is_none() {
                 return Err(Error::InvariantErrorPoolCreationReversalFailedDataNotFound);
             }
         }
 
-        self.store.del_pool_balance(pool_id)?;
-        self.store.del_pool_data(pool_id)?;
+        self.store.del_pool_balance(undo.pool_id)?;
+        self.store.del_pool_data(undo.pool_id)?;
 
         Ok(())
     }
 
     fn decommission_pool(&mut self, pool_id: H256) -> Result<PoSAccountingUndo, Error> {
-        let last_amount = self
-            .store
-            .get_pool_balance(pool_id)?
-            .ok_or(Error::AttemptedDecommissionNonexistingPoolBalance)?;
-
         let pool_data = self
             .store
             .get_pool_data(pool_id)?
@@ -104,24 +102,28 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
 
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
             pool_id,
-            last_amount,
-            pool_data,
+            data_undo: PoolDataUndo::Data(pool_data),
         }))
     }
 
-    fn undo_decommission_pool(&mut self, undo_data: DecommissionPoolUndo) -> Result<(), Error> {
-        let current_amount = self.store.get_pool_balance(undo_data.pool_id)?;
+    fn undo_decommission_pool(&mut self, undo: DecommissionPoolUndo) -> Result<(), Error> {
+        let data_undo = match undo.data_undo {
+            PoolDataUndo::Data(v) => v,
+            PoolDataUndo::DataDelta(_) => unreachable!("this arm should never be executed"),
+        };
+
+        let current_amount = self.store.get_pool_balance(undo.pool_id)?;
         if current_amount.is_some() {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists);
         }
 
-        let current_data = self.store.get_pool_data(undo_data.pool_id)?;
+        let current_data = self.store.get_pool_data(undo.pool_id)?;
         if current_data.is_some() {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists);
         }
 
-        self.store.set_pool_balance(undo_data.pool_id, undo_data.last_amount)?;
-        self.store.set_pool_data(undo_data.pool_id, &undo_data.pool_data)?;
+        self.store.set_pool_balance(undo.pool_id, data_undo.pledge_amount())?;
+        self.store.set_pool_data(undo.pool_id, &data_undo)?;
 
         Ok(())
     }
@@ -153,28 +155,28 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
         Ok((
             delegation_id,
             PoSAccountingUndo::CreateDelegationId(CreateDelegationIdUndo {
-                delegation_data,
-                input0_outpoint: input0_outpoint.clone(),
+                delegation_id,
+                data_undo: DelegationDataUndo::Data(delegation_data),
             }),
         ))
     }
 
-    fn undo_create_delegation_id(
-        &mut self,
-        undo_data: CreateDelegationIdUndo,
-    ) -> Result<(), Error> {
-        let delegation_id = make_delegation_id(&undo_data.input0_outpoint);
+    fn undo_create_delegation_id(&mut self, undo: CreateDelegationIdUndo) -> Result<(), Error> {
+        let data_undo = match undo.data_undo {
+            DelegationDataUndo::Data(v) => v,
+            DelegationDataUndo::DataDelta(_) => unreachable!("this arm should never be executed"),
+        };
 
         let removed_data = self
             .store
-            .get_delegation_data(delegation_id)?
+            .get_delegation_data(undo.delegation_id)?
             .ok_or(Error::InvariantErrorDelegationIdUndoFailedNotFound)?;
 
-        if removed_data != undo_data.delegation_data {
+        if removed_data != data_undo {
             return Err(Error::InvariantErrorDelegationIdUndoFailedDataConflict);
         }
 
-        self.store.del_delegation_data(delegation_id)?;
+        self.store.del_delegation_data(undo.delegation_id)?;
 
         Ok(())
     }

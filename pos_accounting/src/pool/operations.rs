@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use accounting::DataDeltaUndoOp;
 use common::{
     chain::OutPoint,
     primitives::{Amount, H256},
@@ -8,20 +9,29 @@ use crypto::key::PublicKey;
 
 use crate::error::Error;
 
+pub enum PoolDataUndo {
+    Data(PoolData),
+    DataDelta((Amount, DataDeltaUndoOp<PoolData>)),
+}
+
+pub enum DelegationDataUndo {
+    Data(DelegationData),
+    DataDelta(DataDeltaUndoOp<DelegationData>),
+}
+
 pub struct CreatePoolUndo {
-    pub input0_outpoint: OutPoint,
-    pub pledge_amount: Amount,
+    pub pool_id: H256,
+    pub data_undo: PoolDataUndo,
 }
 
 pub struct CreateDelegationIdUndo {
-    pub delegation_data: DelegationData,
-    pub input0_outpoint: OutPoint,
+    pub delegation_id: H256,
+    pub data_undo: DelegationDataUndo,
 }
 
 pub struct DecommissionPoolUndo {
     pub pool_id: H256,
-    pub last_amount: Amount,
-    pub pool_data: PoolData,
+    pub data_undo: PoolDataUndo,
 }
 
 pub struct DelegateStakingUndo {

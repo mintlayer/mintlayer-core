@@ -19,18 +19,18 @@ use serialization::{Decode, Encode};
 
 use crate::error::Error;
 
+use self::undo::{DataDeltaUndoOp, DataDeltaUndoOpInternal, DeltaDataUndoCollection};
+
 pub mod undo;
 
 /// The outcome of combining two deltas for a given key upon the map that contains it
 #[derive(PartialEq, Eq, Debug)]
-pub enum DeltaMapOp<T> {
+enum DeltaMapOp<T> {
     /// Write a specific value (for example, to write a Create or Modify operation)
     Write(T),
     /// Erase the value at the relevant key spot (for example, a modify followed by Erase yields nothing)
     Delete,
 }
-
-use self::undo::{DataDeltaUndoOp, DeltaDataUndoCollection};
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub enum DataDelta<T> {
@@ -80,11 +80,16 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
         let undo = match new_data {
             // when we insert to a map, undoing is restoring what was there beforehand, and erasing if it was empty
             DeltaMapOp::Write(v) => match self.data.insert(key, v) {
-                Some(prev_value) => Some(DataDeltaUndoOp::Write(prev_value)),
-                None => Some(DataDeltaUndoOp::Erase),
+                Some(prev_value) => {
+                    Some(DataDeltaUndoOp(DataDeltaUndoOpInternal::Write(prev_value)))
+                }
+                None => Some(DataDeltaUndoOp(DataDeltaUndoOpInternal::Erase)),
             },
             // when we remove from a map, undoing is rewriting what we removed
-            DeltaMapOp::Delete => self.data.remove(&key).map(DataDeltaUndoOp::Write),
+            DeltaMapOp::Delete => self
+                .data
+                .remove(&key)
+                .map(|v| DataDeltaUndoOp(DataDeltaUndoOpInternal::Write(v))),
         };
 
         Ok(undo)
@@ -105,9 +110,9 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
         key: K,
         data: DataDeltaUndoOp<T>,
     ) -> Result<(), Error> {
-        match data {
-            DataDeltaUndoOp::Write(undo) => self.data.insert(key, undo),
-            DataDeltaUndoOp::Erase => self.data.remove(&key),
+        match data.0 {
+            DataDeltaUndoOpInternal::Write(undo) => self.data.insert(key, undo),
+            DataDeltaUndoOpInternal::Erase => self.data.remove(&key),
         };
         Ok(())
     }
