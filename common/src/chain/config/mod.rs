@@ -191,6 +191,7 @@ const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
 const TOKEN_MAX_URI_LEN: usize = 1024;
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
 const TOKEN_MAX_TICKER_LEN: usize = 5;
+//TODO: Constant is misleading. In current implementation number of issuance in tx cannot be changed, thus it shouldn't be part of chain configuration.
 const TOKEN_MAX_ISSUANCE_ALLOWED: usize = 1;
 
 fn create_mainnet_genesis() -> Genesis {

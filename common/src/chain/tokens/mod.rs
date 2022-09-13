@@ -79,6 +79,7 @@ pub enum TokenData {
         token_id: TokenId,
         amount_to_burn: Amount,
     },
+    // TODO: These types will be implemented in the future PRs
     // // Increase amount of tokens
     // #[codec(index = 4)]
     // TokenReissueV1 {
