@@ -59,6 +59,22 @@ pub enum OutputValue {
     Token(TokenData),
 }
 
+impl OutputValue {
+    pub fn coin_amount(&self) -> Option<Amount> {
+        match self {
+            OutputValue::Coin(v) => Some(*v),
+            OutputValue::Token(_) => None,
+        }
+    }
+
+    pub fn token_data(&self) -> Option<&TokenData> {
+        match self {
+            OutputValue::Coin(_) => None,
+            OutputValue::Token(d) => Some(d),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum TokenData {
     /// TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.
