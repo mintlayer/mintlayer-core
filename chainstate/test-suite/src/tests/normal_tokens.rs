@@ -1509,7 +1509,7 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let token_id = token_id(&issuance_block.transactions()[0]).unwrap();
 
         // Check tokens available in storage
-        let token_aux_data = tf.chainstate.get_token_aux_data(token_id).unwrap();
+        let token_aux_data = tf.chainstate.get_token_aux_data(token_id).unwrap().unwrap();
         // Check id
         assert!(issuance_block.get_id() == token_aux_data.issuance_block_id());
         let issuance_tx = &issuance_block.transactions()[0];

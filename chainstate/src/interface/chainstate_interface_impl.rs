@@ -253,13 +253,16 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
 
     fn token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, ChainstateError> {
         self.chainstate
-            .token_info(token_id)
+            .get_token_info_for_rpc(token_id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn get_token_aux_data(&self, token_id: TokenId) -> Result<TokenAuxiliaryData, ChainstateError> {
+    fn get_token_aux_data(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<TokenAuxiliaryData>, ChainstateError> {
         self.chainstate
-            .get_token_aux_data(token_id)
+            .get_token_aux_data(&token_id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
@@ -268,7 +271,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, ChainstateError> {
         self.chainstate
-            .get_token_info(token_id)
+            .get_token_aux_data(token_id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 

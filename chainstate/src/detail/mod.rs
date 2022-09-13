@@ -315,25 +315,13 @@ impl<S: BlockchainStorage> Chainstate<S> {
         Ok(block)
     }
 
-    pub fn get_token_aux_data(
-        &self,
-        token_id: TokenId,
-    ) -> Result<TokenAuxiliaryData, PropertyQueryError> {
-        let chainstate_ref = self.make_db_tx_ro();
-
-        // Find issuance transaction id by token_id
-        let token_aux_data = chainstate_ref.get_token_aux_data(&token_id)?.ok_or(
-            PropertyQueryError::TokensError(TokensError::TokensNotRegistered(token_id)),
-        )?;
-
-        Ok(token_aux_data)
-    }
-
-    pub fn token_info(
+    pub fn get_token_info_for_rpc(
         &self,
         token_id: TokenId,
     ) -> Result<Option<RPCTokenInfo>, PropertyQueryError> {
-        let token_aux_data = self.get_token_aux_data(token_id)?;
+        let token_aux_data = self.get_token_aux_data(&token_id)?.ok_or(
+            PropertyQueryError::TokensError(TokensError::TokensNotRegistered(token_id)),
+        )?;
 
         Ok(token_aux_data
             .issuance_tx()
@@ -371,7 +359,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
             }))
     }
 
-    pub fn get_token_info(
+    pub fn get_token_aux_data(
         &self,
         token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, PropertyQueryError> {

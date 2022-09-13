@@ -104,7 +104,7 @@ mockall::mock! {
         fn get_token_aux_data(
             &self,
             token_id: TokenId,
-        ) -> Result<TokenAuxiliaryData, ChainstateError>;
+        ) -> Result<Option<TokenAuxiliaryData>, ChainstateError>;
         fn get_token_id_from_issuance_tx(
             &self,
             tx_id: &Id<common::chain::Transaction>,

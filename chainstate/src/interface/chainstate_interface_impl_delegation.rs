@@ -190,7 +190,10 @@ impl<
         self.deref().token_info(token_id)
     }
 
-    fn get_token_aux_data(&self, token_id: TokenId) -> Result<TokenAuxiliaryData, ChainstateError> {
+    fn get_token_aux_data(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<TokenAuxiliaryData>, ChainstateError> {
         self.deref().get_token_aux_data(token_id)
     }
 
