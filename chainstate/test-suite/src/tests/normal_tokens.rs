@@ -263,40 +263,46 @@ fn token_issue_test(#[case] seed: Seed) {
         }
 
         // URI is too long
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id.clone(),
-                        0,
-                        InputWitness::NoSignature(None),
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenIssuanceV1 {
-                            token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
-                            amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
-                            number_of_decimals: rng.gen_range(1..18),
-                            metadata_uri: random_string(&mut rng, 1025..u16::MAX as usize)
-                                .as_bytes()
-                                .to_vec(),
-                        }),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .build(),
-            )
-            .build_and_process();
+        {
+            let uri_len_range_to_use = (tf.chainstate.get_chain_config().token_max_uri_len()
+                as usize
+                + 1)..u16::MAX as usize;
 
-        assert!(matches!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorIncorrectMetadataURI(_, _)
-                    )
+            let result = tf
+                .make_block_builder()
+                .add_transaction(
+                    TransactionBuilder::new()
+                        .add_input(TxInput::new(
+                            outpoint_source_id.clone(),
+                            0,
+                            InputWitness::NoSignature(None),
+                        ))
+                        .add_output(TxOutput::new(
+                            OutputValue::Token(TokenData::TokenIssuanceV1 {
+                                token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
+                                amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
+                                number_of_decimals: rng.gen_range(1..18),
+                                metadata_uri: random_string(&mut rng, uri_len_range_to_use)
+                                    .as_bytes()
+                                    .to_vec(),
+                            }),
+                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        ))
+                        .build(),
+                )
+                .build_and_process();
+
+            assert!(matches!(
+                result,
+                Err(ChainstateError::ProcessBlockError(
+                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                        CheckBlockTransactionsError::TokensError(
+                            TokensError::IssueErrorIncorrectMetadataURI(_, _)
+                        )
+                    ))
                 ))
-            ))
-        ));
+            ));
+        }
 
         // URI contain non alpha-numeric char
         let result = tf
