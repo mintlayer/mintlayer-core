@@ -28,8 +28,8 @@ pub fn register_tokens_issuance(
     block_id: Id<Block>,
     tx: &Transaction,
 ) -> Result<(), TokensError> {
-    let was_tokens_issued = tx.outputs().iter().any(|output| is_tokens_issuance(output.value()));
-    if was_tokens_issued {
+    let was_token_issued = tx.outputs().iter().any(|output| is_tokens_issuance(output.value()));
+    if was_token_issued {
         precache_issuance(tokens_cache, tx, block_id)?;
         write_issuance(tokens_cache, block_id, tx)?;
     }
