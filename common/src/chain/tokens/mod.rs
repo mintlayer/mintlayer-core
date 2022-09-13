@@ -31,23 +31,21 @@ use super::{Transaction, TxOutput};
 
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct TokenIssuanceTransaction {
-    tx: Transaction,
+    issuance_tx: Transaction,
     // When we implement ACL, we can add additional fields here
 }
 
 impl TokenIssuanceTransaction {
+    pub fn new(issuance_tx: Transaction) -> Self {
+        Self { issuance_tx }
+    }
+
     pub fn get_id(&self) -> Id<Transaction> {
-        self.tx.get_id()
+        self.issuance_tx.get_id()
     }
 
     pub fn outputs(&self) -> &Vec<TxOutput> {
-        self.tx.outputs()
-    }
-}
-
-impl From<Transaction> for TokenIssuanceTransaction {
-    fn from(tx: Transaction) -> Self {
-        Self { tx }
+        self.issuance_tx.outputs()
     }
 }
 
