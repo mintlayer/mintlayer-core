@@ -646,7 +646,6 @@ dependencies = [
  "hex",
  "itertools",
  "logging",
- "rand 0.8.5",
  "rstest",
  "serialization",
  "test-utils",

@@ -26,14 +26,14 @@ use common::{
     },
     primitives::{Amount, Idable},
 };
+use crypto::random::distributions::uniform::SampleRange;
 use crypto::{hash::StreamHasher, random::Rng};
 use expect_test::expect;
-use rand::distributions::uniform::SampleRange;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 fn random_string<R: SampleRange<usize>>(rng: &mut impl Rng, range_len: R) -> String {
-    use rand::distributions::{Alphanumeric, DistString};
+    use crypto::random::distributions::{Alphanumeric, DistString};
     if range_len.is_empty() {
         return String::new();
     }
