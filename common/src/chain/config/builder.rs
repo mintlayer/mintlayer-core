@@ -195,7 +195,7 @@ impl Builder {
             token_min_issuance_fee,
             token_max_uri_len,
             token_max_dec_count,
-            token_nax_ticker_len: token_max_ticker_len,
+            token_max_ticker_len,
             token_max_issuance_allowed,
         }
     }
