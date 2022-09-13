@@ -79,10 +79,7 @@ pub fn check_tokens_issuance_data(
 
     // Check amount
     if amount_to_issue == &Amount::from_atoms(0) {
-        return Err(TokensError::IssueErrorIncorrectAmount(
-            tx_id,
-            source_block_id,
-        ));
+        return Err(TokensError::IssueAmountIsZero(tx_id, source_block_id));
     }
 
     // Check decimals

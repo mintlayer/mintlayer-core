@@ -133,7 +133,7 @@ impl BanScore for TokensError {
         match self {
             TokensError::IssueErrorInvalidTickerLength(_, _) => 100,
             TokensError::IssueErrorTickerHasNoneAlphaNumericChar(_, _) => 100,
-            TokensError::IssueErrorIncorrectAmount(_, _) => 100,
+            TokensError::IssueAmountIsZero(_, _) => 100,
             TokensError::IssueErrorTooManyDecimals(_, _) => 100,
             TokensError::IssueErrorIncorrectMetadataURI(_, _) => 100,
             TokensError::MultipleTokenIssuanceInTransaction(_, _) => 100,

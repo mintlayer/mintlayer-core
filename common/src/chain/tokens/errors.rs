@@ -27,7 +27,7 @@ pub enum TokensError {
     #[error("Invalid character in token ticker in issuance transaction {0} in block {1}")]
     IssueErrorTickerHasNoneAlphaNumericChar(Id<Transaction>, Id<Block>),
     #[error("Incorrect amount in issuance transaction {0} in block {1}")]
-    IssueErrorIncorrectAmount(Id<Transaction>, Id<Block>),
+    IssueAmountIsZero(Id<Transaction>, Id<Block>),
     #[error("Too many decimals in issuance transaction {0} in block {1}")]
     IssueErrorTooManyDecimals(Id<Transaction>, Id<Block>),
     #[error("Incorrect metadata URI in issuance transaction {0} in block {1}")]

@@ -192,7 +192,7 @@ fn token_issue_test(#[case] seed: Seed) {
             }
         }
 
-        // Issue amount is too low
+        // Issue amount is zero
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -219,9 +219,7 @@ fn token_issue_test(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorIncorrectAmount(_, _)
-                    )
+                    CheckBlockTransactionsError::TokensError(TokensError::IssueAmountIsZero(_, _))
                 ))
             ))
         ));
