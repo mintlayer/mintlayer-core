@@ -637,8 +637,11 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
         assert!(matches!(coins_value, OutputValue::Coin(_)));
         let genesis_outpoint_id = genesis_info.txns[0].0.clone();
 
-        // Issuance
-        let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
+        // TODO: test this better. It seems that this test only uses the max genesis amount vs no amount to test the issuance fee.
+        //       We need a better test that tests the threshold
+
+        // Issuance data
+        let issuance_data = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
@@ -655,7 +658,7 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     ))
                     .add_output(TxOutput::new(
-                        output_value.clone(),
+                        issuance_data.clone(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
@@ -690,7 +693,7 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     ))
                     .add_output(TxOutput::new(
-                        output_value,
+                        issuance_data,
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
