@@ -549,7 +549,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             // We can't issue multiple tokens in a single tx
             let issuance_count = get_tokens_issuance_count(tx.outputs());
             ensure!(
-                issuance_count <= self.chain_config.token_max_issuance_allowed(),
+                issuance_count <= 1,
                 CheckBlockTransactionsError::TokensError(
                     TokensError::MultipleTokenIssuanceInTransaction(tx.get_id(), block.get_id()),
                 )

@@ -85,7 +85,6 @@ pub struct ChainConfig {
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_ticker_len: usize,
-    token_max_issuance_allowed: usize,
 }
 
 impl ChainConfig {
@@ -173,10 +172,6 @@ impl ChainConfig {
         self.token_max_ticker_len
     }
 
-    pub fn token_max_issuance_allowed(&self) -> usize {
-        self.token_max_issuance_allowed
-    }
-
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
@@ -191,7 +186,6 @@ const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
 const TOKEN_MAX_URI_LEN: usize = 1024;
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
 const TOKEN_MAX_TICKER_LEN: usize = 5;
-const TOKEN_MAX_ISSUANCE_ALLOWED: usize = 1;
 
 fn create_mainnet_genesis() -> Genesis {
     use crate::chain::transaction::TxOutput;

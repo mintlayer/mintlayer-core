@@ -102,7 +102,6 @@ pub struct Builder {
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_ticker_len: usize,
-    token_max_issuance_allowed: usize,
 }
 
 impl Builder {
@@ -126,7 +125,6 @@ impl Builder {
             token_max_uri_len: super::TOKEN_MAX_URI_LEN,
             token_max_dec_count: super::TOKEN_MAX_DEC_COUNT,
             token_max_ticker_len: super::TOKEN_MAX_TICKER_LEN,
-            token_max_issuance_allowed: super::TOKEN_MAX_ISSUANCE_ALLOWED,
         }
     }
 
@@ -157,7 +155,6 @@ impl Builder {
             token_max_uri_len,
             token_max_dec_count,
             token_max_ticker_len,
-            token_max_issuance_allowed,
         } = self;
 
         let emission_schedule = match emission_schedule {
@@ -196,7 +193,6 @@ impl Builder {
             token_max_uri_len,
             token_max_dec_count,
             token_max_ticker_len,
-            token_max_issuance_allowed,
         }
     }
 }
