@@ -879,7 +879,7 @@ fn test_burn_tokens(#[case] seed: Seed) {
             ))
         ));
 
-        // Valid case: Burn 25% through burn data, and burn 25% with just don't add output for them, and transfer the rest 50%
+        // Valid case: Burn 25% with burn data, and burn 25% by not specifying an output, and transfer the remaining 50%
         let block_index = tf
             .make_block_builder()
             .add_transaction(
