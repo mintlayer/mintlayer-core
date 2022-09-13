@@ -41,6 +41,24 @@ fn random_string<R: SampleRange<usize>>(rng: &mut impl Rng, range_len: R) -> Str
     Alphanumeric.sample_string(rng, len)
 }
 
+fn gen_ticker_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec<u8> {
+    assert!(!c.is_ascii_alphanumeric());
+    let ticker_len = 1 + rng.gen::<usize>() % max_len;
+    let random_index_to_replace = rng.gen::<usize>() % ticker_len;
+    let token_ticker: Vec<u8> = (0..ticker_len)
+        .into_iter()
+        .map(|idx| {
+            if idx != random_index_to_replace {
+                rng.sample(&crypto::random::distributions::Alphanumeric)
+            } else {
+                c
+            }
+        })
+        .take(ticker_len)
+        .collect();
+    token_ticker
+}
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -120,39 +138,59 @@ fn token_issue_test(#[case] seed: Seed) {
             ))
         ));
 
-        // Ticker contain non alpha-numeric char
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id.clone(),
-                        0,
-                        InputWitness::NoSignature(None),
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenIssuanceV1 {
-                            token_ticker: "💖".as_bytes().to_vec(),
-                            amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
-                            number_of_decimals: rng.gen_range(1..18),
-                            metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-                        }),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .build(),
-            )
-            .build_and_process();
+        {
+            // try all possible chars for ticker and ensure everything fails except for alphanumeric chars
+            for c in u8::MIN..u8::MAX {
+                // if c is alphanumeric, then this doesn't produce an error, skip it
+                if c.is_ascii_alphanumeric() {
+                    continue;
+                }
 
-        assert!(matches!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(
-                        TokensError::IssueErrorTickerHasNoneAlphaNumericChar(_, _)
+                let token_ticker = gen_ticker_with_non_ascii(
+                    c,
+                    &mut rng,
+                    tf.chainstate.get_chain_config().token_max_ticker_len(),
+                );
+
+                // Ticker contain non alpha-numeric char
+                let result = tf
+                    .make_block_builder()
+                    .add_transaction(
+                        TransactionBuilder::new()
+                            .add_input(TxInput::new(
+                                outpoint_source_id.clone(),
+                                0,
+                                InputWitness::NoSignature(None),
+                            ))
+                            .add_output(TxOutput::new(
+                                OutputValue::Token(TokenData::TokenIssuanceV1 {
+                                    token_ticker,
+                                    amount_to_issue: Amount::from_atoms(
+                                        rng.gen_range(1..u128::MAX),
+                                    ),
+                                    number_of_decimals: rng.gen_range(1..18),
+                                    metadata_uri: random_string(&mut rng, 1..1024)
+                                        .as_bytes()
+                                        .to_vec(),
+                                }),
+                                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                            ))
+                            .build(),
                     )
-                ))
-            ))
-        ));
+                    .build_and_process();
+
+                assert!(matches!(
+                    result,
+                    Err(ChainstateError::ProcessBlockError(
+                        BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                            CheckBlockTransactionsError::TokensError(
+                                TokensError::IssueErrorTickerHasNoneAlphaNumericChar(_, _)
+                            )
+                        ))
+                    ))
+                ));
+            }
+        }
 
         // Issue amount is too low
         let result = tf
