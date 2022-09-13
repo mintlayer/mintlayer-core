@@ -317,7 +317,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         self.get_gen_block_index(&self.get_best_block_id()?)
     }
 
-    pub fn get_token_info(
+    pub fn get_token_aux_data(
         &self,
         token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, PropertyQueryError> {

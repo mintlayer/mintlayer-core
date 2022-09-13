@@ -259,7 +259,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
 
     fn get_token_aux_data(&self, token_id: TokenId) -> Result<TokenAuxiliaryData, ChainstateError> {
         self.chainstate
-            .get_token_detail(token_id)
+            .get_token_aux_data(token_id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 

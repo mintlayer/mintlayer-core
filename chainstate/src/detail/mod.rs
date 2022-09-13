@@ -315,19 +315,16 @@ impl<S: BlockchainStorage> Chainstate<S> {
         Ok(block)
     }
 
-    pub fn get_token_detail(
+    pub fn get_token_aux_data(
         &self,
         token_id: TokenId,
     ) -> Result<TokenAuxiliaryData, PropertyQueryError> {
         let chainstate_ref = self.make_db_tx_ro();
 
         // Find issuance transaction id by token_id
-        let token_aux_data =
-            chainstate_ref
-                .get_token_info(&token_id)?
-                .ok_or(PropertyQueryError::TokensError(
-                    TokensError::TokensNotRegistered(token_id),
-                ))?;
+        let token_aux_data = chainstate_ref.get_token_aux_data(&token_id)?.ok_or(
+            PropertyQueryError::TokensError(TokensError::TokensNotRegistered(token_id)),
+        )?;
 
         Ok(token_aux_data)
     }
@@ -336,7 +333,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
         &self,
         token_id: TokenId,
     ) -> Result<Option<RPCTokenInfo>, PropertyQueryError> {
-        let token_aux_data = self.get_token_detail(token_id)?;
+        let token_aux_data = self.get_token_aux_data(token_id)?;
 
         Ok(token_aux_data
             .issuance_tx()
@@ -379,7 +376,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
         token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, PropertyQueryError> {
         let chainstate_ref = self.make_db_tx_ro();
-        chainstate_ref.get_token_info(token_id)
+        chainstate_ref.get_token_aux_data(token_id)
     }
 
     pub fn get_token_id_from_issuance_tx(
