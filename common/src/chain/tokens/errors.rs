@@ -46,8 +46,6 @@ pub enum TokensError {
     NoTxInMainChainByOutpoint,
     #[error("Block reward output can't be used in tokens transaction")]
     BlockRewardOutputCantBeUsedInTokenTx,
-    #[error("Tokens with ID: `{0}` are not registered")]
-    TokenNotRegistered(TokenId),
     #[error("Tokens ID can't be calculated")]
     TokenIdCantBeCalculated,
     #[error("Burned tokens cannot be transferred")]
