@@ -255,9 +255,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     get_input_token_id_and_amount(utxo.output().value(), || Ok(None))?;
                 match key {
                     CoinOrTokenId::Coin => Ok((CoinOrTokenId::Coin, amount)),
-                    CoinOrTokenId::TokenId(_) => Err(ConnectTransactionError::TokensError(
-                        TokensError::TokensInBlockReward,
-                    )),
+                    CoinOrTokenId::TokenId(tid) => Ok((CoinOrTokenId::TokenId(tid), amount)),
                 }
             }
         }
