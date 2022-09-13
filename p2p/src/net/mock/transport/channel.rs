@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, sync::Mutex};
+use std::{collections::BTreeMap, io, sync::Mutex};
 
 use async_trait::async_trait;
 use once_cell::sync::Lazy;
@@ -138,7 +138,13 @@ impl MockStream for ChannelMockStream {
     }
 
     async fn recv(&mut self) -> Result<Option<Message>> {
-        Ok(self.receiver.recv().await)
+        // To preserve the TCP implementation behaviour, return the `UnexpectedEof` error when
+        // the channel is closed.
+        self.receiver
+            .recv()
+            .await
+            .ok_or(io::Error::from(io::ErrorKind::UnexpectedEof).into())
+            .and_then(|m| Ok(Some(m)))
     }
 }
 
