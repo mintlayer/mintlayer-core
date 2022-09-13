@@ -1028,6 +1028,7 @@ fn test_reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
         });
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -1089,7 +1090,7 @@ fn test_reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         let block_b1 = tf.block(*block_index.block_id());
         let b1_outpoint_id = TestBlockInfo::from_block(&block_b1).txns[0].0.clone();
 
-        // Try to transfer spent tokens
+        // Try to transfer burnt tokens
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -1195,7 +1196,7 @@ fn test_reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         let b2_outpoint_id = TestBlockInfo::from_block(&block_b2).txns[0].0.clone();
         assert!(
             tf.process_block(block_b2, BlockSource::Local).unwrap().is_none(),
-            "Reog is not allowed at this height"
+            "Reorg shouldn't have happened yet"
         );
 
         // C2 - burn all tokens in a second chain
@@ -1231,7 +1232,7 @@ fn test_reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         let c2_outpoint_id = TestBlockInfo::from_block(&block_c2).txns[0].0.clone();
         assert!(
             tf.process_block(block_c2, BlockSource::Local).unwrap().is_none(),
-            "Reog is not allowed at this height"
+            "Reorg shouldn't have happened yet"
         );
 
         // Now D2 trying to spend tokens from mainchain
@@ -1267,7 +1268,7 @@ fn test_reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         let d2_outpoint_id = TestBlockInfo::from_block(&block_d2).txns[0].0.clone();
         assert!(
             tf.process_block(block_d2, BlockSource::Local).unwrap().is_none(),
-            "Reog is not allowed at this height"
+            "Reorg shouldn't have happened yet"
         );
 
         // Block E2 will cause reorganization
