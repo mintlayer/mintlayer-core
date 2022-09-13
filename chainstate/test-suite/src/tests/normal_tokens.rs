@@ -1552,14 +1552,7 @@ fn test_tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
 
         assert!(tf.chainstate.get_token_info_for_rpc(token_id).unwrap().is_none());
 
-        assert!(matches!(
-            tf.chainstate.get_token_aux_data(token_id),
-            Err(ChainstateError::FailedToReadProperty(
-                chainstate_types::PropertyQueryError::TokensError(
-                    TokensError::TokensNotRegistered(_)
-                )
-            ))
-        ));
+        assert!(tf.chainstate.get_token_aux_data(token_id).unwrap().is_none());
     })
 }
 

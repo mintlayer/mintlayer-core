@@ -3,7 +3,7 @@ use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
     chain::{
         block::{BlockHeader, BlockReward},
-        tokens::{OutputValue, RPCTokenInfo, TokenAuxiliaryData, TokenData, TokenId, TokensError},
+        tokens::{OutputValue, RPCTokenInfo, TokenAuxiliaryData, TokenData, TokenId},
         Block, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
@@ -163,9 +163,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateQuery<'a, S, O> {
         &self,
         token_id: TokenId,
     ) -> Result<Option<RPCTokenInfo>, PropertyQueryError> {
-        let token_aux_data = self.get_token_aux_data(&token_id)?.ok_or(
-            PropertyQueryError::TokensError(TokensError::TokensNotRegistered(token_id)),
-        )?;
+        let token_aux_data = self.get_token_aux_data(&token_id)?;
+        let token_aux_data = match token_aux_data {
+            Some(data) => data,
+            None => return Ok(None),
+        };
 
         Ok(token_aux_data
             .issuance_tx()
