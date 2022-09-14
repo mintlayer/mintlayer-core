@@ -1059,19 +1059,28 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn test_bip125_max_replacements<
-    T: GetTime + Send + std::marker::Sync,
-    M: GetMemoryUsage + Send + std::marker::Sync,
->(
-    mempool: &mut Mempool<T, M>,
-    num_potential_replacements: usize,
-) -> anyhow::Result<()> {
-    let tx = TxGenerator::new()
-        .with_num_outputs(num_potential_replacements - 1)
-        .replaceable()
-        .generate_tx(mempool)
-        .await
-        .expect("generate_tx failed");
+async fn test_bip125_max_replacements(num_potential_replacements: usize) -> anyhow::Result<()> {
+    let seed = Seed::from_entropy();
+    let tf = TestFramework::default();
+    let mut rng = make_seedable_rng(seed);
+    let genesis = tf.genesis();
+    let mut tx_builder = TransactionBuilder::new()
+        .add_input(TxInput::new(
+            OutPointSourceId::BlockReward(genesis.get_id().into()),
+            0,
+            empty_witness(&mut rng),
+        ))
+        .with_flags(1);
+
+    for _ in 0..(num_potential_replacements - 1) {
+        tx_builder = tx_builder.add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(999_999_999_000)),
+            OutputPurpose::Transfer(anyonecanspend_address()),
+        ));
+    }
+
+    let tx = tx_builder.build();
+    let mut mempool = setup_new(tf.chainstate()).await;
     let input = tx.inputs().first().expect("one input").clone();
     let outputs = tx.outputs().clone();
     let tx_id = tx.get_id();
@@ -1080,21 +1089,23 @@ async fn test_bip125_max_replacements<
     let flags = 0;
     let locktime = 0;
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
-    let fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
+    let fee = 2_000;
     for (index, _) in outputs.iter().enumerate() {
         let input = TxInput::new(
             outpoint_source_id.clone(),
             index.try_into().unwrap(),
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         );
-        let tx = tx_spend_input(mempool, input, Amount::from_atoms(fee), flags, locktime).await?;
+        let tx = tx_spend_input(&mempool, input, Amount::from_atoms(fee), flags, locktime).await?;
         mempool.add_transaction(tx).await?;
     }
     let mempool_size_before_replacement = mempool.store.txs_by_id.len();
 
-    let replacement_fee = Amount::from_atoms(1000) * fee;
-    let replacement_tx = tx_spend_input(mempool, input, replacement_fee, flags, locktime).await?;
+    let replacement_fee = Amount::from_atoms(1_000_000_000) * fee;
+    let replacement_tx = tx_spend_input(&mempool, input, replacement_fee, flags, locktime).await?;
+    eprintln!("before adding replacement");
     mempool.add_transaction(replacement_tx).await?;
+    eprintln!("after adding replacement");
     let mempool_size_after_replacement = mempool.store.txs_by_id.len();
 
     assert_eq!(
@@ -1106,26 +1117,24 @@ async fn test_bip125_max_replacements<
 
 #[tokio::test]
 async fn too_many_conflicts() -> anyhow::Result<()> {
-    let mut mempool = setup().await;
     let num_potential_replacements = MAX_BIP125_REPLACEMENT_CANDIDATES + 1;
-    let err = test_bip125_max_replacements(&mut mempool, num_potential_replacements)
+    let err = test_bip125_max_replacements(num_potential_replacements)
         .await
         .expect_err("expected error TooManyPotentialReplacements")
         .downcast()
         .expect("failed to downcast");
+    eprintln!("the error is {:?}", err);
     assert!(matches!(
         err,
         Error::TxValidationError(TxValidationError::TooManyPotentialReplacements)
     ));
-    mempool.store.assert_valid();
     Ok(())
 }
 
 #[tokio::test]
 async fn not_too_many_conflicts() -> anyhow::Result<()> {
-    let mut mempool = setup().await;
     let num_potential_replacements = MAX_BIP125_REPLACEMENT_CANDIDATES;
-    test_bip125_max_replacements(&mut mempool, num_potential_replacements).await
+    test_bip125_max_replacements(num_potential_replacements).await
 }
 
 #[tokio::test]

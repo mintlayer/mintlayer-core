@@ -292,7 +292,6 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
     }
 
     fn available_inputs(&self, tx: &Transaction) -> Result<Vec<TxInput>, ChainstateError> {
-        eprintln!("available_inputs chainstate");
         let mut available_inputs = Vec::new();
         for input in tx.inputs() {
             let index = self

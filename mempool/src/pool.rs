@@ -300,7 +300,6 @@ where
             .chainstate_handle
             .call(move |this| this.available_inputs(&tx_clone))
             .await??;
-        eprintln!("got available inputs");
         tx.inputs()
             .iter()
             .find(|input| {
@@ -414,7 +413,6 @@ where
         let conflicts = self.rbf_checks(tx).await?;
 
         self.verify_inputs_available(tx).await?;
-        eprintln!("done verifying inputs available");
 
         self.pays_minimum_relay_fees(tx).await?;
 
@@ -715,7 +713,10 @@ where
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
     fn spends_unconfirmed(&self, mempool: &Mempool<T, M>) -> bool {
-        mempool.contains_transaction(self.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
+        let outpoint_id = self.outpoint().tx_id().get_tx_id().cloned();
+        outpoint_id.is_some()
+            && mempool
+                .contains_transaction(self.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
     }
 }
 
