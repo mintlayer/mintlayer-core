@@ -311,8 +311,8 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         Ok(available_inputs)
     }
 
-    // FIXME proper errors
-    // FIXME this logic is copied from transaction verifier
+    // TODO(PR) proper errors
+    // TODO this logic is copied from transaction verifier
     fn get_outpoint_value(
         &self,
         outpoint: &common::chain::OutPoint,

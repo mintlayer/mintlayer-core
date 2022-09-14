@@ -847,11 +847,13 @@ async fn tx_spend_several_inputs<
     let mut input_values = Vec::new();
     let inputs = inputs.to_owned();
     for input in inputs.clone() {
+        let outpoint = input.outpoint().clone();
         input_values.push(
             mempool
                 .chainstate_handle
                 .call(move |this| this.get_outpoint_value(input.outpoint()))
-                .await??,
+                .await?
+                .or_else(|_| mempool.store.get_unconfirmed_outpoint_value(&outpoint))?,
         )
     }
     let input_value = input_values.into_iter().sum::<Option<_>>().ok_or_else(|| {
@@ -1794,26 +1796,36 @@ async fn descendant_of_expired_entry() -> anyhow::Result<()> {
     let mock_clock = MockClock::new();
     logging::init_logging::<&str>(None);
 
-    let config = Arc::new(common::chain::config::create_unit_test_config());
-    let chainstate_interface = start_chainstate(Arc::clone(&config)).await;
+    let seed = Seed::from_entropy();
+    let tf = TestFramework::default();
+    let genesis = tf.genesis();
+    let mut rng = make_seedable_rng(seed);
 
+    let parent = TransactionBuilder::new()
+        .add_input(TxInput::new(
+            OutPointSourceId::BlockReward(genesis.get_id().into()),
+            0,
+            empty_witness(&mut rng),
+        ))
+        .add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(1_000)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+        .add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(1_000)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+        .build();
+
+    let parent_id = parent.get_id();
+
+    let chainstate = tf.chainstate();
     let mut mempool = Mempool::new(
-        config,
-        chainstate_interface,
+        chainstate.get_chain_config(),
+        start_chainstate_new(chainstate).await,
         mock_clock.clone(),
         SystemUsageEstimator {},
     );
-
-    let num_inputs = 1;
-    let num_outputs = 2;
-    let fee = get_relay_fee_from_tx_size(estimate_tx_size(num_inputs, num_outputs));
-    let parent = TxGenerator::new()
-        .with_num_inputs(num_inputs)
-        .with_num_outputs(num_outputs)
-        .with_fee(Amount::from_atoms(fee))
-        .generate_tx(&mempool)
-        .await?;
-    let parent_id = parent.get_id();
     mempool.add_transaction(parent).await?;
 
     let flags = 0;
@@ -1879,7 +1891,7 @@ async fn mempool_full() -> anyhow::Result<()> {
             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
         ))
         .build();
-    log::debug!("mempool_full: tx has is {}", tx.get_id().get());
+    log::debug!("mempool_full: tx has id {}", tx.get_id().get());
     assert!(matches!(
         mempool.add_transaction(tx).await,
         Err(Error::MempoolFull)

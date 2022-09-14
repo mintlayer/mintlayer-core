@@ -300,6 +300,7 @@ where
             .chainstate_handle
             .call(move |this| this.available_inputs(&tx_clone))
             .await??;
+        eprintln!("got available inputs");
         tx.inputs()
             .iter()
             .find(|input| {
@@ -413,6 +414,7 @@ where
         let conflicts = self.rbf_checks(tx).await?;
 
         self.verify_inputs_available(tx).await?;
+        eprintln!("done verifying inputs available");
 
         self.pays_minimum_relay_fees(tx).await?;
 
