@@ -16,13 +16,15 @@
 //! A simple adaptor to add transaction capability to a type that only implements the basic
 //! read/write operations, giving a full-featured (albeit not necessarily efficient) backend.
 
+mod prefix_iter_rw;
+
 use crate::{
     adaptor::{Construct, CoreOps},
-    backend as traits,
+    backend,
     info::{DbDesc, DbIndex},
     Data,
 };
-use traits::{ReadOps, WriteOps};
+use backend::{PrefixIter, ReadOps, WriteOps};
 
 use std::collections::BTreeMap;
 use utils::sync;
@@ -36,7 +38,15 @@ impl<'tx, T: ReadOps> ReadOps for TxRo<'tx, T> {
     }
 }
 
-impl<'tx, T: ReadOps> traits::TxRo for TxRo<'tx, T> {}
+impl<'tx, 'i, T: PrefixIter<'i>> PrefixIter<'i> for TxRo<'tx, T> {
+    type Iterator = T::Iterator;
+
+    fn prefix_iter<'m: 'i>(&'m self, idx: DbIndex, prefix: Data) -> crate::Result<Self::Iterator> {
+        self.0.prefix_iter(idx, prefix)
+    }
+}
+
+impl<'tx, T: ReadOps> backend::TxRo for TxRo<'tx, T> {}
 
 // Tracker for database changes
 type DeltaMap = BTreeMap<Data, Option<Data>>;
@@ -62,6 +72,14 @@ impl<'tx, T: ReadOps> ReadOps for TxRw<'tx, T> {
     }
 }
 
+impl<'tx, 'i, T: PrefixIter<'i>> PrefixIter<'i> for TxRw<'tx, T> {
+    type Iterator = prefix_iter_rw::Iter<'i, T>;
+
+    fn prefix_iter<'m: 'i>(&'m self, idx: DbIndex, prefix: Data) -> crate::Result<Self::Iterator> {
+        prefix_iter_rw::iter(self, idx, prefix)
+    }
+}
+
 impl<'tx, T> WriteOps for TxRw<'tx, T> {
     fn put(&mut self, idx: DbIndex, key: Data, val: Data) -> crate::Result<()> {
         self.update(idx, key, Some(val))
@@ -72,9 +90,10 @@ impl<'tx, T> WriteOps for TxRw<'tx, T> {
     }
 }
 
-impl<'tx, T: ReadOps + WriteOps> traits::TxRw for TxRw<'tx, T> {
+impl<'tx, T: ReadOps + WriteOps> backend::TxRw for TxRw<'tx, T> {
     fn commit(mut self) -> crate::Result<()> {
-        for (idx, kvmap) in self.deltas.into_iter().enumerate().map(|(i, m)| (DbIndex::new(i), m)) {
+        let entries = self.deltas.into_iter().enumerate().map(|(i, m)| (DbIndex::new(i), m));
+        for (idx, kvmap) in entries {
             for (key, val) in kvmap {
                 match val {
                     None => self.db.del(idx, &key)?,
@@ -100,7 +119,7 @@ impl<T> Clone for TransactionLockImpl<T> {
     }
 }
 
-impl<'tx, T: 'tx + ReadOps> traits::TransactionalRo<'tx> for TransactionLockImpl<T> {
+impl<'tx, T: 'tx + ReadOps> backend::TransactionalRo<'tx> for TransactionLockImpl<T> {
     type TxRo = TxRo<'tx, T>;
 
     fn transaction_ro<'st: 'tx>(&'st self) -> Self::TxRo {
@@ -108,7 +127,7 @@ impl<'tx, T: 'tx + ReadOps> traits::TransactionalRo<'tx> for TransactionLockImpl
     }
 }
 
-impl<'tx, T: 'tx + ReadOps + WriteOps> traits::TransactionalRw<'tx> for TransactionLockImpl<T> {
+impl<'tx, T: 'tx + ReadOps + WriteOps> backend::TransactionalRw<'tx> for TransactionLockImpl<T> {
     type TxRw = TxRw<'tx, T>;
 
     fn transaction_rw<'st: 'tx>(&'st self) -> Self::TxRw {
@@ -119,7 +138,7 @@ impl<'tx, T: 'tx + ReadOps + WriteOps> traits::TransactionalRw<'tx> for Transact
     }
 }
 
-impl<T: CoreOps + Sync + Send + 'static> traits::BackendImpl for TransactionLockImpl<T> {}
+impl<T: CoreOps + Sync + Send + 'static> backend::BackendImpl for TransactionLockImpl<T> {}
 
 /// Add lock-based transactions to given bare backend implementation.
 ///
@@ -137,7 +156,7 @@ where
     }
 }
 
-impl<T: CoreOps + Sync + Send + 'static> traits::Backend for Locking<T>
+impl<T: CoreOps + Sync + Send + 'static> backend::Backend for Locking<T>
 where
     T::From: Clone,
 {

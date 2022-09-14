@@ -17,9 +17,12 @@
 
 #![allow(clippy::unwrap_used)]
 
+// Support modules
 #[macro_use]
 pub mod prelude;
+pub mod model;
 
+// Test modules
 mod basic;
 mod concurrent;
 #[cfg(not(loom))]

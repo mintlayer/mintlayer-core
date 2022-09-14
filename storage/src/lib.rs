@@ -23,6 +23,21 @@
 //! For now, only basic storage implementation is provided. It is to be replaced with a proper one
 //! abstracting over storage backend and a more complete feature set.
 //!
+//! # Prefix iteration
+//!
+//! You can iterate over a prefix of the key. Consider, as an example, a map from an `Outpoint` to
+//! a `Utxo`. Each outpoint consists of a `H256` transaction ID and a `u32` index. You can iterate
+//! over all `Utxo`s for given transaction ID by calling `map.prefix_iter(tx_id)`, provided the
+//! following trait impl exists:
+//!
+//! ```ignore
+//! impl HasPrefix<H256> for Outpoint {}
+//! ```
+//!
+//! The impl above asserts that the encoding of `Outpoint` starts with an encoding of a value of
+//! type `H256` representing the transaction ID. The result is an iterator over all
+//! `(Outpoint, Utxo)` pairs that belong to given transaction.
+//!
 //! # Example
 //!
 //! ```
@@ -77,14 +92,14 @@
 //! # test().unwrap();
 //! ```
 
-mod interface;
+mod database;
 pub mod schema;
 
 // Re-export user-facing items from core
 pub use storage_core::{error, Backend, Error, Result};
 
 // Re-export the interface types
-pub use interface::*;
+pub use database::*;
 
 // Re-export the in-memory storage
 // TODO: Remove this to further decouple the general storage interface from individual backends
@@ -92,31 +107,4 @@ pub use interface::*;
 pub use storage_inmemory as inmemory;
 
 #[cfg(test)]
-mod test {
-    use super::*;
-    use storage_core::Data;
-
-    decl_schema! {
-        Schema {
-            MyMap: Map<Data, Data>,
-        }
-    }
-
-    #[test]
-    fn empty_ro() {
-        utils::concurrency::model(|| {
-            let store = Storage::<_, Schema>::new(inmemory::InMemory::new()).unwrap();
-            let tx = store.transaction_ro();
-            assert_eq!(tx.get::<MyMap, _>().get(&b"foo".to_vec()), Ok(None));
-        });
-    }
-
-    #[test]
-    fn empty_rw() {
-        utils::concurrency::model(|| {
-            let store = Storage::<_, Schema>::new(inmemory::InMemory::new()).unwrap();
-            let tx = store.transaction_rw();
-            assert_eq!(tx.get::<MyMap, _>().get(&b"foo".to_vec()), Ok(None));
-        });
-    }
-}
+mod test;
