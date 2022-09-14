@@ -1678,13 +1678,29 @@ async fn different_size_txs() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn descendant_score() -> anyhow::Result<()> {
-    let mut mempool = setup().await;
-    let tx = TxGenerator::new()
-        .with_num_outputs(2)
-        .generate_tx(&mempool)
-        .await
-        .expect("generate_replaceable_tx");
+    let seed = Seed::from_entropy();
+    let tf = TestFramework::default();
+    let genesis = tf.genesis();
+    let mut rng = make_seedable_rng(seed);
+
+    let tx = TransactionBuilder::new()
+        .add_input(TxInput::new(
+            OutPointSourceId::BlockReward(genesis.get_id().into()),
+            0,
+            empty_witness(&mut rng),
+        ))
+        .add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(10_000)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+        .add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(10_000)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+        .build();
     let tx_id = tx.get_id();
+
+    let mut mempool = setup_new(tf.chainstate()).await;
     mempool.add_transaction(tx).await?;
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
