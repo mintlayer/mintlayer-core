@@ -1918,17 +1918,26 @@ async fn mempool_full() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn no_empty_bags_in_descendant_score_index() -> anyhow::Result<()> {
-    let mut mempool = setup().await;
+    let seed = Seed::from_entropy();
+    let tf = TestFramework::default();
+    let mut rng = make_seedable_rng(seed);
+    let genesis = tf.genesis();
+    let mut tx_builder = TransactionBuilder::new().add_input(TxInput::new(
+        OutPointSourceId::BlockReward(genesis.get_id().into()),
+        0,
+        empty_witness(&mut rng),
+    ));
 
-    let num_inputs = 1;
     let num_outputs = 100;
-    let fee = get_relay_fee_from_tx_size(estimate_tx_size(num_inputs, num_outputs));
-    let parent = TxGenerator::new()
-        .with_num_inputs(num_inputs)
-        .with_num_outputs(num_outputs)
-        .with_fee(Amount::from_atoms(fee))
-        .generate_tx(&mempool)
-        .await?;
+    for _ in 0..num_outputs {
+        tx_builder = tx_builder.add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(2_000)),
+            OutputPurpose::Transfer(anyonecanspend_address()),
+        ));
+    }
+    let parent = tx_builder.build();
+    let mut mempool = setup_new(tf.chainstate()).await;
+
     let parent_id = parent.get_id();
 
     let outpoint_source_id = OutPointSourceId::Transaction(parent.get_id());
@@ -1936,6 +1945,7 @@ async fn no_empty_bags_in_descendant_score_index() -> anyhow::Result<()> {
     let num_child_txs = num_outputs;
     let flags = 0;
     let locktime = 0;
+    let fee = get_relay_fee_from_tx_size(estimate_tx_size(1, num_outputs));
     let mut txs = Vec::new();
     for i in 0..num_child_txs {
         txs.push(
