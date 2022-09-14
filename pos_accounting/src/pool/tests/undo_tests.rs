@@ -89,7 +89,7 @@ fn check_create_pool(op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingVi
 }
 
 #[test]
-fn check_decommission_pool_stoorage() {
+fn check_decommission_pool_storage() {
     let mut storage = InMemoryPoSAccounting::new();
     let mut db = PoSAccountingDBMut::new_empty(&mut storage);
 
