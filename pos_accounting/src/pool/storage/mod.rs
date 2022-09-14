@@ -26,10 +26,8 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         delegation_target: H256,
         amount_to_delegate: Amount,
     ) -> Result<(), Error> {
-        let current_amount = self
-            .store
-            .get_delegation_balance(delegation_target)?
-            .ok_or(Error::DelegateToNonexistingId)?;
+        let current_amount =
+            self.store.get_delegation_balance(delegation_target)?.unwrap_or(Amount::ZERO);
         let new_amount =
             (current_amount + amount_to_delegate).ok_or(Error::DelegationBalanceAdditionError)?;
         self.store.set_delegation_balance(delegation_target, new_amount)?;
@@ -47,7 +45,11 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
             .ok_or(Error::DelegateToNonexistingId)?;
         let new_amount = (current_amount - amount_to_delegate)
             .ok_or(Error::DelegationBalanceSubtractionError)?;
-        self.store.set_delegation_balance(delegation_target, new_amount)?;
+        if new_amount == Amount::ZERO {
+            self.store.del_delegation_balance(delegation_target)?;
+        } else {
+            self.store.set_delegation_balance(delegation_target, new_amount)?;
+        }
         Ok(())
     }
 
@@ -63,7 +65,11 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         let pool_amount =
             self.store.get_pool_balance(pool_id)?.ok_or(Error::DelegateToNonexistingPool)?;
         let new_amount = (pool_amount - amount_to_add).ok_or(Error::PoolBalanceSubtractionError)?;
-        self.store.set_pool_balance(pool_id, new_amount)?;
+        if new_amount == Amount::ZERO {
+            self.store.del_pool_balance(pool_id)?;
+        } else {
+            self.store.set_pool_balance(pool_id, new_amount)?;
+        }
         Ok(())
     }
 
