@@ -75,10 +75,7 @@ fn check_create_pool(op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingVi
         .expect("get_pool_delegations_shares ok")
         .is_none());
 
-    match undo {
-        PoSAccountingUndo::CreatePool(u) => op.undo_create_pool(u).unwrap(),
-        _ => unreachable!(),
-    }
+    op.undo(undo).unwrap();
 
     assert!(op.get_pool_balance(pool_id).expect("get_pool_balance ok").is_none());
     assert!(op.get_pool_data(pool_id).expect("get_pool_data ok").is_none());
@@ -118,10 +115,7 @@ fn check_decommission_pool(op: &mut (impl PoSAccountingOperatorWrite + PoSAccoun
         .expect("get_pool_delegations_shares ok")
         .is_none());
 
-    match undo {
-        PoSAccountingUndo::DecommissionPool(u) => op.undo_decommission_pool(u).unwrap(),
-        _ => unreachable!(),
-    }
+    op.undo(undo).unwrap();
 
     assert_eq!(
         op.get_pool_balance(pool_id)
@@ -178,10 +172,7 @@ fn check_delegation_id(op: &mut (impl PoSAccountingOperatorWrite + PoSAccounting
         .expect("get_pool_delegation_share ok")
         .is_none());
 
-    match undo {
-        PoSAccountingUndo::CreateDelegationId(u) => op.undo_create_delegation_id(u).unwrap(),
-        _ => unreachable!(),
-    }
+    op.undo(undo).unwrap();
 
     assert!(op.get_delegation_data(delegation_id).expect("get_delegation_data ok").is_none());
 
@@ -251,10 +242,7 @@ fn check_delegate_staking(op: &mut (impl PoSAccountingOperatorWrite + PoSAccount
         (pledged_amount + delegated_amount).unwrap()
     );
 
-    match undo {
-        PoSAccountingUndo::DelegateStaking(u) => op.undo_delegate_staking(u).unwrap(),
-        _ => unreachable!(),
-    }
+    op.undo(undo).unwrap();
 
     assert_eq!(
         op.get_delegation_data(delegation_id)
@@ -306,7 +294,7 @@ fn check_spend_share(op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingVi
     op.delegate_staking(delegation_id, delegated_amount).unwrap();
 
     let spent_amount = Amount::from_atoms(50);
-    op.spend_share_from_delegation_id(delegation_id, spent_amount).unwrap();
+    let undo = op.spend_share_from_delegation_id(delegation_id, spent_amount).unwrap();
 
     assert_eq!(
         op.get_delegation_balance(delegation_id)
@@ -324,6 +312,39 @@ fn check_spend_share(op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingVi
         op.get_pool_data(pool_id)
             .expect("get_pool_data ok")
             .expect("get_pool_data some"),
+        PoolData::new(pub_key.clone(), pledged_amount)
+    );
+    assert_eq!(
+        op.get_delegation_data(delegation_id)
+            .expect("get_delegation_data ok")
+            .expect("get_delegation_data some"),
+        DelegationData::new(pool_id, del_pub_key.clone())
+    );
+    assert_eq!(
+        op.get_pool_delegation_share(pool_id, delegation_id)
+            .expect("get_delegation_share ok")
+            .expect("get_delegation_share some"),
+        (delegated_amount - spent_amount).unwrap()
+    );
+
+    op.undo(undo).unwrap();
+
+    assert_eq!(
+        op.get_delegation_balance(delegation_id)
+            .expect("get_delegation_balance ok")
+            .expect("get_delegation_balance some"),
+        delegated_amount
+    );
+    assert_eq!(
+        op.get_pool_balance(pool_id)
+            .expect("get_pool_balance ok")
+            .expect("get_pool_balance some"),
+        (pledged_amount + delegated_amount).unwrap()
+    );
+    assert_eq!(
+        op.get_pool_data(pool_id)
+            .expect("get_pool_data ok")
+            .expect("get_pool_data some"),
         PoolData::new(pub_key, pledged_amount)
     );
     assert_eq!(
@@ -336,7 +357,7 @@ fn check_spend_share(op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingVi
         op.get_pool_delegation_share(pool_id, delegation_id)
             .expect("get_delegation_share ok")
             .expect("get_delegation_share some"),
-        (delegated_amount - spent_amount).unwrap()
+        delegated_amount
     );
 }
 
