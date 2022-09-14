@@ -141,15 +141,12 @@ impl BanScore for TokensError {
             TokensError::InsufficientTokenFees(_, _) => 100,
             TokensError::BurnZeroTokens(_, _) => 100,
             TokensError::NoTxInMainChainByOutpoint => 100,
-            TokensError::BlockRewardOutputCantBeUsedInTokenTx => 100,
             TokensError::TransferZeroTokens(_, _) => 100,
             TokensError::TokenIdCantBeCalculated => 100,
             TokensError::AttemptToTransferBurnedTokens => 100,
             TokensError::TokensInBlockReward => 100,
-            TokensError::InvariantBrokenDuplicateTokenId(_, _) => 100,
             TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_) => 100,
-            TokensError::InvariantBrokenRegisterIssuanceOnNonexistentToken(_) => 100,
-            TokensError::InvariantBrokenFlushNonexistentToken(_) => 100,
+            TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => 100,
         }
     }
 }

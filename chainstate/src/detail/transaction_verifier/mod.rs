@@ -37,7 +37,10 @@ use common::{
         block::timestamp::BlockTimestamp,
         calculate_tx_index_from_block,
         signature::{verify_signature, Transactable},
-        tokens::{get_tokens_issuance_count, OutputValue, TokenId, TokensError},
+        tokens::{
+            get_tokens_issuance_count, is_tokens_issuance, token_id, OutputValue,
+            TokenAuxiliaryData, TokenId, TokensError,
+        },
         Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
         Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
     },
@@ -591,6 +594,12 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 // pre-cache all inputs
                 self.precache_inputs(tx.inputs())?;
 
+                // pre-cache token ids to check ensure it's not in the db when issuing
+                self.precache_token_issuance(
+                    |id| self.db_tx.get_token_aux_data(id).map_err(ConnectTransactionError::from),
+                    tx,
+                )?;
+
                 // check for attempted money printing
                 let fee = Some(self.check_transferred_amounts_and_get_fee(block.get_id(), tx)?);
 
@@ -679,6 +688,12 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 // pre-cache all inputs
                 self.precache_inputs(tx.inputs())?;
 
+                // pre-cache token ids before removing them
+                self.precache_token_issuance(
+                    |id| self.db_tx.get_token_aux_data(id).map_err(ConnectTransactionError::from),
+                    tx,
+                )?;
+
                 // unspend inputs
                 for input in tx.inputs() {
                     let outpoint = input.outpoint();
@@ -691,7 +706,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 }
 
                 // Remove issued tokens
-                unregister_token_issuance(&mut self.tokens_cache, tx, block.get_id())?;
+                unregister_token_issuance(&mut self.tokens_cache, tx)?;
             }
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.block_reward_transactable();
@@ -721,6 +736,37 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
             }
         }
 
+        Ok(())
+    }
+
+    fn precache_token_issuance<
+        F: Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, ConnectTransactionError>,
+    >(
+        &mut self,
+        token_data_getter: F,
+        tx: &Transaction,
+    ) -> Result<(), ConnectTransactionError> {
+        let has_token_issuance =
+            tx.outputs().iter().any(|output| is_tokens_issuance(output.value()));
+        if has_token_issuance {
+            let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+            match self.tokens_cache.entry(token_id) {
+                Entry::Vacant(e) => {
+                    let current_token_data = token_data_getter(&token_id)?;
+                    match current_token_data {
+                        Some(el) => {
+                            e.insert(CachedTokensOperation::Read(el));
+                        }
+                        None => (),
+                    }
+                }
+                Entry::Occupied(_) => {
+                    return Err(ConnectTransactionError::TokensError(
+                        TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(token_id),
+                    ));
+                }
+            }
+        }
         Ok(())
     }
 

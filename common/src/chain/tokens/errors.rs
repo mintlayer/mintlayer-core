@@ -44,20 +44,14 @@ pub enum TokensError {
     TransferZeroTokens(Id<Transaction>, Id<Block>),
     #[error("Can't fetch transaction inputs in main chain by outpoint")]
     NoTxInMainChainByOutpoint,
-    #[error("Block reward output can't be used in tokens transaction")]
-    BlockRewardOutputCantBeUsedInTokenTx,
     #[error("Tokens ID can't be calculated")]
     TokenIdCantBeCalculated,
     #[error("Burned tokens cannot be transferred")]
     AttemptToTransferBurnedTokens,
     #[error("Block reward can't be paid in tokens")]
     TokensInBlockReward,
-    #[error("Invariant broken - duplicate token id in transaction {0} in block {1}")]
-    InvariantBrokenDuplicateTokenId(Id<Transaction>, Id<Block>),
     #[error("Invariant broken - attempt undo issuance on non-existent token {0}")]
     InvariantBrokenUndoIssuanceOnNonexistentToken(TokenId),
     #[error("Invariant broken - attempt register issuance on non-existent token {0}")]
-    InvariantBrokenRegisterIssuanceOnNonexistentToken(TokenId),
-    #[error("Invariant broken - flush non-existent token {0}")]
-    InvariantBrokenFlushNonexistentToken(TokenId),
+    InvariantBrokenRegisterIssuanceWithDuplicateId(TokenId),
 }
