@@ -133,9 +133,10 @@ where
         let socket = T::bind(addr).await?;
         let local_addr = socket.local_address().expect("to have bind address available");
 
+        let address = local_addr.clone();
         tokio::spawn(async move {
             let mut backend = backend::Backend::<T>::new(
-                local_addr,
+                address,
                 socket,
                 Arc::clone(&_config),
                 cmd_rx,
@@ -150,11 +151,12 @@ where
             }
         });
 
+        let peer_id = types::MockPeerId::from_socket_address::<T>(&local_addr);
         Ok((
             Self::ConnectivityHandle {
                 local_addr,
                 cmd_tx: cmd_tx.clone(),
-                peer_id: types::MockPeerId::from_socket_address::<T>(&local_addr),
+                peer_id,
                 conn_rx,
                 _marker: Default::default(),
             },
@@ -211,7 +213,7 @@ where
     }
 
     async fn local_addr(&self) -> crate::Result<Option<S::Address>> {
-        Ok(Some(self.local_addr))
+        Ok(Some(self.local_addr.clone()))
     }
 
     fn peer_id(&self) -> &S::PeerId {

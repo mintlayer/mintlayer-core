@@ -184,7 +184,7 @@ where
             response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
         }
 
-        match timeout(self.timeout, T::connect(address)).await {
+        match timeout(self.timeout, T::connect(address.clone())).await {
             Ok(event) => match event {
                 Ok(socket) => {
                     self.create_peer(

@@ -23,7 +23,7 @@ use crate::{net::mock::types::Message, Result};
 #[async_trait]
 pub trait MockTransport: Send + 'static {
     /// An address type.
-    type Address: Copy + Clone + Debug + Eq + Hash + Send + Sync + ToString;
+    type Address: Clone + Debug + Eq + Hash + Send + Sync + ToString;
 
     /// A listener type.
     type Listener: MockListener<Self::Stream, Self::Address>;

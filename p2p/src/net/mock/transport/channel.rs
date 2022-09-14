@@ -68,7 +68,7 @@ impl MockTransport for ChannelMockTransport {
 
     async fn connect(address: Self::Address) -> Result<Self::Stream> {
         // A connection can only be established to a known address.
-        debug_assert_ne!(ZERO_ADDRESS, address);
+        assert_ne!(ZERO_ADDRESS, address);
 
         let server_sender = CONNECTIONS
             .lock()
