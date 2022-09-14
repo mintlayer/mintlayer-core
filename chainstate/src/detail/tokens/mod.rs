@@ -14,13 +14,12 @@
 // limitations under the License.
 
 use common::{
-    chain::{
-        tokens::{TokenData, TokensError},
-        Block, ChainConfig, Transaction,
-    },
+    chain::{tokens::TokenData, Block, ChainConfig, Transaction},
     primitives::{Amount, Id, Idable},
 };
 use utils::ensure;
+
+use super::transaction_verifier::error::TokensError;
 
 pub fn check_tokens_transfer_data(
     source_block_id: Id<Block>,

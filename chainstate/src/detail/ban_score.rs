@@ -14,11 +14,10 @@
 // limitations under the License.
 
 use super::{
-    transaction_verifier::error::ConnectTransactionError, BlockSizeError, CheckBlockError,
-    CheckBlockTransactionsError, OrphanCheckError,
+    transaction_verifier::error::{ConnectTransactionError, TokensError},
+    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
 };
 use crate::BlockError;
-use common::chain::tokens::TokensError;
 use consensus::{ConsensusPoWError, ConsensusVerificationError};
 
 // TODO: use a ban_score macro in a form similar to thiserror::Error in order to define the ban score
@@ -131,6 +130,7 @@ impl BanScore for CheckBlockError {
 impl BanScore for TokensError {
     fn ban_score(&self) -> u32 {
         match self {
+            TokensError::StorageError(_) => 0,
             TokensError::IssueErrorInvalidTickerLength(_, _) => 100,
             TokensError::IssueErrorTickerHasNoneAlphaNumericChar(_, _) => 100,
             TokensError::IssueAmountIsZero(_, _) => 100,

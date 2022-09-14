@@ -19,11 +19,9 @@ pub type TokenId = H256;
 pub type NftDataHash = Vec<u8>;
 use crate::primitives::{Amount, Id, H256};
 
-mod errors;
 mod rpc;
 mod utils;
 
-pub use errors::TokensError;
 pub use rpc::*;
 pub use utils::*;
 

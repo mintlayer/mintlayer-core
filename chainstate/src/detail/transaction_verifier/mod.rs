@@ -17,8 +17,10 @@ mod amounts_map;
 mod cached_operation;
 pub mod error;
 use self::{
-    amounts_map::AmountsMap, cached_operation::CachedTokensOperation,
-    error::ConnectTransactionError, tokens::CoinOrTokenId, utils::get_output_token_id_and_amount,
+    amounts_map::AmountsMap,
+    error::{ConnectTransactionError, TokensError},
+    token_issuance_cache::{CachedTokensOperation, CoinOrTokenId},
+    utils::get_output_token_id_and_amount,
 };
 use ::utils::ensure;
 use cached_operation::CachedInputsOperation;
@@ -37,10 +39,7 @@ use common::{
         block::timestamp::BlockTimestamp,
         calculate_tx_index_from_block,
         signature::{verify_signature, Transactable},
-        tokens::{
-            get_tokens_issuance_count, is_tokens_issuance, token_id, OutputValue,
-            TokenAuxiliaryData, TokenId, TokensError,
-        },
+        tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
         Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
     },
@@ -51,8 +50,8 @@ use utxo::{
     UtxosDBMut, UtxosView,
 };
 
-mod tokens;
-use self::tokens::{register_tokens_issuance, unregister_token_issuance};
+mod token_issuance_cache;
+use self::token_issuance_cache::TokenIssuanceCache;
 
 mod utils;
 use self::utils::{check_transferred_amount, get_input_token_id_and_amount};
@@ -82,7 +81,7 @@ pub struct TransactionVerifierDelta {
     tx_index: BTreeMap<OutPointSourceId, CachedInputsOperation>,
     utxo_cache: ConsumedUtxoCache,
     utxo_block_undo: BTreeMap<Id<Block>, BlockUndoEntry>,
-    tokens_data: BTreeMap<TokenId, CachedTokensOperation>,
+    tokens_data: TokenIssuanceCache,
 }
 
 /// The tool used to verify transaction and cache their updated states in memory
@@ -91,7 +90,7 @@ pub struct TransactionVerifier<'a, S> {
     tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
     utxo_cache: UtxosCache<'a>,
     utxo_block_undo: BTreeMap<Id<Block>, BlockUndoEntry>,
-    tokens_cache: BTreeMap<TokenId, CachedTokensOperation>,
+    tokens_cache: TokenIssuanceCache,
     chain_config: &'a ChainConfig,
 }
 
@@ -105,7 +104,7 @@ impl<'a, S> TransactionVerifier<'a, S> {
             tx_index_cache: BTreeMap::new(),
             utxo_cache,
             utxo_block_undo: BTreeMap::new(),
-            tokens_cache: BTreeMap::new(),
+            tokens_cache: TokenIssuanceCache::new(),
         }
     }
 }
@@ -595,8 +594,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 self.precache_inputs(tx.inputs())?;
 
                 // pre-cache token ids to check ensure it's not in the db when issuing
-                self.precache_token_issuance(
-                    |id| self.db_tx.get_token_aux_data(id).map_err(ConnectTransactionError::from),
+                self.tokens_cache.precache_token_issuance(
+                    |id| self.db_tx.get_token_aux_data(id).map_err(TokensError::from),
                     tx,
                 )?;
 
@@ -604,7 +603,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 let fee = Some(self.check_transferred_amounts_and_get_fee(block.get_id(), tx)?);
 
                 // Register tokens if tx has issuance data
-                register_tokens_issuance(&mut self.tokens_cache, block.get_id(), tx)?;
+                self.tokens_cache.register_tokens_issuance(block.get_id(), tx)?;
 
                 // verify input signatures
                 self.verify_signatures(tx, spend_height, median_time_past)?;
@@ -689,8 +688,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 self.precache_inputs(tx.inputs())?;
 
                 // pre-cache token ids before removing them
-                self.precache_token_issuance(
-                    |id| self.db_tx.get_token_aux_data(id).map_err(ConnectTransactionError::from),
+                self.tokens_cache.precache_token_issuance(
+                    |id| self.db_tx.get_token_aux_data(id).map_err(TokensError::from),
                     tx,
                 )?;
 
@@ -706,7 +705,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 }
 
                 // Remove issued tokens
-                unregister_token_issuance(&mut self.tokens_cache, tx)?;
+                self.tokens_cache.unregister_token_issuance(tx)?;
             }
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.block_reward_transactable();
@@ -736,37 +735,6 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
             }
         }
 
-        Ok(())
-    }
-
-    fn precache_token_issuance<
-        F: Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, ConnectTransactionError>,
-    >(
-        &mut self,
-        token_data_getter: F,
-        tx: &Transaction,
-    ) -> Result<(), ConnectTransactionError> {
-        let has_token_issuance =
-            tx.outputs().iter().any(|output| is_tokens_issuance(output.value()));
-        if has_token_issuance {
-            let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
-            match self.tokens_cache.entry(token_id) {
-                Entry::Vacant(e) => {
-                    let current_token_data = token_data_getter(&token_id)?;
-                    match current_token_data {
-                        Some(el) => {
-                            e.insert(CachedTokensOperation::Read(el));
-                        }
-                        None => (),
-                    }
-                }
-                Entry::Occupied(_) => {
-                    return Err(ConnectTransactionError::TokensError(
-                        TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(token_id),
-                    ));
-                }
-            }
-        }
         Ok(())
     }
 
@@ -856,7 +824,7 @@ impl<'a, S: BlockchainStorageWrite + 'a> TransactionVerifier<'a, S> {
         for (tx_id, tx_index_op) in consumed.tx_index {
             Self::flush_tx_indexes(db_tx, tx_id, tx_index_op)?;
         }
-        for (token_id, token_op) in consumed.tokens_data {
+        for (token_id, token_op) in consumed.tokens_data.take() {
             Self::flush_tokens(db_tx, token_id, token_op)?;
         }
 

@@ -17,13 +17,16 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        tokens::{token_id, OutputValue, TokenData, TokenId, TokensError},
+        tokens::{token_id, OutputValue, TokenData, TokenId},
         Transaction,
     },
     primitives::Amount,
 };
 
-use super::{error::ConnectTransactionError, tokens::CoinOrTokenId};
+use super::{
+    error::{ConnectTransactionError, TokensError},
+    token_issuance_cache::CoinOrTokenId,
+};
 
 pub fn check_transferred_amount(
     inputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,

@@ -25,6 +25,7 @@ pub use error::CheckBlockTransactionsError;
 pub use error::OrphanCheckError;
 // TODO: ConnectTransactionError used in unit tests to check block processing results. We have to find more appropriate place for this error.
 pub use transaction_verifier::error::ConnectTransactionError;
+pub use transaction_verifier::error::TokensError;
 
 mod block_index_history_iter;
 mod chainstateref;
