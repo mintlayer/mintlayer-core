@@ -897,13 +897,26 @@ async fn tx_spend_several_inputs<
 
 #[tokio::test]
 async fn one_ancestor_replaceability_signal_is_enough() -> anyhow::Result<()> {
-    let mut mempool = setup().await;
-    let tx = TxGenerator::new()
-        .with_num_outputs(2)
-        .generate_tx(&mempool)
-        .await
-        .expect("generate_replaceable_tx");
+    let seed = Seed::from_entropy();
+    let tf = TestFramework::default();
+    let mut rng = make_seedable_rng(seed);
+    let genesis = tf.genesis();
+    let mut tx_builder = TransactionBuilder::new().add_input(TxInput::new(
+        OutPointSourceId::BlockReward(genesis.get_id().into()),
+        0,
+        empty_witness(&mut rng),
+    ));
+    let num_outputs = 2;
 
+    for _ in 0..num_outputs {
+        tx_builder = tx_builder.add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(2_000)),
+            OutputPurpose::Transfer(anyonecanspend_address()),
+        ));
+    }
+    let tx = tx_builder.build();
+
+    let mut mempool = setup_new(tf.chainstate()).await;
     mempool.add_transaction(tx.clone()).await?;
 
     let flags_replaceable = 1;
