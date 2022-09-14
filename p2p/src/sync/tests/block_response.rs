@@ -106,7 +106,7 @@ async fn valid_block_libp2p() {
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
 async fn valid_block_mock_tcp() {
-    valid_block::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>(MockPeerId).await;
+    valid_block::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
 }
 
 #[tokio::test]
@@ -272,7 +272,7 @@ async fn invalid_block_libp2p() {
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
 async fn invalid_block_mock_tcp() {
-    invalid_block::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>(MockPeerId).await;
+    invalid_block::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
 }
 
 #[tokio::test]
