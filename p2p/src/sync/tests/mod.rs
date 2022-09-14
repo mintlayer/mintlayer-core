@@ -13,15 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
+use libp2p::PeerId;
+use tokio::time::timeout;
+
+use chainstate::{make_chainstate, ChainstateConfig};
+
 use super::*;
 use crate::{
     event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
-    net::{libp2p::Libp2pService, types::ConnectivityEvent, ConnectivityService},
+    net::{
+        libp2p::Libp2pService, mock::types::MockPeerId, types::ConnectivityEvent,
+        ConnectivityService,
+    },
 };
-use chainstate::{make_chainstate, ChainstateConfig};
-use libp2p::PeerId;
-use std::time::Duration;
-use tokio::time::timeout;
 
 mod block_response;
 mod connection;
@@ -123,4 +129,26 @@ where
         peer_id,
         peer::PeerContext::new_with_locator(peer_id, locator),
     );
+}
+
+pub trait MakeTestPeerId {
+    type PeerId;
+
+    fn random() -> Self::PeerId;
+}
+
+impl MakeTestPeerId for PeerId {
+    type PeerId = Self;
+
+    fn random() -> Self::PeerId {
+        PeerId::random()
+    }
+}
+
+impl MakeTestPeerId for MockPeerId {
+    type PeerId = Self;
+
+    fn random() -> Self::PeerId {
+        MockPeerId::random()
+    }
 }
