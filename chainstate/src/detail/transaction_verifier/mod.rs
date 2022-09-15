@@ -87,12 +87,12 @@ pub struct TransactionVerifierDelta {
 
 /// The tool used to verify transaction and cache their updated states in memory
 pub struct TransactionVerifier<'a, S> {
+    chain_config: &'a ChainConfig,
     db_tx: &'a S,
     tx_index_cache: TxIndexCache,
     utxo_cache: UtxosCache<'a>,
     utxo_block_undo: BTreeMap<Id<Block>, BlockUndoEntry>,
     token_issuance_cache: TokenIssuanceCache,
-    chain_config: &'a ChainConfig,
 }
 
 // TODO: UtxoDB should be a member of TransactionVerifier and UtxoCache should be constructed from it.
