@@ -18,7 +18,7 @@ use super::*;
 use crate::net::libp2p::{behaviour, types::*};
 use futures::StreamExt;
 use libp2p::gossipsub::IdentTopic as Topic;
-use p2p_test_utils::make_libp2p_addr;
+use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 use serialization::Encode;
 
 impl PartialEq for types::PubSubEvent {
@@ -43,7 +43,7 @@ async fn test_invalid_message() {
     let (mut backend1, _cmd1, _conn1, _gossip, _sync1) = make_libp2p(
         common::chain::config::create_mainnet(),
         Default::default(),
-        make_libp2p_addr(),
+        MakeP2pAddress::make_address(),
         &[net::types::PubSubTopic::Blocks],
     )
     .await;
@@ -51,7 +51,7 @@ async fn test_invalid_message() {
     let (mut backend2, _cmd2, _conn2, _gossip2, _sync2) = make_libp2p(
         common::chain::config::create_mainnet(),
         Default::default(),
-        make_libp2p_addr(),
+        MakeP2pAddress::make_address(),
         &[net::types::PubSubTopic::Blocks],
     )
     .await;
@@ -104,7 +104,7 @@ async fn test_gossipsub_not_supported() {
     let (mut backend1, _cmd, _conn_rx, _gossip_rx, _sync_rx) = make_libp2p(
         config.clone(),
         Default::default(),
-        make_libp2p_addr(),
+        MakeP2pAddress::make_address(),
         &[net::types::PubSubTopic::Blocks],
     )
     .await;

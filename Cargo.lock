@@ -2795,6 +2795,7 @@ dependencies = [
  "libp2p",
  "logging",
  "mempool",
+ "once_cell",
  "p2p-test-utils",
  "parity-scale-codec",
  "portpicker",

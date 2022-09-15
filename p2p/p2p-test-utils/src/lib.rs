@@ -15,6 +15,14 @@
 
 #![allow(clippy::unwrap_used)]
 
+use std::{fmt::Debug, net::SocketAddr, sync::Arc, time::Duration};
+
+use libp2p::Multiaddr;
+use tokio::{
+    net::{TcpListener, TcpStream},
+    time::timeout,
+};
+
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, BlockSource, ChainstateConfig,
 };
@@ -31,30 +39,7 @@ use common::{
     primitives::{time, Amount, Id, Idable},
 };
 use crypto::random::SliceRandom;
-use libp2p::Multiaddr;
 use p2p::net::{types::ConnectivityEvent, ConnectivityService, NetworkingService};
-use std::{net::SocketAddr, sync::Arc, time::Duration};
-use tokio::{
-    net::{TcpListener, TcpStream},
-    time::timeout,
-};
-
-pub fn make_libp2p_addr() -> Multiaddr {
-    "/ip6/::1/tcp/0".parse().unwrap()
-}
-
-pub fn make_mock_addr() -> SocketAddr {
-    "[::1]:0".parse().unwrap()
-}
-
-pub async fn get_two_connected_sockets() -> (TcpStream, TcpStream) {
-    let addr = make_mock_addr();
-    let server = TcpListener::bind(addr).await.unwrap();
-    let peer_fut = TcpStream::connect(server.local_addr().unwrap());
-
-    let (res1, res2) = tokio::join!(server.accept(), peer_fut);
-    (res1.unwrap().0, res2.unwrap())
-}
 
 pub async fn get_tcp_socket() -> TcpStream {
     let port: u16 = portpicker::pick_unused_port().expect("No ports free");
@@ -285,4 +270,48 @@ pub async fn add_more_blocks(
 
     let blocks = create_n_blocks(config, base_block, nblocks);
     import_blocks(handle, blocks).await;
+}
+
+/// An interface for creating the address.
+///
+/// This abstraction layer is needed to uniformly create an address in the tests for different
+/// mocks transport implementations.
+pub trait MakeTestAddress {
+    /// An address type.
+    type Address: Clone + Debug + Eq + std::hash::Hash + Send + Sync + ToString;
+
+    /// Creates a new unused address.
+    ///
+    /// This should work similar to requesting a port of number 0 when opening a TCP connection.
+    fn make_address() -> Self::Address;
+}
+
+pub struct MakeP2pAddress {}
+
+impl MakeTestAddress for MakeP2pAddress {
+    type Address = Multiaddr;
+
+    fn make_address() -> Self::Address {
+        "/ip6/::1/tcp/0".parse().unwrap()
+    }
+}
+
+pub struct MakeTcpAddress {}
+
+impl MakeTestAddress for MakeTcpAddress {
+    type Address = SocketAddr;
+
+    fn make_address() -> Self::Address {
+        "[::1]:0".parse().unwrap()
+    }
+}
+
+pub struct MakeChannelAddress {}
+
+impl MakeTestAddress for MakeChannelAddress {
+    type Address = u64;
+
+    fn make_address() -> Self::Address {
+        0
+    }
 }
