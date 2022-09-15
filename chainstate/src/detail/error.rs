@@ -13,10 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{orphan_blocks::OrphanAddError, transaction_verifier::error::ConnectTransactionError};
+use super::{
+    orphan_blocks::OrphanAddError,
+    transaction_verifier::error::{ConnectTransactionError, TokensError},
+};
 use chainstate_types::PropertyQueryError;
 use common::{
-    chain::{tokens::TokensError, Block, GenBlock, Transaction},
+    chain::{Block, GenBlock, Transaction},
     primitives::{BlockDistance, Id},
 };
 use consensus::ConsensusVerificationError;

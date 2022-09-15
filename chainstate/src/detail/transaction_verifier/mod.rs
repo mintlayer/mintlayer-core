@@ -17,8 +17,10 @@ mod amounts_map;
 mod cached_operation;
 pub mod error;
 use self::{
-    amounts_map::AmountsMap, cached_operation::CachedTokensOperation,
-    error::ConnectTransactionError, tokens::CoinOrTokenId, utils::get_output_token_id_and_amount,
+    amounts_map::AmountsMap,
+    error::{ConnectTransactionError, TokensError},
+    token_issuance_cache::{CachedTokensOperation, CoinOrTokenId},
+    utils::get_output_token_id_and_amount,
 };
 use ::utils::ensure;
 use cached_operation::CachedInputsOperation;
@@ -37,7 +39,7 @@ use common::{
         block::timestamp::BlockTimestamp,
         calculate_tx_index_from_block,
         signature::{verify_signature, Transactable},
-        tokens::{get_tokens_issuance_count, OutputValue, TokenId, TokensError},
+        tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
         Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
     },
@@ -48,8 +50,8 @@ use utxo::{
     UtxosDBMut, UtxosView,
 };
 
-mod tokens;
-use self::tokens::{register_tokens_issuance, unregister_token_issuance};
+mod token_issuance_cache;
+use self::token_issuance_cache::TokenIssuanceCache;
 
 mod utils;
 use self::utils::{check_transferred_amount, get_input_token_id_and_amount};
@@ -79,7 +81,7 @@ pub struct TransactionVerifierDelta {
     tx_index: BTreeMap<OutPointSourceId, CachedInputsOperation>,
     utxo_cache: ConsumedUtxoCache,
     utxo_block_undo: BTreeMap<Id<Block>, BlockUndoEntry>,
-    tokens_data: BTreeMap<TokenId, CachedTokensOperation>,
+    tokens_data: TokenIssuanceCache,
 }
 
 /// The tool used to verify transaction and cache their updated states in memory
@@ -88,7 +90,7 @@ pub struct TransactionVerifier<'a, S> {
     tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
     utxo_cache: UtxosCache<'a>,
     utxo_block_undo: BTreeMap<Id<Block>, BlockUndoEntry>,
-    tokens_cache: BTreeMap<TokenId, CachedTokensOperation>,
+    token_issuance_cache: TokenIssuanceCache,
     chain_config: &'a ChainConfig,
 }
 
@@ -102,7 +104,7 @@ impl<'a, S> TransactionVerifier<'a, S> {
             tx_index_cache: BTreeMap::new(),
             utxo_cache,
             utxo_block_undo: BTreeMap::new(),
-            tokens_cache: BTreeMap::new(),
+            token_issuance_cache: TokenIssuanceCache::new(),
         }
     }
 }
@@ -591,11 +593,17 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 // pre-cache all inputs
                 self.precache_inputs(tx.inputs())?;
 
+                // pre-cache token ids to check ensure it's not in the db when issuing
+                self.token_issuance_cache.precache_token_issuance(
+                    |id| self.db_tx.get_token_aux_data(id).map_err(TokensError::from),
+                    tx,
+                )?;
+
                 // check for attempted money printing
                 let fee = Some(self.check_transferred_amounts_and_get_fee(block.get_id(), tx)?);
 
                 // Register tokens if tx has issuance data
-                register_tokens_issuance(&mut self.tokens_cache, block.get_id(), tx)?;
+                self.token_issuance_cache.register(block.get_id(), tx)?;
 
                 // verify input signatures
                 self.verify_signatures(tx, spend_height, median_time_past)?;
@@ -679,6 +687,12 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 // pre-cache all inputs
                 self.precache_inputs(tx.inputs())?;
 
+                // pre-cache token ids before removing them
+                self.token_issuance_cache.precache_token_issuance(
+                    |id| self.db_tx.get_token_aux_data(id).map_err(TokensError::from),
+                    tx,
+                )?;
+
                 // unspend inputs
                 for input in tx.inputs() {
                     let outpoint = input.outpoint();
@@ -691,7 +705,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 }
 
                 // Remove issued tokens
-                unregister_token_issuance(&mut self.tokens_cache, tx, block.get_id())?;
+                self.token_issuance_cache.unregister(tx)?;
             }
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.block_reward_transactable();
@@ -763,7 +777,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
             tx_index: self.tx_index_cache,
             utxo_cache: self.utxo_cache.consume(),
             utxo_block_undo: self.utxo_block_undo,
-            tokens_data: self.tokens_cache,
+            tokens_data: self.token_issuance_cache,
         })
     }
 }
@@ -810,7 +824,7 @@ impl<'a, S: BlockchainStorageWrite + 'a> TransactionVerifier<'a, S> {
         for (tx_id, tx_index_op) in consumed.tx_index {
             Self::flush_tx_indexes(db_tx, tx_id, tx_index_op)?;
         }
-        for (token_id, token_op) in consumed.tokens_data {
+        for (token_id, token_op) in consumed.tokens_data.take() {
             Self::flush_tokens(db_tx, token_id, token_op)?;
         }
 

@@ -16,7 +16,7 @@
 use thiserror::Error;
 
 use common::{
-    chain::{tokens::TokensError, Block, GenBlock},
+    chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
 
@@ -43,6 +43,4 @@ pub enum PropertyQueryError {
     },
     #[error("Genesis block has no header")]
     GenesisHeaderRequested,
-    #[error("Tokens error: {0}")]
-    TokensError(TokensError),
 }

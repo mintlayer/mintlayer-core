@@ -25,7 +25,7 @@ use common::{
         block::{
             calculate_tx_merkle_root, calculate_witness_merkle_root, BlockHeader, BlockReward,
         },
-        tokens::{get_tokens_issuance_count, OutputValue, TokenId, TokensError},
+        tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
     },
     primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable},
@@ -38,6 +38,7 @@ use utxo::{UtxosDB, UtxosView};
 
 use super::median_time::calculate_median_time_past;
 use crate::detail::tokens::check_tokens_data;
+use crate::detail::transaction_verifier::error::TokensError;
 use crate::{BlockError, BlockSource, ChainstateConfig};
 
 use super::{

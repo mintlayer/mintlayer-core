@@ -1,9 +1,12 @@
 use std::collections::BTreeMap;
 
-use common::{chain::tokens::TokensError, primitives::Amount};
+use common::primitives::Amount;
 use fallible_iterator::{FallibleIterator, IntoFallibleIterator};
 
-use super::{error::ConnectTransactionError, tokens::CoinOrTokenId};
+use super::{
+    error::{ConnectTransactionError, TokensError},
+    token_issuance_cache::CoinOrTokenId,
+};
 
 /// A temporary type used to accumulate token type vs amount
 #[derive(Debug)]

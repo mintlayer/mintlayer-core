@@ -14,20 +14,11 @@
 // limitations under the License.
 
 use super::error::ConnectTransactionError;
-use common::{
-    chain::{tokens::TokenAuxiliaryData, Spender, Transaction, TxMainChainIndex},
-    primitives::Id,
-};
+use common::chain::{Spender, TxMainChainIndex};
 pub enum CachedInputsOperation {
     Write(TxMainChainIndex),
     Read(TxMainChainIndex),
     Erase,
-}
-
-pub enum CachedTokensOperation {
-    Write(TokenAuxiliaryData),
-    Read(TokenAuxiliaryData),
-    Erase(Id<Transaction>),
 }
 
 impl CachedInputsOperation {
