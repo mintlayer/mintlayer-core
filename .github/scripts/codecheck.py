@@ -57,7 +57,7 @@ def disallow(pat, exclude = []):
 # Check license header
 def check_licenses():
     print("==== Checking license headers:")
-    template = re.compile(r'\n'.join(LICENSE_TEMPLATE))
+    template = re.compile('(?:' + r')\n(?:'.join(LICENSE_TEMPLATE) + ')')
 
     ok = True
     for path in rs_sources():
