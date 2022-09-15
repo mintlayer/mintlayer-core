@@ -335,9 +335,10 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
         for (input_idx, input) in inputs.iter().enumerate() {
             let outpoint = input.outpoint();
-            let tx_index = self.tx_index_cache.get_from_cached(&outpoint.tx_id())?.ok_or(
-                ConnectTransactionError::PreviouslyCachedInputNotFound(outpoint.tx_id()),
-            )?;
+            let tx_index =
+                self.tx_index_cache.get_from_cached(&outpoint.tx_id())?.ok_or_else(|| {
+                    ConnectTransactionError::PreviouslyCachedInputNotFound(outpoint.tx_id())
+                })?;
 
             match tx_index.position() {
                 SpendablePosition::Transaction(tx_pos) => {
