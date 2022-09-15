@@ -1190,8 +1190,23 @@ async fn spends_new_unconfirmed() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn pays_more_than_conflicts_with_descendants() -> anyhow::Result<()> {
-    let mut mempool = setup().await;
-    let tx = TxGenerator::new().generate_tx(&mempool).await.expect("generate_replaceable_tx");
+    let seed = Seed::from_entropy();
+    let tf = TestFramework::default();
+    let mut rng = make_seedable_rng(seed);
+    let genesis = tf.genesis();
+    let tx = TransactionBuilder::new()
+        .add_input(TxInput::new(
+            OutPointSourceId::BlockReward(genesis.get_id().into()),
+            0,
+            empty_witness(&mut rng),
+        ))
+        .add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(1_000)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+        .with_flags(1)
+        .build();
+    let mut mempool = setup_new(tf.chainstate()).await;
     let tx_id = tx.get_id();
     mempool.add_transaction(tx).await?;
 
