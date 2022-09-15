@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod undo;
+
 use std::collections::BTreeMap;
 
 use serialization::{Decode, Encode};
@@ -20,8 +22,6 @@ use serialization::{Decode, Encode};
 use crate::error::Error;
 
 use self::undo::*;
-
-pub mod undo;
 
 /// The outcome of combining two deltas for a given key upon the map that contains it
 #[derive(PartialEq, Eq, Debug)]

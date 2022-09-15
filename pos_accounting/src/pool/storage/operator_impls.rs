@@ -32,20 +32,14 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
     ) -> Result<(H256, PoSAccountingUndo), Error> {
         let pool_id = make_pool_id(input0_outpoint);
 
-        {
-            let current_amount = self.store.get_pool_balance(pool_id)?;
-            if current_amount.is_some() {
-                // This should never happen since it's based on an unspent input
-                return Err(Error::InvariantErrorPoolBalanceAlreadyExists);
-            }
+        if self.store.get_pool_balance(pool_id)?.is_some() {
+            // This should never happen since it's based on an unspent input
+            return Err(Error::InvariantErrorPoolBalanceAlreadyExists);
         }
 
-        {
-            let current_data = self.store.get_pool_data(pool_id)?;
-            if current_data.is_some() {
-                // This should never happen since it's based on an unspent input
-                return Err(Error::InvariantErrorPoolDataAlreadyExists);
-            }
+        if self.store.get_pool_data(pool_id)?.is_some() {
+            // This should never happen since it's based on an unspent input
+            return Err(Error::InvariantErrorPoolDataAlreadyExists);
         }
         let pool_data = PoolData::new(decommission_key, pledge_amount);
 
@@ -88,12 +82,9 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
 
         let delegation_id = make_delegation_id(input0_outpoint);
 
-        {
-            let current_delegation_data = self.store.get_delegation_data(delegation_id)?;
-            if current_delegation_data.is_some() {
-                // This should never happen since it's based on an unspent input
-                return Err(Error::InvariantErrorDelegationCreationFailedIdAlreadyExists);
-            }
+        if self.store.get_delegation_data(delegation_id)?.is_some() {
+            // This should never happen since it's based on an unspent input
+            return Err(Error::InvariantErrorDelegationCreationFailedIdAlreadyExists);
         }
 
         let delegation_data = DelegationData::new(target_pool, spend_key);
@@ -178,12 +169,9 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
             None => return Err(Error::InvariantErrorPoolCreationReversalFailedBalanceNotFound),
         }
 
-        let pool_data = self.store.get_pool_data(undo.pool_id)?;
-        {
-            if pool_data.is_none() {
-                return Err(Error::InvariantErrorPoolCreationReversalFailedDataNotFound);
-            }
-        }
+        self.store
+            .get_pool_data(undo.pool_id)?
+            .ok_or(Error::InvariantErrorPoolCreationReversalFailedDataNotFound)?;
 
         self.store.del_pool_balance(undo.pool_id)?;
         self.store.del_pool_data(undo.pool_id)?;
@@ -197,13 +185,11 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
             PoolDataUndo::DataDelta(_) => unreachable!("incompatible PoolDataUndo supplied"),
         };
 
-        let current_amount = self.store.get_pool_balance(undo.pool_id)?;
-        if current_amount.is_some() {
+        if self.store.get_pool_balance(undo.pool_id)?.is_some() {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists);
         }
 
-        let current_data = self.store.get_pool_data(undo.pool_id)?;
-        if current_data.is_some() {
+        if self.store.get_pool_data(undo.pool_id)?.is_some() {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists);
         }
 
