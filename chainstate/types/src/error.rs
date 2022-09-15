@@ -43,6 +43,4 @@ pub enum PropertyQueryError {
     },
     #[error("Genesis block has no header")]
     GenesisHeaderRequested,
-    // #[error("Tokens error: {0}")]
-    // TokensError(TokensError),
 }
