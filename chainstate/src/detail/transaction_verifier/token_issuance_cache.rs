@@ -35,23 +35,19 @@ impl TokenIssuanceCache {
 
     // Token registration saves the token id in the database with the transaction that issued it, and possibly some additional auxiliary data;
     // This helps in finding the relevant information of the token at any time in the future.
-    pub fn register_tokens_issuance(
-        &mut self,
-        block_id: Id<Block>,
-        tx: &Transaction,
-    ) -> Result<(), TokensError> {
+    pub fn register(&mut self, block_id: Id<Block>, tx: &Transaction) -> Result<(), TokensError> {
         let was_token_issued = tx.outputs().iter().any(|output| is_tokens_issuance(output.value()));
         if was_token_issued {
             self.write_issuance(block_id, tx)?;
         }
         Ok(())
     }
-    pub fn unregister_token_issuance(&mut self, tx: &Transaction) -> Result<(), TokensError> {
+    pub fn unregister(&mut self, tx: &Transaction) -> Result<(), TokensError> {
         let was_tokens_issued =
             tx.outputs().iter().any(|output| is_tokens_issuance(output.value()));
 
         if was_tokens_issued {
-            self.undo_issuance(tx)?;
+            self.write_undo_issuance(tx)?;
         }
         Ok(())
     }
@@ -74,7 +70,7 @@ impl TokenIssuanceCache {
         Ok(())
     }
 
-    fn undo_issuance(&mut self, tx: &Transaction) -> Result<(), TokensError> {
+    fn write_undo_issuance(&mut self, tx: &Transaction) -> Result<(), TokensError> {
         let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
         match self.data.entry(token_id) {
             Entry::Occupied(mut e) => {
