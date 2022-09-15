@@ -1,17 +1,19 @@
 use accounting::{DeltaAmountCollection, DeltaDataCollection};
-use common::primitives::H256;
 
-use crate::pool::{delegation::DelegationData, pool_data::PoolData};
+use crate::{
+    pool::{delegation::DelegationData, pool_data::PoolData},
+    DelegationId, PoolId,
+};
 
 use serialization::{Decode, Encode};
 
 #[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
 pub struct PoSAccountingDeltaData {
-    pub pool_data: DeltaDataCollection<H256, PoolData>,
-    pub pool_balances: DeltaAmountCollection<H256>,
-    pub pool_delegation_shares: DeltaAmountCollection<(H256, H256)>,
-    pub delegation_balances: DeltaAmountCollection<H256>,
-    pub delegation_data: DeltaDataCollection<H256, DelegationData>,
+    pub pool_data: DeltaDataCollection<PoolId, PoolData>,
+    pub pool_balances: DeltaAmountCollection<PoolId>,
+    pub pool_delegation_shares: DeltaAmountCollection<(PoolId, DelegationId)>,
+    pub delegation_balances: DeltaAmountCollection<DelegationId>,
+    pub delegation_data: DeltaDataCollection<DelegationId, DelegationData>,
 }
 
 impl PoSAccountingDeltaData {
@@ -23,5 +25,11 @@ impl PoSAccountingDeltaData {
             delegation_balances: Default::default(),
             delegation_data: Default::default(),
         }
+    }
+}
+
+impl Default for PoSAccountingDeltaData {
+    fn default() -> Self {
+        Self::new()
     }
 }

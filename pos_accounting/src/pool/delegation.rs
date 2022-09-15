@@ -1,15 +1,16 @@
-use common::primitives::H256;
 use crypto::key::PublicKey;
 use serialization::{Decode, Encode};
+
+use crate::PoolId;
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct DelegationData {
     spend_key: PublicKey,
-    source_pool: H256,
+    source_pool: PoolId,
 }
 
 impl DelegationData {
-    pub fn new(source_pool: H256, spend_key: PublicKey) -> Self {
+    pub fn new(source_pool: PoolId, spend_key: PublicKey) -> Self {
         Self {
             spend_key,
             source_pool,
@@ -20,7 +21,7 @@ impl DelegationData {
         &self.spend_key
     }
 
-    pub fn source_pool(&self) -> &H256 {
+    pub fn source_pool(&self) -> &PoolId {
         &self.source_pool
     }
 }

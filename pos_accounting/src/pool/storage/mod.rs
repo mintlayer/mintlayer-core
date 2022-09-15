@@ -2,12 +2,13 @@ use std::{collections::BTreeMap, ops::Neg};
 
 use accounting::{combine_amount_delta, combine_data_with_delta, DeltaDataCollection};
 use chainstate_types::storage_result;
-use common::primitives::{signed_amount::SignedAmount, Amount, H256};
+use common::primitives::{signed_amount::SignedAmount, Amount};
 
 use crate::{
     error::Error,
     pool::delta::data::PoSAccountingDeltaData,
     storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
+    DelegationId, PoolId,
 };
 
 use super::{delegation::DelegationData, pool_data::PoolData};
@@ -29,8 +30,8 @@ impl<'a, S> PoSAccountingDBMut<'a, S> {
 }
 
 pub struct DataMergeUndo {
-    pool_data_undo: BTreeMap<H256, Option<PoolData>>,
-    delegation_data_undo: BTreeMap<H256, Option<DelegationData>>,
+    pool_data_undo: BTreeMap<PoolId, Option<PoolData>>,
+    delegation_data_undo: BTreeMap<DelegationId, Option<DelegationData>>,
 }
 
 impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
@@ -217,7 +218,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
 
     fn add_to_delegation_balance(
         &mut self,
-        delegation_target: H256,
+        delegation_target: DelegationId,
         amount_to_delegate: Amount,
     ) -> Result<(), Error> {
         let current_amount =
@@ -230,7 +231,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
 
     fn sub_from_delegation_balance(
         &mut self,
-        delegation_target: H256,
+        delegation_target: DelegationId,
         amount_to_delegate: Amount,
     ) -> Result<(), Error> {
         let current_amount = self
@@ -247,7 +248,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         Ok(())
     }
 
-    fn add_balance_to_pool(&mut self, pool_id: H256, amount_to_add: Amount) -> Result<(), Error> {
+    fn add_balance_to_pool(&mut self, pool_id: PoolId, amount_to_add: Amount) -> Result<(), Error> {
         let pool_amount =
             self.store.get_pool_balance(pool_id)?.ok_or(Error::DelegateToNonexistingPool)?;
         let new_amount = (pool_amount + amount_to_add).ok_or(Error::PoolBalanceAdditionError)?;
@@ -255,7 +256,11 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         Ok(())
     }
 
-    fn sub_balance_from_pool(&mut self, pool_id: H256, amount_to_add: Amount) -> Result<(), Error> {
+    fn sub_balance_from_pool(
+        &mut self,
+        pool_id: PoolId,
+        amount_to_add: Amount,
+    ) -> Result<(), Error> {
         let pool_amount =
             self.store.get_pool_balance(pool_id)?.ok_or(Error::DelegateToNonexistingPool)?;
         let new_amount = (pool_amount - amount_to_add).ok_or(Error::PoolBalanceSubtractionError)?;
@@ -269,8 +274,8 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
 
     fn add_delegation_to_pool_share(
         &mut self,
-        pool_id: H256,
-        delegation_id: H256,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
         amount_to_add: Amount,
     ) -> Result<(), Error> {
         let current_amount = self
@@ -285,8 +290,8 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
 
     fn sub_delegation_from_pool_share(
         &mut self,
-        pool_id: H256,
-        delegation_id: H256,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
         amount_to_add: Amount,
     ) -> Result<(), Error> {
         let current_amount = self
@@ -305,7 +310,10 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
 }
 
 impl<'a, S: PoSAccountingStorageRead> PoSAccountingDBMut<'a, S> {
-    fn get_delegation_data(&self, delegation_target: H256) -> Result<DelegationData, Error> {
+    fn get_delegation_data(
+        &self,
+        delegation_target: DelegationId,
+    ) -> Result<DelegationData, Error> {
         let delegation_target = self
             .store
             .get_delegation_data(delegation_target)

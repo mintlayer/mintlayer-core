@@ -15,12 +15,13 @@ use crate::{
         view::PoSAccountingView,
     },
     storage::in_memory::InMemoryPoSAccounting,
+    DelegationId, PoolId,
 };
 
 fn create_pool(
     op: &mut impl PoSAccountingOperatorWrite,
     pledged_amount: Amount,
-) -> Result<(H256, PublicKey, PoSAccountingUndo), Error> {
+) -> Result<(PoolId, PublicKey, PoSAccountingUndo), Error> {
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint = OutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random())), 0);
     op.create_pool(&outpoint, pledged_amount, pub_key.clone())
@@ -29,8 +30,8 @@ fn create_pool(
 
 fn create_delegation_id(
     op: &mut impl PoSAccountingOperatorWrite,
-    target_pool: H256,
-) -> Result<(H256, PublicKey, PoSAccountingUndo), Error> {
+    target_pool: PoolId,
+) -> Result<(DelegationId, PublicKey, PoSAccountingUndo), Error> {
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint = OutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random())), 0);
     op.create_delegation_id(target_pool, pub_key.clone(), &outpoint)
