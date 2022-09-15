@@ -59,7 +59,14 @@ def check_licenses():
     print("==== Checking license headers:")
     
     # list of files exempted from license check
-    exempted_files = ["./script/src/opcodes.rs"]
+    exempted_files = [
+        "./script/src/opcodes.rs",
+        "./common/src/fixed_hash.rs",
+        "./common/src/uint/internal_macros.rs",
+        "./common/src/uint/endian.rs",
+        "./common/src/uint/impls.rs",
+        "./common/src/uint/mod.rs"
+        ]
     
     template = re.compile('(?:' + r')\n(?:'.join(LICENSE_TEMPLATE) + ')')
 
