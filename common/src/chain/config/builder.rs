@@ -19,8 +19,8 @@ use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, Chain
 use crate::chain::{
     ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoWChainConfig, UpgradeVersion,
 };
-use crate::primitives::Amount;
 use crate::primitives::{id::WithId, semver::SemVer, BlockHeight};
+use crate::primitives::{Amount, BlockDistance};
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -102,6 +102,7 @@ pub struct Builder {
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_ticker_len: usize,
+    empty_consensus_reward_maturity_distance: BlockDistance,
 }
 
 impl Builder {
@@ -125,6 +126,7 @@ impl Builder {
             token_max_uri_len: super::TOKEN_MAX_URI_LEN,
             token_max_dec_count: super::TOKEN_MAX_DEC_COUNT,
             token_max_ticker_len: super::TOKEN_MAX_TICKER_LEN,
+            empty_consensus_reward_maturity_distance: BlockDistance::new(0),
         }
     }
 
@@ -155,6 +157,7 @@ impl Builder {
             token_max_uri_len,
             token_max_dec_count,
             token_max_ticker_len,
+            empty_consensus_reward_maturity_distance,
         } = self;
 
         let emission_schedule = match emission_schedule {
@@ -193,6 +196,7 @@ impl Builder {
             token_max_uri_len,
             token_max_dec_count,
             token_max_ticker_len,
+            empty_consensus_reward_maturity_distance,
         }
     }
 }
@@ -220,6 +224,7 @@ impl Builder {
     builder_method!(max_block_size_with_standard_txs: usize);
     builder_method!(max_block_size_with_smart_contracts: usize);
     builder_method!(net_upgrades: NetUpgrades<UpgradeVersion>);
+    builder_method!(empty_consensus_reward_maturity_distance: BlockDistance);
 
     /// Set the genesis block to be the unit test version
     pub fn genesis_unittest(mut self, premine_destination: Destination) -> Self {

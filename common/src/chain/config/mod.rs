@@ -29,7 +29,7 @@ use crate::chain::{Block, GenBlock, Genesis};
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::semver::SemVer;
-use crate::primitives::{Amount, BlockHeight};
+use crate::primitives::{Amount, BlockDistance, BlockHeight};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -85,6 +85,7 @@ pub struct ChainConfig {
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_ticker_len: usize,
+    empty_consensus_reward_maturity_distance: BlockDistance,
 }
 
 impl ChainConfig {
@@ -170,6 +171,10 @@ impl ChainConfig {
 
     pub fn token_max_ticker_len(&self) -> usize {
         self.token_max_ticker_len
+    }
+
+    pub fn empty_consensus_reward_maturity_distance(&self) -> BlockDistance {
+        self.empty_consensus_reward_maturity_distance
     }
 
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config

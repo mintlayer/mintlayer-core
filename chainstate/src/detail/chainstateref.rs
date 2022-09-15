@@ -422,7 +422,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     fn check_block_reward_maturity_settings(&self, block: &Block) -> Result<(), CheckBlockError> {
-        // TODO: test every individual case
         let required = block.consensus_data().reward_maturity_distance(self.chain_config);
         for output in block.block_reward().outputs() {
             match output.purpose() {
