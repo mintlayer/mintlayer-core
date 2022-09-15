@@ -114,7 +114,6 @@ impl TxIndexCache {
         Ok(result)
     }
 
-    // TODO(PR): rename this
     pub fn get_from_cached(
         &self,
         outpoint: &OutPointSourceId,
