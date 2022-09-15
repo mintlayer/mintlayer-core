@@ -3,7 +3,7 @@ use std::collections::{btree_map::Entry, BTreeMap};
 use common::{
     chain::{
         calculate_tx_index_from_block, signature::Transactable, OutPoint, OutPointSourceId,
-        TxMainChainIndex,
+        Spender, TxInput, TxMainChainIndex,
     },
     primitives::Idable,
 };
@@ -67,7 +67,7 @@ impl TxIndexCache {
         Ok(())
     }
 
-    pub fn fetch_and_cache<F>(
+    fn fetch_and_cache<F>(
         &mut self,
         outpoint: &OutPoint,
         fetcher_func: F,
@@ -123,6 +123,37 @@ impl TxIndexCache {
             None => return Err(ConnectTransactionError::PreviouslyCachedInputNotFound),
         };
         Ok(result)
+    }
+
+    pub fn spend_tx_index(
+        &mut self,
+        inputs: &[TxInput],
+        spender: Spender,
+    ) -> Result<(), ConnectTransactionError> {
+        for input in inputs {
+            let outpoint = input.outpoint();
+            let prev_tx_index_op = self.get_from_cached_mut(&outpoint.tx_id())?;
+            prev_tx_index_op
+                .spend(outpoint.output_index(), spender.clone())
+                .map_err(ConnectTransactionError::from)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn precache_inputs<F>(
+        &mut self,
+        inputs: &[TxInput],
+        fetcher_func: F,
+    ) -> Result<(), ConnectTransactionError>
+    where
+        F: Fn(&OutPointSourceId) -> Result<Option<TxMainChainIndex>, ConnectTransactionError>,
+    {
+        inputs.iter().try_for_each(|input| {
+            self.fetch_and_cache(input.outpoint(), |txid| {
+                fetcher_func(txid).map_err(ConnectTransactionError::from)
+            })
+        })
     }
 
     pub fn take(self) -> BTreeMap<OutPointSourceId, CachedInputsOperation> {
