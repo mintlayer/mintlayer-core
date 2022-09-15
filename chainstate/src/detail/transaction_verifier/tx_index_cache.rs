@@ -133,7 +133,7 @@ impl TxIndexCache {
         Ok(result)
     }
 
-    pub fn spend_tx_index(
+    pub fn spend_tx_index_inputs(
         &mut self,
         inputs: &[TxInput],
         spender: Spender,

@@ -512,7 +512,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
                 // mark tx index as spent
                 let spender = tx.get_id().into();
-                self.tx_index_cache.spend_tx_index(tx.inputs(), spender)?;
+                self.tx_index_cache.spend_tx_index_inputs(tx.inputs(), spender)?;
 
                 fee
             }
@@ -548,7 +548,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
                 if let Some(inputs) = reward_transactable.inputs() {
                     // mark tx index as spend
-                    self.tx_index_cache.spend_tx_index(inputs, block.get_id().into())?;
+                    self.tx_index_cache.spend_tx_index_inputs(inputs, block.get_id().into())?;
                 }
 
                 fee
