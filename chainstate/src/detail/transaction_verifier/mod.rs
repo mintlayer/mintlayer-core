@@ -16,10 +16,12 @@
 mod amounts_map;
 mod cached_operation;
 pub mod error;
+mod tx_index_cache;
 use self::{
     amounts_map::AmountsMap,
     error::{ConnectTransactionError, TokensError},
     token_issuance_cache::{CachedTokensOperation, CoinOrTokenId},
+    tx_index_cache::TxIndexCache,
     utils::get_output_token_id_and_amount,
 };
 use ::utils::ensure;
@@ -37,11 +39,10 @@ use common::{
     amount_sum,
     chain::{
         block::timestamp::BlockTimestamp,
-        calculate_tx_index_from_block,
         signature::{verify_signature, Transactable},
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
-        Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
-        Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
+        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, SpendablePosition, Spender,
+        Transaction, TxInput, TxOutput,
     },
     primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable},
 };
@@ -87,7 +88,7 @@ pub struct TransactionVerifierDelta {
 /// The tool used to verify transaction and cache their updated states in memory
 pub struct TransactionVerifier<'a, S> {
     db_tx: &'a S,
-    tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
+    tx_index_cache: TxIndexCache,
     utxo_cache: UtxosCache<'a>,
     utxo_block_undo: BTreeMap<Id<Block>, BlockUndoEntry>,
     token_issuance_cache: TokenIssuanceCache,
@@ -101,7 +102,7 @@ impl<'a, S> TransactionVerifier<'a, S> {
         Self {
             db_tx,
             chain_config,
-            tx_index_cache: BTreeMap::new(),
+            tx_index_cache: TxIndexCache::new(),
             utxo_cache,
             utxo_block_undo: BTreeMap::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
@@ -110,55 +111,6 @@ impl<'a, S> TransactionVerifier<'a, S> {
 }
 
 impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
-    fn outpoint_source_id_from_spend_ref(
-        spend_ref: BlockTransactableRef,
-    ) -> Result<OutPointSourceId, ConnectTransactionError> {
-        let outpoint_source_id = match spend_ref {
-            BlockTransactableRef::Transaction(block, tx_num) => {
-                let tx = block.transactions().get(tx_num).ok_or_else(|| {
-                    ConnectTransactionError::InvariantErrorTxNumWrongInBlock(tx_num, block.get_id())
-                })?;
-                let tx_id = tx.get_id();
-                OutPointSourceId::from(tx_id)
-            }
-            BlockTransactableRef::BlockReward(block) => OutPointSourceId::from(block.get_id()),
-        };
-        Ok(outpoint_source_id)
-    }
-
-    fn add_tx_index(
-        &mut self,
-        spend_ref: BlockTransactableRef,
-    ) -> Result<(), ConnectTransactionError> {
-        let tx_index = match spend_ref {
-            BlockTransactableRef::Transaction(block, tx_num) => {
-                CachedInputsOperation::Write(calculate_tx_index_from_block(block, tx_num)?)
-            }
-            BlockTransactableRef::BlockReward(block) => {
-                match block.block_reward_transactable().outputs() {
-                    Some(outputs) => CachedInputsOperation::Write(TxMainChainIndex::new(
-                        block.get_id().into(),
-                        outputs
-                            .len()
-                            .try_into()
-                            .map_err(|_| ConnectTransactionError::InvalidOutputCount)?,
-                    )?),
-                    None => return Ok(()), // no outputs to add
-                }
-            }
-        };
-
-        let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
-
-        match self.tx_index_cache.entry(outpoint_source_id) {
-            Entry::Occupied(_) => {
-                return Err(ConnectTransactionError::OutputAlreadyPresentInInputsCache)
-            }
-            Entry::Vacant(entry) => entry.insert(tx_index),
-        };
-        Ok(())
-    }
-
     pub fn get_gen_block_index(
         &self,
         block_id: &Id<GenBlock>,
@@ -173,54 +125,6 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 .map(|b| b.map(GenBlockIndex::Block))
                 .map_err(ConnectTransactionError::from),
         }
-    }
-
-    fn remove_tx_index(
-        &mut self,
-        spend_ref: BlockTransactableRef,
-    ) -> Result<(), ConnectTransactionError> {
-        let tx_index = CachedInputsOperation::Erase;
-        let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
-
-        self.tx_index_cache.insert(outpoint_source_id, tx_index);
-        Ok(())
-    }
-
-    fn get_from_cached_mut(
-        &mut self,
-        outpoint: &OutPoint,
-    ) -> Result<&mut CachedInputsOperation, ConnectTransactionError> {
-        let result = match self.tx_index_cache.get_mut(&outpoint.tx_id()) {
-            Some(tx_index) => tx_index,
-            None => return Err(ConnectTransactionError::PreviouslyCachedInputNotFound),
-        };
-        Ok(result)
-    }
-
-    fn get_tx_index(
-        &self,
-        outpoint: &OutPoint,
-    ) -> Result<Option<&TxMainChainIndex>, ConnectTransactionError> {
-        let result = match self.tx_index_cache.get(&outpoint.tx_id()) {
-            Some(tx_index) => tx_index.get_tx_index(),
-            None => return Err(ConnectTransactionError::PreviouslyCachedInputNotFound),
-        };
-        Ok(result)
-    }
-
-    fn fetch_and_cache(&mut self, outpoint: &OutPoint) -> Result<(), ConnectTransactionError> {
-        match self.tx_index_cache.entry(outpoint.tx_id()) {
-            Entry::Occupied(_) => (),
-            Entry::Vacant(entry) => {
-                // Maybe the utxo is in a previous block?
-                let tx_index = self
-                    .db_tx
-                    .get_mainchain_tx_index(&outpoint.tx_id())?
-                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
-                entry.insert(CachedInputsOperation::Read(tx_index));
-            }
-        }
-        Ok(())
     }
 
     fn calculate_total_outputs(
@@ -432,7 +336,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         for (input_idx, input) in inputs.iter().enumerate() {
             let outpoint = input.outpoint();
             let tx_index = self
-                .get_tx_index(outpoint)?
+                .tx_index_cache
+                .get_from_cached(&outpoint.tx_id())?
                 .ok_or(ConnectTransactionError::PreviouslyCachedInputNotFound)?;
 
             match tx_index.position() {
@@ -513,7 +418,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
     ) -> Result<(), ConnectTransactionError> {
         for input in inputs {
             let outpoint = input.outpoint();
-            let prev_tx_index_op = self.get_from_cached_mut(outpoint)?;
+            let prev_tx_index_op = self.tx_index_cache.get_from_cached_mut(&outpoint.tx_id())?;
             prev_tx_index_op
                 .spend(outpoint.output_index(), spender.clone())
                 .map_err(ConnectTransactionError::from)?;
@@ -662,7 +567,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
             }
         };
         // add tx index to the cache
-        self.add_tx_index(spend_ref)?;
+        self.tx_index_cache.add_tx_index(spend_ref)?;
 
         Ok(fee)
     }
@@ -672,7 +577,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         spend_ref: BlockTransactableRef,
     ) -> Result<(), ConnectTransactionError> {
         // Delete TxMainChainIndex for the current tx
-        self.remove_tx_index(spend_ref)?;
+        self.tx_index_cache.remove_tx_index(spend_ref)?;
 
         match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
@@ -698,7 +603,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     let outpoint = input.outpoint();
 
                     // mark tx index as unspend
-                    let input_tx_id_op = self.get_from_cached_mut(outpoint)?;
+                    let input_tx_id_op =
+                        self.tx_index_cache.get_from_cached_mut(&outpoint.tx_id())?;
                     input_tx_id_op
                         .unspend(outpoint.output_index())
                         .map_err(ConnectTransactionError::from)?;
@@ -726,7 +632,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                         let outpoint = input.outpoint();
 
                         // mark tx index as unspend
-                        let input_tx_id_op = self.get_from_cached_mut(outpoint)?;
+                        let input_tx_id_op =
+                            self.tx_index_cache.get_from_cached_mut(&outpoint.tx_id())?;
                         input_tx_id_op
                             .unspend(outpoint.output_index())
                             .map_err(ConnectTransactionError::from)?;
@@ -739,7 +646,11 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
     }
 
     fn precache_inputs(&mut self, inputs: &[TxInput]) -> Result<(), ConnectTransactionError> {
-        inputs.iter().try_for_each(|input| self.fetch_and_cache(input.outpoint()))
+        inputs.iter().try_for_each(|input| {
+            self.tx_index_cache.fetch_and_cache(input.outpoint(), |txid| {
+                self.db_tx.get_mainchain_tx_index(txid).map_err(ConnectTransactionError::from)
+            })
+        })
     }
 
     fn block_reward_outputs(
@@ -774,7 +685,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {
         Ok(TransactionVerifierDelta {
-            tx_index: self.tx_index_cache,
+            tx_index: self.tx_index_cache.take(),
             utxo_cache: self.utxo_cache.consume(),
             utxo_block_undo: self.utxo_block_undo,
             tokens_data: self.token_issuance_cache,
