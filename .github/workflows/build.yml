@@ -9,8 +9,6 @@ on:
     branches:
       - master
       - staging
-  pull_request_target:
-    types: synchronize
 
 
 env:
