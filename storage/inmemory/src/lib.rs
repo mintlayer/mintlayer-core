@@ -13,17 +13,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use storage_core::{adaptor, backend, Data, DbDesc, DbIndex};
+use storage_core::{adaptor, backend, util, Data, DbDesc, DbIndex};
 
 use std::collections::BTreeMap;
 
 type Map = BTreeMap<Data, Data>;
+
+pub struct PrefixIter<'i>(storage_core::util::PrefixIter<'i, Data>);
+
+impl<'i> Iterator for PrefixIter<'i> {
+    type Item = (Data, Data);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().map(|(k, v)| (k.to_vec(), v.clone()))
+    }
+}
 
 pub struct StorageMaps(Vec<Map>);
 
 impl backend::ReadOps for StorageMaps {
     fn get(&self, idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<&[u8]>> {
         Ok(self.0[idx.get()].get(key).map(AsRef::as_ref))
+    }
+}
+
+impl<'i> backend::PrefixIter<'i> for StorageMaps {
+    type Iterator = PrefixIter<'i>;
+
+    fn prefix_iter<'m: 'i>(
+        &'m self,
+        idx: DbIndex,
+        prefix: Data,
+    ) -> storage_core::Result<Self::Iterator> {
+        Ok(PrefixIter(util::PrefixIter::new(
+            &self.0[idx.get()],
+            prefix,
+        )))
     }
 }
 

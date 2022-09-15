@@ -14,14 +14,16 @@
 // limitations under the License.
 
 // Re-export a bunch of often used items
-pub use std::mem::drop;
+pub use crate::model::{ApplyActions, Model, WriteAction};
 pub use storage_core::{
-    backend::{Backend, Data, ReadOps, TransactionalRo, TransactionalRw, TxRo, TxRw, WriteOps},
+    backend::{
+        Backend, Data, PrefixIter, ReadOps, TransactionalRo, TransactionalRw, TxRo, TxRw, WriteOps,
+    },
     info::{self, DbDesc, DbIndex, MapDesc},
 };
 pub use utils::{sync, thread};
 
-pub use std::sync::Arc;
+pub use std::{mem::drop, sync::Arc};
 
 /// Alias for `Send + Sync + 'static`
 pub trait ThreadSafe: std::panic::UnwindSafe + Send + Sync + 'static {}

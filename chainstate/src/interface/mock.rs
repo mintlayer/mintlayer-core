@@ -19,7 +19,10 @@ use common::chain::block::BlockReward;
 use common::chain::OutPointSourceId;
 use common::chain::TxMainChainIndex;
 use common::{
-    chain::block::{Block, BlockHeader, GenBlock},
+    chain::{
+        block::{Block, BlockHeader, GenBlock},
+        tokens::{RPCTokenInfo, TokenId},
+    },
     primitives::{BlockHeight, Id},
 };
 
@@ -28,6 +31,7 @@ use crate::{detail::BlockSource, ChainstateError, ChainstateEvent, Locator};
 use chainstate_types::BlockIndex;
 use chainstate_types::GenBlockIndex;
 use common::chain::block::timestamp::BlockTimestamp;
+use common::chain::tokens::TokenAuxiliaryData;
 use common::chain::ChainConfig;
 use utils::eventhandler::EventHandler;
 
@@ -96,5 +100,14 @@ mockall::mock! {
             &self,
             block_index: &BlockIndex,
         ) -> Result<Option<BlockReward>, ChainstateError>;
+        fn get_token_info_for_rpc(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, ChainstateError>;
+        fn get_token_aux_data(
+            &self,
+            token_id: TokenId,
+        ) -> Result<Option<TokenAuxiliaryData>, ChainstateError>;
+        fn get_token_id_from_issuance_tx(
+            &self,
+            tx_id: &Id<common::chain::Transaction>,
+        ) -> Result<Option<TokenId>, ChainstateError>;
     }
 }

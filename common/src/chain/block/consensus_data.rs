@@ -41,7 +41,7 @@ impl ConsensusData {
 
     pub fn reward_maturity_distance(&self, chain_config: &ChainConfig) -> BlockDistance {
         match self {
-            ConsensusData::None => BlockDistance::new(0),
+            ConsensusData::None => chain_config.empty_consensus_reward_maturity_distance(),
             ConsensusData::PoW(_) => {
                 chain_config.get_proof_of_work_config().reward_maturity_distance()
             }

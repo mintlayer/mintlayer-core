@@ -183,7 +183,7 @@ where
         info: net::types::PeerInfo<T>,
     ) -> crate::Result<()> {
         let peer_id = info.peer_id;
-        log::debug!("peer {peer_id} connected, address {address}, {info}");
+        log::debug!("peer {peer_id} connected, address {address:?}, {info}");
 
         ensure!(
             info.magic_bytes == *self.chain_config.magic_bytes(),
@@ -228,7 +228,7 @@ where
         address: T::Address,
         info: net::types::PeerInfo<T>,
     ) -> crate::Result<()> {
-        log::debug!("validate inbound connection, inbound address {address}");
+        log::debug!("validate inbound connection, inbound address {address:?}");
 
         ensure!(
             !self.peerdb.is_active_peer(&info.peer_id),
@@ -427,7 +427,7 @@ where
                     // Handle events from an outside controller (rpc, for example) that sets/gets values for PeerManager
                     //
                     event::SwarmEvent::Connect(addr, response) => {
-                        log::debug!("try to establish outbound connection to peer at address {addr}");
+                        log::debug!("try to establish outbound connection to peer at address {addr:?}");
 
                         let res = self.connect(addr.clone()).await.map(|_| {
                             self.pending.insert(addr.clone(), Some(response));

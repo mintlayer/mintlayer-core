@@ -499,6 +499,7 @@ fn mutate_output(tx: &Transaction) -> Transaction {
             OutputValue::Coin(coin) => {
                 OutputValue::Coin((*coin + Amount::from_atoms(100)).unwrap())
             }
+            OutputValue::Token(asset) => OutputValue::Token(asset.clone()),
         },
         updater.outputs[0].purpose().clone(),
     );

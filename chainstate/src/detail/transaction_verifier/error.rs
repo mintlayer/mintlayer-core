@@ -16,7 +16,9 @@
 use common::{
     chain::{
         block::{Block, GenBlock},
-        SpendError, Spender, TxMainChainIndexError, TxMainChainPosition,
+        tokens::TokenId,
+        OutPointSourceId, SpendError, Spender, Transaction, TxMainChainIndexError,
+        TxMainChainPosition,
     },
     primitives::{Amount, Id},
 };
@@ -35,7 +37,7 @@ pub enum ConnectTransactionError {
     #[error("Outputs already in the inputs cache")]
     OutputAlreadyPresentInInputsCache,
     #[error("Input was cached, but could not be found")]
-    PreviouslyCachedInputNotFound,
+    PreviouslyCachedInputNotFound(OutPointSourceId),
     #[error("Input was cached, but it is erased")]
     PreviouslyCachedInputWasErased,
     #[error("Block disconnect already-unspent (invariant broken)")]
@@ -97,6 +99,8 @@ pub enum ConnectTransactionError {
     TimeLockViolation,
     #[error("Utxo error: {0}")]
     UtxoError(#[from] utxo::Error),
+    #[error("Tokens error: {0}")]
+    TokensError(#[from] TokensError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
@@ -139,4 +143,42 @@ impl From<TxMainChainIndexError> for ConnectTransactionError {
             }
         }
     }
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum TokensError {
+    #[error("Blockchain storage error: {0}")]
+    StorageError(#[from] chainstate_storage::Error),
+    #[error("Invalid ticker length in issuance transaction {0} in block {1}")]
+    IssueErrorInvalidTickerLength(Id<Transaction>, Id<Block>),
+    #[error("Invalid character in token ticker in issuance transaction {0} in block {1}")]
+    IssueErrorTickerHasNoneAlphaNumericChar(Id<Transaction>, Id<Block>),
+    #[error("Incorrect amount in issuance transaction {0} in block {1}")]
+    IssueAmountIsZero(Id<Transaction>, Id<Block>),
+    #[error("Too many decimals in issuance transaction {0} in block {1}")]
+    IssueErrorTooManyDecimals(Id<Transaction>, Id<Block>),
+    #[error("Incorrect metadata URI in issuance transaction {0} in block {1}")]
+    IssueErrorIncorrectMetadataURI(Id<Transaction>, Id<Block>),
+    #[error("Too many tokens issuance in transaction {0} in block {1}")]
+    MultipleTokenIssuanceInTransaction(Id<Transaction>, Id<Block>),
+    #[error("Coin or token overflow")]
+    CoinOrTokenOverflow,
+    #[error("Insufficient token issuance fee in transaction {0} in block {1}")]
+    InsufficientTokenFees(Id<Transaction>, Id<Block>),
+    #[error("Can't burn zero value in transaction {0} in block {1}")]
+    BurnZeroTokens(Id<Transaction>, Id<Block>),
+    #[error("Can't transfer zero tokens in transaction {0} in block {1}")]
+    TransferZeroTokens(Id<Transaction>, Id<Block>),
+    #[error("Can't fetch transaction inputs in main chain by outpoint")]
+    NoTxInMainChainByOutpoint,
+    #[error("Tokens ID can't be calculated")]
+    TokenIdCantBeCalculated,
+    #[error("Burned tokens cannot be transferred")]
+    AttemptToTransferBurnedTokens,
+    #[error("Block reward can't be paid in tokens")]
+    TokensInBlockReward,
+    #[error("Invariant broken - attempt undo issuance on non-existent token {0}")]
+    InvariantBrokenUndoIssuanceOnNonexistentToken(TokenId),
+    #[error("Invariant broken - attempt register issuance on non-existent token {0}")]
+    InvariantBrokenRegisterIssuanceWithDuplicateId(TokenId),
 }

@@ -19,6 +19,7 @@ pub mod adaptor;
 pub mod backend;
 pub mod error;
 pub mod info;
+pub mod util;
 
 // Re-export some commonly used items
 pub use backend::Backend;

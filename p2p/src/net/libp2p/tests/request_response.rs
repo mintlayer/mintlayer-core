@@ -21,7 +21,7 @@ use crate::{
 };
 use futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
-use p2p_test_utils::make_libp2p_addr;
+use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 use tokio::sync::oneshot;
 
 // try to send request to an uknown peer and verify that the request is not rejected
@@ -30,7 +30,7 @@ async fn request_sent_directly_but_peer_not_part_of_swarm() {
     let (mut backend, _cmd, _conn_rx, _gossip_rx, _sync_rx) = make_libp2p(
         common::chain::config::create_mainnet(),
         Arc::new(Default::default()),
-        make_libp2p_addr(),
+        MakeP2pAddress::make_address(),
         &[],
     )
     .await;
@@ -53,7 +53,7 @@ async fn request_sent_but_peer_not_part_of_swarm() {
     let (mut backend, _cmd, _conn_rx, _gossip_rx, _sync_rx) = make_libp2p(
         common::chain::config::create_mainnet(),
         Arc::new(Default::default()),
-        make_libp2p_addr(),
+        MakeP2pAddress::make_address(),
         &[],
     )
     .await;

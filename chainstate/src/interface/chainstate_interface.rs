@@ -17,9 +17,12 @@ use std::sync::Arc;
 
 use crate::ChainstateConfig;
 use chainstate_types::{BlockIndex, GenBlockIndex};
+use common::chain::tokens::TokenAuxiliaryData;
+use common::chain::Transaction;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
+        tokens::{RPCTokenInfo, TokenId},
         ChainConfig, OutPointSourceId, TxMainChainIndex,
     },
     primitives::{BlockHeight, Id},
@@ -102,4 +105,17 @@ pub trait ChainstateInterface: Send {
         &self,
         block_index: &BlockIndex,
     ) -> Result<Option<BlockReward>, ChainstateError>;
+    /// Returns token info by token_id
+    fn get_token_info_for_rpc(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<RPCTokenInfo>, ChainstateError>;
+    fn get_token_aux_data(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<TokenAuxiliaryData>, ChainstateError>;
+    fn get_token_id_from_issuance_tx(
+        &self,
+        tx_id: &Id<Transaction>,
+    ) -> Result<Option<TokenId>, ChainstateError>;
 }

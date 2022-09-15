@@ -16,16 +16,13 @@
 pub mod backend;
 pub mod peer;
 pub mod request_manager;
-pub mod socket;
+pub mod transport;
 pub mod types;
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
-use tokio::{
-    net::TcpListener,
-    sync::{mpsc, oneshot},
-};
+use tokio::sync::{mpsc, oneshot};
 
 use logging::log;
 
@@ -35,51 +32,59 @@ use crate::{
     message,
     net::{
         self,
+        mock::transport::{MockListener, MockTransport},
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent, ValidationResult},
         ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,
     },
 };
 
 #[derive(Debug)]
-pub struct MockService;
+pub struct MockService<T: MockTransport>(PhantomData<T>);
 
 #[derive(Debug, Copy, Clone)]
 pub struct MockMessageId(u64);
 
-pub struct MockConnectivityHandle<T: NetworkingService> {
-    /// Socket address of the network service provider
-    local_addr: SocketAddr,
+pub struct MockConnectivityHandle<S: NetworkingService, T: MockTransport> {
+    /// The local address of a network service provider.
+    local_addr: S::Address,
 
-    /// Peer ID of local node
+    /// The peer ID of a local node.
     peer_id: types::MockPeerId,
 
     /// TX channel for sending commands to mock backend
-    cmd_tx: mpsc::Sender<types::Command>,
+    cmd_tx: mpsc::Sender<types::Command<T>>,
 
     /// RX channel for receiving connectivity events from mock backend
-    conn_rx: mpsc::Receiver<types::ConnectivityEvent>,
-    _marker: std::marker::PhantomData<fn() -> T>,
+    conn_rx: mpsc::Receiver<types::ConnectivityEvent<T>>,
+
+    _marker: PhantomData<fn() -> S>,
 }
 
-pub struct MockPubSubHandle<T>
+pub struct MockPubSubHandle<S, T>
 where
-    T: NetworkingService,
+    S: NetworkingService,
+    T: MockTransport,
 {
     /// TX channel for sending commands to mock backend
-    _cmd_tx: mpsc::Sender<types::Command>,
+    _cmd_tx: mpsc::Sender<types::Command<T>>,
 
     /// RX channel for receiving pubsub events from mock backend
-    _pubsub_rx: mpsc::Receiver<types::PubSubEvent>,
-    _marker: std::marker::PhantomData<fn() -> T>,
+    _pubsub_rx: mpsc::Receiver<types::PubSubEvent<T>>,
+
+    _marker: PhantomData<fn() -> S>,
 }
 
-pub struct MockSyncingMessagingHandle<T: NetworkingService> {
+pub struct MockSyncingMessagingHandle<S, T>
+where
+    S: NetworkingService,
+    T: MockTransport,
+{
     /// TX channel for sending commands to mock backend
-    cmd_tx: mpsc::Sender<types::Command>,
+    cmd_tx: mpsc::Sender<types::Command<T>>,
 
     /// RX channel for receiving syncing events
     sync_rx: mpsc::Receiver<types::SyncingEvent>,
-    _marker: std::marker::PhantomData<fn() -> T>,
+    _marker: PhantomData<fn() -> S>,
 }
 
 impl<T> TryInto<net::types::PeerInfo<T>> for types::MockPeerInfo
@@ -100,14 +105,17 @@ where
 }
 
 #[async_trait]
-impl NetworkingService for MockService {
-    type Address = SocketAddr;
+impl<T> NetworkingService for MockService<T>
+where
+    T: MockTransport,
+{
+    type Address = T::Address;
     type PeerId = types::MockPeerId;
     type SyncingPeerRequestId = types::MockRequestId;
     type PubSubMessageId = MockMessageId;
-    type ConnectivityHandle = MockConnectivityHandle<Self>;
-    type PubSubHandle = MockPubSubHandle<Self>;
-    type SyncingMessagingHandle = MockSyncingMessagingHandle<Self>;
+    type ConnectivityHandle = MockConnectivityHandle<Self, T>;
+    type PubSubHandle = MockPubSubHandle<Self, T>;
+    type SyncingMessagingHandle = MockSyncingMessagingHandle<Self, T>;
 
     async fn start(
         addr: Self::Address,
@@ -122,12 +130,13 @@ impl NetworkingService for MockService {
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (pubsub_tx, _pubsub_rx) = mpsc::channel(16);
         let (sync_tx, sync_rx) = mpsc::channel(16);
-        let socket = TcpListener::bind(addr).await?;
-        let local_addr = socket.local_addr().expect("to have bind address available");
+        let socket = T::bind(addr).await?;
+        let local_addr = socket.local_address().expect("to have bind address available");
 
+        let address = local_addr.clone();
         tokio::spawn(async move {
-            let mut backend = backend::Backend::new(
-                local_addr,
+            let mut backend = backend::Backend::<T>::new(
+                address,
                 socket,
                 Arc::clone(&_config),
                 cmd_rx,
@@ -142,11 +151,12 @@ impl NetworkingService for MockService {
             }
         });
 
+        let peer_id = types::MockPeerId::from_socket_address::<T>(&local_addr);
         Ok((
             Self::ConnectivityHandle {
                 local_addr,
                 cmd_tx: cmd_tx.clone(),
-                peer_id: types::MockPeerId::from_socket_address(&local_addr),
+                peer_id,
                 conn_rx,
                 _marker: Default::default(),
             },
@@ -165,12 +175,13 @@ impl NetworkingService for MockService {
 }
 
 #[async_trait]
-impl<T> ConnectivityService<T> for MockConnectivityHandle<T>
+impl<S, T> ConnectivityService<S> for MockConnectivityHandle<S, T>
 where
-    T: NetworkingService<Address = SocketAddr, PeerId = types::MockPeerId> + Send,
-    types::MockPeerInfo: TryInto<net::types::PeerInfo<T>, Error = P2pError>,
+    S: NetworkingService<Address = T::Address, PeerId = types::MockPeerId> + Send,
+    types::MockPeerInfo: TryInto<net::types::PeerInfo<S>, Error = P2pError>,
+    T: MockTransport,
 {
-    async fn connect(&mut self, address: T::Address) -> crate::Result<()> {
+    async fn connect(&mut self, address: S::Address) -> crate::Result<()> {
         log::debug!(
             "try to establish outbound connection, address {:?}",
             address
@@ -187,7 +198,7 @@ where
         rx.await?
     }
 
-    async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+    async fn disconnect(&mut self, peer_id: S::PeerId) -> crate::Result<()> {
         log::debug!("close connection with remote, {peer_id}");
 
         let (tx, rx) = oneshot::channel();
@@ -201,15 +212,15 @@ where
         rx.await?
     }
 
-    async fn local_addr(&self) -> crate::Result<Option<T::Address>> {
-        Ok(Some(self.local_addr))
+    async fn local_addr(&self) -> crate::Result<Option<S::Address>> {
+        Ok(Some(self.local_addr.clone()))
     }
 
-    fn peer_id(&self) -> &T::PeerId {
+    fn peer_id(&self) -> &S::PeerId {
         &self.peer_id
     }
 
-    async fn ban_peer(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+    async fn ban_peer(&mut self, peer_id: S::PeerId) -> crate::Result<()> {
         log::debug!("ban remote peer, peer id {peer_id}");
 
         let (tx, rx) = oneshot::channel();
@@ -223,7 +234,7 @@ where
         rx.await?
     }
 
-    async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {
+    async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<S>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::ConnectivityEvent::OutboundAccepted { address, peer_info } => {
                 Ok(ConnectivityEvent::OutboundAccepted {
@@ -248,9 +259,10 @@ where
 }
 
 #[async_trait]
-impl<T> PubSubService<T> for MockPubSubHandle<T>
+impl<S, T> PubSubService<S> for MockPubSubHandle<S, T>
 where
-    T: NetworkingService<PeerId = types::MockPeerId> + Send,
+    S: NetworkingService<PeerId = types::MockPeerId> + Send,
+    T: MockTransport,
 {
     async fn publish(&mut self, _announcement: message::Announcement) -> crate::Result<()> {
         todo!();
@@ -258,8 +270,8 @@ where
 
     async fn report_validation_result(
         &mut self,
-        _source: T::PeerId,
-        _msg_id: T::PubSubMessageId,
+        _source: S::PeerId,
+        _msg_id: S::PubSubMessageId,
         _result: ValidationResult,
     ) -> crate::Result<()> {
         todo!();
@@ -269,22 +281,23 @@ where
         todo!();
     }
 
-    async fn poll_next(&mut self) -> crate::Result<PubSubEvent<T>> {
+    async fn poll_next(&mut self) -> crate::Result<PubSubEvent<S>> {
         todo!();
     }
 }
 
 #[async_trait]
-impl<T> SyncingMessagingService<T> for MockSyncingMessagingHandle<T>
+impl<S, T> SyncingMessagingService<S> for MockSyncingMessagingHandle<S, T>
 where
-    T: NetworkingService<PeerId = types::MockPeerId, SyncingPeerRequestId = types::MockRequestId>
+    S: NetworkingService<PeerId = types::MockPeerId, SyncingPeerRequestId = types::MockRequestId>
         + Send,
+    T: MockTransport,
 {
     async fn send_request(
         &mut self,
-        peer_id: T::PeerId,
+        peer_id: S::PeerId,
         request: message::Request,
-    ) -> crate::Result<T::SyncingPeerRequestId> {
+    ) -> crate::Result<S::SyncingPeerRequestId> {
         let (tx, rx) = oneshot::channel();
 
         self.cmd_tx
@@ -299,7 +312,7 @@ where
 
     async fn send_response(
         &mut self,
-        request_id: T::SyncingPeerRequestId,
+        request_id: S::SyncingPeerRequestId,
         response: message::Response,
     ) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();
@@ -314,7 +327,7 @@ where
         rx.await?
     }
 
-    async fn poll_next(&mut self) -> crate::Result<SyncingEvent<T>> {
+    async fn poll_next(&mut self) -> crate::Result<SyncingEvent<S>> {
         match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::SyncingEvent::Request {
                 peer_id,
@@ -341,24 +354,32 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::types::{Protocol, ProtocolType};
+    use crate::net::{
+        mock::transport::{ChannelMockTransport, TcpMockTransport},
+        types::{Protocol, ProtocolType},
+    };
     use common::primitives::semver::SemVer;
+    use p2p_test_utils::{MakeChannelAddress, MakeTcpAddress, MakeTestAddress};
+    use std::fmt::Debug;
 
-    #[tokio::test]
-    async fn connect_to_remote() {
+    async fn connect_to_remote<A, T>()
+    where
+        A: MakeTestAddress<Address = T::Address>,
+        T: MockTransport + Debug,
+    {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
-        let (mut conn1, _, _) = MockService::start(
-            p2p_test_utils::make_mock_addr(),
+        let (mut conn1, _, _) = MockService::<T>::start(
+            A::make_address(),
             Arc::clone(&config),
             Arc::clone(&p2p_config),
         )
         .await
         .unwrap();
 
-        let (conn2, _, _) = MockService::start(
-            p2p_test_utils::make_mock_addr(),
+        let (conn2, _, _) = MockService::<T>::start(
+            A::make_address(),
             Arc::clone(&config),
             Arc::clone(&p2p_config),
         )
@@ -393,20 +414,33 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn accept_incoming() {
+    async fn connect_to_remote_tcp() {
+        connect_to_remote::<MakeTcpAddress, TcpMockTransport>().await;
+    }
+
+    #[tokio::test]
+    async fn connect_to_remote_channels() {
+        connect_to_remote::<MakeChannelAddress, ChannelMockTransport>().await;
+    }
+
+    async fn accept_incoming<A, T>()
+    where
+        A: MakeTestAddress<Address = T::Address>,
+        T: MockTransport,
+    {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
-        let (mut conn1, _, _) = MockService::start(
-            p2p_test_utils::make_mock_addr(),
+        let (mut conn1, _, _) = MockService::<T>::start(
+            A::make_address(),
             Arc::clone(&config),
             Arc::clone(&p2p_config),
         )
         .await
         .unwrap();
 
-        let (mut conn2, _, _) = MockService::start(
-            p2p_test_utils::make_mock_addr(),
+        let (mut conn2, _, _) = MockService::<T>::start(
+            A::make_address(),
             Arc::clone(&config),
             Arc::clone(&p2p_config),
         )
@@ -441,21 +475,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn disconnect() {
+    async fn accept_incoming_tcp() {
+        accept_incoming::<MakeTcpAddress, TcpMockTransport>().await;
+    }
+
+    #[tokio::test]
+    async fn accept_incoming_channels() {
+        accept_incoming::<MakeChannelAddress, ChannelMockTransport>().await;
+    }
+
+    async fn disconnect<A, T>()
+    where
+        A: MakeTestAddress<Address = T::Address>,
+        T: MockTransport,
+    {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
-        let (mut conn1, _, _) = MockService::start(
-            p2p_test_utils::make_mock_addr(),
+        let (mut conn1, _, _) = MockService::<T>::start(
+            A::make_address(),
             Arc::clone(&config),
             Arc::clone(&p2p_config),
         )
         .await
         .unwrap();
         let (mut conn2, _, _) =
-            MockService::start(p2p_test_utils::make_mock_addr(), config, p2p_config)
-                .await
-                .unwrap();
+            MockService::<T>::start(A::make_address(), config, p2p_config).await.unwrap();
 
         let (_res1, res2) = tokio::join!(
             conn1.connect(conn2.local_addr().await.unwrap().unwrap()),
@@ -471,5 +516,15 @@ mod tests {
             }
             _ => panic!("invalid event received, expected incoming connection"),
         }
+    }
+
+    #[tokio::test]
+    async fn disconnect_tcp() {
+        disconnect::<MakeTcpAddress, TcpMockTransport>().await;
+    }
+
+    #[tokio::test]
+    async fn disconnect_channels() {
+        disconnect::<MakeChannelAddress, ChannelMockTransport>().await;
     }
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -25,6 +25,8 @@ pub use crate::detail::CheckBlockError;
 pub use crate::detail::CheckBlockTransactionsError;
 pub use crate::detail::ConnectTransactionError;
 pub use crate::detail::OrphanCheckError;
+pub use crate::detail::TokensError;
+
 pub use crate::{
     config::ChainstateConfig,
     detail::{ban_score, BlockError, BlockSource, Locator, HEADER_LIMIT},

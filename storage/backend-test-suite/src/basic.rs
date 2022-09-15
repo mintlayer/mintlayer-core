@@ -87,9 +87,145 @@ fn put_twice_then_commit_read_last<B: Backend>(backend: B) {
     assert_eq!(dbtx.get(IDX.0, b"hello"), Ok(Some(b"b".as_ref())),);
 }
 
+fn put_iterator_count_matches<B: Backend>(backend: B) {
+    let store = backend.open(desc(1)).expect("db open to succeed");
+
+    let mut dbtx = store.transaction_rw();
+    dbtx.put(IDX.0, vec![0x00], vec![]).unwrap();
+    dbtx.put(IDX.0, vec![0x01], vec![]).unwrap();
+    dbtx.put(IDX.0, vec![0x02], vec![]).unwrap();
+    dbtx.put(IDX.0, vec![0x03], vec![]).unwrap();
+    dbtx.commit().expect("commit to succeed");
+
+    let dbtx = store.transaction_ro();
+    assert_eq!(dbtx.prefix_iter(IDX.0, vec![]).unwrap().count(), 4);
+}
+
+fn put_and_iterate_over_prefixes<B: Backend>(backend: B) {
+    let store = backend.open(desc(1)).expect("db open to succeed");
+
+    // Populate the database with some values
+    let mut dbtx = store.transaction_rw();
+    dbtx.put(IDX.0, b"ac".to_vec(), b"2".to_vec()).unwrap();
+    dbtx.put(IDX.0, b"bf".to_vec(), b"7".to_vec()).unwrap();
+    dbtx.put(IDX.0, b"ab".to_vec(), b"1".to_vec()).unwrap();
+    dbtx.put(IDX.0, b"aca".to_vec(), b"3".to_vec()).unwrap();
+    dbtx.put(IDX.0, b"bz".to_vec(), b"8".to_vec()).unwrap();
+    dbtx.put(IDX.0, b"x".to_vec(), b"9".to_vec()).unwrap();
+    dbtx.put(IDX.0, b"bb".to_vec(), b"6".to_vec()).unwrap();
+    dbtx.put(IDX.0, b"b".to_vec(), b"5".to_vec()).unwrap();
+    dbtx.put(IDX.0, b"acb".to_vec(), b"4".to_vec()).unwrap();
+    dbtx.put(IDX.0, b"aa".to_vec(), b"0".to_vec()).unwrap();
+    dbtx.commit().expect("commit to succeed");
+
+    // Check for a non-existent prefix
+    assert_eq!(
+        store.transaction_ro().prefix_iter(IDX.0, b"foo".to_vec()).unwrap().next(),
+        None,
+    );
+
+    // Check for items that are supposed to be present
+    let check = |range: std::ops::RangeInclusive<usize>, prefix: Data| {
+        let dbtx = store.transaction_ro();
+        let vals = dbtx.prefix_iter(IDX.0, prefix).unwrap().map(|(_key, val)| val);
+        let expected_vals = range.map(|x| Data::from(x.to_string()));
+        assert!(vals.eq(expected_vals));
+        drop(dbtx);
+    };
+
+    check(0..=9, b"".to_vec());
+    check(0..=4, b"a".to_vec());
+    check(0..=0, b"aa".to_vec());
+    check(2..=4, b"ac".to_vec());
+    check(5..=8, b"b".to_vec());
+    check(9..=9, b"x".to_vec());
+}
+
+// Check for items that are supposed to be present
+fn check_prefix<Tx: ReadOps>(dbtx: &Tx, prefix: Data, expected: &[(&str, &str)]) {
+    let entries = dbtx.prefix_iter(IDX.0, prefix).unwrap();
+    let expected = expected
+        .iter()
+        .map(|(x, y)| (Data::from(x.to_string()), Data::from(y.to_string())));
+    assert!(entries.eq(expected));
+}
+
+fn put_and_iterate_delete_some<B: Backend>(backend: B) {
+    let store = backend.open(desc(1)).expect("db open to succeed");
+
+    let expected_full_0 =
+        [("aa", "0"), ("ab", "1"), ("ac", "2"), ("aca", "3"), ("acb", "4"), ("b", "5")];
+    let expected_aa_0 = [("aa", "0")];
+    let expected_ac_0 = [("ac", "2"), ("aca", "3"), ("acb", "4")];
+
+    // Populate the database with some
+    let mut dbtx = store.transaction_rw();
+    dbtx.put(IDX.0, b"aa".to_vec(), b"0".to_vec()).unwrap();
+    dbtx.put(IDX.0, b"ab".to_vec(), b"1".to_vec()).unwrap();
+    dbtx.put(IDX.0, b"ac".to_vec(), b"2".to_vec()).unwrap();
+    dbtx.put(IDX.0, b"aca".to_vec(), b"3".to_vec()).unwrap();
+    dbtx.put(IDX.0, b"acb".to_vec(), b"4".to_vec()).unwrap();
+    dbtx.put(IDX.0, b"b".to_vec(), b"5".to_vec()).unwrap();
+    // Check db contents
+    check_prefix(&dbtx, b"".to_vec(), &expected_full_0);
+    check_prefix(&dbtx, b"aa".to_vec(), &expected_aa_0);
+    check_prefix(&dbtx, b"ac".to_vec(), &expected_ac_0);
+    dbtx.commit().expect("commit to succeed");
+
+    // Check db contents after a commit
+    let dbtx = store.transaction_ro();
+    check_prefix(&dbtx, b"".to_vec(), &expected_full_0);
+    check_prefix(&dbtx, b"aa".to_vec(), &expected_aa_0);
+    check_prefix(&dbtx, b"ac".to_vec(), &expected_ac_0);
+    drop(dbtx);
+
+    let expected_full_1 = [("aa", "0"), ("ac", "2"), ("acb", "4"), ("b", "5")];
+    let expected_aa_1 = [("aa", "0")];
+    let expected_ac_1 = [("ac", "2"), ("acb", "4")];
+
+    // Delete some entries
+    let mut dbtx = store.transaction_rw();
+    dbtx.del(IDX.0, b"aca").unwrap();
+    dbtx.del(IDX.0, b"ab").unwrap();
+    // Check updated contents
+    check_prefix(&dbtx, b"".to_vec(), &expected_full_1);
+    check_prefix(&dbtx, b"aa".to_vec(), &expected_aa_1);
+    check_prefix(&dbtx, b"ac".to_vec(), &expected_ac_1);
+    // Abort the transaction
+    drop(dbtx);
+
+    // Check updated contents after a commit
+    let dbtx = store.transaction_ro();
+    check_prefix(&dbtx, b"".to_vec(), &expected_full_0);
+    check_prefix(&dbtx, b"aa".to_vec(), &expected_aa_0);
+    check_prefix(&dbtx, b"ac".to_vec(), &expected_ac_0);
+    drop(dbtx);
+
+    // Delete the items, this time for real
+    let mut dbtx = store.transaction_rw();
+    dbtx.del(IDX.0, b"aca").unwrap();
+    dbtx.del(IDX.0, b"ab").unwrap();
+    // Check updated contents
+    check_prefix(&dbtx, b"".to_vec(), &expected_full_1);
+    check_prefix(&dbtx, b"aa".to_vec(), &expected_aa_1);
+    check_prefix(&dbtx, b"ac".to_vec(), &expected_ac_1);
+    // Abort the transaction
+    dbtx.commit().unwrap();
+
+    // Check updated contents after a commit
+    let dbtx = store.transaction_ro();
+    check_prefix(&dbtx, b"".to_vec(), &expected_full_1);
+    check_prefix(&dbtx, b"aa".to_vec(), &expected_aa_1);
+    check_prefix(&dbtx, b"ac".to_vec(), &expected_ac_1);
+    drop(dbtx);
+}
+
 tests![
     put_and_abort,
     put_and_commit,
+    put_and_iterate_delete_some,
+    put_and_iterate_over_prefixes,
+    put_iterator_count_matches,
     put_twice_then_commit_read_last,
     put_two_under_different_keys,
 ];

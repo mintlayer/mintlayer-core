@@ -23,7 +23,7 @@ use crate::{
 };
 use futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
-use p2p_test_utils::make_libp2p_addr;
+use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 
 #[tokio::test]
 async fn test_discovered_and_expired() {
@@ -33,7 +33,7 @@ async fn test_discovered_and_expired() {
             mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
             ..Default::default()
         }),
-        make_libp2p_addr(),
+        MakeP2pAddress::make_address(),
         &[],
     )
     .await;
@@ -44,7 +44,7 @@ async fn test_discovered_and_expired() {
             mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
             ..Default::default()
         }),
-        make_libp2p_addr(),
+        MakeP2pAddress::make_address(),
         &[],
     )
     .await;

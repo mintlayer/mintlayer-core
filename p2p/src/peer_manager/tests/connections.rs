@@ -19,7 +19,7 @@ use libp2p::{Multiaddr, PeerId};
 use tokio::{sync::oneshot, time::timeout};
 
 use common::{chain::config, primitives::semver::SemVer};
-use p2p_test_utils::{make_libp2p_addr, make_mock_addr};
+use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress};
 
 use crate::{
     error::{DialError, P2pError, ProtocolError},
@@ -27,7 +27,11 @@ use crate::{
     net::{
         self,
         libp2p::Libp2pService,
-        mock::{types::MockPeerId, MockService},
+        mock::{
+            transport::{ChannelMockTransport, TcpMockTransport},
+            types::MockPeerId,
+            MockService,
+        },
         types::{Protocol, ProtocolType},
         ConnectivityService, NetworkingService,
     },
@@ -61,15 +65,15 @@ where
 
 #[tokio::test]
 async fn test_swarm_connect_mock() {
-    let bind_addr = make_mock_addr();
+    let bind_addr = MakeTcpAddress::make_address();
     let remote_addr: SocketAddr = "[::1]:1".parse().unwrap();
 
-    test_swarm_connect::<MockService>(bind_addr, remote_addr).await;
+    test_swarm_connect::<MockService<TcpMockTransport>>(bind_addr, remote_addr).await;
 }
 
 #[tokio::test]
 async fn test_swarm_connect_libp2p() {
-    let bind_addr = make_libp2p_addr();
+    let bind_addr = MakeP2pAddress::make_address();
     let remote_addr: Multiaddr =
         "/ip6/::1/tcp/6666/p2p/12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ"
             .parse()
@@ -80,13 +84,17 @@ async fn test_swarm_connect_libp2p() {
 
 // verify that the auto-connect functionality works if the number of active connections
 // is below the desired threshold and there are idle peers in the peerdb
-async fn test_auto_connect<T>(addr1: T::Address, addr2: T::Address)
+async fn test_auto_connect<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let config = Arc::new(config::create_mainnet());
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
@@ -117,21 +125,30 @@ where
 
 #[tokio::test]
 async fn test_auto_connect_libp2p() {
-    test_auto_connect::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+    test_auto_connect::<MakeP2pAddress, Libp2pService>().await;
 }
 
 #[tokio::test]
-async fn test_auto_connect_mock() {
-    test_auto_connect::<MockService>(make_mock_addr(), make_mock_addr()).await;
+async fn test_auto_connect_mock_tcp() {
+    test_auto_connect::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
-async fn connect_outbound_same_network<T>(addr1: T::Address, addr2: T::Address)
+#[tokio::test]
+async fn test_auto_connect_mock_channels() {
+    test_auto_connect::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+}
+
+async fn connect_outbound_same_network<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let config = Arc::new(config::create_mainnet());
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
@@ -145,18 +162,23 @@ where
 
 #[tokio::test]
 async fn connect_outbound_same_network_libp2p() {
-    connect_outbound_same_network::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+    connect_outbound_same_network::<MakeP2pAddress, Libp2pService>().await;
 }
 
 #[tokio::test]
-async fn connect_outbound_same_network_mock() {
-    connect_outbound_same_network::<MockService>(make_mock_addr(), make_mock_addr()).await;
+async fn connect_outbound_same_network_mock_tcp() {
+    connect_outbound_same_network::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+async fn connect_outbound_same_network_mock_channels() {
+    connect_outbound_same_network::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
 }
 
 #[tokio::test]
 async fn test_validate_supported_protocols() {
     let config = Arc::new(config::create_mainnet());
-    let swarm = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config).await;
+    let swarm = make_peer_manager::<Libp2pService>(MakeP2pAddress::make_address(), config).await;
 
     // all needed protocols
     assert!(swarm.validate_supported_protocols(&default_protocols()));
@@ -199,13 +221,17 @@ async fn test_validate_supported_protocols() {
     ));
 }
 
-async fn connect_outbound_different_network<T>(addr1: T::Address, addr2: T::Address)
+async fn connect_outbound_different_network<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let config = Arc::new(config::create_mainnet());
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(
@@ -224,22 +250,31 @@ where
 
 #[tokio::test]
 async fn connect_outbound_different_network_libp2p() {
-    connect_outbound_different_network::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr())
-        .await;
+    connect_outbound_different_network::<MakeP2pAddress, Libp2pService>().await;
 }
 
 #[tokio::test]
-async fn connect_outbound_different_network_mock() {
-    connect_outbound_different_network::<MockService>(make_mock_addr(), make_mock_addr()).await;
+async fn connect_outbound_different_network_mock_tcp() {
+    connect_outbound_different_network::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
-async fn connect_inbound_same_network<T>(addr1: T::Address, addr2: T::Address)
+#[tokio::test]
+async fn connect_outbound_different_network_mock_channels() {
+    connect_outbound_different_network::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+        .await;
+}
+
+async fn connect_inbound_same_network<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let config = Arc::new(config::create_mainnet());
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
@@ -257,22 +292,32 @@ where
 
 #[tokio::test]
 async fn connect_inbound_same_network_libp2p() {
-    connect_inbound_same_network::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+    connect_inbound_same_network::<MakeP2pAddress, Libp2pService>().await;
 }
 
 #[tokio::test]
-async fn connect_inbound_same_network_mock() {
+async fn connect_inbound_same_network_mock_tcp() {
     // TODO: fix protocol ids to work
-    // connect_inbound_same_network::<MockService>(make_mock_addr(), make_mock_addr()).await;
+    // connect_inbound_same_network::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
-async fn connect_inbound_different_network<T>(addr1: T::Address, addr2: T::Address)
+#[tokio::test]
+async fn connect_inbound_same_network_mock_channel() {
+    // TODO: fix protocol ids to work
+    // connect_inbound_same_network::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+}
+
+async fn connect_inbound_different_network<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::new(config::create_mainnet())).await;
     let mut swarm2 = make_peer_manager::<T>(
         addr2,
@@ -297,22 +342,31 @@ where
 
 #[tokio::test]
 async fn connect_inbound_different_network_libp2p() {
-    connect_inbound_different_network::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr())
-        .await;
+    connect_inbound_different_network::<MakeP2pAddress, Libp2pService>().await;
 }
 
 #[tokio::test]
-async fn connect_inbound_different_network_mock() {
-    connect_inbound_different_network::<MockService>(make_mock_addr(), make_mock_addr()).await;
+async fn connect_inbound_different_network_mock_tcp() {
+    connect_inbound_different_network::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
-async fn remote_closes_connection<T>(addr1: T::Address, addr2: T::Address)
+#[tokio::test]
+async fn connect_inbound_different_network_mock_channels() {
+    connect_inbound_different_network::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+        .await;
+}
+
+async fn remote_closes_connection<A, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::new(config::create_mainnet())).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, Arc::new(config::create_mainnet())).await;
 
@@ -337,25 +391,31 @@ where
 
 #[tokio::test]
 async fn remote_closes_connection_libp2p() {
-    remote_closes_connection::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+    remote_closes_connection::<MakeP2pAddress, Libp2pService>().await;
 }
 
 #[tokio::test]
-async fn remote_closes_connection_mock() {
-    remote_closes_connection::<MockService>(make_mock_addr(), make_mock_addr()).await;
+async fn remote_closes_connection_mock_tcp() {
+    remote_closes_connection::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
-async fn inbound_connection_too_many_peers<T>(
-    addr1: T::Address,
-    addr2: T::Address,
-    default_addr: T::Address,
-    peers: Vec<net::types::PeerInfo<T>>,
-) where
+#[tokio::test]
+async fn remote_closes_connection_mock_channels() {
+    remote_closes_connection::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+}
+
+async fn inbound_connection_too_many_peers<A, T>(peers: Vec<net::types::PeerInfo<T>>)
+where
+    A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
+    let addr1 = A::make_address();
+    let addr2 = A::make_address();
+    let default_addr = A::make_address();
+
     let config = Arc::new(config::create_mainnet());
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, Arc::clone(&config)).await;
@@ -401,20 +461,14 @@ async fn inbound_connection_too_many_peers_libp2p() {
         })
         .collect::<Vec<_>>();
 
-    inbound_connection_too_many_peers::<Libp2pService>(
-        make_libp2p_addr(),
-        make_libp2p_addr(),
-        make_libp2p_addr(),
-        peers,
-    )
-    .await;
+    inbound_connection_too_many_peers::<MakeP2pAddress, Libp2pService>(peers).await;
 }
 
 #[tokio::test]
-async fn inbound_connection_too_many_peers_mock() {
+async fn inbound_connection_too_many_peers_mock_tcp() {
     let config = Arc::new(config::create_mainnet());
     let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
-        .map(|_| net::types::PeerInfo::<MockService> {
+        .map(|_| net::types::PeerInfo::<MockService<TcpMockTransport>> {
             peer_id: MockPeerId::random(),
             magic_bytes: *config.magic_bytes(),
             version: common::primitives::semver::SemVer::new(0, 1, 0),
@@ -428,10 +482,30 @@ async fn inbound_connection_too_many_peers_mock() {
         })
         .collect::<Vec<_>>();
 
-    inbound_connection_too_many_peers::<MockService>(
-        make_mock_addr(),
-        make_mock_addr(),
-        make_mock_addr(),
+    inbound_connection_too_many_peers::<MakeTcpAddress, MockService<TcpMockTransport>>(peers).await;
+}
+
+#[tokio::test]
+async fn inbound_connection_too_many_peers_mock_channels() {
+    let config = Arc::new(config::create_mainnet());
+    let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
+        .map(
+            |_| net::types::PeerInfo::<MockService<ChannelMockTransport>> {
+                peer_id: MockPeerId::random(),
+                magic_bytes: *config.magic_bytes(),
+                version: common::primitives::semver::SemVer::new(0, 1, 0),
+                agent: None,
+                protocols: [
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                    Protocol::new(ProtocolType::Sync, SemVer::new(1, 0, 0)),
+                ]
+                .into_iter()
+                .collect(),
+            },
+        )
+        .collect::<Vec<_>>();
+
+    inbound_connection_too_many_peers::<MakeChannelAddress, MockService<ChannelMockTransport>>(
         peers,
     )
     .await;
@@ -473,7 +547,7 @@ where
 #[tokio::test]
 async fn connection_timeout_libp2p() {
     connection_timeout::<Libp2pService>(
-        make_libp2p_addr(),
+        MakeP2pAddress::make_address(),
         format!("/ip4/255.255.255.255/tcp/8888/p2p/{}", PeerId::random())
             .parse()
             .unwrap(),
@@ -538,7 +612,7 @@ where
 #[tokio::test]
 async fn connection_timeout_rpc_notified_libp2p() {
     connection_timeout_rpc_notified::<Libp2pService>(
-        make_libp2p_addr(),
+        MakeP2pAddress::make_address(),
         format!("/ip4/255.255.255.255/tcp/8888/p2p/{}", PeerId::random())
             .parse()
             .unwrap(),
