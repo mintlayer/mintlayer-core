@@ -109,7 +109,11 @@ impl TxIndexCache {
     ) -> Result<&mut CachedInputsOperation, ConnectTransactionError> {
         let result = match self.data.get_mut(outpoint) {
             Some(tx_index) => tx_index,
-            None => return Err(ConnectTransactionError::PreviouslyCachedInputNotFound),
+            None => {
+                return Err(ConnectTransactionError::PreviouslyCachedInputNotFound(
+                    outpoint.clone(),
+                ))
+            }
         };
         Ok(result)
     }
@@ -120,7 +124,11 @@ impl TxIndexCache {
     ) -> Result<Option<&TxMainChainIndex>, ConnectTransactionError> {
         let result = match self.data.get(outpoint) {
             Some(tx_index) => tx_index.get_tx_index(),
-            None => return Err(ConnectTransactionError::PreviouslyCachedInputNotFound),
+            None => {
+                return Err(ConnectTransactionError::PreviouslyCachedInputNotFound(
+                    outpoint.clone(),
+                ))
+            }
         };
         Ok(result)
     }

@@ -65,7 +65,7 @@ impl BanScore for ConnectTransactionError {
             // this is zero because it's used when we add the outputs whose transactions we tested beforehand
             ConnectTransactionError::InvariantErrorTxNumWrongInBlock(_, _) => 0,
             ConnectTransactionError::OutputAlreadyPresentInInputsCache => 100,
-            ConnectTransactionError::PreviouslyCachedInputNotFound => 0,
+            ConnectTransactionError::PreviouslyCachedInputNotFound(_) => 0,
             ConnectTransactionError::PreviouslyCachedInputWasErased => 100,
             ConnectTransactionError::InvariantBrokenAlreadyUnspent => 0,
             // Even though this is an invariant error, it stems from referencing a block for reward that doesn't exist
