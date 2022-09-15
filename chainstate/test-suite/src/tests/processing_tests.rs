@@ -25,6 +25,7 @@ use chainstate_test_framework::{
     TransactionBuilder,
 };
 use chainstate_types::{GenBlockIndex, PropertyQueryError};
+use common::primitives::BlockDistance;
 use common::{
     chain::{
         block::{consensus_data::PoWData, timestamp::BlockTimestamp, ConsensusData},
@@ -45,6 +46,172 @@ use crypto::{
 };
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn invalid_block_reward_types(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let chain_config = ConfigBuilder::test_chain()
+            .empty_consensus_reward_maturity_distance(50.into())
+            .build();
+        let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
+
+        let coins = OutputValue::Coin(Amount::from_atoms(10));
+        let destination = Destination::PublicKey(PrivateKey::new(KeyKind::RistrettoSchnorr).1);
+
+        // Case 1: reward is a simple transfer
+        let block = tf
+            .make_block_builder()
+            .with_reward(vec![TxOutput::new(
+                coins.clone(),
+                OutputPurpose::Transfer(destination.clone()),
+            )])
+            .add_test_transaction(&mut rng)
+            .build();
+
+        let block_id = block.get_id();
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockRewardOutputType(block_id)
+            ))
+        );
+
+        // Case 2: reward is locked until height
+        let block = tf
+            .make_block_builder()
+            .with_reward(vec![TxOutput::new(
+                coins.clone(),
+                OutputPurpose::LockThenTransfer(
+                    destination.clone(),
+                    OutputTimeLock::UntilHeight(BlockHeight::max()),
+                ),
+            )])
+            .add_test_transaction(&mut rng)
+            .build();
+
+        let block_id = block.get_id();
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockRewardMaturityTimelockType(block_id)
+            ))
+        );
+
+        // Case 3: reward is locked until a specific time
+        let block = tf
+            .make_block_builder()
+            .with_reward(vec![TxOutput::new(
+                coins.clone(),
+                OutputPurpose::LockThenTransfer(
+                    destination.clone(),
+                    OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(u64::MAX)),
+                ),
+            )])
+            .add_test_transaction(&mut rng)
+            .build();
+
+        let block_id = block.get_id();
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockRewardMaturityTimelockType(block_id)
+            ))
+        );
+
+        // Case 4: reward is locked for an amount of seconds
+        let block = tf
+            .make_block_builder()
+            .with_reward(vec![TxOutput::new(
+                coins.clone(),
+                OutputPurpose::LockThenTransfer(
+                    destination.clone(),
+                    OutputTimeLock::ForSeconds(u64::MAX),
+                ),
+            )])
+            .add_test_transaction(&mut rng)
+            .build();
+
+        let block_id = block.get_id();
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockRewardMaturityTimelockType(block_id)
+            ))
+        );
+
+        // Case 5: reward is locked for an invalid number
+        let block = tf
+            .make_block_builder()
+            .with_reward(vec![TxOutput::new(
+                coins.clone(),
+                OutputPurpose::LockThenTransfer(
+                    destination.clone(),
+                    OutputTimeLock::ForBlockCount(u64::MAX),
+                ),
+            )])
+            .add_test_transaction(&mut rng)
+            .build();
+
+        let block_id = block.get_id();
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockRewardMaturityDistanceValue(block_id, u64::MAX)
+            ))
+        );
+
+        // Case 6: reward is locked for less than the required number of blocks
+        let reward_lock_distance: i64 = tf
+            .chainstate
+            .get_chain_config()
+            .empty_consensus_reward_maturity_distance()
+            .into();
+
+        let block = tf
+            .make_block_builder()
+            .with_reward(vec![TxOutput::new(
+                coins.clone(),
+                OutputPurpose::LockThenTransfer(
+                    destination.clone(),
+                    OutputTimeLock::ForBlockCount(reward_lock_distance as u64 - 1),
+                ),
+            )])
+            .add_test_transaction(&mut rng)
+            .build();
+
+        let block_id = block.get_id();
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::InvalidBlockRewardMaturityDistance(
+                    block_id,
+                    BlockDistance::new(reward_lock_distance - 1),
+                    BlockDistance::new(reward_lock_distance)
+                ),
+            ))
+        );
+
+        // Case 7: reward is a stake lock
+        let block = tf
+            .make_block_builder()
+            .with_reward(vec![TxOutput::new(
+                coins,
+                OutputPurpose::StakeLock(destination),
+            )])
+            .add_test_transaction(&mut rng)
+            .build();
+
+        assert!(matches!(
+            tf.process_block(block, BlockSource::Local),
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::InvalidBlockRewardOutputType(_))
+            ))
+        ));
+    });
+}
 
 #[rstest]
 #[trace]
