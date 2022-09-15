@@ -107,3 +107,5 @@ pub enum TokenData {
     //     metadata_uri: Vec<u8>,
     // },
 }
+
+// TODO(NFT): Uncomment NftIssuanceV1
