@@ -17,7 +17,8 @@ use common::{
     chain::{
         block::{Block, GenBlock},
         tokens::TokenId,
-        SpendError, Spender, Transaction, TxMainChainIndexError, TxMainChainPosition,
+        OutPointSourceId, SpendError, Spender, Transaction, TxMainChainIndexError,
+        TxMainChainPosition,
     },
     primitives::{Amount, Id},
 };
@@ -36,7 +37,7 @@ pub enum ConnectTransactionError {
     #[error("Outputs already in the inputs cache")]
     OutputAlreadyPresentInInputsCache,
     #[error("Input was cached, but could not be found")]
-    PreviouslyCachedInputNotFound,
+    PreviouslyCachedInputNotFound(OutPointSourceId),
     #[error("Input was cached, but it is erased")]
     PreviouslyCachedInputWasErased,
     #[error("Block disconnect already-unspent (invariant broken)")]
