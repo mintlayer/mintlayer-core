@@ -1447,24 +1447,39 @@ async fn rolling_fee() -> anyhow::Result<()> {
     // After removing one entry, cause the code to exit the loop by showing a small usage
     mock_usage.expect_get_memory_usage().return_const(0usize);
 
-    let config = Arc::new(common::chain::config::create_unit_test_config());
-    let chainstate_interface = start_chainstate(Arc::clone(&config)).await;
+    let seed = Seed::from_entropy();
+    let tf = TestFramework::default();
+    let mut rng = make_seedable_rng(seed);
+    let genesis = tf.genesis();
+    let mut tx_builder = TransactionBuilder::new()
+        .add_input(TxInput::new(
+            OutPointSourceId::BlockReward(genesis.get_id().into()),
+            0,
+            empty_witness(&mut rng),
+        ))
+        .with_flags(1);
 
-    let mut mempool = Mempool::new(config, chainstate_interface, mock_clock.clone(), mock_usage);
+    let num_outputs = 3;
+    for _ in 0..num_outputs {
+        tx_builder = tx_builder.add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(999_999_999_000)),
+            OutputPurpose::Transfer(anyonecanspend_address()),
+        ));
+    }
+    let parent = tx_builder.build();
+    let parent_id = parent.get_id();
+
+    let chainstate = tf.chainstate();
+    let config = chainstate.get_chain_config();
+    let chainstate_interface = start_chainstate_new(chainstate).await;
 
     let num_inputs = 1;
-    let num_outputs = 3;
 
     // Use a higher than default fee because we don't want this transction to be evicted during
     // the trimming process
-    let parent = TxGenerator::new()
-        .with_num_inputs(num_inputs)
-        .with_num_outputs(num_outputs)
-        .generate_tx(&mempool)
-        .await?;
-    let parent_id = parent.get_id();
     log::debug!("parent_id: {}", parent_id.get());
     log::debug!("before adding parent");
+    let mut mempool = Mempool::new(config, chainstate_interface, mock_clock.clone(), mock_usage);
     mempool.add_transaction(parent).await?;
     log::debug!("after adding parent");
 
@@ -1521,7 +1536,7 @@ async fn rolling_fee() -> anyhow::Result<()> {
         *INCREMENTAL_RELAY_FEE_RATE
             + FeeRate::from_total_tx_fee(child_0_fee, child_0.encoded_size())
     );
-    assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3591)));
+    assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3652)));
     log::debug!(
         "minimum rolling fee after child_0's eviction {:?}",
         rolling_fee
@@ -1574,14 +1589,15 @@ async fn rolling_fee() -> anyhow::Result<()> {
         locktime,
     )
     .await?;
+    let child_2_high_fee_id = child_2_high_fee.get_id();
     log::debug!("before child2_high_fee");
     mempool.add_transaction(child_2_high_fee).await?;
 
     // We simulate a block being accepted so the rolling fee will begin to decay
     let block = Block::new(
         vec![],
-        Id::new(H256::zero()),
-        BlockTimestamp::from_int_seconds(0),
+        genesis.get_id().into(),
+        BlockTimestamp::from_int_seconds(1639975461),
         ConsensusData::None,
         BlockReward::new(vec![]),
     )
@@ -1591,6 +1607,7 @@ async fn rolling_fee() -> anyhow::Result<()> {
         .chainstate_handle
         .call_mut(|this| this.process_block(block, BlockSource::Local))
         .await??;
+    mempool.new_tip_set();
     // Because the rolling fee is only updated when we attempt to add a tx to the mempool
     // we need to submit a "dummy" tx to trigger these updates.
 
@@ -1601,17 +1618,29 @@ async fn rolling_fee() -> anyhow::Result<()> {
     // observer that it is set to zero
     let halflife = ROLLING_FEE_BASE_HALFLIFE / 4;
     mock_clock.increment(halflife);
-    let dummy_tx = TxGenerator::new()
-        .with_fee(Amount::from_atoms(100))
-        .generate_tx(&mempool)
-        .await?;
+    eprintln!("before dummy");
+    let dummy_tx = TransactionBuilder::new()
+        .add_input(TxInput::new(
+            OutPointSourceId::Transaction(child_2_high_fee_id),
+            0,
+            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+        ))
+        .add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(499999999105 - 77)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+        .build();
+    eprintln!("child_2_id: {:?}", child_2_id);
+    eprintln!("after dummy");
     log::debug!(
         "First attempt to add dummy which pays a fee of {:?}",
         mempool.try_get_fee(&dummy_tx).await?
     );
+    eprintln!("got fee dummy");
     let res = mempool.add_transaction(dummy_tx.clone()).await;
+    eprintln!("added dummy");
 
-    log::debug!("Result of first attempt to add dummy: {:?}", res);
+    eprintln!("Result of first attempt to add dummy: {:?}", res);
     assert!(matches!(
         res,
         Err(Error::TxValidationError(
@@ -1645,10 +1674,19 @@ async fn rolling_fee() -> anyhow::Result<()> {
 
     // Add another dummmy until rolling feerate drops to zero
     mock_clock.increment(halflife);
-    let another_dummy = TxGenerator::new()
-        .with_fee(Amount::from_atoms(100))
-        .generate_tx(&mempool)
-        .await?;
+
+    let another_dummy = TransactionBuilder::new()
+        .add_input(TxInput::new(
+            OutPointSourceId::Transaction(child_1_id),
+            0,
+            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+        ))
+        .add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(499999999105 - 77)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+        .build();
+
     mempool.add_transaction(another_dummy).await?;
     assert_eq!(
         mempool.get_minimum_rolling_fee(),

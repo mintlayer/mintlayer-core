@@ -107,7 +107,7 @@ pub trait MempoolInterface: Send {
 
     // Add/remove transactions to/from the mempool according to a new tip
     #[cfg(test)]
-    fn new_tip_set(&mut self, chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>);
+    fn new_tip_set(&mut self);
 }
 
 pub trait ChainState: Debug {
@@ -422,9 +422,13 @@ where
     }
 
     async fn pays_minimum_mempool_fee(&self, tx: &Transaction) -> Result<(), TxValidationError> {
-        log::debug!("pays_minimum_mempool_fee");
         let tx_fee = self.try_get_fee(tx).await?;
         let minimum_fee = self.get_update_minimum_mempool_fee(tx);
+        log::debug!(
+            "pays_minimum_mempool_fee tx_fee = {:?}, minimum_fee = {:?}",
+            tx_fee,
+            minimum_fee
+        );
         ensure!(
             tx_fee >= minimum_fee,
             TxValidationError::RollingFeeThresholdNotMet {
@@ -744,8 +748,7 @@ where
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
     #[cfg(test)]
-    fn new_tip_set(&mut self, chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>) {
-        self.chainstate_handle = chainstate_handle;
+    fn new_tip_set(&mut self) {
         let mut rolling_fee_rate = self.rolling_fee_rate.write();
         (*rolling_fee_rate).block_since_last_rolling_fee_bump = true;
     }
