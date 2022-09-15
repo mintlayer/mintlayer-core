@@ -591,16 +591,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 )?;
 
                 // unspend inputs
-                for input in tx.inputs() {
-                    let outpoint = input.outpoint();
-
-                    // mark tx index as unspend
-                    let input_tx_id_op =
-                        self.tx_index_cache.get_from_cached_mut(&outpoint.tx_id())?;
-                    input_tx_id_op
-                        .unspend(outpoint.output_index())
-                        .map_err(ConnectTransactionError::from)?;
-                }
+                self.tx_index_cache.unspend_tx_index(tx.inputs())?;
 
                 // Remove issued tokens
                 self.token_issuance_cache.unregister(tx)?;
@@ -620,16 +611,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     self.tx_index_cache.precache_inputs(inputs, tx_index_fetcher)?;
 
                     // unspend inputs
-                    for input in inputs {
-                        let outpoint = input.outpoint();
-
-                        // mark tx index as unspend
-                        let input_tx_id_op =
-                            self.tx_index_cache.get_from_cached_mut(&outpoint.tx_id())?;
-                        input_tx_id_op
-                            .unspend(outpoint.output_index())
-                            .map_err(ConnectTransactionError::from)?;
-                    }
+                    self.tx_index_cache.unspend_tx_index(inputs)?;
                 }
             }
         }

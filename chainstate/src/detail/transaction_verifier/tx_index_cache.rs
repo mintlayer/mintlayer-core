@@ -103,7 +103,7 @@ impl TxIndexCache {
         Ok(outpoint_source_id)
     }
 
-    pub fn get_from_cached_mut(
+    fn get_from_cached_mut(
         &mut self,
         outpoint: &OutPointSourceId,
     ) -> Result<&mut CachedInputsOperation, ConnectTransactionError> {
@@ -135,6 +135,18 @@ impl TxIndexCache {
             let prev_tx_index_op = self.get_from_cached_mut(&outpoint.tx_id())?;
             prev_tx_index_op
                 .spend(outpoint.output_index(), spender.clone())
+                .map_err(ConnectTransactionError::from)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn unspend_tx_index(&mut self, inputs: &[TxInput]) -> Result<(), ConnectTransactionError> {
+        for input in inputs {
+            let outpoint = input.outpoint();
+            let prev_tx_index_op = self.get_from_cached_mut(&outpoint.tx_id())?;
+            prev_tx_index_op
+                .unspend(outpoint.output_index())
                 .map_err(ConnectTransactionError::from)?;
         }
 
