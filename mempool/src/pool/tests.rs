@@ -700,18 +700,9 @@ async fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Resul
 
 #[tokio::test]
 async fn try_replace_irreplaceable() -> anyhow::Result<()> {
-    let mut mempool = setup().await;
-    let outpoint = mempool
-        .available_outpoints(true)
-        .await
-        .expect("available_outpoints")
-        .iter()
-        .next()
-        .expect("there should be an outpoint since setup creates the genesis transaction")
-        .clone();
-
-    let outpoint_source_id =
-        OutPointSourceId::from(*outpoint.tx_id().get_tx_id().expect("Not Coinbase"));
+    let tf = TestFramework::default();
+    let genesis = tf.genesis();
+    let outpoint_source_id = OutPointSourceId::BlockReward(genesis.get_id().into());
 
     let input = TxInput::new(
         outpoint_source_id,
@@ -721,6 +712,7 @@ async fn try_replace_irreplaceable() -> anyhow::Result<()> {
     let flags = 0;
     let locktime = 0;
     let original_fee = Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE));
+    let mut mempool = setup_new(tf.chainstate()).await;
     let original = tx_spend_input(&mempool, input.clone(), original_fee, flags, locktime)
         .await
         .expect("should be able to spend here");
