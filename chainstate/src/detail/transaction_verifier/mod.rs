@@ -591,7 +591,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 )?;
 
                 // unspend inputs
-                self.tx_index_cache.unspend_tx_index(tx.inputs())?;
+                self.tx_index_cache.unspend_tx_index_inputs(tx.inputs())?;
 
                 // Remove issued tokens
                 self.token_issuance_cache.unregister(tx)?;
@@ -611,7 +611,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     self.tx_index_cache.precache_inputs(inputs, tx_index_fetcher)?;
 
                     // unspend inputs
-                    self.tx_index_cache.unspend_tx_index(inputs)?;
+                    self.tx_index_cache.unspend_tx_index_inputs(inputs)?;
                 }
             }
         }

@@ -149,7 +149,10 @@ impl TxIndexCache {
         Ok(())
     }
 
-    pub fn unspend_tx_index(&mut self, inputs: &[TxInput]) -> Result<(), ConnectTransactionError> {
+    pub fn unspend_tx_index_inputs(
+        &mut self,
+        inputs: &[TxInput],
+    ) -> Result<(), ConnectTransactionError> {
         for input in inputs {
             let outpoint = input.outpoint();
             let prev_tx_index_op = self.get_from_cached_mut(&outpoint.tx_id())?;
