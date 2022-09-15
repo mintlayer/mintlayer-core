@@ -1330,9 +1330,29 @@ impl GetTime for MockClock {
 
 #[tokio::test]
 async fn only_expired_entries_removed() -> anyhow::Result<()> {
+    let seed = Seed::from_entropy();
+    let tf = TestFramework::default();
+    let mut rng = make_seedable_rng(seed);
+    let genesis = tf.genesis();
+    let num_outputs = 2;
+    let mut tx_builder = TransactionBuilder::new().add_input(TxInput::new(
+        OutPointSourceId::BlockReward(genesis.get_id().into()),
+        0,
+        empty_witness(&mut rng),
+    ));
+
+    for _ in 0..num_outputs {
+        tx_builder = tx_builder.add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(999_999_999_000)),
+            OutputPurpose::Transfer(anyonecanspend_address()),
+        ));
+    }
+    let parent = tx_builder.build();
+
     let mock_clock = MockClock::new();
-    let config = Arc::new(common::chain::config::create_unit_test_config());
-    let chainstate_interface = start_chainstate(Arc::clone(&config)).await;
+    let chainstate = tf.chainstate();
+    let config = chainstate.get_chain_config();
+    let chainstate_interface = start_chainstate_new(chainstate).await;
 
     let mut mempool = Mempool::new(
         config,
@@ -1341,17 +1361,8 @@ async fn only_expired_entries_removed() -> anyhow::Result<()> {
         SystemUsageEstimator {},
     );
 
-    let num_inputs = 1;
-    let num_outputs = 2;
-    let big_fee = get_relay_fee_from_tx_size(estimate_tx_size(num_inputs, num_outputs)) + 100;
-    let parent = TxGenerator::new()
-        .with_num_inputs(num_inputs)
-        .with_num_outputs(num_outputs)
-        .with_fee(Amount::from_atoms(big_fee))
-        .generate_tx(&mempool)
-        .await?;
     let parent_id = parent.get_id();
-    mempool.add_transaction(parent).await?;
+    mempool.add_transaction(parent.clone()).await?;
 
     let flags = 0;
     let locktime = 0;
@@ -1391,13 +1402,15 @@ async fn only_expired_entries_removed() -> anyhow::Result<()> {
     // expired, and so removed along with both its children, and thus the addition of child_1 to
     // the mempool will fail
     let block = Block::new(
-        vec![],
-        Id::new(H256::zero()),
-        BlockTimestamp::from_int_seconds(0),
+        vec![parent],
+        genesis.get_id().into(),
+        BlockTimestamp::from_int_seconds(1639975461),
         ConsensusData::None,
         BlockReward::new(vec![]),
     )
     .map_err(|_| anyhow::Error::msg("block creation error"))?;
+    mempool.drop_transaction(&parent_id);
+    eprintln!("successfully processed block");
 
     mempool
         .chainstate_handle
