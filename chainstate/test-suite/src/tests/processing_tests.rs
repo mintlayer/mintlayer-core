@@ -198,8 +198,8 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         let block = tf
             .make_block_builder()
             .with_reward(vec![TxOutput::new(
-                coins,
-                OutputPurpose::StakeLock(destination),
+                coins.clone(),
+                OutputPurpose::StakeLock(destination.clone()),
             )])
             .add_test_transaction(&mut rng)
             .build();
@@ -210,6 +210,31 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                 BlockError::CheckBlockFailed(CheckBlockError::InvalidBlockRewardOutputType(_))
             ))
         ));
+
+        // Case 8: the correct, working case
+        let reward_lock_distance: i64 = tf
+            .chainstate
+            .get_chain_config()
+            .empty_consensus_reward_maturity_distance()
+            .into();
+
+        let block = tf
+            .make_block_builder()
+            .with_reward(vec![TxOutput::new(
+                coins,
+                OutputPurpose::LockThenTransfer(
+                    destination,
+                    OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
+                ),
+            )])
+            .add_test_transaction(&mut rng)
+            .build();
+
+        let block_id = block.get_id();
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap().unwrap().block_id(),
+            &block_id
+        );
     });
 }
 
