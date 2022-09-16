@@ -67,14 +67,6 @@ impl CachedInputsOperation {
         };
         replace_with::replace_with_or_abort(self, replacer_func);
     }
-
-    pub fn get_tx_index(&self) -> Option<&TxMainChainIndex> {
-        match self {
-            CachedInputsOperation::Write(idx) => Some(idx),
-            CachedInputsOperation::Read(idx) => Some(idx),
-            CachedInputsOperation::Erase => None,
-        }
-    }
 }
 
 // TODO: tests

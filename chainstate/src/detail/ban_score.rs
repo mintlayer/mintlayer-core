@@ -102,6 +102,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTxUndo(_, _) => 0,
             ConnectTransactionError::UtxoError(err) => err.ban_score(),
             ConnectTransactionError::TokensError(err) => err.ban_score(),
+            ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _) => 100,
         }
     }
 }

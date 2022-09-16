@@ -32,6 +32,8 @@ pub enum PropertyQueryError {
     BlockNotFound(Id<Block>),
     #[error("Previous block index not found {0}")]
     PrevBlockIndexNotFound(Id<GenBlock>),
+    #[error("Previous block index not found {0}")]
+    BlockIndexAtHeightNotFound(BlockHeight),
     #[error("Block for height {0} not found")]
     BlockForHeightNotFound(BlockHeight),
     #[error("Provided an empty list")]

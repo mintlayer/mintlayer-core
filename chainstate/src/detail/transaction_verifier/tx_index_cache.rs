@@ -133,21 +133,6 @@ impl TxIndexCache {
         Ok(result)
     }
 
-    pub fn get_from_cached(
-        &self,
-        outpoint: &OutPointSourceId,
-    ) -> Result<Option<&TxMainChainIndex>, ConnectTransactionError> {
-        let result = match self.data.get(outpoint) {
-            Some(tx_index) => tx_index.get_tx_index(),
-            None => {
-                return Err(ConnectTransactionError::PreviouslyCachedInputNotFound(
-                    outpoint.clone(),
-                ))
-            }
-        };
-        Ok(result)
-    }
-
     pub fn spend_tx_index_inputs(
         &mut self,
         inputs: &[TxInput],

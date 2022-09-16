@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate_types::PropertyQueryError;
 use common::{
     chain::{
         block::{Block, GenBlock},
@@ -20,7 +21,7 @@ use common::{
         OutPointSourceId, SpendError, Spender, Transaction, TxMainChainIndexError,
         TxMainChainPosition,
     },
-    primitives::{Amount, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
 use thiserror::Error;
 
@@ -84,7 +85,9 @@ pub enum ConnectTransactionError {
     #[error("Transaction index found but transaction not found")]
     InvariantErrorTransactionCouldNotBeLoaded(TxMainChainPosition),
     #[error("Transaction index for header found but header not found")]
-    InvariantErrorHeaderCouldNotBeLoaded(Id<Block>),
+    InvariantErrorHeaderCouldNotBeLoaded(Id<GenBlock>),
+    #[error("Transaction index for header found but header not found")]
+    InvariantErrorHeaderCouldNotBeLoadedFromHeight(PropertyQueryError, BlockHeight),
     #[error("Unable to find block index")]
     InvariantErrorBlockIndexCouldNotBeLoaded(Id<Block>),
     #[error("Unable to find block")]
