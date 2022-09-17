@@ -60,7 +60,7 @@ use super::chainstateref::block_index_ancestor_getter;
 
 // TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee`
 //       that essentially belongs to this type, but return Amount
-#[derive(PartialEq, Eq, PartialOrd)]
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fee(pub Amount);
 
 pub struct Subsidy(pub Amount);

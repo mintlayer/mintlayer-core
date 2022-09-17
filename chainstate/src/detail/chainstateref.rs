@@ -168,27 +168,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         self.db_tx.get_block_index(block_id).map_err(PropertyQueryError::from)
     }
 
-    pub fn gen_block_index_getter(
-        db_tx: &S,
-        chain_config: &ChainConfig,
-        block_id: Id<GenBlock>,
-    ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
-        match block_id.classify(chain_config) {
-            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
-                chain_config.genesis_block(),
-            )))),
-            GenBlockId::Block(id) => db_tx
-                .get_block_index(&id)
-                .map_err(PropertyQueryError::from)
-                .map(|b| b.map(GenBlockIndex::Block)),
-        }
-    }
-
     pub fn get_gen_block_index(
         &self,
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
-        Self::gen_block_index_getter(&self.db_tx, self.chain_config, *block_id)
+        gen_block_index_getter(&self.db_tx, self.chain_config, *block_id)
     }
 
     pub fn get_mainchain_tx_index(
@@ -248,7 +232,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         target_height: BlockHeight,
     ) -> Result<GenBlockIndex, PropertyQueryError> {
         block_index_ancestor_getter(
-            Self::gen_block_index_getter,
+            gen_block_index_getter,
             &self.db_tx,
             self.chain_config,
             block_index,
@@ -953,5 +937,21 @@ where
                 .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))?;
             height_walk = height_walk_prev;
         }
+    }
+}
+
+pub fn gen_block_index_getter<S: BlockchainStorageRead>(
+    db_tx: &S,
+    chain_config: &ChainConfig,
+    block_id: Id<GenBlock>,
+) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
+    match block_id.classify(chain_config) {
+        GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
+            chain_config.genesis_block(),
+        )))),
+        GenBlockId::Block(id) => db_tx
+            .get_block_index(&id)
+            .map_err(PropertyQueryError::from)
+            .map(|b| b.map(GenBlockIndex::Block)),
     }
 }
