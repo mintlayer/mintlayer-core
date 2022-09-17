@@ -19,7 +19,6 @@ use common::{
         block::{Block, GenBlock},
         tokens::TokenId,
         OutPointSourceId, SpendError, Spender, Transaction, TxMainChainIndexError,
-        TxMainChainPosition,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -39,12 +38,8 @@ pub enum ConnectTransactionError {
     OutputAlreadyPresentInInputsCache,
     #[error("Input was cached, but could not be found")]
     PreviouslyCachedInputNotFound(OutPointSourceId),
-    #[error("Input was cached, but it is erased")]
-    PreviouslyCachedInputWasErased,
     #[error("Block disconnect already-unspent (invariant broken)")]
     InvariantBrokenAlreadyUnspent,
-    #[error("Source block index for block reward output not found")]
-    InvariantBrokenSourceBlockIndexNotFound,
     #[error("Output is not found in the cache or database")]
     MissingOutputOrSpent,
     #[error("While connecting a block, output was erased in a previous step (possible in reorgs with no cache flushing)")]
@@ -63,8 +58,6 @@ pub enum ConnectTransactionError {
     AttemptToPrintMoney(Amount, Amount),
     #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     TxFeeTotalCalcFailed(Amount, Amount),
-    #[error("Output addition error")]
-    OutputAdditionError,
     #[error("Signature verification failed in transaction")]
     SignatureVerificationFailed,
     #[error("Invalid output count")]
@@ -73,8 +66,6 @@ pub enum ConnectTransactionError {
     BlockHeightArithmeticError,
     #[error("Error while calculating timestamps; possibly an overflow")]
     BlockTimestampArithmeticError,
-    #[error("Input addition error")]
-    InputAdditionError,
     #[error("Double-spend attempt in `{0:?}`")]
     DoubleSpendAttempt(Spender),
     #[error("Input of tx {tx_id:?} has an out-of-range output index {source_output_index}")]
@@ -82,18 +73,12 @@ pub enum ConnectTransactionError {
         tx_id: Option<Spender>,
         source_output_index: usize,
     },
-    #[error("Transaction index found but transaction not found")]
-    InvariantErrorTransactionCouldNotBeLoaded(TxMainChainPosition),
     #[error("Transaction index for header found but header not found")]
     InvariantErrorHeaderCouldNotBeLoaded(Id<GenBlock>),
     #[error("Transaction index for header found but header not found")]
     InvariantErrorHeaderCouldNotBeLoadedFromHeight(PropertyQueryError, BlockHeight),
     #[error("Unable to find block index")]
-    InvariantErrorBlockIndexCouldNotBeLoaded(Id<Block>),
-    #[error("Unable to find block index")]
     BlockIndexCouldNotBeLoaded(Id<GenBlock>),
-    #[error("Unable to find block")]
-    InvariantErrorBlockCouldNotBeLoaded(Id<Block>),
     #[error("Addition of all fees in block `{0}` failed")]
     FailedToAddAllFeesOfBlock(Id<Block>),
     #[error("Block reward addition error for block {0}")]
