@@ -28,7 +28,6 @@ use common::chain::signature::inputsig::InputWitness;
 use common::chain::transaction::{Destination, TxInput, TxOutput};
 use common::chain::OutPointSourceId;
 use common::chain::OutputPurpose;
-use common::primitives::H256;
 use common::{
     chain::{block::Block, Transaction},
     primitives::Id,
@@ -77,275 +76,13 @@ async fn real_size() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn make_outpoint(tx_id: &Id<Transaction>, outpoint_index: u32) -> OutPoint {
-    let outpoint_source_id = OutPointSourceId::Transaction(*tx_id);
-    OutPoint::new(outpoint_source_id, outpoint_index)
-}
-
-fn valued_outpoint(
-    tx_id: &Id<Transaction>,
-    outpoint_index: u32,
-    output: &TxOutput,
-) -> ValuedOutPoint {
-    let outpoint = make_outpoint(tx_id, outpoint_index);
-    let value = match output.value() {
-        OutputValue::Coin(coin) => *coin,
-        OutputValue::Token(_) => Amount::from_atoms(0),
-    };
-    ValuedOutPoint { outpoint, value }
-}
-
-impl TxMempoolEntry {
-    fn outpoints_created(&self) -> BTreeSet<OutPoint> {
-        let id = self.tx.get_id();
-        std::iter::repeat(id)
-            .zip(self.tx.outputs().iter().enumerate())
-            .map(|(id, (index, _output))| make_outpoint(&id, index as u32))
-            .collect()
-    }
-}
-
-impl MempoolStore {
-    fn unconfirmed_outpoints(&self) -> BTreeSet<OutPoint> {
-        self.txs_by_id
-            .values()
-            .cloned()
-            .flat_map(|entry| entry.outpoints_created())
-            .collect()
-    }
-}
-
 impl<T, M> Mempool<T, M>
 where
     T: GetTime + Send + std::marker::Sync,
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
-    async fn available_outpoints(
-        &self,
-        allow_double_spend: bool,
-    ) -> anyhow::Result<BTreeSet<OutPoint>> {
-        let mut available = self
-            .store
-            .unconfirmed_outpoints()
-            .into_iter()
-            .chain(
-                self.chainstate_handle
-                    .call(|this| this.confirmed_outpoints().expect("confirmed_outpoints"))
-                    .await?
-                    .into_iter(),
-            )
-            .collect::<BTreeSet<_>>();
-        if !allow_double_spend {
-            available.retain(|outpoint| !self.store.spender_txs.contains_key(outpoint));
-        }
-        eprintln!("available_outpoints are {:?}", available);
-        Ok(available)
-    }
-
-    /*
-    async fn get_input_value(&self, input: &TxInput) -> anyhow::Result<Amount> {
-        let allow_double_spend = true;
-        let outpoint = self
-            .available_outpoints(allow_double_spend)
-            .await?
-            .into_iter()
-            .find(|outpoint| outpoint == input.outpoint())
-            .ok_or_else(|| anyhow::anyhow!("No such unconfirmed output"))?;
-        Ok(self
-            .chainstate_handle
-            .call(move |this| this.get_outpoint_value(&outpoint).expect("get_outpoint_value"))
-            .await
-            .expect("call success"))
-    }
-    */
-
     fn get_minimum_rolling_fee(&self) -> FeeRate {
         self.rolling_fee_rate.read().rolling_minimum_fee_rate
-    }
-}
-
-/* FIXME The second call in the following flow sometimes returns TransactionAlreadyInMempool
-let tx1 = TxGenerator::new(&mempool).generate_tx()?;
-mempool.add_transaction(tx1)?;
-
-let tx2 = TxGenerator::new(&mempool).generate_tx()?;
-mempool.add_transaction(tx2)?;
-*/
-
-struct TxGenerator {
-    coin_pool: BTreeSet<ValuedOutPoint>,
-    num_inputs: usize,
-    num_outputs: usize,
-    tx_fee: Option<Amount>,
-    replaceable: bool,
-    allow_double_spend: bool,
-}
-
-impl TxGenerator {
-    fn with_num_inputs(mut self, num_inputs: usize) -> Self {
-        self.num_inputs = num_inputs;
-        self
-    }
-
-    fn with_num_outputs(mut self, num_outputs: usize) -> Self {
-        self.num_outputs = num_outputs;
-        self
-    }
-
-    fn with_fee(mut self, fee: Amount) -> Self {
-        self.tx_fee = Some(fee);
-        self
-    }
-
-    // TODO allow_double_spend is never true, we can get rid of this field
-    fn new() -> Self {
-        Self {
-            coin_pool: BTreeSet::new(),
-            num_inputs: 1,
-            num_outputs: 1,
-            tx_fee: None,
-            replaceable: false,
-            allow_double_spend: false,
-        }
-    }
-
-    async fn generate_tx<
-        T: GetTime + Send + std::marker::Sync,
-        M: GetMemoryUsage + Send + std::marker::Sync,
-    >(
-        &mut self,
-        mempool: &Mempool<T, M>,
-    ) -> anyhow::Result<Transaction> {
-        // TODO How to generate a tx?
-        // TODO iterate over ALL outpoints, confirmed, and unconfirmed
-        for outpoint in mempool.available_outpoints(self.allow_double_spend).await? {
-            self.coin_pool.insert(ValuedOutPoint {
-                outpoint: outpoint.clone(),
-                value: mempool
-                    .chainstate_handle
-                    .call(move |this| this.get_outpoint_value(&outpoint))
-                    .await??,
-            });
-        }
-        let fee = if let Some(tx_fee) = self.tx_fee {
-            tx_fee
-        } else {
-            Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(
-                self.num_inputs,
-                self.num_outputs,
-            )))
-        };
-        log::debug!(
-            "Trying to build a tx with {} inputs, {} outputs, and a fee of {:?}",
-            self.num_inputs,
-            self.num_outputs,
-            fee
-        );
-        let valued_inputs = self.generate_tx_inputs(fee)?;
-        let outputs = self.generate_tx_outputs(&valued_inputs, fee)?;
-        let locktime = 0;
-        let flags = if self.replaceable { 1 } else { 0 };
-        let (inputs, _): (Vec<TxInput>, Vec<Amount>) = valued_inputs.into_iter().unzip();
-        let spent_outpoints = inputs.iter().map(|input| input.outpoint()).collect::<BTreeSet<_>>();
-        self.coin_pool
-            .retain(|outpoint| !spent_outpoints.iter().any(|spent| **spent == outpoint.outpoint));
-        let tx = Transaction::new(flags, inputs, outputs.clone(), locktime)
-            .map_err(anyhow::Error::from)?;
-        self.coin_pool.extend(
-            std::iter::repeat(tx.get_id())
-                .zip(outputs.iter().enumerate())
-                .map(|(id, (i, output))| valued_outpoint(&id, i as u32, output)),
-        );
-
-        Ok(tx)
-    }
-
-    fn generate_tx_inputs(&mut self, fee: Amount) -> anyhow::Result<Vec<(TxInput, Amount)>> {
-        Ok(self
-            .get_unspent_outpoints(self.num_inputs, fee)?
-            .iter()
-            .map(|valued_outpoint| {
-                let ValuedOutPoint { outpoint, value } = valued_outpoint;
-                (
-                    TxInput::new(
-                        outpoint.tx_id(),
-                        outpoint.output_index(),
-                        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-                    ),
-                    *value,
-                )
-            })
-            .collect())
-    }
-
-    fn generate_tx_outputs(
-        &self,
-        inputs: &[(TxInput, Amount)],
-        tx_fee: Amount,
-    ) -> anyhow::Result<Vec<TxOutput>> {
-        if self.num_outputs == 0 {
-            return Ok(vec![]);
-        }
-
-        let inputs: Vec<_> = inputs.to_owned();
-        let (inputs, values): (Vec<TxInput>, Vec<Amount>) = inputs.into_iter().unzip();
-        if inputs.is_empty() {
-            return Ok(vec![]);
-        }
-        let sum_of_inputs =
-            values.into_iter().sum::<Option<_>>().expect("Overflow in sum of input values");
-
-        let total_to_spend = (sum_of_inputs - tx_fee).ok_or_else(||anyhow::anyhow!(
-                "generate_tx_outputs: underflow computing total_to_spend - sum_of_inputs = {:?}, fee = {:?}", sum_of_inputs, tx_fee
-            ))?;
-
-        let value = (sum_of_inputs / u128::try_from(self.num_outputs).expect("conversion"))
-            .expect("not dividing by zero");
-
-        let mut left_to_spend = total_to_spend;
-        let mut outputs = Vec::new();
-
-        for _ in 0..self.num_outputs - 1 {
-            outputs.push(TxOutput::new(
-                OutputValue::Coin(value),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-            ));
-            left_to_spend = (left_to_spend - value).expect("subtraction failed");
-        }
-
-        outputs.push(TxOutput::new(
-            OutputValue::Coin(left_to_spend),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-        ));
-        Ok(outputs)
-    }
-
-    fn get_unspent_outpoints(
-        &self,
-        num_outputs: usize,
-        fee: Amount,
-    ) -> anyhow::Result<Vec<ValuedOutPoint>> {
-        log::debug!(
-            "get_unspent_outpoints: num_outputs: {}, fee: {:?}",
-            num_outputs,
-            fee
-        );
-        let num_available_outpoints = self.coin_pool.len();
-        let outpoints: Vec<_> = (num_available_outpoints >= num_outputs)
-            .then(|| self.coin_pool.iter().take(num_outputs).cloned().collect())
-            .ok_or_else(|| anyhow::anyhow!("no outpoints left"))?;
-        let sum_of_outputs = outpoints
-            .iter()
-            .map(|valued_outpoint| valued_outpoint.value)
-            .sum::<Option<_>>()
-            .expect("sum error");
-        if fee > sum_of_outputs {
-            Err(anyhow::Error::msg(
-                "get_unspent_outpoints:: fee is {:?} but sum of outputs is {:?}",
-            ))
-        } else {
-            Ok(outpoints)
-        }
     }
 }
 
@@ -387,17 +124,40 @@ async fn add_single_tx() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn txs_sorted() -> anyhow::Result<()> {
-    let mut mempool = setup().await;
-    let mut tx_generator = TxGenerator::new();
+    let seed = Seed::from_entropy();
+    let tf = TestFramework::default();
+    let mut rng = make_seedable_rng(seed);
+    let genesis = tf.genesis();
+    let mut mempool = setup_new(tf.chainstate()).await;
     let target_txs = 10;
 
-    for _ in 0..target_txs {
-        match tx_generator.generate_tx(&mempool).await {
-            Ok(tx) => {
-                mempool.add_transaction(tx.clone()).await?;
-            }
-            _ => break,
-        }
+    let mut tx_builder = TransactionBuilder::new().add_input(TxInput::new(
+        OutPointSourceId::BlockReward(genesis.get_id().into()),
+        0,
+        empty_witness(&mut rng),
+    ));
+    for i in 0..target_txs {
+        tx_builder = tx_builder.add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(1000 * (target_txs + 1 - i))),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+    }
+    let initial_tx = tx_builder.build();
+    let initial_tx_id = initial_tx.get_id();
+    mempool.add_transaction(initial_tx).await?;
+    for i in 0..target_txs {
+        let tx = TransactionBuilder::new()
+            .add_input(TxInput::new(
+                OutPointSourceId::Transaction(initial_tx_id),
+                i as u32,
+                empty_witness(&mut rng),
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(0)),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .build();
+        mempool.add_transaction(tx.clone()).await?;
     }
 
     let mut fees = Vec::new();
@@ -405,7 +165,7 @@ async fn txs_sorted() -> anyhow::Result<()> {
         fees.push(mempool.try_get_fee(tx).await?)
     }
     let mut fees_sorted = fees.clone();
-    fees_sorted.sort_by(|a, b| b.cmp(a));
+    fees_sorted.sort();
     assert_eq!(fees, fees_sorted);
     mempool.store.assert_valid();
     Ok(())
@@ -414,12 +174,8 @@ async fn txs_sorted() -> anyhow::Result<()> {
 #[tokio::test]
 async fn tx_no_inputs() -> anyhow::Result<()> {
     let mut mempool = setup().await;
-    let tx = TxGenerator::new()
-        .with_num_inputs(0)
-        .with_fee(Amount::from_atoms(0))
-        .generate_tx(&mempool)
-        .await
-        .expect("generate_tx failed");
+    let tx = TransactionBuilder::new().build();
+
     assert!(matches!(
         mempool.add_transaction(tx).await,
         Err(Error::TxValidationError(TxValidationError::NoInputs))
