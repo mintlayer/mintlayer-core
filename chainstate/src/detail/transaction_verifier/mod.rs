@@ -335,8 +335,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     }
                 };
 
-                let block_index_getter = |_db_tx, _chain_config, id: Id<GenBlock>| {
-                    gen_block_index_getter(self.db_tx, self.chain_config, id)
+                let block_index_getter = |db_tx, chain_config, id: Id<GenBlock>| {
+                    gen_block_index_getter(db_tx, chain_config, id)
                         .map_err(|_| PropertyQueryError::BlockIndexAtHeightNotFound(*height))
                 };
 
