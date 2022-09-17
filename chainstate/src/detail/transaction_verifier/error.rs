@@ -90,6 +90,8 @@ pub enum ConnectTransactionError {
     InvariantErrorHeaderCouldNotBeLoadedFromHeight(PropertyQueryError, BlockHeight),
     #[error("Unable to find block index")]
     InvariantErrorBlockIndexCouldNotBeLoaded(Id<Block>),
+    #[error("Unable to find block index")]
+    BlockIndexCouldNotBeLoaded(Id<GenBlock>),
     #[error("Unable to find block")]
     InvariantErrorBlockCouldNotBeLoaded(Id<Block>),
     #[error("Addition of all fees in block `{0}` failed")]

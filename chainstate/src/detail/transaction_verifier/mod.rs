@@ -28,10 +28,7 @@ use ::utils::ensure;
 use cached_operation::CachedInputsOperation;
 use fallible_iterator::FallibleIterator;
 
-use std::{
-    collections::{btree_map::Entry, BTreeMap},
-    sync::Arc,
-};
+use std::collections::{btree_map::Entry, BTreeMap};
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
@@ -41,7 +38,7 @@ use common::{
         block::timestamp::BlockTimestamp,
         signature::{verify_signature, Transactable},
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
-        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction, TxInput, TxOutput,
+        Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable},
 };
@@ -56,7 +53,7 @@ use self::token_issuance_cache::TokenIssuanceCache;
 mod utils;
 use self::utils::{check_transferred_amount, get_input_token_id_and_amount};
 
-use super::chainstateref::block_index_ancestor_getter;
+use super::chainstateref::{block_index_ancestor_getter, gen_block_index_getter};
 
 // TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee`
 //       that essentially belongs to this type, but return Amount
@@ -116,17 +113,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         &self,
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, ConnectTransactionError> {
-        // TODO: this seems to be repeated in the query interface. Seek to unify them to avoid redundancy
-        match block_id.classify(self.chain_config) {
-            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
-                self.chain_config.genesis_block(),
-            )))),
-            GenBlockId::Block(id) => self
-                .db_tx
-                .get_block_index(&id)
-                .map(|b| b.map(GenBlockIndex::Block))
-                .map_err(ConnectTransactionError::from),
-        }
+        gen_block_index_getter(self.db_tx, self.chain_config, *block_id)
+            .map_err(|_| ConnectTransactionError::BlockIndexCouldNotBeLoaded(*block_id))
     }
 
     fn calculate_total_outputs(
