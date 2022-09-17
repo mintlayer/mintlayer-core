@@ -881,11 +881,11 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
     }
 }
 
-pub fn block_index_ancestor_getter<'a, S, G>(
+pub fn block_index_ancestor_getter<S, G>(
     gen_block_index_getter: G,
-    db_tx: &'a S,
-    chain_config: &'a ChainConfig,
-    block_index: &'a GenBlockIndex,
+    db_tx: &S,
+    chain_config: &ChainConfig,
+    block_index: &GenBlockIndex,
     target_height: BlockHeight,
 ) -> Result<GenBlockIndex, PropertyQueryError>
 where
