@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use accounting::{DeltaAmountCollection, DeltaDataUndoCollection};
+use accounting::DeltaDataUndoCollection;
 use common::primitives::{signed_amount::SignedAmount, Amount, H256};
 
 use crate::error::Error;
@@ -22,9 +22,6 @@ pub struct PoSAccountingDelta<'a> {
 pub struct DeltaMergeUndo {
     pool_data_undo: DeltaDataUndoCollection<H256, PoolData>,
     delegation_data_undo: DeltaDataUndoCollection<H256, DelegationData>,
-    pool_balances_undo: DeltaAmountCollection<H256>,
-    pool_delegation_shares_undo: DeltaAmountCollection<(H256, H256)>,
-    delegation_balances_undo: DeltaAmountCollection<H256>,
 }
 
 impl<'a> PoSAccountingDelta<'a> {
@@ -59,16 +56,20 @@ impl<'a> PoSAccountingDelta<'a> {
         }
     }
 
-    pub fn undo_delta_merge(&mut self, undo_data: DeltaMergeUndo) -> Result<(), Error> {
-        self.data.pool_balances.undo_merge_delta_amounts(undo_data.pool_balances_undo)?;
+    pub fn undo_delta_merge(
+        &mut self,
+        already_merged: PoSAccountingDeltaData,
+        undo_data: DeltaMergeUndo,
+    ) -> Result<(), Error> {
+        self.data.pool_balances.undo_merge_delta_amounts(already_merged.pool_balances)?;
 
         self.data
             .pool_delegation_shares
-            .undo_merge_delta_amounts(undo_data.pool_delegation_shares_undo)?;
+            .undo_merge_delta_amounts(already_merged.pool_delegation_shares)?;
 
         self.data
             .delegation_balances
-            .undo_merge_delta_amounts(undo_data.delegation_balances_undo)?;
+            .undo_merge_delta_amounts(already_merged.delegation_balances)?;
 
         self.data.pool_data.undo_merge_delta_data(undo_data.pool_data_undo)?;
 
@@ -101,9 +102,6 @@ impl<'a> PoSAccountingDelta<'a> {
         Ok(DeltaMergeUndo {
             pool_data_undo,
             delegation_data_undo,
-            pool_balances_undo: other.pool_balances,
-            pool_delegation_shares_undo: other.pool_delegation_shares,
-            delegation_balances_undo: other.delegation_balances,
         })
     }
 

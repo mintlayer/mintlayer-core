@@ -32,7 +32,7 @@ pub trait PoSAccountingStorageWrite: PoSAccountingStorageRead {
 
     fn del_pool_balance(&mut self, pool_id: H256) -> Result<(), Error>;
 
-    fn set_pool_data(&mut self, pool_id: H256, pool_data: &PoolData) -> Result<(), Error>;
+    fn set_pool_data(&mut self, pool_id: H256, pool_data: PoolData) -> Result<(), Error>;
 
     fn del_pool_data(&mut self, pool_id: H256) -> Result<(), Error>;
 
@@ -47,7 +47,7 @@ pub trait PoSAccountingStorageWrite: PoSAccountingStorageRead {
     fn set_delegation_data(
         &mut self,
         delegation_id: H256,
-        delegation_data: &DelegationData,
+        delegation_data: DelegationData,
     ) -> Result<(), Error>;
 
     fn del_delegation_data(&mut self, delegation_id: H256) -> Result<(), Error>;

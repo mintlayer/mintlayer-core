@@ -10,11 +10,11 @@ use super::{PoSAccountingStorageRead, PoSAccountingStorageWrite};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InMemoryPoSAccounting {
-    pub pool_data: BTreeMap<H256, PoolData>,
-    pub pool_balances: BTreeMap<H256, Amount>,
-    pub pool_delegation_shares: BTreeMap<(H256, H256), Amount>,
-    pub delegation_balances: BTreeMap<H256, Amount>,
-    pub delegation_data: BTreeMap<H256, DelegationData>,
+    pool_data: BTreeMap<H256, PoolData>,
+    pool_balances: BTreeMap<H256, Amount>,
+    pool_delegation_shares: BTreeMap<(H256, H256), Amount>,
+    delegation_balances: BTreeMap<H256, Amount>,
+    delegation_data: BTreeMap<H256, DelegationData>,
 }
 
 impl InMemoryPoSAccounting {
@@ -25,6 +25,21 @@ impl InMemoryPoSAccounting {
             pool_delegation_shares: Default::default(),
             delegation_balances: Default::default(),
             delegation_data: Default::default(),
+        }
+    }
+    pub fn from_values(
+        pool_data: BTreeMap<H256, PoolData>,
+        pool_balances: BTreeMap<H256, Amount>,
+        pool_delegation_shares: BTreeMap<(H256, H256), Amount>,
+        delegation_balances: BTreeMap<H256, Amount>,
+        delegation_data: BTreeMap<H256, DelegationData>,
+    ) -> Self {
+        Self {
+            pool_data,
+            pool_balances,
+            pool_delegation_shares,
+            delegation_balances,
+            delegation_data,
         }
     }
 }
@@ -117,9 +132,9 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
     fn set_delegation_data(
         &mut self,
         delegation_id: H256,
-        delegation_data: &DelegationData,
+        delegation_data: DelegationData,
     ) -> Result<(), Error> {
-        self.delegation_data.insert(delegation_id, delegation_data.clone());
+        self.delegation_data.insert(delegation_id, delegation_data);
         Ok(())
     }
 
@@ -128,8 +143,8 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         Ok(())
     }
 
-    fn set_pool_data(&mut self, pool_id: H256, pool_data: &PoolData) -> Result<(), Error> {
-        self.pool_data.insert(pool_id, pool_data.clone());
+    fn set_pool_data(&mut self, pool_id: H256, pool_data: PoolData) -> Result<(), Error> {
+        self.pool_data.insert(pool_id, pool_data);
         Ok(())
     }
 

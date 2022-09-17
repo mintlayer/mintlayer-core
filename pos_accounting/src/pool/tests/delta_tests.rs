@@ -33,8 +33,8 @@ fn check_merge_deltas() {
         ),
         pool_balances: DeltaAmountCollection::from_iter(
             [
-                (H256::from_low_u64_be(3), SignedAmount::from_atoms(100)),
-                (H256::from_low_u64_be(4), SignedAmount::from_atoms(100)),
+                (H256::from_low_u64_be(3), SignedAmount::from_atoms(300)),
+                (H256::from_low_u64_be(4), SignedAmount::from_atoms(400)),
             ]
             .into_iter(),
         ),
@@ -47,8 +47,8 @@ fn check_merge_deltas() {
         ),
         delegation_balances: DeltaAmountCollection::from_iter(
             [
-                (H256::from_low_u64_be(5), SignedAmount::from_atoms(100)),
-                (H256::from_low_u64_be(6), SignedAmount::from_atoms(100)),
+                (H256::from_low_u64_be(5), SignedAmount::from_atoms(500)),
+                (H256::from_low_u64_be(6), SignedAmount::from_atoms(600)),
             ]
             .into_iter(),
         ),
@@ -89,8 +89,8 @@ fn check_merge_deltas() {
         ),
         pool_balances: DeltaAmountCollection::from_iter(
             [
-                (H256::from_low_u64_be(3), SignedAmount::from_atoms(50)),
-                (H256::from_low_u64_be(4), SignedAmount::from_atoms(-50)),
+                (H256::from_low_u64_be(3), SignedAmount::from_atoms(-300)),
+                (H256::from_low_u64_be(4), SignedAmount::from_atoms(50)),
             ]
             .into_iter(),
         ),
@@ -103,8 +103,8 @@ fn check_merge_deltas() {
         ),
         delegation_balances: DeltaAmountCollection::from_iter(
             [
-                (H256::from_low_u64_be(8), SignedAmount::from_atoms(100)),
-                (H256::from_low_u64_be(9), SignedAmount::from_atoms(100)),
+                (H256::from_low_u64_be(8), SignedAmount::from_atoms(200)),
+                (H256::from_low_u64_be(9), SignedAmount::from_atoms(300)),
             ]
             .into_iter(),
         ),
@@ -113,6 +113,7 @@ fn check_merge_deltas() {
         ),
     };
     let delta2 = PoSAccountingDelta::from_data(&db, data2);
+    let delta2_origin_data = delta2.data().clone();
 
     let expected_data = PoSAccountingDeltaData {
         pool_data: DeltaDataCollection::from_iter(
@@ -135,11 +136,7 @@ fn check_merge_deltas() {
             .into_iter(),
         ),
         pool_balances: DeltaAmountCollection::from_iter(
-            [
-                (H256::from_low_u64_be(3), SignedAmount::from_atoms(150)),
-                (H256::from_low_u64_be(4), SignedAmount::from_atoms(50)),
-            ]
-            .into_iter(),
+            [(H256::from_low_u64_be(4), SignedAmount::from_atoms(450))].into_iter(),
         ),
         pool_delegation_shares: DeltaAmountCollection::from_iter(
             [(
@@ -150,10 +147,10 @@ fn check_merge_deltas() {
         ),
         delegation_balances: DeltaAmountCollection::from_iter(
             [
-                (H256::from_low_u64_be(5), SignedAmount::from_atoms(100)),
-                (H256::from_low_u64_be(6), SignedAmount::from_atoms(100)),
-                (H256::from_low_u64_be(8), SignedAmount::from_atoms(100)),
-                (H256::from_low_u64_be(9), SignedAmount::from_atoms(100)),
+                (H256::from_low_u64_be(5), SignedAmount::from_atoms(500)),
+                (H256::from_low_u64_be(6), SignedAmount::from_atoms(600)),
+                (H256::from_low_u64_be(8), SignedAmount::from_atoms(200)),
+                (H256::from_low_u64_be(9), SignedAmount::from_atoms(300)),
             ]
             .into_iter(),
         ),
@@ -163,7 +160,7 @@ fn check_merge_deltas() {
     let undo_data = delta1.merge_with_delta(delta2.consume()).unwrap();
     assert_eq!(delta1.data(), &expected_data);
 
-    delta1.undo_delta_merge(undo_data).unwrap();
+    delta1.undo_delta_merge(delta2_origin_data, undo_data).unwrap();
     assert_eq!(delta1.data(), &delta1_origin_data);
 }
 
@@ -172,31 +169,31 @@ fn check_merge_values_with_deltas() {
     let (_, pub_key1) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let (_, pub_key2) = PrivateKey::new(KeyKind::RistrettoSchnorr);
 
-    let mut storage = InMemoryPoSAccounting {
-        pool_data: BTreeMap::from([(
+    let mut storage = InMemoryPoSAccounting::from_values(
+        BTreeMap::from([(
             H256::from_low_u64_be(1),
             PoolData::new(pub_key1.clone(), Amount::from_atoms(100)),
         )]),
-        pool_balances: BTreeMap::from([
-            (H256::from_low_u64_be(3), Amount::from_atoms(100)),
-            (H256::from_low_u64_be(4), Amount::from_atoms(100)),
+        BTreeMap::from([
+            (H256::from_low_u64_be(3), Amount::from_atoms(300)),
+            (H256::from_low_u64_be(4), Amount::from_atoms(400)),
         ]),
-        pool_delegation_shares: BTreeMap::from([(
+        BTreeMap::from([(
             (H256::from_low_u64_be(5), H256::from_low_u64_be(6)),
             Amount::from_atoms(100),
         )]),
-        delegation_balances: BTreeMap::from([
-            (H256::from_low_u64_be(5), Amount::from_atoms(100)),
-            (H256::from_low_u64_be(6), Amount::from_atoms(100)),
+        BTreeMap::from([
+            (H256::from_low_u64_be(5), Amount::from_atoms(500)),
+            (H256::from_low_u64_be(6), Amount::from_atoms(600)),
         ]),
-        delegation_data: BTreeMap::from([(
+        BTreeMap::from([(
             H256::from_low_u64_be(1),
             DelegationData::new(H256::from_low_u64_be(1), pub_key1.clone()),
         )]),
-    };
+    );
     let original_storage = storage.clone();
 
-    let undo_data = {
+    let (delta_origin, undo_data) = {
         let mut db = PoSAccountingDBMut::new_empty(&mut storage);
 
         let delta_data = PoSAccountingDeltaData {
@@ -221,8 +218,8 @@ fn check_merge_values_with_deltas() {
             ),
             pool_balances: DeltaAmountCollection::from_iter(
                 [
-                    (H256::from_low_u64_be(3), SignedAmount::from_atoms(50)),
-                    (H256::from_low_u64_be(4), SignedAmount::from_atoms(-50)),
+                    (H256::from_low_u64_be(3), SignedAmount::from_atoms(-300)),
+                    (H256::from_low_u64_be(4), SignedAmount::from_atoms(50)),
                 ]
                 .into_iter(),
             ),
@@ -235,8 +232,8 @@ fn check_merge_values_with_deltas() {
             ),
             delegation_balances: DeltaAmountCollection::from_iter(
                 [
-                    (H256::from_low_u64_be(8), SignedAmount::from_atoms(100)),
-                    (H256::from_low_u64_be(9), SignedAmount::from_atoms(100)),
+                    (H256::from_low_u64_be(8), SignedAmount::from_atoms(200)),
+                    (H256::from_low_u64_be(9), SignedAmount::from_atoms(300)),
                 ]
                 .into_iter(),
             ),
@@ -245,12 +242,14 @@ fn check_merge_values_with_deltas() {
             ),
         };
         let delta = PoSAccountingDelta::from_data(&db, delta_data);
+        let delta_origin = delta.data().clone();
 
-        db.merge_with_delta(delta.consume()).unwrap()
+        let undo_data = db.merge_with_delta(delta.consume()).unwrap();
+        (delta_origin, undo_data)
     };
 
-    let expected_storage = InMemoryPoSAccounting {
-        pool_data: BTreeMap::from([
+    let expected_storage = InMemoryPoSAccounting::from_values(
+        BTreeMap::from([
             (
                 H256::from_low_u64_be(1),
                 PoolData::new(pub_key1.clone(), Amount::from_atoms(300)),
@@ -260,27 +259,24 @@ fn check_merge_values_with_deltas() {
                 PoolData::new(pub_key2.clone(), Amount::from_atoms(100)),
             ),
         ]),
-        pool_balances: BTreeMap::from([
-            (H256::from_low_u64_be(3), Amount::from_atoms(150)),
-            (H256::from_low_u64_be(4), Amount::from_atoms(50)),
-        ]),
-        pool_delegation_shares: BTreeMap::from([(
+        BTreeMap::from([(H256::from_low_u64_be(4), Amount::from_atoms(450))]),
+        BTreeMap::from([(
             (H256::from_low_u64_be(5), H256::from_low_u64_be(6)),
             Amount::from_atoms(150),
         )]),
-        delegation_balances: BTreeMap::from([
-            (H256::from_low_u64_be(5), Amount::from_atoms(100)),
-            (H256::from_low_u64_be(6), Amount::from_atoms(100)),
-            (H256::from_low_u64_be(8), Amount::from_atoms(100)),
-            (H256::from_low_u64_be(9), Amount::from_atoms(100)),
+        BTreeMap::from([
+            (H256::from_low_u64_be(5), Amount::from_atoms(500)),
+            (H256::from_low_u64_be(6), Amount::from_atoms(600)),
+            (H256::from_low_u64_be(8), Amount::from_atoms(200)),
+            (H256::from_low_u64_be(9), Amount::from_atoms(300)),
         ]),
-        delegation_data: BTreeMap::from_iter([]),
-    };
+        BTreeMap::from_iter([]),
+    );
 
     assert_eq!(storage, expected_storage);
 
     let mut db = PoSAccountingDBMut::new_empty(&mut storage);
-    db.undo_merge_with_delta(undo_data).unwrap();
+    db.undo_merge_with_delta(delta_origin, undo_data).unwrap();
     assert_eq!(storage, original_storage);
 }
 
