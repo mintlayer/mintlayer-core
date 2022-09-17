@@ -109,14 +109,6 @@ impl<'a, S> TransactionVerifier<'a, S> {
 }
 
 impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
-    pub fn get_gen_block_index(
-        &self,
-        block_id: &Id<GenBlock>,
-    ) -> Result<Option<GenBlockIndex>, ConnectTransactionError> {
-        gen_block_index_getter(self.db_tx, self.chain_config, *block_id)
-            .map_err(|_| ConnectTransactionError::BlockIndexCouldNotBeLoaded(*block_id))
-    }
-
     fn calculate_total_outputs(
         outputs: &[TxOutput],
         include_issuance: Option<&Transaction>,
@@ -343,8 +335,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     }
                 };
 
-                let block_index_getter = |_db_tx, _chain_config, id| {
-                    self.get_gen_block_index(&id)
+                let block_index_getter = |_db_tx, _chain_config, id: Id<GenBlock>| {
+                    gen_block_index_getter(self.db_tx, self.chain_config, id)
                         .map_err(|_| PropertyQueryError::BlockIndexAtHeightNotFound(*height))
                 };
 
