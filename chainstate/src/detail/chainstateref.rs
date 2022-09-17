@@ -172,7 +172,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         &self,
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
-        gen_block_index_getter(&self.db_tx, self.chain_config, *block_id)
+        gen_block_index_getter(&self.db_tx, self.chain_config, block_id)
     }
 
     pub fn get_mainchain_tx_index(
@@ -892,7 +892,7 @@ where
     G: Fn(
         &'a S,
         &'a ChainConfig,
-        Id<GenBlock>,
+        &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, PropertyQueryError>,
 {
     if target_height > block_index.block_height() {
@@ -928,12 +928,12 @@ where
         let prev_too_close = height_skip_prev >= target_height;
 
         if at_target || (still_not_there && !(too_close && prev_too_close)) {
-            block_index_walk = gen_block_index_getter(db_tx, chain_config, *ancestor)?
+            block_index_walk = gen_block_index_getter(db_tx, chain_config, ancestor)?
                 .expect("Block index of ancestor must exist, since id exists");
             height_walk = height_skip;
         } else {
             let prev_block_id = cur_block_index.prev_block_id();
-            block_index_walk = gen_block_index_getter(db_tx, chain_config, *prev_block_id)?
+            block_index_walk = gen_block_index_getter(db_tx, chain_config, prev_block_id)?
                 .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))?;
             height_walk = height_walk_prev;
         }
@@ -943,7 +943,7 @@ where
 pub fn gen_block_index_getter<S: BlockchainStorageRead>(
     db_tx: &S,
     chain_config: &ChainConfig,
-    block_id: Id<GenBlock>,
+    block_id: &Id<GenBlock>,
 ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
     match block_id.classify(chain_config) {
         GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
