@@ -335,10 +335,11 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     }
                 };
 
-                let block_index_getter = |db_tx, chain_config, id: &Id<GenBlock>| {
-                    gen_block_index_getter(db_tx, chain_config, id)
-                        .map_err(|_| PropertyQueryError::BlockIndexAtHeightNotFound(*height))
-                };
+                let block_index_getter =
+                    |db_tx: &S, chain_config: &ChainConfig, id: &Id<GenBlock>| {
+                        gen_block_index_getter(db_tx, chain_config, id)
+                            .map_err(|_| PropertyQueryError::BlockIndexAtHeightNotFound(*height))
+                    };
 
                 let block_index = block_index_ancestor_getter(
                     block_index_getter,

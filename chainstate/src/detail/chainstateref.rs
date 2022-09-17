@@ -889,11 +889,7 @@ pub fn block_index_ancestor_getter<'a, S, G>(
     target_height: BlockHeight,
 ) -> Result<GenBlockIndex, PropertyQueryError>
 where
-    G: Fn(
-        &'a S,
-        &'a ChainConfig,
-        &Id<GenBlock>,
-    ) -> Result<Option<GenBlockIndex>, PropertyQueryError>,
+    G: Fn(&S, &ChainConfig, &Id<GenBlock>) -> Result<Option<GenBlockIndex>, PropertyQueryError>,
 {
     if target_height > block_index.block_height() {
         return Err(PropertyQueryError::InvalidAncestorHeight {
