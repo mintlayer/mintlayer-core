@@ -28,21 +28,17 @@ use ::utils::ensure;
 use cached_operation::CachedInputsOperation;
 use fallible_iterator::FallibleIterator;
 
-use std::{
-    collections::{btree_map::Entry, BTreeMap},
-    sync::Arc,
-};
+use std::collections::{btree_map::Entry, BTreeMap};
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
-use chainstate_types::GenBlockIndex;
+use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     amount_sum,
     chain::{
         block::timestamp::BlockTimestamp,
         signature::{verify_signature, Transactable},
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
-        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, SpendablePosition, Transaction,
-        TxInput, TxOutput,
+        Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable},
 };
@@ -57,9 +53,11 @@ use self::token_issuance_cache::TokenIssuanceCache;
 mod utils;
 use self::utils::{check_transferred_amount, get_input_token_id_and_amount};
 
+use super::chainstateref::{block_index_ancestor_getter, gen_block_index_getter};
+
 // TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee`
 //       that essentially belongs to this type, but return Amount
-#[derive(PartialEq, Eq, PartialOrd)]
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fee(pub Amount);
 
 pub struct Subsidy(pub Amount);
@@ -111,22 +109,6 @@ impl<'a, S> TransactionVerifier<'a, S> {
 }
 
 impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
-    pub fn get_gen_block_index(
-        &self,
-        block_id: &Id<GenBlock>,
-    ) -> Result<Option<GenBlockIndex>, ConnectTransactionError> {
-        match block_id.classify(self.chain_config) {
-            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
-                self.chain_config.genesis_block(),
-            )))),
-            GenBlockId::Block(id) => self
-                .db_tx
-                .get_block_index(&id)
-                .map(|b| b.map(GenBlockIndex::Block))
-                .map_err(ConnectTransactionError::from),
-        }
-    }
-
     fn calculate_total_outputs(
         outputs: &[TxOutput],
         include_issuance: Option<&Transaction>,
@@ -324,6 +306,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
     fn verify_signatures<T: Transactable>(
         &self,
+        block_index: &BlockIndex,
         tx: &T,
         spend_height: &BlockHeight,
         spending_time: &BlockTimestamp,
@@ -335,77 +318,44 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
         for (input_idx, input) in inputs.iter().enumerate() {
             let outpoint = input.outpoint();
-            let tx_index =
-                self.tx_index_cache.get_from_cached(&outpoint.tx_id())?.ok_or_else(|| {
-                    ConnectTransactionError::PreviouslyCachedInputNotFound(outpoint.tx_id())
+            let utxo = self
+                .utxo_cache
+                .utxo(outpoint)
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+
+            // TODO: see if a different treatment should be done for different output purposes
+            verify_signature(utxo.output().purpose().destination(), tx, input_idx)
+                .map_err(|_| ConnectTransactionError::SignatureVerificationFailed)?;
+
+            {
+                let height = match utxo.source() {
+                    utxo::UtxoSource::Blockchain(h) => h,
+                    utxo::UtxoSource::Mempool => {
+                        unreachable!("Mempool utxos can never be reached from storage")
+                    }
+                };
+
+                let block_index_getter =
+                    |db_tx: &S, chain_config: &ChainConfig, id: &Id<GenBlock>| {
+                        gen_block_index_getter(db_tx, chain_config, id)
+                            .map_err(|_| PropertyQueryError::BlockIndexAtHeightNotFound(*height))
+                    };
+
+                let block_index = block_index_ancestor_getter(
+                    block_index_getter,
+                    self.db_tx,
+                    self.chain_config,
+                    &block_index.clone().into(),
+                    *height,
+                )
+                .map_err(|e| {
+                    ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(
+                        e, *height,
+                    )
                 })?;
 
-            match tx_index.position() {
-                SpendablePosition::Transaction(tx_pos) => {
-                    let prev_tx = self
-                        .db_tx
-                        .get_mainchain_tx_by_position(tx_pos)
-                        .map_err(ConnectTransactionError::from)?
-                        .ok_or_else(|| {
-                            ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(
-                                tx_pos.clone(),
-                            )
-                        })?;
-
-                    let output = prev_tx
-                        .outputs()
-                        .get(input.outpoint().output_index() as usize)
-                        .ok_or(ConnectTransactionError::OutputIndexOutOfRange {
-                            tx_id: None,
-                            source_output_index: outpoint.output_index() as usize,
-                        })?;
-
-                    // TODO: see if a different treatment should be done for different output purposes
-
-                    {
-                        let block_index = self
-                            .db_tx
-                            .get_block_index(tx_pos.block_id())
-                            .map_err(ConnectTransactionError::from)?
-                            .ok_or_else(|| {
-                                ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(
-                                    *tx_pos.block_id(),
-                                )
-                            })?;
-                        self.check_timelock(
-                            &GenBlockIndex::Block(block_index),
-                            output,
-                            spend_height,
-                            spending_time,
-                        )?;
-                    }
-
-                    verify_signature(output.purpose().destination(), tx, input_idx)
-                        .map_err(|_| ConnectTransactionError::SignatureVerificationFailed)?;
-                }
-                SpendablePosition::BlockReward(block_id) => {
-                    let block_index = self.get_gen_block_index(block_id)?.ok_or_else(|| {
-                        // TODO get rid of the coercion
-                        let block_id = Id::new(block_id.get());
-                        ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(block_id)
-                    })?;
-
-                    let outputs = self.block_reward_outputs(block_id)?;
-                    let output = outputs.get(input.outpoint().output_index() as usize).ok_or(
-                        ConnectTransactionError::OutputIndexOutOfRange {
-                            tx_id: None,
-                            source_output_index: outpoint.output_index() as usize,
-                        },
-                    )?;
-
-                    // TODO: see if a different treatment should be done for different output purposes
-
-                    self.check_timelock(&block_index, output, spend_height, spending_time)?;
-
-                    verify_signature(output.purpose().destination(), tx, input_idx)
-                        .map_err(|_| ConnectTransactionError::SignatureVerificationFailed)?;
-                }
-            };
+                self.check_timelock(&block_index, utxo.output(), spend_height, spending_time)?;
+            }
         }
 
         Ok(())
@@ -468,6 +418,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
     pub fn connect_transactable(
         &mut self,
+        block_index: &BlockIndex,
         spend_ref: BlockTransactableRef,
         spend_height: &BlockHeight,
         median_time_past: &BlockTimestamp,
@@ -499,7 +450,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 self.token_issuance_cache.register(block.get_id(), tx)?;
 
                 // verify input signatures
-                self.verify_signatures(tx, spend_height, median_time_past)?;
+                self.verify_signatures(block_index, tx, spend_height, median_time_past)?;
 
                 // spend utxos
                 let tx_undo = self
@@ -524,7 +475,12 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     self.tx_index_cache.precache_inputs(inputs, tx_index_fetcher)?;
 
                     // verify input signatures
-                    self.verify_signatures(&reward_transactable, spend_height, median_time_past)?;
+                    self.verify_signatures(
+                        block_index,
+                        &reward_transactable,
+                        spend_height,
+                        median_time_past,
+                    )?;
                 }
 
                 let fee = None;
@@ -617,36 +573,6 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         }
 
         Ok(())
-    }
-
-    fn block_reward_outputs(
-        &self,
-        block_id: &Id<GenBlock>,
-    ) -> Result<Vec<TxOutput>, ConnectTransactionError> {
-        match block_id.classify(self.chain_config) {
-            GenBlockId::Genesis(_) => Ok(self
-                .chain_config
-                .genesis_block()
-                .block_reward_transactable()
-                .outputs()
-                .unwrap_or(&[])
-                .to_vec()),
-            // TODO: Getting the whole block just for reward outputs isn't optimal. See the
-            // https://github.com/mintlayer/mintlayer-core/issues/344 issue for details.
-            GenBlockId::Block(id) => {
-                let block_index = self
-                    .db_tx
-                    .get_block_index(&id)?
-                    .ok_or(ConnectTransactionError::InvariantErrorBlockIndexCouldNotBeLoaded(id))?;
-                let reward = self
-                    .db_tx
-                    .get_block_reward(&block_index)?
-                    .ok_or(ConnectTransactionError::InvariantErrorBlockCouldNotBeLoaded(id))?
-                    .outputs()
-                    .to_vec();
-                Ok(reward)
-            }
-        }
     }
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {

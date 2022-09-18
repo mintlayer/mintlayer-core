@@ -74,3 +74,9 @@ impl GenBlockIndex {
         }
     }
 }
+
+impl From<BlockIndex> for GenBlockIndex {
+    fn from(bi: BlockIndex) -> Self {
+        GenBlockIndex::Block(bi)
+    }
+}

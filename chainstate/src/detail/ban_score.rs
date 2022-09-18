@@ -66,32 +66,24 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvariantErrorTxNumWrongInBlock(_, _) => 0,
             ConnectTransactionError::OutputAlreadyPresentInInputsCache => 100,
             ConnectTransactionError::PreviouslyCachedInputNotFound(_) => 0,
-            ConnectTransactionError::PreviouslyCachedInputWasErased => 100,
             ConnectTransactionError::InvariantBrokenAlreadyUnspent => 0,
             // Even though this is an invariant error, it stems from referencing a block for reward that doesn't exist
-            ConnectTransactionError::InvariantBrokenSourceBlockIndexNotFound => 100,
             ConnectTransactionError::MissingOutputOrSpent => 100,
             ConnectTransactionError::MissingOutputOrSpentOutputErasedOnConnect => 100,
             ConnectTransactionError::MissingOutputOrSpentOutputErasedOnDisconnect => 0,
             ConnectTransactionError::AttemptToPrintMoney(_, _) => 100,
             ConnectTransactionError::TxFeeTotalCalcFailed(_, _) => 100,
-            ConnectTransactionError::OutputAdditionError => 100,
             ConnectTransactionError::SignatureVerificationFailed => 100,
             ConnectTransactionError::InvalidOutputCount => 100,
             ConnectTransactionError::BlockHeightArithmeticError => 100,
             ConnectTransactionError::BlockTimestampArithmeticError => 100,
-            ConnectTransactionError::InputAdditionError => 100,
             ConnectTransactionError::DoubleSpendAttempt(_) => 100,
             ConnectTransactionError::OutputIndexOutOfRange {
                 tx_id: _,
                 source_output_index: _,
             } => 100,
-            // Even though this is an invariant error, it stems from a transaction that doesn't exist
-            ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(_) => 100,
             // Even though this is an invariant error, it stems from a block reward that doesn't exist
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(_) => 100,
-            ConnectTransactionError::InvariantErrorBlockIndexCouldNotBeLoaded(_) => 100,
-            ConnectTransactionError::InvariantErrorBlockCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::FailedToAddAllFeesOfBlock(_) => 100,
             ConnectTransactionError::RewardAdditionError(_) => 100,
             // Even though this is an invariant, we consider it a violation to be overly cautious
@@ -102,6 +94,8 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTxUndo(_, _) => 0,
             ConnectTransactionError::UtxoError(err) => err.ban_score(),
             ConnectTransactionError::TokensError(err) => err.ban_score(),
+            ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _) => 100,
+            ConnectTransactionError::BlockIndexCouldNotBeLoaded(_) => 100,
         }
     }
 }
