@@ -51,4 +51,6 @@ pub enum PropertyQueryError {
     TxNotFound,
     #[error("Genesis block has no header")]
     GenesisHeaderRequested,
+    #[error("Tried getting value of a token oupoint")]
+    ExpectedCoinOutpointAndFoundToken,
 }

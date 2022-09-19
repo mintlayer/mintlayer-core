@@ -20,16 +20,12 @@ use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::block::BlockReward;
 use common::chain::config::ChainConfig;
-use common::chain::signature::Transactable;
 use common::chain::tokens::OutputValue;
 use common::chain::tokens::TokenAuxiliaryData;
-use common::chain::GenBlockId;
-use common::chain::SpendablePosition;
 use common::chain::TxInput;
 use common::chain::{OutPointSourceId, Transaction, TxMainChainIndex};
 
 use chainstate_types::PropertyQueryError;
-use common::chain::OutputSpentState;
 use common::{
     chain::{
         block::{Block, BlockHeader, GenBlock},
@@ -38,6 +34,7 @@ use common::{
     primitives::{id::WithId, BlockHeight, Id},
 };
 use utils::eventhandler::EventHandler;
+use utxo::UtxosView;
 
 use crate::ChainstateConfig;
 use crate::{
@@ -290,106 +287,38 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
     }
 
     fn available_inputs(&self, tx: &Transaction) -> Result<Vec<TxInput>, ChainstateError> {
-        let mut available_inputs = Vec::new();
-        for input in tx.inputs() {
-            let index = self
-                .chainstate
-                .make_db_tx_ro()
-                .get_mainchain_tx_index(&input.outpoint().tx_id())
-                .map_err(ChainstateError::FailedToReadProperty)?;
-            if let Some(index) = index {
-                if let Ok(OutputSpentState::Unspent) =
-                    index.get_spent_state(input.outpoint().output_index())
-                {
-                    available_inputs.push(input.clone())
-                }
-            }
-        }
+        let chainstate_ref = self.chainstate.make_db_tx_ro();
+        let utxo_view = chainstate_ref.make_utxo_view();
+        let available_inputs = tx
+            .inputs()
+            .iter()
+            .filter(|input| utxo_view.utxo(input.outpoint()).is_some())
+            .cloned()
+            .collect();
         Ok(available_inputs)
     }
 
-    // TODO(PR) proper errors
-    // TODO this logic is copied from transaction verifier
     fn get_outpoint_value(
         &self,
         outpoint: &common::chain::OutPoint,
     ) -> Result<common::primitives::Amount, ChainstateError> {
-        let tx_index = self
-            .chainstate
-            .make_db_tx_ro()
-            .get_mainchain_tx_index(&outpoint.tx_id())
-            .map_err(ChainstateError::FailedToReadProperty)?
-            .ok_or(ChainstateError::FailedToReadProperty(
-                PropertyQueryError::TxNotFound,
-            ))?;
-        match tx_index.position() {
-            SpendablePosition::Transaction(tx_pos) => {
-                let prev_tx = self
-                    .chainstate
-                    .make_db_tx_ro()
-                    .get_mainchain_tx_by_position(tx_pos)
-                    .map_err(ChainstateError::FailedToReadProperty)?
-                    .ok_or(ChainstateError::FailedToReadProperty(
-                        PropertyQueryError::TxNotFound,
-                    ))?;
-                let output = prev_tx.outputs().get(outpoint.output_index() as usize).ok_or(
-                    ChainstateError::FailedToReadProperty(
-                        PropertyQueryError::OutpointIndexOutOfRange,
-                    ),
-                )?;
-                Ok(match output.value() {
-                    OutputValue::Coin(amount) => *amount,
-                    _ => todo!(),
-                })
-            }
-            SpendablePosition::BlockReward(block_id) => {
-                match block_id.classify(&*self.get_chain_config()) {
-                    GenBlockId::Genesis(_) => {
-                        let rewards = self
-                            .get_chain_config()
-                            .genesis_block()
-                            .block_reward_transactable()
-                            .outputs()
-                            .unwrap_or(&[])
-                            .to_vec();
-                        let output = rewards.get(outpoint.output_index() as usize).ok_or(
-                            ChainstateError::FailedToReadProperty(
-                                PropertyQueryError::OutpointIndexOutOfRange,
-                            ),
-                        )?;
-                        Ok(match output.value() {
-                            OutputValue::Coin(amount) => *amount,
-                            _ => todo!(),
-                        })
-                    }
-                    // TODO: Getting the whole block just for reward outputs isn't optimal. See the
-                    // https://github.com/mintlayer/mintlayer-core/issues/344 issue for details.
-                    GenBlockId::Block(id) => {
-                        let block_index = self.get_block_index(&id)?.ok_or(
-                            ChainstateError::FailedToReadProperty(
-                                PropertyQueryError::BestBlockIndexNotFound,
-                            ),
-                        )?;
+        use std::time::Instant;
+        let start = Instant::now();
 
-                        let rewards = self
-                            .get_block_reward(&block_index)?
-                            .ok_or(ChainstateError::FailedToReadProperty(
-                                PropertyQueryError::BestBlockNotFound,
-                            ))?
-                            .outputs()
-                            .to_vec();
-                        let output = rewards.get(outpoint.output_index() as usize).ok_or(
-                            ChainstateError::FailedToReadProperty(
-                                PropertyQueryError::OutpointIndexOutOfRange,
-                            ),
-                        )?;
-                        Ok(match output.value() {
-                            OutputValue::Coin(amount) => *amount,
-                            _ => todo!(),
-                        })
-                    }
-                }
-            }
-        }
+        let chainstate_ref = self.chainstate.make_db_tx_ro();
+        let utxo_view = chainstate_ref.make_utxo_view();
+        let res = match utxo_view.utxo(outpoint) {
+            Some(utxo) => match utxo.output().value() {
+                OutputValue::Coin(amount) => Ok(*amount),
+                _ => Err(ChainstateError::FailedToReadProperty(
+                    PropertyQueryError::ExpectedCoinOutpointAndFoundToken,
+                )),
+            },
+            None => Err(ChainstateError::FailedToReadProperty(
+                PropertyQueryError::OutpointNotFound,
+            )),
+        };
+        eprintln!("time spent getting outpoint {:?}", start.elapsed());
+        res
     }
 }

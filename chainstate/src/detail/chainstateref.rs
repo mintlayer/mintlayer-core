@@ -145,6 +145,10 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         }
     }
 
+    pub fn make_utxo_view(&self) -> impl UtxosView + '_ {
+        UtxosDB::new(&self.db_tx)
+    }
+
     pub fn chain_config(&self) -> &ChainConfig {
         self.chain_config
     }

@@ -184,29 +184,25 @@ async fn tx_no_inputs() -> anyhow::Result<()> {
 
 // TODO this is copy-pasted from libp2p's test utils. This function should be extracted to an
 // external crate to avoid code duplication
-pub async fn start_chainstate(
+pub async fn start_chainstate_with_config(
     chain_config: Arc<ChainConfig>,
 ) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
     let storage = chainstate_storage::inmemory::Store::new_empty().unwrap();
-    let mut man = subsystem::Manager::new("TODO");
-    let handle = man.add_subsystem(
-        "chainstate",
-        make_chainstate(
-            chain_config,
-            ChainstateConfig::new(),
-            storage,
-            None,
-            Default::default(),
-        )
-        .unwrap(),
-    );
-    tokio::spawn(async move { man.main().await });
-    handle
+    let chainstate = make_chainstate(
+        chain_config,
+        ChainstateConfig::new(),
+        storage,
+        None,
+        Default::default(),
+    )
+    .unwrap();
+    start_chainstate(chainstate).await
 }
 
 async fn setup() -> Mempool<SystemClock, SystemUsageEstimator> {
+    logging::init_logging::<&str>(None);
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let chainstate_interface = start_chainstate(Arc::clone(&config)).await;
+    let chainstate_interface = start_chainstate_with_config(Arc::clone(&config)).await;
     Mempool::new(
         config,
         chainstate_interface,
@@ -218,8 +214,9 @@ async fn setup() -> Mempool<SystemClock, SystemUsageEstimator> {
 async fn setup_with_chainstate(
     chainstate: Box<dyn chainstate_interface::ChainstateInterface>,
 ) -> Mempool<SystemClock, SystemUsageEstimator> {
+    logging::init_logging::<&str>(None);
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let chainstate_handle = start_chainstate_new(chainstate).await;
+    let chainstate_handle = start_chainstate(chainstate).await;
     Mempool::new(
         config,
         chainstate_handle,
@@ -228,7 +225,7 @@ async fn setup_with_chainstate(
     )
 }
 
-pub async fn start_chainstate_new(
+pub async fn start_chainstate(
     chainstate: Box<dyn chainstate_interface::ChainstateInterface>,
 ) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
     let mut man = subsystem::Manager::new("TODO");
@@ -1109,7 +1106,7 @@ async fn only_expired_entries_removed() -> anyhow::Result<()> {
     let mock_clock = MockClock::new();
     let chainstate = tf.chainstate();
     let config = chainstate.get_chain_config();
-    let chainstate_interface = start_chainstate_new(chainstate).await;
+    let chainstate_interface = start_chainstate(chainstate).await;
 
     let mut mempool = Mempool::new(
         config,
@@ -1221,7 +1218,7 @@ async fn rolling_fee() -> anyhow::Result<()> {
 
     let chainstate = tf.chainstate();
     let config = chainstate.get_chain_config();
-    let chainstate_interface = start_chainstate_new(chainstate).await;
+    let chainstate_interface = start_chainstate(chainstate).await;
 
     let num_inputs = 1;
 
@@ -1675,7 +1672,7 @@ async fn descendant_of_expired_entry() -> anyhow::Result<()> {
     let chainstate = tf.chainstate();
     let mut mempool = Mempool::new(
         chainstate.get_chain_config(),
-        start_chainstate_new(chainstate).await,
+        start_chainstate(chainstate).await,
         mock_clock.clone(),
         SystemUsageEstimator {},
     );
@@ -1729,7 +1726,7 @@ async fn mempool_full() -> anyhow::Result<()> {
 
     let chainstate = tf.chainstate();
     let config = chainstate.get_chain_config();
-    let chainstate_handle = start_chainstate_new(chainstate).await;
+    let chainstate_handle = start_chainstate(chainstate).await;
 
     let mut mempool = Mempool::new(config, chainstate_handle, SystemClock, mock_usage);
 
