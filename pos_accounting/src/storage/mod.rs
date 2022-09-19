@@ -6,8 +6,6 @@ use crate::pool::{delegation::DelegationData, pool_data::PoolData};
 
 use chainstate_types::storage_result::Error;
 
-pub mod in_memory;
-
 pub trait PoSAccountingStorageRead {
     fn get_pool_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error>;
 
@@ -67,3 +65,6 @@ pub trait PoSAccountingStorageWrite: PoSAccountingStorageRead {
         delegation_id: H256,
     ) -> Result<(), Error>;
 }
+
+#[cfg(test)]
+pub(crate) mod in_memory;

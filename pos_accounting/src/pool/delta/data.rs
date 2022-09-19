@@ -24,14 +24,4 @@ impl PoSAccountingDeltaData {
             delegation_data: Default::default(),
         }
     }
-
-    #[cfg(test)]
-    pub fn is_empty(&self) -> bool {
-        // TODO: implement derivable trait for this
-        self.pool_balances.data().is_empty()
-            && self.pool_data.data().is_empty()
-            && self.delegation_balances.data().is_empty()
-            && self.delegation_data.data().is_empty()
-            && self.pool_delegation_shares.data().is_empty()
-    }
 }

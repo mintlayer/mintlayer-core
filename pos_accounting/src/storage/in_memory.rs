@@ -8,7 +8,7 @@ use chainstate_types::storage_result::Error;
 
 use super::{PoSAccountingStorageRead, PoSAccountingStorageWrite};
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InMemoryPoSAccounting {
     pool_data: BTreeMap<H256, PoolData>,
     pool_balances: BTreeMap<H256, Amount>,
@@ -25,6 +25,21 @@ impl InMemoryPoSAccounting {
             pool_delegation_shares: Default::default(),
             delegation_balances: Default::default(),
             delegation_data: Default::default(),
+        }
+    }
+    pub fn from_values(
+        pool_data: BTreeMap<H256, PoolData>,
+        pool_balances: BTreeMap<H256, Amount>,
+        pool_delegation_shares: BTreeMap<(H256, H256), Amount>,
+        delegation_balances: BTreeMap<H256, Amount>,
+        delegation_data: BTreeMap<H256, DelegationData>,
+    ) -> Self {
+        Self {
+            pool_data,
+            pool_balances,
+            pool_delegation_shares,
+            delegation_balances,
+            delegation_data,
         }
     }
 }

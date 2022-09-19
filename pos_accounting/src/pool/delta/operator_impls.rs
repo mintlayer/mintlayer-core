@@ -32,20 +32,14 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
     ) -> Result<(H256, PoSAccountingUndo), Error> {
         let pool_id = make_pool_id(input0_outpoint);
 
-        {
-            let current_amount = self.get_pool_balance(pool_id)?;
-            if current_amount.is_some() {
-                // This should never happen since it's based on an unspent input
-                return Err(Error::InvariantErrorPoolBalanceAlreadyExists);
-            }
+        if self.get_pool_balance(pool_id)?.is_some() {
+            // This should never happen since it's based on an unspent input
+            return Err(Error::InvariantErrorPoolBalanceAlreadyExists);
         }
 
-        {
-            let current_data = self.get_pool_data(pool_id)?;
-            if current_data.is_some() {
-                // This should never happen since it's based on an unspent input
-                return Err(Error::InvariantErrorPoolDataAlreadyExists);
-            }
+        if self.get_pool_data(pool_id)?.is_some() {
+            // This should never happen since it's based on an unspent input
+            return Err(Error::InvariantErrorPoolDataAlreadyExists);
         }
 
         self.data.pool_balances.add_unsigned(pool_id, pledge_amount)?;
@@ -92,19 +86,16 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
 
         let delegation_id = make_delegation_id(input0_outpoint);
 
-        {
-            let current_delegation_data = self.get_delegation_id_data(delegation_id)?;
-            if current_delegation_data.is_some() {
-                // This should never happen since it's based on an unspent input
-                return Err(Error::InvariantErrorDelegationCreationFailedIdAlreadyExists);
-            }
+        if self.get_delegation_id_data(delegation_id)?.is_some() {
+            // This should never happen since it's based on an unspent input
+            return Err(Error::InvariantErrorDelegationCreationFailedIdAlreadyExists);
         }
 
         let delegation_data = DelegationData::new(target_pool, spend_key);
 
         let data_undo = self.data.delegation_data.merge_delta_data_element(
             delegation_id,
-            DataDelta::Create(Box::new(delegation_data.clone())),
+            DataDelta::Create(Box::new(delegation_data)),
         )?;
 
         Ok((
@@ -192,12 +183,8 @@ impl<'a> PoSAccountingDelta<'a> {
 
         self.data.pool_balances.sub_unsigned(undo.pool_id, pledge_amount)?;
 
-        let pool_data = self.get_pool_data(undo.pool_id)?;
-        {
-            if pool_data.is_none() {
-                return Err(Error::InvariantErrorPoolCreationReversalFailedDataNotFound);
-            }
-        }
+        self.get_pool_data(undo.pool_id)?
+            .ok_or(Error::InvariantErrorPoolCreationReversalFailedDataNotFound)?;
 
         self.data.pool_data.undo_merge_delta_data_element(undo.pool_id, undo_data)?;
 
@@ -210,13 +197,11 @@ impl<'a> PoSAccountingDelta<'a> {
             PoolDataUndo::Data(_) => unreachable!("incompatible PoolDataUndo supplied"),
         };
 
-        let current_amount = self.get_pool_balance(undo.pool_id)?;
-        if current_amount.is_some() {
+        if self.get_pool_balance(undo.pool_id)?.is_some() {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists);
         }
 
-        let current_data = self.get_pool_data(undo.pool_id)?;
-        if current_data.is_some() {
+        if self.get_pool_data(undo.pool_id)?.is_some() {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists);
         }
 
@@ -329,12 +314,12 @@ impl<'a> PoSAccountingOperatorRead for PoSAccountingDelta<'a> {
     fn get_delegation_id_data(&self, id: H256) -> Result<Option<DelegationData>, Error> {
         let parent_data = self.parent.get_delegation_data(id)?;
         let local_data = self.data.delegation_data.data().get(&id);
-        combine_data_with_delta(parent_data, local_data).map_err(Error::AccountingError)
+        combine_data_with_delta(parent_data.as_ref(), local_data).map_err(Error::AccountingError)
     }
 
     fn get_pool_data(&self, id: H256) -> Result<Option<PoolData>, Error> {
         let parent_data = self.parent.get_pool_data(id)?;
         let local_data = self.data.pool_data.data().get(&id);
-        combine_data_with_delta(parent_data, local_data).map_err(Error::AccountingError)
+        combine_data_with_delta(parent_data.as_ref(), local_data).map_err(Error::AccountingError)
     }
 }
