@@ -17,7 +17,10 @@ pub use rand::prelude::SliceRandom;
 pub use rand::{seq, CryptoRng, Rng, RngCore, SeedableRng};
 
 pub mod distributions {
-    pub use rand::distributions::{Alphanumeric, Distribution, Standard};
+    pub use rand::distributions::{Alphanumeric, DistString, Distribution, Standard};
+    pub mod uniform {
+        pub use rand::distributions::uniform::SampleRange;
+    }
 }
 
 pub mod rngs {

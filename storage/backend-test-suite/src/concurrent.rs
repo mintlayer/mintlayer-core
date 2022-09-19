@@ -112,9 +112,39 @@ fn threaded_reads_consistent<B: Backend>(backend: B) {
     assert_eq!(thr1.join().unwrap(), val);
 }
 
+fn write_different_keys_and_iterate<B: Backend>(backend: B) {
+    let store = backend.open(desc(1)).expect("db open to succeed");
+
+    let thr0 = thread::spawn({
+        let store = store.clone();
+        move || {
+            let mut dbtx = store.transaction_rw();
+            dbtx.put(IDX.0, vec![0x01], vec![0xf1]).unwrap();
+            dbtx.commit().unwrap();
+        }
+    });
+    let thr1 = thread::spawn({
+        let store = store.clone();
+        move || {
+            let mut dbtx = store.transaction_rw();
+            dbtx.put(IDX.0, vec![0x02], vec![0xf2]).unwrap();
+            dbtx.commit().unwrap();
+        }
+    });
+
+    thr0.join().unwrap();
+    thr1.join().unwrap();
+
+    let dbtx = store.transaction_ro();
+    let contents = dbtx.prefix_iter(IDX.0, vec![]).unwrap();
+    let expected = [(vec![0x01], vec![0xf1]), (vec![0x02], vec![0xf2])];
+    assert!(contents.eq(expected));
+}
+
 tests![
     commutative_read_modify_write,
-    read_write_race,
     read_initialize_race,
+    read_write_race,
     threaded_reads_consistent,
+    write_different_keys_and_iterate,
 ];

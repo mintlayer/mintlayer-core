@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -16,6 +16,7 @@
 pub mod address;
 pub mod chain;
 pub mod primitives;
+pub mod time_getter;
 pub mod uint;
 
 #[macro_use]

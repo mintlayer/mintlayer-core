@@ -1,9 +1,25 @@
+// Copyright (c) 2021-2022 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
     chain::{
         block::{BlockHeader, BlockReward},
-        Block, GenBlock,
+        tokens::{OutputValue, RPCTokenInfo, TokenAuxiliaryData, TokenData, TokenId},
+        Block, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
@@ -61,6 +77,13 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateQuery<'a, S, O> {
         id: &Id<Block>,
     ) -> Result<Option<BlockIndex>, PropertyQueryError> {
         self.chainstate_ref.get_block_index(id)
+    }
+
+    pub fn get_gen_block_index(
+        &self,
+        id: &Id<GenBlock>,
+    ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
+        self.chainstate_ref.get_gen_block_index(id)
     }
 
     pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
@@ -142,5 +165,72 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateQuery<'a, S, O> {
             .collect::<Vec<_>>();
 
         Ok(res)
+    }
+
+    pub fn get_mainchain_tx_index(
+        &self,
+        tx_id: &OutPointSourceId,
+    ) -> Result<Option<TxMainChainIndex>, PropertyQueryError> {
+        self.chainstate_ref.get_mainchain_tx_index(tx_id)
+    }
+
+    pub fn get_token_info_for_rpc(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<RPCTokenInfo>, PropertyQueryError> {
+        let token_aux_data = self.get_token_aux_data(&token_id)?;
+        let token_aux_data = match token_aux_data {
+            Some(data) => data,
+            None => return Ok(None),
+        };
+
+        Ok(token_aux_data
+            .issuance_tx()
+            .outputs()
+            .iter()
+            // Filter tokens
+            .filter_map(|output| match output.value() {
+                OutputValue::Coin(_) => None,
+                OutputValue::Token(token_data) => Some(token_data),
+            })
+            // Find issuance data and return RPCTokenInfo
+            .find_map(|token_data| match token_data {
+                TokenData::TokenIssuanceV1 {
+                    token_ticker,
+                    amount_to_issue,
+                    number_of_decimals,
+                    metadata_uri,
+                } => Some(RPCTokenInfo::new(
+                    token_id,
+                    token_aux_data.issuance_tx().get_id(),
+                    token_aux_data.issuance_block_id(),
+                    token_ticker.clone(),
+                    *amount_to_issue,
+                    *number_of_decimals,
+                    metadata_uri.clone(),
+                )),
+                TokenData::TokenTransferV1 {
+                    token_id: _,
+                    amount: _,
+                }
+                | TokenData::TokenBurnV1 {
+                    token_id: _,
+                    amount_to_burn: _,
+                } => None,
+            }))
+    }
+
+    pub fn get_token_aux_data(
+        &self,
+        token_id: &TokenId,
+    ) -> Result<Option<TokenAuxiliaryData>, PropertyQueryError> {
+        self.chainstate_ref.get_token_aux_data(token_id)
+    }
+
+    pub fn get_token_id_from_issuance_tx(
+        &self,
+        tx_id: &Id<Transaction>,
+    ) -> Result<Option<TokenId>, PropertyQueryError> {
+        self.chainstate_ref.get_token_id(tx_id)
     }
 }

@@ -13,16 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use thiserror::Error;
-
+use super::{
+    orphan_blocks::OrphanAddError,
+    transaction_verifier::error::{ConnectTransactionError, TokensError},
+};
 use chainstate_types::PropertyQueryError;
 use common::{
     chain::{Block, GenBlock, Transaction},
     primitives::{BlockDistance, Id},
 };
 use consensus::ConsensusVerificationError;
-
-use super::{orphan_blocks::OrphanAddError, transaction_verifier::error::ConnectTransactionError};
+use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockError {
@@ -88,8 +89,10 @@ pub enum CheckBlockTransactionsError {
     DuplicateInputInTransaction(Id<Transaction>, Id<Block>),
     #[error("Duplicate input in block")]
     DuplicateInputInBlock(Id<Block>),
-    #[error("Duplicate transaction found in block")]
-    DuplicatedTransactionInBlock(Id<Transaction>, Id<Block>),
+    #[error("Empty inputs or outputs in transaction found in block")]
+    EmptyInputsOutputsInTransactionInBlock(Id<Transaction>, Id<Block>),
+    #[error("Tokens error: {0}")]
+    TokensError(TokensError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

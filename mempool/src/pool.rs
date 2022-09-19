@@ -73,8 +73,9 @@ where
         let sum_outputs = tx
             .outputs()
             .iter()
-            .map(|output| match output.value() {
-                OutputValue::Coin(coin) => *coin,
+            .filter_map(|output| match output.value() {
+                OutputValue::Coin(coin) => Some(*coin),
+                OutputValue::Token(_) => None,
             })
             .sum::<Option<_>>()
             .ok_or(TxValidationError::OutputValuesOverflow)?;

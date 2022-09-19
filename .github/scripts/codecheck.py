@@ -57,10 +57,24 @@ def disallow(pat, exclude = []):
 # Check license header
 def check_licenses():
     print("==== Checking license headers:")
-    template = re.compile(r'\n'.join(LICENSE_TEMPLATE))
+    
+    # list of files exempted from license check
+    exempted_files = [
+        "./script/src/opcodes.rs",
+        "./common/src/fixed_hash.rs",
+        "./common/src/uint/internal_macros.rs",
+        "./common/src/uint/endian.rs",
+        "./common/src/uint/impls.rs",
+        "./common/src/uint/mod.rs"
+        ]
+    
+    template = re.compile('(?:' + r')\n(?:'.join(LICENSE_TEMPLATE) + ')')
 
     ok = True
     for path in rs_sources():
+        if any(os.path.samefile(path, exempted) for exempted in exempted_files):
+            continue
+        
         with open(path) as file:
             if not template.search(file.read()):
                 ok = False

@@ -1,8 +1,7 @@
 on:
-  pull_request:
+  push:
     branches:
-      - master
-      - staging
+      - '**' # target all branches
 
 name: Code Coverage
 
@@ -13,7 +12,8 @@ jobs:
       - uses: actions/checkout@v1
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2022-03-22
+          # TODO: Inspect coverage, and change toolchain to stable
+          toolchain: nightly-2022-08-16
           override: true
       - uses: actions-rs/cargo@v1
         with:

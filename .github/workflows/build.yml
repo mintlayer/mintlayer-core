@@ -3,14 +3,7 @@ name: build
 on:
   push:
     branches:
-      - master
-      - staging
-  pull_request:
-    branches:
-      - master
-      - staging
-  pull_request_target:
-    types: synchronize
+      - '**' # target all branches
 
 
 env:

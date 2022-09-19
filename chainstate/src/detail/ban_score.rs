@@ -13,13 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use consensus::{ConsensusPoWError, ConsensusVerificationError};
-
 use super::{
-    transaction_verifier::error::ConnectTransactionError, BlockSizeError, CheckBlockError,
-    CheckBlockTransactionsError, OrphanCheckError,
+    transaction_verifier::error::{ConnectTransactionError, TokensError},
+    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
 };
 use crate::BlockError;
+use consensus::{ConsensusPoWError, ConsensusVerificationError};
 
 // TODO: use a ban_score macro in a form similar to thiserror::Error in order to define the ban score
 //       value of an error on the error enum arms instead of separately like in this file
@@ -66,33 +65,25 @@ impl BanScore for ConnectTransactionError {
             // this is zero because it's used when we add the outputs whose transactions we tested beforehand
             ConnectTransactionError::InvariantErrorTxNumWrongInBlock(_, _) => 0,
             ConnectTransactionError::OutputAlreadyPresentInInputsCache => 100,
-            ConnectTransactionError::PreviouslyCachedInputNotFound => 0,
-            ConnectTransactionError::PreviouslyCachedInputWasErased => 100,
+            ConnectTransactionError::PreviouslyCachedInputNotFound(_) => 0,
             ConnectTransactionError::InvariantBrokenAlreadyUnspent => 0,
             // Even though this is an invariant error, it stems from referencing a block for reward that doesn't exist
-            ConnectTransactionError::InvariantBrokenSourceBlockIndexNotFound => 100,
             ConnectTransactionError::MissingOutputOrSpent => 100,
             ConnectTransactionError::MissingOutputOrSpentOutputErasedOnConnect => 100,
             ConnectTransactionError::MissingOutputOrSpentOutputErasedOnDisconnect => 0,
             ConnectTransactionError::AttemptToPrintMoney(_, _) => 100,
             ConnectTransactionError::TxFeeTotalCalcFailed(_, _) => 100,
-            ConnectTransactionError::OutputAdditionError => 100,
             ConnectTransactionError::SignatureVerificationFailed => 100,
             ConnectTransactionError::InvalidOutputCount => 100,
             ConnectTransactionError::BlockHeightArithmeticError => 100,
             ConnectTransactionError::BlockTimestampArithmeticError => 100,
-            ConnectTransactionError::InputAdditionError => 100,
             ConnectTransactionError::DoubleSpendAttempt(_) => 100,
             ConnectTransactionError::OutputIndexOutOfRange {
                 tx_id: _,
                 source_output_index: _,
             } => 100,
-            // Even though this is an invariant error, it stems from a transaction that doesn't exist
-            ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(_) => 100,
             // Even though this is an invariant error, it stems from a block reward that doesn't exist
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(_) => 100,
-            ConnectTransactionError::InvariantErrorBlockIndexCouldNotBeLoaded(_) => 100,
-            ConnectTransactionError::InvariantErrorBlockCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::FailedToAddAllFeesOfBlock(_) => 100,
             ConnectTransactionError::RewardAdditionError(_) => 100,
             // Even though this is an invariant, we consider it a violation to be overly cautious
@@ -102,6 +93,9 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::MissingBlockRewardUndo(_) => 0,
             ConnectTransactionError::MissingTxUndo(_, _) => 0,
             ConnectTransactionError::UtxoError(err) => err.ban_score(),
+            ConnectTransactionError::TokensError(err) => err.ban_score(),
+            ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _) => 100,
+            ConnectTransactionError::BlockIndexCouldNotBeLoaded(_) => 100,
         }
     }
 }
@@ -127,13 +121,38 @@ impl BanScore for CheckBlockError {
     }
 }
 
+impl BanScore for TokensError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            TokensError::StorageError(_) => 0,
+            TokensError::IssueErrorInvalidTickerLength(_, _) => 100,
+            TokensError::IssueErrorTickerHasNoneAlphaNumericChar(_, _) => 100,
+            TokensError::IssueAmountIsZero(_, _) => 100,
+            TokensError::IssueErrorTooManyDecimals(_, _) => 100,
+            TokensError::IssueErrorIncorrectMetadataURI(_, _) => 100,
+            TokensError::MultipleTokenIssuanceInTransaction(_, _) => 100,
+            TokensError::CoinOrTokenOverflow => 100,
+            TokensError::InsufficientTokenFees(_, _) => 100,
+            TokensError::BurnZeroTokens(_, _) => 100,
+            TokensError::NoTxInMainChainByOutpoint => 100,
+            TokensError::TransferZeroTokens(_, _) => 100,
+            TokensError::TokenIdCantBeCalculated => 100,
+            TokensError::AttemptToTransferBurnedTokens => 100,
+            TokensError::TokensInBlockReward => 100,
+            TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_) => 100,
+            TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => 100,
+        }
+    }
+}
+
 impl BanScore for CheckBlockTransactionsError {
     fn ban_score(&self) -> u32 {
         match self {
             CheckBlockTransactionsError::StorageError(_) => 0,
             CheckBlockTransactionsError::DuplicateInputInTransaction(_, _) => 100,
             CheckBlockTransactionsError::DuplicateInputInBlock(_) => 100,
-            CheckBlockTransactionsError::DuplicatedTransactionInBlock(_, _) => 100,
+            CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(_, _) => 100,
+            CheckBlockTransactionsError::TokensError(err) => err.ban_score(),
         }
     }
 }

@@ -10,7 +10,7 @@ edition = "2021"
 accounting = {path = '../accounting'}
 common = {path = '../common'}
 crypto = {path = '../crypto'}
-chainstate-types = {path = '../chainstate-types'}
+chainstate-types = { path = '../chainstate/types' }
 serialization = {path = "../serialization"}
 
 thiserror = "1.0"

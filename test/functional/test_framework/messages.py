@@ -412,7 +412,6 @@ class CTxIn:
             % (repr(self.prevout), self.scriptSig.hex(),
                self.nSequence)
 
-
 class CTxOut:
     __slots__ = ("nValue", "scriptPubKey")
 

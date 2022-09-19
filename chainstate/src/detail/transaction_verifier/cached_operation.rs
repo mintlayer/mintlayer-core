@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -15,7 +15,6 @@
 
 use super::error::ConnectTransactionError;
 use common::chain::{Spender, TxMainChainIndex};
-
 pub enum CachedInputsOperation {
     Write(TxMainChainIndex),
     Read(TxMainChainIndex),
@@ -67,14 +66,6 @@ impl CachedInputsOperation {
             CachedInputsOperation::Erase => unreachable!(),
         };
         replace_with::replace_with_or_abort(self, replacer_func);
-    }
-
-    pub fn get_tx_index(&self) -> Option<&TxMainChainIndex> {
-        match self {
-            CachedInputsOperation::Write(idx) => Some(idx),
-            CachedInputsOperation::Read(idx) => Some(idx),
-            CachedInputsOperation::Erase => None,
-        }
     }
 }
 

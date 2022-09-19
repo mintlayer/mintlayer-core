@@ -573,11 +573,14 @@ dependencies = [
  "common",
  "consensus",
  "crypto",
+ "expect-test",
+ "fallible-iterator",
  "hex",
  "itertools",
  "jsonrpsee",
  "logging",
  "mockall",
+ "rand 0.8.5",
  "replace_with",
  "rpc",
  "rstest",
@@ -609,6 +612,44 @@ dependencies = [
  "test-utils",
  "utils",
  "utxo",
+]
+
+[[package]]
+name = "chainstate-test-framework"
+version = "0.1.0"
+dependencies = [
+ "chainstate",
+ "chainstate-storage",
+ "chainstate-types",
+ "common",
+ "consensus",
+ "crypto",
+ "hex",
+ "itertools",
+ "logging",
+ "serialization",
+ "test-utils",
+ "utils",
+]
+
+[[package]]
+name = "chainstate-test-suite"
+version = "0.1.0"
+dependencies = [
+ "chainstate",
+ "chainstate-test-framework",
+ "chainstate-types",
+ "common",
+ "consensus",
+ "crypto",
+ "expect-test",
+ "hex",
+ "itertools",
+ "logging",
+ "rstest",
+ "serialization",
+ "test-utils",
+ "utils",
 ]
 
 [[package]]
@@ -1141,6 +1182,12 @@ dependencies = [
  "dissimilar",
  "once_cell",
 ]
+
+[[package]]
+name = "fallible-iterator"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 
 [[package]]
 name = "fastrand"
@@ -2748,6 +2795,7 @@ dependencies = [
  "libp2p",
  "logging",
  "mempool",
+ "once_cell",
  "p2p-test-utils",
  "parity-scale-codec",
  "portpicker",
@@ -4081,6 +4129,7 @@ dependencies = [
 name = "storage-core"
 version = "0.1.0"
 dependencies = [
+ "itertools",
  "logging",
  "thiserror",
  "utils",
