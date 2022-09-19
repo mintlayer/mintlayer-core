@@ -19,41 +19,51 @@ pub mod connection_manager;
 pub mod discovery;
 pub mod sync_codec;
 
+mod behaviour_wrapper;
+
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+    task::{Context, Poll, Waker},
+};
+
+use libp2p::{
+    core::connection::ConnectionId,
+    gossipsub::{self, Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
+    identify,
+    identity::Keypair,
+    ping,
+    request_response::*,
+    swarm::{
+        ConnectionHandler, IntoConnectionHandler, NetworkBehaviour, NetworkBehaviourAction,
+        PollParameters,
+    },
+    PeerId,
+};
+
+use common::chain::config::ChainConfig;
+use logging::log;
+use serialization::Decode;
+
 use crate::{
-    config,
+    config::P2pConfig,
     error::{P2pError, ProtocolError},
     message,
     net::{
         self,
         libp2p::{
+            behaviour::{
+                behaviour_wrapper::NetworkBehaviourWrapper,
+                connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent},
+                sync_codec::{
+                    message_types::{SyncRequest, SyncResponse},
+                    SyncMessagingCodec, SyncingProtocol,
+                },
+            },
             constants::*,
             types::{self, ConnectivityEvent, Libp2pBehaviourEvent, PubSubEvent},
         },
     },
-};
-use common::chain::config::ChainConfig;
-use connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent};
-use libp2p::{
-    gossipsub::{self, Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
-    identify, identity, ping,
-    request_response::*,
-    swarm::{
-        ConnectionHandler, IntoConnectionHandler, NetworkBehaviour as Libp2pNetworkBehaviour,
-        NetworkBehaviourAction, PollParameters,
-    },
-};
-use logging::log;
-use serialization::Decode;
-use std::{
-    collections::{HashMap, VecDeque},
-    iter,
-    num::NonZeroU32,
-    sync::Arc,
-    task::{Context, Poll, Waker},
-};
-use sync_codec::{
-    message_types::{SyncRequest, SyncResponse},
-    SyncMessagingCodec, SyncingProtocol,
 };
 
 /// `Libp2pBehaviour` defines the protocols that communicate with peers, such as different streams
@@ -62,97 +72,37 @@ use sync_codec::{
 /// (identify, as another example, is a stream that's created by libp2p, and handles getting identifying information
 /// of peers, like their peer public keys, addresses, supported protocols, etc)
 ///
-/// Every "behaviour" below (besides those with `#[behaviour(ignore)]` on top), implement the `NetworkBehaviour` trait,
-/// where this trait has methods that handle connections, streams, and other events.
-///
 /// As another example with explanation, the Request/Response protocol is used for syncing.
 /// The implementation for that is done in:
 ///     `impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse>> ...`
 /// where we handle the request/response messages that libp2p demultiplexes for us
-#[derive(libp2p::NetworkBehaviour)]
-#[behaviour(
-    out_event = "Libp2pBehaviourEvent",
-//    event_process = true,
-    poll_method = "poll"
-)]
 pub struct Libp2pBehaviour {
-    pub connmgr: connection_manager::ConnectionManager,
-    pub identify: identify::Identify,
-    pub discovery: discovery::DiscoveryManager,
-    pub gossipsub: Gossipsub,
-    pub ping: ping::Behaviour,
-    pub sync: RequestResponse<SyncMessagingCodec>,
-
-    #[behaviour(ignore)]
+    pub behaviour: NetworkBehaviourWrapper,
     pub events: VecDeque<Libp2pBehaviourEvent>,
-    #[behaviour(ignore)]
     pub pending_reqs: HashMap<RequestId, ResponseChannel<SyncResponse>>,
-    #[behaviour(ignore)]
     pub waker: Option<Waker>,
 }
 
 pub type Libp2pNetworkBehaviourAction = NetworkBehaviourAction<
-    <Libp2pBehaviour as Libp2pNetworkBehaviour>::OutEvent,
-    <Libp2pBehaviour as Libp2pNetworkBehaviour>::ConnectionHandler,
-    <<<Libp2pBehaviour as Libp2pNetworkBehaviour>::ConnectionHandler
+    <Libp2pBehaviour as NetworkBehaviour>::OutEvent,
+    <Libp2pBehaviour as NetworkBehaviour>::ConnectionHandler,
+    <<<Libp2pBehaviour as NetworkBehaviour>::ConnectionHandler
         as IntoConnectionHandler>::Handler as ConnectionHandler>::InEvent>;
 
 impl Libp2pBehaviour {
     pub async fn new(
         config: Arc<ChainConfig>,
-        p2p_config: Arc<config::P2pConfig>,
-        id_keys: identity::Keypair,
+        p2p_config: Arc<P2pConfig>,
+        id_keys: Keypair,
     ) -> Self {
-        let gossipsub_config = GossipsubConfigBuilder::default()
-            .heartbeat_interval(GOSSIPSUB_HEARTBEAT)
-            .validation_mode(ValidationMode::Strict)
-            .max_transmit_size(GOSSIPSUB_MAX_TRANSMIT_SIZE)
-            .validate_messages()
-            .build()
-            .expect("configuration to be valid");
+        let behaviour = NetworkBehaviourWrapper::new(config, p2p_config, id_keys).await;
 
-        let version = config.version();
-        let protocol = format!(
-            "/mintlayer/{}.{}.{}-{:x}",
-            version.major,
-            version.minor,
-            version.patch,
-            config.magic_bytes_as_u32(),
-        );
-        let mut req_cfg = RequestResponseConfig::default();
-        req_cfg.set_request_timeout(REQ_RESP_TIMEOUT);
-
-        let behaviour = Libp2pBehaviour {
-            ping: ping::Behaviour::new(
-                ping::Config::new()
-                    .with_timeout(PING_TIMEOUT)
-                    .with_interval(PING_INTERVAL)
-                    .with_max_failures(
-                        NonZeroU32::new(PING_MAX_RETRIES).expect("max failures > 0"),
-                    ),
-            ),
-            identify: identify::Identify::new(identify::IdentifyConfig::new(
-                protocol,
-                id_keys.public(),
-            )),
-            sync: RequestResponse::new(
-                SyncMessagingCodec(),
-                iter::once((SyncingProtocol(), ProtocolSupport::Full)),
-                req_cfg,
-            ),
-            gossipsub: Gossipsub::new(
-                MessageAuthenticity::Signed(id_keys.clone()),
-                gossipsub_config,
-            )
-            .expect("configuration to be valid"),
-            connmgr: connection_manager::ConnectionManager::new(),
-            discovery: discovery::DiscoveryManager::new(Arc::clone(&p2p_config)).await,
+        Self {
+            behaviour,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             waker: None,
-        };
-
-        behaviour
+        }
     }
 
     fn add_event(&mut self, event: Libp2pBehaviourEvent) {
@@ -185,13 +135,116 @@ impl Libp2pBehaviour {
     }
 }
 
-impl From<identify::IdentifyEvent> for Libp2pBehaviourEvent {
-    fn from(event: identify::IdentifyEvent) -> Self {
-        //Libp2pBehaviourEvent::Gossipsub(event)
-        todo!();
-        todo!()
+impl NetworkBehaviour for Libp2pBehaviour {
+    type ConnectionHandler = <NetworkBehaviourWrapper as NetworkBehaviour>::ConnectionHandler;
+    type OutEvent = Libp2pBehaviourEvent;
+
+    fn new_handler(&mut self) -> Self::ConnectionHandler {
+        self.behaviour.new_handler()
+    }
+
+    fn inject_event(
+        &mut self,
+        peer_id: PeerId,
+        connection: ConnectionId,
+        event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
+    ) {
+        self.behaviour.inject_event(peer_id, connection, event)
+    }
+
+    fn poll(
+        &mut self,
+        cx: &mut Context<'_>,
+        params: &mut impl PollParameters,
+    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+        loop {
+            match self.behaviour.poll(cx, params) {
+                Poll::Ready(e) => return Poll::Ready(e),
+                Poll::Pending => break,
+            }
+        }
+        Libp2pBehaviour::poll(self, cx, params)
     }
 }
+
+// impl From<ConnectionManagerEvent> for Libp2pBehaviourEvent {
+//     fn from(event: ConnectionManagerEvent) -> Self {
+//         match event {
+//             ConnectionManagerEvent::Behaviour(event) => match event {
+//                 BehaviourEvent::InboundAccepted { address, peer_info } => {
+//                     self.add_event(Libp2pBehaviourEvent::Connectivity(
+//                         ConnectivityEvent::InboundAccepted { address, peer_info },
+//                     ))
+//                 }
+//                 BehaviourEvent::OutboundAccepted { address, peer_info } => {
+//                     self.add_event(Libp2pBehaviourEvent::Connectivity(
+//                         ConnectivityEvent::OutboundAccepted { address, peer_info },
+//                     ))
+//                 }
+//                 BehaviourEvent::ConnectionClosed { peer_id } => {
+//                     self.add_event(Libp2pBehaviourEvent::Connectivity(
+//                         ConnectivityEvent::ConnectionClosed { peer_id },
+//                     ))
+//                 }
+//                 BehaviourEvent::ConnectionError { address, error } => {
+//                     self.add_event(Libp2pBehaviourEvent::Connectivity(
+//                         ConnectivityEvent::ConnectionError { address, error },
+//                     ))
+//                 }
+//             },
+//             ConnectionManagerEvent::Control(event) => match event {
+//                 ControlEvent::CloseConnection { peer_id } => self.add_event(
+//                     Libp2pBehaviourEvent::Control(types::ControlEvent::CloseConnection { peer_id }),
+//                 ),
+//             },
+//         }
+//
+//         /*
+//                 impl NetworkBehaviourEventProcess<ConnectionManagerEvent> for Libp2pBehaviour {
+//             fn inject_event(&mut self, event: ConnectionManagerEvent) {
+//                 match event {
+//                     ConnectionManagerEvent::Behaviour(event) => match event {
+//                         BehaviourEvent::InboundAccepted { address, peer_info } => {
+//                             self.add_event(Libp2pBehaviourEvent::Connectivity(
+//                                 ConnectivityEvent::InboundAccepted { address, peer_info },
+//                             ))
+//                         }
+//                         BehaviourEvent::OutboundAccepted { address, peer_info } => {
+//                             self.add_event(Libp2pBehaviourEvent::Connectivity(
+//                                 ConnectivityEvent::OutboundAccepted { address, peer_info },
+//                             ))
+//                         }
+//                         BehaviourEvent::ConnectionClosed { peer_id } => {
+//                             self.add_event(Libp2pBehaviourEvent::Connectivity(
+//                                 ConnectivityEvent::ConnectionClosed { peer_id },
+//                             ))
+//                         }
+//                         BehaviourEvent::ConnectionError { address, error } => {
+//                             self.add_event(Libp2pBehaviourEvent::Connectivity(
+//                                 ConnectivityEvent::ConnectionError { address, error },
+//                             ))
+//                         }
+//                     },
+//                     ConnectionManagerEvent::Control(event) => match event {
+//                         ControlEvent::CloseConnection { peer_id } => self.add_event(
+//                             Libp2pBehaviourEvent::Control(types::ControlEvent::CloseConnection { peer_id }),
+//                         ),
+//                     },
+//                 }
+//             }
+//         }
+//                  */
+//     }
+// }
+
+// TODO: FIXME:
+// impl From<identify::IdentifyEvent> for Libp2pBehaviourEvent {
+//     fn from(event: identify::IdentifyEvent) -> Self {
+//         //Libp2pBehaviourEvent::Gossipsub(event)
+//         todo!();
+//         todo!()
+//     }
+// }
 
 /*
 impl NetworkBehaviourEventProcess<identify::IdentifyEvent> for Libp2pBehaviour {
@@ -400,40 +453,6 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
                     }
                 }
             }
-        }
-    }
-}
-
-impl NetworkBehaviourEventProcess<ConnectionManagerEvent> for Libp2pBehaviour {
-    fn inject_event(&mut self, event: ConnectionManagerEvent) {
-        match event {
-            ConnectionManagerEvent::Behaviour(event) => match event {
-                BehaviourEvent::InboundAccepted { address, peer_info } => {
-                    self.add_event(Libp2pBehaviourEvent::Connectivity(
-                        ConnectivityEvent::InboundAccepted { address, peer_info },
-                    ))
-                }
-                BehaviourEvent::OutboundAccepted { address, peer_info } => {
-                    self.add_event(Libp2pBehaviourEvent::Connectivity(
-                        ConnectivityEvent::OutboundAccepted { address, peer_info },
-                    ))
-                }
-                BehaviourEvent::ConnectionClosed { peer_id } => {
-                    self.add_event(Libp2pBehaviourEvent::Connectivity(
-                        ConnectivityEvent::ConnectionClosed { peer_id },
-                    ))
-                }
-                BehaviourEvent::ConnectionError { address, error } => {
-                    self.add_event(Libp2pBehaviourEvent::Connectivity(
-                        ConnectivityEvent::ConnectionError { address, error },
-                    ))
-                }
-            },
-            ConnectionManagerEvent::Control(event) => match event {
-                ControlEvent::CloseConnection { peer_id } => self.add_event(
-                    Libp2pBehaviourEvent::Control(types::ControlEvent::CloseConnection { peer_id }),
-                ),
-            },
         }
     }
 }

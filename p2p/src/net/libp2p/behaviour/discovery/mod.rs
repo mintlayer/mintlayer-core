@@ -35,6 +35,7 @@ use std::{
 
 mod mdns;
 
+#[derive(Debug)]
 pub enum DiscoveryEvent {
     /// Peer discovered
     Discovered(Vec<(PeerId, Multiaddr)>),

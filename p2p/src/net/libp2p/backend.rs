@@ -95,7 +95,7 @@ impl Libp2pBackend {
                         self.listen_addr = Some(address.with(libp2p::multiaddr::Protocol::P2p(peer_id.into())));
                     }
                     SwarmEvent::BannedPeer { peer_id, endpoint: _ } => {
-                        self.swarm.behaviour_mut().connmgr.handle_banned_peer(peer_id);
+                        self.swarm.behaviour_mut().behaviour.connmgr.handle_banned_peer(peer_id);
                     }
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::Connectivity(event)) => {
                         self.conn_tx.send(event).map_err(P2pError::from)?;
@@ -151,7 +151,7 @@ impl Libp2pBackend {
 
         match self.swarm.dial(address.clone()) {
             Ok(_) => {
-                self.swarm.behaviour_mut().connmgr.dialing(peer_id, address);
+                self.swarm.behaviour_mut().behaviour.connmgr.dialing(peer_id, address);
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
             }
             Err(err) => response.send(Err(err.into())).map_err(|_| P2pError::ChannelClosed),
@@ -192,6 +192,7 @@ impl Libp2pBackend {
         let res = self
             .swarm
             .behaviour_mut()
+            .behaviour
             .gossipsub
             .publish((&topic).into(), message)
             .map(|_| ())
@@ -209,7 +210,7 @@ impl Libp2pBackend {
     ) -> crate::Result<()> {
         log::trace!("report gossipsub message validation result: {message_id} {source} {result:?}");
 
-        match self.swarm.behaviour_mut().gossipsub.report_message_validation_result(
+        match self.swarm.behaviour_mut().behaviour.gossipsub.report_message_validation_result(
             &message_id,
             &source,
             result,
@@ -238,6 +239,7 @@ impl Libp2pBackend {
             .send(Ok(self
                 .swarm
                 .behaviour_mut()
+                .behaviour
                 .sync
                 .send_request(peer_id, request)))
             .map_err(|_| P2pError::ChannelClosed)
@@ -261,6 +263,7 @@ impl Libp2pBackend {
                 let res = self
                     .swarm
                     .behaviour_mut()
+                    .behaviour
                     .sync
                     .send_response(response_channel, response)
                     .map(|_| ())
@@ -279,7 +282,7 @@ impl Libp2pBackend {
         log::trace!("subscribe to gossipsub topics {topics:#?}");
 
         for topic in topics {
-            if let Err(err) = self.swarm.behaviour_mut().gossipsub.subscribe(&topic) {
+            if let Err(err) = self.swarm.behaviour_mut().behaviour.gossipsub.subscribe(&topic) {
                 return response.send(Err(err.into())).map_err(|_| P2pError::ChannelClosed);
             }
         }
