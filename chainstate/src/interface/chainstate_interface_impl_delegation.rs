@@ -219,12 +219,6 @@ impl<
     ) -> Result<common::primitives::Amount, ChainstateError> {
         self.deref().get_outpoint_value(outpoint)
     }
-
-    fn confirmed_outpoints(
-        &self,
-    ) -> Result<std::collections::BTreeSet<common::chain::OutPoint>, ChainstateError> {
-        self.deref().confirmed_outpoints()
-    }
 }
 
 #[cfg(test)]

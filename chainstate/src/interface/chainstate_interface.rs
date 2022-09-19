@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use crate::detail::BlockSource;
@@ -128,7 +127,4 @@ pub trait ChainstateInterface: Send {
 
     /// Returns the value of a given OutPoint
     fn get_outpoint_value(&self, outpoint: &OutPoint) -> Result<Amount, ChainstateError>;
-
-    /// Returns the current utxo set
-    fn confirmed_outpoints(&self) -> Result<BTreeSet<OutPoint>, ChainstateError>;
 }

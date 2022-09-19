@@ -27,10 +27,8 @@ use common::chain::GenBlockId;
 use common::chain::SpendablePosition;
 use common::chain::TxInput;
 use common::chain::{OutPointSourceId, Transaction, TxMainChainIndex};
-use std::collections::BTreeSet;
 
 use chainstate_types::PropertyQueryError;
-use common::chain::OutPoint;
 use common::chain::OutputSpentState;
 use common::{
     chain::{
@@ -393,9 +391,5 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
                 }
             }
         }
-    }
-
-    fn confirmed_outpoints(&self) -> Result<BTreeSet<OutPoint>, ChainstateError> {
-        Ok(BTreeSet::new())
     }
 }
