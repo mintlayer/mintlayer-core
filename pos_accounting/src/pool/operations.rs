@@ -11,9 +11,8 @@ pub(crate) enum PoolDataUndo {
     DataDelta((Amount, DataDeltaUndoOp<PoolData>)),
 }
 
-#[allow(clippy::large_enum_variant)]
 pub(crate) enum DelegationDataUndo {
-    Data(DelegationData),
+    Data(Box<DelegationData>),
     DataDelta(DataDeltaUndoOp<DelegationData>),
 }
 

@@ -93,7 +93,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
             delegation_id,
             PoSAccountingUndo::CreateDelegationId(CreateDelegationIdUndo {
                 delegation_id,
-                data_undo: DelegationDataUndo::Data(delegation_data),
+                data_undo: DelegationDataUndo::Data(Box::new(delegation_data)),
             }),
         ))
     }
@@ -210,7 +210,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
             .get_delegation_data(undo.delegation_id)?
             .ok_or(Error::InvariantErrorDelegationIdUndoFailedNotFound)?;
 
-        if removed_data != data_undo {
+        if removed_data != *data_undo {
             return Err(Error::InvariantErrorDelegationIdUndoFailedDataConflict);
         }
 
