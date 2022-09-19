@@ -3,12 +3,10 @@ name: build
 on:
   push:
     branches:
-      - master
-      - staging
+      - '**' # target all branches
   pull_request:
     branches:
-      - master
-      - staging
+      - '**' # target all branches
 
 
 env:
