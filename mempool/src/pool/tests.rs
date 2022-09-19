@@ -126,7 +126,7 @@ async fn txs_sorted() -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
-    let mut mempool = setup_new(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     let target_txs = 10;
 
     let mut tx_builder = TransactionBuilder::new().add_input(TxInput::new(
@@ -215,7 +215,7 @@ async fn setup() -> Mempool<SystemClock, SystemUsageEstimator> {
     )
 }
 
-async fn setup_new(
+async fn setup_with_chainstate(
     chainstate: Box<dyn chainstate_interface::ChainstateInterface>,
 ) -> Mempool<SystemClock, SystemUsageEstimator> {
     let config = Arc::new(common::chain::config::create_unit_test_config());
@@ -250,7 +250,7 @@ async fn tx_no_outputs() -> anyhow::Result<()> {
             empty_witness(&mut rng),
         ))
         .build();
-    let mut mempool = setup_new(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     assert!(matches!(
         mempool.add_transaction(tx).await,
         Err(Error::TxValidationError(TxValidationError::NoOutputs))
@@ -322,7 +322,7 @@ async fn tx_already_in_mempool() -> anyhow::Result<()> {
 async fn outpoint_not_found() -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let chainstate = tf.chainstate();
-    let mut mempool = setup_new(chainstate).await;
+    let mut mempool = setup_with_chainstate(chainstate).await;
 
     let outpoint_source_id = OutPointSourceId::from(mempool.chain_config.genesis_block_id());
 
@@ -384,7 +384,7 @@ async fn tx_too_big() -> anyhow::Result<()> {
         ))
     }
     let tx = tx_builder.build();
-    let mut mempool = setup_new(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
 
     assert!(matches!(
         mempool.add_transaction(tx).await,
@@ -415,7 +415,7 @@ async fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Resul
     let flags = 1;
     let locktime = 0;
 
-    let mut mempool = setup_new(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     let original = tx_spend_input(&mempool, input.clone(), original_fee, flags, locktime)
         .await
         .expect("should be able to spend here");
@@ -455,7 +455,7 @@ async fn try_replace_irreplaceable() -> anyhow::Result<()> {
     let flags = 0;
     let locktime = 0;
     let original_fee = Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE));
-    let mut mempool = setup_new(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     let original = tx_spend_input(&mempool, input.clone(), original_fee, flags, locktime)
         .await
         .expect("should be able to spend here");
@@ -528,7 +528,7 @@ async fn tx_replace_child() -> anyhow::Result<()> {
         ))
         .with_flags(1)
         .build();
-    let mut mempool = setup_new(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     mempool.add_transaction(tx.clone()).await?;
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx.get_id());
@@ -662,7 +662,7 @@ async fn one_ancestor_replaceability_signal_is_enough() -> anyhow::Result<()> {
     }
     let tx = tx_builder.build();
 
-    let mut mempool = setup_new(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     mempool.add_transaction(tx.clone()).await?;
 
     let flags_replaceable = 1;
@@ -826,7 +826,7 @@ async fn test_bip125_max_replacements(num_potential_replacements: usize) -> anyh
     }
 
     let tx = tx_builder.build();
-    let mut mempool = setup_new(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     let input = tx.inputs().first().expect("one input").clone();
     let outputs = tx.outputs().clone();
     let tx_id = tx.get_id();
@@ -903,7 +903,7 @@ async fn spends_new_unconfirmed() -> anyhow::Result<()> {
 
     let tx = tx_builder.build();
     let outpoint_source_id = OutPointSourceId::Transaction(tx.get_id());
-    let mut mempool = setup_new(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     mempool.add_transaction(tx).await?;
 
     let input1 = TxInput::new(
@@ -963,7 +963,7 @@ async fn pays_more_than_conflicts_with_descendants() -> anyhow::Result<()> {
         ))
         .with_flags(1)
         .build();
-    let mut mempool = setup_new(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     let tx_id = tx.get_id();
     mempool.add_transaction(tx).await?;
 
@@ -1465,7 +1465,7 @@ async fn different_size_txs() -> anyhow::Result<()> {
     let block = tf.make_block_builder().add_transaction(initial_tx.clone()).build();
     tf.process_block(block, BlockSource::Local).expect("process_block");
     let chainstate = tf.chainstate();
-    let mut mempool = setup_new(chainstate).await;
+    let mut mempool = setup_with_chainstate(chainstate).await;
 
     let target_txs = 10;
     for i in 0..target_txs {
@@ -1537,7 +1537,7 @@ async fn descendant_score() -> anyhow::Result<()> {
         .build();
     let tx_id = tx.get_id();
 
-    let mut mempool = setup_new(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     mempool.add_transaction(tx).await?;
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
@@ -1773,7 +1773,7 @@ async fn no_empty_bags_in_descendant_score_index() -> anyhow::Result<()> {
         ));
     }
     let parent = tx_builder.build();
-    let mut mempool = setup_new(tf.chainstate()).await;
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
 
     let parent_id = parent.get_id();
 
