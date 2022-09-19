@@ -104,9 +104,7 @@ async fn add_single_tx() -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
     );
     let relay_fee = Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE));
-    eprintln!("1");
     let tx = tx_spend_input(&mempool, input, relay_fee, flags, locktime).await?;
-    eprintln!("2");
 
     let tx_clone = tx.clone();
     let tx_id = tx.get_id();
@@ -851,9 +849,7 @@ async fn test_bip125_max_replacements(num_potential_replacements: usize) -> anyh
 
     let replacement_fee = Amount::from_atoms(1_000_000_000) * fee;
     let replacement_tx = tx_spend_input(&mempool, input, replacement_fee, flags, locktime).await?;
-    eprintln!("before adding replacement");
     mempool.add_transaction(replacement_tx).await?;
-    eprintln!("after adding replacement");
     let mempool_size_after_replacement = mempool.store.txs_by_id.len();
 
     assert_eq!(
@@ -871,7 +867,6 @@ async fn too_many_conflicts() -> anyhow::Result<()> {
         .expect_err("expected error TooManyPotentialReplacements")
         .downcast()
         .expect("failed to downcast");
-    eprintln!("the error is {:?}", err);
     assert!(matches!(
         err,
         Error::TxValidationError(TxValidationError::TooManyPotentialReplacements)
@@ -1172,7 +1167,6 @@ async fn only_expired_entries_removed() -> anyhow::Result<()> {
     )
     .map_err(|_| anyhow::Error::msg("block creation error"))?;
     mempool.drop_transaction(&parent_id);
-    eprintln!("successfully processed block");
 
     mempool
         .chainstate_handle
@@ -1374,7 +1368,6 @@ async fn rolling_fee() -> anyhow::Result<()> {
     // observer that it is set to zero
     let halflife = ROLLING_FEE_BASE_HALFLIFE / 4;
     mock_clock.increment(halflife);
-    eprintln!("before dummy");
     let dummy_tx = TransactionBuilder::new()
         .add_input(TxInput::new(
             OutPointSourceId::Transaction(child_2_high_fee_id),
@@ -1386,17 +1379,12 @@ async fn rolling_fee() -> anyhow::Result<()> {
             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
         ))
         .build();
-    eprintln!("child_2_id: {:?}", child_2_id);
-    eprintln!("after dummy");
     log::debug!(
         "First attempt to add dummy which pays a fee of {:?}",
         mempool.try_get_fee(&dummy_tx).await?
     );
-    eprintln!("got fee dummy");
     let res = mempool.add_transaction(dummy_tx.clone()).await;
-    eprintln!("added dummy");
 
-    eprintln!("Result of first attempt to add dummy: {:?}", res);
     assert!(matches!(
         res,
         Err(Error::TxValidationError(
@@ -1486,7 +1474,6 @@ async fn different_size_txs() -> anyhow::Result<()> {
         let num_outputs = 10 * (i + 1);
         let mut tx_builder = TransactionBuilder::new();
         for j in 0..num_inputs {
-            //eprintln!("index {}", 100 * i + j);
             tx_builder = tx_builder.add_input(TxInput::new(
                 OutPointSourceId::Transaction(initial_tx.get_id()),
                 100 * i + j,
