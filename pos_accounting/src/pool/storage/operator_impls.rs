@@ -44,7 +44,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
         let pool_data = PoolData::new(decommission_key, pledge_amount);
 
         self.store.set_pool_balance(pool_id, pledge_amount)?;
-        self.store.set_pool_data(pool_id, pool_data.clone())?;
+        self.store.set_pool_data(pool_id, &pool_data)?;
 
         Ok((
             pool_id,
@@ -89,7 +89,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
 
         let delegation_data = DelegationData::new(target_pool, spend_key);
 
-        self.store.set_delegation_data(delegation_id, delegation_data.clone())?;
+        self.store.set_delegation_data(delegation_id, &delegation_data)?;
 
         Ok((
             delegation_id,
@@ -194,7 +194,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         }
 
         self.store.set_pool_balance(undo.pool_id, data_undo.pledge_amount())?;
-        self.store.set_pool_data(undo.pool_id, data_undo)?;
+        self.store.set_pool_data(undo.pool_id, &data_undo)?;
 
         Ok(())
     }

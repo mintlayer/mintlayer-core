@@ -120,17 +120,11 @@ fn check_merge_deltas() {
             [
                 (
                     H256::from_low_u64_be(1),
-                    DataDelta::Create(Box::new(PoolData::new(
-                        pub_key1.clone(),
-                        Amount::from_atoms(300),
-                    ))),
+                    DataDelta::Create(Box::new(PoolData::new(pub_key1, Amount::from_atoms(300)))),
                 ),
                 (
                     H256::from_low_u64_be(10),
-                    DataDelta::Create(Box::new(PoolData::new(
-                        pub_key2.clone(),
-                        Amount::from_atoms(100),
-                    ))),
+                    DataDelta::Create(Box::new(PoolData::new(pub_key2, Amount::from_atoms(100)))),
                 ),
             ]
             .into_iter(),
@@ -252,11 +246,11 @@ fn check_merge_values_with_deltas() {
         BTreeMap::from([
             (
                 H256::from_low_u64_be(1),
-                PoolData::new(pub_key1.clone(), Amount::from_atoms(300)),
+                PoolData::new(pub_key1, Amount::from_atoms(300)),
             ),
             (
                 H256::from_low_u64_be(10),
-                PoolData::new(pub_key2.clone(), Amount::from_atoms(100)),
+                PoolData::new(pub_key2, Amount::from_atoms(100)),
             ),
         ]),
         BTreeMap::from([(H256::from_low_u64_be(4), Amount::from_atoms(450))]),

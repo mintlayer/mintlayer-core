@@ -132,9 +132,9 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
     fn set_delegation_data(
         &mut self,
         delegation_id: H256,
-        delegation_data: DelegationData,
+        delegation_data: &DelegationData,
     ) -> Result<(), Error> {
-        self.delegation_data.insert(delegation_id, delegation_data);
+        self.delegation_data.insert(delegation_id, delegation_data.clone());
         Ok(())
     }
 
@@ -143,8 +143,8 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         Ok(())
     }
 
-    fn set_pool_data(&mut self, pool_id: H256, pool_data: PoolData) -> Result<(), Error> {
-        self.pool_data.insert(pool_id, pool_data);
+    fn set_pool_data(&mut self, pool_id: H256, pool_data: &PoolData) -> Result<(), Error> {
+        self.pool_data.insert(pool_id, pool_data.clone());
         Ok(())
     }
 

@@ -84,15 +84,13 @@ impl<'a> PoSAccountingDelta<'a> {
         &mut self,
         other: PoSAccountingDeltaData,
     ) -> Result<DeltaMergeUndo, Error> {
-        self.data.pool_balances.merge_delta_amounts(other.pool_balances.clone())?;
+        self.data.pool_balances.merge_delta_amounts(other.pool_balances)?;
 
         self.data
             .pool_delegation_shares
-            .merge_delta_amounts(other.pool_delegation_shares.clone())?;
+            .merge_delta_amounts(other.pool_delegation_shares)?;
 
-        self.data
-            .delegation_balances
-            .merge_delta_amounts(other.delegation_balances.clone())?;
+        self.data.delegation_balances.merge_delta_amounts(other.delegation_balances)?;
 
         let pool_data_undo = self.data.pool_data.merge_delta_data(other.pool_data)?;
 
