@@ -12,7 +12,16 @@ use crate::{
         storage::PoSAccountingDBMut,
     },
     storage::in_memory::InMemoryPoSAccounting,
+    DelegationId, PoolId,
 };
+
+fn new_pool_id(v: u64) -> PoolId {
+    PoolId::new(H256::from_low_u64_be(v))
+}
+
+fn new_delegation_id(v: u64) -> DelegationId {
+    DelegationId::new(H256::from_low_u64_be(v))
+}
 
 #[test]
 fn check_merge_deltas() {
@@ -23,7 +32,7 @@ fn check_merge_deltas() {
     let data1 = PoSAccountingDeltaData {
         pool_data: DeltaDataCollection::from_iter(
             [(
-                H256::from_low_u64_be(1).into(),
+                new_pool_id(1),
                 DataDelta::Create(Box::new(PoolData::new(
                     pub_key1.clone(),
                     Amount::from_atoms(100),
@@ -33,45 +42,30 @@ fn check_merge_deltas() {
         ),
         pool_balances: DeltaAmountCollection::from_iter(
             [
-                (
-                    H256::from_low_u64_be(3).into(),
-                    SignedAmount::from_atoms(300),
-                ),
-                (
-                    H256::from_low_u64_be(4).into(),
-                    SignedAmount::from_atoms(400),
-                ),
+                (new_pool_id(3), SignedAmount::from_atoms(300)),
+                (new_pool_id(4), SignedAmount::from_atoms(400)),
             ]
             .into_iter(),
         ),
         pool_delegation_shares: DeltaAmountCollection::from_iter(
             [(
-                (
-                    H256::from_low_u64_be(5).into(),
-                    H256::from_low_u64_be(6).into(),
-                ),
+                (new_pool_id(5), new_delegation_id(6)),
                 SignedAmount::from_atoms(100),
             )]
             .into_iter(),
         ),
         delegation_balances: DeltaAmountCollection::from_iter(
             [
-                (
-                    H256::from_low_u64_be(5).into(),
-                    SignedAmount::from_atoms(500),
-                ),
-                (
-                    H256::from_low_u64_be(6).into(),
-                    SignedAmount::from_atoms(600),
-                ),
+                (new_delegation_id(5), SignedAmount::from_atoms(500)),
+                (new_delegation_id(6), SignedAmount::from_atoms(600)),
             ]
             .into_iter(),
         ),
         delegation_data: DeltaDataCollection::from_iter(
             [(
-                H256::from_low_u64_be(1).into(),
+                new_delegation_id(1),
                 DataDelta::Create(Box::new(DelegationData::new(
-                    H256::from_low_u64_be(1).into(),
+                    new_pool_id(1),
                     pub_key1.clone(),
                 ))),
             )]
@@ -86,14 +80,14 @@ fn check_merge_deltas() {
         pool_data: DeltaDataCollection::from_iter(
             [
                 (
-                    H256::from_low_u64_be(1).into(),
+                    new_pool_id(1),
                     DataDelta::Modify(Box::new(PoolData::new(
                         pub_key1.clone(),
                         Amount::from_atoms(300),
                     ))),
                 ),
                 (
-                    H256::from_low_u64_be(10).into(),
+                    new_pool_id(10),
                     DataDelta::Create(Box::new(PoolData::new(
                         pub_key2.clone(),
                         Amount::from_atoms(100),
@@ -104,42 +98,27 @@ fn check_merge_deltas() {
         ),
         pool_balances: DeltaAmountCollection::from_iter(
             [
-                (
-                    H256::from_low_u64_be(3).into(),
-                    SignedAmount::from_atoms(-300),
-                ),
-                (
-                    H256::from_low_u64_be(4).into(),
-                    SignedAmount::from_atoms(50),
-                ),
+                (new_pool_id(3), SignedAmount::from_atoms(-300)),
+                (new_pool_id(4), SignedAmount::from_atoms(50)),
             ]
             .into_iter(),
         ),
         pool_delegation_shares: DeltaAmountCollection::from_iter(
             [(
-                (
-                    H256::from_low_u64_be(5).into(),
-                    H256::from_low_u64_be(6).into(),
-                ),
+                (new_pool_id(5), new_delegation_id(6)),
                 SignedAmount::from_atoms(50),
             )]
             .into_iter(),
         ),
         delegation_balances: DeltaAmountCollection::from_iter(
             [
-                (
-                    H256::from_low_u64_be(8).into(),
-                    SignedAmount::from_atoms(200),
-                ),
-                (
-                    H256::from_low_u64_be(9).into(),
-                    SignedAmount::from_atoms(300),
-                ),
+                (new_delegation_id(8), SignedAmount::from_atoms(200)),
+                (new_delegation_id(9), SignedAmount::from_atoms(300)),
             ]
             .into_iter(),
         ),
         delegation_data: DeltaDataCollection::from_iter(
-            [(H256::from_low_u64_be(1).into(), DataDelta::Delete)].into_iter(),
+            [(new_delegation_id(1), DataDelta::Delete)].into_iter(),
         ),
     };
     let delta2 = PoSAccountingDelta::from_data(&db, data2);
@@ -149,51 +128,32 @@ fn check_merge_deltas() {
         pool_data: DeltaDataCollection::from_iter(
             [
                 (
-                    H256::from_low_u64_be(1).into(),
+                    new_pool_id(1),
                     DataDelta::Create(Box::new(PoolData::new(pub_key1, Amount::from_atoms(300)))),
                 ),
                 (
-                    H256::from_low_u64_be(10).into(),
+                    new_pool_id(10),
                     DataDelta::Create(Box::new(PoolData::new(pub_key2, Amount::from_atoms(100)))),
                 ),
             ]
             .into_iter(),
         ),
         pool_balances: DeltaAmountCollection::from_iter(
-            [(
-                H256::from_low_u64_be(4).into(),
-                SignedAmount::from_atoms(450),
-            )]
-            .into_iter(),
+            [(new_pool_id(4), SignedAmount::from_atoms(450))].into_iter(),
         ),
         pool_delegation_shares: DeltaAmountCollection::from_iter(
             [(
-                (
-                    H256::from_low_u64_be(5).into(),
-                    H256::from_low_u64_be(6).into(),
-                ),
+                (new_pool_id(5), new_delegation_id(6)),
                 SignedAmount::from_atoms(150),
             )]
             .into_iter(),
         ),
         delegation_balances: DeltaAmountCollection::from_iter(
             [
-                (
-                    H256::from_low_u64_be(5).into(),
-                    SignedAmount::from_atoms(500),
-                ),
-                (
-                    H256::from_low_u64_be(6).into(),
-                    SignedAmount::from_atoms(600),
-                ),
-                (
-                    H256::from_low_u64_be(8).into(),
-                    SignedAmount::from_atoms(200),
-                ),
-                (
-                    H256::from_low_u64_be(9).into(),
-                    SignedAmount::from_atoms(300),
-                ),
+                (new_delegation_id(5), SignedAmount::from_atoms(500)),
+                (new_delegation_id(6), SignedAmount::from_atoms(600)),
+                (new_delegation_id(8), SignedAmount::from_atoms(200)),
+                (new_delegation_id(9), SignedAmount::from_atoms(300)),
             ]
             .into_iter(),
         ),
@@ -214,27 +174,24 @@ fn check_merge_values_with_deltas() {
 
     let mut storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([(
-            H256::from_low_u64_be(1).into(),
+            new_pool_id(1),
             PoolData::new(pub_key1.clone(), Amount::from_atoms(100)),
         )]),
         BTreeMap::from([
-            (H256::from_low_u64_be(3).into(), Amount::from_atoms(300)),
-            (H256::from_low_u64_be(4).into(), Amount::from_atoms(400)),
+            (new_pool_id(3), Amount::from_atoms(300)),
+            (new_pool_id(4), Amount::from_atoms(400)),
         ]),
         BTreeMap::from([(
-            (
-                H256::from_low_u64_be(5).into(),
-                H256::from_low_u64_be(6).into(),
-            ),
+            (new_pool_id(5), new_delegation_id(6)),
             Amount::from_atoms(100),
         )]),
         BTreeMap::from([
-            (H256::from_low_u64_be(5).into(), Amount::from_atoms(500)),
-            (H256::from_low_u64_be(6).into(), Amount::from_atoms(600)),
+            (new_delegation_id(5), Amount::from_atoms(500)),
+            (new_delegation_id(6), Amount::from_atoms(600)),
         ]),
         BTreeMap::from([(
-            H256::from_low_u64_be(1).into(),
-            DelegationData::new(H256::from_low_u64_be(1).into(), pub_key1.clone()),
+            new_delegation_id(1),
+            DelegationData::new(new_pool_id(1), pub_key1.clone()),
         )]),
     );
     let original_storage = storage.clone();
@@ -246,14 +203,14 @@ fn check_merge_values_with_deltas() {
             pool_data: DeltaDataCollection::from_iter(
                 [
                     (
-                        H256::from_low_u64_be(1).into(),
+                        new_pool_id(1),
                         DataDelta::Modify(Box::new(PoolData::new(
                             pub_key1.clone(),
                             Amount::from_atoms(300),
                         ))),
                     ),
                     (
-                        H256::from_low_u64_be(10).into(),
+                        new_pool_id(10),
                         DataDelta::Create(Box::new(PoolData::new(
                             pub_key2.clone(),
                             Amount::from_atoms(100),
@@ -264,42 +221,27 @@ fn check_merge_values_with_deltas() {
             ),
             pool_balances: DeltaAmountCollection::from_iter(
                 [
-                    (
-                        H256::from_low_u64_be(3).into(),
-                        SignedAmount::from_atoms(-300),
-                    ),
-                    (
-                        H256::from_low_u64_be(4).into(),
-                        SignedAmount::from_atoms(50),
-                    ),
+                    (new_pool_id(3), SignedAmount::from_atoms(-300)),
+                    (new_pool_id(4), SignedAmount::from_atoms(50)),
                 ]
                 .into_iter(),
             ),
             pool_delegation_shares: DeltaAmountCollection::from_iter(
                 [(
-                    (
-                        H256::from_low_u64_be(5).into(),
-                        H256::from_low_u64_be(6).into(),
-                    ),
+                    (new_pool_id(5), new_delegation_id(6)),
                     SignedAmount::from_atoms(50),
                 )]
                 .into_iter(),
             ),
             delegation_balances: DeltaAmountCollection::from_iter(
                 [
-                    (
-                        H256::from_low_u64_be(8).into(),
-                        SignedAmount::from_atoms(200),
-                    ),
-                    (
-                        H256::from_low_u64_be(9).into(),
-                        SignedAmount::from_atoms(300),
-                    ),
+                    (new_delegation_id(8), SignedAmount::from_atoms(200)),
+                    (new_delegation_id(9), SignedAmount::from_atoms(300)),
                 ]
                 .into_iter(),
             ),
             delegation_data: DeltaDataCollection::from_iter(
-                [(H256::from_low_u64_be(1).into(), DataDelta::Delete)].into_iter(),
+                [(new_delegation_id(1), DataDelta::Delete)].into_iter(),
             ),
         };
         let delta = PoSAccountingDelta::from_data(&db, delta_data);
@@ -312,27 +254,24 @@ fn check_merge_values_with_deltas() {
     let expected_storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([
             (
-                H256::from_low_u64_be(1).into(),
+                new_pool_id(1),
                 PoolData::new(pub_key1, Amount::from_atoms(300)),
             ),
             (
-                H256::from_low_u64_be(10).into(),
+                new_pool_id(10),
                 PoolData::new(pub_key2, Amount::from_atoms(100)),
             ),
         ]),
-        BTreeMap::from([(H256::from_low_u64_be(4).into(), Amount::from_atoms(450))]),
+        BTreeMap::from([(new_pool_id(4), Amount::from_atoms(450))]),
         BTreeMap::from([(
-            (
-                H256::from_low_u64_be(5).into(),
-                H256::from_low_u64_be(6).into(),
-            ),
+            (new_pool_id(5), new_delegation_id(6)),
             Amount::from_atoms(150),
         )]),
         BTreeMap::from([
-            (H256::from_low_u64_be(5).into(), Amount::from_atoms(500)),
-            (H256::from_low_u64_be(6).into(), Amount::from_atoms(600)),
-            (H256::from_low_u64_be(8).into(), Amount::from_atoms(200)),
-            (H256::from_low_u64_be(9).into(), Amount::from_atoms(300)),
+            (new_delegation_id(5), Amount::from_atoms(500)),
+            (new_delegation_id(6), Amount::from_atoms(600)),
+            (new_delegation_id(8), Amount::from_atoms(200)),
+            (new_delegation_id(9), Amount::from_atoms(300)),
         ]),
         BTreeMap::from_iter([]),
     );

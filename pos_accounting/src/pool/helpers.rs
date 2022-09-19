@@ -21,7 +21,7 @@ pub fn make_pool_id(input0_outpoint: &OutPoint) -> PoolId {
     hash_encoded_to(&input0_outpoint, &mut hasher);
     // 0 is arbitrary here, we use this as prefix to use this information again
     hash_encoded_to(&pool_id_preimage_suffix(), &mut hasher);
-    PoolId(hasher.finalize().into())
+    PoolId::new(hasher.finalize().into())
 }
 
 pub fn make_delegation_id(input0_outpoint: &OutPoint) -> DelegationId {
@@ -29,5 +29,5 @@ pub fn make_delegation_id(input0_outpoint: &OutPoint) -> DelegationId {
     hash_encoded_to(&input0_outpoint, &mut hasher);
     // 1 is arbitrary here, we use this as prefix to use this information again
     hash_encoded_to(&delegation_id_preimage_suffix(), &mut hasher);
-    DelegationId(hasher.finalize().into())
+    DelegationId::new(hasher.finalize().into())
 }

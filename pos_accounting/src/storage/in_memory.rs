@@ -55,8 +55,8 @@ impl PoSAccountingStorageRead for InMemoryPoSAccounting {
         &self,
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Error> {
-        let range_start = (pool_id, DelegationId(H256::zero()));
-        let range_end = (pool_id, DelegationId(H256::repeat_byte(0xFF)));
+        let range_start = (pool_id, DelegationId::new(H256::zero()));
+        let range_end = (pool_id, DelegationId::new(H256::repeat_byte(0xFF)));
         let range = self.pool_delegation_shares.range(range_start..=range_end);
         let result = range.map(|((_pool_id, del_id), v)| (*del_id, *v)).collect::<BTreeMap<_, _>>();
         if result.is_empty() {

@@ -48,8 +48,8 @@ impl<'a> PoSAccountingDelta<'a> {
         &self,
         pool_id: PoolId,
     ) -> Option<BTreeMap<DelegationId, SignedAmount>> {
-        let range_start = (pool_id, DelegationId(H256::zero()));
-        let range_end = (pool_id, DelegationId(H256::repeat_byte(0xFF)));
+        let range_start = (pool_id, DelegationId::new(H256::zero()));
+        let range_end = (pool_id, DelegationId::new(H256::repeat_byte(0xFF)));
         let range = self.data.pool_delegation_shares.data().range(range_start..=range_end);
         let result = range.map(|((_, del_id), v)| (*del_id, *v)).collect::<BTreeMap<_, _>>();
         if result.is_empty() {

@@ -19,11 +19,11 @@ pub struct PoSAccountingDeltaData {
 impl PoSAccountingDeltaData {
     pub fn new() -> Self {
         Self {
-            pool_data: Default::default(),
-            pool_balances: Default::default(),
-            pool_delegation_shares: Default::default(),
-            delegation_balances: Default::default(),
-            delegation_data: Default::default(),
+            pool_data: DeltaDataCollection::new(),
+            pool_balances: DeltaAmountCollection::new(),
+            pool_delegation_shares: DeltaAmountCollection::new(),
+            delegation_balances: DeltaAmountCollection::new(),
+            delegation_data: DeltaDataCollection::new(),
         }
     }
 }
