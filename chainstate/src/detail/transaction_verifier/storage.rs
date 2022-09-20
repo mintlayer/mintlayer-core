@@ -7,7 +7,7 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 use thiserror::Error;
-use utxo::BlockUndo;
+use utxo::{BlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum TransactionVerifierStorageError {
@@ -19,7 +19,7 @@ pub enum TransactionVerifierStorageError {
     GetAncestorError(#[from] chainstate_types::GetAncestorError),
 }
 
-pub trait TransactionVerifierStorageRef {
+pub trait TransactionVerifierStorageRef: UtxosStorageRead {
     fn token_id_from_issuance_tx(
         &self,
         tx_id: Id<Transaction>,
@@ -52,7 +52,7 @@ pub trait TransactionVerifierStorageRef {
     ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError>;
 }
 
-pub trait TransactionVerifierStorageMut: TransactionVerifierStorageRef {
+pub trait TransactionVerifierStorageMut: TransactionVerifierStorageRef + UtxosStorageWrite {
     fn set_mainchain_tx_index(
         &mut self,
         tx_id: &OutPointSourceId,

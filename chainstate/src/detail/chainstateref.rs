@@ -36,9 +36,8 @@ use common::{
 };
 use consensus::{BlockIndexHandle, TransactionIndexHandle};
 use logging::log;
-use utils::ensure;
-use utils::tap_error_log::LogError;
-use utxo::{UtxosDB, UtxosView};
+use utils::{ensure, tap_error_log::LogError};
+use utxo::{UtxosDB, UtxosStorageRead, UtxosStorageWrite, UtxosView};
 
 use super::median_time::calculate_median_time_past;
 use super::transaction_verifier::storage::{
@@ -840,16 +839,16 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             .make_cache_with_connected_transactions(block_index, block, spend_height)
             .log_err()?;
 
-        let consumed = connected_txs.consume().log_err()?;
-        TransactionVerifier::flush_to_storage(&mut self.db_tx, consumed).log_err()?;
+        let consumed = connected_txs.consume()?;
+        TransactionVerifier::flush_to_storage(self, consumed)?;
 
         Ok(())
     }
 
     fn disconnect_transactions(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
-        let cached_inputs = self.make_cache_with_disconnected_transactions(block).log_err()?;
-        let cached_inputs = cached_inputs.consume().log_err()?;
-        TransactionVerifier::flush_to_storage(&mut self.db_tx, cached_inputs).log_err()?;
+        let cached_inputs = self.make_cache_with_disconnected_transactions(block)?;
+        let cached_inputs = cached_inputs.consume()?;
+        TransactionVerifier::flush_to_storage(self, cached_inputs)?;
 
         Ok(())
     }
@@ -1070,6 +1069,8 @@ pub fn gen_block_index_getter<S: BlockchainStorageRead>(
     }
 }
 
+// TODO(PR): Move all this stuff below to a submodule
+
 impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionVerifierStorageRef
     for ChainstateRef<'a, S, O>
 {
@@ -1115,6 +1116,67 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionVerifierStorageRe
         token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError> {
         Ok(self.db_tx.get_token_aux_data(token_id).map_err(StatePersistenceError::from)?)
+    }
+}
+
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> UtxosStorageRead for ChainstateRef<'a, S, O> {
+    fn get_utxo(
+        &self,
+        outpoint: &common::chain::OutPoint,
+    ) -> Result<Option<utxo::Utxo>, chainstate_types::storage_result::Error> {
+        self.db_tx.get_utxo(outpoint)
+    }
+
+    fn get_best_block_for_utxos(
+        &self,
+    ) -> Result<Option<Id<GenBlock>>, chainstate_types::storage_result::Error> {
+        self.db_tx.get_best_block_for_utxos()
+    }
+
+    fn get_undo_data(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<utxo::BlockUndo>, chainstate_types::storage_result::Error> {
+        self.db_tx.get_undo_data(id)
+    }
+}
+
+impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks> UtxosStorageWrite for ChainstateRef<'a, S, O> {
+    fn set_utxo(
+        &mut self,
+        outpoint: &common::chain::OutPoint,
+        entry: utxo::Utxo,
+    ) -> Result<(), chainstate_types::storage_result::Error> {
+        self.db_tx.set_utxo(outpoint, entry)
+    }
+
+    fn del_utxo(
+        &mut self,
+        outpoint: &common::chain::OutPoint,
+    ) -> Result<(), chainstate_types::storage_result::Error> {
+        self.db_tx.del_utxo(outpoint)
+    }
+
+    fn set_best_block_for_utxos(
+        &mut self,
+        block_id: &Id<GenBlock>,
+    ) -> Result<(), chainstate_types::storage_result::Error> {
+        self.db_tx.set_best_block_for_utxos(block_id)
+    }
+
+    fn set_undo_data(
+        &mut self,
+        id: Id<Block>,
+        undo: &utxo::BlockUndo,
+    ) -> Result<(), chainstate_types::storage_result::Error> {
+        self.db_tx.set_undo_data(id, undo)
+    }
+
+    fn del_undo_data(
+        &mut self,
+        id: Id<Block>,
+    ) -> Result<(), chainstate_types::storage_result::Error> {
+        self.db_tx.del_undo_data(id)
     }
 }
 

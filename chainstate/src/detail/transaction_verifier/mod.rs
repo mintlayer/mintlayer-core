@@ -21,6 +21,7 @@ mod tx_index_cache;
 use self::{
     amounts_map::AmountsMap,
     error::{ConnectTransactionError, TokensError},
+    storage::TransactionVerifierStorageMut,
     token_issuance_cache::{CachedTokensOperation, CoinOrTokenId},
     tx_index_cache::TxIndexCache,
     utils::get_output_token_id_and_amount,
@@ -31,7 +32,7 @@ use fallible_iterator::FallibleIterator;
 
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
+use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
     amount_sum,
@@ -585,7 +586,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
     }
 }
 
-impl<'a, S: BlockchainStorageWrite + 'a> TransactionVerifier<'a, S> {
+impl<'a, S: TransactionVerifierStorageMut + 'a> TransactionVerifier<'a, S> {
     fn flush_tx_indexes(
         db_tx: &mut S,
         tx_id: OutPointSourceId,
