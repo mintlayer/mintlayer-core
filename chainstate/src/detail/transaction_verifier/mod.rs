@@ -41,7 +41,7 @@ use common::{
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
-    primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable, H256},
 };
 use utxo::{
     BlockRewardUndo, BlockUndo, ConsumedUtxoCache, FlushableUtxoView, TxUndo, Utxo, UtxosCache,
@@ -78,10 +78,10 @@ pub enum BlockTransactableRef<'a> {
 
 /// The change that a block has caused to the blockchain state
 pub struct TransactionVerifierDelta {
-    tx_index: BTreeMap<OutPointSourceId, CachedInputsOperation>,
+    tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
     utxo_cache: ConsumedUtxoCache,
     utxo_block_undo: BTreeMap<Id<Block>, BlockUndoEntry>,
-    tokens_data: TokenIssuanceCache,
+    token_issuance_cache: BTreeMap<H256, CachedTokensOperation>,
 }
 
 /// The tool used to verify transaction and cache their updated states in memory
@@ -576,10 +576,10 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {
         Ok(TransactionVerifierDelta {
-            tx_index: self.tx_index_cache.take(),
+            tx_index_cache: self.tx_index_cache.take(),
             utxo_cache: self.utxo_cache.consume(),
             utxo_block_undo: self.utxo_block_undo,
-            tokens_data: self.token_issuance_cache,
+            token_issuance_cache: self.token_issuance_cache.take(),
         })
     }
 }
@@ -623,10 +623,10 @@ impl<'a, S: TransactionVerifierStorageMut + 'a> TransactionVerifier<'a, S> {
         db_tx: &mut S,
         consumed: TransactionVerifierDelta,
     ) -> Result<(), ConnectTransactionError> {
-        for (tx_id, tx_index_op) in consumed.tx_index {
+        for (tx_id, tx_index_op) in consumed.tx_index_cache {
             Self::flush_tx_indexes(db_tx, tx_id, tx_index_op)?;
         }
-        for (token_id, token_op) in consumed.tokens_data.take() {
+        for (token_id, token_op) in consumed.token_issuance_cache {
             Self::flush_tokens(db_tx, token_id, token_op)?;
         }
 
