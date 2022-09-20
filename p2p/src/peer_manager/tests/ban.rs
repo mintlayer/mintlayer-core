@@ -74,14 +74,12 @@ async fn ban_connected_peer_libp2p() {
 
 #[tokio::test]
 async fn ban_connected_peer_mock_tcp() {
-    // TODO: implement `ban_peer()`
-    // ban_connected_peer::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    ban_connected_peer::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
 #[tokio::test]
 async fn ban_connected_peer_mock_channels() {
-    // TODO: implement `ban_peer()`
-    // ban_connected_peer::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    ban_connected_peer::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
 }
 
 async fn banned_peer_attempts_to_connect<A, T>()
@@ -113,6 +111,7 @@ where
         swarm2.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
+    println!("EEE");
 
     // try to restablish connection, it timeouts because it's rejected in the backend
     let addr = swarm2.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
@@ -133,14 +132,13 @@ async fn banned_peer_attempts_to_connect_libp2p() {
 
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_mock_tcp() {
-    // TODO: implement proper peer banning
-    // banned_peer_attempts_to_connect::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    banned_peer_attempts_to_connect::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_mock_channel() {
-    // TODO: implement proper peer banning
-    // banned_peer_attempts_to_connect::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    banned_peer_attempts_to_connect::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+        .await;
 }
 
 // attempt to connect to banned peer
@@ -202,14 +200,12 @@ async fn connect_to_banned_peer_libp2p() {
 
 #[tokio::test]
 async fn connect_to_banned_peer_mock_tcp() {
-    // TODO: implement proper peer banning
-    // connect_to_banned_peer::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    connect_to_banned_peer::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
 #[tokio::test]
 async fn connect_to_banned_peer_mock_channels() {
-    // TODO: implement proper peer banning
-    // connect_to_banned_peer::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    connect_to_banned_peer::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
 }
 
 #[tokio::test]

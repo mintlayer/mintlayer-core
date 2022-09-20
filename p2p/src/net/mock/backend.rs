@@ -21,7 +21,11 @@
 //! and advertise via the `Hello` message. Until the peer ID has been received, the
 //! peers are distinguished by their socket addresses.
 
-use std::{collections::HashMap, io::ErrorKind, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    io::ErrorKind,
+    sync::Arc,
+};
 
 use futures::FutureExt;
 use tokio::{
@@ -100,6 +104,12 @@ pub struct Backend<T: MockTransport> {
 
     /// Request manager for managing inbound/outbound requests and responses
     request_mgr: request_manager::RequestManager,
+
+    /// The list of banner peers.
+    ///
+    /// Any incoming connection and any dialing attempt to peers from this list will immediately
+    /// be rejected.
+    banned_peers: HashSet<types::MockPeerId>,
 }
 
 impl<T> Backend<T>
@@ -132,6 +142,7 @@ where
             peer_chan: mpsc::channel(64),
             local_peer_id,
             request_mgr: request_manager::RequestManager::new(),
+            banned_peers: HashSet::new(),
         }
     }
 
@@ -174,6 +185,18 @@ where
         address: T::Address,
         response: oneshot::Sender<crate::Result<()>>,
     ) -> crate::Result<()> {
+        let remote_peer_id = types::MockPeerId::from_socket_address::<T>(&address);
+        println!(
+            "### connect: local = {}, remote = {}",
+            self.local_peer_id, remote_peer_id
+        );
+        println!("banned = {:?}", self.banned_peers);
+        if self.banned_peers.contains(&remote_peer_id) {
+            // TODO: FIXME:
+            //self.connect(address, response).await?;
+            return Ok(());
+        }
+
         if self.address == address {
             response
                 .send(Err(P2pError::DialError(DialError::IoError(
@@ -190,7 +213,7 @@ where
                     self.create_peer(
                         socket,
                         self.local_peer_id,
-                        types::MockPeerId::from_socket_address::<T>(&address),
+                        remote_peer_id,
                         peer::Role::Outbound,
                         ConnectionState::OutboundAccepted { address },
                     )
@@ -405,8 +428,10 @@ where
                         self.connect(address, response).await?;
                     }
                     types::Command::Disconnect { peer_id, response } |
-                    // TODO: implement proper banning mechanism
                     types::Command::BanPeer { peer_id, response } => {
+                        println!("before: {:?}", self.banned_peers);
+                        self.banned_peers.insert(peer_id);
+                        println!("after: {:?}", self.banned_peers);
                         let res = self.disconnect_peer(&peer_id).await;
                         response.send(res).map_err(|_| P2pError::ChannelClosed)?;
                     }

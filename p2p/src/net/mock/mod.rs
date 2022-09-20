@@ -221,6 +221,7 @@ where
     }
 
     async fn ban_peer(&mut self, peer_id: S::PeerId) -> crate::Result<()> {
+        println!("--- ban remote peer, peer id {peer_id}");
         log::debug!("ban remote peer, peer id {peer_id}");
 
         let (tx, rx) = oneshot::channel();

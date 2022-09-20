@@ -107,12 +107,7 @@ where
                             version: *self.config.version(),
                             network: *self.config.magic_bytes(),
                             // TODO: Replace the hard-coded values when ping and pubsub protocols are implemented for the mock interface.
-                            protocols: [
-                                Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
-                                Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
-                            ]
-                            .into_iter()
-                            .collect(),
+                            protocols: mock_protocols(),
                         },
                     ))
                     .await?;
@@ -139,12 +134,7 @@ where
                         peer_id: self.local_peer_id,
                         version: *self.config.version(),
                         network: *self.config.magic_bytes(),
-                        protocols: [
-                            Protocol::new(ProtocolType::PubSub, *self.config.version()),
-                            Protocol::new(ProtocolType::Ping, *self.config.version()),
-                        ]
-                        .into_iter()
-                        .collect(),
+                        protocols: mock_protocols(),
                     }))
                     .await?;
 
@@ -224,6 +214,16 @@ where
     }
 }
 
+fn mock_protocols() -> Vec<Protocol> {
+    [
+        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+    ]
+    .into_iter()
+    .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -235,7 +235,6 @@ mod tests {
         },
     };
     use chainstate::Locator;
-    use common::primitives::semver::SemVer;
     use futures::FutureExt;
     use p2p_test_utils::{MakeChannelAddress, MakeTcpAddress, MakeTestAddress};
 
@@ -273,12 +272,7 @@ mod tests {
                 peer_id: peer_id2,
                 version: *config.version(),
                 network: *config.magic_bytes(),
-                protocols: [
-                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                ]
-                .into_iter()
-                .collect(),
+                protocols: mock_protocols(),
             }))
             .await
             .is_ok());
@@ -292,12 +286,7 @@ mod tests {
                     peer_id: peer_id2,
                     network: *config.magic_bytes(),
                     version: *config.version(),
-                    protocols: [
-                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                    ]
-                    .into_iter()
-                    .collect(),
+                    protocols: mock_protocols(),
                 }
             ))
         );
@@ -348,12 +337,7 @@ mod tests {
                         peer_id: peer_id2,
                         version: *config.version(),
                         network: *config.magic_bytes(),
-                        protocols: [
-                            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                        ]
-                        .into_iter()
-                        .collect(),
+                        protocols: mock_protocols(),
                     }
                 ))
                 .await
@@ -369,12 +353,7 @@ mod tests {
                     peer_id: peer_id2,
                     network: *config.magic_bytes(),
                     version: *config.version(),
-                    protocols: [
-                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                    ]
-                    .into_iter()
-                    .collect(),
+                    protocols: mock_protocols(),
                 }
             ))
         );
@@ -421,12 +400,7 @@ mod tests {
                 peer_id: peer_id2,
                 version: *config.version(),
                 network: [1, 2, 3, 4],
-                protocols: [
-                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                ]
-                .into_iter()
-                .collect(),
+                protocols: mock_protocols(),
             }))
             .await
             .is_ok());
