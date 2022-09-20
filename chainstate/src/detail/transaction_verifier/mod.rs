@@ -16,6 +16,7 @@
 mod amounts_map;
 mod cached_operation;
 pub mod error;
+pub mod hierarchy;
 pub mod storage;
 mod tx_index_cache;
 use self::{

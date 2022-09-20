@@ -39,12 +39,14 @@ pub enum CoinOrTokenId {
 
 pub struct TokenIssuanceCache {
     data: BTreeMap<TokenId, CachedTokensOperation>,
+    txid_vs_tokenid: BTreeMap<Id<Transaction>, TokenId>,
 }
 
 impl TokenIssuanceCache {
     pub fn new() -> Self {
         Self {
             data: BTreeMap::new(),
+            txid_vs_tokenid: BTreeMap::new(),
         }
     }
 
@@ -82,6 +84,9 @@ impl TokenIssuanceCache {
                 )));
             }
         }
+
+        // TODO: this probably needs better modeling. Currently, we just want to know what the token id is for a given issuance tx id
+        self.txid_vs_tokenid.insert(tx.get_id(), token_id);
         Ok(())
     }
 
@@ -97,6 +102,9 @@ impl TokenIssuanceCache {
                 ))
             }
         }
+
+        self.txid_vs_tokenid.insert(tx.get_id(), token_id);
+
         Ok(())
     }
 
@@ -126,6 +134,14 @@ impl TokenIssuanceCache {
             }
         }
         Ok(())
+    }
+
+    pub fn data(&self) -> &BTreeMap<TokenId, CachedTokensOperation> {
+        &self.data
+    }
+
+    pub fn txid_from_issuance(&self) -> &BTreeMap<Id<Transaction>, TokenId> {
+        &self.txid_vs_tokenid
     }
 
     pub fn take(self) -> BTreeMap<TokenId, CachedTokensOperation> {

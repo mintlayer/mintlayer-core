@@ -133,6 +133,10 @@ impl TxIndexCache {
         Ok(result)
     }
 
+    pub fn get_from_cached(&self, outpoint: &OutPointSourceId) -> Option<&CachedInputsOperation> {
+        self.data.get(outpoint)
+    }
+
     pub fn spend_tx_index_inputs(
         &mut self,
         inputs: &[TxInput],
