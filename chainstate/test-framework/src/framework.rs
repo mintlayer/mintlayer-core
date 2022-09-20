@@ -17,6 +17,7 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::ChainstateError;
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::tokens::TokenData;
+use common::chain::tokens::TokenTransferV1;
 use common::chain::TxInput;
 use common::chain::TxOutput;
 use common::primitives::id::WithId;
@@ -177,34 +178,23 @@ fn create_utxo_data(
                 )
             }
             OutputValue::Token(asset) => match asset {
-                TokenData::TokenTransferV1 {
-                    token_id: _,
-                    amount: _,
-                } => TxOutput::new(
+                TokenData::TokenTransferV1(_transfer) => TxOutput::new(
                     OutputValue::Token(asset.clone()),
                     OutputPurpose::Transfer(anyonecanspend_address()),
                 ),
-                TokenData::TokenIssuanceV1 {
-                    token_ticker: _,
-                    amount_to_issue,
-                    number_of_decimals: _,
-                    metadata_uri: _,
-                } => TxOutput::new(
-                    OutputValue::Token(TokenData::TokenTransferV1 {
+                TokenData::TokenIssuanceV1(issuance) => TxOutput::new(
+                    OutputValue::Token(TokenData::TokenTransferV1(TokenTransferV1 {
                         token_id: match outsrc {
                             OutPointSourceId::Transaction(prev_tx) => {
                                 chainstate.get_token_id_from_issuance_tx(&prev_tx).unwrap().unwrap()
                             }
                             OutPointSourceId::BlockReward(_) => return None,
                         },
-                        amount: *amount_to_issue,
-                    }),
+                        amount: issuance.amount_to_issue,
+                    })),
                     OutputPurpose::Transfer(anyonecanspend_address()),
                 ),
-                TokenData::TokenBurnV1 {
-                    token_id: _,
-                    amount_to_burn: _,
-                } => return None,
+                TokenData::TokenBurnV1(_burn) => return None,
             },
         },
     ))

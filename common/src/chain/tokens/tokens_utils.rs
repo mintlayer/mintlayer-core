@@ -27,20 +27,10 @@ pub fn is_tokens_issuance(output_value: &OutputValue) -> bool {
     match output_value {
         OutputValue::Coin(_) => false,
         OutputValue::Token(token_data) => match token_data {
-            TokenData::TokenTransferV1 {
-                token_id: _,
-                amount: _,
-            } => false,
-            TokenData::TokenIssuanceV1 {
-                token_ticker: _,
-                amount_to_issue: _,
-                number_of_decimals: _,
-                metadata_uri: _,
-            } => true,
-            TokenData::TokenBurnV1 {
-                token_id: _,
-                amount_to_burn: _,
-            } => false,
+            TokenData::TokenIssuanceV1(_) => true,
+            TokenData::TokenTransferV1(_)
+            | TokenData::TokenBurnV1(_)
+            | TokenData::NftIssuanceV1(_) => false,
         },
     }
 }

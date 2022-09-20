@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use common::{
-    chain::{tokens::TokenData, Block, ChainConfig, Transaction},
+    chain::{
+        tokens::{NftIssuanceV1, TokenData},
+        Block, ChainConfig, Transaction,
+    },
     primitives::{Amount, Id, Idable},
 };
 use utils::ensure;
@@ -46,6 +49,14 @@ pub fn check_tokens_burn_data(
         TokensError::BurnZeroTokens(tx.get_id(), *source_block_id)
     );
     Ok(())
+}
+
+pub fn check_nft_issuance_data(
+    _chain_config: &ChainConfig,
+    _issuance: &NftIssuanceV1,
+) -> Result<(), TokensError> {
+    //FIXME(nft_issuance)
+    unimplemented!()
 }
 
 pub fn check_tokens_issuance_data(
@@ -110,34 +121,24 @@ pub fn check_tokens_data(
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
     match token_data {
-        TokenData::TokenTransferV1 {
-            token_id: _,
-            amount,
-        } => {
-            check_tokens_transfer_data(source_block_id, tx, amount)?;
+        TokenData::TokenTransferV1(transfer) => {
+            check_tokens_transfer_data(source_block_id, tx, &transfer.amount)?;
         }
-        TokenData::TokenIssuanceV1 {
-            token_ticker,
-            amount_to_issue,
-            number_of_decimals,
-            metadata_uri,
-        } => {
+        TokenData::TokenIssuanceV1(issuance) => {
             check_tokens_issuance_data(
                 chain_config,
-                token_ticker,
-                amount_to_issue,
-                number_of_decimals,
-                metadata_uri,
+                &issuance.token_ticker,
+                &issuance.amount_to_issue,
+                &issuance.number_of_decimals,
+                &issuance.metadata_uri,
                 tx.get_id(),
                 source_block_id,
             )?;
         }
-        TokenData::TokenBurnV1 {
-            token_id: _,
-            amount_to_burn,
-        } => {
-            check_tokens_burn_data(tx, &source_block_id, amount_to_burn)?;
+        TokenData::TokenBurnV1(burn) => {
+            check_tokens_burn_data(tx, &source_block_id, &burn.amount_to_burn)?;
         }
+        TokenData::NftIssuanceV1(issuance) => check_nft_issuance_data(chain_config, issuance)?,
     }
     Ok(())
 }

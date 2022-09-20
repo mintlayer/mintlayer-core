@@ -21,7 +21,24 @@ use crate::{
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
-pub struct RPCTokenInfo {
+
+pub enum RPCTokenInfo {
+    FungibleToken(RPCFungibleTokenInfo),
+    NonFungibleToken(RPCNonFungibleTokenInfo),
+}
+
+impl RPCTokenInfo {
+    pub fn new_fungible(token_info: RPCFungibleTokenInfo) -> Self {
+        Self::FungibleToken(token_info)
+    }
+
+    pub fn new_nonfungible(token_info: RPCNonFungibleTokenInfo) -> Self {
+        Self::NonFungibleToken(token_info)
+    }
+}
+
+#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+pub struct RPCFungibleTokenInfo {
     // TODO: Add the controller public key to issuance data - https://github.com/mintlayer/mintlayer-core/issues/401
     pub token_id: TokenId,
     pub creation_tx_id: Id<Transaction>,
@@ -32,7 +49,7 @@ pub struct RPCTokenInfo {
     pub metadata_uri: Vec<u8>,
 }
 
-impl RPCTokenInfo {
+impl RPCFungibleTokenInfo {
     pub fn new(
         token_id: TokenId,
         creation_tx_id: Id<Transaction>,
@@ -50,6 +67,28 @@ impl RPCTokenInfo {
             amount_to_issue,
             number_of_decimals,
             metadata_uri,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+pub struct RPCNonFungibleTokenInfo {
+    pub token_id: TokenId,
+    pub creation_tx_id: Id<Transaction>,
+    pub creation_block_id: Id<Block>,
+    //FIXME(nft_issuance): Add other fields
+}
+
+impl RPCNonFungibleTokenInfo {
+    pub fn new(
+        token_id: TokenId,
+        creation_tx_id: Id<Transaction>,
+        creation_block_id: Id<Block>,
+    ) -> Self {
+        Self {
+            token_id,
+            creation_tx_id,
+            creation_block_id,
         }
     }
 }
