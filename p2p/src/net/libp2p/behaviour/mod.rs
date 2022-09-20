@@ -107,6 +107,27 @@ impl Libp2pBehaviour {
             waker.wake_by_ref();
         }
     }
+
+    fn poll(
+        &mut self,
+        cx: &mut Context<'_>,
+        _params: &mut impl PollParameters,
+    ) -> Poll<Libp2pNetworkBehaviourAction> {
+        match &self.waker {
+            Some(waker) => {
+                if waker.will_wake(cx.waker()) {
+                    self.waker = Some(cx.waker().clone());
+                }
+            }
+            None => self.waker = Some(cx.waker().clone()),
+        }
+
+        if let Some(event) = self.events.pop_front() {
+            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
+        }
+
+        Poll::Pending
+    }
 }
 
 impl NetworkBehaviour for Libp2pBehaviour {
