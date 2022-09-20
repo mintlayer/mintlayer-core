@@ -59,22 +59,23 @@ where
     async fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError> {
         use std::time::Instant;
         let before = Instant::now();
-        let mut input_values = Vec::new();
-        for input in tx.inputs() {
-            let before_input = Instant::now();
-            let input_clone = input.clone();
-            input_values.push(
-                self.chainstate_handle
-                    .call(move |this| this.get_outpoint_value(input_clone.outpoint()))
-                    .await?
-                    .or_else(|_| self.store.get_unconfirmed_outpoint_value(input.outpoint()))?,
-            );
-            eprintln!(
-                "time collecting single input value {:?}",
-                before_input.elapsed()
-            );
+        let tx_clone = tx.clone();
+        let chainstate_input_values = self
+            .chainstate_handle
+            .call(move |this| this.get_outpoint_values(&tx_clone))
+            .await??;
+
+        let mut input_values = Vec::<Amount>::new();
+        for (i, chainstate_input_value) in chainstate_input_values.iter().enumerate() {
+            if let Some(value) = chainstate_input_value {
+                input_values.push(*value)
+            } else {
+                let value = self.store.get_unconfirmed_outpoint_value(
+                    tx.inputs().get(i).expect("index").outpoint(),
+                )?;
+                input_values.push(value);
+            }
         }
-        eprintln!("time collecting input values {:?}", before.elapsed());
 
         let sum_inputs = input_values
             .iter()

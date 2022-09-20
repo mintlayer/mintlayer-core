@@ -298,27 +298,36 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         Ok(available_inputs)
     }
 
-    fn get_outpoint_value(
+    fn get_outpoint_values(
         &self,
-        outpoint: &common::chain::OutPoint,
-    ) -> Result<common::primitives::Amount, ChainstateError> {
+        tx: &Transaction,
+    ) -> Result<Vec<Option<common::primitives::Amount>>, ChainstateError> {
         use std::time::Instant;
         let start = Instant::now();
 
         let chainstate_ref = self.chainstate.make_db_tx_ro();
         let utxo_view = chainstate_ref.make_utxo_view();
-        let res = match utxo_view.utxo(outpoint) {
-            Some(utxo) => match utxo.output().value() {
-                OutputValue::Coin(amount) => Ok(*amount),
-                _ => Err(ChainstateError::FailedToReadProperty(
-                    PropertyQueryError::ExpectedCoinOutpointAndFoundToken,
-                )),
+
+        let outpoint_values = tx.inputs().iter().map(|input| input.outpoint()).try_fold(
+            Vec::new(),
+            |mut values, outpoint| {
+                if let Some(utxo) = utxo_view.utxo(outpoint) {
+                    match utxo.output().value() {
+                        OutputValue::Coin(amount) => values.push(Some(*amount)),
+                        _ => {
+                            return Err(ChainstateError::FailedToReadProperty(
+                                PropertyQueryError::ExpectedCoinOutpointAndFoundToken,
+                            ))
+                        }
+                    }
+                } else {
+                    values.push(None)
+                }
+                Ok(values)
             },
-            None => Err(ChainstateError::FailedToReadProperty(
-                PropertyQueryError::OutpointNotFound,
-            )),
-        };
+        );
+
         eprintln!("time spent getting outpoint {:?}", start.elapsed());
-        res
+        outpoint_values
     }
 }

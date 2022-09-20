@@ -591,13 +591,17 @@ async fn tx_spend_several_inputs<
     let inputs = inputs.to_owned();
     for input in inputs.clone() {
         let outpoint = input.outpoint().clone();
-        input_values.push(
-            mempool
-                .chainstate_handle
-                .call(move |this| this.get_outpoint_value(input.outpoint()))
-                .await?
-                .or_else(|_| mempool.store.get_unconfirmed_outpoint_value(&outpoint))?,
-        )
+        let chainstate_outpoint_value = mempool
+            .chainstate_handle
+            .call(move |this| {
+                this.get_outpoint_values(&Transaction::new(0, vec![input], vec![], 0).unwrap())
+            })
+            .await??;
+        let input_value = match chainstate_outpoint_value.first().unwrap() {
+            Some(input_value) => *input_value,
+            None => mempool.store.get_unconfirmed_outpoint_value(&outpoint)?,
+        };
+        input_values.push(input_value)
     }
     let input_value = input_values.into_iter().sum::<Option<_>>().ok_or_else(|| {
         let msg = String::from("tx_spend_input: overflow");

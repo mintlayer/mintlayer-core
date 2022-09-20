@@ -212,12 +212,11 @@ impl<
     fn available_inputs(&self, tx: &Transaction) -> Result<Vec<TxInput>, ChainstateError> {
         self.deref().available_inputs(tx)
     }
-
-    fn get_outpoint_value(
+    fn get_outpoint_values(
         &self,
-        outpoint: &common::chain::OutPoint,
-    ) -> Result<common::primitives::Amount, ChainstateError> {
-        self.deref().get_outpoint_value(outpoint)
+        tx: &Transaction,
+    ) -> Result<Vec<Option<common::primitives::Amount>>, ChainstateError> {
+        self.deref().get_outpoint_values(tx)
     }
 }
 

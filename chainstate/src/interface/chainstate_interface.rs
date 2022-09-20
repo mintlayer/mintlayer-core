@@ -19,7 +19,6 @@ use crate::detail::BlockSource;
 use crate::ChainstateConfig;
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::tokens::TokenAuxiliaryData;
-use common::chain::OutPoint;
 use common::chain::Transaction;
 use common::chain::TxInput;
 use common::chain::{
@@ -27,7 +26,6 @@ use common::chain::{
     tokens::{RPCTokenInfo, TokenId},
     ChainConfig, OutPointSourceId, TxMainChainIndex,
 };
-use common::primitives::Amount;
 use common::primitives::{BlockHeight, Id};
 use utils::eventhandler::EventHandler;
 
@@ -125,6 +123,9 @@ pub trait ChainstateInterface: Send {
     /// Returns all spendable inputs of a Transaction
     fn available_inputs(&self, tx: &Transaction) -> Result<Vec<TxInput>, ChainstateError>;
 
-    /// Returns the value of a given OutPoint
-    fn get_outpoint_value(&self, outpoint: &OutPoint) -> Result<Amount, ChainstateError>;
+    /// Returns the values of the outpoints spent by a transaction
+    fn get_outpoint_values(
+        &self,
+        tx: &Transaction,
+    ) -> Result<Vec<Option<common::primitives::Amount>>, ChainstateError>;
 }

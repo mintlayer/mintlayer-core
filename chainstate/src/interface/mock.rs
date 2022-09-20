@@ -112,6 +112,9 @@ mockall::mock! {
             tx_id: &Id<common::chain::Transaction>,
         ) -> Result<Option<TokenId>, ChainstateError>;
         fn available_inputs(&self, tx: &Transaction) -> Result<Vec<TxInput>, ChainstateError>;
-        fn get_outpoint_value(&self, outpoint: &common::chain::OutPoint) -> Result<common::primitives::Amount, ChainstateError>;
+        fn get_outpoint_values(
+            &self,
+            tx: &Transaction,
+        ) -> Result<Vec<Option<common::primitives::Amount>>, ChainstateError>;
     }
 }
