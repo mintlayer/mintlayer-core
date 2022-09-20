@@ -1,4 +1,4 @@
-use chainstate_types::GenBlockIndex;
+use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
@@ -8,6 +8,8 @@ use common::{
 };
 use thiserror::Error;
 use utxo::{BlockUndo, UtxosStorageRead, UtxosStorageWrite};
+
+use crate::TokensError;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum TransactionVerifierStorageError {
@@ -20,7 +22,7 @@ pub enum TransactionVerifierStorageError {
 }
 
 pub trait TransactionVerifierStorageRef: UtxosStorageRead {
-    fn token_id_from_issuance_tx(
+    fn get_token_id_from_issuance_tx(
         &self,
         tx_id: Id<Transaction>,
     ) -> Result<Option<TokenId>, TransactionVerifierStorageError>;
@@ -28,7 +30,7 @@ pub trait TransactionVerifierStorageRef: UtxosStorageRead {
     fn get_gen_block_index(
         &self,
         block_id: &Id<GenBlock>,
-    ) -> Result<Option<GenBlockIndex>, TransactionVerifierStorageError>;
+    ) -> Result<Option<GenBlockIndex>, storage_result::Error>;
 
     fn get_ancestor(
         &self,
@@ -49,7 +51,7 @@ pub trait TransactionVerifierStorageRef: UtxosStorageRead {
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
-    ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError>;
+    ) -> Result<Option<TokenAuxiliaryData>, TokensError>;
 }
 
 pub trait TransactionVerifierStorageMut: TransactionVerifierStorageRef + UtxosStorageWrite {

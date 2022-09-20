@@ -648,11 +648,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         block_index: &'a BlockIndex,
         block: &WithId<Block>,
         spend_height: &BlockHeight,
-    ) -> Result<TransactionVerifier<S>, BlockError> {
+    ) -> Result<TransactionVerifier<Self>, BlockError> {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
 
-        let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
+        let mut tx_verifier = TransactionVerifier::new(self, self.chain_config);
 
         let reward_fees = tx_verifier
             .connect_transactable(
@@ -694,8 +694,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     fn make_cache_with_disconnected_transactions(
         &'a self,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<S>, BlockError> {
-        let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
+    ) -> Result<TransactionVerifier<Self>, BlockError> {
+        let mut tx_verifier = TransactionVerifier::new(self, self.chain_config);
 
         // TODO: add a test that checks the order in which txs are disconnected
         block
@@ -1074,7 +1074,7 @@ pub fn gen_block_index_getter<S: BlockchainStorageRead>(
 impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionVerifierStorageRef
     for ChainstateRef<'a, S, O>
 {
-    fn token_id_from_issuance_tx(
+    fn get_token_id_from_issuance_tx(
         &self,
         tx_id: Id<Transaction>,
     ) -> Result<Option<TokenId>, TransactionVerifierStorageError> {
@@ -1084,9 +1084,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionVerifierStorageRe
     fn get_gen_block_index(
         &self,
         block_id: &Id<GenBlock>,
-    ) -> Result<Option<GenBlockIndex>, TransactionVerifierStorageError> {
-        self.get_gen_block_index(block_id)
-            .map_err(|_| TransactionVerifierStorageError::GenBlockIndexRetrievalFailed(*block_id))
+    ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
+        gen_block_index_getter(&self.db_tx, self.chain_config, block_id)
     }
 
     fn get_ancestor(
@@ -1114,8 +1113,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionVerifierStorageRe
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
-    ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError> {
-        Ok(self.db_tx.get_token_aux_data(token_id).map_err(StatePersistenceError::from)?)
+    ) -> Result<Option<TokenAuxiliaryData>, TokensError> {
+        Ok(self.db_tx.get_token_aux_data(token_id)?)
     }
 }
 

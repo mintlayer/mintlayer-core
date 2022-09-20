@@ -21,7 +21,7 @@ mod tx_index_cache;
 use self::{
     amounts_map::AmountsMap,
     error::{ConnectTransactionError, TokensError},
-    storage::TransactionVerifierStorageMut,
+    storage::{TransactionVerifierStorageMut, TransactionVerifierStorageRef},
     token_issuance_cache::{CachedTokensOperation, CoinOrTokenId},
     tx_index_cache::TxIndexCache,
     utils::get_output_token_id_and_amount,
@@ -32,7 +32,6 @@ use fallible_iterator::FallibleIterator;
 
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
     amount_sum,
@@ -55,7 +54,7 @@ use self::token_issuance_cache::TokenIssuanceCache;
 mod utils;
 use self::utils::{check_transferred_amount, get_input_token_id_and_amount};
 
-use super::chainstateref::{block_index_ancestor_getter, gen_block_index_getter};
+use super::chainstateref::block_index_ancestor_getter;
 
 // TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee`
 //       that essentially belongs to this type, but return Amount
@@ -108,7 +107,7 @@ impl<'a, S: UtxosStorageRead> TransactionVerifier<'a, S> {
     }
 }
 
-impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
+impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
     fn calculate_total_outputs(
         outputs: &[TxOutput],
         include_issuance: Option<&Transaction>,
@@ -132,7 +131,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 let issuance_token_id_getter =
                     || -> Result<Option<TokenId>, ConnectTransactionError> {
                         // issuance transactions are unique, so we use them to get the token id
-                        Ok(self.db_tx.get_token_id(&tx_id)?)
+                        Ok(self.db_tx.get_token_id_from_issuance_tx(tx_id)?)
                     };
                 let (key, amount) =
                     get_input_token_id_and_amount(utxo.output().value(), issuance_token_id_getter)?;
@@ -336,8 +335,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 };
 
                 let block_index_getter =
-                    |db_tx: &S, chain_config: &ChainConfig, id: &Id<GenBlock>| {
-                        gen_block_index_getter(db_tx, chain_config, id)
+                    |db_tx: &S, _chain_config: &ChainConfig, id: &Id<GenBlock>| {
+                        db_tx.get_gen_block_index(id)
                     };
 
                 let block_index = block_index_ancestor_getter(
@@ -367,10 +366,9 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         match self.utxo_block_undo.entry(*block_id) {
             Entry::Occupied(entry) => Ok(&mut entry.into_mut().undo),
             Entry::Vacant(entry) => {
-                let block_undo = self
-                    .db_tx
-                    .get_undo_data(*block_id)?
-                    .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
+                let block_undo =
+                    TransactionVerifierStorageRef::get_undo_data(self.db_tx, *block_id)?
+                        .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
                 Ok(&mut entry
                     .insert(BlockUndoEntry {
                         undo: block_undo,
