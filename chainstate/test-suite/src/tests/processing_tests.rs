@@ -315,7 +315,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         tf.process_block(block.clone(), BlockSource::Local).unwrap();
         assert_eq!(tf.best_block_id(), <Id<GenBlock>>::from(block.get_id()));
 
-        // Check that the transactions are in the main-chain and insure that the connected previous
+        // Check that the transactions are in the main-chain and ensure that the connected previous
         // outputs are spent.
         for tx in block.transactions() {
             let tx_id = tx.get_id();
