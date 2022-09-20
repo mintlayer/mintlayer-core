@@ -38,6 +38,7 @@ async fn request_sent_directly_but_peer_not_part_of_swarm() {
     backend
         .swarm
         .behaviour_mut()
+        .behaviour
         .sync
         .send_request(&PeerId::random(), SyncRequest::new(vec![0u8; 128]));
     assert!(std::matches!(

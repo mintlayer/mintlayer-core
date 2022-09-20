@@ -105,7 +105,7 @@ pub async fn make_libp2p(
                 | (magic[3] as u32)
         );
 
-        let mut behaviour = behaviour::Libp2pBehaviour {
+        let behaviour = behaviour::behaviour_wrapper::NetworkBehaviourWrapper {
             ping: libp2p_ping::Behaviour::new(
                 libp2p_ping::Config::new()
                     .with_timeout(std::time::Duration::from_secs(60))
@@ -125,6 +125,10 @@ pub async fn make_libp2p(
             .expect("configuration to be valid"),
             connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(p2p_config).await,
+        };
+
+        let mut behaviour = behaviour::Libp2pBehaviour {
+            behaviour,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             waker: None,
@@ -132,7 +136,11 @@ pub async fn make_libp2p(
 
         for topic in topics.iter() {
             log::info!("subscribing to gossipsub topic {:?}", topic);
-            behaviour.gossipsub.subscribe(&topic.into()).expect("subscription to work");
+            behaviour
+                .behaviour
+                .gossipsub
+                .subscribe(&topic.into())
+                .expect("subscription to work");
         }
 
         // subscribes to our topic
@@ -206,7 +214,7 @@ pub async fn make_libp2p_with_ping(
                 | (magic[3] as u32)
         );
 
-        let mut behaviour = behaviour::Libp2pBehaviour {
+        let behaviour = behaviour::behaviour_wrapper::NetworkBehaviourWrapper {
             ping,
             identify: Identify::new(IdentifyConfig::new(protocol, id_keys.public())),
             sync: RequestResponse::new(
@@ -221,6 +229,9 @@ pub async fn make_libp2p_with_ping(
             .expect("configuration to be valid"),
             connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(Arc::clone(&p2p_config)).await,
+        };
+        let mut behaviour = behaviour::Libp2pBehaviour {
+            behaviour,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             waker: None,
@@ -228,7 +239,11 @@ pub async fn make_libp2p_with_ping(
 
         for topic in topics.iter() {
             log::info!("subscribing to gossipsub topic {:?}", topic);
-            behaviour.gossipsub.subscribe(&topic.into()).expect("subscription to work");
+            behaviour
+                .behaviour
+                .gossipsub
+                .subscribe(&topic.into())
+                .expect("subscription to work");
         }
 
         // subscribes to our topic

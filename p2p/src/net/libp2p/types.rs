@@ -228,7 +228,6 @@ impl From<net::types::ValidationResult> for MessageAcceptance {
 }
 
 #[derive(Debug)]
-#[allow(clippy::enum_variant_names)]
 pub enum Libp2pBehaviourEvent {
     Connectivity(ConnectivityEvent),
     Syncing(SyncingEvent),

@@ -65,6 +65,7 @@ async fn test_invalid_message() {
     while backend1
         .swarm
         .behaviour_mut()
+        .behaviour
         .gossipsub
         .publish(Topic::new("mintlayer-gossipsub-blocks"), vec![999].encode())
         .is_err()
@@ -93,6 +94,7 @@ async fn test_invalid_message() {
         let _ = backend1
             .swarm
             .behaviour_mut()
+            .behaviour
             .gossipsub
             .publish(Topic::new("mintlayer-gossipsub-blocks"), vec![999].encode());
     }

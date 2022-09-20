@@ -119,7 +119,7 @@ mod tests {
         impl Future for MdnsTester {
             type Output = NetworkBehaviourAction<
                 mdns::MdnsEvent,
-                <mdns::Mdns as SwarmNetworkBehaviour>::ConnectionHandler,
+                <mdns::TokioMdns as SwarmNetworkBehaviour>::ConnectionHandler,
             >;
 
             fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

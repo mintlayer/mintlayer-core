@@ -39,7 +39,6 @@ use crate::{
             GOSSIPSUB_HEARTBEAT, GOSSIPSUB_MAX_TRANSMIT_SIZE, PING_INTERVAL, PING_MAX_RETRIES,
             PING_TIMEOUT, REQ_RESP_TIMEOUT,
         },
-        types::Libp2pBehaviourEvent,
     },
 };
 
@@ -47,7 +46,6 @@ use crate::{
 // so this wrapper is needed to separate behaviours from other fields of the `Libp2pBehaviour`
 // struct.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "Libp2pBehaviourEvent")]
 pub struct NetworkBehaviourWrapper {
     pub connmgr: ConnectionManager,
     pub identify: Identify,

@@ -18,7 +18,7 @@
 
 use futures::StreamExt;
 use libp2p::{
-    gossipsub::{IdentTopic, MessageAcceptance, MessageId},
+    gossipsub::{IdentTopic, MessageAcceptance, MessageId, Topic},
     request_response::RequestId,
     swarm::{Swarm, SwarmEvent},
     Multiaddr, PeerId,
@@ -189,12 +189,13 @@ impl Libp2pBackend {
     ) -> crate::Result<()> {
         log::trace!("publish message on gossipsub topic {topic:?}");
 
+        let topic: Topic<_> = (&topic).into();
         let res = self
             .swarm
             .behaviour_mut()
             .behaviour
             .gossipsub
-            .publish((&topic).into(), message)
+            .publish(topic, message)
             .map(|_| ())
             .map_err(|e| e.into());
         response.send(res).map_err(|_| P2pError::ChannelClosed)
@@ -405,13 +406,16 @@ mod tests {
         let cfg = RequestResponseConfig::default();
         let sync = RequestResponse::new(SyncMessagingCodec(), protocols, cfg);
 
-        let behaviour = behaviour::Libp2pBehaviour {
+        let behaviour = behaviour::behaviour_wrapper::NetworkBehaviourWrapper {
             ping: ping::Behaviour::new(ping::Config::new()),
             gossipsub,
             identify,
             sync,
             connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(Default::default()).await,
+        };
+        let behaviour = behaviour::Libp2pBehaviour {
+            behaviour,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             waker: None,
