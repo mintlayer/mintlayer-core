@@ -609,7 +609,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         )?;
         debug_assert!(reward_fees.is_none());
 
-        // TODO: add a test that checks the order in which txs are connected
         let total_fees = block.transactions().iter().enumerate().try_fold(
             Amount::from_atoms(0),
             |total, (tx_num, _)| {

@@ -18,13 +18,14 @@ use std::{sync::atomic::Ordering, time::Duration};
 
 use chainstate::{
     make_chainstate, BlockError, BlockSource, ChainstateConfig, ChainstateError, CheckBlockError,
-    CheckBlockTransactionsError, OrphanCheckError,
+    CheckBlockTransactionsError, ConnectTransactionError, OrphanCheckError,
 };
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestBlockInfo, TestFramework, TestStore,
     TransactionBuilder,
 };
 use chainstate_types::{GenBlockIndex, PropertyQueryError};
+use common::chain::Transaction;
 use common::primitives::BlockDistance;
 use common::{
     chain::{
@@ -338,6 +339,54 @@ fn spend_inputs_simple(#[case] seed: Seed) {
                 );
             }
         }
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn transaction_processing_order(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::default();
+
+        // Genesis reward UTXO
+        let (utx, utxo) = &tf.best_block_info().txns[0];
+
+        // Transaction that spends the genesis reward
+        let tx1 = Transaction::new(
+            0,
+            vec![TxInput::new(utx.clone(), 0, empty_witness(&mut rng))],
+            vec![TxOutput::new(
+                utxo[0].value().clone(),
+                OutputPurpose::Transfer(anyonecanspend_address()),
+            )],
+            0,
+        )
+        .unwrap();
+
+        // Transaction that spends tx1
+        let tx2 = Transaction::new(
+            0,
+            vec![TxInput::new(tx1.get_id().into(), 0, empty_witness(&mut rng))],
+            vec![TxOutput::new(
+                tx1.outputs()[0].value().clone(),
+                OutputPurpose::Transfer(anyonecanspend_address()),
+            )],
+            0,
+        )
+        .unwrap();
+
+        // Create a new block with tx2 appearing before tx1
+        let block = tf.make_block_builder().add_transaction(tx2).add_transaction(tx1).build();
+
+        // Processing this block should cause an error
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::MissingOutputOrSpent
+            ))
+        );
     });
 }
 
