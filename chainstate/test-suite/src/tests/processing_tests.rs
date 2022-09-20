@@ -306,9 +306,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         // Check that all tx not in the main chain
         for tx in block.transactions() {
             assert_eq!(
-                tf.chainstate
-                    .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
-                    .unwrap(),
+                tf.chainstate.get_mainchain_tx_index(&tx.get_id().into()).unwrap(),
                 None
             );
         }
@@ -317,17 +315,25 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         tf.process_block(block.clone(), BlockSource::Local).unwrap();
         assert_eq!(tf.best_block_id(), <Id<GenBlock>>::from(block.get_id()));
 
-        // Check that the transactions are in the main-chain and their inputs are not spent.
+        // Check that the transactions are in the main-chain and ensure that the connected previous
+        // outputs are spent.
         for tx in block.transactions() {
-            let tx_index = tf
-                .chainstate
-                .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
-                .unwrap()
-                .unwrap();
-
-            for input in tx.inputs() {
+            let tx_id = tx.get_id();
+            // All inputs must spend a corresponding output
+            for tx_in in tx.inputs() {
+                let outpoint = tx_in.outpoint();
+                let prev_out_tx_index =
+                    tf.chainstate.get_mainchain_tx_index(&outpoint.tx_id()).unwrap().unwrap();
                 assert_eq!(
-                    tx_index.get_spent_state(input.outpoint().output_index()).unwrap(),
+                    prev_out_tx_index.get_spent_state(outpoint.output_index()).unwrap(),
+                    OutputSpentState::SpentBy(tx_id.into())
+                );
+            }
+            // All the outputs of this transaction should be unspent
+            let tx_index = tf.chainstate.get_mainchain_tx_index(&tx_id.into()).unwrap().unwrap();
+            for idx in 0..tx.outputs().len() as u32 {
+                assert_eq!(
+                    tx_index.get_spent_state(idx).unwrap(),
                     OutputSpentState::Unspent
                 );
             }
