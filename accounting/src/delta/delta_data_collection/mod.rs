@@ -45,6 +45,12 @@ pub struct DeltaDataCollection<K: Ord, T> {
 }
 
 impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
+    pub fn new() -> Self {
+        Self {
+            data: BTreeMap::new(),
+        }
+    }
+
     pub fn merge_delta_data(
         &mut self,
         delta_to_apply: Self,

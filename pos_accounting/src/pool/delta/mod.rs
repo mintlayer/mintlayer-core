@@ -1,9 +1,24 @@
+// Copyright (c) 2022 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::collections::BTreeMap;
 
 use accounting::DeltaDataUndoCollection;
 use common::primitives::{signed_amount::SignedAmount, Amount, H256};
 
-use crate::error::Error;
+use crate::{error::Error, DelegationId, PoolId};
 
 use self::data::PoSAccountingDeltaData;
 
@@ -20,8 +35,8 @@ pub struct PoSAccountingDelta<'a> {
 
 /// All the operations we have to do with the accounting state to undo a delta
 pub struct DeltaMergeUndo {
-    pool_data_undo: DeltaDataUndoCollection<H256, PoolData>,
-    delegation_data_undo: DeltaDataUndoCollection<H256, DelegationData>,
+    pool_data_undo: DeltaDataUndoCollection<PoolId, PoolData>,
+    delegation_data_undo: DeltaDataUndoCollection<DelegationId, DelegationData>,
 }
 
 impl<'a> PoSAccountingDelta<'a> {
@@ -44,11 +59,14 @@ impl<'a> PoSAccountingDelta<'a> {
         &self.data
     }
 
-    fn get_cached_delegations_shares(&self, pool_id: H256) -> Option<BTreeMap<H256, SignedAmount>> {
-        let range_start = (pool_id, H256::zero());
-        let range_end = (pool_id, H256::repeat_byte(0xFF));
+    fn get_cached_delegations_shares(
+        &self,
+        pool_id: PoolId,
+    ) -> Option<BTreeMap<DelegationId, SignedAmount>> {
+        let range_start = (pool_id, DelegationId::new(H256::zero()));
+        let range_end = (pool_id, DelegationId::new(H256::repeat_byte(0xFF)));
         let range = self.data.pool_delegation_shares.data().range(range_start..=range_end);
-        let result = range.map(|((_pool_id, del_id), v)| (*del_id, *v)).collect::<BTreeMap<_, _>>();
+        let result = range.map(|((_, del_id), v)| (*del_id, *v)).collect::<BTreeMap<_, _>>();
         if result.is_empty() {
             None
         } else {
@@ -105,7 +123,7 @@ impl<'a> PoSAccountingDelta<'a> {
 
     fn add_to_delegation_balance(
         &mut self,
-        delegation_target: H256,
+        delegation_target: DelegationId,
         amount_to_delegate: Amount,
     ) -> Result<(), Error> {
         self.data
@@ -116,7 +134,7 @@ impl<'a> PoSAccountingDelta<'a> {
 
     fn sub_from_delegation_balance(
         &mut self,
-        delegation_target: H256,
+        delegation_target: DelegationId,
         amount_to_delegate: Amount,
     ) -> Result<(), Error> {
         self.data
@@ -125,14 +143,18 @@ impl<'a> PoSAccountingDelta<'a> {
             .map_err(Error::AccountingError)
     }
 
-    fn add_balance_to_pool(&mut self, pool_id: H256, amount_to_add: Amount) -> Result<(), Error> {
+    fn add_balance_to_pool(&mut self, pool_id: PoolId, amount_to_add: Amount) -> Result<(), Error> {
         self.data
             .pool_balances
             .add_unsigned(pool_id, amount_to_add)
             .map_err(Error::AccountingError)
     }
 
-    fn sub_balance_from_pool(&mut self, pool_id: H256, amount_to_add: Amount) -> Result<(), Error> {
+    fn sub_balance_from_pool(
+        &mut self,
+        pool_id: PoolId,
+        amount_to_add: Amount,
+    ) -> Result<(), Error> {
         self.data
             .pool_balances
             .sub_unsigned(pool_id, amount_to_add)
@@ -141,8 +163,8 @@ impl<'a> PoSAccountingDelta<'a> {
 
     fn add_delegation_to_pool_share(
         &mut self,
-        pool_id: H256,
-        delegation_id: H256,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
         amount_to_add: Amount,
     ) -> Result<(), Error> {
         self.data
@@ -153,8 +175,8 @@ impl<'a> PoSAccountingDelta<'a> {
 
     fn sub_delegation_from_pool_share(
         &mut self,
-        pool_id: H256,
-        delegation_id: H256,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
         amount_to_add: Amount,
     ) -> Result<(), Error> {
         self.data
@@ -165,10 +187,10 @@ impl<'a> PoSAccountingDelta<'a> {
 }
 
 // TODO: this is used in both operator and view impls. Find an appropriate place for it.
-fn sum_maps(
-    mut m1: BTreeMap<H256, Amount>,
-    m2: BTreeMap<H256, SignedAmount>,
-) -> Result<BTreeMap<H256, Amount>, Error> {
+fn sum_maps<K: Ord + Copy>(
+    mut m1: BTreeMap<K, Amount>,
+    m2: BTreeMap<K, SignedAmount>,
+) -> Result<BTreeMap<K, Amount>, Error> {
     for (k, v) in m2 {
         let base_value = match m1.get(&k) {
             Some(pv) => *pv,

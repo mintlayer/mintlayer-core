@@ -1,3 +1,18 @@
+// Copyright (c) 2022 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use common::{
     chain::{OutPoint, OutPointSourceId},
     primitives::{Amount, Id, H256},
@@ -15,12 +30,13 @@ use crate::{
         view::PoSAccountingView,
     },
     storage::in_memory::InMemoryPoSAccounting,
+    DelegationId, PoolId,
 };
 
 fn create_pool(
     op: &mut impl PoSAccountingOperatorWrite,
     pledged_amount: Amount,
-) -> Result<(H256, PublicKey, PoSAccountingUndo), Error> {
+) -> Result<(PoolId, PublicKey, PoSAccountingUndo), Error> {
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint = OutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random())), 0);
     op.create_pool(&outpoint, pledged_amount, pub_key.clone())
@@ -29,8 +45,8 @@ fn create_pool(
 
 fn create_delegation_id(
     op: &mut impl PoSAccountingOperatorWrite,
-    target_pool: H256,
-) -> Result<(H256, PublicKey, PoSAccountingUndo), Error> {
+    target_pool: PoolId,
+) -> Result<(DelegationId, PublicKey, PoSAccountingUndo), Error> {
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint = OutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random())), 0);
     op.create_delegation_id(target_pool, pub_key.clone(), &outpoint)

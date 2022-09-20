@@ -27,6 +27,12 @@ pub struct DeltaAmountCollection<K: Ord> {
 }
 
 impl<K: Ord> DeltaAmountCollection<K> {
+    pub fn new() -> Self {
+        Self {
+            data: BTreeMap::new(),
+        }
+    }
+
     pub fn merge_delta_amounts(&mut self, delta_to_apply: Self) -> Result<(), Error> {
         delta_to_apply.data.into_iter().try_for_each(|(key, other_amount)| {
             self.merge_delta_amount_element(key, other_amount)

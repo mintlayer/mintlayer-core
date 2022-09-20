@@ -1,10 +1,22 @@
+// Copyright (c) 2022 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::collections::BTreeMap;
 
 use accounting::{combine_amount_delta, combine_data_with_delta, DataDelta};
-use common::{
-    chain::OutPoint,
-    primitives::{Amount, H256},
-};
+use common::{chain::OutPoint, primitives::Amount};
 use crypto::key::PublicKey;
 
 use crate::{
@@ -19,6 +31,7 @@ use crate::{
         },
         pool_data::PoolData,
     },
+    DelegationId, PoolId,
 };
 
 use super::{sum_maps, PoSAccountingDelta};
@@ -29,7 +42,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
         decommission_key: PublicKey,
-    ) -> Result<(H256, PoSAccountingUndo), Error> {
+    ) -> Result<(PoolId, PoSAccountingUndo), Error> {
         let pool_id = make_pool_id(input0_outpoint);
 
         if self.get_pool_balance(pool_id)?.is_some() {
@@ -57,7 +70,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         ))
     }
 
-    fn decommission_pool(&mut self, pool_id: H256) -> Result<PoSAccountingUndo, Error> {
+    fn decommission_pool(&mut self, pool_id: PoolId) -> Result<PoSAccountingUndo, Error> {
         let last_amount = self
             .get_pool_balance(pool_id)?
             .ok_or(Error::AttemptedDecommissionNonexistingPoolBalance)?;
@@ -76,10 +89,10 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
 
     fn create_delegation_id(
         &mut self,
-        target_pool: H256,
+        target_pool: PoolId,
         spend_key: PublicKey,
         input0_outpoint: &OutPoint,
-    ) -> Result<(H256, PoSAccountingUndo), Error> {
+    ) -> Result<(DelegationId, PoSAccountingUndo), Error> {
         if !self.pool_exists(target_pool)? {
             return Err(Error::DelegationCreationFailedPoolDoesNotExist);
         }
@@ -109,7 +122,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
 
     fn delegate_staking(
         &mut self,
-        delegation_target: H256,
+        delegation_target: DelegationId,
         amount_to_delegate: Amount,
     ) -> Result<PoSAccountingUndo, Error> {
         let pool_id = *self
@@ -131,7 +144,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
 
     fn spend_share_from_delegation_id(
         &mut self,
-        delegation_id: H256,
+        delegation_id: DelegationId,
         amount: Amount,
     ) -> Result<PoSAccountingUndo, Error> {
         let pool_id = *self
@@ -269,7 +282,7 @@ impl<'a> PoSAccountingDelta<'a> {
 }
 
 impl<'a> PoSAccountingOperatorRead for PoSAccountingDelta<'a> {
-    fn pool_exists(&self, pool_id: H256) -> Result<bool, Error> {
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
         Ok(self
             .get_pool_data(pool_id)?
             .ok_or_else(|| self.parent.get_pool_data(pool_id))
@@ -278,8 +291,8 @@ impl<'a> PoSAccountingOperatorRead for PoSAccountingDelta<'a> {
 
     fn get_delegation_shares(
         &self,
-        pool_id: H256,
-    ) -> Result<Option<BTreeMap<H256, Amount>>, Error> {
+        pool_id: PoolId,
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Error> {
         let parent_shares = self.parent.get_pool_delegations_shares(pool_id)?.unwrap_or_default();
         let local_shares = self.get_cached_delegations_shares(pool_id).unwrap_or_default();
         if parent_shares.is_empty() && local_shares.is_empty() {
@@ -291,33 +304,36 @@ impl<'a> PoSAccountingOperatorRead for PoSAccountingDelta<'a> {
 
     fn get_delegation_share(
         &self,
-        pool_id: H256,
-        delegation_id: H256,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Error> {
         let parent_share = self.parent.get_pool_delegation_share(pool_id, delegation_id)?;
         let local_share = self.data.pool_delegation_shares.data().get(&(pool_id, delegation_id));
         combine_amount_delta(&parent_share, &local_share.copied()).map_err(Error::AccountingError)
     }
 
-    fn get_pool_balance(&self, pool_id: H256) -> Result<Option<Amount>, Error> {
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
         let parent_amount = self.parent.get_pool_balance(pool_id)?;
         let local_amount = self.data.pool_balances.data().get(&pool_id);
         combine_amount_delta(&parent_amount, &local_amount.copied()).map_err(Error::AccountingError)
     }
 
-    fn get_delegation_id_balance(&self, delegation_id: H256) -> Result<Option<Amount>, Error> {
+    fn get_delegation_id_balance(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Error> {
         let parent_amount = self.parent.get_delegation_balance(delegation_id)?;
         let local_amount = self.data.delegation_balances.data().get(&delegation_id);
         combine_amount_delta(&parent_amount, &local_amount.copied()).map_err(Error::AccountingError)
     }
 
-    fn get_delegation_id_data(&self, id: H256) -> Result<Option<DelegationData>, Error> {
+    fn get_delegation_id_data(&self, id: DelegationId) -> Result<Option<DelegationData>, Error> {
         let parent_data = self.parent.get_delegation_data(id)?;
         let local_data = self.data.delegation_data.data().get(&id);
         combine_data_with_delta(parent_data.as_ref(), local_data).map_err(Error::AccountingError)
     }
 
-    fn get_pool_data(&self, id: H256) -> Result<Option<PoolData>, Error> {
+    fn get_pool_data(&self, id: PoolId) -> Result<Option<PoolData>, Error> {
         let parent_data = self.parent.get_pool_data(id)?;
         let local_data = self.data.pool_data.data().get(&id);
         combine_data_with_delta(parent_data.as_ref(), local_data).map_err(Error::AccountingError)
