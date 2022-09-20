@@ -251,7 +251,11 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_ancestor(block_index, ancestor_height)
-            .map_err(ChainstateError::FailedToReadProperty)
+            .map_err(|e| {
+                ChainstateError::FailedToReadProperty(
+                    chainstate_types::PropertyQueryError::GetAncestorError(e),
+                )
+            })
     }
 
     fn last_common_ancestor(

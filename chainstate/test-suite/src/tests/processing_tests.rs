@@ -475,10 +475,12 @@ fn get_ancestor_invalid_height(#[case] seed: Seed) {
 
     let invalid_height = height + 1;
     assert_eq!(
-        ChainstateError::FailedToReadProperty(PropertyQueryError::InvalidAncestorHeight {
-            ancestor_height: u64::try_from(invalid_height).unwrap().into(),
-            block_height: u64::try_from(height).unwrap().into(),
-        }),
+        ChainstateError::FailedToReadProperty(PropertyQueryError::GetAncestorError(
+            GetAncestorError::InvalidAncestorHeight {
+                ancestor_height: u64::try_from(invalid_height).unwrap().into(),
+                block_height: u64::try_from(height).unwrap().into(),
+            }
+        )),
         tf.chainstate
             .get_ancestor(
                 &tf.best_block_index(),

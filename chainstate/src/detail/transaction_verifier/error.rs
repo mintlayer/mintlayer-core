@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::PropertyQueryError;
+use chainstate_types::GetAncestorError;
 use common::{
     chain::{
         block::{Block, GenBlock},
@@ -23,6 +23,8 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use thiserror::Error;
+
+use super::storage::TransactionVerifierStorageError;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConnectTransactionError {
@@ -76,7 +78,7 @@ pub enum ConnectTransactionError {
     #[error("Transaction index for header found but header not found")]
     InvariantErrorHeaderCouldNotBeLoaded(Id<GenBlock>),
     #[error("Transaction index for header found but header not found")]
-    InvariantErrorHeaderCouldNotBeLoadedFromHeight(PropertyQueryError, BlockHeight),
+    InvariantErrorHeaderCouldNotBeLoadedFromHeight(GetAncestorError, BlockHeight),
     #[error("Unable to find block index")]
     BlockIndexCouldNotBeLoaded(Id<GenBlock>),
     #[error("Addition of all fees in block `{0}` failed")]
@@ -91,6 +93,8 @@ pub enum ConnectTransactionError {
     UtxoError(#[from] utxo::Error),
     #[error("Tokens error: {0}")]
     TokensError(#[from] TokensError),
+    #[error("Tokens error: {0}")]
+    TransactionVerifierError(#[from] TransactionVerifierStorageError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

@@ -14,10 +14,14 @@
 // limitations under the License.
 
 use super::{
-    transaction_verifier::error::{ConnectTransactionError, TokensError},
+    transaction_verifier::{
+        error::{ConnectTransactionError, TokensError},
+        storage::TransactionVerifierStorageError,
+    },
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
 };
 use crate::BlockError;
+use chainstate_types::GetAncestorError;
 use consensus::{ConsensusPoWError, ConsensusVerificationError};
 
 // TODO: use a ban_score macro in a form similar to thiserror::Error in order to define the ban score
@@ -96,6 +100,30 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::TokensError(err) => err.ban_score(),
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _) => 100,
             ConnectTransactionError::BlockIndexCouldNotBeLoaded(_) => 100,
+            ConnectTransactionError::TransactionVerifierError(err) => err.ban_score(),
+        }
+    }
+}
+
+impl BanScore for TransactionVerifierStorageError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            TransactionVerifierStorageError::StatePersistenceError(_) => 0,
+            TransactionVerifierStorageError::GenBlockIndexRetrievalFailed(_) => 100,
+            TransactionVerifierStorageError::GetAncestorError(err) => err.ban_score(),
+        }
+    }
+}
+
+impl BanScore for GetAncestorError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            GetAncestorError::StorageError(_) => 0,
+            GetAncestorError::InvalidAncestorHeight {
+                block_height: _,
+                ancestor_height: _,
+            } => 100,
+            GetAncestorError::PrevBlockIndexNotFound(_) => 0,
         }
     }
 }

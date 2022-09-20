@@ -16,6 +16,7 @@
 mod amounts_map;
 mod cached_operation;
 pub mod error;
+pub mod storage;
 mod tx_index_cache;
 use self::{
     amounts_map::AmountsMap,
@@ -31,7 +32,7 @@ use fallible_iterator::FallibleIterator;
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
-use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
     amount_sum,
     chain::{
@@ -336,7 +337,6 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 let block_index_getter =
                     |db_tx: &S, chain_config: &ChainConfig, id: &Id<GenBlock>| {
                         gen_block_index_getter(db_tx, chain_config, id)
-                            .map_err(|_| PropertyQueryError::BlockIndexAtHeightNotFound(*height))
                     };
 
                 let block_index = block_index_ancestor_getter(
