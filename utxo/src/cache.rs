@@ -36,9 +36,50 @@ pub struct ConsumedUtxoCache {
     pub(crate) best_block: Id<GenBlock>,
 }
 
-#[derive(Clone)]
+pub enum UtxosViewCow<'a> {
+    Borrowed(&'a dyn UtxosView),
+    Owned(Box<dyn UtxosView>),
+}
+
+impl<'a> UtxosView for UtxosViewCow<'a> {
+    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
+        match self {
+            UtxosViewCow::Borrowed(r) => r.utxo(outpoint),
+            UtxosViewCow::Owned(r) => r.utxo(outpoint),
+        }
+    }
+
+    fn has_utxo(&self, outpoint: &OutPoint) -> bool {
+        match self {
+            UtxosViewCow::Borrowed(r) => r.has_utxo(outpoint),
+            UtxosViewCow::Owned(r) => r.has_utxo(outpoint),
+        }
+    }
+
+    fn best_block_hash(&self) -> Id<GenBlock> {
+        match self {
+            UtxosViewCow::Borrowed(r) => r.best_block_hash(),
+            UtxosViewCow::Owned(r) => r.best_block_hash(),
+        }
+    }
+
+    fn estimated_size(&self) -> Option<usize> {
+        match self {
+            UtxosViewCow::Borrowed(r) => r.estimated_size(),
+            UtxosViewCow::Owned(r) => r.estimated_size(),
+        }
+    }
+
+    fn derive_cache(&self) -> UtxosCache {
+        match self {
+            UtxosViewCow::Borrowed(r) => r.derive_cache(),
+            UtxosViewCow::Owned(r) => r.derive_cache(),
+        }
+    }
+}
+
 pub struct UtxosCache<'a> {
-    parent: &'a dyn UtxosView,
+    parent: UtxosViewCow<'a>,
     current_block_hash: Id<GenBlock>,
     // pub(crate) visibility is required for tests that are in a different mod
     pub(crate) utxos: BTreeMap<OutPoint, UtxoEntry>,
@@ -51,7 +92,7 @@ impl<'a> UtxosCache<'a> {
     #[cfg(test)]
     pub fn new_for_test(best_block: Id<GenBlock>, view: &'a dyn UtxosView) -> Self {
         Self {
-            parent: view,
+            parent: UtxosViewCow::Borrowed(view),
             current_block_hash: best_block,
             utxos: Default::default(),
             memory_usage: 0,
@@ -82,10 +123,20 @@ impl<'a> UtxosCache<'a> {
         }
     }
 
+    // TODO: rename this to from_borrowed_parent
     pub fn new(parent: &'a dyn UtxosView) -> Self {
         UtxosCache {
-            parent,
+            parent: UtxosViewCow::Borrowed(parent),
             current_block_hash: parent.best_block_hash(),
+            utxos: BTreeMap::new(),
+            memory_usage: 0,
+        }
+    }
+
+    pub fn from_owned_parent(parent: Box<dyn UtxosView>) -> Self {
+        UtxosCache {
+            current_block_hash: parent.best_block_hash(),
+            parent: UtxosViewCow::Owned(parent),
             utxos: BTreeMap::new(),
             memory_usage: 0,
         }
