@@ -145,6 +145,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         }
     }
 
+    // TODO this will go when transaction verifier is ready
     pub fn make_utxo_view(&self) -> impl UtxosView + '_ {
         UtxosDB::new(&self.db_tx)
     }
