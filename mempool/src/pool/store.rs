@@ -95,7 +95,8 @@ impl MempoolStore {
 
     // Checks whether the outpoint is to be created by an unconfirmed tx
     pub(super) fn contains_outpoint(&self, outpoint: &OutPoint) -> bool {
-        matches!(self.txs_by_id.get(&outpoint.tx_id().get_tx_id().expect("Not Coinbase").get()),
+        outpoint.tx_id().get_tx_id().is_some()
+            && matches!(self.txs_by_id.get(&outpoint.tx_id().get_tx_id().expect("Not a block reward outpoint").get()),
             Some(entry) if entry.tx.outputs().len() > outpoint.output_index() as usize)
     }
 

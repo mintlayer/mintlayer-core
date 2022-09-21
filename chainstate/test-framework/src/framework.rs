@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::ChainstateError;
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::tokens::TokenData;
@@ -41,6 +42,10 @@ pub struct TestFramework {
 }
 
 impl TestFramework {
+    pub fn chainstate(self) -> super::TestChainstate {
+        self.chainstate
+    }
+
     /// Creates a new test framework instance using a builder api.
     pub fn builder() -> TestFrameworkBuilder {
         TestFrameworkBuilder::new()

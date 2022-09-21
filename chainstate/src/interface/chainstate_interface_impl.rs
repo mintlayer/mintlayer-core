@@ -20,8 +20,13 @@ use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::block::BlockReward;
 use common::chain::config::ChainConfig;
+use common::chain::tokens::OutputValue;
 use common::chain::tokens::TokenAuxiliaryData;
+use common::chain::TxInput;
 use common::chain::{OutPointSourceId, Transaction, TxMainChainIndex};
+use common::primitives::Amount;
+
+use chainstate_types::PropertyQueryError;
 use common::{
     chain::{
         block::{Block, BlockHeader, GenBlock},
@@ -30,6 +35,7 @@ use common::{
     primitives::{id::WithId, BlockHeight, Id},
 };
 use utils::eventhandler::EventHandler;
+use utxo::UtxosView;
 
 use crate::ChainstateConfig;
 use crate::{
@@ -279,5 +285,45 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
             .query()
             .get_token_id_from_issuance_tx(tx_id)
             .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError> {
+        let chainstate_ref = self.chainstate.make_db_tx_ro();
+        let utxo_view = chainstate_ref.make_utxo_view();
+        let available_inputs = tx
+            .inputs()
+            .iter()
+            .map(|input| utxo_view.utxo(input.outpoint()).map(|_| input).cloned())
+            .collect();
+        Ok(available_inputs)
+    }
+
+    fn get_inputs_outpoints_values(
+        &self,
+        tx: &Transaction,
+    ) -> Result<Vec<Option<Amount>>, ChainstateError> {
+        let chainstate_ref = self.chainstate.make_db_tx_ro();
+        let utxo_view = chainstate_ref.make_utxo_view();
+
+        let outpoint_values = tx.inputs().iter().map(|input| input.outpoint()).try_fold(
+            Vec::new(),
+            |mut values, outpoint| {
+                if let Some(utxo) = utxo_view.utxo(outpoint) {
+                    match utxo.output().value() {
+                        OutputValue::Coin(amount) => values.push(Some(*amount)),
+                        _ => {
+                            return Err(ChainstateError::FailedToReadProperty(
+                                PropertyQueryError::ExpectedCoinOutpointAndFoundToken,
+                            ))
+                        }
+                    }
+                } else {
+                    values.push(None)
+                }
+                Ok(values)
+            },
+        );
+
+        outpoint_values
     }
 }

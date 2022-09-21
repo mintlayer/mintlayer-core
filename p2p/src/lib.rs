@@ -21,7 +21,7 @@ use crate::{
 use chainstate::chainstate_interface;
 use common::chain::ChainConfig;
 use logging::log;
-use mempool::{pool::MempoolInterface, DummyMempoolChainState};
+use mempool::pool::MempoolInterface;
 use std::{fmt::Debug, str::FromStr, sync::Arc};
 use tap::TapFallible;
 use tokio::sync::{mpsc, oneshot};
@@ -145,7 +145,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-        _mempool_handle: subsystem::Handle<Box<dyn MempoolInterface<DummyMempoolChainState>>>,
+        _mempool_handle: subsystem::Handle<Box<dyn MempoolInterface>>,
     ) -> crate::Result<Self>
     where
         <T as NetworkingService>::Address: FromStr,
@@ -241,7 +241,7 @@ pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-    mempool_handle: subsystem::Handle<Box<dyn MempoolInterface<DummyMempoolChainState>>>,
+    mempool_handle: subsystem::Handle<Box<dyn MempoolInterface>>,
 ) -> crate::Result<P2pInterface<T>>
 where
     T: NetworkingService + 'static,

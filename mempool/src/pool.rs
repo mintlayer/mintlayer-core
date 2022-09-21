@@ -13,12 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::time::Duration;
 
+use chainstate::chainstate_interface::ChainstateInterface;
 use common::chain::tokens::OutputValue;
+use common::chain::ChainConfig;
+use parking_lot::RwLock;
 use serialization::Encode;
 
 use common::chain::transaction::Transaction;
@@ -46,26 +49,35 @@ use crate::config::*;
 
 mod store;
 
-impl<C, H, T, M> TryGetFee for Mempool<C, H, T, M>
+#[async_trait::async_trait]
+impl<T, M> TryGetFee for Mempool<T, M>
 where
-    C: ChainState + Send,
-    H: Send,
-    T: GetTime + Send,
-    M: GetMemoryUsage + Send,
+    T: GetTime + Send + std::marker::Sync,
+    M: GetMemoryUsage + Send + std::marker::Sync,
 {
     // TODO this calculation is already done in ChainState, reuse it
-    fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError> {
-        let inputs = tx
-            .inputs()
-            .iter()
-            .map(|input| {
-                let outpoint = input.outpoint();
-                self.chain_state
-                    .get_outpoint_value(outpoint)
-                    .or_else(|_| self.store.get_unconfirmed_outpoint_value(outpoint))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let sum_inputs = inputs
+    async fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError> {
+        use std::time::Instant;
+        let before = Instant::now();
+        let tx_clone = tx.clone();
+        let chainstate_input_values = self
+            .chainstate_handle
+            .call(move |this| this.get_inputs_outpoints_values(&tx_clone))
+            .await??;
+
+        let mut input_values = Vec::<Amount>::new();
+        for (i, chainstate_input_value) in chainstate_input_values.iter().enumerate() {
+            if let Some(value) = chainstate_input_value {
+                input_values.push(*value)
+            } else {
+                let value = self.store.get_unconfirmed_outpoint_value(
+                    tx.inputs().get(i).expect("index").outpoint(),
+                )?;
+                input_values.push(value);
+            }
+        }
+
+        let sum_inputs = input_values
             .iter()
             .cloned()
             .sum::<Option<_>>()
@@ -79,6 +91,7 @@ where
             })
             .sum::<Option<_>>()
             .ok_or(TxValidationError::OutputValuesOverflow)?;
+        eprintln!("time getting fee: {:?}", before.elapsed());
         (sum_inputs - sum_outputs).ok_or(TxValidationError::InputsBelowOutputs)
     }
 }
@@ -88,8 +101,9 @@ fn get_relay_fee(tx: &Transaction) -> Amount {
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
 }
 
-pub trait MempoolInterface<C>: Send {
-    fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error>;
+#[async_trait::async_trait]
+pub trait MempoolInterface: Send {
+    async fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error>;
     fn get_all(&self) -> Vec<&Transaction>;
 
     // Returns `true` if the mempool contains a transaction with the given id, `false` otherwise.
@@ -103,7 +117,7 @@ pub trait MempoolInterface<C>: Send {
 
     // Add/remove transactions to/from the mempool according to a new tip
     #[cfg(test)]
-    fn new_tip_set(&mut self, chain_state: C);
+    fn new_tip_set(&mut self);
 }
 
 pub trait ChainState: Debug {
@@ -111,8 +125,9 @@ pub trait ChainState: Debug {
     fn get_outpoint_value(&self, outpoint: &OutPoint) -> Result<Amount, anyhow::Error>;
 }
 
+#[async_trait::async_trait]
 trait TryGetFee {
-    fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError>;
+    async fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError>;
 }
 
 newtype! {
@@ -140,7 +155,7 @@ struct RollingFeeRate {
 impl RollingFeeRate {
     #[allow(clippy::float_arithmetic)]
     fn decay_fee(mut self, halflife: Time, current_time: Time) -> Self {
-        log::trace!(
+        log::debug!(
             "decay_fee: old fee rate:  {:?}\nCurrent time: {:?}\nLast Rolling Fee Update: {:?}\nHalflife: {:?}",
             self.rolling_minimum_fee_rate,
             self.last_rolling_fee_update,
@@ -155,7 +170,7 @@ impl RollingFeeRate {
             (self.rolling_minimum_fee_rate.atoms_per_kb() as f64 / divisor) as u128,
         ));
 
-        log::trace!(
+        log::debug!(
             "decay_fee: new fee rate:  {:?}",
             self.rolling_minimum_fee_rate
         );
@@ -174,44 +189,50 @@ impl RollingFeeRate {
     }
 }
 
-#[derive(Debug)]
 pub struct Mempool<
-    C: ChainState + 'static + Send,
-    H: 'static + Send,
     T: GetTime + 'static + Send,
-    M: GetMemoryUsage + 'static + Send,
+    M: GetMemoryUsage + 'static + Send + std::marker::Sync,
 > {
+    #[allow(unused)]
+    chain_config: Arc<ChainConfig>,
     store: MempoolStore,
-    rolling_fee_rate: Cell<RollingFeeRate>,
+    rolling_fee_rate: RwLock<RollingFeeRate>,
     max_size: usize,
     max_tx_age: Duration,
-    chain_state: C,
-    #[allow(unused)]
-    chainstate_handle: H,
+    chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     clock: T,
     memory_usage_estimator: M,
 }
 
-impl<C, H, T, M> Mempool<C, H, T, M>
+impl<T, M> std::fmt::Debug for Mempool<T, M>
 where
-    C: ChainState + Send,
-    H: Send,
-    T: GetTime + Send,
-    M: GetMemoryUsage + Send,
+    T: GetTime + 'static + Send + std::marker::Sync,
+    M: GetMemoryUsage + 'static + Send + std::marker::Sync,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.store)
+    }
+}
+
+impl<T, M> Mempool<T, M>
+where
+    T: GetTime + Send + std::marker::Sync,
+    M: GetMemoryUsage + Send + std::marker::Sync,
 {
     pub(crate) fn new(
-        chain_state: C,
-        chainstate_handle: H,
+        chain_config: Arc<ChainConfig>,
+        chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         clock: T,
         memory_usage_estimator: M,
     ) -> Self {
         Self {
+            chain_config,
             store: MempoolStore::new(),
-            chain_state,
             chainstate_handle,
             max_size: MAX_MEMPOOL_SIZE_BYTES,
             max_tx_age: DEFAULT_MEMPOOL_EXPIRY,
-            rolling_fee_rate: Cell::new(RollingFeeRate::new(clock.get_time())),
+            // TODO research whether we really need parking lot
+            rolling_fee_rate: parking_lot::RwLock::new(RollingFeeRate::new(clock.get_time())),
             clock,
             memory_usage_estimator,
         }
@@ -233,14 +254,15 @@ where
     }
 
     pub(crate) fn update_min_fee_rate(&self, rate: FeeRate) {
-        let mut rolling_fee_rate = self.rolling_fee_rate.get();
-        rolling_fee_rate.rolling_minimum_fee_rate = rate;
+        let mut rolling_fee_rate = self.rolling_fee_rate.write();
+        (*rolling_fee_rate).rolling_minimum_fee_rate = rate;
         rolling_fee_rate.block_since_last_rolling_fee_bump = false;
-        self.rolling_fee_rate.set(rolling_fee_rate)
     }
 
     pub(crate) fn get_update_min_fee_rate(&self) -> FeeRate {
-        let rolling_fee_rate = self.rolling_fee_rate.get();
+        log::debug!("get_update_min_fee_rate");
+        let rolling_fee_rate = *self.rolling_fee_rate.read();
+        log::debug!("after read");
         if !rolling_fee_rate.block_since_last_rolling_fee_bump
             || rolling_fee_rate.rolling_minimum_fee_rate == FeeRate::new(Amount::from_atoms(0))
         {
@@ -255,60 +277,67 @@ where
                 self.rolling_fee_rate
             );
 
-            if self.rolling_fee_rate.get().rolling_minimum_fee_rate < *INCREMENTAL_RELAY_THRESHOLD {
-                log::trace!("rolling fee rate {:?} less than half of the incremental fee rate, dropping the fee", self.rolling_fee_rate.get().rolling_minimum_fee_rate);
+            if self.rolling_fee_rate.read().rolling_minimum_fee_rate < *INCREMENTAL_RELAY_THRESHOLD
+            {
+                log::trace!("rolling fee rate {:?} less than half of the incremental fee rate, dropping the fee", self.rolling_fee_rate.read().rolling_minimum_fee_rate);
                 self.drop_rolling_fee();
-                return self.rolling_fee_rate.get().rolling_minimum_fee_rate;
+                return self.rolling_fee_rate.read().rolling_minimum_fee_rate;
             }
         }
 
         std::cmp::max(
-            self.rolling_fee_rate.get().rolling_minimum_fee_rate,
+            self.rolling_fee_rate.read().rolling_minimum_fee_rate,
             *INCREMENTAL_RELAY_FEE_RATE,
         )
     }
 
     fn drop_rolling_fee(&self) {
-        let mut rolling_fee_rate = self.rolling_fee_rate.get();
-        rolling_fee_rate.rolling_minimum_fee_rate = FeeRate::new(Amount::from_atoms(0));
-        self.rolling_fee_rate.set(rolling_fee_rate)
+        let mut rolling_fee_rate = self.rolling_fee_rate.write();
+        (*rolling_fee_rate).rolling_minimum_fee_rate = FeeRate::new(Amount::from_atoms(0));
     }
 
     fn decay_rolling_fee_rate(&self) {
+        log::debug!("decay_rolling_fee_rate");
         let halflife = self.rolling_fee_halflife();
         let time = self.clock.get_time();
-        self.rolling_fee_rate.set(self.rolling_fee_rate.get().decay_fee(halflife, time));
+        let mut rolling_fee_rate = self.rolling_fee_rate.write();
+        *rolling_fee_rate = (*rolling_fee_rate).decay_fee(halflife, time);
+        log::debug!("decay_rolling_fee_rate_end: {:?}", self.rolling_fee_rate);
     }
 
-    fn verify_inputs_available(&self, tx: &Transaction) -> Result<(), TxValidationError> {
+    async fn verify_inputs_available(&self, tx: &Transaction) -> Result<(), TxValidationError> {
+        let tx_clone = tx.clone();
+        let chainstate_inputs = self
+            .chainstate_handle
+            .call(move |this| this.available_inputs(&tx_clone))
+            .await??;
         tx.inputs()
             .iter()
-            .map(TxInput::outpoint)
-            .find(|outpoint| !self.outpoint_available(outpoint))
+            .find(|input| {
+                !chainstate_inputs.contains(&Some((*input).clone()))
+                    && !self.store.contains_outpoint(input.outpoint())
+            })
             .map_or_else(
                 || Ok(()),
-                |outpoint| {
+                |input| {
                     Err(TxValidationError::OutPointNotFound {
-                        outpoint: outpoint.clone(),
+                        outpoint: input.outpoint().clone(),
                         tx_id: tx.get_id(),
                     })
                 },
             )
     }
 
-    fn outpoint_available(&self, outpoint: &OutPoint) -> bool {
-        self.store.contains_outpoint(outpoint) || self.chain_state.contains_outpoint(outpoint)
-    }
-
-    fn create_entry(&self, tx: Transaction) -> Result<TxMempoolEntry, TxValidationError> {
+    async fn create_entry(&self, tx: Transaction) -> Result<TxMempoolEntry, TxValidationError> {
+        // Genesis transaction has no parent, hence the first filter_map
         let parents = tx
             .inputs()
             .iter()
-            .map(|input| *input.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
+            .filter_map(|input| input.outpoint().tx_id().get_tx_id().cloned())
             .filter_map(|id| self.store.txs_by_id.contains_key(&id.get()).then(|| id))
             .collect::<BTreeSet<_>>();
 
-        let fee = self.try_get_fee(&tx)?;
+        let fee = self.try_get_fee(&tx).await?;
         let time = self.clock.get_time();
         Ok(TxMempoolEntry::new(tx, fee, parents, time))
     }
@@ -327,7 +356,7 @@ where
         res
     }
 
-    fn validate_transaction(&self, tx: &Transaction) -> Result<Conflicts, TxValidationError> {
+    async fn validate_transaction(&self, tx: &Transaction) -> Result<Conflicts, TxValidationError> {
         // This validation function is based on Bitcoin Core's MemPoolAccept::PreChecks.
         // However, as of this stage it does not cover everything covered in Bitcoin Core
         //
@@ -392,20 +421,25 @@ where
             return Err(TxValidationError::TransactionAlreadyInMempool);
         }
 
-        let conflicts = self.rbf_checks(tx)?;
+        let conflicts = self.rbf_checks(tx).await?;
 
-        self.verify_inputs_available(tx)?;
+        self.verify_inputs_available(tx).await?;
 
-        self.pays_minimum_relay_fees(tx)?;
+        self.pays_minimum_relay_fees(tx).await?;
 
-        self.pays_minimum_mempool_fee(tx)?;
+        self.pays_minimum_mempool_fee(tx).await?;
 
         Ok(conflicts)
     }
 
-    fn pays_minimum_mempool_fee(&self, tx: &Transaction) -> Result<(), TxValidationError> {
-        let tx_fee = self.try_get_fee(tx)?;
+    async fn pays_minimum_mempool_fee(&self, tx: &Transaction) -> Result<(), TxValidationError> {
+        let tx_fee = self.try_get_fee(tx).await?;
         let minimum_fee = self.get_update_minimum_mempool_fee(tx);
+        log::debug!(
+            "pays_minimum_mempool_fee tx_fee = {:?}, minimum_fee = {:?}",
+            tx_fee,
+            minimum_fee
+        );
         ensure!(
             tx_fee >= minimum_fee,
             TxValidationError::RollingFeeThresholdNotMet {
@@ -416,8 +450,8 @@ where
         Ok(())
     }
 
-    fn pays_minimum_relay_fees(&self, tx: &Transaction) -> Result<(), TxValidationError> {
-        let tx_fee = self.try_get_fee(tx)?;
+    async fn pays_minimum_relay_fees(&self, tx: &Transaction) -> Result<(), TxValidationError> {
+        let tx_fee = self.try_get_fee(tx).await?;
         let relay_fee = get_relay_fee(tx);
         log::debug!("tx_fee: {:?}, relay_fee: {:?}", tx_fee, relay_fee);
         ensure!(
@@ -427,7 +461,7 @@ where
         Ok(())
     }
 
-    fn rbf_checks(&self, tx: &Transaction) -> Result<Conflicts, TxValidationError> {
+    async fn rbf_checks(&self, tx: &Transaction) -> Result<Conflicts, TxValidationError> {
         let conflicts = tx
             .inputs()
             .iter()
@@ -438,11 +472,11 @@ where
         if conflicts.is_empty() {
             Ok(Conflicts(BTreeSet::new()))
         } else {
-            self.do_rbf_checks(tx, &conflicts)
+            self.do_rbf_checks(tx, &conflicts).await
         }
     }
 
-    fn do_rbf_checks(
+    async fn do_rbf_checks(
         &self,
         tx: &Transaction,
         conflicts: &[&TxMempoolEntry],
@@ -461,26 +495,30 @@ where
         // more economically rational to mine. Before we go digging through the mempool for all
         // transactions that would need to be removed (direct conflicts and all descendants), check
         // that the replacement transaction pays more than its direct conflicts.
-        self.pays_more_than_direct_conflicts(tx, conflicts)?;
+        self.pays_more_than_direct_conflicts(tx, conflicts).await?;
         // Enforce BIP125 Rule #2.
         self.spends_no_new_unconfirmed_outputs(tx, conflicts)?;
         // Enforce BIP125 Rule #5.
         let conflicts_with_descendants = self.potential_replacements_within_limit(conflicts)?;
         // Enforce BIP125 Rule #3.
-        let total_conflict_fees =
-            self.pays_more_than_conflicts_with_descendants(tx, &conflicts_with_descendants)?;
+        let total_conflict_fees = self
+            .pays_more_than_conflicts_with_descendants(tx, &conflicts_with_descendants)
+            .await?;
         // Enforce BIP125 Rule #4.
-        self.pays_for_bandwidth(tx, total_conflict_fees)?;
+        self.pays_for_bandwidth(tx, total_conflict_fees).await?;
         Ok(Conflicts::from(conflicts_with_descendants))
     }
 
-    fn pays_for_bandwidth(
+    async fn pays_for_bandwidth(
         &self,
         tx: &Transaction,
         total_conflict_fees: Amount,
     ) -> Result<(), TxValidationError> {
-        log::debug!("pays_for_bandwidth: tx fee is {:?}", self.try_get_fee(tx)?);
-        let additional_fees = (self.try_get_fee(tx)? - total_conflict_fees)
+        log::debug!(
+            "pays_for_bandwidth: tx fee is {:?}",
+            self.try_get_fee(tx).await?
+        );
+        let additional_fees = (self.try_get_fee(tx).await? - total_conflict_fees)
             .ok_or(TxValidationError::AdditionalFeesUnderflow)?;
         let relay_fee = get_relay_fee(tx);
         log::debug!(
@@ -496,7 +534,7 @@ where
         Ok(())
     }
 
-    fn pays_more_than_conflicts_with_descendants(
+    async fn pays_more_than_conflicts_with_descendants(
         &self,
         tx: &Transaction,
         conflicts_with_descendants: &BTreeSet<Id<Transaction>>,
@@ -513,7 +551,7 @@ where
             .sum::<Option<Amount>>()
             .ok_or(TxValidationError::ConflictsFeeOverflow)?;
 
-        let replacement_fee = self.try_get_fee(tx)?;
+        let replacement_fee = self.try_get_fee(tx).await?;
         ensure!(
             replacement_fee > total_conflict_fees,
             TxValidationError::TransactionFeeLowerThanConflictsWithDescendants
@@ -544,12 +582,12 @@ where
             })
     }
 
-    fn pays_more_than_direct_conflicts(
+    async fn pays_more_than_direct_conflicts(
         &self,
         tx: &Transaction,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), TxValidationError> {
-        let replacement_fee = self.try_get_fee(tx)?;
+        let replacement_fee = self.try_get_fee(tx).await?;
         conflicts.iter().find(|conflict| conflict.fee >= replacement_fee).map_or_else(
             || Ok(()),
             |conflict| {
@@ -583,8 +621,8 @@ where
         Ok(replacements_with_descendants)
     }
 
-    fn finalize_tx(&mut self, tx: Transaction) -> Result<(), Error> {
-        let entry = self.create_entry(tx)?;
+    async fn finalize_tx(&mut self, tx: Transaction) -> Result<(), Error> {
+        let entry = self.create_entry(tx).await?;
         let id = entry.tx.get_id().get();
         self.store.add_tx(entry)?;
         self.remove_expired_transactions();
@@ -604,7 +642,7 @@ where
             let new_minimum_fee_rate =
                 *removed_fees.iter().max().expect("removed_fees should not be empty")
                     + *INCREMENTAL_RELAY_FEE_RATE;
-            if new_minimum_fee_rate > self.rolling_fee_rate.get().rolling_minimum_fee_rate {
+            if new_minimum_fee_rate > self.rolling_fee_rate.read().rolling_minimum_fee_rate {
                 self.update_min_fee_rate(new_minimum_fee_rate)
             }
         }
@@ -676,25 +714,24 @@ where
     }
 }
 
-trait SpendsUnconfirmed<C, H, T, M>
+trait SpendsUnconfirmed<T, M>
 where
-    C: ChainState + Send,
-    H: Send,
-    T: GetTime + Send,
-    M: GetMemoryUsage + Send,
+    T: GetTime + Send + std::marker::Sync,
+    M: GetMemoryUsage + Send + std::marker::Sync,
 {
-    fn spends_unconfirmed(&self, mempool: &Mempool<C, H, T, M>) -> bool;
+    fn spends_unconfirmed(&self, mempool: &Mempool<T, M>) -> bool;
 }
 
-impl<C, H, T, M> SpendsUnconfirmed<C, H, T, M> for TxInput
+impl<T, M> SpendsUnconfirmed<T, M> for TxInput
 where
-    C: ChainState + Send,
-    H: Send,
-    T: GetTime + Send,
-    M: GetMemoryUsage + Send,
+    T: GetTime + Send + std::marker::Sync,
+    M: GetMemoryUsage + Send + std::marker::Sync,
 {
-    fn spends_unconfirmed(&self, mempool: &Mempool<C, H, T, M>) -> bool {
-        mempool.contains_transaction(self.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
+    fn spends_unconfirmed(&self, mempool: &Mempool<T, M>) -> bool {
+        let outpoint_id = self.outpoint().tx_id().get_tx_id().cloned();
+        outpoint_id.is_some()
+            && mempool
+                .contains_transaction(self.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
     }
 }
 
@@ -715,30 +752,23 @@ impl GetMemoryUsage for SystemUsageEstimator {
     }
 }
 
-impl<C, H, T, M> MempoolInterface<C> for Mempool<C, H, T, M>
+#[async_trait::async_trait]
+impl<T, M> MempoolInterface for Mempool<T, M>
 where
-    C: ChainState + Send,
-    H: Send,
-    T: GetTime + Send,
-    M: GetMemoryUsage + Send,
+    T: GetTime + Send + std::marker::Sync,
+    M: GetMemoryUsage + Send + std::marker::Sync,
 {
     #[cfg(test)]
-    fn new_tip_set(&mut self, chain_state: C) {
-        self.chain_state = chain_state;
-        self.rolling_fee_rate.set({
-            let mut rolling_fee_rate = self.rolling_fee_rate.get();
-            // TODO Not sure we should set the flag to true when a block is disconnected/during a
-            // reorg
-            rolling_fee_rate.block_since_last_rolling_fee_bump = true;
-            rolling_fee_rate
-        })
+    fn new_tip_set(&mut self) {
+        let mut rolling_fee_rate = self.rolling_fee_rate.write();
+        (*rolling_fee_rate).block_since_last_rolling_fee_bump = true;
     }
     //
 
-    fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error> {
-        let conflicts = self.validate_transaction(&tx)?;
+    async fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error> {
+        let conflicts = self.validate_transaction(&tx).await?;
         self.store.drop_conflicts(conflicts);
-        self.finalize_tx(tx)?;
+        self.finalize_tx(tx).await?;
         self.store.assert_valid();
         Ok(())
     }

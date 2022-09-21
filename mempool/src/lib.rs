@@ -15,12 +15,15 @@
 
 #![deny(clippy::clone_on_ref_ptr)]
 
+use std::sync::Arc;
+
+use chainstate::chainstate_interface::ChainstateInterface;
+use common::chain::ChainConfig;
 use pool::MempoolInterface;
 
 use crate::config::GetMemoryUsage;
 use crate::config::GetTime;
 use crate::error::Error as MempoolError;
-use crate::pool::ChainState;
 use crate::pool::Mempool;
 
 mod config;
@@ -29,42 +32,24 @@ mod feerate;
 pub mod pool;
 pub mod rpc;
 
-impl<C: 'static> subsystem::Subsystem for Box<dyn MempoolInterface<C>> {}
+impl subsystem::Subsystem for Box<dyn MempoolInterface> {}
 
-#[allow(dead_code)]
-type MempoolHandle<C> = subsystem::Handle<Box<dyn MempoolInterface<C>>>;
+type MempoolHandle = subsystem::Handle<Box<dyn MempoolInterface>>;
 
 pub type Result<T> = core::result::Result<T, MempoolError>;
 
-#[derive(Debug)]
-pub struct DummyMempoolChainState;
-
-impl ChainState for DummyMempoolChainState {
-    fn contains_outpoint(&self, _outpoint: &common::chain::OutPoint) -> bool {
-        false
-    }
-    fn get_outpoint_value(
-        &self,
-        _outpoint: &common::chain::OutPoint,
-    ) -> core::result::Result<common::primitives::Amount, anyhow::Error> {
-        Err(anyhow::Error::msg("this is a dummy placeholder chainstate"))
-    }
-}
-
-pub fn make_mempool<C, T, M, H>(
-    chainstate: C,
-    chainstate_handle: H,
+pub fn make_mempool<T, M>(
+    chain_config: Arc<ChainConfig>,
+    chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     time_getter: T,
     memory_usage_estimator: M,
-) -> crate::Result<Box<dyn MempoolInterface<C>>>
+) -> crate::Result<Box<dyn MempoolInterface>>
 where
-    C: ChainState + 'static + Send,
-    H: 'static + Send,
-    T: GetTime + 'static + Send,
-    M: GetMemoryUsage + 'static + Send,
+    T: GetTime + 'static + Send + std::marker::Sync,
+    M: GetMemoryUsage + 'static + Send + std::marker::Sync,
 {
     Ok(Box::new(Mempool::new(
-        chainstate,
+        chain_config,
         chainstate_handle,
         time_getter,
         memory_usage_estimator,

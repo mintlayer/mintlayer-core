@@ -37,7 +37,7 @@ mod detail;
 
 use std::sync::Arc;
 
-use chainstate_types::PropertyQueryError;
+pub use chainstate_types::PropertyQueryError;
 use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},

@@ -15,21 +15,22 @@
 
 use std::sync::Arc;
 
+use crate::detail::BlockSource;
 use crate::ChainstateConfig;
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::tokens::TokenAuxiliaryData;
 use common::chain::Transaction;
-use common::{
-    chain::{
-        block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
-        tokens::{RPCTokenInfo, TokenId},
-        ChainConfig, OutPointSourceId, TxMainChainIndex,
-    },
-    primitives::{BlockHeight, Id},
+use common::chain::TxInput;
+use common::chain::{
+    block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
+    tokens::{RPCTokenInfo, TokenId},
+    ChainConfig, OutPointSourceId, TxMainChainIndex,
 };
+use common::primitives::{BlockHeight, Id};
 use utils::eventhandler::EventHandler;
 
-use crate::{detail::BlockSource, ChainstateError, ChainstateEvent, Locator};
+use crate::{ChainstateError, ChainstateEvent};
+use chainstate_types::Locator;
 
 pub trait ChainstateInterface: Send {
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>);
@@ -118,4 +119,13 @@ pub trait ChainstateInterface: Send {
         &self,
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TokenId>, ChainstateError>;
+
+    /// Returns all spendable inputs of a Transaction
+    fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError>;
+
+    /// Returns the values of the outpoints spent by a transaction
+    fn get_inputs_outpoints_values(
+        &self,
+        tx: &Transaction,
+    ) -> Result<Vec<Option<common::primitives::Amount>>, ChainstateError>;
 }

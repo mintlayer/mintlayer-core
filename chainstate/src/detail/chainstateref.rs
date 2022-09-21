@@ -145,6 +145,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         }
     }
 
+    // TODO this will go when transaction verifier is ready
+    pub fn make_utxo_view(&self) -> impl UtxosView + '_ {
+        UtxosDB::new(&self.db_tx)
+    }
+
     pub fn chain_config(&self) -> &ChainConfig {
         self.chain_config
     }
@@ -183,7 +188,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         self.db_tx.get_mainchain_tx_index(tx_id).map_err(PropertyQueryError::from)
     }
 
-    fn get_mainchain_tx_by_position(
+    pub fn get_mainchain_tx_by_position(
         &self,
         tx_index: &common::chain::TxMainChainPosition,
     ) -> Result<Option<common::chain::Transaction>, PropertyQueryError> {
