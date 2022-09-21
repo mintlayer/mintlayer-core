@@ -36,6 +36,9 @@ pub struct ConsumedUtxoCache {
     pub(crate) best_block: Id<GenBlock>,
 }
 
+// We don't use std::borrow::Cow because that requires ToOwned to be implemented,
+// and we don't use MaybeOwned crate because that doesn't offer the ?Sized trait,
+// which means that trait objects won't work with it
 pub enum UtxosViewCow<'a> {
     Borrowed(&'a dyn UtxosView),
     Owned(Box<dyn UtxosView + 'a>),
