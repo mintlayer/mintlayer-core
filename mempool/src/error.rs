@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use chainstate::ChainstateError;
+use subsystem::subsystem::CallError;
 use thiserror::Error;
 
 use common::chain::transaction::Transaction;
@@ -83,21 +84,9 @@ pub enum TxValidationError {
     #[error("Transaction is a descendant of expired transaction.")]
     DescendantOfExpiredTransaction,
     #[error("Chainstate error")]
-    ChainstateError,
+    ChainstateError(#[from] ChainstateError),
     #[error("Subsystem call error")]
-    CallError,
+    CallError(#[from] CallError),
     #[error("Internal Error.")]
     InternalError,
-}
-
-impl From<subsystem::subsystem::CallError> for TxValidationError {
-    fn from(_e: subsystem::subsystem::CallError) -> TxValidationError {
-        TxValidationError::CallError
-    }
-}
-
-impl From<ChainstateError> for TxValidationError {
-    fn from(_e: ChainstateError) -> TxValidationError {
-        TxValidationError::ChainstateError
-    }
 }

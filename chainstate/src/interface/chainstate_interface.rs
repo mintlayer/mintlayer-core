@@ -121,10 +121,10 @@ pub trait ChainstateInterface: Send {
     ) -> Result<Option<TokenId>, ChainstateError>;
 
     /// Returns all spendable inputs of a Transaction
-    fn available_inputs(&self, tx: &Transaction) -> Result<Vec<TxInput>, ChainstateError>;
+    fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError>;
 
     /// Returns the values of the outpoints spent by a transaction
-    fn get_outpoint_values(
+    fn get_inputs_outpoints_values(
         &self,
         tx: &Transaction,
     ) -> Result<Vec<Option<common::primitives::Amount>>, ChainstateError>;

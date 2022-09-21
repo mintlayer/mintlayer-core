@@ -30,6 +30,7 @@ default-features = false
 features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"]
 
 [dev-dependencies]
+rstest = "0.15"
 chainstate-storage = { path = '../chainstate/storage' }
 chainstate-test-framework = { path = '../chainstate/test-framework' }
 crypto = { path = '../crypto' }

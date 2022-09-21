@@ -20,6 +20,7 @@ use common::chain::OutPointSourceId;
 use common::chain::Transaction;
 use common::chain::TxInput;
 use common::chain::TxMainChainIndex;
+use common::primitives::Amount;
 use common::{
     chain::{
         block::{Block, BlockHeader, GenBlock},
@@ -111,10 +112,10 @@ mockall::mock! {
             &self,
             tx_id: &Id<common::chain::Transaction>,
         ) -> Result<Option<TokenId>, ChainstateError>;
-        fn available_inputs(&self, tx: &Transaction) -> Result<Vec<TxInput>, ChainstateError>;
-        fn get_outpoint_values(
+        fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError>;
+        fn get_inputs_outpoints_values(
             &self,
             tx: &Transaction,
-        ) -> Result<Vec<Option<common::primitives::Amount>>, ChainstateError>;
+        ) -> Result<Vec<Option<Amount>>, ChainstateError>;
     }
 }

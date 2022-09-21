@@ -1,3 +1,5 @@
+// Copyright (c) 2022 RBB S.r.l
+// opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
 // you may not use this file except in compliance with the License.
@@ -33,6 +35,7 @@ use common::{
     primitives::Id,
 };
 use core::panic;
+use rstest::rstest;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use test_utils::random::make_seedable_rng;
@@ -52,9 +55,11 @@ fn dummy_size() {
     log::debug!("1, 400: {}", estimate_tx_size(1, 400));
 }
 
-#[tokio::test]
-async fn real_size() -> anyhow::Result<()> {
-    let seed = Seed::from_entropy();
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[test]
+fn real_size(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
@@ -120,9 +125,11 @@ async fn add_single_tx() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn txs_sorted() -> anyhow::Result<()> {
-    let seed = Seed::from_entropy();
+async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
@@ -234,9 +241,11 @@ pub async fn start_chainstate(
     handle
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn tx_no_outputs() -> anyhow::Result<()> {
-    let seed = Seed::from_entropy();
+async fn tx_no_outputs(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
@@ -356,9 +365,11 @@ async fn outpoint_not_found() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn tx_too_big() -> anyhow::Result<()> {
-    let seed = Seed::from_entropy();
+async fn tx_too_big(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
@@ -507,9 +518,11 @@ async fn tx_replace() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn tx_replace_child() -> anyhow::Result<()> {
-    let seed = Seed::from_entropy();
+async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
@@ -594,7 +607,9 @@ async fn tx_spend_several_inputs<
         let chainstate_outpoint_value = mempool
             .chainstate_handle
             .call(move |this| {
-                this.get_outpoint_values(&Transaction::new(0, vec![input], vec![], 0).unwrap())
+                this.get_inputs_outpoints_values(
+                    &Transaction::new(0, vec![input], vec![], 0).unwrap(),
+                )
             })
             .await??;
         let input_value = match chainstate_outpoint_value.first().unwrap() {
@@ -642,9 +657,11 @@ async fn tx_spend_several_inputs<
     .map_err(Into::into)
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn one_ancestor_replaceability_signal_is_enough() -> anyhow::Result<()> {
-    let seed = Seed::from_entropy();
+async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
@@ -806,8 +823,10 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn test_bip125_max_replacements(num_potential_replacements: usize) -> anyhow::Result<()> {
-    let seed = Seed::from_entropy();
+async fn test_bip125_max_replacements(
+    seed: Seed,
+    num_potential_replacements: usize,
+) -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
@@ -860,10 +879,13 @@ async fn test_bip125_max_replacements(num_potential_replacements: usize) -> anyh
     Ok(())
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn too_many_conflicts() -> anyhow::Result<()> {
+async fn too_many_conflicts(#[case] seed: Seed) -> anyhow::Result<()> {
     let num_potential_replacements = MAX_BIP125_REPLACEMENT_CANDIDATES + 1;
-    let err = test_bip125_max_replacements(num_potential_replacements)
+    let err = test_bip125_max_replacements(seed, num_potential_replacements)
         .await
         .expect_err("expected error TooManyPotentialReplacements")
         .downcast()
@@ -875,15 +897,20 @@ async fn too_many_conflicts() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn not_too_many_conflicts() -> anyhow::Result<()> {
+async fn not_too_many_conflicts(#[case] seed: Seed) -> anyhow::Result<()> {
     let num_potential_replacements = MAX_BIP125_REPLACEMENT_CANDIDATES;
-    test_bip125_max_replacements(num_potential_replacements).await
+    test_bip125_max_replacements(seed, num_potential_replacements).await
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn spends_new_unconfirmed() -> anyhow::Result<()> {
-    let seed = Seed::from_entropy();
+async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
@@ -946,9 +973,11 @@ async fn spends_new_unconfirmed() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn pays_more_than_conflicts_with_descendants() -> anyhow::Result<()> {
-    let seed = Seed::from_entropy();
+async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
@@ -1086,9 +1115,11 @@ impl GetTime for MockClock {
     }
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn only_expired_entries_removed() -> anyhow::Result<()> {
-    let seed = Seed::from_entropy();
+async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
@@ -1182,8 +1213,11 @@ async fn only_expired_entries_removed() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn rolling_fee() -> anyhow::Result<()> {
+async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     logging::init_logging::<&str>(None);
     let mock_clock = MockClock::new();
     let mut mock_usage = MockGetMemoryUsage::new();
@@ -1198,7 +1232,6 @@ async fn rolling_fee() -> anyhow::Result<()> {
     // After removing one entry, cause the code to exit the loop by showing a small usage
     mock_usage.expect_get_memory_usage().return_const(0usize);
 
-    let seed = Seed::from_entropy();
     let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
@@ -1442,11 +1475,13 @@ async fn rolling_fee() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn different_size_txs() -> anyhow::Result<()> {
+async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
     use std::time::Instant;
 
-    let seed = Seed::from_entropy();
     let mut tf = TestFramework::default();
     let genesis = tf.genesis();
     let mut rng = make_seedable_rng(seed);
@@ -1514,9 +1549,11 @@ async fn different_size_txs() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn descendant_score() -> anyhow::Result<()> {
-    let seed = Seed::from_entropy();
+async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let genesis = tf.genesis();
     let mut rng = make_seedable_rng(seed);
@@ -1645,12 +1682,14 @@ fn check_txs_sorted_by_descendant_sore(mempool: &Mempool<SystemClock, SystemUsag
     }
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn descendant_of_expired_entry() -> anyhow::Result<()> {
+async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     let mock_clock = MockClock::new();
     logging::init_logging::<&str>(None);
 
-    let seed = Seed::from_entropy();
     let tf = TestFramework::default();
     let genesis = tf.genesis();
     let mut rng = make_seedable_rng(seed);
@@ -1713,11 +1752,13 @@ async fn descendant_of_expired_entry() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn mempool_full() -> anyhow::Result<()> {
+async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
     logging::init_logging::<&str>(None);
 
-    let seed = Seed::from_entropy();
     let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
@@ -1754,9 +1795,11 @@ async fn mempool_full() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn no_empty_bags_in_descendant_score_index() -> anyhow::Result<()> {
-    let seed = Seed::from_entropy();
+async fn no_empty_bags_in_descendant_score_index(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();

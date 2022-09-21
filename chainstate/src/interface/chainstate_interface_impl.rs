@@ -24,6 +24,7 @@ use common::chain::tokens::OutputValue;
 use common::chain::tokens::TokenAuxiliaryData;
 use common::chain::TxInput;
 use common::chain::{OutPointSourceId, Transaction, TxMainChainIndex};
+use common::primitives::Amount;
 
 use chainstate_types::PropertyQueryError;
 use common::{
@@ -286,25 +287,21 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn available_inputs(&self, tx: &Transaction) -> Result<Vec<TxInput>, ChainstateError> {
+    fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError> {
         let chainstate_ref = self.chainstate.make_db_tx_ro();
         let utxo_view = chainstate_ref.make_utxo_view();
         let available_inputs = tx
             .inputs()
             .iter()
-            .filter(|input| utxo_view.utxo(input.outpoint()).is_some())
-            .cloned()
+            .map(|input| utxo_view.utxo(input.outpoint()).map(|_| input).cloned())
             .collect();
         Ok(available_inputs)
     }
 
-    fn get_outpoint_values(
+    fn get_inputs_outpoints_values(
         &self,
         tx: &Transaction,
-    ) -> Result<Vec<Option<common::primitives::Amount>>, ChainstateError> {
-        use std::time::Instant;
-        let start = Instant::now();
-
+    ) -> Result<Vec<Option<Amount>>, ChainstateError> {
         let chainstate_ref = self.chainstate.make_db_tx_ro();
         let utxo_view = chainstate_ref.make_utxo_view();
 
@@ -327,7 +324,6 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
             },
         );
 
-        eprintln!("time spent getting outpoint {:?}", start.elapsed());
         outpoint_values
     }
 }

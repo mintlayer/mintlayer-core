@@ -209,14 +209,14 @@ impl<
         self.deref().get_token_id_from_issuance_tx(tx_id)
     }
 
-    fn available_inputs(&self, tx: &Transaction) -> Result<Vec<TxInput>, ChainstateError> {
+    fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError> {
         self.deref().available_inputs(tx)
     }
-    fn get_outpoint_values(
+    fn get_inputs_outpoints_values(
         &self,
         tx: &Transaction,
     ) -> Result<Vec<Option<common::primitives::Amount>>, ChainstateError> {
-        self.deref().get_outpoint_values(tx)
+        self.deref().get_inputs_outpoints_values(tx)
     }
 }
 

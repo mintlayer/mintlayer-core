@@ -62,7 +62,7 @@ where
         let tx_clone = tx.clone();
         let chainstate_input_values = self
             .chainstate_handle
-            .call(move |this| this.get_outpoint_values(&tx_clone))
+            .call(move |this| this.get_inputs_outpoints_values(&tx_clone))
             .await??;
 
         let mut input_values = Vec::<Amount>::new();
@@ -231,6 +231,7 @@ where
             chainstate_handle,
             max_size: MAX_MEMPOOL_SIZE_BYTES,
             max_tx_age: DEFAULT_MEMPOOL_EXPIRY,
+            // TODO research whether we really need parking lot
             rolling_fee_rate: parking_lot::RwLock::new(RollingFeeRate::new(clock.get_time())),
             clock,
             memory_usage_estimator,
@@ -313,7 +314,7 @@ where
         tx.inputs()
             .iter()
             .find(|input| {
-                !chainstate_inputs.contains(*input)
+                !chainstate_inputs.contains(&Some((*input).clone()))
                     && !self.store.contains_outpoint(input.outpoint())
             })
             .map_or_else(

@@ -2355,6 +2355,7 @@ dependencies = [
  "mockall",
  "parking_lot 0.12.1",
  "rpc",
+ "rstest",
  "serialization",
  "subsystem",
  "test-utils",
