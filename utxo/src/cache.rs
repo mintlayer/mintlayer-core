@@ -67,7 +67,7 @@ impl<'a> UtxosView for UtxosViewCow<'a> {
 }
 
 impl<'a> UtxosViewCow<'a> {
-    fn as_bounded_ref(&self) -> &dyn UtxosView {
+    pub fn as_bounded_ref(&self) -> &dyn UtxosView {
         match self {
             UtxosViewCow::Borrowed(r) => *r,
             UtxosViewCow::Owned(o) => o.as_ref(),
