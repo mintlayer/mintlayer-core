@@ -53,7 +53,7 @@
 // ) {
 //     let mut rng = make_seedable_rng(seed);
 //     let mut result: ResultWithUndo = Default::default();
-//     let test_view = super::test_view();
+//     let test_view = super::empty_test_utxos_view();
 //     let mut base = UtxosCache::new_for_test(H256::random().into(), &*test_view);
 
 //     let new_cache = simulation_step(
@@ -89,7 +89,7 @@
 //         return None;
 //     }
 
-//     let mut cache = UtxosCache::new(parent);
+//     let mut cache = UtxosCache::from_borrowed_parent(parent);
 //     let mut new_cache_res = populate_cache_with_undo(rng, &mut cache, iterations_per_cache, result);
 //     result.utxo_outpoints.append(&mut new_cache_res.utxo_outpoints);
 //     result.outpoints_with_undo.append(&mut new_cache_res.outpoints_with_undo);
