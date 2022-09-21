@@ -1099,8 +1099,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionVerifierStorageRe
     fn get_undo_data(
         &self,
         id: Id<Block>,
-    ) -> Result<Option<utxo::BlockUndo>, TransactionVerifierStorageError> {
-        Ok(self.db_tx.get_undo_data(id).map_err(StatePersistenceError::from)?)
+    ) -> Result<Option<utxo::BlockUndo>, storage_result::Error> {
+        self.db_tx.get_undo_data(id)
     }
 
     fn get_mainchain_tx_index(

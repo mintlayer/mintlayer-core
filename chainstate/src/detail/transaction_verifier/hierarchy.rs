@@ -59,14 +59,13 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
 
     fn get_undo_data(
         &self,
-        _id: Id<Block>,
-    ) -> Result<Option<utxo::BlockUndo>, TransactionVerifierStorageError> {
-        // match self.utxo_block_undo.get(&id) {
-        //     Some(v) => return Ok(Some(v.clone())),
-        //     None => (),
-        // };
-        // TransactionVerifierStorageRef::get_undo_data(self.db_tx, id)
-        todo!()
+        id: Id<Block>,
+    ) -> Result<Option<utxo::BlockUndo>, storage_result::Error> {
+        match self.utxo_block_undo.get(&id) {
+            Some(v) => return Ok(Some(v.undo.clone())),
+            None => (),
+        };
+        TransactionVerifierStorageRef::get_undo_data(self.db_tx, id)
     }
 
     fn get_mainchain_tx_index(
@@ -108,7 +107,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
     }
 }
 
-impl<'a, S> UtxosStorageRead for TransactionVerifier<'a, S> {
+impl<'a, S: TransactionVerifierStorageRef> UtxosStorageRead for TransactionVerifier<'a, S> {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<utxo::Utxo>, storage_result::Error> {
         Ok(self.utxo_cache.utxo(outpoint))
     }
@@ -119,8 +118,12 @@ impl<'a, S> UtxosStorageRead for TransactionVerifier<'a, S> {
 
     fn get_undo_data(
         &self,
-        _id: Id<Block>,
+        id: Id<Block>,
     ) -> Result<Option<utxo::BlockUndo>, storage_result::Error> {
-        todo!()
+        match self.utxo_block_undo.get(&id) {
+            Some(v) => return Ok(Some(v.undo.clone())),
+            None => (),
+        };
+        TransactionVerifierStorageRef::get_undo_data(self.db_tx, id)
     }
 }

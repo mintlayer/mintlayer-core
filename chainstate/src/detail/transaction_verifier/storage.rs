@@ -53,10 +53,7 @@ pub trait TransactionVerifierStorageRef: UtxosStorageRead {
         target_height: BlockHeight,
     ) -> Result<GenBlockIndex, TransactionVerifierStorageError>;
 
-    fn get_undo_data(
-        &self,
-        id: Id<Block>,
-    ) -> Result<Option<BlockUndo>, TransactionVerifierStorageError>;
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, storage_result::Error>;
 
     fn get_mainchain_tx_index(
         &self,
