@@ -57,7 +57,7 @@ pub struct MempoolStore {
     // would no longer be valid to mine). Entries with a lower descendant score will be evicted
     // first.
     //
-    // FIXME currently, the descendant score is the sum fee of the transaction to gether with all
+    // TODO: currently, the descendant score is the sum fee of the transaction to gether with all
     // of its descendants. If we wish to follow Bitcoin Core, we should use:
     // max(feerate(tx, tx_with_descendants)),
     // Where feerate is computed as fee(tx)/size(tx)
