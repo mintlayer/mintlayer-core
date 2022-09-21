@@ -53,7 +53,8 @@ fn cache_simulation_with_undo(
 ) {
     let mut rng = make_seedable_rng(seed);
     let mut result: ResultWithUndo = Default::default();
-    let mut base = UtxosCache::new_for_test(H256::random().into());
+    let test_view = super::test_view();
+    let mut base = UtxosCache::new_for_test(H256::random().into(), &*test_view);
 
     let new_cache = simulation_step(
         &mut rng,

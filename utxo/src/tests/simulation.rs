@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::test_helper::create_utxo;
+use super::{test_helper::create_utxo, test_view};
 use crate::{FlushableUtxoView, UtxosCache, UtxosView};
 use common::{chain::OutPoint, primitives::H256};
 use crypto::random::Rng;
@@ -34,7 +34,8 @@ fn cache_simulation_test(
 ) {
     let mut rng = make_seedable_rng(seed);
     let mut result: Vec<OutPoint> = Vec::new();
-    let mut base = UtxosCache::new_for_test(H256::random().into());
+    let test_view = test_view();
+    let mut base = UtxosCache::new_for_test(H256::random().into(), &*test_view);
 
     let new_cache = simulation_step(
         &mut rng,
