@@ -38,7 +38,7 @@ pub struct ConsumedUtxoCache {
 
 pub enum UtxosViewCow<'a> {
     Borrowed(&'a dyn UtxosView),
-    Owned(Box<dyn UtxosView>),
+    Owned(Box<dyn UtxosView + 'a>),
 }
 
 impl<'a> UtxosView for UtxosViewCow<'a> {
@@ -123,8 +123,7 @@ impl<'a> UtxosCache<'a> {
         }
     }
 
-    // TODO: rename this to from_borrowed_parent
-    pub fn new(parent: &'a dyn UtxosView) -> Self {
+    pub fn from_borrowed_parent(parent: &'a dyn UtxosView) -> Self {
         UtxosCache {
             parent: UtxosViewCow::Borrowed(parent),
             current_block_hash: parent.best_block_hash(),
@@ -133,7 +132,7 @@ impl<'a> UtxosCache<'a> {
         }
     }
 
-    pub fn from_owned_parent(parent: Box<dyn UtxosView>) -> Self {
+    pub fn from_owned_parent(parent: Box<dyn UtxosView + 'a>) -> Self {
         UtxosCache {
             current_block_hash: parent.best_block_hash(),
             parent: UtxosViewCow::Owned(parent),
@@ -421,7 +420,7 @@ impl<'a> UtxosView for UtxosCache<'a> {
     }
 
     fn derive_cache(&self) -> UtxosCache {
-        UtxosCache::new(self)
+        UtxosCache::from_borrowed_parent(self)
     }
 }
 
@@ -491,8 +490,8 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
 mod unit_test {
     use super::*;
     use crate::tests::{
+        empty_test_utxos_view,
         test_helper::{insert_single_entry, Presence},
-        test_view,
     };
     use common::primitives::H256;
     use rstest::rstest;
@@ -501,7 +500,7 @@ mod unit_test {
     #[test]
     fn set_best_block() {
         let expected_best_block_id: Id<GenBlock> = H256::random().into();
-        let test_view = test_view();
+        let test_view = empty_test_utxos_view();
         let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
         cache.set_best_block(expected_best_block_id);
         assert_eq!(expected_best_block_id, cache.best_block_hash());
@@ -512,7 +511,7 @@ mod unit_test {
     #[case(Seed::from_entropy())]
     fn uncache_absent(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let test_view = test_view();
+        let test_view = empty_test_utxos_view();
         let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
 
         // when the outpoint does not exist.
@@ -526,7 +525,7 @@ mod unit_test {
     #[case(Seed::from_entropy())]
     fn uncache_not_fresh_not_dirty(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let test_view = test_view();
+        let test_view = empty_test_utxos_view();
         let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
 
         // when the entry is not dirty and not fresh
@@ -546,7 +545,7 @@ mod unit_test {
     #[case(Seed::from_entropy())]
     fn uncache_dirty_not_fresh(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let test_view = test_view();
+        let test_view = empty_test_utxos_view();
         let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
 
         // when the entry is dirty, entry cannot be removed.
@@ -565,7 +564,7 @@ mod unit_test {
     #[case(Seed::from_entropy())]
     fn uncache_fresh_and_dirty(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let test_view = test_view();
+        let test_view = empty_test_utxos_view();
         let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
 
         // when the entry is both fresh and dirty, entry cannot be removed.
@@ -584,7 +583,7 @@ mod unit_test {
     #[case(Seed::from_entropy())]
     fn fetch_an_entry(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let test_view = test_view();
+        let test_view = empty_test_utxos_view();
         let mut cache1 = UtxosCache::new_for_test(H256::random().into(), &*test_view);
         let (_, outpoint) = insert_single_entry(
             &mut rng,
@@ -594,7 +593,7 @@ mod unit_test {
             None,
         );
 
-        let mut cache2 = UtxosCache::new(&cache1);
+        let mut cache2 = UtxosCache::from_borrowed_parent(&cache1);
 
         assert!(cache1.has_utxo_in_cache(&outpoint));
         assert!(!cache2.has_utxo_in_cache(&outpoint));

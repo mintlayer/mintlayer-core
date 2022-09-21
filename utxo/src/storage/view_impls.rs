@@ -46,7 +46,7 @@ mod utxosdb_utxosview_impls {
     }
 
     pub fn derive_cache<S: UtxosStorageRead + UtxosView>(db: &S) -> UtxosCache {
-        let mut cache = UtxosCache::new(db);
+        let mut cache = UtxosCache::from_borrowed_parent(db);
         cache.set_best_block(db.best_block_hash());
         cache
     }

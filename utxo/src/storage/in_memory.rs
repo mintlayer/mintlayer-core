@@ -98,6 +98,6 @@ impl UtxosView for UtxosDBInMemoryImpl {
     }
 
     fn derive_cache(&self) -> crate::UtxosCache {
-        UtxosCache::new(self)
+        UtxosCache::from_borrowed_parent(self)
     }
 }

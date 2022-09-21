@@ -44,7 +44,7 @@ use common::{
 };
 use utxo::{
     BlockRewardUndo, BlockUndo, ConsumedUtxoCache, FlushableUtxoView, TxUndo, Utxo, UtxosCache,
-    UtxosDBMut, UtxosView,
+    UtxosDB, UtxosDBMut, UtxosStorageRead, UtxosView,
 };
 
 mod token_issuance_cache;
@@ -93,15 +93,13 @@ pub struct TransactionVerifier<'a, S> {
     token_issuance_cache: TokenIssuanceCache,
 }
 
-// TODO: UtxoDB should be a member of TransactionVerifier and UtxoCache should be constructed from it.
-// Investigate how to solve borrows checker lifetime issues with that approach.
-impl<'a, S> TransactionVerifier<'a, S> {
-    pub fn new(db_tx: &'a S, utxo_cache: UtxosCache<'a>, chain_config: &'a ChainConfig) -> Self {
+impl<'a, S: UtxosStorageRead> TransactionVerifier<'a, S> {
+    pub fn new(db_tx: &'a S, chain_config: &'a ChainConfig) -> Self {
         Self {
             db_tx,
             chain_config,
             tx_index_cache: TxIndexCache::new(),
-            utxo_cache,
+            utxo_cache: UtxosCache::from_owned_parent(Box::new(UtxosDB::new(db_tx))),
             utxo_block_undo: BTreeMap::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
         }

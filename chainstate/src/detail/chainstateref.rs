@@ -596,15 +596,13 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     fn make_cache_with_connected_transactions(
         &'a self,
         block_index: &'a BlockIndex,
-        utxo_view: &'a impl UtxosView,
         block: &WithId<Block>,
         spend_height: &BlockHeight,
     ) -> Result<TransactionVerifier<S>, BlockError> {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
 
-        let mut tx_verifier =
-            TransactionVerifier::new(&self.db_tx, utxo_view.derive_cache(), self.chain_config);
+        let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
 
         let reward_fees = tx_verifier.connect_transactable(
             block_index,
@@ -637,11 +635,9 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     fn make_cache_with_disconnected_transactions(
         &'a self,
-        utxo_view: &'a impl UtxosView,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<S>, BlockError> {
-        let mut tx_verifier =
-            TransactionVerifier::new(&self.db_tx, utxo_view.derive_cache(), self.chain_config);
+        let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
 
         // TODO: add a test that checks the order in which txs are disconnected
         block.transactions().iter().enumerate().rev().try_for_each(|(tx_num, _)| {
@@ -733,13 +729,8 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         block: &WithId<Block>,
         spend_height: &BlockHeight,
     ) -> Result<(), BlockError> {
-        let utxo_db = UtxosDB::new(&self.db_tx);
-        let connected_txs = self.make_cache_with_connected_transactions(
-            block_index,
-            &utxo_db,
-            block,
-            spend_height,
-        )?;
+        let connected_txs =
+            self.make_cache_with_connected_transactions(block_index, block, spend_height)?;
 
         let consumed = connected_txs.consume()?;
         TransactionVerifier::flush_to_storage(&mut self.db_tx, consumed)?;
@@ -748,8 +739,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
     }
 
     fn disconnect_transactions(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
-        let utxo_db = UtxosDB::new(&self.db_tx);
-        let cached_inputs = self.make_cache_with_disconnected_transactions(&utxo_db, block)?;
+        let cached_inputs = self.make_cache_with_disconnected_transactions(block)?;
         let cached_inputs = cached_inputs.consume()?;
         TransactionVerifier::flush_to_storage(&mut self.db_tx, cached_inputs)?;
 
