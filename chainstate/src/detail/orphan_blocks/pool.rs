@@ -21,7 +21,7 @@ use common::primitives::id::WithId;
 use common::primitives::{Id, Idable};
 use crypto::random::SliceRandom;
 
-// FIXME: The Arc here is unnecessary: https://github.com/mintlayer/mintlayer-core/issues/164
+// TODO: The Arc here is unnecessary: https://github.com/mintlayer/mintlayer-core/issues/164
 pub struct OrphanBlocksPool {
     orphan_ids: Vec<Id<Block>>,
     orphan_by_id: BTreeMap<Id<Block>, Arc<WithId<Block>>>,
