@@ -46,37 +46,31 @@ pub enum UtxosViewCow<'a> {
 
 impl<'a> UtxosView for UtxosViewCow<'a> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
-        match self {
-            UtxosViewCow::Borrowed(r) => r.utxo(outpoint),
-            UtxosViewCow::Owned(r) => r.utxo(outpoint),
-        }
+        self.as_bounded_ref().utxo(outpoint)
     }
 
     fn has_utxo(&self, outpoint: &OutPoint) -> bool {
-        match self {
-            UtxosViewCow::Borrowed(r) => r.has_utxo(outpoint),
-            UtxosViewCow::Owned(r) => r.has_utxo(outpoint),
-        }
+        self.as_bounded_ref().has_utxo(outpoint)
     }
 
     fn best_block_hash(&self) -> Id<GenBlock> {
-        match self {
-            UtxosViewCow::Borrowed(r) => r.best_block_hash(),
-            UtxosViewCow::Owned(r) => r.best_block_hash(),
-        }
+        self.as_bounded_ref().best_block_hash()
     }
 
     fn estimated_size(&self) -> Option<usize> {
-        match self {
-            UtxosViewCow::Borrowed(r) => r.estimated_size(),
-            UtxosViewCow::Owned(r) => r.estimated_size(),
-        }
+        self.as_bounded_ref().estimated_size()
     }
 
     fn derive_cache(&self) -> UtxosCache {
+        self.as_bounded_ref().derive_cache()
+    }
+}
+
+impl<'a> UtxosViewCow<'a> {
+    fn as_bounded_ref(&self) -> &dyn UtxosView {
         match self {
-            UtxosViewCow::Borrowed(r) => r.derive_cache(),
-            UtxosViewCow::Owned(r) => r.derive_cache(),
+            UtxosViewCow::Borrowed(r) => *r,
+            UtxosViewCow::Owned(o) => o.as_ref(),
         }
     }
 }
