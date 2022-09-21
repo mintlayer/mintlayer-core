@@ -14,7 +14,13 @@ pub struct NftIssuanceV1 {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct TokenCreator {
-    pub pubkey: PublicKey,
+    pub public_key: PublicKey,
+}
+
+impl From<PublicKey> for TokenCreator {
+    fn from(public_key: PublicKey) -> Self {
+        Self { public_key }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]

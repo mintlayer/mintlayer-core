@@ -85,6 +85,7 @@ pub struct ChainConfig {
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_ticker_len: usize,
+    token_max_name_len: usize,
     empty_consensus_reward_maturity_distance: BlockDistance,
 }
 
@@ -173,6 +174,10 @@ impl ChainConfig {
         self.token_max_ticker_len
     }
 
+    pub fn token_max_name_len(&self) -> usize {
+        self.token_max_name_len
+    }
+
     pub fn empty_consensus_reward_maturity_distance(&self) -> BlockDistance {
         self.empty_consensus_reward_maturity_distance
     }
@@ -191,6 +196,8 @@ const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
 const TOKEN_MAX_URI_LEN: usize = 1024;
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
 const TOKEN_MAX_TICKER_LEN: usize = 5;
+// FIXME(nft_issuance): Check how long name might be
+const TOKEN_MAX_NAME_LEN: usize = 10;
 
 fn create_mainnet_genesis() -> Genesis {
     use crate::chain::transaction::TxOutput;

@@ -24,6 +24,9 @@ use utils::ensure;
 
 use super::transaction_verifier::error::TokensError;
 
+mod validate_utils;
+use validate_utils::*;
+
 pub fn check_tokens_transfer_data(
     source_block_id: Id<Block>,
     tx: &Transaction,
@@ -52,10 +55,72 @@ pub fn check_tokens_burn_data(
 }
 
 pub fn check_nft_issuance_data(
-    _chain_config: &ChainConfig,
-    _issuance: &NftIssuanceV1,
+    chain_config: &ChainConfig,
+    issuance: &NftIssuanceV1,
+    tx_id: Id<Transaction>,
+    source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
     //FIXME(nft_issuance)
+
+    // Ticker
+    check_token_ticker(
+        chain_config,
+        &issuance.metadata.ticker,
+        tx_id,
+        source_block_id,
+    )?;
+    check_alphanumeric(&issuance.metadata.ticker, tx_id, source_block_id)?;
+
+    // Name
+    check_token_name(
+        chain_config,
+        &issuance.metadata.name,
+        tx_id,
+        source_block_id,
+    )?;
+    check_alphanumeric(&issuance.metadata.name, tx_id, source_block_id)?;
+
+    // Description
+    check_token_description(
+        chain_config,
+        &issuance.metadata.name,
+        tx_id,
+        source_block_id,
+    )?;
+    check_alphanumeric(&issuance.metadata.description, tx_id, source_block_id)?;
+
+    // Icon URL
+    match &issuance.metadata.icon_url {
+        Some(url) => check_url(chain_config, url, tx_id, source_block_id)?,
+        None => (),
+    }
+
+    // Metadata URL
+    match &issuance.metadata.additional_metadata_url {
+        Some(url) => check_url(chain_config, url, tx_id, source_block_id)?,
+        None => (),
+    }
+
+    // Media URL
+    match &issuance.metadata.media_url {
+        Some(url) => check_url(chain_config, url, tx_id, source_block_id)?,
+        None => (),
+    }
+
+    // Check media hash
+    check_media_hash(&issuance.metadata.media_hash)?;
+
+    // Check issued time
+    // Check expired time
+    // Check start time
+
+    // issuance.metadata.creator: TokenCreator,
+    // issuance.metadata.media_hash: Vec<u8>,
+    // issuance.metadata.issuead_at: Option<u64>,
+    // issuance.metadata.expired_at: Option<u64>,
+    // issuance.metadata.valid_since: Option<u64>,
+    // issuance.metadata.refund_period: Option<u64>,
+
     unimplemented!()
 }
 
@@ -69,23 +134,10 @@ pub fn check_tokens_issuance_data(
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
     // Check token name
-    if token_ticker.len() > chain_config.token_max_ticker_len() || token_ticker.is_empty() {
-        return Err(TokensError::IssueErrorInvalidTickerLength(
-            tx_id,
-            source_block_id,
-        ));
-    }
+    check_token_ticker(chain_config, token_ticker, tx_id, source_block_id)?;
 
     // Check the name consists of alphanumeric characters only
-    let is_alphanumeric = String::from_utf8(token_ticker.to_vec())
-        .map_err(|_| TokensError::IssueErrorTickerHasNoneAlphaNumericChar(tx_id, source_block_id))?
-        .chars()
-        .all(char::is_alphanumeric);
-
-    ensure!(
-        is_alphanumeric,
-        TokensError::IssueErrorTickerHasNoneAlphaNumericChar(tx_id, source_block_id)
-    );
+    check_alphanumeric(token_ticker, tx_id, source_block_id)?;
 
     // Check amount
     if amount_to_issue == &Amount::from_atoms(0) {
@@ -138,7 +190,9 @@ pub fn check_tokens_data(
         TokenData::TokenBurnV1(burn) => {
             check_tokens_burn_data(tx, &source_block_id, &burn.amount_to_burn)?;
         }
-        TokenData::NftIssuanceV1(issuance) => check_nft_issuance_data(chain_config, issuance)?,
+        TokenData::NftIssuanceV1(issuance) => {
+            check_nft_issuance_data(chain_config, issuance, tx.get_id(), source_block_id)?
+        }
     }
     Ok(())
 }

@@ -56,6 +56,7 @@ impl TokenAuxiliaryData {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum OutputValue {
     Coin(Amount),
+    //FIXME(nft_issuance): Clippy warning on this. Should we use Box here?
     Token(TokenData),
 }
 
@@ -108,7 +109,7 @@ pub enum TokenData {
     TokenBurnV1(TokenBurnV1),
     // A new NFT creation
     #[codec(index = 4)]
-    NftIssuanceV1(NftIssuanceV1)
+    NftIssuanceV1(NftIssuanceV1),
     // TODO: These types will be implemented in the future PRs
     // // Increase amount of tokens
     // #[codec(index = 4)]
