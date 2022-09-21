@@ -53,7 +53,8 @@ fn cache_simulation_with_undo(
 ) {
     let mut rng = make_seedable_rng(seed);
     let mut result: ResultWithUndo = Default::default();
-    let mut base = UtxosCache::new_for_test(H256::random().into());
+    let test_view = super::empty_test_utxos_view();
+    let mut base = UtxosCache::new_for_test(H256::random().into(), &*test_view);
 
     let new_cache = simulation_step(
         &mut rng,
@@ -88,15 +89,16 @@ fn simulation_step<'a>(
         return None;
     }
 
-    let mut cache = UtxosCache::new(parent);
+    let mut cache = UtxosCache::from_borrowed_parent(parent);
     let mut new_cache_res = populate_cache_with_undo(rng, &mut cache, iterations_per_cache, result);
     result.utxo_outpoints.append(&mut new_cache_res.utxo_outpoints);
     result.outpoints_with_undo.append(&mut new_cache_res.outpoints_with_undo);
 
     let new_cache = simulation_step(rng, result, &cache, iterations_per_cache, nested_level - 1);
 
-    if let Some(new_cache) = new_cache {
-        let consumed_cache = new_cache.consume();
+    let consumed_cache_op = new_cache.map(|c| c.consume());
+
+    if let Some(consumed_cache) = consumed_cache_op {
         cache.batch_write(consumed_cache).expect("batch write must succeed");
     }
 
