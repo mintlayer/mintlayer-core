@@ -103,6 +103,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         file_path: &std::path::Path,
         include_orphans: bool,
     ) -> rpc::Result<()> {
+        // TODO: test this function in functional tests
         let blocks_list = if include_orphans {
             handle_error(self.call(move |this| this.get_block_id_tree_as_list()).await)?
         } else {
@@ -118,13 +119,15 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         let file_obj = std::fs::File::create(file_path).map_err(rpc::Error::to_call_error)?;
         let mut writer = std::io::BufWriter::new(&file_obj);
         for block_id in blocks_list {
-            writer.write(magic_bytes).map_err(rpc::Error::to_call_error)?;
+            writer.write_all(magic_bytes).map_err(rpc::Error::to_call_error)?;
             let block = handle_error(self.call(move |this| this.get_block(block_id)).await)?
-                .ok_or(rpc::Error::Custom(
-                    "Block not found by id after having being read from chainstate block index"
-                        .to_owned(),
-                ))?;
-            writer.write(&block.encode())?;
+                .ok_or_else(|| {
+                    rpc::Error::Custom(
+                        "Block not found by id after having being read from chainstate block index"
+                            .to_owned(),
+                    )
+                })?;
+            writer.write_all(&block.encode())?;
         }
         Ok(())
     }
