@@ -56,7 +56,13 @@ impl FeeRate {
     // TODO Use NonZeroUsize for divisor
     fn div_up(dividend: u128, divisor: NonZeroUsize) -> u128 {
         let divisor = u128::try_from(usize::from(divisor)).expect("div_up conversion");
-        (dividend + divisor - 1) / divisor
+        if divisor == 1 {
+            dividend
+        } else if dividend % divisor == 0 {
+            dividend / divisor
+        } else {
+            dividend / divisor + 1
+        }
     }
 }
 
@@ -88,5 +94,15 @@ mod tests {
         let tx_size = usize::MAX;
         let rate = FeeRate::div_up(fee, NonZeroUsize::new(tx_size).unwrap());
         assert_eq!(rate, 1);
+
+        let fee = u128::MAX;
+        let tx_size = 1;
+        let rate = FeeRate::div_up(fee, NonZeroUsize::new(tx_size).unwrap());
+        assert_eq!(rate, u128::MAX);
+
+        let fee = u128::MAX - 1;
+        let tx_size = 3;
+        let rate = FeeRate::div_up(fee, NonZeroUsize::new(tx_size).unwrap());
+        assert_eq!(rate, fee / tx_size as u128 + 1);
     }
 }
