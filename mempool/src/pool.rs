@@ -21,6 +21,7 @@ use std::time::Duration;
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::chain::tokens::OutputValue;
 use common::chain::ChainConfig;
+use common::time_getter::TimeGetter;
 use parking_lot::RwLock;
 use serialization::Encode;
 
@@ -50,15 +51,12 @@ use crate::config::*;
 mod store;
 
 #[async_trait::async_trait]
-impl<T, M> TryGetFee for Mempool<T, M>
+impl<M> TryGetFee for Mempool<M>
 where
-    T: GetTime + Send + std::marker::Sync,
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
     // TODO this calculation is already done in ChainState, reuse it
     async fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError> {
-        use std::time::Instant;
-        let before = Instant::now();
         let tx_clone = tx.clone();
         let chainstate_input_values = self
             .chainstate_handle
@@ -91,7 +89,6 @@ where
             })
             .sum::<Option<_>>()
             .ok_or(TxValidationError::OutputValuesOverflow)?;
-        eprintln!("time getting fee: {:?}", before.elapsed());
         (sum_inputs - sum_outputs).ok_or(TxValidationError::InputsBelowOutputs)
     }
 }
@@ -189,10 +186,7 @@ impl RollingFeeRate {
     }
 }
 
-pub struct Mempool<
-    T: GetTime + 'static + Send,
-    M: GetMemoryUsage + 'static + Send + std::marker::Sync,
-> {
+pub struct Mempool<M: GetMemoryUsage + 'static + Send + std::marker::Sync> {
     #[allow(unused)]
     chain_config: Arc<ChainConfig>,
     store: MempoolStore,
@@ -200,13 +194,12 @@ pub struct Mempool<
     max_size: usize,
     max_tx_age: Duration,
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
-    clock: T,
+    clock: TimeGetter,
     memory_usage_estimator: M,
 }
 
-impl<T, M> std::fmt::Debug for Mempool<T, M>
+impl<M> std::fmt::Debug for Mempool<M>
 where
-    T: GetTime + 'static + Send + std::marker::Sync,
     M: GetMemoryUsage + 'static + Send + std::marker::Sync,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -214,15 +207,14 @@ where
     }
 }
 
-impl<T, M> Mempool<T, M>
+impl<M> Mempool<M>
 where
-    T: GetTime + Send + std::marker::Sync,
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
     pub(crate) fn new(
         chain_config: Arc<ChainConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
-        clock: T,
+        clock: TimeGetter,
         memory_usage_estimator: M,
     ) -> Self {
         Self {
@@ -714,20 +706,18 @@ where
     }
 }
 
-trait SpendsUnconfirmed<T, M>
+trait SpendsUnconfirmed<M>
 where
-    T: GetTime + Send + std::marker::Sync,
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
-    fn spends_unconfirmed(&self, mempool: &Mempool<T, M>) -> bool;
+    fn spends_unconfirmed(&self, mempool: &Mempool<M>) -> bool;
 }
 
-impl<T, M> SpendsUnconfirmed<T, M> for TxInput
+impl<M> SpendsUnconfirmed<M> for TxInput
 where
-    T: GetTime + Send + std::marker::Sync,
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
-    fn spends_unconfirmed(&self, mempool: &Mempool<T, M>) -> bool {
+    fn spends_unconfirmed(&self, mempool: &Mempool<M>) -> bool {
         let outpoint_id = self.outpoint().tx_id().get_tx_id().cloned();
         outpoint_id.is_some()
             && mempool
@@ -753,9 +743,8 @@ impl GetMemoryUsage for SystemUsageEstimator {
 }
 
 #[async_trait::async_trait]
-impl<T, M> MempoolInterface for Mempool<T, M>
+impl<M> MempoolInterface for Mempool<M>
 where
-    T: GetTime + Send + std::marker::Sync,
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
     #[cfg(test)]

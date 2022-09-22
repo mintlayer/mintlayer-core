@@ -81,9 +81,8 @@ fn real_size(#[case] seed: Seed) -> anyhow::Result<()> {
     Ok(())
 }
 
-impl<T, M> Mempool<T, M>
+impl<M> Mempool<M>
 where
-    T: GetTime + Send + std::marker::Sync,
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
     fn get_minimum_rolling_fee(&self) -> FeeRate {
@@ -206,28 +205,28 @@ pub async fn start_chainstate_with_config(
     start_chainstate(chainstate).await
 }
 
-async fn setup() -> Mempool<SystemClock, SystemUsageEstimator> {
+async fn setup() -> Mempool<SystemUsageEstimator> {
     logging::init_logging::<&str>(None);
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&config)).await;
     Mempool::new(
         config,
         chainstate_interface,
-        SystemClock {},
+        Default::default(),
         SystemUsageEstimator {},
     )
 }
 
 async fn setup_with_chainstate(
     chainstate: Box<dyn chainstate_interface::ChainstateInterface>,
-) -> Mempool<SystemClock, SystemUsageEstimator> {
+) -> Mempool<SystemUsageEstimator> {
     logging::init_logging::<&str>(None);
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let chainstate_handle = start_chainstate(chainstate).await;
     Mempool::new(
         config,
         chainstate_handle,
-        SystemClock {},
+        Default::default(),
         SystemUsageEstimator {},
     )
 }
@@ -573,11 +572,8 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
 // To test our validation of BIP125 Rule#4 (replacement transaction pays for its own bandwidth), we need to know the necessary relay fee before creating the transaction. The relay fee depends on the size of the transaction. The usual way to get the size of a transaction is to call `tx.encoded_size` but we cannot do this until we have created the transaction itself. To get around this cycle, we have precomputed the size of all transaction created by `tx_spend_input`. This value will be the same for all transactions created by this function.
 const TX_SPEND_INPUT_SIZE: usize = 213;
 
-async fn tx_spend_input<
-    T: GetTime + Send + std::marker::Sync,
-    M: GetMemoryUsage + Send + std::marker::Sync,
->(
-    mempool: &Mempool<T, M>,
+async fn tx_spend_input<M: GetMemoryUsage + Send + std::marker::Sync>(
+    mempool: &Mempool<M>,
     input: TxInput,
     fee: impl Into<Option<Amount>>,
     flags: u32,
@@ -590,11 +586,8 @@ async fn tx_spend_input<
     tx_spend_several_inputs(mempool, &[input], fee, flags, locktime).await
 }
 
-async fn tx_spend_several_inputs<
-    T: GetTime + Send + std::marker::Sync,
-    M: GetMemoryUsage + Send + std::marker::Sync,
->(
-    mempool: &Mempool<T, M>,
+async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + std::marker::Sync>(
+    mempool: &Mempool<M>,
     inputs: &[TxInput],
     fee: Amount,
     flags: u32,
@@ -1085,36 +1078,6 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     Ok(())
 }
 
-#[derive(Clone)]
-struct MockClock {
-    time: Arc<AtomicU64>,
-}
-
-impl MockClock {
-    fn new() -> Self {
-        Self {
-            time: Arc::new(AtomicU64::new(0)),
-        }
-    }
-
-    fn set(&self, time: Time) {
-        self.time.store(time.as_secs(), Ordering::SeqCst)
-    }
-
-    fn increment(&self, inc: Time) {
-        self.time.store(
-            self.time.load(Ordering::SeqCst) + inc.as_secs(),
-            Ordering::SeqCst,
-        )
-    }
-}
-
-impl GetTime for MockClock {
-    fn get_time(&self) -> Time {
-        Duration::new(self.time.load(Ordering::SeqCst), 0)
-    }
-}
-
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -1138,7 +1101,11 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     }
     let parent = tx_builder.build();
 
-    let mock_clock = MockClock::new();
+    let mock_time = Arc::new(AtomicU64::new(0));
+    let mock_time_clone = Arc::clone(&mock_time);
+    let mock_clock = TimeGetter::new(Arc::new(move || {
+        Duration::from_secs(mock_time_clone.load(Ordering::SeqCst))
+    }));
     let chainstate = tf.chainstate();
     let config = chainstate.get_chain_config();
     let chainstate_interface = start_chainstate(chainstate).await;
@@ -1146,7 +1113,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     let mut mempool = Mempool::new(
         config,
         chainstate_interface,
-        mock_clock.clone(),
+        mock_clock,
         SystemUsageEstimator {},
     );
 
@@ -1204,7 +1171,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
         .chainstate_handle
         .call_mut(|this| this.process_block(block, BlockSource::Local))
         .await??;
-    mock_clock.set(DEFAULT_MEMPOOL_EXPIRY + Duration::new(1, 0));
+    mock_time.store(DEFAULT_MEMPOOL_EXPIRY.as_secs() + 1, Ordering::SeqCst);
 
     mempool.add_transaction(child_1).await?;
     assert!(!mempool.contains_transaction(&expired_tx_id));
@@ -1219,7 +1186,11 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
 #[tokio::test]
 async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     logging::init_logging::<&str>(None);
-    let mock_clock = MockClock::new();
+    let mock_time = Arc::new(AtomicU64::new(0));
+    let mock_time_clone = Arc::clone(&mock_time);
+    let mock_clock = TimeGetter::new(Arc::new(move || {
+        Duration::from_secs(mock_time_clone.load(Ordering::SeqCst))
+    }));
     let mut mock_usage = MockGetMemoryUsage::new();
     // Add parent
     // Add first child
@@ -1263,7 +1234,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     // the trimming process
     log::debug!("parent_id: {}", parent_id.get());
     log::debug!("before adding parent");
-    let mut mempool = Mempool::new(config, chainstate_interface, mock_clock.clone(), mock_usage);
+    let mut mempool = Mempool::new(config, chainstate_interface, mock_clock, mock_usage);
     mempool.add_transaction(parent).await?;
     log::debug!("after adding parent");
 
@@ -1401,7 +1372,10 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     // between txs. Finally, when the fee rate falls under INCREMENTAL_RELAY_THRESHOLD, we
     // observer that it is set to zero
     let halflife = ROLLING_FEE_BASE_HALFLIFE / 4;
-    mock_clock.increment(halflife);
+    mock_time.store(
+        mock_time.load(Ordering::SeqCst) + halflife.as_secs(),
+        Ordering::SeqCst,
+    );
     let dummy_tx = TransactionBuilder::new()
         .add_input(TxInput::new(
             OutPointSourceId::Transaction(child_2_high_fee_id),
@@ -1434,7 +1408,10 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         rolling_fee / std::num::NonZeroU128::new(2).expect("nonzero")
     );
 
-    mock_clock.increment(halflife);
+    mock_time.store(
+        mock_time.load(Ordering::SeqCst) + halflife.as_secs(),
+        Ordering::SeqCst,
+    );
     log::debug!("Second attempt to add dummy");
     mempool.add_transaction(dummy_tx).await?;
     log::debug!(
@@ -1451,7 +1428,10 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     );
 
     // Add another dummmy until rolling feerate drops to zero
-    mock_clock.increment(halflife);
+    mock_time.store(
+        mock_time.load(Ordering::SeqCst) + halflife.as_secs(),
+        Ordering::SeqCst,
+    );
 
     let another_dummy = TransactionBuilder::new()
         .add_input(TxInput::new(
@@ -1666,7 +1646,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn check_txs_sorted_by_descendant_sore(mempool: &Mempool<SystemClock, SystemUsageEstimator>) {
+fn check_txs_sorted_by_descendant_sore(mempool: &Mempool<SystemUsageEstimator>) {
     let txs_by_descendant_score =
         mempool.store.txs_by_descendant_score.values().flatten().collect::<Vec<_>>();
     for i in 0..(txs_by_descendant_score.len() - 1) {
@@ -1687,7 +1667,11 @@ fn check_txs_sorted_by_descendant_sore(mempool: &Mempool<SystemClock, SystemUsag
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
-    let mock_clock = MockClock::new();
+    let mock_time = Arc::new(AtomicU64::new(0));
+    let mock_time_clone = Arc::clone(&mock_time);
+    let mock_clock = TimeGetter::new(Arc::new(move || {
+        Duration::from_secs(mock_time_clone.load(Ordering::SeqCst))
+    }));
     logging::init_logging::<&str>(None);
 
     let tf = TestFramework::default();
@@ -1716,7 +1700,7 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut mempool = Mempool::new(
         chainstate.get_chain_config(),
         start_chainstate(chainstate).await,
-        mock_clock.clone(),
+        mock_clock,
         SystemUsageEstimator {},
     );
     mempool.add_transaction(parent).await?;
@@ -1737,7 +1721,7 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     )
     .await?;
     let child_id = child.get_id();
-    mock_clock.set(DEFAULT_MEMPOOL_EXPIRY + Duration::new(1, 0));
+    mock_time.store(DEFAULT_MEMPOOL_EXPIRY.as_secs() + 1, Ordering::SeqCst);
 
     assert!(matches!(
         mempool.add_transaction(child).await,
@@ -1773,7 +1757,7 @@ async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
     let config = chainstate.get_chain_config();
     let chainstate_handle = start_chainstate(chainstate).await;
 
-    let mut mempool = Mempool::new(config, chainstate_handle, SystemClock, mock_usage);
+    let mut mempool = Mempool::new(config, chainstate_handle, Default::default(), mock_usage);
 
     let tx = TransactionBuilder::new()
         .add_input(TxInput::new(
