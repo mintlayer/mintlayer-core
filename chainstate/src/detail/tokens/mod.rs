@@ -69,7 +69,7 @@ pub fn check_nft_issuance_data(
         tx_id,
         source_block_id,
     )?;
-    check_alphanumeric(&issuance.metadata.ticker, tx_id, source_block_id)?;
+    check_is_ticker_alphanumeric(&issuance.metadata.ticker, tx_id, source_block_id)?;
 
     // Name
     check_token_name(
@@ -78,16 +78,16 @@ pub fn check_nft_issuance_data(
         tx_id,
         source_block_id,
     )?;
-    check_alphanumeric(&issuance.metadata.name, tx_id, source_block_id)?;
+    check_is_name_alphanumeric(&issuance.metadata.name, tx_id, source_block_id)?;
 
     // Description
     check_token_description(
         chain_config,
-        &issuance.metadata.name,
+        &issuance.metadata.description,
         tx_id,
         source_block_id,
     )?;
-    check_alphanumeric(&issuance.metadata.description, tx_id, source_block_id)?;
+    check_is_description_alphanumeric(&issuance.metadata.description, tx_id, source_block_id)?;
 
     // Icon URL
     match &issuance.metadata.icon_url {
@@ -121,7 +121,7 @@ pub fn check_nft_issuance_data(
     // issuance.metadata.valid_since: Option<u64>,
     // issuance.metadata.refund_period: Option<u64>,
 
-    unimplemented!()
+    Ok(())
 }
 
 pub fn check_tokens_issuance_data(
@@ -137,7 +137,7 @@ pub fn check_tokens_issuance_data(
     check_token_ticker(chain_config, token_ticker, tx_id, source_block_id)?;
 
     // Check the name consists of alphanumeric characters only
-    check_alphanumeric(token_ticker, tx_id, source_block_id)?;
+    check_is_ticker_alphanumeric(token_ticker, tx_id, source_block_id)?;
 
     // Check amount
     if amount_to_issue == &Amount::from_atoms(0) {

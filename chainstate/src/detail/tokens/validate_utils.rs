@@ -8,26 +8,28 @@ use crate::TokensError;
 
 pub fn check_token_name(
     chain_config: &ChainConfig,
-    token_name: &[u8],
+    name: &[u8],
     tx_id: Id<Transaction>,
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
-    if token_name.len() > chain_config.token_max_name_len() || token_name.is_empty() {
-        return Err(TokensError::IssueErrorInvalidTickerLength(
+    // Check length
+    if name.len() > chain_config.token_max_name_len() || name.is_empty() {
+        return Err(TokensError::IssueErrorInvalidNameLength(
             tx_id,
             source_block_id,
         ));
     }
+
     Ok(())
 }
 
 pub fn check_token_ticker(
     chain_config: &ChainConfig,
-    token_ticker: &[u8],
+    ticker: &[u8],
     tx_id: Id<Transaction>,
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
-    if token_ticker.len() > chain_config.token_max_ticker_len() || token_ticker.is_empty() {
+    if ticker.len() > chain_config.token_max_ticker_len() || ticker.is_empty() {
         return Err(TokensError::IssueErrorInvalidTickerLength(
             tx_id,
             source_block_id,
@@ -38,12 +40,12 @@ pub fn check_token_ticker(
 
 pub fn check_token_description(
     chain_config: &ChainConfig,
-    token_ticker: &[u8],
+    description: &[u8],
     tx_id: Id<Transaction>,
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
-    if token_ticker.len() > chain_config.token_max_ticker_len() || token_ticker.is_empty() {
-        return Err(TokensError::IssueErrorInvalidTickerLength(
+    if description.len() > chain_config.token_max_description_len() || description.is_empty() {
+        return Err(TokensError::IssueErrorInvalidDescriptionLength(
             tx_id,
             source_block_id,
         ));
@@ -51,7 +53,8 @@ pub fn check_token_description(
     Ok(())
 }
 
-pub fn check_alphanumeric(
+// FIXME(nft_issuance): These functions below are equal, make one general function
+pub fn check_is_ticker_alphanumeric(
     str: &[u8],
     tx_id: Id<Transaction>,
     source_block_id: Id<Block>,
@@ -64,6 +67,42 @@ pub fn check_alphanumeric(
     ensure!(
         is_alphanumeric,
         TokensError::IssueErrorTickerHasNoneAlphaNumericChar(tx_id, source_block_id)
+    );
+    Ok(())
+}
+
+pub fn check_is_name_alphanumeric(
+    str: &[u8],
+    tx_id: Id<Transaction>,
+    source_block_id: Id<Block>,
+) -> Result<(), TokensError> {
+    let is_alphanumeric = String::from_utf8(str.to_vec())
+        .map_err(|_| TokensError::IssueErrorNameHasNoneAlphaNumericChar(tx_id, source_block_id))?
+        .chars()
+        .all(char::is_alphanumeric);
+
+    ensure!(
+        is_alphanumeric,
+        TokensError::IssueErrorNameHasNoneAlphaNumericChar(tx_id, source_block_id)
+    );
+    Ok(())
+}
+
+pub fn check_is_description_alphanumeric(
+    str: &[u8],
+    tx_id: Id<Transaction>,
+    source_block_id: Id<Block>,
+) -> Result<(), TokensError> {
+    let is_alphanumeric = String::from_utf8(str.to_vec())
+        .map_err(|_| {
+            TokensError::IssueErrorDescriptionHasNoneAlphaNumericChar(tx_id, source_block_id)
+        })?
+        .chars()
+        .all(char::is_alphanumeric);
+
+    ensure!(
+        is_alphanumeric,
+        TokensError::IssueErrorDescriptionHasNoneAlphaNumericChar(tx_id, source_block_id)
     );
     Ok(())
 }
@@ -90,5 +129,6 @@ pub fn check_url(
 }
 
 pub fn check_media_hash(_hash: &Vec<u8>) -> Result<(), TokensError> {
-    unimplemented!()
+    // FIXME(nft_issuance): Research: What kinds of Hash might be here? Can we check correctness of the hash.
+    Ok(())
 }

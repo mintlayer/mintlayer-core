@@ -150,10 +150,18 @@ impl From<TxMainChainIndexError> for TxIndexError {
 pub enum TokensError {
     #[error("Blockchain storage error: {0}")]
     StorageError(#[from] chainstate_storage::Error),
+    #[error("Invalid name length in issuance transaction {0} in block {1}")]
+    IssueErrorInvalidNameLength(Id<Transaction>, Id<Block>),
     #[error("Invalid ticker length in issuance transaction {0} in block {1}")]
     IssueErrorInvalidTickerLength(Id<Transaction>, Id<Block>),
+    #[error("Invalid ticker length in issuance transaction {0} in block {1}")]
+    IssueErrorInvalidDescriptionLength(Id<Transaction>, Id<Block>),
     #[error("Invalid character in token ticker in issuance transaction {0} in block {1}")]
     IssueErrorTickerHasNoneAlphaNumericChar(Id<Transaction>, Id<Block>),
+    #[error("Invalid character in token name in issuance transaction {0} in block {1}")]
+    IssueErrorNameHasNoneAlphaNumericChar(Id<Transaction>, Id<Block>),
+    #[error("Invalid character in token description in issuance transaction {0} in block {1}")]
+    IssueErrorDescriptionHasNoneAlphaNumericChar(Id<Transaction>, Id<Block>),
     #[error("Incorrect amount in issuance transaction {0} in block {1}")]
     IssueAmountIsZero(Id<Transaction>, Id<Block>),
     #[error("Too many decimals in issuance transaction {0} in block {1}")]

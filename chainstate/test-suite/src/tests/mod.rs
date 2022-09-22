@@ -36,12 +36,12 @@ mod chainstate_storage_tests;
 mod double_spend_tests;
 mod events_tests;
 mod fungible_tokens;
+mod non_fungible_tokens;
 mod output_timelock;
 mod processing_tests;
 mod reorgs_tests;
 mod signature_tests;
 mod syncing_tests;
-mod non_fungible_tokens;
 
 type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
 
