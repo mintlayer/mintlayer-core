@@ -27,6 +27,7 @@ pub use error::OrphanCheckError;
 pub use transaction_verifier::error::ConnectTransactionError;
 pub use transaction_verifier::error::TokensError;
 
+pub mod bootstrap;
 mod block_index_history_iter;
 mod chainstateref;
 mod error;

@@ -140,6 +140,7 @@ where
                 FailedToInitializeChainstate(_) => 0,
                 ProcessBlockError(err) => err.ban_score(),
                 FailedToReadProperty(_) => 0,
+                chainstate::ChainstateError::BootstrapError(_) => 0,
             },
         };
 

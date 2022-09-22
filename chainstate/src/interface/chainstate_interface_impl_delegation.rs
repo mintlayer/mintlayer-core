@@ -226,6 +226,13 @@ impl<
     fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
         self.deref().get_block_id_tree_as_list()
     }
+
+    fn import_bootstrap_file(
+        &mut self,
+        bootstrap_file_path: &std::path::Path,
+    ) -> Result<(), ChainstateError> {
+        self.deref_mut().import_bootstrap_file(bootstrap_file_path)
+    }
 }
 
 #[cfg(test)]

@@ -134,4 +134,10 @@ pub trait ChainstateInterface: Send {
 
     /// Returns a list of all blocks in the block tree, including orphans. The length cannot be predicted before the call
     fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
+
+    /// Imports a bootstrap file exported with rpc
+    fn import_bootstrap_file(
+        &mut self,
+        bootstrap_file_path: &std::path::Path,
+    ) -> Result<(), ChainstateError>;
 }

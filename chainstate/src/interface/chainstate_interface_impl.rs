@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use crate::detail::bootstrap::import_bootstrap_stream;
 use crate::detail::calculate_median_time_past;
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, GenBlockIndex};
@@ -339,5 +340,23 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
             .query()
             .get_block_id_tree_as_list()
             .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn import_bootstrap_file(
+        &mut self,
+        bootstrap_file_path: &std::path::Path,
+    ) -> Result<(), ChainstateError> {
+        let magic_bytes = self.chainstate.chain_config().magic_bytes().to_vec();
+
+        let file_obj = std::fs::File::open(bootstrap_file_path)
+            .map_err(|e| ChainstateError::BootstrapError(e.into()))?;
+
+        let mut file_reader = std::io::BufReader::new(file_obj);
+
+        let mut block_processor = |block| self.chainstate.process_block(block, BlockSource::Local);
+
+        import_bootstrap_stream(&magic_bytes, &mut file_reader, &mut block_processor)?;
+
+        Ok(())
     }
 }
