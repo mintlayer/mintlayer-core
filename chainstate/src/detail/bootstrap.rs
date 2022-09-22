@@ -24,16 +24,16 @@ use crate::BlockError;
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum BootstrapError {
     #[error("File error: {0}")]
-    FileError(String),
+    File(String),
     #[error("Deserialization error: {0}")]
-    DeserializationError(#[from] serialization::Error),
+    Deserialization(#[from] serialization::Error),
     #[error("Block import error: {0}")]
-    BlockImportError(#[from] BlockError),
+    BlockProcessing(#[from] BlockError),
 }
 
 impl From<std::io::Error> for BootstrapError {
     fn from(error: std::io::Error) -> Self {
-        Self::FileError(error.to_string())
+        Self::File(error.to_string())
     }
 }
 
