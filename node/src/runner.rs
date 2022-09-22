@@ -163,6 +163,7 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
         chain_max_block_header_size,
         chain_max_block_size_with_standard_txs,
         chain_max_block_size_with_smart_contracts,
+        chain_gossipsub_max_size,
     } = options;
 
     let mut builder = ChainConfigBuilder::new(ChainType::Regtest);
@@ -199,6 +200,7 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
     update_builder!(max_block_header_size);
     update_builder!(max_block_size_with_standard_txs);
     update_builder!(max_block_size_with_smart_contracts);
+    update_builder!(gossipsub_max_size);
 
     Ok(builder.build())
 }

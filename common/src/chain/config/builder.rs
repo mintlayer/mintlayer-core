@@ -103,6 +103,7 @@ pub struct Builder {
     token_max_dec_count: u8,
     token_max_ticker_len: usize,
     empty_consensus_reward_maturity_distance: BlockDistance,
+    gossipsub_max_size: usize,
 }
 
 impl Builder {
@@ -127,6 +128,7 @@ impl Builder {
             token_max_dec_count: super::TOKEN_MAX_DEC_COUNT,
             token_max_ticker_len: super::TOKEN_MAX_TICKER_LEN,
             empty_consensus_reward_maturity_distance: BlockDistance::new(0),
+            gossipsub_max_size: 2 * 1024 * 1024,
         }
     }
 
@@ -158,6 +160,7 @@ impl Builder {
             token_max_dec_count,
             token_max_ticker_len,
             empty_consensus_reward_maturity_distance,
+            gossipsub_max_size,
         } = self;
 
         let emission_schedule = match emission_schedule {
@@ -197,6 +200,7 @@ impl Builder {
             token_max_dec_count,
             token_max_ticker_len,
             empty_consensus_reward_maturity_distance,
+            gossipsub_max_size,
         }
     }
 }
@@ -225,6 +229,7 @@ impl Builder {
     builder_method!(max_block_size_with_smart_contracts: usize);
     builder_method!(net_upgrades: NetUpgrades<UpgradeVersion>);
     builder_method!(empty_consensus_reward_maturity_distance: BlockDistance);
+    builder_method!(gossipsub_max_size: usize);
 
     /// Set the genesis block to be the unit test version
     pub fn genesis_unittest(mut self, premine_destination: Destination) -> Self {

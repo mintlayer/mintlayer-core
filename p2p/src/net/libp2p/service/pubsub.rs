@@ -18,7 +18,7 @@ use crate::{
     message,
     net::{
         self,
-        libp2p::{constants, types},
+        libp2p::types,
         types::{PubSubEvent, PubSubTopic},
         NetworkingService, PubSubService,
     },
@@ -35,6 +35,10 @@ pub struct Libp2pPubSubHandle<T: NetworkingService> {
 
     /// Channel for receiving pubsub events from libp2p backend
     gossip_rx: mpsc::UnboundedReceiver<types::PubSubEvent>,
+
+    /// The maximum size of the `Announcement` message in bytes.
+    gossipsub_max_message_size: usize,
+
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
@@ -42,10 +46,12 @@ impl<T: NetworkingService> Libp2pPubSubHandle<T> {
     pub fn new(
         cmd_tx: mpsc::UnboundedSender<types::Command>,
         gossip_rx: mpsc::UnboundedReceiver<types::PubSubEvent>,
+        gossipsub_max_message_size: usize,
     ) -> Self {
         Self {
             cmd_tx,
             gossip_rx,
+            gossipsub_max_message_size,
             _marker: Default::default(),
         }
     }
@@ -59,10 +65,10 @@ where
     async fn publish(&mut self, announcement: message::Announcement) -> crate::Result<()> {
         let encoded = announcement.encode();
         ensure!(
-            encoded.len() <= constants::GOSSIPSUB_MAX_TRANSMIT_SIZE,
+            encoded.len() <= self.gossipsub_max_message_size,
             P2pError::PublishError(PublishError::MessageTooLarge(
                 Some(encoded.len()),
-                Some(constants::GOSSIPSUB_MAX_TRANSMIT_SIZE),
+                Some(self.gossipsub_max_message_size),
             ))
         );
 

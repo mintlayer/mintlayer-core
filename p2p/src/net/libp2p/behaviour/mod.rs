@@ -106,7 +106,7 @@ impl Libp2pBehaviour {
         let gossipsub_config = GossipsubConfigBuilder::default()
             .heartbeat_interval(GOSSIPSUB_HEARTBEAT)
             .validation_mode(ValidationMode::Strict)
-            .max_transmit_size(GOSSIPSUB_MAX_TRANSMIT_SIZE)
+            .max_transmit_size(config.gossipsub_max_size())
             .validate_messages()
             .build()
             .expect("configuration to be valid");

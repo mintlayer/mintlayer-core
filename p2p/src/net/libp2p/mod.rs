@@ -128,7 +128,7 @@ impl NetworkingService for Libp2pService {
 
         Ok((
             Self::ConnectivityHandle::new(peer_id, cmd_tx.clone(), conn_rx),
-            Self::PubSubHandle::new(cmd_tx.clone(), gossip_rx),
+            Self::PubSubHandle::new(cmd_tx.clone(), gossip_rx, chain_config.gossipsub_max_size()),
             Self::SyncingMessagingHandle::new(cmd_tx, sync_rx),
         ))
     }

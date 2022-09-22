@@ -22,7 +22,6 @@ use std::time::Duration;
 /// Gossipsub configuration
 // TODO: config or spec?
 pub const GOSSIPSUB_HEARTBEAT: Duration = Duration::from_secs(10);
-pub const GOSSIPSUB_MAX_TRANSMIT_SIZE: usize = 2 * 1024 * 1024;
 
 /// Ping configuration
 /// NOTE: these are not from config but part of Mintlayer's protocol spec

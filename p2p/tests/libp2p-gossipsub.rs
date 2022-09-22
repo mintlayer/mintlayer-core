@@ -295,14 +295,13 @@ async fn test_libp2p_gossipsub_too_big_message() {
         .unwrap(),
     );
     let encoded_size = message.encode().len();
-    // TODO: move this to a spec.rs so it's accessible everywhere
-    const MAXIMUM_SIZE: usize = 2 * 1024 * 1024;
+    let maximum_size = config.gossipsub_max_size();
 
     assert_eq!(
         pubsub1.publish(message).await,
         Err(P2pError::PublishError(PublishError::MessageTooLarge(
             Some(encoded_size),
-            Some(MAXIMUM_SIZE)
+            Some(maximum_size)
         )))
     );
 }

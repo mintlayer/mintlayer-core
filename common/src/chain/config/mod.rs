@@ -86,6 +86,8 @@ pub struct ChainConfig {
     token_max_dec_count: u8,
     token_max_ticker_len: usize,
     empty_consensus_reward_maturity_distance: BlockDistance,
+    /// The maximum announcement message size in bytes.
+    gossipsub_max_size: usize,
 }
 
 impl ChainConfig {
@@ -180,6 +182,10 @@ impl ChainConfig {
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
+    }
+
+    pub fn gossipsub_max_size(&self) -> usize {
+        self.gossipsub_max_size
     }
 }
 
