@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::num::NonZeroUsize;
+
 use common::primitives::amount::Amount;
 
 lazy_static::lazy_static! {
@@ -35,7 +37,7 @@ impl FeeRate {
         }
     }
 
-    pub(crate) fn from_total_tx_fee(total_tx_fee: Amount, tx_size: usize) -> Self {
+    pub(crate) fn from_total_tx_fee(total_tx_fee: Amount, tx_size: NonZeroUsize) -> Self {
         Self {
             atoms_per_kb: Self::div_up(1000 * total_tx_fee.into_atoms(), tx_size),
         }
@@ -52,9 +54,8 @@ impl FeeRate {
     }
 
     // TODO Use NonZeroUsize for divisor
-    fn div_up(dividend: u128, divisor: usize) -> u128 {
-        debug_assert!(divisor != 0);
-        let divisor = u128::try_from(divisor).expect("div_up conversion");
+    fn div_up(dividend: u128, divisor: NonZeroUsize) -> u128 {
+        let divisor = u128::try_from(usize::from(divisor)).expect("div_up conversion");
         (dividend + divisor - 1) / divisor
     }
 }
@@ -85,7 +86,7 @@ mod tests {
     fn test_div_up() {
         let fee = 7;
         let tx_size = usize::MAX;
-        let rate = FeeRate::div_up(fee, tx_size);
+        let rate = FeeRate::div_up(fee, NonZeroUsize::new(tx_size).unwrap());
         assert_eq!(rate, 1);
     }
 }

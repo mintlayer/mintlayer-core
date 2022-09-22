@@ -15,6 +15,7 @@
 
 use std::collections::BTreeSet;
 use std::fmt::Debug;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -691,7 +692,8 @@ where
             );
             removed_fees.push(FeeRate::from_total_tx_fee(
                 removed.fee,
-                removed.tx.encoded_size(),
+                NonZeroUsize::new(removed.tx.encoded_size())
+                    .expect("transaction cannot have zero size"),
             ));
             self.store.drop_tx_and_descendants(removed.tx.get_id());
         }
