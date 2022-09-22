@@ -19,10 +19,10 @@ use std::sync::Arc;
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::chain::ChainConfig;
+use common::time_getter::TimeGetter;
 use pool::MempoolInterface;
 
 use crate::config::GetMemoryUsage;
-use crate::config::GetTime;
 use crate::error::Error as MempoolError;
 use crate::pool::Mempool;
 
@@ -38,14 +38,13 @@ type MempoolHandle = subsystem::Handle<Box<dyn MempoolInterface>>;
 
 pub type Result<T> = core::result::Result<T, MempoolError>;
 
-pub fn make_mempool<T, M>(
+pub fn make_mempool<M>(
     chain_config: Arc<ChainConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
-    time_getter: T,
+    time_getter: TimeGetter,
     memory_usage_estimator: M,
 ) -> crate::Result<Box<dyn MempoolInterface>>
 where
-    T: GetTime + 'static + Send + std::marker::Sync,
     M: GetMemoryUsage + 'static + Send + std::marker::Sync,
 {
     Ok(Box::new(Mempool::new(

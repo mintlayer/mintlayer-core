@@ -74,7 +74,7 @@ pub async fn initialize(
         mempool::make_mempool(
             Arc::clone(&chain_config),
             chainstate.clone(),
-            mempool::pool::SystemClock {},
+            Default::default(),
             mempool::pool::SystemUsageEstimator {},
         )?,
     );

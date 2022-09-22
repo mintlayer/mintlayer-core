@@ -90,7 +90,6 @@ impl MempoolStore {
 
     pub(super) fn is_empty(&self) -> bool {
         self.txs_by_id.is_empty()
-        // TODO maybe add some asserts here
     }
 
     // Checks whether the outpoint is to be created by an unconfirmed tx
