@@ -76,7 +76,7 @@ pub trait BlockchainStorageRead: UtxosStorageRead {
     /// Get token id by id of the creation tx
     fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
 
-    /// Get token id by id of the creation tx
+    /// Get block tree as height vs ids
     fn get_block_tree_by_height(&self) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 }
 
