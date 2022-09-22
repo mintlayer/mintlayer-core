@@ -658,7 +658,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             let block_id = block_id
                 .classify(self.chain_config)
                 .chain_block_id()
-                .expect("Since the index is never zero, this cannot be genesis");
+                .expect("Since the height is never zero, this cannot be genesis");
             Ok(block_id)
         };
 
