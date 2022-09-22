@@ -326,4 +326,18 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
 
         outpoint_values
     }
+
+    fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
+        self.chainstate
+            .query()
+            .get_mainchain_blocks_list()
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
+        self.chainstate
+            .query()
+            .get_block_id_tree_as_list()
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
 }

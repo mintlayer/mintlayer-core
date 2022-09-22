@@ -117,5 +117,7 @@ mockall::mock! {
             &self,
             tx: &Transaction,
         ) -> Result<Vec<Option<Amount>>, ChainstateError>;
+        fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
+        fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
     }
 }

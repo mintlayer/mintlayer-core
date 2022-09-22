@@ -128,4 +128,10 @@ pub trait ChainstateInterface: Send {
         &self,
         tx: &Transaction,
     ) -> Result<Vec<Option<common::primitives::Amount>>, ChainstateError>;
+
+    /// Returns a list of all block ids in mainchain in order (starting from block of height 1, hence the result length is best_height - 1)
+    fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
+
+    //. Returns a list of all blocks in the block tree, including orphans. The length cannot be predicted before the call
+    fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
 }

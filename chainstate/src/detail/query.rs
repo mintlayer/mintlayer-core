@@ -233,4 +233,12 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateQuery<'a, S, O> {
     ) -> Result<Option<TokenId>, PropertyQueryError> {
         self.chainstate_ref.get_token_id(tx_id)
     }
+
+    pub fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
+        self.chainstate_ref.get_mainchain_blocks_list()
+    }
+
+    pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
+        self.chainstate_ref.get_block_id_tree_as_list()
+    }
 }

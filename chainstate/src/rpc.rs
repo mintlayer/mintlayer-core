@@ -15,12 +15,14 @@
 
 //! Chainstate subsystem RPC handler
 
+use std::io::Write;
+
 use crate::{Block, BlockSource, ChainstateError, GenBlock};
 use common::{
     chain::tokens::{RPCTokenInfo, TokenId},
     primitives::{BlockHeight, Id},
 };
-use serialization::Decode;
+use serialization::{Decode, Encode};
 use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, namespace = "chainstate")]
@@ -51,6 +53,14 @@ trait ChainstateRpc {
     /// Get token information
     #[method(name = "token_info")]
     async fn token_info(&self, token_id: TokenId) -> rpc::Result<Option<RPCTokenInfo>>;
+
+    /// Write blocks to disk
+    #[method(name = "export_bootstrap_file")]
+    async fn export_bootstrap_file(
+        &self,
+        file_path: &std::path::Path,
+        include_orphans: bool,
+    ) -> rpc::Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -86,6 +96,37 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn token_info(&self, token_id: TokenId) -> rpc::Result<Option<RPCTokenInfo>> {
         handle_error(self.call(move |this| this.get_token_info_for_rpc(token_id)).await)
+    }
+
+    async fn export_bootstrap_file(
+        &self,
+        file_path: &std::path::Path,
+        include_orphans: bool,
+    ) -> rpc::Result<()> {
+        let blocks_list = if include_orphans {
+            handle_error(self.call(move |this| this.get_block_id_tree_as_list()).await)?
+        } else {
+            handle_error(self.call(move |this| this.get_mainchain_blocks_list()).await)?
+        };
+        let chain_config = self
+            .call(move |this| this.get_chain_config())
+            .await
+            .map_err(rpc::Error::to_call_error)?;
+
+        let magic_bytes = chain_config.magic_bytes();
+
+        let file_obj = std::fs::File::create(file_path).map_err(rpc::Error::to_call_error)?;
+        let mut writer = std::io::BufWriter::new(&file_obj);
+        for block_id in blocks_list {
+            writer.write(magic_bytes).map_err(rpc::Error::to_call_error)?;
+            let block = handle_error(self.call(move |this| this.get_block(block_id)).await)?
+                .ok_or(rpc::Error::Custom(
+                    "Block not found by id after having being read from chainstate block index"
+                        .to_owned(),
+                ))?;
+            writer.write(&block.encode())?;
+        }
+        Ok(())
     }
 }
 

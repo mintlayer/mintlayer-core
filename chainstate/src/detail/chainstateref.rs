@@ -647,6 +647,39 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
         Ok(tx_verifier)
     }
+
+    pub fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
+        // TODO: write tests for this
+        let id_from_height = |block_height: u64| -> Result<Id<Block>, PropertyQueryError> {
+            let block_height: BlockHeight = block_height.into();
+            let block_id = self
+                .get_block_id_by_height(&block_height)?
+                .expect("Since block_height is >= best_height, this must exist");
+            let block_id = block_id
+                .classify(self.chain_config)
+                .chain_block_id()
+                .expect("Since the index is never zero, this cannot be genesis");
+            Ok(block_id)
+        };
+
+        let best_block_index =
+            self.get_best_block_index()?.expect("Failed to get best block index");
+        let best_height = best_block_index.block_height();
+        let best_height_int: u64 = best_height.into();
+        let mut result = Vec::with_capacity(best_height_int as usize);
+        for block_height in 1..=best_height_int {
+            result.push(id_from_height(block_height)?);
+        }
+        Ok(result)
+    }
+
+    pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
+        // TODO: write tests for this
+
+        // TODO: to find all block ids, we iterate over all block index entries, and fill a map of BTreeMap<BlockHeight, Vec<Id<Block>> based on height,
+        // then flatten that map into a vec
+        todo!()
+    }
 }
 
 impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> {
