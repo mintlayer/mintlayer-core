@@ -57,8 +57,6 @@ where
 {
     // TODO this calculation is already done in ChainState, reuse it
     async fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError> {
-        use std::time::Instant;
-        let before = Instant::now();
         let tx_clone = tx.clone();
         let chainstate_input_values = self
             .chainstate_handle
@@ -91,7 +89,6 @@ where
             })
             .sum::<Option<_>>()
             .ok_or(TxValidationError::OutputValuesOverflow)?;
-        eprintln!("time getting fee: {:?}", before.elapsed());
         (sum_inputs - sum_outputs).ok_or(TxValidationError::InputsBelowOutputs)
     }
 }
