@@ -26,7 +26,7 @@ use common::chain::{
     tokens::{RPCTokenInfo, TokenId},
     ChainConfig, OutPointSourceId, TxMainChainIndex,
 };
-use common::primitives::{BlockHeight, Id};
+use common::primitives::{Amount, BlockHeight, Id};
 use utils::eventhandler::EventHandler;
 
 use crate::{ChainstateError, ChainstateEvent};
@@ -127,7 +127,7 @@ pub trait ChainstateInterface: Send {
     fn get_inputs_outpoints_values(
         &self,
         tx: &Transaction,
-    ) -> Result<Vec<Option<common::primitives::Amount>>, ChainstateError>;
+    ) -> Result<Vec<Option<Amount>>, ChainstateError>;
 
     /// Returns a list of all block ids in mainchain in order (starting from block of height 1, hence the result length is best_height - 1)
     fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
