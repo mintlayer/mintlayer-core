@@ -326,7 +326,7 @@ where
             .inputs()
             .iter()
             .filter_map(|input| input.outpoint().tx_id().get_tx_id().cloned())
-            .filter_map(|id| self.store.txs_by_id.contains_key(&id.get()).then(|| id))
+            .filter_map(|id| self.store.txs_by_id.contains_key(&id).then(|| id))
             .collect::<BTreeSet<_>>();
 
         let fee = self.try_get_fee(&tx).await?;
@@ -532,10 +532,7 @@ where
         conflicts_with_descendants: &BTreeSet<Id<Transaction>>,
     ) -> Result<Amount, TxValidationError> {
         let conflicts_with_descendants = conflicts_with_descendants.iter().map(|conflict_id| {
-            self.store
-                .txs_by_id
-                .get(&conflict_id.get())
-                .expect("tx should exist in mempool")
+            self.store.txs_by_id.get(conflict_id).expect("tx should exist in mempool")
         });
 
         let total_conflict_fees = conflicts_with_descendants
@@ -615,7 +612,7 @@ where
 
     async fn finalize_tx(&mut self, tx: Transaction) -> Result<(), Error> {
         let entry = self.create_entry(tx).await?;
-        let id = entry.tx.get_id().get();
+        let id = entry.tx.get_id();
         self.store.add_tx(entry)?;
         self.remove_expired_transactions();
         ensure!(
@@ -648,7 +645,7 @@ where
             .txs_by_creation_time
             .values()
             .flatten()
-            .map(|entry_id| self.store.txs_by_id.get(&entry_id.get()).expect("entry should exist"))
+            .map(|entry_id| self.store.txs_by_id.get(entry_id).expect("entry should exist"))
             .filter(|entry| {
                 let now = self.clock.get_time();
                 let expired = now.saturating_sub(entry.creation_time) > self.max_tx_age;
@@ -683,12 +680,8 @@ where
                 .flatten()
                 .next()
                 .expect("pool not empty");
-            let removed = self
-                .store
-                .txs_by_id
-                .get(&removed_id.get())
-                .expect("tx with id should exist")
-                .clone();
+            let removed =
+                self.store.txs_by_id.get(removed_id).expect("tx with id should exist").clone();
 
             log::debug!(
                 "Mempool trim: Evicting tx {} which has a descendant score of {:?} and has size {}",
@@ -772,7 +765,7 @@ where
     }
 
     fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
-        self.store.txs_by_id.contains_key(&tx_id.get())
+        self.store.txs_by_id.contains_key(tx_id)
     }
 
     // TODO Consider returning an error
