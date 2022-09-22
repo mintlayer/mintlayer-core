@@ -59,7 +59,7 @@ fn hierarchy_test_utxo() {
         .return_const(Ok(None));
     store
         .expect_get_undo_data()
-        .with(predicate::eq(block_undo_id_0.clone()))
+        .with(predicate::eq(block_undo_id_0))
         .times(1)
         .return_const(Ok(None));
 
@@ -200,12 +200,12 @@ fn hierarchy_test_tokens() {
         .return_const(Ok(Some(H256::zero().into())));
     store
         .expect_get_token_aux_data()
-        .with(predicate::eq(token_id_0.clone()))
+        .with(predicate::eq(token_id_0))
         .times(1)
         .return_const(Ok(None));
     store
         .expect_get_token_id_from_issuance_tx()
-        .with(predicate::eq(tx_id_0.clone()))
+        .with(predicate::eq(tx_id_0))
         .times(1)
         .return_const(Ok(None));
 
