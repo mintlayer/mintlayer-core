@@ -15,6 +15,8 @@
 
 //! A mock version of the blockchain storage.
 
+use std::collections::BTreeMap;
+
 use chainstate_types::BlockIndex;
 use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::{
@@ -57,6 +59,10 @@ mockall::mock! {
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
 
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
+
+        fn get_block_tree_by_height(
+            &self,
+        ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
     }
 
     impl UtxosStorageRead for Store {
@@ -141,6 +147,9 @@ mockall::mock! {
 
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
+        fn get_block_tree_by_height(
+            &self,
+        ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
     }
 
     impl crate::UtxosStorageRead for StoreTxRo {
@@ -184,6 +193,9 @@ mockall::mock! {
 
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
+        fn get_block_tree_by_height(
+            &self,
+        ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
     }
 
     impl UtxosStorageRead for StoreTxRw {

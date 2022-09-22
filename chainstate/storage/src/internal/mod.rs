@@ -26,6 +26,7 @@ use common::{
     primitives::{BlockHeight, Id, Idable},
 };
 use serialization::{Codec, Decode, DecodeAll, Encode, EncodeLike};
+use std::collections::BTreeMap;
 use storage::schema;
 use utxo::{BlockUndo, Utxo, UtxosStorageRead, UtxosStorageWrite};
 
@@ -178,6 +179,10 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
 
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
+
+        fn get_block_tree_by_height(
+            &self,
+        ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
     }
 }
 
@@ -325,6 +330,20 @@ macro_rules! impl_read_ops {
                 issuance_tx_id: &Id<Transaction>,
             ) -> crate::Result<Option<TokenId>> {
                 self.read::<DBIssuanceTxVsTokenId, _, _>(&issuance_tx_id)
+            }
+
+            fn get_block_tree_by_height(
+                &self,
+            ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>> {
+                let map = self.0.get::<DBBlockIndex, _>();
+                let items = map.prefix_iter(&())?.map(|(_id, bi)| bi.decode());
+
+                let mut result = BTreeMap::<BlockHeight, Vec<Id<Block>>>::new();
+                for bi in items {
+                    result.entry(bi.block_height()).or_default().push(*bi.block_id());
+                }
+
+                Ok(result)
             }
         }
 

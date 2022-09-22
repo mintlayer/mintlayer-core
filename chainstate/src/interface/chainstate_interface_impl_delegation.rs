@@ -218,6 +218,14 @@ impl<
     ) -> Result<Vec<Option<common::primitives::Amount>>, ChainstateError> {
         self.deref().get_inputs_outpoints_values(tx)
     }
+
+    fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
+        self.deref().get_mainchain_blocks_list()
+    }
+
+    fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
+        self.deref().get_block_id_tree_as_list()
+    }
 }
 
 #[cfg(test)]

@@ -31,6 +31,7 @@ use rstest::rstest;
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 
+mod bootstrap;
 mod double_spend_tests;
 mod events_tests;
 mod fungible_tokens;
