@@ -62,17 +62,12 @@ impl FeeRate {
         self.atoms_per_kb
     }
 
-    // TODO Use NonZeroUsize for divisor
     fn div_up(dividend: Amount, divisor: NonZeroUsize) -> Amount {
         let divisor = u128::try_from(usize::from(divisor)).expect("div_up conversion");
-        if divisor == 1 {
-            dividend
-        } else if (dividend % divisor).expect("divisor is nonzero") == Amount::from_atoms(0) {
-            (dividend / divisor).expect("divisor is nonzero")
-        } else {
-            ((dividend / divisor).expect("divisor is nonzero") + Amount::from_atoms(1))
-                .expect("should not overflow")
-        }
+        let result = dividend.into_atoms() / divisor;
+        let round_up =
+            ((dividend % divisor).expect("nonzero divisor") > Amount::from_atoms(0)) as u128;
+        Amount::from_atoms(result + round_up)
     }
 }
 
