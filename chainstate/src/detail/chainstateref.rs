@@ -676,9 +676,13 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
         // TODO: write tests for this
 
-        // TODO: to find all block ids, we iterate over all block index entries, and fill a map of BTreeMap<BlockHeight, Vec<Id<Block>> based on height,
-        // then flatten that map into a vec
-        todo!()
+        let block_tree_map = self.db_tx.get_block_tree_by_height()?;
+        let result = block_tree_map
+            .into_iter()
+            .map(|(_height, ids_per_height)| ids_per_height)
+            .flatten()
+            .collect();
+        Ok(result)
     }
 }
 
