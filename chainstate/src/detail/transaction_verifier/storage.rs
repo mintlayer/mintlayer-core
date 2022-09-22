@@ -17,12 +17,12 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex,
+        GenBlock, OutPointSourceId, Transaction, TxMainChainIndex,
     },
     primitives::{BlockHeight, Id},
 };
 use thiserror::Error;
-use utxo::{BlockUndo, UtxosStorageRead, UtxosStorageWrite};
+use utxo::{UtxosStorageRead, UtxosStorageWrite};
 
 use crate::TokensError;
 
@@ -52,8 +52,6 @@ pub trait TransactionVerifierStorageRef: UtxosStorageRead {
         block_index: &GenBlockIndex,
         target_height: BlockHeight,
     ) -> Result<GenBlockIndex, TransactionVerifierStorageError>;
-
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, storage_result::Error>;
 
     fn get_mainchain_tx_index(
         &self,

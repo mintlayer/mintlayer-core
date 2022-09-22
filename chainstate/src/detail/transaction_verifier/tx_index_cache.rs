@@ -38,6 +38,11 @@ impl TxIndexCache {
         }
     }
 
+    #[cfg(test)]
+    pub fn new_for_test(data: BTreeMap<OutPointSourceId, CachedInputsOperation>) -> Self {
+        Self { data }
+    }
+
     pub fn add_tx_index(
         &mut self,
         spend_ref: BlockTransactableRef,

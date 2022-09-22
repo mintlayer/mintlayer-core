@@ -50,6 +50,17 @@ impl TokenIssuanceCache {
         }
     }
 
+    #[cfg(test)]
+    pub fn new_for_test(
+        data: BTreeMap<TokenId, CachedTokensOperation>,
+        txid_vs_tokenid: BTreeMap<Id<Transaction>, TokenId>,
+    ) -> Self {
+        Self {
+            data,
+            txid_vs_tokenid,
+        }
+    }
+
     // Token registration saves the token id in the database with the transaction that issued it, and possibly some additional auxiliary data;
     // This helps in finding the relevant information of the token at any time in the future.
     pub fn register(&mut self, block_id: Id<Block>, tx: &Transaction) -> Result<(), TokensError> {
@@ -59,6 +70,7 @@ impl TokenIssuanceCache {
         }
         Ok(())
     }
+
     pub fn unregister(&mut self, tx: &Transaction) -> Result<(), TokensError> {
         let was_tokens_issued =
             tx.outputs().iter().any(|output| is_tokens_issuance(output.value()));

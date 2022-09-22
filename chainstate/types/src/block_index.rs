@@ -14,15 +14,13 @@
 // limitations under the License.
 
 use common::chain::block::block_header::BlockHeader;
+use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::{Block, GenBlock};
 use common::primitives::{BlockHeight, Id, Idable};
 use common::Uint256;
 use serialization::{Decode, Encode};
 
-use common::chain::block::timestamp::BlockTimestamp;
-
 #[derive(Debug, Clone, Encode, Decode)]
-#[allow(dead_code, unused_variables)]
 pub struct BlockIndex {
     block_id: Id<Block>,
     block_header: BlockHeader,

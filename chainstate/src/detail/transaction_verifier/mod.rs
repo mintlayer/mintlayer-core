@@ -16,13 +16,14 @@
 mod amounts_map;
 mod cached_operation;
 pub mod error;
+pub mod flush;
 pub mod hierarchy;
 pub mod storage;
 mod tx_index_cache;
 use self::{
     amounts_map::AmountsMap,
     error::{ConnectTransactionError, TokensError},
-    storage::{TransactionVerifierStorageMut, TransactionVerifierStorageRef},
+    storage::TransactionVerifierStorageRef,
     token_issuance_cache::{CachedTokensOperation, CoinOrTokenId},
     tx_index_cache::TxIndexCache,
     utils::get_output_token_id_and_amount,
@@ -45,8 +46,7 @@ use common::{
     primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable, H256},
 };
 use utxo::{
-    BlockRewardUndo, BlockUndo, ConsumedUtxoCache, FlushableUtxoView, TxUndo, Utxo, UtxosCache,
-    UtxosDB, UtxosDBMut, UtxosStorageRead, UtxosView,
+    BlockRewardUndo, BlockUndo, ConsumedUtxoCache, TxUndo, Utxo, UtxosCache, UtxosDB, UtxosView,
 };
 
 mod token_issuance_cache;
@@ -88,27 +88,25 @@ pub struct TransactionVerifierDelta {
 /// The tool used to verify transaction and cache their updated states in memory
 pub struct TransactionVerifier<'a, S> {
     chain_config: &'a ChainConfig,
-    db_tx: &'a S,
+    storage_ref: &'a S,
     tx_index_cache: TxIndexCache,
     utxo_cache: UtxosCache<'a>,
     utxo_block_undo: BTreeMap<Id<Block>, BlockUndoEntry>,
     token_issuance_cache: TokenIssuanceCache,
 }
 
-impl<'a, S: UtxosStorageRead> TransactionVerifier<'a, S> {
-    pub fn new(db_tx: &'a S, chain_config: &'a ChainConfig) -> Self {
+impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
+    pub fn new(storage_ref: &'a S, chain_config: &'a ChainConfig) -> Self {
         Self {
-            db_tx,
+            storage_ref,
             chain_config,
             tx_index_cache: TxIndexCache::new(),
-            utxo_cache: UtxosCache::from_owned_parent(Box::new(UtxosDB::new(db_tx))),
+            utxo_cache: UtxosCache::from_owned_parent(Box::new(UtxosDB::new(storage_ref))),
             utxo_block_undo: BTreeMap::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
         }
     }
-}
 
-impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
     fn calculate_total_outputs(
         outputs: &[TxOutput],
         include_issuance: Option<&Transaction>,
@@ -132,7 +130,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 let issuance_token_id_getter =
                     || -> Result<Option<TokenId>, ConnectTransactionError> {
                         // issuance transactions are unique, so we use them to get the token id
-                        Ok(self.db_tx.get_token_id_from_issuance_tx(tx_id)?)
+                        Ok(self.storage_ref.get_token_id_from_issuance_tx(tx_id)?)
                     };
                 let (key, amount) =
                     get_input_token_id_and_amount(utxo.output().value(), issuance_token_id_getter)?;
@@ -342,7 +340,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
 
                 let block_index = block_index_ancestor_getter(
                     block_index_getter,
-                    self.db_tx,
+                    self.storage_ref,
                     self.chain_config,
                     &block_index.clone().into(),
                     *height,
@@ -367,9 +365,10 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         match self.utxo_block_undo.entry(*block_id) {
             Entry::Occupied(entry) => Ok(&mut entry.into_mut().undo),
             Entry::Vacant(entry) => {
-                let block_undo =
-                    TransactionVerifierStorageRef::get_undo_data(self.db_tx, *block_id)?
-                        .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
+                let block_undo = self
+                    .storage_ref
+                    .get_undo_data(*block_id)?
+                    .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
                 Ok(&mut entry
                     .insert(BlockUndoEntry {
                         undo: block_undo,
@@ -422,7 +421,9 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         median_time_past: &BlockTimestamp,
     ) -> Result<Option<Fee>, ConnectTransactionError> {
         let tx_index_fetcher = |tx_id: &OutPointSourceId| {
-            self.db_tx.get_mainchain_tx_index(tx_id).map_err(ConnectTransactionError::from)
+            self.storage_ref
+                .get_mainchain_tx_index(tx_id)
+                .map_err(ConnectTransactionError::from)
         };
 
         let fee = match spend_ref {
@@ -437,7 +438,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
 
                 // pre-cache token ids to check ensure it's not in the db when issuing
                 self.token_issuance_cache.precache_token_issuance(
-                    |id| self.db_tx.get_token_aux_data(id).map_err(TokensError::from),
+                    |id| self.storage_ref.get_token_aux_data(id).map_err(TokensError::from),
                     tx.transaction(),
                 )?;
 
@@ -524,7 +525,9 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         self.tx_index_cache.remove_tx_index(spend_ref)?;
 
         let tx_index_fetcher = |tx_id: &OutPointSourceId| {
-            self.db_tx.get_mainchain_tx_index(tx_id).map_err(ConnectTransactionError::from)
+            self.storage_ref
+                .get_mainchain_tx_index(tx_id)
+                .map_err(ConnectTransactionError::from)
         };
 
         match spend_ref {
@@ -542,8 +545,8 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
 
                 // pre-cache token ids before removing them
                 self.token_issuance_cache.precache_token_issuance(
-                    |id| self.db_tx.get_token_aux_data(id).map_err(TokensError::from),
-                    tx.transaction(),
+                    |id| self.storage_ref.get_token_aux_data(id).map_err(TokensError::from),
+                    tx,
                 )?;
 
                 // unspend inputs
@@ -585,68 +588,8 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
     }
 }
 
-impl<'a, S: TransactionVerifierStorageMut + 'a> TransactionVerifier<'a, S> {
-    fn flush_tx_indexes(
-        db_tx: &mut S,
-        tx_id: OutPointSourceId,
-        tx_index_op: CachedInputsOperation,
-    ) -> Result<(), ConnectTransactionError> {
-        match tx_index_op {
-            CachedInputsOperation::Write(ref tx_index) => {
-                db_tx.set_mainchain_tx_index(&tx_id, tx_index)?
-            }
-            CachedInputsOperation::Read(_) => (),
-            CachedInputsOperation::Erase => db_tx.del_mainchain_tx_index(&tx_id)?,
-        }
-        Ok(())
-    }
-
-    fn flush_tokens(
-        db_tx: &mut S,
-        token_id: TokenId,
-        token_op: CachedTokensOperation,
-    ) -> Result<(), ConnectTransactionError> {
-        match token_op {
-            CachedTokensOperation::Write(ref issuance_tx) => {
-                db_tx.set_token_aux_data(&token_id, issuance_tx)?;
-                db_tx.set_token_id(&issuance_tx.issuance_tx().get_id(), &token_id)?;
-            }
-            CachedTokensOperation::Read(_) => (),
-            CachedTokensOperation::Erase(issuance_tx) => {
-                db_tx.del_token_aux_data(&token_id)?;
-                db_tx.del_token_id(&issuance_tx)?;
-            }
-        }
-        Ok(())
-    }
-
-    pub fn flush_to_storage(
-        db_tx: &mut S,
-        consumed: TransactionVerifierDelta,
-    ) -> Result<(), ConnectTransactionError> {
-        for (tx_id, tx_index_op) in consumed.tx_index_cache {
-            Self::flush_tx_indexes(db_tx, tx_id, tx_index_op)?;
-        }
-        for (token_id, token_op) in consumed.token_issuance_cache {
-            Self::flush_tokens(db_tx, token_id, token_op)?;
-        }
-
-        // flush utxo set
-        let mut utxo_db = UtxosDBMut::new(db_tx);
-        utxo_db.batch_write(consumed.utxo_cache)?;
-
-        //flush block undo
-        for (block_id, entry) in consumed.utxo_block_undo {
-            if entry.is_fresh {
-                db_tx.set_undo_data(block_id, &entry.undo)?;
-            } else {
-                db_tx.del_undo_data(block_id)?;
-            }
-        }
-
-        Ok(())
-    }
-}
+#[cfg(test)]
+mod tests;
 
 // TODO: write tests for CachedInputs that covers all possible mutations
 // TODO: write tests for block rewards

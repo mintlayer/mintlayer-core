@@ -39,14 +39,14 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
             Some(v) => return Ok(Some(*v)),
             None => (),
         };
-        self.db_tx.get_token_id_from_issuance_tx(tx_id)
+        self.storage_ref.get_token_id_from_issuance_tx(tx_id)
     }
 
     fn get_gen_block_index(
         &self,
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
-        self.db_tx.get_gen_block_index(block_id)
+        self.storage_ref.get_gen_block_index(block_id)
     }
 
     fn get_ancestor(
@@ -54,18 +54,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
         block_index: &GenBlockIndex,
         target_height: BlockHeight,
     ) -> Result<GenBlockIndex, TransactionVerifierStorageError> {
-        self.db_tx.get_ancestor(block_index, target_height)
-    }
-
-    fn get_undo_data(
-        &self,
-        id: Id<Block>,
-    ) -> Result<Option<utxo::BlockUndo>, storage_result::Error> {
-        match self.utxo_block_undo.get(&id) {
-            Some(v) => return Ok(Some(v.undo.clone())),
-            None => (),
-        };
-        TransactionVerifierStorageRef::get_undo_data(self.db_tx, id)
+        self.storage_ref.get_ancestor(block_index, target_height)
     }
 
     fn get_mainchain_tx_index(
@@ -84,7 +73,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
             },
             None => (),
         };
-        self.db_tx.get_mainchain_tx_index(tx_id)
+        self.storage_ref.get_mainchain_tx_index(tx_id)
     }
 
     fn get_token_aux_data(
@@ -103,7 +92,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
             },
             None => (),
         }
-        self.db_tx.get_token_aux_data(token_id)
+        self.storage_ref.get_token_aux_data(token_id)
     }
 }
 
@@ -124,6 +113,6 @@ impl<'a, S: TransactionVerifierStorageRef> UtxosStorageRead for TransactionVerif
             Some(v) => return Ok(Some(v.undo.clone())),
             None => (),
         };
-        TransactionVerifierStorageRef::get_undo_data(self.db_tx, id)
+        self.storage_ref.get_undo_data(id)
     }
 }

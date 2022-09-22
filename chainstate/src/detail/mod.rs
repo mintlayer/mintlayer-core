@@ -14,20 +14,8 @@
 // limitations under the License.
 
 pub mod ban_score;
-
-pub use self::error::*;
-pub use self::median_time::calculate_median_time_past;
-pub use chainstate_types::Locator;
-use chainstate_types::PropertyQueryError;
-use common::time_getter::TimeGetter;
-pub use error::BlockError;
-pub use error::CheckBlockError;
-pub use error::CheckBlockTransactionsError;
-pub use error::OrphanCheckError;
-// TODO: ConnectTransactionError used in unit tests to check block processing results. We have to find more appropriate place for this error.
-pub use transaction_verifier::error::ConnectTransactionError;
-pub use transaction_verifier::error::TokensError;
-use utils::tap_error_log::LogError;
+pub mod query;
+pub mod tokens;
 
 mod block_index_history_iter;
 pub mod bootstrap;
@@ -35,9 +23,14 @@ mod chainstateref;
 mod error;
 mod median_time;
 mod orphan_blocks;
-pub mod query;
-pub mod tokens;
 mod transaction_verifier;
+
+pub use self::error::*;
+pub use self::median_time::calculate_median_time_past;
+pub use chainstate_types::Locator;
+pub use error::{BlockError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError};
+// TODO: ConnectTransactionError used in unit tests to check block processing results. We have to find more appropriate place for this error.
+pub use transaction_verifier::error::{ConnectTransactionError, TokensError};
 
 use std::sync::Arc;
 
@@ -48,9 +41,13 @@ use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
     chain::{block::BlockHeader, config::ChainConfig, Block},
     primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
+    time_getter::TimeGetter,
 };
 use logging::log;
-use utils::eventhandler::{EventHandler, EventsController};
+use utils::{
+    eventhandler::{EventHandler, EventsController},
+    tap_error_log::LogError,
+};
 use utxo::UtxosDBMut;
 
 use self::{
