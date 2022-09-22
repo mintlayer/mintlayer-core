@@ -1292,7 +1292,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
             + FeeRate::from_total_tx_fee(
                 child_0_fee,
                 NonZeroUsize::new(child_0.encoded_size()).unwrap()
-            )
+            )?
     );
     assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3652)));
     log::debug!(
@@ -1304,7 +1304,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         FeeRate::from_total_tx_fee(
             mempool.try_get_fee(&child_0).await?,
             NonZeroUsize::new(child_0.encoded_size()).unwrap()
-        ) + *INCREMENTAL_RELAY_FEE_RATE
+        )? + *INCREMENTAL_RELAY_FEE_RATE
     );
 
     // Now that the minimum rolling fee has been bumped up, a low-fee tx will not pass

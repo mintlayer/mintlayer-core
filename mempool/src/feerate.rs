@@ -17,6 +17,8 @@ use std::num::NonZeroUsize;
 
 use common::primitives::amount::Amount;
 
+use crate::error::TxValidationError;
+
 lazy_static::lazy_static! {
     pub(crate) static ref INCREMENTAL_RELAY_FEE_RATE: FeeRate = FeeRate::new(Amount::from_atoms(1000));
     pub(crate) static ref INCREMENTAL_RELAY_THRESHOLD: FeeRate = FeeRate::new(Amount::from_atoms(500));
@@ -37,10 +39,17 @@ impl FeeRate {
         }
     }
 
-    pub(crate) fn from_total_tx_fee(total_tx_fee: Amount, tx_size: NonZeroUsize) -> Self {
-        Self {
-            atoms_per_kb: Self::div_up(1000 * total_tx_fee.into_atoms(), tx_size),
-        }
+    pub(crate) fn from_total_tx_fee(
+        total_tx_fee: Amount,
+        tx_size: NonZeroUsize,
+    ) -> Result<Self, TxValidationError> {
+        Ok(Self {
+            atoms_per_kb: Self::div_up(
+                (total_tx_fee * 1000).ok_or(TxValidationError::FeeOverflow)?,
+                tx_size,
+            )
+            .into_atoms(),
+        })
     }
 
     pub(crate) fn compute_fee(&self, size: usize) -> Amount {
@@ -54,14 +63,15 @@ impl FeeRate {
     }
 
     // TODO Use NonZeroUsize for divisor
-    fn div_up(dividend: u128, divisor: NonZeroUsize) -> u128 {
+    fn div_up(dividend: Amount, divisor: NonZeroUsize) -> Amount {
         let divisor = u128::try_from(usize::from(divisor)).expect("div_up conversion");
         if divisor == 1 {
             dividend
-        } else if dividend % divisor == 0 {
-            dividend / divisor
+        } else if (dividend % divisor).expect("divisor is nonzero") == Amount::from_atoms(0) {
+            (dividend / divisor).expect("divisor is nonzero")
         } else {
-            dividend / divisor + 1
+            ((dividend / divisor).expect("divisor is nonzero") + Amount::from_atoms(1))
+                .expect("should not overflow")
         }
     }
 }
@@ -90,19 +100,22 @@ mod tests {
 
     #[test]
     fn test_div_up() {
-        let fee = 7;
+        let fee = Amount::from_atoms(7);
         let tx_size = usize::MAX;
         let rate = FeeRate::div_up(fee, NonZeroUsize::new(tx_size).unwrap());
-        assert_eq!(rate, 1);
+        assert_eq!(rate, Amount::from_atoms(1));
 
-        let fee = u128::MAX;
+        let fee = Amount::from_atoms(u128::MAX);
         let tx_size = 1;
         let rate = FeeRate::div_up(fee, NonZeroUsize::new(tx_size).unwrap());
-        assert_eq!(rate, u128::MAX);
+        assert_eq!(rate, Amount::from_atoms(u128::MAX));
 
-        let fee = u128::MAX - 1;
+        let fee = Amount::from_atoms(u128::MAX - 1);
         let tx_size = 3;
         let rate = FeeRate::div_up(fee, NonZeroUsize::new(tx_size).unwrap());
-        assert_eq!(rate, fee / tx_size as u128 + 1);
+        assert_eq!(
+            rate,
+            ((fee / tx_size.try_into().unwrap()).unwrap() + Amount::from_atoms(1)).unwrap()
+        );
     }
 }

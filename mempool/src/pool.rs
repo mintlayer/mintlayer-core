@@ -627,7 +627,7 @@ where
     }
 
     fn limit_mempool_size(&mut self) -> Result<(), Error> {
-        let removed_fees = self.trim();
+        let removed_fees = self.trim()?;
         if !removed_fees.is_empty() {
             let new_minimum_fee_rate =
                 *removed_fees.iter().max().expect("removed_fees should not be empty")
@@ -670,7 +670,7 @@ where
         }
     }
 
-    fn trim(&mut self) -> Vec<FeeRate> {
+    fn trim(&mut self) -> Result<Vec<FeeRate>, TxValidationError> {
         let mut removed_fees = Vec::new();
         while !self.store.is_empty() && self.get_memory_usage() > self.max_size {
             // TODO sort by descendant score, not by fee
@@ -694,10 +694,10 @@ where
                 removed.fee,
                 NonZeroUsize::new(removed.tx.encoded_size())
                     .expect("transaction cannot have zero size"),
-            ));
+            )?);
             self.store.drop_tx_and_descendants(removed.tx.get_id());
         }
-        removed_fees
+        Ok(removed_fees)
     }
 }
 
