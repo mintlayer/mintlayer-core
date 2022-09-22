@@ -679,8 +679,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         let block_tree_map = self.db_tx.get_block_tree_by_height()?;
         let result = block_tree_map
             .into_iter()
-            .map(|(_height, ids_per_height)| ids_per_height)
-            .flatten()
+            .flat_map(|(_height, ids_per_height)| ids_per_height)
             .collect();
         Ok(result)
     }
