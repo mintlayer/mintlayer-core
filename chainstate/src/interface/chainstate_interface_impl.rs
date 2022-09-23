@@ -375,9 +375,9 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         let magic_bytes = self.chainstate.chain_config().magic_bytes();
         let mut writer = writer.lock().expect("Mutex lock failed");
         export_bootstrap_stream(
+            magic_bytes,
             writer.deref_mut(),
             include_orphans,
-            magic_bytes,
             &self.chainstate.query(),
         )?;
         Ok(())

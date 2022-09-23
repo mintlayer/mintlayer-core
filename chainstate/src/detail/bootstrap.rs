@@ -119,9 +119,9 @@ fn read_block_at_pos(buf: &[u8]) -> Result<Block, BootstrapError> {
 }
 
 pub fn export_bootstrap_stream<'a, S: BlockchainStorageRead, O: OrphanBlocks>(
+    magic_bytes: &[u8],
     writer: &mut std::io::BufWriter<Box<dyn std::io::Write + 'a + Send>>,
     include_orphans: bool,
-    magic_bytes: &[u8],
     query_interface: &ChainstateQuery<'a, S, O>,
 ) -> Result<(), BootstrapError>
 where
