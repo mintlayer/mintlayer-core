@@ -265,7 +265,10 @@ impl MempoolStore {
         self.update_for_drop(entry);
         self.remove_from_descendant_score_index(entry);
         self.txs_by_creation_time.entry(entry.creation_time).and_modify(|entries| {
-            entries.remove(&entry.tx_id()).then(|| ()).expect("Inconsistent mempool store")
+            entries
+                .remove(&entry.tx_id())
+                .then_some(())
+                .expect("Inconsistent mempool store")
         });
         self.unspend_outpoints(entry)
     }

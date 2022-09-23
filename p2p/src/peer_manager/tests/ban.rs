@@ -56,7 +56,7 @@ where
         &mut swarm2.peer_connectivity_handle,
     )
     .await;
-    swarm2.accept_inbound_connection(address, peer_info).await.unwrap();
+    swarm2.accept_inbound_connection(address, peer_info).unwrap();
 
     let peer_id = *swarm1.peer_connectivity_handle.peer_id();
     assert_eq!(swarm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
@@ -104,7 +104,7 @@ where
         &mut swarm2.peer_connectivity_handle,
     )
     .await;
-    swarm2.accept_inbound_connection(address, peer_info).await.unwrap();
+    swarm2.accept_inbound_connection(address, peer_info).unwrap();
 
     let peer_id = *swarm1.peer_connectivity_handle.peer_id();
     assert_eq!(swarm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
@@ -164,7 +164,7 @@ where
         &mut swarm2.peer_connectivity_handle,
     )
     .await;
-    swarm2.accept_inbound_connection(address, peer_info).await.unwrap();
+    swarm2.accept_inbound_connection(address, peer_info).unwrap();
 
     let peer_id = *swarm1.peer_connectivity_handle.peer_id();
     assert_eq!(swarm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
@@ -221,75 +221,67 @@ async fn validate_invalid_outbound_connection() {
 
     // valid connection
     let peer_id = libp2p::PeerId::random();
-    let res = swarm
-        .accept_connection(
-            Multiaddr::empty(),
-            net::types::PeerInfo::<Libp2pService> {
-                peer_id,
-                magic_bytes: *config.magic_bytes(),
-                version: common::primitives::semver::SemVer::new(0, 1, 0),
-                agent: None,
-                protocols: default_protocols(),
-            },
-        )
-        .await;
+    let res = swarm.accept_connection(
+        Multiaddr::empty(),
+        net::types::PeerInfo::<Libp2pService> {
+            peer_id,
+            magic_bytes: *config.magic_bytes(),
+            version: common::primitives::semver::SemVer::new(0, 1, 0),
+            agent: None,
+            protocols: default_protocols(),
+        },
+    );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(!swarm.peerdb.is_id_banned(&peer_id));
 
     // invalid magic bytes
     let peer_id = libp2p::PeerId::random();
-    let res = swarm
-        .accept_connection(
-            Multiaddr::empty(),
-            net::types::PeerInfo::<Libp2pService> {
-                peer_id,
-                magic_bytes: [1, 2, 3, 4],
-                version: common::primitives::semver::SemVer::new(0, 1, 0),
-                agent: None,
-                protocols: default_protocols(),
-            },
-        )
-        .await;
+    let res = swarm.accept_connection(
+        Multiaddr::empty(),
+        net::types::PeerInfo::<Libp2pService> {
+            peer_id,
+            magic_bytes: [1, 2, 3, 4],
+            version: common::primitives::semver::SemVer::new(0, 1, 0),
+            agent: None,
+            protocols: default_protocols(),
+        },
+    );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(swarm.peerdb.is_id_banned(&peer_id));
 
     // invalid version
     let peer_id = libp2p::PeerId::random();
-    let res = swarm
-        .accept_connection(
-            Multiaddr::empty(),
-            net::types::PeerInfo::<Libp2pService> {
-                peer_id,
-                magic_bytes: *config.magic_bytes(),
-                version: common::primitives::semver::SemVer::new(1, 1, 1),
-                agent: None,
-                protocols: default_protocols(),
-            },
-        )
-        .await;
+    let res = swarm.accept_connection(
+        Multiaddr::empty(),
+        net::types::PeerInfo::<Libp2pService> {
+            peer_id,
+            magic_bytes: *config.magic_bytes(),
+            version: common::primitives::semver::SemVer::new(1, 1, 1),
+            agent: None,
+            protocols: default_protocols(),
+        },
+    );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(swarm.peerdb.is_id_banned(&peer_id));
 
     // protocol missing
     let peer_id = libp2p::PeerId::random();
-    let res = swarm
-        .accept_connection(
-            Multiaddr::empty(),
-            net::types::PeerInfo::<Libp2pService> {
-                peer_id,
-                magic_bytes: *config.magic_bytes(),
-                version: common::primitives::semver::SemVer::new(0, 1, 0),
-                agent: None,
-                protocols: [
-                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                ]
-                .into_iter()
-                .collect(),
-            },
-        )
-        .await;
+    let res = swarm.accept_connection(
+        Multiaddr::empty(),
+        net::types::PeerInfo::<Libp2pService> {
+            peer_id,
+            magic_bytes: *config.magic_bytes(),
+            version: common::primitives::semver::SemVer::new(0, 1, 0),
+            agent: None,
+            protocols: [
+                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+            ]
+            .into_iter()
+            .collect(),
+        },
+    );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(swarm.peerdb.is_id_banned(&peer_id));
 }
@@ -303,75 +295,67 @@ async fn validate_invalid_inbound_connection() {
 
     // valid connection
     let peer_id = libp2p::PeerId::random();
-    let res = swarm
-        .accept_inbound_connection(
-            Multiaddr::empty(),
-            net::types::PeerInfo::<Libp2pService> {
-                peer_id,
-                magic_bytes: *config.magic_bytes(),
-                version: common::primitives::semver::SemVer::new(0, 1, 0),
-                agent: None,
-                protocols: default_protocols(),
-            },
-        )
-        .await;
+    let res = swarm.accept_inbound_connection(
+        Multiaddr::empty(),
+        net::types::PeerInfo::<Libp2pService> {
+            peer_id,
+            magic_bytes: *config.magic_bytes(),
+            version: common::primitives::semver::SemVer::new(0, 1, 0),
+            agent: None,
+            protocols: default_protocols(),
+        },
+    );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(!swarm.peerdb.is_id_banned(&peer_id));
 
     // invalid magic bytes
     let peer_id = libp2p::PeerId::random();
-    let res = swarm
-        .accept_inbound_connection(
-            Multiaddr::empty(),
-            net::types::PeerInfo::<Libp2pService> {
-                peer_id,
-                magic_bytes: [1, 2, 3, 4],
-                version: common::primitives::semver::SemVer::new(0, 1, 0),
-                agent: None,
-                protocols: default_protocols(),
-            },
-        )
-        .await;
+    let res = swarm.accept_inbound_connection(
+        Multiaddr::empty(),
+        net::types::PeerInfo::<Libp2pService> {
+            peer_id,
+            magic_bytes: [1, 2, 3, 4],
+            version: common::primitives::semver::SemVer::new(0, 1, 0),
+            agent: None,
+            protocols: default_protocols(),
+        },
+    );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(swarm.peerdb.is_id_banned(&peer_id));
 
     // invalid version
     let peer_id = libp2p::PeerId::random();
-    let res = swarm
-        .accept_inbound_connection(
-            Multiaddr::empty(),
-            net::types::PeerInfo::<Libp2pService> {
-                peer_id,
-                magic_bytes: *config.magic_bytes(),
-                version: common::primitives::semver::SemVer::new(1, 1, 1),
-                agent: None,
-                protocols: default_protocols(),
-            },
-        )
-        .await;
+    let res = swarm.accept_inbound_connection(
+        Multiaddr::empty(),
+        net::types::PeerInfo::<Libp2pService> {
+            peer_id,
+            magic_bytes: *config.magic_bytes(),
+            version: common::primitives::semver::SemVer::new(1, 1, 1),
+            agent: None,
+            protocols: default_protocols(),
+        },
+    );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(swarm.peerdb.is_id_banned(&peer_id));
 
     // protocol missing
     let peer_id = libp2p::PeerId::random();
-    let res = swarm
-        .accept_inbound_connection(
-            Multiaddr::empty(),
-            net::types::PeerInfo::<Libp2pService> {
-                peer_id,
-                magic_bytes: *config.magic_bytes(),
-                version: common::primitives::semver::SemVer::new(0, 1, 0),
-                agent: None,
-                protocols: [
-                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                ]
-                .into_iter()
-                .collect(),
-            },
-        )
-        .await;
+    let res = swarm.accept_inbound_connection(
+        Multiaddr::empty(),
+        net::types::PeerInfo::<Libp2pService> {
+            peer_id,
+            magic_bytes: *config.magic_bytes(),
+            version: common::primitives::semver::SemVer::new(0, 1, 0),
+            agent: None,
+            protocols: [
+                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+            ]
+            .into_iter()
+            .collect(),
+        },
+    );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(swarm.peerdb.is_id_banned(&peer_id));
 }

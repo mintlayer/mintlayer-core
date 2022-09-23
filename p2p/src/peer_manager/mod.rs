@@ -177,7 +177,7 @@ where
     /// The event is received from the networking backend and it's either a result of an incoming
     /// connection from a remote peer or a response to an outbound connection that was initiated
     /// by the node as result of swarm maintenance.
-    async fn accept_connection(
+    fn accept_connection(
         &mut self,
         address: T::Address,
         info: net::types::PeerInfo<T>,
@@ -223,7 +223,7 @@ where
     /// This function verifies that neither address the nor the peer ID are on the
     /// list of banned IPs/peer IDs. It also checks that the maximum number of
     /// connections `PeerManager` is configured to have has not been reached.
-    async fn accept_inbound_connection(
+    fn accept_inbound_connection(
         &mut self,
         address: T::Address,
         info: net::types::PeerInfo<T>,
@@ -252,7 +252,7 @@ where
             return Err(P2pError::PeerError(PeerError::TooManyPeers));
         }
 
-        self.accept_connection(address, info).await
+        self.accept_connection(address, info)
     }
 
     /// Close connection to a remote peer
@@ -260,7 +260,7 @@ where
     /// The decision to close the connection is made either by the user via RPC
     /// or by the [`PeerManager::heartbeat()`] function which has decided to cull
     /// this connection in favor of another potential connection.
-    async fn close_connection(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+    fn close_connection(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
         log::debug!("connection closed for peer {peer_id}");
 
         self.tx_sync.send(event::SyncControlEvent::Disconnected(peer_id))?;
@@ -474,7 +474,7 @@ where
                         net::types::ConnectivityEvent::InboundAccepted { address, peer_info } => {
                             let peer_id = peer_info.peer_id;
 
-                            match self.accept_inbound_connection(address, peer_info).await {
+                            match self.accept_inbound_connection(address, peer_info) {
                                 Ok(_) => {},
                                 Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
                                 Err(P2pError::PeerError(err)) => {
@@ -492,7 +492,7 @@ where
                         }
                         net::types::ConnectivityEvent::OutboundAccepted { address, peer_info } => {
                             let peer_id = peer_info.peer_id;
-                            let res = self.accept_connection(address.clone(), peer_info).await;
+                            let res = self.accept_connection(address.clone(), peer_info);
                             self.handle_result(Some(peer_id), res).await?;
 
                             match self.pending.remove(&address) {
@@ -502,7 +502,7 @@ where
                             }
                         }
                         net::types::ConnectivityEvent::ConnectionClosed { peer_id } => {
-                            let res = self.close_connection(peer_id).await;
+                            let res = self.close_connection(peer_id);
                             self.handle_result(Some(peer_id), res).await?;
                         }
                         net::types::ConnectivityEvent::ConnectionError { address, error } => {

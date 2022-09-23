@@ -164,7 +164,7 @@ pub fn calculate_tx_index_from_block(
     let offset_tx = enc_block
         .windows(enc_tx.len())
         .enumerate()
-        .find_map(|(window_num, enc_data)| (enc_data == enc_tx).then(|| window_num))
+        .find_map(|(window_num, enc_data)| (enc_data == enc_tx).then_some(window_num))
         .ok_or_else(|| TxMainChainIndexError::SerializationInvariantError(block.get_id()))?
         .try_into()
         .expect("Number conversion from usize to u32 should not fail here (1)");
