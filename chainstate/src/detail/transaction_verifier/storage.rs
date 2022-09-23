@@ -22,7 +22,7 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 use thiserror::Error;
-use utxo::{UtxosStorageRead, UtxosStorageWrite};
+use utxo::{FlushableUtxoView, UtxosStorageRead, UtxosStorageWrite};
 
 use crate::TokensError;
 
@@ -64,7 +64,9 @@ pub trait TransactionVerifierStorageRef: UtxosStorageRead {
     ) -> Result<Option<TokenAuxiliaryData>, TokensError>;
 }
 
-pub trait TransactionVerifierStorageMut: TransactionVerifierStorageRef + UtxosStorageWrite {
+pub trait TransactionVerifierStorageMut:
+    TransactionVerifierStorageRef + UtxosStorageWrite + FlushableUtxoView
+{
     fn set_mainchain_tx_index(
         &mut self,
         tx_id: &OutPointSourceId,

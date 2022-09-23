@@ -43,6 +43,10 @@ impl TxIndexCache {
         Self { data }
     }
 
+    pub fn consume(self) -> BTreeMap<OutPointSourceId, CachedInputsOperation> {
+        self.data
+    }
+
     pub fn add_tx_index(
         &mut self,
         spend_ref: BlockTransactableRef,
@@ -66,8 +70,17 @@ impl TxIndexCache {
         };
 
         let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
+        self.insert_tx_index(&outpoint_source_id, tx_index)?;
 
-        match self.data.entry(outpoint_source_id) {
+        Ok(())
+    }
+
+    fn insert_tx_index(
+        &mut self,
+        outpoint_source_id: &OutPointSourceId,
+        tx_index: CachedInputsOperation,
+    ) -> Result<(), ConnectTransactionError> {
+        match self.data.entry(outpoint_source_id.clone()) {
             Entry::Occupied(_) => {
                 return Err(ConnectTransactionError::OutputAlreadyPresentInInputsCache)
             }
@@ -80,11 +93,25 @@ impl TxIndexCache {
         &mut self,
         spend_ref: BlockTransactableRef,
     ) -> Result<(), ConnectTransactionError> {
-        let tx_index = CachedInputsOperation::Erase;
         let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
 
-        self.data.insert(outpoint_source_id, tx_index);
+        self.data.insert(outpoint_source_id, CachedInputsOperation::Erase);
         Ok(())
+    }
+
+    pub fn set_tx_index(
+        &mut self,
+        tx_id: &OutPointSourceId,
+        tx_index: TxMainChainIndex,
+    ) -> Result<(), ConnectTransactionError> {
+        self.insert_tx_index(tx_id, CachedInputsOperation::Write(tx_index))
+    }
+
+    pub fn del_tx_index(
+        &mut self,
+        tx_id: &OutPointSourceId,
+    ) -> Result<(), ConnectTransactionError> {
+        self.insert_tx_index(tx_id, CachedInputsOperation::Erase)
     }
 
     fn fetch_and_cache<F>(
@@ -186,10 +213,6 @@ impl TxIndexCache {
                 fetcher_func(txid).map_err(ConnectTransactionError::from)
             })
         })
-    }
-
-    pub fn take(self) -> BTreeMap<OutPointSourceId, CachedInputsOperation> {
-        self.data
     }
 }
 

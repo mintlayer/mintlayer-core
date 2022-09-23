@@ -64,7 +64,7 @@ pub struct Fee(pub Amount);
 
 pub struct Subsidy(pub Amount);
 
-struct BlockUndoEntry {
+pub struct BlockUndoEntry {
     undo: BlockUndo,
     // indicates whether this BlockUndo was fetched from the db or it's new
     is_fresh: bool,
@@ -106,6 +106,8 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
             token_issuance_cache: TokenIssuanceCache::new(),
         }
     }
+
+    //pub fn derive()
 
     fn calculate_total_outputs(
         outputs: &[TxOutput],
@@ -580,7 +582,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {
         Ok(TransactionVerifierDelta {
-            tx_index_cache: self.tx_index_cache.take(),
+            tx_index_cache: self.tx_index_cache.consume(),
             utxo_cache: self.utxo_cache.consume(),
             utxo_block_undo: self.utxo_block_undo,
             token_issuance_cache: self.token_issuance_cache.take(),

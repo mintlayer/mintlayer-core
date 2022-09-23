@@ -21,11 +21,17 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
-use utxo::{UtxosStorageRead, UtxosView};
+use utxo::{
+    BlockUndo, ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead, UtxosStorageWrite,
+    UtxosView,
+};
 
 use super::{
-    storage::{TransactionVerifierStorageError, TransactionVerifierStorageRef},
-    TransactionVerifier,
+    storage::{
+        TransactionVerifierStorageError, TransactionVerifierStorageMut,
+        TransactionVerifierStorageRef,
+    },
+    BlockUndoEntry, TransactionVerifier,
 };
 
 impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
@@ -114,5 +120,106 @@ impl<'a, S: TransactionVerifierStorageRef> UtxosStorageRead for TransactionVerif
             None => (),
         };
         self.storage_ref.get_undo_data(id)
+    }
+}
+
+//TODO: errors?
+
+impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
+    for TransactionVerifier<'a, S>
+{
+    fn set_mainchain_tx_index(
+        &mut self,
+        tx_id: &OutPointSourceId,
+        tx_index: &TxMainChainIndex,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        self.tx_index_cache.set_tx_index(tx_id, tx_index.clone());
+        Ok(())
+    }
+
+    fn del_mainchain_tx_index(
+        &mut self,
+        tx_id: &OutPointSourceId,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        self.tx_index_cache.del_tx_index(tx_id);
+        Ok(())
+    }
+
+    fn set_token_aux_data(
+        &mut self,
+        token_id: &TokenId,
+        data: &TokenAuxiliaryData,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        self.token_issuance_cache.set_token_aux_data(token_id, data.clone());
+        Ok(())
+    }
+
+    fn del_token_aux_data(
+        &mut self,
+        token_id: &TokenId,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        self.token_issuance_cache.del_token_aux_data(token_id);
+        Ok(())
+    }
+
+    fn set_token_id(
+        &mut self,
+        issuance_tx_id: &Id<Transaction>,
+        token_id: &TokenId,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        self.token_issuance_cache.set_token_id(issuance_tx_id, token_id);
+        Ok(())
+    }
+
+    fn del_token_id(
+        &mut self,
+        issuance_tx_id: &Id<Transaction>,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        self.token_issuance_cache.del_token_id(issuance_tx_id);
+        Ok(())
+    }
+}
+
+impl<'a, S: TransactionVerifierStorageMut> UtxosStorageWrite for TransactionVerifier<'a, S> {
+    fn set_undo_data(
+        &mut self,
+        id: Id<Block>,
+        undo: &BlockUndo,
+    ) -> Result<(), storage_result::Error> {
+        self.utxo_block_undo.entry(id).or_insert(BlockUndoEntry {
+            undo: undo.clone(),
+            is_fresh: true,
+        });
+        Ok(())
+    }
+
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), storage_result::Error> {
+        self.utxo_block_undo.remove(&id);
+        Ok(())
+    }
+
+    fn set_utxo(
+        &mut self,
+        _outpoint: &OutPoint,
+        _entry: Utxo,
+    ) -> Result<(), storage_result::Error> {
+        unreachable!("use FlushableUtxoView::batch_write");
+    }
+
+    fn del_utxo(&mut self, _outpoint: &OutPoint) -> Result<(), storage_result::Error> {
+        unreachable!("use FlushableUtxoView::batch_write");
+    }
+
+    fn set_best_block_for_utxos(
+        &mut self,
+        _block_id: &Id<GenBlock>,
+    ) -> Result<(), storage_result::Error> {
+        unreachable!("use FlushableUtxoView::batch_write");
+    }
+}
+
+impl<'a, S: TransactionVerifierStorageRef> FlushableUtxoView for TransactionVerifier<'a, S> {
+    fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error> {
+        self.utxo_cache.batch_write(utxos)
     }
 }

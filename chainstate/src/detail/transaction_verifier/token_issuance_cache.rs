@@ -83,41 +83,52 @@ impl TokenIssuanceCache {
 
     fn write_issuance(&mut self, block_id: Id<Block>, tx: &Transaction) -> Result<(), TokensError> {
         let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
-        match self.data.entry(token_id) {
-            Entry::Occupied(_) => {
-                return Err(TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(
-                    token_id,
-                ))
-            }
-            Entry::Vacant(e) => {
-                e.insert(CachedTokensOperation::Write(TokenAuxiliaryData::new(
-                    tx.clone(),
-                    block_id,
-                )));
-            }
-        }
+        self.insert_aux_data(token_id, TokenAuxiliaryData::new(tx.clone(), block_id))?;
 
         // TODO: this probably needs better modeling. Currently, we just want to know what the token id is for a given issuance tx id
         self.txid_vs_tokenid.insert(tx.get_id(), token_id);
         Ok(())
     }
 
-    fn write_undo_issuance(&mut self, tx: &Transaction) -> Result<(), TokensError> {
-        let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+    fn insert_aux_data(
+        &mut self,
+        token_id: TokenId,
+        data: TokenAuxiliaryData,
+    ) -> Result<(), TokensError> {
         match self.data.entry(token_id) {
-            Entry::Occupied(mut e) => {
-                e.insert(CachedTokensOperation::Erase(tx.get_id()));
-            }
-            Entry::Vacant(_) => {
-                return Err(TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(
-                    token_id,
-                ))
+            Entry::Occupied(_) => Err(TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(
+                token_id,
+            )),
+            Entry::Vacant(e) => {
+                e.insert(CachedTokensOperation::Write(data));
+                Ok(())
             }
         }
+    }
+
+    fn write_undo_issuance(&mut self, tx: &Transaction) -> Result<(), TokensError> {
+        let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+        self.remove_aux_data(token_id, tx.get_id())?;
 
         self.txid_vs_tokenid.insert(tx.get_id(), token_id);
 
         Ok(())
+    }
+
+    fn remove_aux_data(
+        &mut self,
+        token_id: TokenId,
+        tx_id: Id<Transaction>,
+    ) -> Result<(), TokensError> {
+        match self.data.entry(token_id) {
+            Entry::Occupied(mut e) => {
+                e.insert(CachedTokensOperation::Erase(tx_id));
+                Ok(())
+            }
+            Entry::Vacant(_) => Err(TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(
+                token_id,
+            )),
+        }
     }
 
     pub fn precache_token_issuance<
@@ -145,6 +156,40 @@ impl TokenIssuanceCache {
                 }
             }
         }
+        Ok(())
+    }
+
+    pub fn set_token_aux_data(
+        &mut self,
+        token_id: &TokenId,
+        data: TokenAuxiliaryData,
+    ) -> Result<(), TokensError> {
+        self.insert_aux_data(*token_id, data)
+    }
+
+    pub fn del_token_aux_data(&mut self, token_id: &TokenId) -> Result<(), TokensError> {
+        if let Some(op) = self.data.get(token_id) {
+            let tx_id = match op {
+                CachedTokensOperation::Write(data) => data.issuance_tx().get_id(),
+                CachedTokensOperation::Read(data) => data.issuance_tx().get_id(),
+                CachedTokensOperation::Erase(id) => *id,
+            };
+            self.remove_aux_data(*token_id, tx_id);
+        }
+        Ok(())
+    }
+
+    pub fn set_token_id(
+        &mut self,
+        issuance_tx_id: &Id<Transaction>,
+        token_id: &TokenId,
+    ) -> Result<(), TokensError> {
+        self.txid_vs_tokenid.insert(*issuance_tx_id, *token_id);
+        Ok(())
+    }
+
+    pub fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> Result<(), TokensError> {
+        self.txid_vs_tokenid.remove(issuance_tx_id);
         Ok(())
     }
 

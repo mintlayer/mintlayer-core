@@ -32,7 +32,7 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
-use utxo::{UtxosStorageRead, UtxosStorageWrite};
+use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
 
 impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionVerifierStorageRef
     for ChainstateRef<'a, S, O>
@@ -132,6 +132,13 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks> UtxosStorageWrite for Chain
         id: Id<Block>,
     ) -> Result<(), chainstate_types::storage_result::Error> {
         self.db_tx.del_undo_data(id)
+    }
+}
+
+impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks> FlushableUtxoView for ChainstateRef<'a, S, O> {
+    fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error> {
+        let mut db = UtxosDBMut::new(&mut self.db_tx);
+        db.batch_write(utxos)
     }
 }
 

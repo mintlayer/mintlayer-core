@@ -21,7 +21,6 @@ use common::{
     chain::{tokens::TokenId, OutPointSourceId},
     primitives::Idable,
 };
-use utxo::{FlushableUtxoView, UtxosDBMut};
 
 fn flush_tx_indexes(
     storage: &mut impl TransactionVerifierStorageMut,
@@ -69,8 +68,7 @@ pub fn flush_to_storage(
     }
 
     // flush utxo set
-    let mut utxo_db = UtxosDBMut::new(storage);
-    utxo_db.batch_write(consumed.utxo_cache)?;
+    storage.batch_write(consumed.utxo_cache)?;
 
     //flush block undo
     for (block_id, entry) in consumed.utxo_block_undo {
