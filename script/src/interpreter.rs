@@ -769,7 +769,7 @@ mod test {
             let result = run_script(&ctx, &script, stack);
             prop_assert!(result.is_ok());
 
-            let expected = cond.then_some(then_val).unwrap_or(else_val) as i64;
+            let expected = if cond { then_val } else { else_val } as i64;
             let expected_stack = Stack(vec![script::build_scriptint(expected).into()]);
             prop_assert_eq!(result.unwrap(), expected_stack);
         }
