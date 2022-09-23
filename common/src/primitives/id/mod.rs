@@ -19,7 +19,7 @@ pub use with_id::WithId;
 use crate::{construct_fixed_hash, Uint256};
 use generic_array::{typenum, GenericArray};
 use serialization::{Decode, Encode};
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 construct_fixed_hash! {
     #[derive(Encode, Decode)]
@@ -66,7 +66,7 @@ impl<'de> serde::Deserialize<'de> for H256 {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
 pub struct Id<T: ?Sized> {
     id: H256,
@@ -85,7 +85,7 @@ impl<T: ?Sized> Copy for Id<T> {}
 
 impl<T: ?Sized> Display for Id<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.id.fmt(f)
+        std::fmt::Display::fmt(&self.id, f)
     }
 }
 
@@ -122,6 +122,12 @@ impl<T: ?Sized> Id<T> {
     }
 }
 
+impl<T: Debug> Debug for Id<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.id, f)
+    }
+}
+
 impl<T: ?Sized> AsRef<[u8]> for Id<T> {
     fn as_ref(&self) -> &[u8] {
         &self.id[..]
@@ -130,7 +136,7 @@ impl<T: ?Sized> AsRef<[u8]> for Id<T> {
 
 /// a trait for objects that deserve having a unique id with implementations to how to ID them
 pub trait Idable {
-    type Tag: ?Sized;
+    type Tag;
     fn get_id(&self) -> Id<Self::Tag>;
 }
 
