@@ -26,7 +26,7 @@ use common::chain::block::timestamp::BlockTimestamp;
 pub struct BlockIndex {
     block_id: Id<Block>,
     block_header: BlockHeader,
-    skip: Id<GenBlock>,
+    some_ancestor: Id<GenBlock>,
     chain_trust: Uint256,
     height: BlockHeight,
     time_max: BlockTimestamp,
@@ -44,7 +44,7 @@ impl BlockIndex {
         Self {
             block_header: block.header().clone(),
             block_id: block.get_id(),
-            skip: some_ancestor,
+            some_ancestor,
             chain_trust,
             height,
             time_max,
@@ -80,7 +80,7 @@ impl BlockIndex {
     }
 
     pub fn some_ancestor(&self) -> &Id<GenBlock> {
-        &self.skip
+        &self.some_ancestor
     }
 
     pub fn into_block_header(self) -> BlockHeader {
