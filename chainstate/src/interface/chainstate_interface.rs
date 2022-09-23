@@ -136,9 +136,9 @@ pub trait ChainstateInterface: Send {
     fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
 
     /// Imports a bootstrap file exported with rpc
-    fn import_bootstrap_file(
-        &mut self,
-        bootstrap_file_path: &std::path::Path,
+    fn import_bootstrap_stream<'a>(
+        &'a mut self,
+        reader: std::sync::Mutex<std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>>,
     ) -> Result<(), ChainstateError>;
 
     fn export_bootstrap_stream<'a>(

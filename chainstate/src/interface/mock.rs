@@ -119,7 +119,10 @@ mockall::mock! {
         ) -> Result<Vec<Option<Amount>>, ChainstateError>;
         fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
         fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
-        fn import_bootstrap_file(&mut self, bootstrap_file_path: &std::path::Path) -> Result<(), ChainstateError>;
+        fn import_bootstrap_stream<'a>(
+            &'a mut self,
+            reader: std::sync::Mutex<std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>>
+        ) -> Result<(), ChainstateError>;
         fn export_bootstrap_stream<'a>(
             &'a self,
             writer: std::sync::Mutex<std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>>,

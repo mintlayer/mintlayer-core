@@ -344,20 +344,17 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn import_bootstrap_file(
+    fn import_bootstrap_stream<'a>(
         &mut self,
-        bootstrap_file_path: &std::path::Path,
+        reader: std::sync::Mutex<std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>>,
     ) -> Result<(), ChainstateError> {
         let magic_bytes = self.chainstate.chain_config().magic_bytes().to_vec();
 
-        let file_obj = std::fs::File::open(bootstrap_file_path)
-            .map_err(|e| ChainstateError::BootstrapError(e.into()))?;
-
-        let mut file_reader = std::io::BufReader::new(file_obj);
+        let mut reader = reader.lock().expect("Failed to unlock mutex");
 
         let mut block_processor = |block| self.chainstate.process_block(block, BlockSource::Local);
 
-        import_bootstrap_stream(&magic_bytes, &mut file_reader, &mut block_processor)?;
+        import_bootstrap_stream(&magic_bytes, reader.deref_mut(), &mut block_processor)?;
 
         Ok(())
     }

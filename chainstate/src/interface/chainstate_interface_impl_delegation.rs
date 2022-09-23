@@ -227,11 +227,11 @@ impl<
         self.deref().get_block_id_tree_as_list()
     }
 
-    fn import_bootstrap_file(
-        &mut self,
-        bootstrap_file_path: &std::path::Path,
+    fn import_bootstrap_stream<'a>(
+        &'a mut self,
+        reader: std::sync::Mutex<std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>>,
     ) -> Result<(), ChainstateError> {
-        self.deref_mut().import_bootstrap_file(bootstrap_file_path)
+        self.deref_mut().import_bootstrap_stream(reader)
     }
 
     fn export_bootstrap_stream<'a>(
