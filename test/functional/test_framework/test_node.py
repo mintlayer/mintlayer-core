@@ -218,7 +218,7 @@ class TestNode():
         subp_env = dict(os.environ, LIBC_FATAL_STDERR_="1")
 
         cmd = self.args + extra_args
-        self.log.debug("Executing command: {}".format(" ".join(self.args + extra_args)))
+        self.log.debug("Starting node with command: {}".format(" ".join(self.args + extra_args)))
         self.process = subprocess.Popen(cmd, env=subp_env, stdout=stdout, stderr=stderr, cwd=cwd, **kwargs)
 
         self.running = True
