@@ -286,7 +286,7 @@ mod tests {
             let chainstate_config = ChainstateConfig {
                 max_db_commit_attempts: 10,
                 max_orphan_blocks: 0,
-                min_max_bootstrap_import_buffer_sizes: (1 << 22, 1 << 26),
+                min_max_bootstrap_import_buffer_sizes: None,
             };
             let chainstate_storage = Store::new_empty().unwrap();
 

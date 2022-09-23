@@ -24,7 +24,7 @@ pub struct ChainstateConfig {
     pub max_orphan_blocks: usize,
     /// When importing bootstrap file, this controls the buffer sizes (min, max)
     /// (see bootstrap import function for more information)
-    pub min_max_bootstrap_import_buffer_sizes: (usize, usize),
+    pub min_max_bootstrap_import_buffer_sizes: Option<(usize, usize)>,
 }
 
 impl ChainstateConfig {
@@ -42,7 +42,7 @@ impl ChainstateConfig {
         mut self,
         min_max_bootstrap_import_buffer_sizes: (usize, usize),
     ) -> Self {
-        self.min_max_bootstrap_import_buffer_sizes = min_max_bootstrap_import_buffer_sizes;
+        self.min_max_bootstrap_import_buffer_sizes = Some(min_max_bootstrap_import_buffer_sizes);
         self
     }
 }
@@ -52,10 +52,7 @@ impl Default for ChainstateConfig {
         Self {
             max_db_commit_attempts: 10,
             max_orphan_blocks: 512,
-            min_max_bootstrap_import_buffer_sizes: (
-                1 << 22, /* 4 MB */
-                1 << 26, /* 64 MB */
-            ),
+            min_max_bootstrap_import_buffer_sizes: None,
         }
     }
 }
