@@ -25,7 +25,6 @@ use chainstate_test_framework::{
     TransactionBuilder,
 };
 use chainstate_types::{GenBlockIndex, PropertyQueryError};
-use common::chain::StakePoolData;
 use common::chain::Transaction;
 use common::primitives::BlockDistance;
 use common::{
