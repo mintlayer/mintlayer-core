@@ -17,7 +17,7 @@ use crate::{address::pubkeyhash::PublicKeyHash, chain::tokens::OutputValue, prim
 use script::Script;
 use serialization::{Decode, Encode};
 
-use self::stakelock::StakePoolData;
+pub use self::stakelock::StakePoolData;
 
 pub mod stakelock;
 
@@ -44,15 +44,20 @@ pub enum OutputPurpose {
     #[codec(index = 1)]
     LockThenTransfer(Destination, OutputTimeLock),
     #[codec(index = 2)]
-    StakePool(Box<StakePoolData>),
+    // TODO(PR): remove the option, it's here only to simplify development
+    StakePool(Option<Box<StakePoolData>>),
 }
 
 impl OutputPurpose {
-    pub fn destination(&self) -> &Destination {
+    // TODO(PR) restore returning a reference here
+    pub fn destination(&self) -> Destination {
         match self {
-            OutputPurpose::Transfer(d) => d,
-            OutputPurpose::LockThenTransfer(d, _) => d,
-            OutputPurpose::StakePool(d) => d.owner(),
+            OutputPurpose::Transfer(d) => d.clone(),
+            OutputPurpose::LockThenTransfer(d, _) => d.clone(),
+            OutputPurpose::StakePool(d) => match d {
+                Some(v) => v.owner().clone(),
+                None => Destination::AnyoneCanSpend,
+            },
         }
     }
 }

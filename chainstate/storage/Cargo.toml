@@ -1,0 +1,29 @@
+[package]
+name = "chainstate-storage"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common = { path = '../../common' }
+utxo = { path = '../../utxo' }
+storage = { path = '../../storage', features = ['inmemory'] }
+serialization = { path = "../../serialization" }
+chainstate-types = { path = '../types' }
+
+mockall = { version = "0.11", optional = true }
+
+[dev-dependencies]
+crypto = { path = '../../crypto' }
+test-utils = {path = '../../test-utils'}
+utils = { path = '../../utils' }
+
+itertools = "0.10"
+mockall = "0.11"
+num-traits = "0.2"
+rstest = "0.15"
+
+[features]
+mock = [ 'mockall' ]

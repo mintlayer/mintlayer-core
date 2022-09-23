@@ -17,14 +17,15 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use super::{OrphanBlocksRef, OrphanBlocksRefMut};
 use common::chain::{Block, GenBlock};
+use common::primitives::id::WithId;
 use common::primitives::{Id, Idable};
 use crypto::random::SliceRandom;
 
-// FIXME: The Arc here is unnecessary: https://github.com/mintlayer/mintlayer-core/issues/164
+// TODO: The Arc here is unnecessary: https://github.com/mintlayer/mintlayer-core/issues/164
 pub struct OrphanBlocksPool {
     orphan_ids: Vec<Id<Block>>,
-    orphan_by_id: BTreeMap<Id<Block>, Arc<Block>>,
-    orphan_by_prev_id: BTreeMap<Id<GenBlock>, Vec<Arc<Block>>>,
+    orphan_by_id: BTreeMap<Id<Block>, Arc<WithId<Block>>>,
+    orphan_by_prev_id: BTreeMap<Id<GenBlock>, Vec<Arc<WithId<Block>>>>,
     max_orphans: usize,
 }
 
@@ -94,11 +95,13 @@ impl OrphanBlocksPool {
         self.del_one_deepest_child(&id);
     }
 
-    pub fn add_block(&mut self, block: Block) -> Result<(), OrphanAddError> {
+    pub fn add_block(&mut self, block: WithId<Block>) -> Result<(), OrphanAddError> {
         self.prune();
         let block_id = block.get_id();
         if self.orphan_by_id.contains_key(&block_id) {
-            return Err(OrphanAddError::BlockAlreadyInOrphanList(block));
+            return Err(OrphanAddError::BlockAlreadyInOrphanList(WithId::take(
+                block,
+            )));
         }
 
         let rc_block = Arc::new(block);
@@ -126,7 +129,7 @@ impl OrphanBlocksPool {
     /// take all the blocks that share the same parent
     /// this is useful when a new tip is set, and we want to connect all its unorphaned children
     #[allow(dead_code)]
-    pub fn take_all_children_of(&mut self, block_id: &Id<GenBlock>) -> Vec<Block> {
+    pub fn take_all_children_of(&mut self, block_id: &Id<GenBlock>) -> Vec<WithId<Block>> {
         let res = self.orphan_by_prev_id.get_mut(block_id);
         let mut res = match res {
             None => {
@@ -250,7 +253,7 @@ mod tests {
             check_pool_length(orphans_pool, 0);
         }
 
-        pub fn check_block_existence(orphans_pool: &OrphanBlocksPool, block: &Block) {
+        pub fn check_block_existence(orphans_pool: &OrphanBlocksPool, block: &WithId<Block>) {
             assert!(orphans_pool.orphan_ids.contains(&block.get_id()));
             assert!(orphans_pool.is_already_an_orphan(&block.get_id()));
 
@@ -266,7 +269,7 @@ mod tests {
 
         pub fn check_block_existence_and_pool_length(
             orphans_pool: &OrphanBlocksPool,
-            block: &Block,
+            block: &WithId<Block>,
             expected_length: usize,
         ) {
             check_block_existence(orphans_pool, block);
@@ -291,10 +294,10 @@ mod tests {
         // add a random block
         let mut rng = make_seedable_rng(seed);
         let block = gen_random_block(&mut rng);
-        assert!(orphans_pool.add_block(block.clone()).is_ok());
+        assert!(orphans_pool.add_block(block.clone().into()).is_ok());
 
         // check if block was really inserted
-        check_block_existence(&orphans_pool, &block);
+        check_block_existence(&orphans_pool, &block.into());
         assert_eq!(orphans_pool.len(), 1);
 
         // check if orphans pool is empty after clearing.
@@ -311,15 +314,15 @@ mod tests {
         // add a random block
         let mut rng = make_seedable_rng(seed);
         let block = gen_random_block(&mut rng);
-        assert!(orphans_pool.add_block(block.clone()).is_ok());
+        assert!(orphans_pool.add_block(block.clone().into()).is_ok());
         assert_eq!(orphans_pool.len(), 1);
 
-        check_block_existence_and_pool_length(&orphans_pool, &block, 1);
+        check_block_existence_and_pool_length(&orphans_pool, &block.clone().into(), 1);
 
         // add another block that connects to the first one
         let conn_block = gen_block_from_id(&mut rng, Some(block.get_id().into()));
-        assert!(orphans_pool.add_block(conn_block.clone()).is_ok());
-        check_block_existence_and_pool_length(&orphans_pool, &conn_block, 2);
+        assert!(orphans_pool.add_block(conn_block.clone().into()).is_ok());
+        check_block_existence_and_pool_length(&orphans_pool, &conn_block.into(), 2);
         assert_eq!(orphans_pool.len(), 2);
 
         // check that there is only 2 key-value pair in `orphans_by_prev_id`
@@ -338,8 +341,8 @@ mod tests {
         };
 
         let sim_block = gen_block_from_id(&mut rng, Some(rand_block.prev_block_id()));
-        assert!(orphans_pool.add_block(sim_block.clone()).is_ok());
-        check_block_existence_and_pool_length(&orphans_pool, &sim_block, 3);
+        assert!(orphans_pool.add_block(sim_block.clone().into()).is_ok());
+        check_block_existence_and_pool_length(&orphans_pool, &sim_block.into(), 3);
 
         // check that there is STILL only 2 key-value pair in `orphans_by_prev_id`
         assert_eq!(orphans_pool.orphan_by_prev_id.len(), 2);
@@ -359,7 +362,7 @@ mod tests {
         let blocks = gen_random_blocks(&mut rng, max_orphans as u32 + 2);
 
         blocks.into_iter().for_each(|block| {
-            assert!(orphans_pool.add_block(block).is_ok());
+            assert!(orphans_pool.add_block(block.into()).is_ok());
         });
 
         check_pool_length(&orphans_pool, max_orphans);
@@ -374,13 +377,13 @@ mod tests {
         let blocks = gen_random_blocks(&mut rng, 50);
 
         blocks.iter().for_each(|block| {
-            assert!(orphans_pool.add_block(block.clone()).is_ok());
+            assert!(orphans_pool.add_block(block.clone().into()).is_ok());
         });
 
         let rand_block = blocks.choose(&mut rng).expect("this should return any block");
 
         assert_eq!(
-            orphans_pool.add_block(rand_block.clone()).unwrap_err(),
+            orphans_pool.add_block(rand_block.clone().into()).unwrap_err(),
             OrphanAddError::BlockAlreadyInOrphanList(rand_block.clone())
         );
     }
@@ -394,7 +397,7 @@ mod tests {
         let blocks = gen_random_blocks(&mut rng, 5);
 
         blocks.iter().for_each(|block| {
-            assert!(orphans_pool.add_block(block.clone()).is_ok());
+            assert!(orphans_pool.add_block(block.clone().into()).is_ok());
         });
         check_pool_length(&orphans_pool, blocks.len());
 
@@ -425,7 +428,7 @@ mod tests {
         let blocks = gen_blocks_chain(&mut rng, 4);
 
         blocks.iter().for_each(|block| {
-            assert!(orphans_pool.add_block(block.clone()).is_ok());
+            assert!(orphans_pool.add_block(block.clone().into()).is_ok());
             assert!(orphans_pool.is_already_an_orphan(&block.get_id()));
 
             // check that relationship of the prev_id and the block is 1-to-1.
@@ -458,7 +461,7 @@ mod tests {
         check_pool_length(&orphans_pool, blocks.len() - 1);
 
         // the first block should still exist.
-        check_block_existence(&orphans_pool, first_block);
+        check_block_existence(&orphans_pool, &first_block.clone().into());
     }
 
     #[rstest]
@@ -475,7 +478,7 @@ mod tests {
 
         blocks.iter().enumerate().for_each(|(idx, b)| {
             let block_id = b.get_id();
-            assert!(orphans_pool.add_block(b.clone()).is_ok());
+            assert!(orphans_pool.add_block(b.clone().into()).is_ok());
             assert!(orphans_pool.is_already_an_orphan(&block_id));
 
             // check that the number of blocks for the same key, increases too.
@@ -558,7 +561,7 @@ mod tests {
         let blocks = [sim_blocks, conn_blocks, extra_conn_blocks, extra_sim_blocks].concat();
 
         blocks.iter().for_each(|block| {
-            orphans_pool.add_block(block.clone()).expect("should not fail");
+            orphans_pool.add_block(block.clone().into()).expect("should not fail");
         });
 
         check_pool_length(&orphans_pool, blocks.len());
@@ -575,10 +578,10 @@ mod tests {
 
         // add a random block
         let random_block = gen_random_block(&mut rng);
-        assert!(orphans_pool.add_block(random_block.clone()).is_ok());
+        assert!(orphans_pool.add_block(random_block.clone().into()).is_ok());
         check_block_existence_and_pool_length(
             &orphans_pool,
-            &random_block,
+            &random_block.into(),
             orphans_pool.max_orphans,
         );
 
@@ -610,8 +613,8 @@ mod tests {
 
         // alternate adding of blocks
         for (sim_block, conn_block) in sim_blocks.iter().zip(conn_blocks) {
-            orphans_pool.add_block(sim_block.clone()).expect("should not fail");
-            orphans_pool.add_block(conn_block).expect("should not fail");
+            orphans_pool.add_block(sim_block.clone().into()).expect("should not fail");
+            orphans_pool.add_block(conn_block.into()).expect("should not fail");
         }
 
         // collect all children of sim_blocks's prev_id
@@ -624,7 +627,7 @@ mod tests {
 
         // all blocks in sim_blocks should appear in the children list
         sim_blocks.into_iter().for_each(|child| {
-            assert!(children.contains(&Arc::new(child)));
+            assert!(children.contains(&Arc::new(child.into())));
         });
 
         // the remaining blocks in the pool should all belong to conn_blocks
@@ -681,11 +684,11 @@ mod tests {
         for i in 0..sim_blocks.len() {
             if i < conn_blocks.len() {
                 let b = conn_blocks[i].clone();
-                orphans_pool.add_block(b).expect("should not fail");
+                orphans_pool.add_block(b.into()).expect("should not fail");
             }
 
             let b = sim_blocks[i].clone();
-            orphans_pool.add_block(b).expect("should not fail");
+            orphans_pool.add_block(b.into()).expect("should not fail");
         }
 
         // collect all children of sim_blocks's prev_id
@@ -698,7 +701,7 @@ mod tests {
 
         // all blocks in sim_blocks should appear in the children list
         sim_blocks.iter().for_each(|child| {
-            assert!(children.contains(child));
+            assert!(children.contains(&child.clone().into()));
         });
 
         // the remaining blocks in the pool should all belong to conn_blocks;
@@ -708,7 +711,7 @@ mod tests {
         //  ( d, k ), ( k, l ), ( l, m ), ( i, n ), ( n, o ), ( o, p )
         // ]
         conn_blocks.iter().for_each(|block| {
-            check_block_existence(&orphans_pool, block);
+            check_block_existence(&orphans_pool, &block.clone().into());
         })
     }
 }

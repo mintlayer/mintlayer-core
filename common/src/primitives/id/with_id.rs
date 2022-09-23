@@ -72,6 +72,12 @@ impl<T: Idable> std::ops::Deref for WithId<T> {
     }
 }
 
+impl<T: Idable> From<T> for WithId<T> {
+    fn from(t: T) -> Self {
+        WithId::new(t)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

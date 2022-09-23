@@ -15,7 +15,6 @@
 
 mod builder;
 pub mod emission_schedule;
-
 pub use builder::Builder;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleTabular, Mlt};
 
@@ -77,7 +76,6 @@ pub struct ChainConfig {
     net_upgrades: NetUpgrades<UpgradeVersion>,
     magic_bytes: [u8; 4],
     genesis_block: Arc<WithId<Genesis>>,
-    blockreward_maturity: BlockDistance,
     max_future_block_time_offset: Duration,
     version: SemVer,
     target_block_spacing: Duration,
@@ -89,6 +87,11 @@ pub struct ChainConfig {
     epoch_length: BlockDistance,
     epoch_index_seed_stride: u64,
     initial_randomness: H256,
+    token_min_issuance_fee: Amount,
+    token_max_uri_len: usize,
+    token_max_dec_count: u8,
+    token_max_ticker_len: usize,
+    empty_consensus_reward_maturity_distance: BlockDistance,
 }
 
 impl ChainConfig {
@@ -180,22 +183,40 @@ impl ChainConfig {
         height % epoch_length
     }
 
+    pub fn token_min_issuance_fee(&self) -> Amount {
+        self.token_min_issuance_fee
+    }
+
+    pub fn token_max_uri_len(&self) -> usize {
+        self.token_max_uri_len
+    }
+
+    pub fn token_max_dec_count(&self) -> u8 {
+        self.token_max_dec_count
+    }
+
+    pub fn token_max_ticker_len(&self) -> usize {
+        self.token_max_ticker_len
+    }
+
+    pub fn empty_consensus_reward_maturity_distance(&self) -> BlockDistance {
+        self.empty_consensus_reward_maturity_distance
+    }
+
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
     }
-
-    pub const fn blockreward_maturity(&self) -> &BlockDistance {
-        &self.blockreward_maturity
-    }
 }
 
-// If block time is 2 minutes (which is my goal eventually), then 500 is equivalent to 100 in bitcoin's 10 minutes.
-const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
 // DSA allows us to have blocks up to 1mb
 const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 524_288;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 524_288;
+const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
+const TOKEN_MAX_URI_LEN: usize = 1024;
+const TOKEN_MAX_DEC_COUNT: u8 = 18;
+const TOKEN_MAX_TICKER_LEN: usize = 5;
 
 fn create_mainnet_genesis() -> Genesis {
     use crate::chain::transaction::TxOutput;

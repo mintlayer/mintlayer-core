@@ -15,9 +15,14 @@
 
 //! Chainstate subsystem RPC handler
 
+use std::io::Write;
+
 use crate::{Block, BlockSource, ChainstateError, GenBlock};
-use common::primitives::{BlockHeight, Id};
-use serialization::Decode;
+use common::{
+    chain::tokens::{RPCTokenInfo, TokenId},
+    primitives::{BlockHeight, Id},
+};
+use serialization::{Decode, Encode};
 use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, namespace = "chainstate")]
@@ -44,6 +49,18 @@ trait ChainstateRpc {
     /// Get best block height in main chain
     #[method(name = "best_block_height")]
     async fn best_block_height(&self) -> rpc::Result<BlockHeight>;
+
+    /// Get token information
+    #[method(name = "token_info")]
+    async fn token_info(&self, token_id: TokenId) -> rpc::Result<Option<RPCTokenInfo>>;
+
+    /// Write blocks to disk
+    #[method(name = "export_bootstrap_file")]
+    async fn export_bootstrap_file(
+        &self,
+        file_path: &std::path::Path,
+        include_orphans: bool,
+    ) -> rpc::Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -61,6 +78,8 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         let block_data = hex::decode(block_hex).map_err(rpc::Error::to_call_error)?;
         let block = Block::decode(&mut &block_data[..]).map_err(rpc::Error::to_call_error)?;
         let res = self.call_mut(move |this| this.process_block(block, BlockSource::Local)).await;
+        // remove the block index from the return value
+        let res = res.map(|v| v.map(|_bi| ()));
         handle_error(res)
     }
 
@@ -73,6 +92,44 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn best_block_height(&self) -> rpc::Result<BlockHeight> {
         handle_error(self.call(move |this| this.get_best_block_height()).await)
+    }
+
+    async fn token_info(&self, token_id: TokenId) -> rpc::Result<Option<RPCTokenInfo>> {
+        handle_error(self.call(move |this| this.get_token_info_for_rpc(token_id)).await)
+    }
+
+    async fn export_bootstrap_file(
+        &self,
+        file_path: &std::path::Path,
+        include_orphans: bool,
+    ) -> rpc::Result<()> {
+        // TODO: test this function in functional tests
+        let blocks_list = if include_orphans {
+            handle_error(self.call(move |this| this.get_block_id_tree_as_list()).await)?
+        } else {
+            handle_error(self.call(move |this| this.get_mainchain_blocks_list()).await)?
+        };
+        let chain_config = self
+            .call(move |this| this.get_chain_config())
+            .await
+            .map_err(rpc::Error::to_call_error)?;
+
+        let magic_bytes = chain_config.magic_bytes();
+
+        let file_obj = std::fs::File::create(file_path).map_err(rpc::Error::to_call_error)?;
+        let mut writer = std::io::BufWriter::new(&file_obj);
+        for block_id in blocks_list {
+            writer.write_all(magic_bytes).map_err(rpc::Error::to_call_error)?;
+            let block = handle_error(self.call(move |this| this.get_block(block_id)).await)?
+                .ok_or_else(|| {
+                    rpc::Error::Custom(
+                        "Block not found by id after having being read from chainstate block index"
+                            .to_owned(),
+                    )
+                })?;
+            writer.write_all(&block.encode())?;
+        }
+        Ok(())
     }
 }
 

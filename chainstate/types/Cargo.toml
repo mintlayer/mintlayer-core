@@ -1,0 +1,18 @@
+[package]
+name = "chainstate-types"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serialization = { path = "../../serialization" }
+common = { path = "../../common/" }
+storage = { path = "../../storage/" }
+crypto = { path = "../../crypto" }
+
+parity-scale-codec = "3.1"
+thiserror = "1.0"
+generic-array = "0.14"
+replace_with = "0.1"

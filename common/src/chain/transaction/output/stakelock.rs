@@ -17,6 +17,22 @@ pub struct StakePoolData {
 }
 
 impl StakePoolData {
+    pub fn new(
+        owner: Destination,
+        staker: Option<Destination>,
+        vrf_public_key: VRFPublicKey,
+        margin_ratio_per_thousand: u64,
+        cost_per_epoch: Amount,
+    ) -> Self {
+        Self {
+            owner,
+            staker,
+            vrf_public_key,
+            margin_ratio_per_thousand,
+            cost_per_epoch,
+        }
+    }
+
     pub fn owner(&self) -> &Destination {
         &self.owner
     }

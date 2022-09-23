@@ -21,7 +21,7 @@ trait MempoolRpc {
     fn dummy(&self) -> rpc::Result<String>;
 }
 
-impl<C: 'static> MempoolRpcServer for super::MempoolHandle<C> {
+impl MempoolRpcServer for super::MempoolHandle {
     fn dummy(&self) -> rpc::Result<String> {
         Ok("dummy".to_string())
     }

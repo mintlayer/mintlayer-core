@@ -20,8 +20,17 @@ pub use crate::{
     Data,
 };
 
+/// Types providing capability of iterating over keys with given prefix
+pub trait PrefixIter<'i> {
+    /// The iterator type
+    type Iterator: 'i + Iterator<Item = (Data, Data)>;
+
+    /// Get iterator over key-value pairs where the key has given prefix
+    fn prefix_iter<'m: 'i>(&'m self, idx: DbIndex, prefix: Data) -> crate::Result<Self::Iterator>;
+}
+
 /// Read-only database operations
-pub trait ReadOps {
+pub trait ReadOps: for<'i> PrefixIter<'i> {
     /// Get value associated with given key.
     fn get(&self, idx: DbIndex, key: &[u8]) -> crate::Result<Option<&[u8]>>;
 }

@@ -13,19 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
-use crate::net::mock::{types::MockPeerId, MockService};
 use chainstate::ChainstateError;
 use common::chain::block::consensus_data::PoWData;
-use p2p_test_utils::{make_libp2p_addr, make_mock_addr, TestBlockInfo};
+
+use super::*;
+use crate::net::mock::{
+    transport::{ChannelMockTransport, TcpMockTransport},
+    types::MockPeerId,
+    MockService,
+};
+use p2p_test_utils::{
+    MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress, TestBlockInfo,
+};
 
 // peer doesn't exist
-async fn peer_doesnt_exist<T>(addr: T::Address, peer_id: T::PeerId)
+async fn peer_doesnt_exist<A, P, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
+    P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr = A::make_address();
+    let peer_id = P::random();
+
     let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
 
     assert_eq!(
@@ -36,23 +48,33 @@ where
 
 #[tokio::test]
 async fn peer_doesnt_exist_libp2p() {
-    peer_doesnt_exist::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
+    peer_doesnt_exist::<MakeP2pAddress, PeerId, Libp2pService>().await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn peer_doesnt_exist_mock() {
-    peer_doesnt_exist::<MockService>(make_mock_addr(), MockPeerId::random()).await;
+async fn peer_doesnt_exist_mock_tcp() {
+    peer_doesnt_exist::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+async fn peer_doesnt_exist_mock_channels() {
+    peer_doesnt_exist::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>().await;
 }
 
 // submit valid block but the peer is in invalid state
-async fn valid_block<T>(addr: T::Address, peer_id: T::PeerId)
+async fn valid_block<A, P, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
+    P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr = A::make_address();
+    let peer_id = P::random();
+
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
     register_peer(&mut mgr, peer_id).await;
@@ -77,23 +99,33 @@ where
 
 #[tokio::test]
 async fn valid_block_libp2p() {
-    valid_block::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
+    valid_block::<MakeP2pAddress, PeerId, Libp2pService>().await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn valid_block_mock() {
-    valid_block::<MockService>(make_mock_addr(), MockPeerId::random()).await;
+async fn valid_block_mock_tcp() {
+    valid_block::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+async fn valid_block_mock_channels() {
+    valid_block::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>().await;
 }
 
 // submit valid block
-async fn valid_block_invalid_state<T>(addr: T::Address, peer_id: T::PeerId)
+async fn valid_block_invalid_state<A, P, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
+    P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr = A::make_address();
+    let peer_id = P::random();
+
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
     register_peer(&mut mgr, peer_id).await;
@@ -112,23 +144,35 @@ where
 
 #[tokio::test]
 async fn valid_block_invalid_state_libp2p() {
-    valid_block_invalid_state::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
+    valid_block_invalid_state::<MakeP2pAddress, PeerId, Libp2pService>().await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn valid_block_invalid_state_mock() {
-    valid_block_invalid_state::<MockService>(make_mock_addr(), MockPeerId::random()).await;
+async fn valid_block_invalid_state_mock_tcp() {
+    valid_block_invalid_state::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+async fn valid_block_invalid_state_mock_channels() {
+    valid_block_invalid_state::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>(
+    )
+    .await;
 }
 
 // submit the same block twice
-async fn valid_block_resubmitted_chainstate<T>(addr: T::Address, peer_id: T::PeerId)
+async fn valid_block_resubmitted_chainstate<A, P, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
+    P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr = A::make_address();
+    let peer_id = P::random();
+
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
     let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
@@ -157,23 +201,40 @@ where
 
 #[tokio::test]
 async fn valid_block_resubmitted_chainstate_libp2p() {
-    valid_block_resubmitted_chainstate::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
+    valid_block_resubmitted_chainstate::<MakeP2pAddress, PeerId, Libp2pService>().await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn valid_block_resubmitted_chainstate_mock() {
-    valid_block_resubmitted_chainstate::<MockService>(make_mock_addr(), MockPeerId::random()).await;
+async fn valid_block_resubmitted_chainstate_mock_tcp() {
+    valid_block_resubmitted_chainstate::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>(
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn valid_block_resubmitted_chainstate_mock_channels() {
+    valid_block_resubmitted_chainstate::<
+        MakeChannelAddress,
+        MockPeerId,
+        MockService<ChannelMockTransport>,
+    >()
+    .await;
 }
 
 // block validation fails
-async fn invalid_block<T>(addr: T::Address, peer_id: T::PeerId)
+async fn invalid_block<A, P, T>()
 where
+    A: MakeTestAddress<Address = T::Address>,
+    P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    let addr = A::make_address();
+    let peer_id = P::random();
+
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
     let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
@@ -204,12 +265,17 @@ where
 
 #[tokio::test]
 async fn invalid_block_libp2p() {
-    invalid_block::<Libp2pService>(make_libp2p_addr(), PeerId::random()).await;
+    invalid_block::<MakeP2pAddress, PeerId, Libp2pService>().await;
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 #[cfg(not(target_os = "macos"))]
-async fn invalid_block_mock() {
-    invalid_block::<MockService>(make_mock_addr(), MockPeerId::random()).await;
+async fn invalid_block_mock_tcp() {
+    invalid_block::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+async fn invalid_block_mock_channels() {
+    invalid_block::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>().await;
 }

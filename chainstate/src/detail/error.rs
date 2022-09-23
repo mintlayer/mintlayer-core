@@ -13,16 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use thiserror::Error;
-
+use super::{
+    orphan_blocks::OrphanAddError,
+    transaction_verifier::error::{ConnectTransactionError, TokensError},
+};
 use chainstate_types::PropertyQueryError;
 use common::{
     chain::{Block, GenBlock, Transaction},
-    primitives::Id,
+    primitives::{BlockDistance, Id},
 };
 use consensus::{ConsensusVerificationError, ExtraConsensusDataError};
 
-use super::{orphan_blocks::OrphanAddError, transaction_verifier::error::ConnectTransactionError};
+use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockError {
@@ -72,6 +74,14 @@ pub enum CheckBlockError {
     CheckTransactionFailed(CheckBlockTransactionsError),
     #[error("Check transaction failed: {0}")]
     ConsensusVerificationFailed(ConsensusVerificationError),
+    #[error("Block reward maturity distance too short in block {0}: {1} < {2}")]
+    InvalidBlockRewardMaturityDistance(Id<Block>, BlockDistance, BlockDistance),
+    #[error("Block reward maturity distance invalid in block {0}: {1}")]
+    InvalidBlockRewardMaturityDistanceValue(Id<Block>, u64),
+    #[error("Invalid block reward output timelock type for block {0}")]
+    InvalidBlockRewardMaturityTimelockType(Id<Block>),
+    #[error("Invalid block reward output type for block {0}")]
+    InvalidBlockRewardOutputType(Id<Block>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -82,8 +92,10 @@ pub enum CheckBlockTransactionsError {
     DuplicateInputInTransaction(Id<Transaction>, Id<Block>),
     #[error("Duplicate input in block")]
     DuplicateInputInBlock(Id<Block>),
-    #[error("Duplicate transaction found in block")]
-    DuplicatedTransactionInBlock(Id<Transaction>, Id<Block>),
+    #[error("Empty inputs or outputs in transaction found in block")]
+    EmptyInputsOutputsInTransactionInBlock(Id<Transaction>, Id<Block>),
+    #[error("Tokens error: {0}")]
+    TokensError(TokensError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

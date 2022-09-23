@@ -19,7 +19,7 @@ use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, Chain
 use crate::chain::{
     ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoWChainConfig, UpgradeVersion,
 };
-use crate::primitives::{id::WithId, semver::SemVer, BlockDistance, BlockHeight, H256};
+use crate::primitives::{id::WithId, semver::SemVer, Amount, BlockDistance, BlockHeight, H256};
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -87,7 +87,6 @@ pub struct Builder {
     chain_type: ChainType,
     address_prefix: String,
     magic_bytes: [u8; 4],
-    blockreward_maturity: BlockDistance,
     max_future_block_time_offset: Duration,
     version: SemVer,
     target_block_spacing: Duration,
@@ -101,6 +100,11 @@ pub struct Builder {
     epoch_length: BlockDistance,
     epoch_index_seed_stride: u64,
     initial_randomness: H256,
+    token_min_issuance_fee: Amount,
+    token_max_uri_len: usize,
+    token_max_dec_count: u8,
+    token_max_ticker_len: usize,
+    empty_consensus_reward_maturity_distance: BlockDistance,
 }
 
 impl Builder {
@@ -109,7 +113,6 @@ impl Builder {
         Self {
             chain_type,
             address_prefix: chain_type.default_address_prefix().to_string(),
-            blockreward_maturity: super::MAINNET_BLOCKREWARD_MATURITY,
             coin_decimals: Mlt::DECIMALS,
             magic_bytes: chain_type.default_magic_bytes(),
             version: SemVer::new(0, 1, 0),
@@ -124,6 +127,11 @@ impl Builder {
             epoch_length: super::DEFAULT_EPOCH_LENGTH,
             epoch_index_seed_stride: super::DEFAULT_EPOCH_SEED_STRIDE,
             initial_randomness: H256::zero(),
+            token_min_issuance_fee: super::TOKEN_MIN_ISSUANCE_FEE,
+            token_max_uri_len: super::TOKEN_MAX_URI_LEN,
+            token_max_dec_count: super::TOKEN_MAX_DEC_COUNT,
+            token_max_ticker_len: super::TOKEN_MAX_TICKER_LEN,
+            empty_consensus_reward_maturity_distance: BlockDistance::new(0),
         }
     }
 
@@ -139,7 +147,6 @@ impl Builder {
         let Self {
             chain_type,
             address_prefix,
-            blockreward_maturity,
             coin_decimals,
             magic_bytes,
             version,
@@ -154,6 +161,11 @@ impl Builder {
             epoch_length,
             epoch_index_seed_stride,
             initial_randomness,
+            token_min_issuance_fee,
+            token_max_uri_len,
+            token_max_dec_count,
+            token_max_ticker_len,
+            empty_consensus_reward_maturity_distance,
         } = self;
 
         let emission_schedule = match emission_schedule {
@@ -176,7 +188,6 @@ impl Builder {
         ChainConfig {
             chain_type,
             address_prefix,
-            blockreward_maturity,
             coin_decimals,
             magic_bytes,
             version,
@@ -192,6 +203,11 @@ impl Builder {
             epoch_length,
             epoch_index_seed_stride,
             initial_randomness,
+            token_min_issuance_fee,
+            token_max_uri_len,
+            token_max_dec_count,
+            token_max_ticker_len,
+            empty_consensus_reward_maturity_distance,
         }
     }
 }
@@ -211,7 +227,6 @@ impl Builder {
     builder_method!(chain_type: ChainType);
     builder_method!(address_prefix: String);
     builder_method!(magic_bytes: [u8; 4]);
-    builder_method!(blockreward_maturity: BlockDistance);
     builder_method!(max_future_block_time_offset: Duration);
     builder_method!(version: SemVer);
     builder_method!(target_block_spacing: Duration);
@@ -220,6 +235,7 @@ impl Builder {
     builder_method!(max_block_size_with_standard_txs: usize);
     builder_method!(max_block_size_with_smart_contracts: usize);
     builder_method!(net_upgrades: NetUpgrades<UpgradeVersion>);
+    builder_method!(empty_consensus_reward_maturity_distance: BlockDistance);
 
     /// Set the genesis block to be the unit test version
     pub fn genesis_unittest(mut self, premine_destination: Destination) -> Self {

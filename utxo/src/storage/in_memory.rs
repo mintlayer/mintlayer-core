@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -98,6 +98,6 @@ impl UtxosView for UtxosDBInMemoryImpl {
     }
 
     fn derive_cache(&self) -> crate::UtxosCache {
-        UtxosCache::new(self)
+        UtxosCache::from_borrowed_parent(self)
     }
 }

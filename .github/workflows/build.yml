@@ -1,14 +1,10 @@
 name: build
 
 on:
-    push:
-      branches:
-        - master
-        - staging
-    pull_request:
-      branches:
-        - master
-        - staging
+  push:
+    branches:
+      - '**' # target all branches
+
 
 env:
   CARGO_TERM_COLOR: always

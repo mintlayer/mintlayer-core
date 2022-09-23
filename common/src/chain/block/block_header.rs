@@ -46,6 +46,10 @@ impl BlockHeader {
     pub fn timestamp(&self) -> BlockTimestamp {
         self.timestamp
     }
+
+    pub fn header_size(&self) -> usize {
+        self.encoded_size()
+    }
 }
 
 impl Idable for BlockHeader {

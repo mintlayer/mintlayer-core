@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate_types::PropertyQueryError;
 use common::{
     chain::{
         block::{Block, GenBlock},
-        SpendError, Spender, TxMainChainIndexError, TxMainChainPosition,
+        tokens::TokenId,
+        OutPointSourceId, SpendError, Spender, Transaction, TxMainChainIndexError,
     },
-    primitives::{Amount, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
 use thiserror::Error;
 
@@ -34,16 +36,10 @@ pub enum ConnectTransactionError {
     InvariantErrorTxNumWrongInBlock(usize, Id<Block>),
     #[error("Outputs already in the inputs cache")]
     OutputAlreadyPresentInInputsCache,
-    #[error("Block reward spent immaturely")]
-    ImmatureBlockRewardSpend,
     #[error("Input was cached, but could not be found")]
-    PreviouslyCachedInputNotFound,
-    #[error("Input was cached, but it is erased")]
-    PreviouslyCachedInputWasErased,
+    PreviouslyCachedInputNotFound(OutPointSourceId),
     #[error("Block disconnect already-unspent (invariant broken)")]
     InvariantBrokenAlreadyUnspent,
-    #[error("Source block index for block reward output not found")]
-    InvariantBrokenSourceBlockIndexNotFound,
     #[error("Output is not found in the cache or database")]
     MissingOutputOrSpent,
     #[error("While connecting a block, output was erased in a previous step (possible in reorgs with no cache flushing)")]
@@ -62,8 +58,6 @@ pub enum ConnectTransactionError {
     AttemptToPrintMoney(Amount, Amount),
     #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     TxFeeTotalCalcFailed(Amount, Amount),
-    #[error("Output addition error")]
-    OutputAdditionError,
     #[error("Signature verification failed in transaction")]
     SignatureVerificationFailed,
     #[error("Invalid output count")]
@@ -72,8 +66,6 @@ pub enum ConnectTransactionError {
     BlockHeightArithmeticError,
     #[error("Error while calculating timestamps; possibly an overflow")]
     BlockTimestampArithmeticError,
-    #[error("Input addition error")]
-    InputAdditionError,
     #[error("Double-spend attempt in `{0:?}`")]
     DoubleSpendAttempt(Spender),
     #[error("Input of tx {tx_id:?} has an out-of-range output index {source_output_index}")]
@@ -81,14 +73,12 @@ pub enum ConnectTransactionError {
         tx_id: Option<Spender>,
         source_output_index: usize,
     },
-    #[error("Transaction index found but transaction not found")]
-    InvariantErrorTransactionCouldNotBeLoaded(TxMainChainPosition),
     #[error("Transaction index for header found but header not found")]
-    InvariantErrorHeaderCouldNotBeLoaded(Id<Block>),
+    InvariantErrorHeaderCouldNotBeLoaded(Id<GenBlock>),
+    #[error("Transaction index for header found but header not found")]
+    InvariantErrorHeaderCouldNotBeLoadedFromHeight(PropertyQueryError, BlockHeight),
     #[error("Unable to find block index")]
-    InvariantErrorBlockIndexCouldNotBeLoaded(Id<Block>),
-    #[error("Unable to find block")]
-    InvariantErrorBlockCouldNotBeLoaded(Id<Block>),
+    BlockIndexCouldNotBeLoaded(Id<GenBlock>),
     #[error("Addition of all fees in block `{0}` failed")]
     FailedToAddAllFeesOfBlock(Id<Block>),
     #[error("Block reward addition error for block {0}")]
@@ -99,6 +89,8 @@ pub enum ConnectTransactionError {
     TimeLockViolation,
     #[error("Utxo error: {0}")]
     UtxoError(#[from] utxo::Error),
+    #[error("Tokens error: {0}")]
+    TokensError(#[from] TokensError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
@@ -141,4 +133,42 @@ impl From<TxMainChainIndexError> for ConnectTransactionError {
             }
         }
     }
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum TokensError {
+    #[error("Blockchain storage error: {0}")]
+    StorageError(#[from] chainstate_storage::Error),
+    #[error("Invalid ticker length in issuance transaction {0} in block {1}")]
+    IssueErrorInvalidTickerLength(Id<Transaction>, Id<Block>),
+    #[error("Invalid character in token ticker in issuance transaction {0} in block {1}")]
+    IssueErrorTickerHasNoneAlphaNumericChar(Id<Transaction>, Id<Block>),
+    #[error("Incorrect amount in issuance transaction {0} in block {1}")]
+    IssueAmountIsZero(Id<Transaction>, Id<Block>),
+    #[error("Too many decimals in issuance transaction {0} in block {1}")]
+    IssueErrorTooManyDecimals(Id<Transaction>, Id<Block>),
+    #[error("Incorrect metadata URI in issuance transaction {0} in block {1}")]
+    IssueErrorIncorrectMetadataURI(Id<Transaction>, Id<Block>),
+    #[error("Too many tokens issuance in transaction {0} in block {1}")]
+    MultipleTokenIssuanceInTransaction(Id<Transaction>, Id<Block>),
+    #[error("Coin or token overflow")]
+    CoinOrTokenOverflow,
+    #[error("Insufficient token issuance fee in transaction {0} in block {1}")]
+    InsufficientTokenFees(Id<Transaction>, Id<Block>),
+    #[error("Can't burn zero value in transaction {0} in block {1}")]
+    BurnZeroTokens(Id<Transaction>, Id<Block>),
+    #[error("Can't transfer zero tokens in transaction {0} in block {1}")]
+    TransferZeroTokens(Id<Transaction>, Id<Block>),
+    #[error("Can't fetch transaction inputs in main chain by outpoint")]
+    NoTxInMainChainByOutpoint,
+    #[error("Tokens ID can't be calculated")]
+    TokenIdCantBeCalculated,
+    #[error("Burned tokens cannot be transferred")]
+    AttemptToTransferBurnedTokens,
+    #[error("Block reward can't be paid in tokens")]
+    TokensInBlockReward,
+    #[error("Invariant broken - attempt undo issuance on non-existent token {0}")]
+    InvariantBrokenUndoIssuanceOnNonexistentToken(TokenId),
+    #[error("Invariant broken - attempt register issuance on non-existent token {0}")]
+    InvariantBrokenRegisterIssuanceWithDuplicateId(TokenId),
 }

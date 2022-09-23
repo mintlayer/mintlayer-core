@@ -56,7 +56,9 @@ fn check_stake_kernel_hash(
             ));
         }
 
-        common::chain::OutputPurpose::StakePool(d) => &**d,
+        common::chain::OutputPurpose::StakePool(d) => {
+            &**d.as_ref().expect("TODO(PR) remove expect by removing the Option in StakePool")
+        }
     };
 
     let hash_pos: H256 = verify_vrf_and_get_vrf_output(
@@ -73,6 +75,7 @@ fn check_stake_kernel_hash(
     // TODO: calculate the total pool balance, not just from the delegation as done here, but also add all delegated stakes
     let pool_balance = match kernel_output.value() {
         OutputValue::Coin(a) => a.into_atoms().into(),
+        OutputValue::Token(_) => 0u128.into(),
     };
 
     // TODO: the target multiplication can overflow, use Uint512

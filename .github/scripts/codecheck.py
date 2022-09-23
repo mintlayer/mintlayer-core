@@ -57,10 +57,24 @@ def disallow(pat, exclude = []):
 # Check license header
 def check_licenses():
     print("==== Checking license headers:")
-    template = re.compile(r'\n'.join(LICENSE_TEMPLATE))
+    
+    # list of files exempted from license check
+    exempted_files = [
+        "./script/src/opcodes.rs",
+        "./common/src/fixed_hash.rs",
+        "./common/src/uint/internal_macros.rs",
+        "./common/src/uint/endian.rs",
+        "./common/src/uint/impls.rs",
+        "./common/src/uint/mod.rs"
+        ]
+    
+    template = re.compile('(?:' + r')\n(?:'.join(LICENSE_TEMPLATE) + ')')
 
     ok = True
     for path in rs_sources():
+        if any(os.path.samefile(path, exempted) for exempted in exempted_files):
+            continue
+        
         with open(path) as file:
             if not template.search(file.read()):
                 ok = False
@@ -69,11 +83,34 @@ def check_licenses():
     print()
     return ok
 
+# check TODO(PR) and FIXME instances
+def check_todos():
+    print("==== Checking TODO(PR) and FIXME instances:")
+    
+    # list of files exempted from checks
+    exempted_files = [
+        ]
+    
+    ok = True
+    for path in rs_sources():
+        if any(os.path.samefile(path, exempted) for exempted in exempted_files):
+            continue
+        
+        with open(path) as file:
+            file_data = file.read()
+            if 'TODO(PR)' in file_data or 'FIXME' in file_data:
+                ok = False
+                print("{}: Found TODO(PR) or FIXME instances".format(path))
+
+    print()
+    return ok
+
 def run_checks():
     return all([
             disallow(SCALECODEC_RE, exclude = ['serialization/core']),
             disallow(JSONRPSEE_RE, exclude = ['rpc']),
-            check_licenses()
+            check_licenses(),
+            check_todos()
         ])
 
 if __name__ == '__main__':

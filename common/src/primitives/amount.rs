@@ -41,7 +41,19 @@ pub type UnsignedIntType = u128;
 
 /// An unsigned fixed-point type for amounts
 /// The smallest unit of count is called an atom
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[must_use]
 pub struct Amount {
     #[codec(compact)]
@@ -60,6 +72,7 @@ fn remove_right_most_zeros_and_decimal_point(s: String) -> String {
 
 impl Amount {
     pub const MAX: Self = Self::from_atoms(UnsignedIntType::MAX);
+    pub const ZERO: Self = Self::from_atoms(0);
 
     pub const fn from_atoms(v: UnsignedIntType) -> Self {
         Amount { val: v }

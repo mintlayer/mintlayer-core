@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -20,9 +20,16 @@ pub use interface::chainstate_interface_impl_delegation;
 
 pub mod rpc;
 
+pub use crate::detail::calculate_median_time_past;
+pub use crate::detail::CheckBlockError;
+pub use crate::detail::CheckBlockTransactionsError;
+pub use crate::detail::ConnectTransactionError;
+pub use crate::detail::OrphanCheckError;
+pub use crate::detail::TokensError;
+
 pub use crate::{
     config::ChainstateConfig,
-    detail::{ban_score, BlockError, BlockSource, Locator},
+    detail::{ban_score, BlockError, BlockSource, Locator, HEADER_LIMIT},
 };
 
 mod config;
@@ -30,7 +37,7 @@ mod detail;
 
 use std::sync::Arc;
 
-use chainstate_types::PropertyQueryError;
+pub use chainstate_types::PropertyQueryError;
 use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
@@ -38,7 +45,8 @@ use common::{
 
 use chainstate_interface::ChainstateInterface;
 use chainstate_interface_impl::ChainstateInterfaceImpl;
-use detail::{time_getter::TimeGetter, Chainstate};
+use common::time_getter::TimeGetter;
+use detail::Chainstate;
 
 #[derive(Debug, Clone)]
 pub enum ChainstateEvent {
@@ -76,6 +84,3 @@ pub fn make_chainstate<S: chainstate_storage::BlockchainStorage + 'static>(
     let cons_interface = ChainstateInterfaceImpl::new(cons);
     Ok(Box::new(cons_interface))
 }
-
-#[cfg(test)]
-mod test;

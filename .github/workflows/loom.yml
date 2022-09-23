@@ -1,10 +1,9 @@
 name: Permutation testing
 
 on:
-  pull_request:
+  push:
     branches:
-      - master
-      - staging
+      - '**' # target all branches
 
 env:
   CARGO_TERM_COLOR: always
