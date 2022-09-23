@@ -23,6 +23,7 @@ pub struct ChainstateConfig {
     /// The maximum capacity of the orphan blocks pool.
     pub max_orphan_blocks: usize,
     /// When importing bootstrap file, this controls the buffer sizes (min, max)
+    /// (see bootstrap import function for more information)
     pub min_max_bootstrap_import_buffer_sizes: (usize, usize),
 }
 
