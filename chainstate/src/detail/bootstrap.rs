@@ -18,7 +18,7 @@ use std::io::{BufRead, Write};
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, PropertyQueryError};
 use common::{chain::Block, primitives::id::WithId};
-use serialization::{DecodeAll, Encode};
+use serialization::{Decode, Encode};
 
 use crate::{BlockError, ChainstateConfig};
 
@@ -51,6 +51,9 @@ pub fn import_bootstrap_stream<P, S: std::io::Read>(
 where
     P: FnMut(WithId<Block>) -> Result<Option<BlockIndex>, BlockError>,
 {
+    // min: The smallest buffer size, after which another read is triggered from the bootstrap file
+    // max: The largest buffer size, after which reading the file is stopped
+    // NOTE: both sizes MUST be larger than the largest block in the blockchain + 4 bytes for magic bytes
     let (min_buffer_size, max_buffer_size) =
         chainstate_config.min_max_bootstrap_import_buffer_sizes;
 
@@ -63,9 +66,12 @@ where
             fill_buffer(&mut buffer_queue, file_reader, max_buffer_size)?;
         }
 
+        // locate magic bytes to recognize the start of a block
         let current_pos = buffer_queue
             .windows(expected_magic_bytes.len())
             .position(|window| window == expected_magic_bytes);
+
+        // read the block after the magic bytes
         let block = match current_pos {
             Some(v) => read_block_at_pos(&buffer_queue[v + expected_magic_bytes.len()..])?,
             None => break,
@@ -102,7 +108,7 @@ fn fill_buffer<S: std::io::Read>(
 
 fn read_block_at_pos(buf: &[u8]) -> Result<Block, BootstrapError> {
     let mut buffer = buf;
-    let block = Block::decode_all(&mut buffer)?;
+    let block = Block::decode(&mut buffer)?;
     Ok(block)
 }
 
