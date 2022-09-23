@@ -212,7 +212,7 @@ where
         }
     }
 
-    mgr.check_state().await
+    mgr.check_state()
 }
 
 async fn local_and_remote_in_sync<A, T>()
@@ -364,7 +364,7 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
+    mgr1.check_state().unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Idle);
@@ -502,8 +502,8 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
-    mgr2.check_state().await.unwrap();
+    mgr1.check_state().unwrap();
+    mgr2.check_state().unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Idle);
@@ -665,8 +665,8 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
-    mgr2.check_state().await.unwrap();
+    mgr1.check_state().unwrap();
+    mgr2.check_state().unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await == local_tip);
@@ -833,8 +833,8 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
-    mgr2.check_state().await.unwrap();
+    mgr1.check_state().unwrap();
+    mgr2.check_state().unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await != local_tip);
@@ -963,7 +963,7 @@ where
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
+    mgr1.check_state().unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
@@ -1109,7 +1109,7 @@ where
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
+    mgr1.check_state().unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
@@ -1266,7 +1266,7 @@ where
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
+    mgr1.check_state().unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(same_tip(&mgr2_handle, &mgr3_handle).await);
@@ -1411,7 +1411,7 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
+    mgr1.check_state().unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Idle);

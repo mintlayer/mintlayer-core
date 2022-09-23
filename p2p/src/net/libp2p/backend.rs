@@ -117,7 +117,7 @@ impl Libp2pBackend {
                     }
                 },
                 command = self.cmd_rx.recv() => match command {
-                    Some(cmd) => self.on_command(cmd).await?,
+                    Some(cmd) => self.on_command(cmd)?,
                     None => return Err(P2pError::ChannelClosed),
                 },
             }
@@ -301,7 +301,7 @@ impl Libp2pBackend {
 
     // TODO: design p2p global command system
     /// Handle command received from the libp2p front-end
-    async fn on_command(&mut self, cmd: types::Command) -> crate::Result<()> {
+    fn on_command(&mut self, cmd: types::Command) -> crate::Result<()> {
         log::trace!("handle incoming command {:?}", cmd);
 
         match cmd {
