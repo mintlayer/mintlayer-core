@@ -141,6 +141,9 @@ fn bootstrap_tests(#[case] seed: Seed) {
             mainchain_vec
         };
 
+        // from now on, the original TestFramework cannot be modified
+        let tf1 = tf1;
+
         // double-check that we have all blocks of all chains
         let all_blocks = {
             let tree_vec = tf1.chainstate.get_block_id_tree_as_list().unwrap();
