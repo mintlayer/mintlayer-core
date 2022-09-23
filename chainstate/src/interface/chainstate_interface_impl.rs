@@ -352,9 +352,17 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
 
         let mut reader = reader.lock().expect("Failed to unlock mutex");
 
+        // We clone because borrowing with the closure below borrowing
+        let chainstate_config = self.chainstate.chainstate_config().clone();
+
         let mut block_processor = |block| self.chainstate.process_block(block, BlockSource::Local);
 
-        import_bootstrap_stream(&magic_bytes, reader.deref_mut(), &mut block_processor)?;
+        import_bootstrap_stream(
+            &magic_bytes,
+            reader.deref_mut(),
+            &mut block_processor,
+            &chainstate_config,
+        )?;
 
         Ok(())
     }

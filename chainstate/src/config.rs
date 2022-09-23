@@ -38,7 +38,10 @@ impl Default for ChainstateConfig {
         Self {
             max_db_commit_attempts: 10,
             max_orphan_blocks: 512,
-            min_max_bootstrap_import_buffer_sizes: (1 << 22, 1 << 26),
+            min_max_bootstrap_import_buffer_sizes: (
+                1 << 22, /* 4 MB */
+                1 << 26, /* 64 MB */
+            ),
         }
     }
 }

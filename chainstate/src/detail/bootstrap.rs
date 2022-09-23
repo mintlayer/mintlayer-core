@@ -20,7 +20,7 @@ use chainstate_types::{BlockIndex, PropertyQueryError};
 use common::{chain::Block, primitives::id::WithId};
 use serialization::{DecodeAll, Encode};
 
-use crate::BlockError;
+use crate::{BlockError, ChainstateConfig};
 
 use super::{orphan_blocks::OrphanBlocks, query::ChainstateQuery};
 
@@ -46,19 +46,21 @@ pub fn import_bootstrap_stream<P, S: std::io::Read>(
     expected_magic_bytes: &[u8],
     file_reader: &mut std::io::BufReader<S>,
     process_block_func: &mut P,
+    chainstate_config: &ChainstateConfig,
 ) -> Result<(), BootstrapError>
 where
     P: FnMut(WithId<Block>) -> Result<Option<BlockIndex>, BlockError>,
 {
-    const MIN_BUFFER_SIZE: usize = 1 << 22; // 4 MB
+    let (min_buffer_size, max_buffer_size) =
+        chainstate_config.min_max_bootstrap_import_buffer_sizes;
 
     // It's more reasonable to use a VeqDeque, but it's incompatible with the windows() method which is needed to search for magic bytes
     // There's a performance hit behind this, but we don't care. Anyone is free to optimize this.
     let mut buffer_queue = Vec::<u8>::new();
 
     loop {
-        if buffer_queue.len() < MIN_BUFFER_SIZE {
-            fill_buffer(&mut buffer_queue, file_reader)?;
+        if buffer_queue.len() < min_buffer_size {
+            fill_buffer(&mut buffer_queue, file_reader, max_buffer_size)?;
         }
 
         let current_pos = buffer_queue
@@ -81,10 +83,9 @@ where
 fn fill_buffer<S: std::io::Read>(
     buffer_queue: &mut Vec<u8>,
     reader: &mut std::io::BufReader<S>,
+    max_buffer_size: usize,
 ) -> Result<(), BootstrapError> {
-    const MAX_BUFFER_SIZE: usize = 1 << 26; // 64 MB
-
-    while buffer_queue.len() < MAX_BUFFER_SIZE {
+    while buffer_queue.len() < max_buffer_size {
         let buf_len = {
             let data = reader.fill_buf()?;
             if data.is_empty() {
