@@ -233,6 +233,14 @@ impl<
     ) -> Result<(), ChainstateError> {
         self.deref_mut().import_bootstrap_file(bootstrap_file_path)
     }
+
+    fn export_bootstrap_stream<'a>(
+        &'a self,
+        writer: std::sync::Mutex<std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>>,
+        include_orphans: bool,
+    ) -> Result<(), ChainstateError> {
+        self.deref().export_bootstrap_stream(writer, include_orphans)
+    }
 }
 
 #[cfg(test)]

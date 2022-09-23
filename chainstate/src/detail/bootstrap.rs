@@ -13,13 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::BufRead;
+use std::io::{BufRead, Write};
 
-use chainstate_types::BlockIndex;
+use chainstate_storage::BlockchainStorageRead;
+use chainstate_types::{BlockIndex, PropertyQueryError};
 use common::{chain::Block, primitives::id::WithId};
 use serialization::{DecodeAll, Encode};
 
 use crate::BlockError;
+
+use super::{orphan_blocks::OrphanBlocks, query::ChainstateQuery};
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum BootstrapError {
@@ -29,6 +32,8 @@ pub enum BootstrapError {
     Deserialization(#[from] serialization::Error),
     #[error("Block import error: {0}")]
     BlockProcessing(#[from] BlockError),
+    #[error("Block import error: {0}")]
+    FailedToReadProperty(#[from] PropertyQueryError),
 }
 
 impl From<std::io::Error> for BootstrapError {
@@ -98,4 +103,28 @@ fn read_block_at_pos(buf: &[u8]) -> Result<Block, BootstrapError> {
     let mut buffer = buf;
     let block = Block::decode_all(&mut buffer)?;
     Ok(block)
+}
+
+pub fn export_bootstrap_stream<'a, S: BlockchainStorageRead, O: OrphanBlocks>(
+    writer: &mut std::io::BufWriter<Box<dyn std::io::Write + 'a + Send>>,
+    include_orphans: bool,
+    magic_bytes: &[u8],
+    query_interface: &ChainstateQuery<'a, S, O>,
+) -> Result<(), BootstrapError>
+where
+{
+    let blocks_list = if include_orphans {
+        query_interface.get_block_id_tree_as_list()?
+    } else {
+        query_interface.get_mainchain_blocks_list()?
+    };
+
+    for block_id in blocks_list {
+        writer.write_all(magic_bytes)?;
+        let block = query_interface
+            .get_block(block_id)?
+            .ok_or_else(|| PropertyQueryError::BlockNotFound(block_id))?;
+        writer.write_all(&block.encode())?;
+    }
+    Ok(())
 }

@@ -13,8 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::DerefMut;
 use std::sync::Arc;
 
+use crate::detail::bootstrap::export_bootstrap_stream;
 use crate::detail::bootstrap::import_bootstrap_stream;
 use crate::detail::calculate_median_time_past;
 use chainstate_storage::BlockchainStorage;
@@ -358,5 +360,21 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         import_bootstrap_stream(&magic_bytes, &mut file_reader, &mut block_processor)?;
 
         Ok(())
+    }
+
+    fn export_bootstrap_stream<'a>(
+        &'a self,
+        writer: std::sync::Mutex<std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>>,
+        include_orphans: bool,
+    ) -> Result<(), ChainstateError> {
+        let magic_bytes = self.chainstate.chain_config().magic_bytes();
+        let mut writer = writer.lock().expect("Mutex lock failed");
+        let result = export_bootstrap_stream(
+            writer.deref_mut(),
+            include_orphans,
+            magic_bytes,
+            &self.chainstate.query(),
+        )?;
+        Ok(result)
     }
 }

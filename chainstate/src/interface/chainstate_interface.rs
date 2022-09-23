@@ -140,4 +140,10 @@ pub trait ChainstateInterface: Send {
         &mut self,
         bootstrap_file_path: &std::path::Path,
     ) -> Result<(), ChainstateError>;
+
+    fn export_bootstrap_stream<'a>(
+        &'a self,
+        writer: std::sync::Mutex<std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>>,
+        include_orphans: bool,
+    ) -> Result<(), ChainstateError>;
 }
