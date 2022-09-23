@@ -138,12 +138,12 @@ pub trait ChainstateInterface: Send {
     /// Imports a bootstrap file exported with rpc
     fn import_bootstrap_stream<'a>(
         &'a mut self,
-        reader: std::sync::Mutex<std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>>,
+        reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
     ) -> Result<(), ChainstateError>;
 
     fn export_bootstrap_stream<'a>(
         &'a self,
-        writer: std::sync::Mutex<std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>>,
+        writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
         include_orphans: bool,
     ) -> Result<(), ChainstateError>;
 }

@@ -113,11 +113,8 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             std::io::BufWriter::new(Box::new(file_obj));
 
         handle_error(
-            self.call(move |this| {
-                let writer = std::sync::Mutex::new(writer);
-                this.export_bootstrap_stream(writer, include_orphans)
-            })
-            .await,
+            self.call(move |this| this.export_bootstrap_stream(writer, include_orphans))
+                .await,
         )?;
 
         Ok(())
@@ -129,13 +126,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         let reader: std::io::BufReader<Box<dyn Read + Send>> =
             std::io::BufReader::new(Box::new(file_obj));
 
-        handle_error(
-            self.call_mut(move |this| {
-                let writer = std::sync::Mutex::new(reader);
-                this.import_bootstrap_stream(writer)
-            })
-            .await,
-        )?;
+        handle_error(self.call_mut(move |this| this.import_bootstrap_stream(reader)).await)?;
 
         Ok(())
     }

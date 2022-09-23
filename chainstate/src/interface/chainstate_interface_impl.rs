@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::DerefMut;
 use std::sync::Arc;
 
 use crate::detail::bootstrap::export_bootstrap_stream;
@@ -346,11 +345,11 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
 
     fn import_bootstrap_stream<'a>(
         &mut self,
-        reader: std::sync::Mutex<std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>>,
+        reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
     ) -> Result<(), ChainstateError> {
         let magic_bytes = self.chainstate.chain_config().magic_bytes().to_vec();
 
-        let mut reader = reader.lock().expect("Failed to unlock mutex");
+        let mut reader = reader;
 
         // We clone because borrowing with the closure below borrowing
         let chainstate_config = self.chainstate.chainstate_config().clone();
@@ -359,7 +358,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
 
         import_bootstrap_stream(
             &magic_bytes,
-            reader.deref_mut(),
+            &mut reader,
             &mut block_processor,
             &chainstate_config,
         )?;
@@ -369,14 +368,14 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
 
     fn export_bootstrap_stream<'a>(
         &'a self,
-        writer: std::sync::Mutex<std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>>,
+        writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
         include_orphans: bool,
     ) -> Result<(), ChainstateError> {
         let magic_bytes = self.chainstate.chain_config().magic_bytes();
-        let mut writer = writer.lock().expect("Mutex lock failed");
+        let mut writer = writer;
         export_bootstrap_stream(
             magic_bytes,
-            writer.deref_mut(),
+            &mut writer,
             include_orphans,
             &self.chainstate.query(),
         )?;

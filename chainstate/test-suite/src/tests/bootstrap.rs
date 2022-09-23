@@ -179,9 +179,8 @@ fn bootstrap_tests(#[case] seed: Seed) {
         let make_bootstrap_as_vec = |with_orphans: bool| {
             let mut write_buffer = Vec::new();
 
-            let buf: BufWriter<Box<dyn std::io::Write + Send>> =
+            let writer: BufWriter<Box<dyn std::io::Write + Send>> =
                 std::io::BufWriter::new(Box::new(&mut write_buffer));
-            let writer = std::sync::Mutex::new(buf);
 
             tf1.chainstate.export_bootstrap_stream(writer, with_orphans).unwrap();
 
@@ -201,9 +200,8 @@ fn bootstrap_tests(#[case] seed: Seed) {
                 )
                 .build();
 
-            let buf: std::io::BufReader<Box<dyn std::io::Read + Send>> =
+            let reader: std::io::BufReader<Box<dyn std::io::Read + Send>> =
                 std::io::BufReader::new(Box::new(bootstrap_with_orphans.as_slice()));
-            let reader = std::sync::Mutex::new(buf);
 
             tf2.chainstate.import_bootstrap_stream(reader).unwrap();
 
@@ -223,9 +221,8 @@ fn bootstrap_tests(#[case] seed: Seed) {
                 )
                 .build();
 
-            let buf: std::io::BufReader<Box<dyn std::io::Read + Send>> =
+            let reader: std::io::BufReader<Box<dyn std::io::Read + Send>> =
                 std::io::BufReader::new(Box::new(bootstrap_no_orphans.as_slice()));
-            let reader = std::sync::Mutex::new(buf);
 
             tf3.chainstate.import_bootstrap_stream(reader).unwrap();
 
@@ -241,9 +238,8 @@ fn bootstrap_tests(#[case] seed: Seed) {
                 .with_chainstate_config(ChainstateConfig::new().with_max_orphan_blocks(0))
                 .build();
 
-            let buf: std::io::BufReader<Box<dyn std::io::Read + Send>> =
+            let reader: std::io::BufReader<Box<dyn std::io::Read + Send>> =
                 std::io::BufReader::new(Box::new(bootstrap_with_orphans.as_slice()));
-            let reader = std::sync::Mutex::new(buf);
 
             tf4.chainstate.import_bootstrap_stream(reader).unwrap();
 
@@ -263,9 +259,8 @@ fn bootstrap_tests(#[case] seed: Seed) {
                 )
                 .build();
 
-            let buf: std::io::BufReader<Box<dyn std::io::Read + Send>> =
+            let reader: std::io::BufReader<Box<dyn std::io::Read + Send>> =
                 std::io::BufReader::new(Box::new(bootstrap_with_orphans.as_slice()));
-            let reader = std::sync::Mutex::new(buf);
 
             tf5.chainstate.import_bootstrap_stream(reader).unwrap();
 

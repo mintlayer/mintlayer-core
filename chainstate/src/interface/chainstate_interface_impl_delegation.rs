@@ -229,14 +229,14 @@ impl<
 
     fn import_bootstrap_stream<'a>(
         &'a mut self,
-        reader: std::sync::Mutex<std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>>,
+        reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
     ) -> Result<(), ChainstateError> {
         self.deref_mut().import_bootstrap_stream(reader)
     }
 
     fn export_bootstrap_stream<'a>(
         &'a self,
-        writer: std::sync::Mutex<std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>>,
+        writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
         include_orphans: bool,
     ) -> Result<(), ChainstateError> {
         self.deref().export_bootstrap_stream(writer, include_orphans)
