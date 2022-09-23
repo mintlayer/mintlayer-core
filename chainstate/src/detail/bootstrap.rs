@@ -123,7 +123,7 @@ where
         writer.write_all(magic_bytes)?;
         let block = query_interface
             .get_block(block_id)?
-            .ok_or_else(|| PropertyQueryError::BlockNotFound(block_id))?;
+            .ok_or(PropertyQueryError::BlockNotFound(block_id))?;
         writer.write_all(&block.encode())?;
     }
     Ok(())
