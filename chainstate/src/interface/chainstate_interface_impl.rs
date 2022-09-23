@@ -351,7 +351,8 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
 
         let mut reader = reader;
 
-        // We clone because borrowing with the closure below borrowing
+        // We clone because borrowing with the closure below prevents immutable borrows,
+        // and the cost of cloning is small compared to the bootstrapping
         let chainstate_config = self.chainstate.chainstate_config().clone();
 
         let mut block_processor = |block| self.chainstate.process_block(block, BlockSource::Local);
