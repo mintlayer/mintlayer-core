@@ -882,10 +882,8 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
     }
 
     fn add_to_block_index(&mut self, block: &WithId<Block>) -> Result<BlockIndex, BlockError> {
-        match self.db_tx.get_block_index(&block.get_id()).map_err(BlockError::from)? {
-            // this is not an error, because it's valid to have the header but not the whole block
-            Some(bi) => return Ok(bi),
-            None => (),
+        if let Some(bi) = self.db_tx.get_block_index(&block.get_id()).map_err(BlockError::from)? {
+            return Ok(bi);
         }
 
         let prev_block_index = self
@@ -931,10 +929,10 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
 
     pub fn accept_block(&mut self, block: &WithId<Block>) -> Result<BlockIndex, BlockError> {
         let block_index = self.add_to_block_index(block)?;
-        match self.db_tx.get_block(block.get_id()).map_err(BlockError::from)? {
-            Some(_) => return Err(BlockError::BlockAlreadyExists(block.get_id())),
-            None => (),
+        if (self.db_tx.get_block(block.get_id()).map_err(BlockError::from)?).is_some() {
+            return Err(BlockError::BlockAlreadyExists(block.get_id()));
         }
+
         self.check_block_index(&block_index)?;
         self.db_tx.set_block_index(&block_index).map_err(BlockError::from)?;
         self.db_tx.add_block(block).map_err(BlockError::from)?;

@@ -326,7 +326,7 @@ where
             .inputs()
             .iter()
             .filter_map(|input| input.outpoint().tx_id().get_tx_id().cloned())
-            .filter_map(|id| self.store.txs_by_id.contains_key(&id).then(|| id))
+            .filter_map(|id| self.store.txs_by_id.contains_key(&id).then_some(id))
             .collect::<BTreeSet<_>>();
 
         let fee = self.try_get_fee(&tx).await?;

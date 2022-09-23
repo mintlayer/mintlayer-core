@@ -284,10 +284,7 @@ where
         &mut swarm2.peer_connectivity_handle,
     )
     .await;
-    assert_eq!(
-        swarm2.accept_inbound_connection(address, peer_info).await,
-        Ok(())
-    );
+    assert_eq!(swarm2.accept_inbound_connection(address, peer_info), Ok(()));
 }
 
 #[tokio::test]
@@ -332,7 +329,7 @@ where
     .await;
 
     assert_eq!(
-        swarm2.accept_inbound_connection(address, peer_info).await,
+        swarm2.accept_inbound_connection(address, peer_info),
         Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
             [1, 2, 3, 4],
             *config::create_mainnet().magic_bytes(),

@@ -60,7 +60,7 @@ impl TryFrom<u8> for SigHashType {
             sighash_byte & Self::MASK_OUT,
             Self::ALL | Self::NONE | Self::SINGLE
         );
-        ok.then(|| Self(sighash_byte))
+        ok.then_some(Self(sighash_byte))
             .ok_or(TransactionSigError::InvalidSigHashValue(sighash_byte))
     }
 }

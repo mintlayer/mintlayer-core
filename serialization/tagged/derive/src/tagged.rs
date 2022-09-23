@@ -25,7 +25,7 @@ pub fn variant_index(variant: &syn::Variant) -> Option<TokenStream> {
         .attrs
         .iter()
         .filter_map(|a| {
-            a.path.is_ident("codec").then(|| ())?;
+            a.path.is_ident("codec").then_some(())?;
             match a.parse_args().expect("Can't parse metadata") {
                 syn::NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
                     nv.path.is_ident("index").then(|| match nv.lit {

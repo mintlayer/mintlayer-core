@@ -97,7 +97,7 @@ fn test_storage_manipulation() {
     let offset_tx0 = enc_block0
         .windows(enc_tx0.len())
         .enumerate()
-        .find_map(|(i, d)| (d == enc_tx0).then(|| i))
+        .find_map(|(i, d)| (d == enc_tx0).then_some(i))
         .unwrap();
     assert!(
         &enc_block0[offset_tx0..].starts_with(&enc_tx0),

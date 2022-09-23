@@ -355,7 +355,7 @@ where
     ///
     /// When the node is synced, [`crate::pubsub::PubSubMessageHandler`] is notified so it knows to
     /// subscribe to the needed publish-subscribe topics.
-    pub async fn check_state(&mut self) -> crate::Result<()> {
+    pub fn check_state(&mut self) -> crate::Result<()> {
         // TODO: improve "initial block download done" check
 
         if self.peers.is_empty() {
@@ -598,7 +598,7 @@ where
                 }
             };
 
-            self.check_state().await?;
+            self.check_state()?;
         }
     }
 }
