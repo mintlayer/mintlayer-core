@@ -15,7 +15,7 @@
 
 //! Chainstate subsystem RPC handler
 
-use std::io::Write;
+use std::io::{Read, Write};
 
 use crate::{Block, BlockSource, ChainstateError, GenBlock};
 use common::{
@@ -61,6 +61,10 @@ trait ChainstateRpc {
         file_path: &std::path::Path,
         include_orphans: bool,
     ) -> rpc::Result<()>;
+
+    /// Reads blocks from disk
+    #[method(name = "import_bootstrap_file")]
+    async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> rpc::Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -112,6 +116,23 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             self.call(move |this| {
                 let writer = std::sync::Mutex::new(writer);
                 this.export_bootstrap_stream(writer, include_orphans)
+            })
+            .await,
+        )?;
+
+        Ok(())
+    }
+
+    async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> rpc::Result<()> {
+        // TODO: test this function in functional tests
+        let file_obj = std::fs::File::open(file_path).map_err(rpc::Error::to_call_error)?;
+        let reader: std::io::BufReader<Box<dyn Read + Send>> =
+            std::io::BufReader::new(Box::new(file_obj));
+
+        handle_error(
+            self.call_mut(move |this| {
+                let writer = std::sync::Mutex::new(reader);
+                this.import_bootstrap_stream(writer)
             })
             .await,
         )?;
