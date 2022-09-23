@@ -249,7 +249,7 @@ fn bootstrap_tests(#[case] seed: Seed) {
             );
         }
 
-        // test importing all blocks with orphans with small huge buffers
+        // test importing all blocks with orphans with huge buffers
         {
             let mut tf5 = TestFramework::builder()
                 .with_chainstate_config(
