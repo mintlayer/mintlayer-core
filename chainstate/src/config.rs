@@ -22,6 +22,8 @@ pub struct ChainstateConfig {
     pub max_db_commit_attempts: usize,
     /// The maximum capacity of the orphan blocks pool.
     pub max_orphan_blocks: usize,
+    /// When importing bootstrap file, this controls the buffer sizes (min, max)
+    pub min_max_bootstrap_import_buffer_sizes: (usize, usize),
 }
 
 impl ChainstateConfig {
@@ -36,6 +38,7 @@ impl Default for ChainstateConfig {
         Self {
             max_db_commit_attempts: 10,
             max_orphan_blocks: 512,
+            min_max_bootstrap_import_buffer_sizes: (1 << 22, 1 << 26),
         }
     }
 }

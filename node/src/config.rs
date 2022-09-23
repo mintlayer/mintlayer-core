@@ -85,6 +85,7 @@ fn chainstate_config(config: ChainstateConfig, options: &RunOptions) -> Chainsta
     let ChainstateConfig {
         max_db_commit_attempts,
         max_orphan_blocks,
+        min_max_bootstrap_import_buffer_sizes,
     } = config;
 
     let max_db_commit_attempts = options.max_db_commit_attempts.unwrap_or(max_db_commit_attempts);
@@ -93,6 +94,7 @@ fn chainstate_config(config: ChainstateConfig, options: &RunOptions) -> Chainsta
     ChainstateConfig {
         max_db_commit_attempts,
         max_orphan_blocks,
+        min_max_bootstrap_import_buffer_sizes,
     }
 }
 
