@@ -39,7 +39,7 @@ fn check_height_order<C: ChainstateInterface>(blocks: &Vec<Id<Block>>, chainstat
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn reorg_simple(#[case] seed: Seed) {
+fn block_ids_retrieval_tests(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
