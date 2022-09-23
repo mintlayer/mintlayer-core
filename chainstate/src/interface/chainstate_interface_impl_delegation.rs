@@ -228,14 +228,14 @@ impl<
     }
 
     fn import_bootstrap_stream<'a>(
-        &'a mut self,
+        &mut self,
         reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
     ) -> Result<(), ChainstateError> {
         self.deref_mut().import_bootstrap_stream(reader)
     }
 
     fn export_bootstrap_stream<'a>(
-        &'a self,
+        &self,
         writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
         include_orphans: bool,
     ) -> Result<(), ChainstateError> {

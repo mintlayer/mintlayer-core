@@ -367,7 +367,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
     }
 
     fn export_bootstrap_stream<'a>(
-        &'a self,
+        &self,
         writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
         include_orphans: bool,
     ) -> Result<(), ChainstateError> {
