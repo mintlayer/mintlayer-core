@@ -33,6 +33,7 @@ mod block_v1;
 use std::iter;
 
 use serialization::{DirectDecode, DirectEncode};
+use utils::typename::TypeName;
 
 use crate::{
     chain::{
@@ -234,6 +235,12 @@ impl Idable for Block {
         // Block ID is just the hash of its header. The transaction list is committed to by the
         // inclusion of transaction Merkle root in the header. We also include the version number.
         self.header().get_id()
+    }
+}
+
+impl TypeName for Block {
+    fn typename_str() -> &'static str {
+        "Block"
     }
 }
 

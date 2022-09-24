@@ -11,6 +11,7 @@ script = { path = '../script'}
 crypto = { path = '../crypto'}
 serialization = { path = "../serialization" }
 logging = { path = "../logging/" }
+utils = {path = '../utils'}
 
 anyhow = "1.0"
 bech32 = "0.9"

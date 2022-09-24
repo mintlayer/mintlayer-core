@@ -19,6 +19,7 @@ use itertools::Itertools;
 
 use crypto::key::{KeyKind, PrivateKey};
 
+use self::utils::*;
 use super::{
     inputsig::{InputWitness, StandardInputSignature},
     sighashtype::SigHashType,
@@ -31,7 +32,6 @@ use crate::{
     },
     primitives::{Amount, Id, H256},
 };
-use utils::*;
 
 mod mixed_sighash_types;
 mod sign_and_mutate;

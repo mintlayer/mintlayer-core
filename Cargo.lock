@@ -801,6 +801,7 @@ dependencies = [
  "sscanf",
  "static_assertions",
  "thiserror",
+ "utils",
 ]
 
 [[package]]

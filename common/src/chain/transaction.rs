@@ -16,6 +16,7 @@
 use crate::primitives::{id::WithId, Id, Idable};
 use serialization::{DirectDecode, DirectEncode, Encode};
 use thiserror::Error;
+use utils::typename::TypeName;
 
 use crate::chain::transaction::transaction_v1::TransactionV1;
 
@@ -50,6 +51,12 @@ impl Idable for Transaction {
         match &self {
             Transaction::V1(tx) => tx.get_id(),
         }
+    }
+}
+
+impl TypeName for Transaction {
+    fn typename_str() -> &'static str {
+        "Transaction"
     }
 }
 

@@ -17,6 +17,7 @@
 
 use super::{Block, Genesis};
 use crate::primitives::Id;
+use utils::typename::TypeName;
 
 /// Generalized block that's either [Genesis] or [Block].
 ///
@@ -78,5 +79,11 @@ impl GenBlockId {
             GenBlockId::Genesis(_) => None,
             GenBlockId::Block(id) => Some(id),
         }
+    }
+}
+
+impl TypeName for GenBlock {
+    fn typename_str() -> &'static str {
+        "GenBlock"
     }
 }
