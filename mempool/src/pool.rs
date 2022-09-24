@@ -335,7 +335,10 @@ where
         Ok(TxMempoolEntry::new(tx, fee, parents, time))
     }
 
-    fn get_update_minimum_mempool_fee(&self, tx: &Transaction) -> Amount {
+    fn get_update_minimum_mempool_fee(
+        &self,
+        tx: &Transaction,
+    ) -> Result<Amount, TxValidationError> {
         let minimum_fee_rate = self.get_update_min_fee_rate();
         log::debug!("minimum fee rate {:?}", minimum_fee_rate);
         /*log::debug!(
@@ -427,7 +430,7 @@ where
 
     async fn pays_minimum_mempool_fee(&self, tx: &Transaction) -> Result<(), TxValidationError> {
         let tx_fee = self.try_get_fee(tx).await?;
-        let minimum_fee = self.get_update_minimum_mempool_fee(tx);
+        let minimum_fee = self.get_update_minimum_mempool_fee(tx)?;
         log::debug!(
             "pays_minimum_mempool_fee tx_fee = {:?}, minimum_fee = {:?}",
             tx_fee,
@@ -630,8 +633,9 @@ where
         let removed_fees = self.trim()?;
         if !removed_fees.is_empty() {
             let new_minimum_fee_rate =
-                *removed_fees.iter().max().expect("removed_fees should not be empty")
-                    + *INCREMENTAL_RELAY_FEE_RATE;
+                (*removed_fees.iter().max().expect("removed_fees should not be empty")
+                    + *INCREMENTAL_RELAY_FEE_RATE)
+                    .ok_or(TxValidationError::FeeOverflow)?;
             if new_minimum_fee_rate > self.rolling_fee_rate.read().rolling_minimum_fee_rate {
                 self.update_min_fee_rate(new_minimum_fee_rate)
             }

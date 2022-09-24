@@ -1288,11 +1288,12 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     log::debug!("FeeRate of child_0 {:?}", child_0_fee);
     assert_eq!(
         rolling_fee,
-        *INCREMENTAL_RELAY_FEE_RATE
+        (*INCREMENTAL_RELAY_FEE_RATE
             + FeeRate::from_total_tx_fee(
                 child_0_fee,
                 NonZeroUsize::new(child_0.encoded_size()).unwrap()
-            )?
+            )?)
+        .unwrap()
     );
     assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3651)));
     log::debug!(
@@ -1301,10 +1302,11 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     assert_eq!(
         rolling_fee,
-        FeeRate::from_total_tx_fee(
+        (FeeRate::from_total_tx_fee(
             mempool.try_get_fee(&child_0).await?,
             NonZeroUsize::new(child_0.encoded_size()).unwrap()
-        )? + *INCREMENTAL_RELAY_FEE_RATE
+        )? + *INCREMENTAL_RELAY_FEE_RATE)
+            .unwrap()
     );
 
     // Now that the minimum rolling fee has been bumped up, a low-fee tx will not pass
@@ -1344,7 +1346,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
             2,
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         ),
-        mempool.get_minimum_rolling_fee().compute_fee(estimate_tx_size(1, 1)),
+        mempool.get_minimum_rolling_fee().compute_fee(estimate_tx_size(1, 1)).unwrap(),
         flags,
         locktime,
     )
@@ -1410,7 +1412,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     assert_eq!(
         mempool.get_minimum_rolling_fee(),
-        rolling_fee / std::num::NonZeroU128::new(2).expect("nonzero")
+        rolling_fee / std::num::NonZeroUsize::new(2).expect("nonzero")
     );
 
     mock_time.store(
@@ -1425,7 +1427,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     assert_eq!(
         mempool.get_minimum_rolling_fee(),
-        rolling_fee / std::num::NonZeroU128::new(4).expect("nonzero")
+        rolling_fee / std::num::NonZeroUsize::new(4).expect("nonzero")
     );
     log::debug!(
         "After successful addition of dummy, rolling fee rate is {:?}",
