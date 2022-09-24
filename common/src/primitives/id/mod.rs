@@ -200,13 +200,7 @@ mod tests {
     fn typename() {
         let h1: Id<TestType1> = H256::random().into();
         let h2: Id<TestType2> = H256::random().into();
-        assert!(format!("{:?}", TestType1 {})
-            .split(">")
-            .collect::<Vec<_>>()
-            .first()
-            .unwrap()
-            .ends_with("TestType1"));
-        assert!(format!("{:?}", h1).split(">").next().unwrap().ends_with("TestType1"));
+        assert!(format!("{:?}", h1).split('>').next().unwrap().ends_with("TestType1"));
         assert!(format!("{:?}", h2).starts_with("Id<TestType2>"));
     }
 
