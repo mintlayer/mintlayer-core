@@ -43,12 +43,11 @@ impl FeeRate {
         total_tx_fee: Amount,
         tx_size: NonZeroUsize,
     ) -> Result<Self, TxValidationError> {
+        let tx_size = u128::try_from(usize::from(tx_size)).expect("div_up conversion");
         Ok(Self {
-            atoms_per_kb: Self::div_up(
-                (total_tx_fee * 1000).ok_or(TxValidationError::FeeOverflow)?,
-                tx_size,
-            )
-            .into_atoms(),
+            atoms_per_kb: ((total_tx_fee * 1000).ok_or(TxValidationError::FeeOverflow)? / tx_size)
+                .expect("tx_size nonzero")
+                .into_atoms(),
         })
     }
 
@@ -60,14 +59,6 @@ impl FeeRate {
 
     pub(crate) fn atoms_per_kb(&self) -> u128 {
         self.atoms_per_kb
-    }
-
-    fn div_up(dividend: Amount, divisor: NonZeroUsize) -> Amount {
-        let divisor = u128::try_from(usize::from(divisor)).expect("div_up conversion");
-        let result = dividend.into_atoms() / divisor;
-        let round_up =
-            ((dividend % divisor).expect("nonzero divisor") > Amount::from_atoms(0)) as u128;
-        Amount::from_atoms(result + round_up)
     }
 }
 
@@ -94,23 +85,20 @@ mod tests {
     }
 
     #[test]
-    fn test_div_up() {
+    fn test_from_total_tx_fee() {
         let fee = Amount::from_atoms(7);
         let tx_size = usize::MAX;
-        let rate = FeeRate::div_up(fee, NonZeroUsize::new(tx_size).unwrap());
-        assert_eq!(rate, Amount::from_atoms(1));
+        let rate = FeeRate::from_total_tx_fee(fee, NonZeroUsize::new(tx_size).unwrap()).unwrap();
+        assert_eq!(rate, FeeRate { atoms_per_kb: 0 });
 
         let fee = Amount::from_atoms(u128::MAX);
         let tx_size = 1;
-        let rate = FeeRate::div_up(fee, NonZeroUsize::new(tx_size).unwrap());
-        assert_eq!(rate, Amount::from_atoms(u128::MAX));
+        let res = FeeRate::from_total_tx_fee(fee, NonZeroUsize::new(tx_size).unwrap());
+        assert!(matches!(res, Err(TxValidationError::FeeOverflow)));
 
         let fee = Amount::from_atoms(u128::MAX - 1);
         let tx_size = 3;
-        let rate = FeeRate::div_up(fee, NonZeroUsize::new(tx_size).unwrap());
-        assert_eq!(
-            rate,
-            ((fee / tx_size.try_into().unwrap()).unwrap() + Amount::from_atoms(1)).unwrap()
-        );
+        let res = FeeRate::from_total_tx_fee(fee, NonZeroUsize::new(tx_size).unwrap());
+        assert!(matches!(res, Err(TxValidationError::FeeOverflow)));
     }
 }

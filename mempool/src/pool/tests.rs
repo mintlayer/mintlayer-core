@@ -1294,7 +1294,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
                 NonZeroUsize::new(child_0.encoded_size()).unwrap()
             )?
     );
-    assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3652)));
+    assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3651)));
     log::debug!(
         "minimum rolling fee after child_0's eviction {:?}",
         rolling_fee
