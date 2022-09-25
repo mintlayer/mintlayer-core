@@ -14,13 +14,15 @@
 // limitations under the License.
 
 mod with_id;
-use utils::typename::TypeName;
+
 pub use with_id::WithId;
+
+use std::fmt::{Debug, Display};
 
 use crate::{construct_fixed_hash, Uint256};
 use generic_array::{typenum, GenericArray};
 use serialization::{Decode, Encode};
-use std::fmt::{Debug, Display};
+use typename::TypeName;
 
 construct_fixed_hash! {
     #[derive(Encode, Decode)]
@@ -182,10 +184,8 @@ mod tests {
     use hex::FromHex;
     use std::str::FromStr;
 
-    #[derive(Eq, PartialEq, Debug)]
+    #[derive(Eq, PartialEq, Debug, TypeName)]
     struct TestType1;
-
-    impl TypeName for TestType1 {}
 
     #[derive(Eq, PartialEq, Debug)]
     struct TestType2;
@@ -199,9 +199,10 @@ mod tests {
     #[test]
     fn typename() {
         let h1: Id<TestType1> = H256::random().into();
+        assert!(format!("{h1:?}").starts_with("Id<TestType1>{"));
+
         let h2: Id<TestType2> = H256::random().into();
-        assert!(format!("{:?}", h1).split('>').next().unwrap().ends_with("TestType1"));
-        assert!(format!("{:?}", h2).starts_with("Id<TestType2>"));
+        assert!(format!("{h2:?}").starts_with("Id<TestType2>{"));
     }
 
     #[test]

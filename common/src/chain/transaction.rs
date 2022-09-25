@@ -13,12 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::primitives::{id::WithId, Id, Idable};
-use serialization::{DirectDecode, DirectEncode, Encode};
 use thiserror::Error;
-use utils::typename::TypeName;
+
+use serialization::{DirectDecode, DirectEncode, Encode};
+use typename::TypeName;
 
 use crate::chain::transaction::transaction_v1::TransactionV1;
+use crate::primitives::{id::WithId, Id, Idable};
 
 pub mod input;
 pub use input::*;
@@ -40,7 +41,7 @@ pub enum TransactionSize {
     SmartContractTransaction(usize),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode, TypeName)]
 pub enum Transaction {
     V1(TransactionV1),
 }
@@ -51,12 +52,6 @@ impl Idable for Transaction {
         match &self {
             Transaction::V1(tx) => tx.get_id(),
         }
-    }
-}
-
-impl TypeName for Transaction {
-    fn typename_str() -> &'static str {
-        "Transaction"
     }
 }
 

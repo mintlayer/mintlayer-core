@@ -13,11 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod blockuntilzero;
-pub mod counttracker;
-pub mod ensure;
-pub mod eventhandler;
-pub mod newtype;
+use proc_macro::{self, TokenStream};
+use quote::quote;
+use syn::{parse_macro_input, DeriveInput};
 
-mod concurrency_impl;
-pub use concurrency_impl::*;
+#[proc_macro_derive(TypeName)]
+pub fn derive(input: TokenStream) -> TokenStream {
+    let DeriveInput { ident, .. } = parse_macro_input!(input);
+    let type_name = ident.to_string();
+    let output = quote! {
+        impl TypeName for #ident {
+            fn typename_str() -> &'static str {
+                #type_name
+            }
+        }
+    };
+    output.into()
+}

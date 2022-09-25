@@ -13,35 +13,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub use typename_derive::TypeName;
+
+/// The interface for getting a name of the type.
+///
+/// The name is used in debug output, so it shouldn't be too verbose (fully qualified) to nut
+/// clutter logs.
 pub trait TypeName {
-    fn typename_str() -> &'static str {
-        // This implementation is good enough, though it includes the full qualifiers of a typename, which may not be ideal
-        std::any::type_name::<Self>()
-    }
+    /// Returns a name of the type.
+    fn typename_str() -> &'static str;
 }
 
-impl TypeName for () {}
+impl TypeName for () {
+    fn typename_str() -> &'static str {
+        "()"
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[derive(Eq, PartialEq, Debug)]
-    struct TestType1;
 
-    impl TypeName for TestType1 {}
+    #[test]
+    fn typename_manual() {
+        struct TestType1;
 
-    #[derive(Eq, PartialEq, Debug)]
-    struct TestType2;
-
-    impl TypeName for TestType2 {
-        fn typename_str() -> &'static str {
-            "TestType2"
+        impl TypeName for TestType1 {
+            fn typename_str() -> &'static str {
+                "TestType1"
+            }
         }
+
+        assert_eq!(TestType1::typename_str(), "TestType1");
     }
 
     #[test]
-    fn typename() {
-        assert!(TestType1::typename_str().ends_with("TestType1"));
+    fn typename_derive() {
+        #[derive(TypeName)]
+        struct TestType2;
+
         assert_eq!(TestType2::typename_str(), "TestType2");
     }
 }

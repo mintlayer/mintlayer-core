@@ -45,7 +45,7 @@
 use core::{default::Default, fmt};
 
 use serialization::{Decode, Encode};
-use utils::typename::TypeName;
+use typename::TypeName;
 
 use crate::{error::Error, opcodes};
 
@@ -53,15 +53,9 @@ use crate::{error::Error, opcodes};
 type PubkeyHash = [u8];
 type ScriptHash = [u8];
 
-#[derive(Clone, Default, PartialOrd, Ord, PartialEq, Eq, Hash, Encode, Decode)]
 /// A Bitcoin script
+#[derive(Clone, Default, PartialOrd, Ord, PartialEq, Eq, Hash, Encode, Decode, TypeName)]
 pub struct Script(Vec<u8>);
-
-impl TypeName for Script {
-    fn typename_str() -> &'static str {
-        "Script"
-    }
-}
 
 impl AsRef<[u8]> for Script {
     fn as_ref(&self) -> &[u8] {

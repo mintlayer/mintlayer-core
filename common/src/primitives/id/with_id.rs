@@ -80,11 +80,10 @@ impl<T: Idable> From<T> for WithId<T> {
 
 #[cfg(test)]
 mod test {
-    use utils::typename::TypeName;
-
     use super::*;
+    use typename::TypeName;
 
-    #[derive(Eq, PartialEq, Debug, Clone, serialization::Encode)]
+    #[derive(Eq, PartialEq, Debug, Clone, serialization::Encode, TypeName)]
     struct TestStruct {
         num: u64,
         blurb: String,
@@ -96,8 +95,6 @@ mod test {
             Id::new(super::super::hash_encoded(self))
         }
     }
-
-    impl TypeName for TestStruct {}
 
     #[test]
     fn owned() {
