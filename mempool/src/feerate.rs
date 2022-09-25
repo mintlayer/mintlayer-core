@@ -29,12 +29,12 @@ lazy_static::lazy_static! {
 // dangerous arithmetic operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct FeeRate {
-    atoms_per_kb: Amount,
+    amount_per_kb: Amount,
 }
 
 impl FeeRate {
-    pub(crate) fn new(atoms_per_kb: Amount) -> Self {
-        Self { atoms_per_kb }
+    pub(crate) fn new(amount_per_kb: Amount) -> Self {
+        Self { amount_per_kb }
     }
 
     pub(crate) fn from_total_tx_fee(
@@ -43,32 +43,29 @@ impl FeeRate {
     ) -> Result<Self, TxValidationError> {
         let tx_size = u128::try_from(usize::from(tx_size)).expect("div_up conversion");
         Ok(Self {
-            atoms_per_kb: ((total_tx_fee * 1000).ok_or(TxValidationError::FeeOverflow)? / tx_size)
+            amount_per_kb: ((total_tx_fee * 1000).ok_or(TxValidationError::FeeOverflow)? / tx_size)
                 .expect("tx_size nonzero"),
         })
     }
 
     pub(crate) fn compute_fee(&self, size: usize) -> Result<Amount, TxValidationError> {
         let size = u128::try_from(size).expect("compute_fee conversion");
+        let fee = (self.amount_per_kb * size).ok_or(TxValidationError::FeeOverflow)?;
         // +999 for ceil operation
-        Ok(
-            ((((self.atoms_per_kb * size).ok_or(TxValidationError::FeeOverflow)?
-                + Amount::from_atoms(999))
-            .ok_or(TxValidationError::FeeOverflow)?)
-                / 1000)
-                .expect("valid division"),
-        )
+        let fee = (((fee + Amount::from_atoms(999)).ok_or(TxValidationError::FeeOverflow)?) / 1000)
+            .expect("valid division");
+        Ok(fee)
     }
 
     pub(crate) fn atoms_per_kb(&self) -> u128 {
-        self.atoms_per_kb.into_atoms()
+        self.amount_per_kb.into_atoms()
     }
 }
 
 impl std::ops::Add for FeeRate {
     type Output = Option<Self>;
     fn add(self, other: Self) -> Self::Output {
-        (self.atoms_per_kb + other.atoms_per_kb).map(|atoms_per_kb| FeeRate { atoms_per_kb })
+        (self.amount_per_kb + other.amount_per_kb).map(|amount_per_kb| FeeRate { amount_per_kb })
     }
 }
 
@@ -81,7 +78,7 @@ mod tests {
         fn div(self, rhs: NonZeroUsize) -> Self::Output {
             let rhs = u128::try_from(usize::from(rhs)).expect("conversion");
             FeeRate {
-                atoms_per_kb: (self.atoms_per_kb / rhs).expect("rhs is nonzero"),
+                amount_per_kb: (self.amount_per_kb / rhs).expect("rhs is nonzero"),
             }
         }
     }
@@ -94,7 +91,7 @@ mod tests {
         assert_eq!(
             rate,
             FeeRate {
-                atoms_per_kb: Amount::from_atoms(0)
+                amount_per_kb: Amount::from_atoms(0)
             }
         );
 
