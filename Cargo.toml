@@ -37,6 +37,7 @@ members = [
   "utxo",                         # Utxo and related utilities (cache, undo, etc.).
   "test",                         # Integration tests.
   "test-utils",                   # Various utilities for tests.
+  "typename",                     # Trait and derive macro for getting a pretty name of a type.
 ]
 
 default-members = [

@@ -801,6 +801,7 @@ dependencies = [
  "sscanf",
  "static_assertions",
  "thiserror",
+ "typename",
  "utils",
 ]
 
@@ -3718,6 +3719,7 @@ dependencies = [
  "proptest",
  "serialization",
  "thiserror",
+ "typename",
  "utils",
 ]
 
@@ -4587,6 +4589,22 @@ name = "try-lock"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
+
+[[package]]
+name = "typename"
+version = "0.1.0"
+dependencies = [
+ "typename-derive",
+]
+
+[[package]]
+name = "typename-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "typenum"
