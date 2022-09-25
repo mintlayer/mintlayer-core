@@ -270,8 +270,7 @@ where
                 self.rolling_fee_rate
             );
 
-            if self.rolling_fee_rate.read().rolling_minimum_fee_rate < *INCREMENTAL_RELAY_THRESHOLD
-            {
+            if self.rolling_fee_rate.read().rolling_minimum_fee_rate < INCREMENTAL_RELAY_THRESHOLD {
                 log::trace!("rolling fee rate {:?} less than half of the incremental fee rate, dropping the fee", self.rolling_fee_rate.read().rolling_minimum_fee_rate);
                 self.drop_rolling_fee();
                 return self.rolling_fee_rate.read().rolling_minimum_fee_rate;
@@ -280,7 +279,7 @@ where
 
         std::cmp::max(
             self.rolling_fee_rate.read().rolling_minimum_fee_rate,
-            *INCREMENTAL_RELAY_FEE_RATE,
+            INCREMENTAL_RELAY_FEE_RATE,
         )
     }
 
@@ -634,7 +633,7 @@ where
         if !removed_fees.is_empty() {
             let new_minimum_fee_rate =
                 (*removed_fees.iter().max().expect("removed_fees should not be empty")
-                    + *INCREMENTAL_RELAY_FEE_RATE)
+                    + INCREMENTAL_RELAY_FEE_RATE)
                     .ok_or(TxValidationError::FeeOverflow)?;
             if new_minimum_fee_rate > self.rolling_fee_rate.read().rolling_minimum_fee_rate {
                 self.update_min_fee_rate(new_minimum_fee_rate)

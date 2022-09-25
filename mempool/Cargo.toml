@@ -20,7 +20,6 @@ async-trait = "0.1"
 futures = "0.3"
 jsonrpsee = {version = "0.15", features = ["macros"]}
 thiserror = "1.0"
-lazy_static = "1.4"
 mockall = "0.11.0"
 parking_lot = "0.12"
 

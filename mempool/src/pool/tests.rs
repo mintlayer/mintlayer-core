@@ -1288,7 +1288,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     log::debug!("FeeRate of child_0 {:?}", child_0_fee);
     assert_eq!(
         rolling_fee,
-        (*INCREMENTAL_RELAY_FEE_RATE
+        (INCREMENTAL_RELAY_FEE_RATE
             + FeeRate::from_total_tx_fee(
                 child_0_fee,
                 NonZeroUsize::new(child_0.encoded_size()).unwrap()
@@ -1305,7 +1305,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         (FeeRate::from_total_tx_fee(
             mempool.try_get_fee(&child_0).await?,
             NonZeroUsize::new(child_0.encoded_size()).unwrap()
-        )? + *INCREMENTAL_RELAY_FEE_RATE)
+        )? + INCREMENTAL_RELAY_FEE_RATE)
             .unwrap()
     );
 

@@ -19,10 +19,8 @@ use common::primitives::amount::Amount;
 
 use crate::error::TxValidationError;
 
-lazy_static::lazy_static! {
-    pub(crate) static ref INCREMENTAL_RELAY_FEE_RATE: FeeRate = FeeRate::new(Amount::from_atoms(1000));
-    pub(crate) static ref INCREMENTAL_RELAY_THRESHOLD: FeeRate = FeeRate::new(Amount::from_atoms(500));
-}
+pub(crate) const INCREMENTAL_RELAY_FEE_RATE: FeeRate = FeeRate::new(Amount::from_atoms(1000));
+pub(crate) const INCREMENTAL_RELAY_THRESHOLD: FeeRate = FeeRate::new(Amount::from_atoms(500));
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct FeeRate {
@@ -30,7 +28,7 @@ pub(crate) struct FeeRate {
 }
 
 impl FeeRate {
-    pub(crate) fn new(amount_per_kb: Amount) -> Self {
+    pub(crate) const fn new(amount_per_kb: Amount) -> Self {
         Self { amount_per_kb }
     }
 
@@ -54,7 +52,7 @@ impl FeeRate {
         Ok(fee)
     }
 
-    pub(crate) fn atoms_per_kb(&self) -> u128 {
+    pub(crate) const fn atoms_per_kb(&self) -> u128 {
         self.amount_per_kb.into_atoms()
     }
 }
