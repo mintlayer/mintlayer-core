@@ -332,7 +332,7 @@ impl Idable for TxMempoolEntry {
 pub(super) struct TxMempoolEntry {
     // TODO(Roy) make members private and add getters
     tx: WithId<Transaction>,
-    pub(super) fee: Amount,
+    fee: Amount,
     parents: BTreeSet<Id<Transaction>>,
     children: BTreeSet<Id<Transaction>>,
     pub(super) count_with_descendants: usize,
@@ -362,6 +362,10 @@ impl TxMempoolEntry {
 
     pub(super) fn tx(&self) -> &WithId<Transaction> {
         &self.tx
+    }
+
+    pub(super) fn fee(&self) -> Amount {
+        self.fee
     }
 
     pub(super) fn count_with_descendants(&self) -> usize {

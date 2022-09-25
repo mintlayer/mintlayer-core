@@ -539,7 +539,7 @@ where
         });
 
         let total_conflict_fees = conflicts_with_descendants
-            .map(|conflict| conflict.fee)
+            .map(|conflict| conflict.fee())
             .sum::<Option<Amount>>()
             .ok_or(TxValidationError::ConflictsFeeOverflow)?;
 
@@ -580,13 +580,13 @@ where
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), TxValidationError> {
         let replacement_fee = self.try_get_fee(tx).await?;
-        conflicts.iter().find(|conflict| conflict.fee >= replacement_fee).map_or_else(
+        conflicts.iter().find(|conflict| conflict.fee() >= replacement_fee).map_or_else(
             || Ok(()),
             |conflict| {
                 Err(TxValidationError::ReplacementFeeLowerThanOriginal {
                     replacement_tx: tx.get_id().get(),
                     replacement_fee,
-                    original_fee: conflict.fee,
+                    original_fee: conflict.fee(),
                     original_tx: conflict.tx_id().get(),
                 })
             },
@@ -694,7 +694,7 @@ where
                 removed.size()
             );
             removed_fees.push(FeeRate::from_total_tx_fee(
-                removed.fee,
+                removed.fee(),
                 NonZeroUsize::new(removed.size()).expect("transaction cannot have zero size"),
             )?);
             self.store.drop_tx_and_descendants(removed.get_id());
