@@ -690,7 +690,7 @@ where
             log::debug!(
                 "Mempool trim: Evicting tx {} which has a descendant score of {:?} and has size {}",
                 removed.tx_id(),
-                removed.fees_with_descendants,
+                removed.fees_with_descendants(),
                 removed.size()
             );
             removed_fees.push(FeeRate::from_total_tx_fee(

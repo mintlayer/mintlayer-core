@@ -1625,14 +1625,14 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.add_transaction(tx_c).await?;
 
     let entry_a = mempool.store.txs_by_id.get(&tx_a_id).expect("tx_a");
-    log::debug!("entry a has score {:?}", entry_a.fees_with_descendants);
+    log::debug!("entry a has score {:?}", entry_a.fees_with_descendants());
     let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
-    log::debug!("entry b has score {:?}", entry_b.fees_with_descendants);
+    log::debug!("entry b has score {:?}", entry_b.fees_with_descendants());
     let entry_c = mempool.store.txs_by_id.get(&tx_c_id).expect("tx_c").clone();
-    log::debug!("entry c has score {:?}", entry_c.fees_with_descendants);
-    assert_eq!(entry_a.fee(), entry_a.fees_with_descendants);
+    log::debug!("entry c has score {:?}", entry_c.fees_with_descendants());
+    assert_eq!(entry_a.fee(), entry_a.fees_with_descendants());
     assert_eq!(
-        entry_b.fees_with_descendants,
+        entry_b.fees_with_descendants(),
         (entry_b.fee() + entry_c.fee()).unwrap()
     );
     assert!(!mempool.store.txs_by_descendant_score.contains_key(&tx_b_fee.into()));
@@ -1645,7 +1645,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.drop_transaction(&entry_c.get_id());
     assert!(!mempool.store.txs_by_descendant_score.contains_key(&tx_c_fee.into()));
     let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
-    assert_eq!(entry_b.fees_with_descendants, entry_b.fee());
+    assert_eq!(entry_b.fees_with_descendants(), entry_b.fee());
 
     check_txs_sorted_by_descendant_sore(&mempool);
     mempool.store.assert_valid();
@@ -1660,9 +1660,9 @@ fn check_txs_sorted_by_descendant_sore(mempool: &Mempool<SystemUsageEstimator>) 
         log::debug!("i =  {}", i);
         let tx_id = txs_by_descendant_score.get(i).unwrap();
         let next_tx_id = txs_by_descendant_score.get(i + 1).unwrap();
-        let entry_score = mempool.store.txs_by_id.get(tx_id).unwrap().fees_with_descendants;
+        let entry_score = mempool.store.txs_by_id.get(tx_id).unwrap().fees_with_descendants();
         let next_entry_score =
-            mempool.store.txs_by_id.get(next_tx_id).unwrap().fees_with_descendants;
+            mempool.store.txs_by_id.get(next_tx_id).unwrap().fees_with_descendants();
         log::debug!("entry_score: {:?}", entry_score);
         log::debug!("next_entry_score: {:?}", next_entry_score);
         assert!(entry_score <= next_entry_score)

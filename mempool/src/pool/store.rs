@@ -336,7 +336,7 @@ pub(super) struct TxMempoolEntry {
     parents: BTreeSet<Id<Transaction>>,
     children: BTreeSet<Id<Transaction>>,
     count_with_descendants: usize,
-    pub(super) fees_with_descendants: Amount,
+    fees_with_descendants: Amount,
     size_with_descendants: usize,
     pub(super) creation_time: Time,
 }
@@ -370,6 +370,10 @@ impl TxMempoolEntry {
 
     pub(super) fn count_with_descendants(&self) -> usize {
         self.count_with_descendants
+    }
+
+    pub(super) fn fees_with_descendants(&self) -> Amount {
+        self.fees_with_descendants
     }
 
     #[allow(unused)]
