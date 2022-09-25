@@ -335,7 +335,7 @@ pub(super) struct TxMempoolEntry {
     fee: Amount,
     parents: BTreeSet<Id<Transaction>>,
     children: BTreeSet<Id<Transaction>>,
-    pub(super) count_with_descendants: usize,
+    count_with_descendants: usize,
     pub(super) fees_with_descendants: Amount,
     size_with_descendants: usize,
     pub(super) creation_time: Time,
