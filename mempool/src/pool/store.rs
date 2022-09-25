@@ -190,6 +190,7 @@ impl MempoolStore {
             let ancestor = self.txs_by_id.get_mut(&ancestor).expect("ancestor");
             ancestor.fees_with_descendants =
                 (ancestor.fees_with_descendants - entry.fee).expect("fee with descendants");
+            ancestor.size_with_descendants -= entry.size();
             ancestor.count_with_descendants -= 1;
         }
     }
@@ -329,7 +330,7 @@ pub(super) struct TxMempoolEntry {
     children: BTreeSet<Id<Transaction>>,
     pub(super) count_with_descendants: usize,
     pub(super) fees_with_descendants: Amount,
-    pub(super) size_with_descendants: usize,
+    size_with_descendants: usize,
     pub(super) creation_time: Time,
 }
 
@@ -354,6 +355,11 @@ impl TxMempoolEntry {
 
     pub(super) fn count_with_descendants(&self) -> usize {
         self.count_with_descendants
+    }
+
+    #[allow(unused)]
+    pub(super) fn size_with_descendants(&self) -> usize {
+        self.size_with_descendants
     }
 
     pub(super) fn tx_id(&self) -> Id<Transaction> {
