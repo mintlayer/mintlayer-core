@@ -558,7 +558,7 @@ where
     ) -> Result<(), TxValidationError> {
         let outpoints_spent_by_conflicts = conflicts
             .iter()
-            .flat_map(|conflict| conflict.tx.inputs().iter().map(|input| input.outpoint()))
+            .flat_map(|conflict| conflict.tx().inputs().iter().map(|input| input.outpoint()))
             .collect::<BTreeSet<_>>();
 
         tx.inputs()
@@ -615,7 +615,7 @@ where
 
     async fn finalize_tx(&mut self, tx: Transaction) -> Result<(), Error> {
         let entry = self.create_entry(tx).await?;
-        let id = entry.tx.get_id();
+        let id = entry.get_id();
         self.store.add_tx(entry)?;
         self.remove_expired_transactions();
         ensure!(
@@ -668,7 +668,7 @@ where
             .cloned()
             .collect();
 
-        for tx_id in expired.iter().map(|entry| entry.tx.get_id()) {
+        for tx_id in expired.iter().map(|entry| entry.get_id()) {
             self.store.drop_tx_and_descendants(tx_id)
         }
     }
@@ -691,14 +691,13 @@ where
                 "Mempool trim: Evicting tx {} which has a descendant score of {:?} and has size {}",
                 removed.tx_id(),
                 removed.fees_with_descendants,
-                removed.tx.encoded_size()
+                removed.size()
             );
             removed_fees.push(FeeRate::from_total_tx_fee(
                 removed.fee,
-                NonZeroUsize::new(removed.tx.encoded_size())
-                    .expect("transaction cannot have zero size"),
+                NonZeroUsize::new(removed.size()).expect("transaction cannot have zero size"),
             )?);
-            self.store.drop_tx_and_descendants(removed.tx.get_id());
+            self.store.drop_tx_and_descendants(removed.get_id());
         }
         Ok(removed_fees)
     }
@@ -765,7 +764,7 @@ where
             .txs_by_descendant_score
             .values()
             .flatten()
-            .map(|id| WithId::get(&self.store.get_entry(id).expect("entry").tx))
+            .map(|id| WithId::get(self.store.get_entry(id).expect("entry").tx()))
             .collect()
     }
 
