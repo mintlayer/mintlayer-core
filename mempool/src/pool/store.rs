@@ -24,6 +24,7 @@ use common::primitives::amount::Amount;
 use common::primitives::id::WithId;
 use common::primitives::Id;
 use common::primitives::Idable;
+use serialization::Encode;
 
 use logging::log;
 
@@ -178,6 +179,7 @@ impl MempoolStore {
             let ancestor = self.txs_by_id.get_mut(&ancestor).expect("ancestor");
             ancestor.fees_with_descendants = (ancestor.fees_with_descendants + entry.fee)
                 .ok_or(TxValidationError::AncestorFeeUpdateOverflow)?;
+            ancestor.size_with_descendants += entry.size();
             ancestor.count_with_descendants += 1;
         }
         Ok(())
@@ -320,12 +322,14 @@ impl MempoolStore {
 
 #[derive(Debug, Eq, Clone)]
 pub(super) struct TxMempoolEntry {
+    // TODO(Roy) make members private and add getters
     pub(super) tx: WithId<Transaction>,
     pub(super) fee: Amount,
     parents: BTreeSet<Id<Transaction>>,
     children: BTreeSet<Id<Transaction>>,
     pub(super) count_with_descendants: usize,
     pub(super) fees_with_descendants: Amount,
+    pub(super) size_with_descendants: usize,
     pub(super) creation_time: Time,
 }
 
@@ -337,13 +341,14 @@ impl TxMempoolEntry {
         creation_time: Time,
     ) -> TxMempoolEntry {
         Self {
-            tx: WithId::new(tx),
             fee,
             parents,
             children: BTreeSet::default(),
             count_with_descendants: 1,
             creation_time,
             fees_with_descendants: fee,
+            size_with_descendants: tx.encoded_size(),
+            tx: WithId::new(tx),
         }
     }
 
@@ -353,6 +358,11 @@ impl TxMempoolEntry {
 
     pub(super) fn tx_id(&self) -> Id<Transaction> {
         WithId::id(&self.tx)
+    }
+
+    pub(super) fn size(&self) -> usize {
+        // TODO(Roy) this should follow Bitcoin's GetTxSize, which weighs in sigops, etc.
+        self.tx.encoded_size()
     }
 
     fn unconfirmed_parents(&self) -> impl Iterator<Item = &Id<Transaction>> {
