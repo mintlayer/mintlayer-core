@@ -79,7 +79,7 @@ where
 
         // read the block after the magic bytes
         let block = match current_pos {
-            Some(v) => read_block_at_pos(&buffer_queue[v + expected_magic_bytes.len()..])?,
+            Some(v) => Block::decode(&mut &buffer_queue[v + expected_magic_bytes.len()..])?,
             None => break,
         };
         let block_len = block.encoded_size();
@@ -110,12 +110,6 @@ fn fill_buffer<S: std::io::Read>(
     }
 
     Ok(())
-}
-
-fn read_block_at_pos(buf: &[u8]) -> Result<Block, BootstrapError> {
-    let mut buffer = buf;
-    let block = Block::decode(&mut buffer)?;
-    Ok(block)
 }
 
 pub fn export_bootstrap_stream<'a, S: BlockchainStorageRead, O: OrphanBlocks>(
