@@ -18,7 +18,7 @@ pub mod interface;
 impl subsystem::Subsystem for Box<dyn BlockProductionInterface> {}
 
 #[allow(dead_code)]
-type BlockProductionHandle = subsystem::Handle<Box<dyn BlockProductionInterface>>;
+pub type BlockProductionHandle = subsystem::Handle<Box<dyn BlockProductionInterface>>;
 
 pub fn make_blockproduction(
     _chain_config: Arc<ChainConfig>,
