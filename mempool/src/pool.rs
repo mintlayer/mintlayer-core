@@ -764,7 +764,14 @@ where
             .txs_by_descendant_score
             .values()
             .flatten()
-            .map(|id| WithId::get(self.store.get_entry(id).expect("entry").tx()))
+            .map(|id| {
+                WithId::get(
+                    self.store
+                        .get_entry(id)
+                        .unwrap_or_else(|| panic!("did not find entry with id {}", id))
+                        .tx(),
+                )
+            })
             .collect()
     }
 

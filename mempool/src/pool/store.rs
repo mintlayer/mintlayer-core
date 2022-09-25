@@ -224,7 +224,7 @@ impl MempoolStore {
     fn add_to_descendant_score_index(&mut self, entry: &TxMempoolEntry) {
         self.refresh_ancestors(entry);
         self.txs_by_descendant_score
-            .entry(entry.fees_with_descendants.into())
+            .entry(entry.descendant_score())
             .or_default()
             .insert(entry.tx_id());
     }
@@ -240,7 +240,7 @@ impl MempoolStore {
         for ancestor_id in ancestors.0 {
             let ancestor = self.txs_by_id.get(&ancestor_id).expect("Inconsistent mempool state");
             self.txs_by_descendant_score
-                .entry(ancestor.fees_with_descendants.into())
+                .entry(ancestor.descendant_score())
                 .or_default()
                 .insert(ancestor_id);
         }
@@ -279,16 +279,16 @@ impl MempoolStore {
     fn remove_from_descendant_score_index(&mut self, entry: &TxMempoolEntry) {
         self.refresh_ancestors(entry);
         self.txs_by_descendant_score
-            .entry(entry.fees_with_descendants.into())
+            .entry(entry.descendant_score())
             .or_default()
             .remove(&entry.tx_id());
         if self
             .txs_by_descendant_score
-            .get(&entry.fees_with_descendants.into())
+            .get(&entry.descendant_score())
             .expect("key must exist")
             .is_empty()
         {
-            self.txs_by_descendant_score.remove(&entry.fees_with_descendants.into());
+            self.txs_by_descendant_score.remove(&entry.descendant_score());
         }
     }
 
@@ -375,9 +375,11 @@ impl TxMempoolEntry {
         self.fees_with_descendants
     }
 
-    #[allow(unused)]
-    pub(super) fn size_with_descendants(&self) -> usize {
-        self.size_with_descendants
+    pub(super) fn descendant_score(&self) -> DescendantScore {
+        (self.fees_with_descendants
+            / u128::try_from(self.size_with_descendants).expect("conversion"))
+        .expect("nonzero tx_size")
+        .into()
     }
 
     pub(super) fn tx_id(&self) -> Id<Transaction> {

@@ -1660,9 +1660,8 @@ fn check_txs_sorted_by_descendant_sore(mempool: &Mempool<SystemUsageEstimator>) 
         log::debug!("i =  {}", i);
         let tx_id = txs_by_descendant_score.get(i).unwrap();
         let next_tx_id = txs_by_descendant_score.get(i + 1).unwrap();
-        let entry_score = mempool.store.txs_by_id.get(tx_id).unwrap().fees_with_descendants();
-        let next_entry_score =
-            mempool.store.txs_by_id.get(next_tx_id).unwrap().fees_with_descendants();
+        let entry_score = mempool.store.txs_by_id.get(tx_id).unwrap().descendant_score();
+        let next_entry_score = mempool.store.txs_by_id.get(next_tx_id).unwrap().descendant_score();
         log::debug!("entry_score: {:?}", entry_score);
         log::debug!("next_entry_score: {:?}", next_entry_score);
         assert!(entry_score <= next_entry_score)
