@@ -321,6 +321,13 @@ impl MempoolStore {
     }
 }
 
+impl Idable for TxMempoolEntry {
+    type Tag = Transaction;
+    fn get_id(&self) -> Id<Transaction> {
+        self.tx.get_id()
+    }
+}
+
 #[derive(Debug, Eq, Clone)]
 pub(super) struct TxMempoolEntry {
     // TODO(Roy) make members private and add getters
