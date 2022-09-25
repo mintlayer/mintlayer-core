@@ -34,7 +34,7 @@ pub mod rpc;
 
 impl subsystem::Subsystem for Box<dyn MempoolInterface> {}
 
-type MempoolHandle = subsystem::Handle<Box<dyn MempoolInterface>>;
+pub type MempoolHandle = subsystem::Handle<Box<dyn MempoolInterface>>;
 
 pub type Result<T> = core::result::Result<T, MempoolError>;
 

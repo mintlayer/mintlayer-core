@@ -13,6 +13,7 @@ edition = "2021"
 members = [
   "accounting",                   # Accounting and balances abstractions
   "common",                       # Everything else, until it's moved to another crate.
+  "blockprod",                    # Block production with whatever consensus algorithm.
   "crypto",                       # Cryptographic primitives and their interfaces.
   "consensus",                    # Consensus related logic.
   "chainstate",                   # Code on chainstate of blocks and transactions.

@@ -92,6 +92,17 @@ pub async fn initialize(
         .expect("The p2p subsystem initialization failed"),
     );
 
+    // Block production
+    let _block_prod = manager.add_subsystem(
+        "blockprod",
+        blockprod::make_blockproduction(
+            chain_config,
+            chainstate.clone(),
+            mempool.clone(),
+            Default::default(),
+        )?,
+    );
+
     // RPC subsystem
     let _rpc = manager.add_subsystem(
         "rpc",

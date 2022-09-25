@@ -9,6 +9,7 @@ license = "MIT"
 [dependencies]
 # Local dependencies
 chainstate-storage = { path = "../chainstate/storage/" }
+blockprod = { path = "../blockprod/" }
 common = { path = "../common/" }
 chainstate = { path = "../chainstate/" }
 logging = { path = "../logging/" }
