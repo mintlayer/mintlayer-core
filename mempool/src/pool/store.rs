@@ -330,7 +330,6 @@ impl Idable for TxMempoolEntry {
 
 #[derive(Debug, Eq, Clone)]
 pub(super) struct TxMempoolEntry {
-    // TODO(Roy) make members private and add getters
     tx: WithId<Transaction>,
     fee: Amount,
     parents: BTreeSet<Id<Transaction>>,
@@ -338,7 +337,7 @@ pub(super) struct TxMempoolEntry {
     count_with_descendants: usize,
     fees_with_descendants: Amount,
     size_with_descendants: usize,
-    pub(super) creation_time: Time,
+    creation_time: Time,
 }
 
 impl TxMempoolEntry {
@@ -388,6 +387,10 @@ impl TxMempoolEntry {
     pub(super) fn size(&self) -> usize {
         // TODO(Roy) this should follow Bitcoin's GetTxSize, which weighs in sigops, etc.
         self.tx.encoded_size()
+    }
+
+    pub(super) fn creation_time(&self) -> Time {
+        self.creation_time
     }
 
     fn unconfirmed_parents(&self) -> impl Iterator<Item = &Id<Transaction>> {
