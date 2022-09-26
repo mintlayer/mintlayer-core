@@ -226,6 +226,21 @@ impl<
     fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
         self.deref().get_block_id_tree_as_list()
     }
+
+    fn import_bootstrap_stream<'a>(
+        &mut self,
+        reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
+    ) -> Result<(), ChainstateError> {
+        self.deref_mut().import_bootstrap_stream(reader)
+    }
+
+    fn export_bootstrap_stream<'a>(
+        &self,
+        writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
+        include_orphans: bool,
+    ) -> Result<(), ChainstateError> {
+        self.deref().export_bootstrap_stream(writer, include_orphans)
+    }
 }
 
 #[cfg(test)]
@@ -271,6 +286,7 @@ mod tests {
             let chainstate_config = ChainstateConfig {
                 max_db_commit_attempts: 10,
                 max_orphan_blocks: 0,
+                min_max_bootstrap_import_buffer_sizes: None,
             };
             let chainstate_storage = Store::new_empty().unwrap();
 

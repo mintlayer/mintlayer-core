@@ -23,6 +23,7 @@ use crate::{
         NetworkingService, PubSubService,
     },
 };
+use chainstate::ChainstateError::BootstrapError;
 use chainstate::{
     ban_score::BanScore,
     chainstate_interface,
@@ -140,6 +141,7 @@ where
                 FailedToInitializeChainstate(_) => 0,
                 ProcessBlockError(err) => err.ban_score(),
                 FailedToReadProperty(_) => 0,
+                BootstrapError(_) => 0,
             },
         };
 

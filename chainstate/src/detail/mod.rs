@@ -28,6 +28,7 @@ pub use transaction_verifier::error::ConnectTransactionError;
 pub use transaction_verifier::error::TokensError;
 
 mod block_index_history_iter;
+pub mod bootstrap;
 mod chainstateref;
 mod error;
 mod median_time;

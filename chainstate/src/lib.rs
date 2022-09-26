@@ -14,6 +14,7 @@
 // limitations under the License.
 
 mod interface;
+use detail::bootstrap::BootstrapError;
 pub use interface::chainstate_interface;
 use interface::chainstate_interface_impl;
 pub use interface::chainstate_interface_impl_delegation;
@@ -61,6 +62,8 @@ pub enum ChainstateError {
     ProcessBlockError(BlockError),
     #[error("Property read error: `{0}`")]
     FailedToReadProperty(PropertyQueryError),
+    #[error("Block import error {0}")]
+    BootstrapError(#[from] BootstrapError),
 }
 
 impl subsystem::Subsystem for Box<dyn ChainstateInterface> {}

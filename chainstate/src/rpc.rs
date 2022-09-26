@@ -15,14 +15,14 @@
 
 //! Chainstate subsystem RPC handler
 
-use std::io::Write;
+use std::io::{Read, Write};
 
 use crate::{Block, BlockSource, ChainstateError, GenBlock};
 use common::{
     chain::tokens::{RPCTokenInfo, TokenId},
     primitives::{BlockHeight, Id},
 };
-use serialization::{Decode, Encode};
+use serialization::Decode;
 use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, namespace = "chainstate")]
@@ -61,6 +61,10 @@ trait ChainstateRpc {
         file_path: &std::path::Path,
         include_orphans: bool,
     ) -> rpc::Result<()>;
+
+    /// Reads blocks from disk
+    #[method(name = "import_bootstrap_file")]
+    async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> rpc::Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -104,31 +108,26 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         include_orphans: bool,
     ) -> rpc::Result<()> {
         // TODO: test this function in functional tests
-        let blocks_list = if include_orphans {
-            handle_error(self.call(move |this| this.get_block_id_tree_as_list()).await)?
-        } else {
-            handle_error(self.call(move |this| this.get_mainchain_blocks_list()).await)?
-        };
-        let chain_config = self
-            .call(move |this| this.get_chain_config())
-            .await
-            .map_err(rpc::Error::to_call_error)?;
-
-        let magic_bytes = chain_config.magic_bytes();
-
         let file_obj = std::fs::File::create(file_path).map_err(rpc::Error::to_call_error)?;
-        let mut writer = std::io::BufWriter::new(&file_obj);
-        for block_id in blocks_list {
-            writer.write_all(magic_bytes).map_err(rpc::Error::to_call_error)?;
-            let block = handle_error(self.call(move |this| this.get_block(block_id)).await)?
-                .ok_or_else(|| {
-                    rpc::Error::Custom(
-                        "Block not found by id after having being read from chainstate block index"
-                            .to_owned(),
-                    )
-                })?;
-            writer.write_all(&block.encode())?;
-        }
+        let writer: std::io::BufWriter<Box<dyn Write + Send>> =
+            std::io::BufWriter::new(Box::new(file_obj));
+
+        handle_error(
+            self.call(move |this| this.export_bootstrap_stream(writer, include_orphans))
+                .await,
+        )?;
+
+        Ok(())
+    }
+
+    async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> rpc::Result<()> {
+        // TODO: test this function in functional tests
+        let file_obj = std::fs::File::open(file_path).map_err(rpc::Error::to_call_error)?;
+        let reader: std::io::BufReader<Box<dyn Read + Send>> =
+            std::io::BufReader::new(Box::new(file_obj));
+
+        handle_error(self.call_mut(move |this| this.import_bootstrap_stream(reader)).await)?;
+
         Ok(())
     }
 }

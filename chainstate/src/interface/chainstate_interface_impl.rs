@@ -15,6 +15,8 @@
 
 use std::sync::Arc;
 
+use crate::detail::bootstrap::export_bootstrap_stream;
+use crate::detail::bootstrap::import_bootstrap_stream;
 use crate::detail::calculate_median_time_past;
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, GenBlockIndex};
@@ -339,5 +341,45 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
             .query()
             .get_block_id_tree_as_list()
             .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn import_bootstrap_stream<'a>(
+        &mut self,
+        reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
+    ) -> Result<(), ChainstateError> {
+        let magic_bytes = self.chainstate.chain_config().magic_bytes().to_vec();
+
+        let mut reader = reader;
+
+        // We clone because borrowing with the closure below prevents immutable borrows,
+        // and the cost of cloning is small compared to the bootstrapping
+        let chainstate_config = self.chainstate.chainstate_config().clone();
+
+        let mut block_processor = |block| self.chainstate.process_block(block, BlockSource::Local);
+
+        import_bootstrap_stream(
+            &magic_bytes,
+            &mut reader,
+            &mut block_processor,
+            &chainstate_config,
+        )?;
+
+        Ok(())
+    }
+
+    fn export_bootstrap_stream<'a>(
+        &self,
+        writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
+        include_orphans: bool,
+    ) -> Result<(), ChainstateError> {
+        let magic_bytes = self.chainstate.chain_config().magic_bytes();
+        let mut writer = writer;
+        export_bootstrap_stream(
+            magic_bytes,
+            &mut writer,
+            include_orphans,
+            &self.chainstate.query(),
+        )?;
+        Ok(())
     }
 }
