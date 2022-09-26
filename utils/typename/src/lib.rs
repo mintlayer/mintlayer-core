@@ -109,4 +109,46 @@ mod tests {
             "TestType5<TestType2,TestType1>"
         );
     }
+
+    #[test]
+    fn typename_for_enum() {
+        #[derive(TypeName)]
+        #[allow(dead_code)]
+        enum TestType6 {
+            A(u32),
+            B(String),
+        }
+
+        assert_eq!(TestType6::typename_str(), "TestType6");
+    }
+
+    #[test]
+    fn typename_for_enum_with_generic() {
+        #[derive(TypeName)]
+        #[allow(dead_code)]
+        enum TestType7<T> {
+            A(T),
+            B(String),
+        }
+
+        assert_eq!(
+            TestType7::<TestType2>::typename_str(),
+            "TestType7<TestType2>"
+        );
+    }
+
+    #[test]
+    fn typename_for_enum_with_two_generics() {
+        #[derive(TypeName)]
+        #[allow(dead_code)]
+        enum TestType8<T, U> {
+            A(T),
+            B(U),
+        }
+
+        assert_eq!(
+            TestType8::<TestType2, TestType1>::typename_str(),
+            "TestType8<TestType2,TestType1>"
+        );
+    }
 }
