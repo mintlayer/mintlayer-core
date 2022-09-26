@@ -189,6 +189,8 @@ impl BanScore for TokensError {
             TokensError::IssueErrorInvalidDescriptionLength(_, _) => 100,
             TokensError::IssueErrorNameHasNoneAlphaNumericChar(_, _) => 100,
             TokensError::IssueErrorDescriptionHasNoneAlphaNumericChar(_, _) => 100,
+            TokensError::IssueErrorIncorrectIconURI(_, _) => 100,
+            TokensError::IssueErrorIncorrectMediaURI(_, _) => 100,
         }
     }
 }

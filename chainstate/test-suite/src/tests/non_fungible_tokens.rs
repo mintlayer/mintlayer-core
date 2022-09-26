@@ -19,6 +19,14 @@ fn random_creator() -> TokenCreator {
     TokenCreator::from(public_key)
 }
 
+// FIXME(nft_issuance): This is the copy of function from check block. Remove copy and use this func from more appropriate place.
+fn is_rfc1738_valid_symbol(ch: char) -> bool {
+    // RFC 1738 alphabet
+    String::from(":._-~!/?#[]@$&\'()*+,;=")
+        .chars()
+        .any(|rfc1738_ch| ch == rfc1738_ch)
+}
+
 //FIXME(nft_issuance): Move it in super mod and use for all tokens tests
 fn random_string<R: SampleRange<usize>>(rng: &mut impl Rng, range_len: R) -> String {
     use crypto::random::distributions::{Alphanumeric, DistString};
@@ -30,11 +38,11 @@ fn random_string<R: SampleRange<usize>>(rng: &mut impl Rng, range_len: R) -> Str
 }
 
 //FIXME(nft_issuance): Move it in super mod and use for all tokens tests
-fn gen_ticker_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec<u8> {
+fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec<u8> {
     assert!(!c.is_ascii_alphanumeric());
-    let ticker_len = 1 + rng.gen::<usize>() % max_len;
-    let random_index_to_replace = rng.gen::<usize>() % ticker_len;
-    let token_ticker: Vec<u8> = (0..ticker_len)
+    let text_len = 1 + rng.gen::<usize>() % max_len;
+    let random_index_to_replace = rng.gen::<usize>() % text_len;
+    let token_ticker: Vec<u8> = (0..text_len)
         .into_iter()
         .map(|idx| {
             if idx != random_index_to_replace {
@@ -43,7 +51,7 @@ fn gen_ticker_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec<u
                 c
             }
         })
-        .take(ticker_len)
+        .take(text_len)
         .collect();
     token_ticker
 }
@@ -57,13 +65,16 @@ fn nft_issuance_name_too_long(#[case] seed: Seed) {
         let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let mut rng = make_seedable_rng(seed);
 
-        // Ticker is too long
+        // Name is too long
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         let result = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(TxInput::new(
-                        outpoint_source_id.clone(),
+                        outpoint_source_id,
                         0,
                         InputWitness::NoSignature(None),
                     ))
@@ -72,19 +83,17 @@ fn nft_issuance_name_too_long(#[case] seed: Seed) {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 //FIXME(nft_issuance): Decide how long nft name might be
-                                name: random_string(&mut rng, 11..100).into_bytes(),
-                                description: random_string(&mut rng, 100..200).into_bytes(),
-                                ticker: random_string(&mut rng, 1..5).into_bytes(),
-                                icon_url: Some(random_string(&mut rng, 100..200).into_bytes()),
-                                additional_metadata_url: Some(
-                                    random_string(&mut rng, 100..200).into_bytes(),
-                                ),
-                                media_url: Some(random_string(&mut rng, 100..200).into_bytes()),
+                                name: random_string(
+                                    &mut rng,
+                                    max_name_len + 1..max_name_len + 1000,
+                                )
+                                .into_bytes(),
+                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                icon_uri: None,
+                                additional_metadata_uri: None,
+                                media_uri: None,
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                                issuead_at: None,
-                                expired_at: None,
-                                valid_since: None,
-                                refund_period: None,
                             },
                         })),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -116,12 +125,14 @@ fn nft_issuance_empty_name(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         // Name is empty
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         let result = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(TxInput::new(
-                        outpoint_source_id.clone(),
+                        outpoint_source_id,
                         0,
                         InputWitness::NoSignature(None),
                     ))
@@ -131,18 +142,12 @@ fn nft_issuance_empty_name(#[case] seed: Seed) {
                                 creator: random_creator(),
                                 //FIXME(nft_issuance): Decide how long nft name might be
                                 name: vec![],
-                                description: random_string(&mut rng, 100..200).into_bytes(),
-                                ticker: random_string(&mut rng, 1..5).into_bytes(),
-                                icon_url: Some(random_string(&mut rng, 100..200).into_bytes()),
-                                additional_metadata_url: Some(
-                                    random_string(&mut rng, 100..200).into_bytes(),
-                                ),
-                                media_url: Some(random_string(&mut rng, 100..200).into_bytes()),
+                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                icon_uri: None,
+                                additional_metadata_uri: None,
+                                media_uri: None,
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                                issuead_at: None,
-                                expired_at: None,
-                                valid_since: None,
-                                refund_period: None,
                             },
                         })),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -173,6 +178,10 @@ fn nft_issuance_invalid_name(#[case] seed: Seed) {
         let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let mut rng = make_seedable_rng(seed);
 
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+
         // try all possible chars for ticker and ensure everything fails except for alphanumeric chars
         for c in u8::MIN..u8::MAX {
             // if c is alphanumeric, then this doesn't produce an error, skip it
@@ -180,11 +189,7 @@ fn nft_issuance_invalid_name(#[case] seed: Seed) {
                 continue;
             }
 
-            let token_name = gen_ticker_with_non_ascii(
-                c,
-                &mut rng,
-                tf.chainstate.get_chain_config().token_max_name_len(),
-            );
+            let name = gen_text_with_non_ascii(c, &mut rng, max_name_len);
 
             let result = tf
                 .make_block_builder()
@@ -200,19 +205,14 @@ fn nft_issuance_invalid_name(#[case] seed: Seed) {
                                 metadata: Metadata {
                                     creator: random_creator(),
                                     //FIXME(nft_issuance): Decide how long nft name might be
-                                    name: token_name,
-                                    description: random_string(&mut rng, 1..100).into_bytes(),
-                                    ticker: random_string(&mut rng, 1..5).into_bytes(),
-                                    icon_url: Some(random_string(&mut rng, 100..200).into_bytes()),
-                                    additional_metadata_url: Some(
-                                        random_string(&mut rng, 100..200).into_bytes(),
-                                    ),
-                                    media_url: Some(random_string(&mut rng, 100..200).into_bytes()),
+                                    name,
+                                    description: random_string(&mut rng, 1..max_desc_len)
+                                        .into_bytes(),
+                                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                    icon_uri: None,
+                                    additional_metadata_uri: None,
+                                    media_uri: None,
                                     media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                                    issuead_at: None,
-                                    expired_at: None,
-                                    valid_since: None,
-                                    refund_period: None,
                                 },
                             })),
                             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -244,13 +244,17 @@ fn issue_test_ticker_too_long(#[case] seed: Seed) {
         let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let mut rng = make_seedable_rng(seed);
 
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+
         // Ticker is too long
         let result = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(TxInput::new(
-                        outpoint_source_id.clone(),
+                        outpoint_source_id,
                         0,
                         InputWitness::NoSignature(None),
                     ))
@@ -259,19 +263,17 @@ fn issue_test_ticker_too_long(#[case] seed: Seed) {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 //FIXME(nft_issuance): Decide how long nft name might be
-                                name: random_string(&mut rng, 1..10).into_bytes(),
-                                description: random_string(&mut rng, 100..200).into_bytes(),
-                                ticker: random_string(&mut rng, 10..u16::MAX as usize).into_bytes(),
-                                icon_url: Some(random_string(&mut rng, 100..200).into_bytes()),
-                                additional_metadata_url: Some(
-                                    random_string(&mut rng, 100..200).into_bytes(),
-                                ),
-                                media_url: Some(random_string(&mut rng, 100..200).into_bytes()),
+                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                                ticker: random_string(
+                                    &mut rng,
+                                    max_ticker_len + 1..max_ticker_len + 1000,
+                                )
+                                .into_bytes(),
+                                icon_uri: None,
+                                additional_metadata_uri: None,
+                                media_uri: None,
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                                issuead_at: None,
-                                expired_at: None,
-                                valid_since: None,
-                                refund_period: None,
                             },
                         })),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -302,13 +304,16 @@ fn nft_issuance_empty_ticker(#[case] seed: Seed) {
         let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let mut rng = make_seedable_rng(seed);
 
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+
         // Ticker is empty
         let result = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(TxInput::new(
-                        outpoint_source_id.clone(),
+                        outpoint_source_id,
                         0,
                         InputWitness::NoSignature(None),
                     ))
@@ -317,19 +322,13 @@ fn nft_issuance_empty_ticker(#[case] seed: Seed) {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 //FIXME(nft_issuance): Decide how long nft name might be
-                                name: random_string(&mut rng, 1..10).into_bytes(),
-                                description: random_string(&mut rng, 100..200).into_bytes(),
+                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: vec![],
-                                icon_url: Some(random_string(&mut rng, 100..200).into_bytes()),
-                                additional_metadata_url: Some(
-                                    random_string(&mut rng, 100..200).into_bytes(),
-                                ),
-                                media_url: Some(random_string(&mut rng, 100..200).into_bytes()),
+                                icon_uri: None,
+                                additional_metadata_uri: None,
+                                media_uri: None,
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                                issuead_at: None,
-                                expired_at: None,
-                                valid_since: None,
-                                refund_period: None,
                             },
                         })),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -360,6 +359,10 @@ fn nft_issuance_invalid_ticker(#[case] seed: Seed) {
         let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let mut rng = make_seedable_rng(seed);
 
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+
         // try all possible chars for ticker and ensure everything fails except for alphanumeric chars
         for c in u8::MIN..u8::MAX {
             // if c is alphanumeric, then this doesn't produce an error, skip it
@@ -367,11 +370,7 @@ fn nft_issuance_invalid_ticker(#[case] seed: Seed) {
                 continue;
             }
 
-            let ticker = gen_ticker_with_non_ascii(
-                c,
-                &mut rng,
-                tf.chainstate.get_chain_config().token_max_ticker_len(),
-            );
+            let ticker = gen_text_with_non_ascii(c, &mut rng, max_ticker_len);
 
             let result = tf
                 .make_block_builder()
@@ -387,19 +386,14 @@ fn nft_issuance_invalid_ticker(#[case] seed: Seed) {
                                 metadata: Metadata {
                                     creator: random_creator(),
                                     //FIXME(nft_issuance): Decide how long nft name might be
-                                    name: random_string(&mut rng, 1..10).into_bytes(),
-                                    description: random_string(&mut rng, 1..100).into_bytes(),
+                                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                    description: random_string(&mut rng, 1..max_desc_len)
+                                        .into_bytes(),
                                     ticker,
-                                    icon_url: Some(random_string(&mut rng, 100..200).into_bytes()),
-                                    additional_metadata_url: Some(
-                                        random_string(&mut rng, 100..200).into_bytes(),
-                                    ),
-                                    media_url: Some(random_string(&mut rng, 100..200).into_bytes()),
+                                    icon_uri: None,
+                                    additional_metadata_uri: None,
+                                    media_uri: None,
                                     media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                                    issuead_at: None,
-                                    expired_at: None,
-                                    valid_since: None,
-                                    refund_period: None,
                                 },
                             })),
                             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -431,13 +425,17 @@ fn issue_test_description_too_long(#[case] seed: Seed) {
         let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let mut rng = make_seedable_rng(seed);
 
-        // Ticker is too long
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+
+        // Description is too long
         let result = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(TxInput::new(
-                        outpoint_source_id.clone(),
+                        outpoint_source_id,
                         0,
                         InputWitness::NoSignature(None),
                     ))
@@ -446,19 +444,17 @@ fn issue_test_description_too_long(#[case] seed: Seed) {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 //FIXME(nft_issuance): Decide how long nft name might be
-                                name: random_string(&mut rng, 1..10).into_bytes(),
-                                description: random_string(&mut rng, 1000..2000).into_bytes(),
-                                ticker: random_string(&mut rng, 1..5).into_bytes(),
-                                icon_url: Some(random_string(&mut rng, 100..200).into_bytes()),
-                                additional_metadata_url: Some(
-                                    random_string(&mut rng, 100..200).into_bytes(),
-                                ),
-                                media_url: Some(random_string(&mut rng, 100..200).into_bytes()),
+                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                description: random_string(
+                                    &mut rng,
+                                    max_desc_len + 1..max_desc_len + 1000,
+                                )
+                                .into_bytes(),
+                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                icon_uri: None,
+                                additional_metadata_uri: None,
+                                media_uri: None,
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                                issuead_at: None,
-                                expired_at: None,
-                                valid_since: None,
-                                refund_period: None,
                             },
                         })),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -480,5 +476,669 @@ fn issue_test_description_too_long(#[case] seed: Seed) {
     })
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_issuance_empty_description(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let mut rng = make_seedable_rng(seed);
+
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+
+        // Description is empty
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id,
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
+                            metadata: Metadata {
+                                creator: random_creator(),
+                                //FIXME(nft_issuance): Decide how long nft name might be
+                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                description: vec![],
+                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                icon_uri: None,
+                                additional_metadata_uri: None,
+                                media_uri: None,
+                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                            },
+                        })),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert!(matches!(
+            result,
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(
+                        TokensError::IssueErrorInvalidDescriptionLength(_, _)
+                    )
+                ))
+            ))
+        ));
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_issuance_invalid_description(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let mut rng = make_seedable_rng(seed);
+
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+
+        // try all possible chars for description and ensure everything fails except for alphanumeric chars
+        for c in u8::MIN..u8::MAX {
+            // if c is alphanumeric, then this doesn't produce an error, skip it
+            if c.is_ascii_alphanumeric() {
+                continue;
+            }
+
+            let description = gen_text_with_non_ascii(c, &mut rng, max_desc_len);
+
+            let result = tf
+                .make_block_builder()
+                .add_transaction(
+                    TransactionBuilder::new()
+                        .add_input(TxInput::new(
+                            outpoint_source_id.clone(),
+                            0,
+                            InputWitness::NoSignature(None),
+                        ))
+                        .add_output(TxOutput::new(
+                            OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
+                                metadata: Metadata {
+                                    creator: random_creator(),
+                                    //FIXME(nft_issuance): Decide how long nft name might be
+                                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                    description,
+                                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                    icon_uri: None,
+                                    additional_metadata_uri: None,
+                                    media_uri: None,
+                                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                                },
+                            })),
+                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        ))
+                        .build(),
+                )
+                .build_and_process();
+
+            assert!(matches!(
+                result,
+                Err(ChainstateError::ProcessBlockError(
+                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                        CheckBlockTransactionsError::TokensError(
+                            TokensError::IssueErrorDescriptionHasNoneAlphaNumericChar(_, _)
+                        )
+                    ))
+                ))
+            ));
+        }
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_issuance_icon_uri_too_long(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let mut rng = make_seedable_rng(seed);
+
+        // Ticker is too long
+        let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id,
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
+                            metadata: Metadata {
+                                creator: random_creator(),
+                                //FIXME(nft_issuance): Decide how long nft name might be
+                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                icon_uri: Some(
+                                    random_string(&mut rng, max_uri_len + 1..max_uri_len + 1000)
+                                        .into_bytes(),
+                                ),
+                                additional_metadata_uri: None,
+                                media_uri: None,
+                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                            },
+                        })),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert!(matches!(
+            result,
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(
+                        TokensError::IssueErrorIncorrectIconURI(_, _)
+                    )
+                ))
+            ))
+        ));
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_issuance_icon_uri_empty(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let mut rng = make_seedable_rng(seed);
+
+        // Ticker is too long
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id,
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
+                            metadata: Metadata {
+                                creator: random_creator(),
+                                //FIXME(nft_issuance): Decide how long nft name might be
+                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                icon_uri: Some(vec![]),
+                                additional_metadata_uri: None,
+                                media_uri: None,
+                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                            },
+                        })),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert!(matches!(
+            result,
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(
+                        TokensError::IssueErrorIncorrectIconURI(_, _)
+                    )
+                ))
+            ))
+        ));
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_issuance_icon_uri_invalid(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let mut rng = make_seedable_rng(seed);
+
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
+
+        // try all possible chars for description and ensure everything fails except for alphanumeric chars
+        for c in u8::MIN..u8::MAX {
+            // if c is alphanumeric, then this doesn't produce an error, skip it
+            if c.is_ascii_alphanumeric() || is_rfc1738_valid_symbol(char::from(c)) {
+                continue;
+            }
+
+            let icon_uri = Some(gen_text_with_non_ascii(c, &mut rng, max_uri_len));
+
+            let result = tf
+                .make_block_builder()
+                .add_transaction(
+                    TransactionBuilder::new()
+                        .add_input(TxInput::new(
+                            outpoint_source_id.clone(),
+                            0,
+                            InputWitness::NoSignature(None),
+                        ))
+                        .add_output(TxOutput::new(
+                            OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
+                                metadata: Metadata {
+                                    creator: random_creator(),
+                                    //FIXME(nft_issuance): Decide how long nft name might be
+                                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                    description: random_string(&mut rng, 1..max_desc_len)
+                                        .into_bytes(),
+                                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                    icon_uri,
+                                    additional_metadata_uri: None,
+                                    media_uri: None,
+                                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                                },
+                            })),
+                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        ))
+                        .build(),
+                )
+                .build_and_process();
+
+            assert!(matches!(
+                result,
+                Err(ChainstateError::ProcessBlockError(
+                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                        CheckBlockTransactionsError::TokensError(
+                            TokensError::IssueErrorIncorrectIconURI(_, _)
+                        )
+                    ))
+                ))
+            ));
+        }
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_issuance_metadata_uri_too_long(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let mut rng = make_seedable_rng(seed);
+
+        // Metadata URI is too long
+        let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id,
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
+                            metadata: Metadata {
+                                creator: random_creator(),
+                                //FIXME(nft_issuance): Decide how long nft name might be
+                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                icon_uri: None,
+                                additional_metadata_uri: Some(
+                                    random_string(&mut rng, max_uri_len + 1..max_uri_len + 1000)
+                                        .into_bytes(),
+                                ),
+                                media_uri: None,
+                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                            },
+                        })),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert!(matches!(
+            result,
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(
+                        TokensError::IssueErrorIncorrectMetadataURI(_, _)
+                    )
+                ))
+            ))
+        ));
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_issuance_metadata_uri_empty(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let mut rng = make_seedable_rng(seed);
+
+        // Metadata URI is too long
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id,
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
+                            metadata: Metadata {
+                                creator: random_creator(),
+                                //FIXME(nft_issuance): Decide how long nft name might be
+                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                icon_uri: None,
+                                additional_metadata_uri: Some(vec![]),
+                                media_uri: None,
+                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                            },
+                        })),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert!(matches!(
+            result,
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(
+                        TokensError::IssueErrorIncorrectMetadataURI(_, _)
+                    )
+                ))
+            ))
+        ));
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_issuance_metadata_uri_invalid(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let mut rng = make_seedable_rng(seed);
+
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
+
+        // try all possible chars for description and ensure everything fails except for alphanumeric chars
+        for c in u8::MIN..u8::MAX {
+            // if c is alphanumeric, then this doesn't produce an error, skip it
+            if c.is_ascii_alphanumeric() || is_rfc1738_valid_symbol(char::from(c)) {
+                continue;
+            }
+
+            let additional_metadata_uri = Some(gen_text_with_non_ascii(c, &mut rng, max_uri_len));
+
+            let result = tf
+                .make_block_builder()
+                .add_transaction(
+                    TransactionBuilder::new()
+                        .add_input(TxInput::new(
+                            outpoint_source_id.clone(),
+                            0,
+                            InputWitness::NoSignature(None),
+                        ))
+                        .add_output(TxOutput::new(
+                            OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
+                                metadata: Metadata {
+                                    creator: random_creator(),
+                                    //FIXME(nft_issuance): Decide how long nft name might be
+                                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                    description: random_string(&mut rng, 1..max_desc_len)
+                                        .into_bytes(),
+                                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                    icon_uri: None,
+                                    additional_metadata_uri,
+                                    media_uri: None,
+                                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                                },
+                            })),
+                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        ))
+                        .build(),
+                )
+                .build_and_process();
+
+            assert!(matches!(
+                result,
+                Err(ChainstateError::ProcessBlockError(
+                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                        CheckBlockTransactionsError::TokensError(
+                            TokensError::IssueErrorIncorrectMetadataURI(_, _)
+                        )
+                    ))
+                ))
+            ));
+        }
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_issuance_media_uri_too_long(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let mut rng = make_seedable_rng(seed);
+
+        // Metadata URI is too long
+        let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id,
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
+                            metadata: Metadata {
+                                creator: random_creator(),
+                                //FIXME(nft_issuance): Decide how long nft name might be
+                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                icon_uri: None,
+                                additional_metadata_uri: None,
+                                media_uri: Some(
+                                    random_string(&mut rng, max_uri_len + 1..max_uri_len + 1000)
+                                        .into_bytes(),
+                                ),
+                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                            },
+                        })),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert!(matches!(
+            result,
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(
+                        TokensError::IssueErrorIncorrectMediaURI(_, _)
+                    )
+                ))
+            ))
+        ));
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_issuance_media_uri_empty(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let mut rng = make_seedable_rng(seed);
+
+        // Metadata URI is too long
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id,
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
+                            metadata: Metadata {
+                                creator: random_creator(),
+                                //FIXME(nft_issuance): Decide how long nft name might be
+                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                icon_uri: None,
+                                additional_metadata_uri: None,
+                                media_uri: Some(vec![]),
+                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                            },
+                        })),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process();
+
+        assert!(matches!(
+            result,
+            Err(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::TokensError(
+                        TokensError::IssueErrorIncorrectMediaURI(_, _)
+                    )
+                ))
+            ))
+        ));
+    })
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_issuance_media_uri_invalid(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let mut rng = make_seedable_rng(seed);
+
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
+
+        // try all possible chars for description and ensure everything fails except for alphanumeric chars
+        for c in u8::MIN..u8::MAX {
+            // if c is alphanumeric, then this doesn't produce an error, skip it
+            if c.is_ascii_alphanumeric() || is_rfc1738_valid_symbol(char::from(c)) {
+                continue;
+            }
+
+            let media_uri = Some(gen_text_with_non_ascii(c, &mut rng, max_uri_len));
+
+            let result = tf
+                .make_block_builder()
+                .add_transaction(
+                    TransactionBuilder::new()
+                        .add_input(TxInput::new(
+                            outpoint_source_id.clone(),
+                            0,
+                            InputWitness::NoSignature(None),
+                        ))
+                        .add_output(TxOutput::new(
+                            OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
+                                metadata: Metadata {
+                                    creator: random_creator(),
+                                    //FIXME(nft_issuance): Decide how long nft name might be
+                                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                    description: random_string(&mut rng, 1..max_desc_len)
+                                        .into_bytes(),
+                                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                    icon_uri: None,
+                                    additional_metadata_uri: None,
+                                    media_uri,
+                                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                                },
+                            })),
+                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        ))
+                        .build(),
+                )
+                .build_and_process();
+
+            assert!(matches!(
+                result,
+                Err(ChainstateError::ProcessBlockError(
+                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                        CheckBlockTransactionsError::TokensError(
+                            TokensError::IssueErrorIncorrectMediaURI(_, _)
+                        )
+                    ))
+                ))
+            ));
+        }
+    })
+}
+
 //FIXME(nft_issuance): NFT transfers checks
 //FIXME(nft_issuance): NFT burn checks
+//FIXME(nft_issuance): Can we check somehow media hash? Need research

@@ -29,14 +29,15 @@ pub struct Metadata {
     pub name: Vec<u8>,
     pub description: Vec<u8>,
     pub ticker: Vec<u8>,
-    pub icon_url: Option<Vec<u8>>,
-    pub additional_metadata_url: Option<Vec<u8>>,
-    pub media_url: Option<Vec<u8>>,
+    pub icon_uri: Option<Vec<u8>>,
+    pub additional_metadata_uri: Option<Vec<u8>>,
+    pub media_uri: Option<Vec<u8>>,
     pub media_hash: Vec<u8>,
-    pub issuead_at: Option<u64>,
-    pub expired_at: Option<u64>,
-    pub valid_since: Option<u64>,
-    pub refund_period: Option<u64>,
+    // FIXME(nft_issuance): Check how it is should work
+    // pub issuead_at: Option<u64>,
+    // pub expired_at: Option<u64>,
+    // pub valid_since: Option<u64>,
+    // pub refund_period: Option<u64>,
 }
 
 pub struct Payout {

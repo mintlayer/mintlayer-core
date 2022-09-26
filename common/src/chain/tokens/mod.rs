@@ -54,6 +54,7 @@ impl TokenAuxiliaryData {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[allow(clippy::large_enum_variant)]
 pub enum OutputValue {
     Coin(Amount),
     //FIXME(nft_issuance): Clippy warning on this. Should we use Box here?
@@ -96,7 +97,9 @@ pub struct TokenBurnV1 {
     pub amount_to_burn: Amount,
 }
 
+//FIXME(nft_issuance): Clippy warning on this. Should we use Box here?
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[allow(clippy::large_enum_variant)]
 pub enum TokenData {
     /// TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.
     #[codec(index = 1)]

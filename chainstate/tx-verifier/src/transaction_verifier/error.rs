@@ -168,6 +168,10 @@ pub enum TokensError {
     IssueErrorTooManyDecimals(Id<Transaction>, Id<Block>),
     #[error("Incorrect metadata URI in issuance transaction {0} in block {1}")]
     IssueErrorIncorrectMetadataURI(Id<Transaction>, Id<Block>),
+    #[error("Incorrect icon URI in issuance transaction {0} in block {1}")]
+    IssueErrorIncorrectIconURI(Id<Transaction>, Id<Block>),
+    #[error("Incorrect media URI in issuance transaction {0} in block {1}")]
+    IssueErrorIncorrectMediaURI(Id<Transaction>, Id<Block>),
     #[error("Too many tokens issuance in transaction {0} in block {1}")]
     MultipleTokenIssuanceInTransaction(Id<Transaction>, Id<Block>),
     #[error("Coin or token overflow")]
