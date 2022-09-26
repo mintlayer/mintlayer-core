@@ -1158,7 +1158,7 @@ fn nft_issuance_valid_case(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(TxInput::new(
-                        outpoint_source_id.clone(),
+                        outpoint_source_id,
                         0,
                         InputWitness::NoSignature(None),
                     ))
