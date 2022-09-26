@@ -2352,7 +2352,6 @@ dependencies = [
  "crypto",
  "futures",
  "jsonrpsee",
- "lazy_static",
  "logging",
  "mockall",
  "parking_lot 0.12.1",
