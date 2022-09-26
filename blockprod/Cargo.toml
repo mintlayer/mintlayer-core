@@ -10,6 +10,6 @@ license = "MIT"
 chainstate = { path = "../chainstate/" }
 common = { path = "../common/" }
 mempool = { path = "../mempool/" }
-subsystem = { path = "../subsystem" }
+subsystem = { path = "../subsystem/" }
 
 thiserror = "1.0"
