@@ -135,12 +135,14 @@ pub trait ChainstateInterface: Send {
     /// Returns a list of all blocks in the block tree, including orphans. The length cannot be predicted before the call
     fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
 
-    /// Imports a bootstrap file exported with rpc
+    /// Imports a bootstrap file exported with export_bootstrap_stream
     fn import_bootstrap_stream<'a>(
         &mut self,
         reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
     ) -> Result<(), ChainstateError>;
 
+    /// Writes the blocks of the blockchain into a stream that's meant to go to a file.
+    /// The blocks in the stream can be used to resync the blockchain in another node
     fn export_bootstrap_stream<'a>(
         &self,
         writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
