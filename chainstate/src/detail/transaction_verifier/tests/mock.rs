@@ -114,5 +114,4 @@ mockall::mock! {
         fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), storage_result::Error>;
         fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), storage_result::Error>;
     }
-
 }

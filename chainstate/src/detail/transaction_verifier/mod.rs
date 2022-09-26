@@ -108,17 +108,6 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         }
     }
 
-    pub fn derive(&'a self) -> Self {
-        Self {
-            storage_ref: self as &dyn TransactionVerifierStorageRef,
-            chain_config: self.chain_config,
-            tx_index_cache: TxIndexCache::new(),
-            utxo_cache: self.utxo_cache.derive_cache(),
-            utxo_block_undo: BTreeMap::new(),
-            token_issuance_cache: TokenIssuanceCache::new(),
-        }
-    }
-
     fn calculate_total_outputs(
         outputs: &[TxOutput],
         include_issuance: Option<&Transaction>,

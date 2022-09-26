@@ -102,6 +102,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks> UtxosStorageWrite for Chain
         outpoint: &common::chain::OutPoint,
         entry: utxo::Utxo,
     ) -> Result<(), chainstate_types::storage_result::Error> {
+        //FIXME: unreachable??
         self.db_tx.set_utxo(outpoint, entry)
     }
 
@@ -109,6 +110,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks> UtxosStorageWrite for Chain
         &mut self,
         outpoint: &common::chain::OutPoint,
     ) -> Result<(), chainstate_types::storage_result::Error> {
+        //FIXME: unreachable??
         self.db_tx.del_utxo(outpoint)
     }
 
@@ -116,6 +118,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks> UtxosStorageWrite for Chain
         &mut self,
         block_id: &Id<GenBlock>,
     ) -> Result<(), chainstate_types::storage_result::Error> {
+        //FIXME: unreachable??
         self.db_tx.set_best_block_for_utxos(block_id)
     }
 

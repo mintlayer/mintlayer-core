@@ -123,7 +123,7 @@ impl<'a, S: TransactionVerifierStorageRef> UtxosStorageRead for TransactionVerif
     }
 }
 
-//TODO: errors?
+//FIXME: return errors?
 
 impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
     for TransactionVerifier<'a, S>
