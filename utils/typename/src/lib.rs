@@ -76,7 +76,7 @@ mod tests {
     }
 
     #[derive(TypeName)]
-    struct TestType4<T: TypeName> {
+    struct TestType4<T> {
         _phantom: PhantomData<T>,
     }
 
@@ -97,7 +97,7 @@ mod tests {
     }
 
     #[derive(TypeName)]
-    struct TestType5<T: TypeName, U: TypeName> {
+    struct TestType5<T, U> {
         _phantom1: PhantomData<T>,
         _phantom2: PhantomData<U>,
     }

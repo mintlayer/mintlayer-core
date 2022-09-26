@@ -37,7 +37,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
             }
         }
     } else {
-        let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+        let (impl_generics, ty_generics, _where_clause) = generics.split_for_impl();
         let type_name = ident.to_string();
         #[allow(unstable_name_collisions)]
         let gen_params = generics
@@ -50,8 +50,13 @@ pub fn derive(input: TokenStream) -> TokenStream {
             })
             .intersperse(quote! {+ "," +});
 
+        let where_clause_params = generics.type_params().into_iter().cloned().map(|t| {
+            let ident = t.ident;
+            quote!(#ident: TypeName)
+        });
+
         quote! {
-            impl #impl_generics TypeName for #ident #ty_generics #where_clause {
+            impl #impl_generics TypeName for #ident #ty_generics where #(#where_clause_params),* {
                 fn typename_str() -> std::borrow::Cow<'static, str> {
                     std::borrow::Cow::Owned(#type_name.to_owned() + "<" + #(#gen_params)* + ">")
                 }
