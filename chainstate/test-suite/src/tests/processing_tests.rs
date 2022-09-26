@@ -25,7 +25,7 @@ use chainstate_test_framework::{
     TransactionBuilder,
 };
 use chainstate_types::{GenBlockIndex, PropertyQueryError};
-use common::chain::Transaction;
+use common::chain::{signed_transaction::SignedTransaction, Transaction};
 use common::primitives::BlockDistance;
 use common::{
     chain::{
@@ -321,7 +321,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         for tx in block.transactions() {
             let tx_id = tx.get_id();
             // All inputs must spend a corresponding output
-            for tx_in in tx.inputs() {
+            for tx_in in tx.transaction().inputs() {
                 let outpoint = tx_in.outpoint();
                 let prev_out_tx_index =
                     tf.chainstate.get_mainchain_tx_index(&outpoint.tx_id()).unwrap().unwrap();
@@ -332,7 +332,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
             }
             // All the outputs of this transaction should be unspent
             let tx_index = tf.chainstate.get_mainchain_tx_index(&tx_id.into()).unwrap().unwrap();
-            for idx in 0..tx.outputs().len() as u32 {
+            for idx in 0..tx.transaction().outputs().len() as u32 {
                 assert_eq!(
                     tx_index.get_spent_state(idx).unwrap(),
                     OutputSpentState::Unspent
@@ -354,28 +354,34 @@ fn transaction_processing_order(#[case] seed: Seed) {
         let (utx, utxo) = &tf.best_block_info().txns[0];
 
         // Transaction that spends the genesis reward
-        let tx1 = Transaction::new(
-            0,
-            vec![TxInput::new(utx.clone(), 0, empty_witness(&mut rng))],
-            vec![TxOutput::new(
-                utxo[0].value().clone(),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )],
-            0,
-        )
-        .unwrap();
+        let tx1 = SignedTransaction::new(
+            Transaction::new(
+                0,
+                vec![TxInput::new(utx.clone(), 0, empty_witness(&mut rng))],
+                vec![TxOutput::new(
+                    utxo[0].value().clone(),
+                    OutputPurpose::Transfer(anyonecanspend_address()),
+                )],
+                0,
+            )
+            .unwrap(),
+            vec![empty_witness(&mut rng)],
+        );
 
         // Transaction that spends tx1
-        let tx2 = Transaction::new(
-            0,
-            vec![TxInput::new(tx1.get_id().into(), 0, empty_witness(&mut rng))],
-            vec![TxOutput::new(
-                tx1.outputs()[0].value().clone(),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )],
-            0,
-        )
-        .unwrap();
+        let tx2 = SignedTransaction::new(
+            Transaction::new(
+                0,
+                vec![TxInput::new(tx1.get_id().into(), 0, empty_witness(&mut rng))],
+                vec![TxOutput::new(
+                    tx1.transaction().outputs()[0].value().clone(),
+                    OutputPurpose::Transfer(anyonecanspend_address()),
+                )],
+                0,
+            )
+            .unwrap(),
+            vec![empty_witness(&mut rng)],
+        );
 
         // Create a new block with tx2 appearing before tx1
         let block = tf.make_block_builder().add_transaction(tx2).add_transaction(tx1).build();
@@ -1135,11 +1141,14 @@ fn burn_inputs_in_tx(#[case] seed: Seed) {
 
         let mut rng = make_seedable_rng(seed);
         let first_tx = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                0,
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                    empty_witness(&mut rng),
+                ),
                 empty_witness(&mut rng),
-            ))
+            )
             .build();
         let first_tx_id = first_tx.get_id();
 

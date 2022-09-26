@@ -15,6 +15,7 @@
 
 use super::*;
 use common::chain::tokens::OutputValue;
+use common::chain::transaction::signed_transaction::SignedTransaction;
 use common::chain::{Destination, OutputPurpose, TxOutput};
 use common::primitives::{Amount, H256};
 use crypto::key::{KeyKind, PrivateKey};
@@ -51,7 +52,7 @@ fn test_storage_manipulation() {
     let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
     let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
     let block0 = Block::new(
-        vec![tx0.clone()],
+        vec![SignedTransaction::new(tx0.clone(), vec![])],
         Id::new(H256::default()),
         BlockTimestamp::from_int_seconds(12),
         ConsensusData::None,
@@ -59,7 +60,7 @@ fn test_storage_manipulation() {
     )
     .unwrap();
     let block1 = Block::new(
-        vec![tx1.clone()],
+        vec![SignedTransaction::new(tx1.clone(), vec![])],
         Id::new(block0.get_id().get()),
         BlockTimestamp::from_int_seconds(34),
         ConsensusData::None,
