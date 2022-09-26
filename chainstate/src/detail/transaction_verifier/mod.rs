@@ -23,6 +23,7 @@ mod tx_index_cache;
 use self::{
     amounts_map::AmountsMap,
     error::{ConnectTransactionError, TokensError},
+    flush::flush_to_storage,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{CachedTokensOperation, CoinOrTokenId},
     tx_index_cache::TxIndexCache,
@@ -107,7 +108,16 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         }
     }
 
-    //pub fn derive()
+    pub fn derive(&'a self) -> Self {
+        Self {
+            storage_ref: self as &dyn TransactionVerifierStorageRef,
+            chain_config: self.chain_config,
+            tx_index_cache: TxIndexCache::new(),
+            utxo_cache: self.utxo_cache.derive_cache(),
+            utxo_block_undo: BTreeMap::new(),
+            token_issuance_cache: TokenIssuanceCache::new(),
+        }
+    }
 
     fn calculate_total_outputs(
         outputs: &[TxOutput],

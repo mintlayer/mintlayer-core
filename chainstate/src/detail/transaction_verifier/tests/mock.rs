@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::storage::{TransactionVerifierStorageError, TransactionVerifierStorageRef};
+use super::storage::{
+    TransactionVerifierStorageError, TransactionVerifierStorageMut, TransactionVerifierStorageRef,
+};
 use crate::TokensError;
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
@@ -23,7 +25,9 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
-use utxo::{BlockUndo, Utxo, UtxosStorageRead};
+use utxo::{
+    BlockUndo, ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead, UtxosStorageWrite,
+};
 
 mockall::mock! {
     pub Store {}
@@ -56,9 +60,59 @@ mockall::mock! {
         ) -> Result<Option<TokenAuxiliaryData>, TokensError>;
     }
 
+    impl TransactionVerifierStorageMut for Store {
+        fn set_mainchain_tx_index(
+            &mut self,
+            tx_id: &OutPointSourceId,
+            tx_index: &TxMainChainIndex,
+        ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn del_mainchain_tx_index(
+            &mut self,
+            tx_id: &OutPointSourceId,
+        ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn set_token_aux_data(
+            &mut self,
+            token_id: &TokenId,
+            data: &TokenAuxiliaryData,
+        ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn del_token_aux_data(
+            &mut self,
+            token_id: &TokenId,
+        ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn set_token_id(
+            &mut self,
+            issuance_tx_id: &Id<Transaction>,
+            token_id: &TokenId,
+        ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn del_token_id(
+            &mut self,
+            issuance_tx_id: &Id<Transaction>,
+        ) -> Result<(), TransactionVerifierStorageError>;
+    }
+
     impl UtxosStorageRead for Store {
         fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, storage_result::Error>;
         fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>,storage_result::Error>;
         fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, storage_result::Error>;
     }
+
+    impl FlushableUtxoView for Store {
+        fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error>;
+    }
+
+    impl UtxosStorageWrite for Store {
+        fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), storage_result::Error>;
+        fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), storage_result::Error>;
+
+        fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), storage_result::Error>;
+
+        fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), storage_result::Error>;
+        fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), storage_result::Error>;
+    }
+
 }
