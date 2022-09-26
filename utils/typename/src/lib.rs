@@ -21,17 +21,19 @@ pub use typename_derive::TypeName;
 /// clutter logs.
 pub trait TypeName {
     /// Returns a name of the type.
-    fn typename_str() -> &'static str;
+    fn typename_str() -> std::borrow::Cow<'static, str>;
 }
 
 impl TypeName for () {
-    fn typename_str() -> &'static str {
-        "()"
+    fn typename_str() -> std::borrow::Cow<'static, str> {
+        "()".into()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::marker::PhantomData;
+
     use super::*;
 
     #[test]
@@ -39,19 +41,58 @@ mod tests {
         struct TestType1;
 
         impl TypeName for TestType1 {
-            fn typename_str() -> &'static str {
-                "TestType1"
+            fn typename_str() -> std::borrow::Cow<'static, str> {
+                "TestType1".into()
             }
         }
 
         assert_eq!(TestType1::typename_str(), "TestType1");
     }
 
+    #[derive(TypeName)]
+    struct TestType2;
+
     #[test]
     fn typename_derive() {
-        #[derive(TypeName)]
-        struct TestType2;
-
         assert_eq!(TestType2::typename_str(), "TestType2");
+    }
+
+    struct TestType3<T> {
+        _phantom: PhantomData<T>,
+    }
+
+    impl<T: TypeName> TypeName for TestType3<T> {
+        fn typename_str() -> std::borrow::Cow<'static, str> {
+            std::borrow::Cow::Owned("TestType3<".to_owned() + T::typename_str().as_ref() + ">")
+        }
+    }
+
+    #[test]
+    fn typename_with_custom_generic() {
+        assert_eq!(
+            TestType3::<TestType2>::typename_str(),
+            "TestType3<TestType2>"
+        );
+    }
+
+    #[derive(TypeName)]
+    struct TestType4<T: TypeName> {
+        _phantom: PhantomData<T>,
+    }
+
+    #[test]
+    fn typename_with_derived_generic() {
+        assert_eq!(
+            TestType4::<TestType2>::typename_str(),
+            "TestType4<TestType2>"
+        );
+    }
+
+    #[test]
+    fn typename_with_derived_generic_generic() {
+        assert_eq!(
+            TestType4::<TestType3<TestType2>>::typename_str(),
+            "TestType4<TestType3<TestType2>>"
+        );
     }
 }

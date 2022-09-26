@@ -77,7 +77,7 @@ pub struct Id<T> {
     _shadow: std::marker::PhantomData<fn() -> T>,
 }
 
-impl<T: Debug + TypeName> Debug for Id<T> {
+impl<T: TypeName> Debug for Id<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Id<{}>{{{:?}}}", T::typename_str(), self.id)
     }
@@ -191,8 +191,8 @@ mod tests {
     struct TestType2;
 
     impl TypeName for TestType2 {
-        fn typename_str() -> &'static str {
-            "TestType2"
+        fn typename_str() -> std::borrow::Cow<'static, str> {
+            "TestType2".into()
         }
     }
 

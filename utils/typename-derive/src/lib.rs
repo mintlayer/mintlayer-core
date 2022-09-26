@@ -19,12 +19,30 @@ use syn::{parse_macro_input, DeriveInput};
 
 #[proc_macro_derive(TypeName)]
 pub fn derive(input: TokenStream) -> TokenStream {
-    let DeriveInput { ident, .. } = parse_macro_input!(input);
-    let type_name = ident.to_string();
-    let output = quote! {
-        impl TypeName for #ident {
-            fn typename_str() -> &'static str {
-                #type_name
+    let DeriveInput {
+        ident,
+        attrs: _attrs,
+        vis: _vis,
+        generics,
+        data: _data,
+    } = parse_macro_input!(input);
+    let output = if generics.params.is_empty() {
+        let type_name = ident.to_string();
+        quote! {
+            impl TypeName for #ident {
+                fn typename_str() -> std::borrow::Cow<'static, str> {
+                    #type_name.into()
+                }
+            }
+        }
+    } else {
+        let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+        let type_name = ident.to_string();
+        quote! {
+            impl #impl_generics TypeName for #ident #ty_generics #where_clause {
+                fn typename_str() -> std::borrow::Cow<'static, str> {
+                    std::borrow::Cow::Owned(#type_name.to_owned() + "<" + T::typename_str().as_ref() + ">")
+                }
             }
         }
     };
