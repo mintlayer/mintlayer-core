@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use itertools::Itertools;
 use proc_macro::{self, TokenStream};
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput};
@@ -38,10 +39,21 @@ pub fn derive(input: TokenStream) -> TokenStream {
     } else {
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
         let type_name = ident.to_string();
+        #[allow(unstable_name_collisions)]
+        let gen_params = generics
+            .type_params()
+            .into_iter()
+            .cloned()
+            .map(|t| {
+                let ident = t.ident;
+                quote!(#ident::typename_str().as_ref())
+            })
+            .intersperse(quote! {+ "," +});
+
         quote! {
             impl #impl_generics TypeName for #ident #ty_generics #where_clause {
                 fn typename_str() -> std::borrow::Cow<'static, str> {
-                    std::borrow::Cow::Owned(#type_name.to_owned() + "<" + T::typename_str().as_ref() + ">")
+                    std::borrow::Cow::Owned(#type_name.to_owned() + "<" + #(#gen_params)* + ">")
                 }
             }
         }

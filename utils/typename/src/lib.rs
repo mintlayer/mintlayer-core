@@ -36,16 +36,16 @@ mod tests {
 
     use super::*;
 
+    struct TestType1;
+
+    impl TypeName for TestType1 {
+        fn typename_str() -> std::borrow::Cow<'static, str> {
+            "TestType1".into()
+        }
+    }
+
     #[test]
     fn typename_manual() {
-        struct TestType1;
-
-        impl TypeName for TestType1 {
-            fn typename_str() -> std::borrow::Cow<'static, str> {
-                "TestType1".into()
-            }
-        }
-
         assert_eq!(TestType1::typename_str(), "TestType1");
     }
 
@@ -93,6 +93,20 @@ mod tests {
         assert_eq!(
             TestType4::<TestType3<TestType2>>::typename_str(),
             "TestType4<TestType3<TestType2>>"
+        );
+    }
+
+    #[derive(TypeName)]
+    struct TestType5<T: TypeName, U: TypeName> {
+        _phantom1: PhantomData<T>,
+        _phantom2: PhantomData<U>,
+    }
+
+    #[test]
+    fn typename_with_two_generics() {
+        assert_eq!(
+            TestType5::<TestType2, TestType1>::typename_str(),
+            "TestType5<TestType2,TestType1>"
         );
     }
 }
