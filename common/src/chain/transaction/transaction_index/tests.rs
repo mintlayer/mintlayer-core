@@ -18,6 +18,7 @@ use crypto::random::RngCore;
 
 use super::*;
 use crate::chain::block::timestamp::BlockTimestamp;
+use crate::chain::signed_transaction::SignedTransaction;
 use crate::chain::tokens::OutputValue;
 use crate::chain::OutputPurpose;
 use crate::{
@@ -214,6 +215,23 @@ fn generate_random_bytes(g: &mut impl crypto::random::Rng, length: usize) -> Vec
     bytes
 }
 
+fn generate_random_invalid_witness(
+    count: usize,
+    g: &mut impl crypto::random::Rng,
+) -> Vec<InputWitness> {
+    (0..count)
+        .into_iter()
+        .map(|_| {
+            let witness_size = g.next_u32();
+            let witness = generate_random_bytes(g, (1 + witness_size % 1000) as usize);
+            InputWitness::Standard(StandardInputSignature::new(
+                SigHashType::try_from(SigHashType::ALL).unwrap(),
+                witness,
+            ))
+        })
+        .collect::<Vec<_>>()
+}
+
 fn generate_random_invalid_input(g: &mut impl crypto::random::Rng) -> TxInput {
     let witness_size = g.next_u32();
     let witness = generate_random_bytes(g, (1 + witness_size % 1000) as usize);
@@ -274,6 +292,13 @@ fn generate_random_invalid_block() -> Block {
             .map(|_| generate_random_invalid_transaction(&mut rng))
             .collect::<Vec<_>>()
     };
+    let transactions = transactions
+        .into_iter()
+        .map(|tx| {
+            let inputs_count = tx.inputs().len();
+            SignedTransaction::new(tx, generate_random_invalid_witness(inputs_count, &mut rng))
+        })
+        .collect::<Vec<_>>();
     let time = rng.next_u64();
     let prev_id = Id::new(generate_random_h256(&mut rng));
     let reward = BlockReward::new(Vec::new());
@@ -304,7 +329,10 @@ fn test_indices_calculations() {
     for (tx_num, tx) in block.transactions().iter().enumerate() {
         let tx_index = calculate_tx_index_from_block(&block, tx_num).unwrap();
         assert!(!tx_index.all_outputs_spent());
-        assert_eq!(tx_index.output_count(), tx.outputs().len() as u32);
+        assert_eq!(
+            tx_index.output_count(),
+            tx.transaction().outputs().len() as u32
+        );
 
         let pos = match tx_index.position() {
             SpendablePosition::Transaction(pos) => pos,

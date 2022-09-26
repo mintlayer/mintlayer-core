@@ -24,6 +24,8 @@ use crate::primitives::{id::WithId, Id, Idable};
 pub mod input;
 pub use input::*;
 
+pub mod signed_transaction;
+
 pub mod output;
 pub use output::*;
 
@@ -121,6 +123,7 @@ impl Transaction {
         }
     }
 
+    // TODO(PR): this has to go
     /// provides the hash of a transaction including the witness (malleable)
     pub fn serialized_hash(&self) -> Id<Transaction> {
         match &self {

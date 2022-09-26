@@ -174,6 +174,7 @@ mod tests {
         use super::*;
         use common::chain::block::timestamp::BlockTimestamp;
         use common::chain::block::{BlockReward, ConsensusData};
+        use common::chain::signed_transaction::SignedTransaction;
         use common::chain::transaction::Transaction;
         use common::primitives::H256;
         use crypto::random::Rng;
@@ -190,7 +191,7 @@ mod tests {
             let tx = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
 
             Block::new(
-                vec![tx],
+                vec![SignedTransaction::new(tx, vec![])],
                 prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()).into()),
                 BlockTimestamp::from_int_seconds(rng.gen()),
                 ConsensusData::None,

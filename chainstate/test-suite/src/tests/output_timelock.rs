@@ -59,7 +59,7 @@ fn output_lock_until_height() {
             tf.make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
-                        .add_input(locked_output.clone())
+                        .add_input(locked_output.1.clone(), locked_output.0.clone())
                         .add_anyone_can_spend_output(5000)
                         .build()
                 )
@@ -76,11 +76,14 @@ fn output_lock_until_height() {
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        prev_block_info.txns[0].0.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(
+                            prev_block_info.txns[0].0.clone(),
+                            0,
+                            InputWitness::NoSignature(None),
+                        ),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_anyone_can_spend_output(10000)
                     .build(),
             )
@@ -101,7 +104,7 @@ fn output_lock_until_height() {
                 tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
-                            .add_input(locked_output.clone())
+                            .add_input(locked_output.1.clone(), locked_output.0.clone())
                             .add_anyone_can_spend_output(5000)
                             .build()
                     )
@@ -132,7 +135,7 @@ fn output_lock_until_height() {
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(locked_output)
+                    .add_input(locked_output.1, locked_output.0)
                     .add_anyone_can_spend_output(5000)
                     .build(),
             )
@@ -156,11 +159,14 @@ fn output_lock_until_height_but_spend_at_same_block() {
         let prev_block = tf.genesis();
 
         let tx1 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::BlockReward(<Id<GenBlock>>::from(prev_block.get_id())),
-                0,
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(<Id<GenBlock>>::from(prev_block.get_id())),
+                    0,
+                    InputWitness::NoSignature(None),
+                ),
                 InputWitness::NoSignature(None),
-            ))
+            )
             .add_anyone_can_spend_output(10000)
             .add_output(TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(100000)),
@@ -171,11 +177,14 @@ fn output_lock_until_height_but_spend_at_same_block() {
             ))
             .build();
         let tx2 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::Transaction(tx1.get_id()),
-                1,
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::Transaction(tx1.get_id()),
+                    1,
+                    InputWitness::NoSignature(None),
+                ),
                 InputWitness::NoSignature(None),
-            ))
+            )
             .add_anyone_can_spend_output(5000)
             .build();
 
@@ -212,7 +221,7 @@ fn output_lock_for_block_count() {
             tf.make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
-                        .add_input(locked_output.clone())
+                        .add_input(locked_output.1.clone(), locked_output.0.clone())
                         .add_anyone_can_spend_output(5000)
                         .build()
                 )
@@ -229,11 +238,14 @@ fn output_lock_for_block_count() {
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        prev_block_info.txns[0].0.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(
+                            prev_block_info.txns[0].0.clone(),
+                            0,
+                            InputWitness::NoSignature(None),
+                        ),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_anyone_can_spend_output(10000)
                     .build(),
             )
@@ -254,7 +266,7 @@ fn output_lock_for_block_count() {
                 tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
-                            .add_input(locked_output.clone())
+                            .add_input(locked_output.1.clone(), locked_output.0.clone())
                             .add_anyone_can_spend_output(5000)
                             .build()
                     )
@@ -281,7 +293,7 @@ fn output_lock_for_block_count() {
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(locked_output)
+                    .add_input(locked_output.1, locked_output.0)
                     .add_anyone_can_spend_output(5000)
                     .build(),
             )
@@ -303,11 +315,14 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
 
         // create the first block, with a locked output
         let tx1 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::BlockReward(<Id<GenBlock>>::from(tf.genesis().get_id())),
-                0,
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(<Id<GenBlock>>::from(tf.genesis().get_id())),
+                    0,
+                    InputWitness::NoSignature(None),
+                ),
                 InputWitness::NoSignature(None),
-            ))
+            )
             .add_anyone_can_spend_output(10000)
             .add_output(TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(100000)),
@@ -318,11 +333,14 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
             ))
             .build();
         let tx2 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::Transaction(tx1.get_id()),
-                1,
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::Transaction(tx1.get_id()),
+                    1,
+                    InputWitness::NoSignature(None),
+                ),
                 InputWitness::NoSignature(None),
-            ))
+            )
             .add_anyone_can_spend_output(50000)
             .build();
         assert_eq!(
@@ -357,7 +375,7 @@ fn output_lock_for_block_count_attempted_overflow() {
             tf.make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
-                        .add_input(locked_output)
+                        .add_input(locked_output.1, locked_output.0)
                         .add_anyone_can_spend_output(5000)
                         .build()
                 )
@@ -420,7 +438,7 @@ fn output_lock_until_time() {
                 tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
-                            .add_input(locked_output.clone())
+                            .add_input(locked_output.1.clone(), locked_output.0.clone())
                             .add_anyone_can_spend_output(5000)
                             .build()
                     )
@@ -450,7 +468,7 @@ fn output_lock_until_time() {
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(locked_output)
+                    .add_input(locked_output.1, locked_output.0)
                     .add_anyone_can_spend_output(5000)
                     .build(),
             )
@@ -478,11 +496,14 @@ fn output_lock_until_time_but_spend_at_same_block() {
 
         // create the first block, with a locked output
         let tx1 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::BlockReward(<Id<GenBlock>>::from(tf.genesis().get_id())),
-                0,
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(<Id<GenBlock>>::from(tf.genesis().get_id())),
+                    0,
+                    InputWitness::NoSignature(None),
+                ),
                 InputWitness::NoSignature(None),
-            ))
+            )
             .add_anyone_can_spend_output(10000)
             .add_output(TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(100000)),
@@ -494,11 +515,14 @@ fn output_lock_until_time_but_spend_at_same_block() {
             .build();
 
         let tx2 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::Transaction(tx1.get_id()),
-                1,
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::Transaction(tx1.get_id()),
+                    1,
+                    InputWitness::NoSignature(None),
+                ),
                 InputWitness::NoSignature(None),
-            ))
+            )
             .add_anyone_can_spend_output(50000)
             .build();
 
@@ -565,7 +589,7 @@ fn output_lock_for_seconds() {
                 tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
-                            .add_input(locked_output.clone())
+                            .add_input(locked_output.1.clone(), locked_output.0.clone())
                             .add_anyone_can_spend_output(5000)
                             .build()
                     )
@@ -596,7 +620,7 @@ fn output_lock_for_seconds() {
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(locked_output)
+                    .add_input(locked_output.1, locked_output.0)
                     .add_anyone_can_spend_output(5000)
                     .build(),
             )
@@ -621,11 +645,14 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
 
         // create the first block, with a locked output
         let tx1 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::BlockReward(<Id<GenBlock>>::from(tf.genesis().get_id())),
-                0,
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(<Id<GenBlock>>::from(tf.genesis().get_id())),
+                    0,
+                    InputWitness::NoSignature(None),
+                ),
                 InputWitness::NoSignature(None),
-            ))
+            )
             .add_anyone_can_spend_output(10000)
             .add_output(TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(100000)),
@@ -637,11 +664,14 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
             .build();
 
         let tx2 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::Transaction(tx1.get_id()),
-                1,
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::Transaction(tx1.get_id()),
+                    1,
+                    InputWitness::NoSignature(None),
+                ),
                 InputWitness::NoSignature(None),
-            ))
+            )
             .add_anyone_can_spend_output(50000)
             .build();
 
@@ -675,7 +705,7 @@ fn output_lock_for_seconds_attempted_overflow() {
             tf.make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
-                        .add_input(locked_output)
+                        .add_input(locked_output.1, locked_output.0)
                         .add_anyone_can_spend_output(5000)
                         .build()
                 )
@@ -694,7 +724,7 @@ fn add_block_with_locked_output(
     tf: &mut TestFramework,
     output_time_lock: OutputTimeLock,
     timestamp: BlockTimestamp,
-) -> TxInput {
+) -> (InputWitness, TxInput) {
     // Find the last block.
     let current_height = tf.best_block_index().block_height();
     let prev_block_info = tf.block_info(current_height.into());
@@ -702,11 +732,14 @@ fn add_block_with_locked_output(
     tf.make_block_builder()
         .add_transaction(
             TransactionBuilder::new()
-                .add_input(TxInput::new(
-                    prev_block_info.txns[0].0.clone(),
-                    0,
+                .add_input(
+                    TxInput::new(
+                        prev_block_info.txns[0].0.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ),
                     InputWitness::NoSignature(None),
-                ))
+                )
                 .add_anyone_can_spend_output(10000)
                 .add_output(TxOutput::new(
                     OutputValue::Coin(Amount::from_atoms(100000)),
@@ -722,10 +755,13 @@ fn add_block_with_locked_output(
     assert_eq!(tf.best_block_index().block_height(), new_height);
 
     let block_info = tf.block_info(new_height.into());
-    TxInput::new(
-        block_info.txns[0].0.clone(),
-        1,
+    (
         InputWitness::NoSignature(None),
+        TxInput::new(
+            block_info.txns[0].0.clone(),
+            1,
+            InputWitness::NoSignature(None),
+        ),
     )
 }
 

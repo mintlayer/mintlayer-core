@@ -70,6 +70,7 @@ impl TransactionV1 {
         self.lock_time
     }
 
+    // TODO(PR): this has to go and become part of SignedTransaction
     pub fn serialized_hash(&self) -> Id<Transaction> {
         Id::new(id::hash_encoded(self))
     }

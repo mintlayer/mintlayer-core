@@ -255,6 +255,7 @@ mod tests {
     use super::*;
     use crate::{BlockchainStorageRead, BlockchainStorageWrite, Transactional};
     use crate::{TransactionRo, TransactionRw};
+    use common::chain::signed_transaction::SignedTransaction;
     use common::{
         chain::block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         primitives::{Idable, H256},
@@ -403,7 +404,7 @@ mod tests {
         let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
         let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
         let block0 = Block::new(
-            vec![tx0],
+            vec![SignedTransaction::new(tx0, vec![])],
             Id::<GenBlock>::new(H256([0x23; 32])),
             BlockTimestamp::from_int_seconds(12),
             ConsensusData::None,
@@ -411,7 +412,7 @@ mod tests {
         )
         .unwrap();
         let block1 = Block::new(
-            vec![tx1],
+            vec![SignedTransaction::new(tx1, vec![])],
             block0.get_id().into(),
             BlockTimestamp::from_int_seconds(34),
             ConsensusData::None,

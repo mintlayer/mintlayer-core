@@ -23,8 +23,8 @@ use crate::{
 };
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, signature::inputsig::InputWitness, OutPointSourceId,
-        Transaction, TxInput,
+        block::timestamp::BlockTimestamp, signature::inputsig::InputWitness,
+        signed_transaction::SignedTransaction, OutPointSourceId, Transaction, TxInput,
     },
     primitives::{BlockHeight, Id, Idable, H256},
 };
@@ -39,7 +39,7 @@ fn create_transactions(
     inputs: Vec<TxInput>,
     max_num_of_outputs: usize,
     num_of_txs: usize,
-) -> Vec<Transaction> {
+) -> Vec<SignedTransaction> {
     // distribute the inputs on the number of the transactions specified.
     let input_size = inputs.len() / num_of_txs;
 
@@ -55,8 +55,14 @@ fn create_transactions(
                 vec![]
             };
 
-            Transaction::new(0x00, inputs.to_vec(), outputs, 0)
-                .expect("should create a transaction successfully")
+            SignedTransaction::new(
+                Transaction::new(0x00, inputs.to_vec(), outputs, 0)
+                    .expect("should create a transaction successfully"),
+                (0..inputs.len())
+                    .into_iter()
+                    .map(|_| InputWitness::NoSignature(None))
+                    .collect::<Vec<_>>(),
+            )
         })
         .collect_vec()
 }
@@ -155,7 +161,11 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
             let undos = block
                 .transactions()
                 .iter()
-                .map(|tx| cache.connect_transaction(tx, block_height).expect("should spend okay."))
+                .map(|tx| {
+                    cache
+                        .connect_transaction(tx.transaction(), block_height)
+                        .expect("should spend okay.")
+                })
                 .collect_vec();
             BlockUndo::new(Default::default(), undos)
         };
@@ -194,7 +204,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
     // check that the inputs of the block do not exist in the utxo column.
     {
         block.transactions().iter().for_each(|tx| {
-            tx.inputs().iter().for_each(|input| {
+            tx.transaction().inputs().iter().for_each(|input| {
                 assert_eq!(db.utxo(input.outpoint()), None);
             });
         });
@@ -227,7 +237,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
             let undos = undo.inner();
 
             // add the undo utxos back to the view.
-            tx.inputs().iter().enumerate().for_each(|(in_idx, input)| {
+            tx.transaction().inputs().iter().enumerate().for_each(|(in_idx, input)| {
                 let utxo = undos.get(in_idx).unwrap();
                 cache.add_utxo(input.outpoint(), utxo.clone(), true).unwrap();
             });
@@ -281,7 +291,7 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
     let tx = block.transactions().get(0).unwrap();
 
     assert_eq!(
-        view.connect_transaction(tx, BlockHeight::new(2)).unwrap_err(),
+        view.connect_transaction(tx.transaction(), BlockHeight::new(2)).unwrap_err(),
         NoUtxoFound
     );
 }

@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chainstate::chainstate_interface::ChainstateInterface;
+use common::chain::signed_transaction::SignedTransaction;
 use common::chain::tokens::OutputValue;
 use common::chain::ChainConfig;
 use common::time_getter::TimeGetter;
@@ -57,11 +58,11 @@ where
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
     // TODO this calculation is already done in ChainState, reuse it
-    async fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError> {
+    async fn try_get_fee(&self, tx: &SignedTransaction) -> Result<Amount, TxValidationError> {
         let tx_clone = tx.clone();
         let chainstate_input_values = self
             .chainstate_handle
-            .call(move |this| this.get_inputs_outpoints_values(&tx_clone))
+            .call(move |this| this.get_inputs_outpoints_values(tx_clone.transaction()))
             .await??;
 
         let mut input_values = Vec::<Amount>::new();
@@ -70,7 +71,7 @@ where
                 input_values.push(*value)
             } else {
                 let value = self.store.get_unconfirmed_outpoint_value(
-                    tx.inputs().get(i).expect("index").outpoint(),
+                    tx.transaction().inputs().get(i).expect("index").outpoint(),
                 )?;
                 input_values.push(value);
             }
@@ -82,6 +83,7 @@ where
             .sum::<Option<_>>()
             .ok_or(TxValidationError::InputValuesOverflow)?;
         let sum_outputs = tx
+            .transaction()
             .outputs()
             .iter()
             .filter_map(|output| match output.value() {
@@ -94,15 +96,15 @@ where
     }
 }
 
-fn get_relay_fee(tx: &Transaction) -> Amount {
+fn get_relay_fee(tx: &SignedTransaction) -> Amount {
     // TODO we should never reach the expect, but should this be an error anyway?
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
 }
 
 #[async_trait::async_trait]
 pub trait MempoolInterface: Send {
-    async fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error>;
-    fn get_all(&self) -> Vec<&Transaction>;
+    async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error>;
+    fn get_all(&self) -> Vec<&SignedTransaction>;
 
     // Returns `true` if the mempool contains a transaction with the given id, `false` otherwise.
     fn contains_transaction(&self, tx: &Id<Transaction>) -> bool;
@@ -125,7 +127,7 @@ pub trait ChainState: Debug {
 
 #[async_trait::async_trait]
 trait TryGetFee {
-    async fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError>;
+    async fn try_get_fee(&self, tx: &SignedTransaction) -> Result<Amount, TxValidationError>;
 }
 
 newtype! {
@@ -297,13 +299,17 @@ where
         log::debug!("decay_rolling_fee_rate_end: {:?}", self.rolling_fee_rate);
     }
 
-    async fn verify_inputs_available(&self, tx: &Transaction) -> Result<(), TxValidationError> {
+    async fn verify_inputs_available(
+        &self,
+        tx: &SignedTransaction,
+    ) -> Result<(), TxValidationError> {
         let tx_clone = tx.clone();
         let chainstate_inputs = self
             .chainstate_handle
-            .call(move |this| this.available_inputs(&tx_clone))
+            .call(move |this| this.available_inputs(tx_clone.transaction()))
             .await??;
-        tx.inputs()
+        tx.transaction()
+            .inputs()
             .iter()
             .find(|input| {
                 !chainstate_inputs.contains(&Some((*input).clone()))
@@ -320,9 +326,13 @@ where
             )
     }
 
-    async fn create_entry(&self, tx: Transaction) -> Result<TxMempoolEntry, TxValidationError> {
+    async fn create_entry(
+        &self,
+        tx: SignedTransaction,
+    ) -> Result<TxMempoolEntry, TxValidationError> {
         // Genesis transaction has no parent, hence the first filter_map
         let parents = tx
+            .transaction()
             .inputs()
             .iter()
             .filter_map(|input| input.outpoint().tx_id().get_tx_id().cloned())
@@ -336,7 +346,7 @@ where
 
     fn get_update_minimum_mempool_fee(
         &self,
-        tx: &Transaction,
+        tx: &SignedTransaction,
     ) -> Result<Amount, TxValidationError> {
         let minimum_fee_rate = self.get_update_min_fee_rate();
         log::debug!("minimum fee rate {:?}", minimum_fee_rate);
@@ -351,7 +361,10 @@ where
         res
     }
 
-    async fn validate_transaction(&self, tx: &Transaction) -> Result<Conflicts, TxValidationError> {
+    async fn validate_transaction(
+        &self,
+        tx: &SignedTransaction,
+    ) -> Result<Conflicts, TxValidationError> {
         // This validation function is based on Bitcoin Core's MemPoolAccept::PreChecks.
         // However, as of this stage it does not cover everything covered in Bitcoin Core
         //
@@ -392,15 +405,15 @@ where
         // We don't have a notion of MAX_MONEY like Bitcoin Core does, so we also don't have a
         // `MoneyRange` check like the one found in Bitcoin Core's `CheckTransaction`
 
-        if tx.inputs().is_empty() {
+        if tx.transaction().inputs().is_empty() {
             return Err(TxValidationError::NoInputs);
         }
 
-        if tx.outputs().is_empty() {
+        if tx.transaction().outputs().is_empty() {
             return Err(TxValidationError::NoOutputs);
         }
 
-        let outpoints = tx.inputs().iter().map(|input| input.outpoint()).cloned();
+        let outpoints = tx.transaction().inputs().iter().map(|input| input.outpoint()).cloned();
 
         if has_duplicate_entry(outpoints) {
             return Err(TxValidationError::DuplicateInputs);
@@ -427,7 +440,10 @@ where
         Ok(conflicts)
     }
 
-    async fn pays_minimum_mempool_fee(&self, tx: &Transaction) -> Result<(), TxValidationError> {
+    async fn pays_minimum_mempool_fee(
+        &self,
+        tx: &SignedTransaction,
+    ) -> Result<(), TxValidationError> {
         let tx_fee = self.try_get_fee(tx).await?;
         let minimum_fee = self.get_update_minimum_mempool_fee(tx)?;
         log::debug!(
@@ -445,7 +461,10 @@ where
         Ok(())
     }
 
-    async fn pays_minimum_relay_fees(&self, tx: &Transaction) -> Result<(), TxValidationError> {
+    async fn pays_minimum_relay_fees(
+        &self,
+        tx: &SignedTransaction,
+    ) -> Result<(), TxValidationError> {
         let tx_fee = self.try_get_fee(tx).await?;
         let relay_fee = get_relay_fee(tx);
         log::debug!("tx_fee: {:?}, relay_fee: {:?}", tx_fee, relay_fee);
@@ -456,8 +475,9 @@ where
         Ok(())
     }
 
-    async fn rbf_checks(&self, tx: &Transaction) -> Result<Conflicts, TxValidationError> {
+    async fn rbf_checks(&self, tx: &SignedTransaction) -> Result<Conflicts, TxValidationError> {
         let conflicts = tx
+            .transaction()
             .inputs()
             .iter()
             .filter_map(|input| self.store.find_conflicting_tx(input.outpoint()))
@@ -473,7 +493,7 @@ where
 
     async fn do_rbf_checks(
         &self,
-        tx: &Transaction,
+        tx: &SignedTransaction,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<Conflicts, TxValidationError> {
         for entry in conflicts {
@@ -506,7 +526,7 @@ where
 
     async fn pays_for_bandwidth(
         &self,
-        tx: &Transaction,
+        tx: &SignedTransaction,
         total_conflict_fees: Amount,
     ) -> Result<(), TxValidationError> {
         log::debug!(
@@ -531,7 +551,7 @@ where
 
     async fn pays_more_than_conflicts_with_descendants(
         &self,
-        tx: &Transaction,
+        tx: &SignedTransaction,
         conflicts_with_descendants: &BTreeSet<Id<Transaction>>,
     ) -> Result<Amount, TxValidationError> {
         let conflicts_with_descendants = conflicts_with_descendants.iter().map(|conflict_id| {
@@ -553,15 +573,18 @@ where
 
     fn spends_no_new_unconfirmed_outputs(
         &self,
-        tx: &Transaction,
+        tx: &SignedTransaction,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), TxValidationError> {
         let outpoints_spent_by_conflicts = conflicts
             .iter()
-            .flat_map(|conflict| conflict.tx().inputs().iter().map(|input| input.outpoint()))
+            .flat_map(|conflict| {
+                conflict.tx().transaction().inputs().iter().map(|input| input.outpoint())
+            })
             .collect::<BTreeSet<_>>();
 
-        tx.inputs()
+        tx.transaction()
+            .inputs()
             .iter()
             .find(|input| {
                 // input spends an unconfirmed output
@@ -576,7 +599,7 @@ where
 
     async fn pays_more_than_direct_conflicts(
         &self,
-        tx: &Transaction,
+        tx: &SignedTransaction,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), TxValidationError> {
         let replacement_fee = self.try_get_fee(tx).await?;
@@ -613,7 +636,7 @@ where
         Ok(replacements_with_descendants)
     }
 
-    async fn finalize_tx(&mut self, tx: Transaction) -> Result<(), Error> {
+    async fn finalize_tx(&mut self, tx: SignedTransaction) -> Result<(), Error> {
         let entry = self.create_entry(tx).await?;
         let id = entry.tx_id();
         self.store.add_tx(entry)?;
@@ -751,7 +774,7 @@ where
     }
     //
 
-    async fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error> {
+    async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
         let conflicts = self.validate_transaction(&tx).await?;
         self.store.drop_conflicts(conflicts);
         self.finalize_tx(tx).await?;
@@ -759,7 +782,7 @@ where
         Ok(())
     }
 
-    fn get_all(&self) -> Vec<&Transaction> {
+    fn get_all(&self) -> Vec<&SignedTransaction> {
         self.store
             .txs_by_descendant_score
             .values()

@@ -486,7 +486,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         // check for duplicate inputs (see CVE-2018-17144)
         let mut block_inputs = BTreeSet::new();
         for tx in block.transactions() {
-            if tx.inputs().is_empty() || tx.outputs().is_empty() {
+            if tx.transaction().inputs().is_empty() || tx.transaction().outputs().is_empty() {
                 return Err(
                     CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
                         tx.get_id(),
@@ -495,7 +495,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 );
             }
             let mut tx_inputs = BTreeSet::new();
-            for input in tx.inputs() {
+            for input in tx.transaction().inputs() {
                 ensure!(
                     tx_inputs.insert(input.outpoint()),
                     CheckBlockTransactionsError::DuplicateInputInTransaction(
@@ -515,7 +515,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     fn check_tokens_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         for tx in block.transactions() {
             // We can't issue multiple tokens in a single tx
-            let issuance_count = get_tokens_issuance_count(tx.outputs());
+            let issuance_count = get_tokens_issuance_count(tx.transaction().outputs());
             ensure!(
                 issuance_count <= 1,
                 CheckBlockTransactionsError::TokensError(
@@ -524,14 +524,20 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             );
 
             // Check tokens
-            tx.outputs()
+            tx.transaction()
+                .outputs()
                 .iter()
                 .filter_map(|output| match output.value() {
                     OutputValue::Coin(_) => None,
                     OutputValue::Token(token_data) => Some(token_data),
                 })
                 .try_for_each(|token_data| {
-                    check_tokens_data(self.chain_config, token_data, tx, block.get_id())
+                    check_tokens_data(
+                        self.chain_config,
+                        token_data,
+                        tx.transaction(),
+                        block.get_id(),
+                    )
                 })
                 .map_err(CheckBlockTransactionsError::TokensError)?;
         }
