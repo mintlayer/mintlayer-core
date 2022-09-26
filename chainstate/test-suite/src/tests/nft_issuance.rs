@@ -14,6 +14,7 @@ use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
+// FIXME(nft_issuance): This is the copy of function from check block. Remove copy and use this func from more appropriate place.
 fn random_creator() -> TokenCreator {
     let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     TokenCreator::from(public_key)
@@ -1139,6 +1140,51 @@ fn nft_issuance_media_uri_invalid(#[case] seed: Seed) {
     })
 }
 
-//FIXME(nft_issuance): NFT transfers checks
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_issuance_valid_case(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let mut rng = make_seedable_rng(seed);
+
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+
+        let _ = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        outpoint_source_id.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
+                            metadata: Metadata {
+                                creator: random_creator(),
+                                //FIXME(nft_issuance): Decide how long nft name might be
+                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                icon_uri: None,
+                                additional_metadata_uri: None,
+                                media_uri: None,
+                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                            },
+                        })),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+    })
+}
+
 //FIXME(nft_issuance): NFT burn checks
 //FIXME(nft_issuance): Can we check somehow media hash? Need research
