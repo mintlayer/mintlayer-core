@@ -8,6 +8,7 @@ license = "MIT"
 crypto = { path = '../crypto' }
 serialization = { path = "../serialization" }
 utils = { path = '../utils' }
+typename = { path = "../utils/typename" }
 
 parity-scale-codec = "3.1"
 thiserror = "1.0"

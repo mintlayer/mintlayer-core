@@ -20,10 +20,10 @@ pub type NftDataHash = Vec<u8>;
 use crate::primitives::{Amount, Id, H256};
 
 mod rpc;
-mod utils;
+mod tokens_utils;
 
 pub use rpc::*;
-pub use utils::*;
+pub use tokens_utils::*;
 
 use super::{Block, Transaction};
 

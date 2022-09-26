@@ -13,14 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use serialization::{Decode, Encode};
+use typename::TypeName;
+
 use super::block::{timestamp::BlockTimestamp, BlockRewardTransactable};
 use super::TxOutput;
 use crate::primitives::{id, Id, Idable};
 
-use serialization::{Decode, Encode};
-
 /// Genesis defines the initial state of the blockchain
-#[derive(Eq, PartialEq, Clone, Encode, Decode, Debug)]
+#[derive(Eq, PartialEq, Clone, Encode, Decode, Debug, TypeName)]
 pub struct Genesis {
     /// Arbitrary message included in the genesis
     fun_message: String,

@@ -33,6 +33,7 @@ mod block_v1;
 use std::iter;
 
 use serialization::{DirectDecode, DirectEncode};
+use typename::TypeName;
 
 use crate::{
     chain::{
@@ -92,7 +93,7 @@ impl From<MerkleTreeFormError> for BlockCreationError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode, TypeName)]
 #[must_use]
 pub enum Block {
     V1(BlockV1),
