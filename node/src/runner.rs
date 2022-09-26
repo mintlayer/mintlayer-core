@@ -68,7 +68,6 @@ pub async fn initialize(
     );
 
     // Mempool subsystem
-    // TODO use TimeGetter from chainstate
     let mempool = manager.add_subsystem(
         "mempool",
         mempool::make_mempool(
