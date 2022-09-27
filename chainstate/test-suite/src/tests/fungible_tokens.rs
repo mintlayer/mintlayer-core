@@ -729,7 +729,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id = block.transactions()[0].get_id().into();
+        let issuance_outpoint_id = block.transactions()[0].transaction().get_id().into();
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Split tokens in outputs
@@ -830,7 +830,8 @@ fn burn_tokens(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id: OutPointSourceId = block.transactions()[0].get_id().into();
+        let issuance_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Try burn more than we have in input
@@ -1030,7 +1031,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
 
         let issuance_block = tf.block(*block_index.block_id());
         let issuance_outpoint_id: OutPointSourceId =
-            issuance_block.transactions()[0].get_id().into();
+            issuance_block.transactions()[0].transaction().get_id().into();
         let token_id = token_id(issuance_block.transactions()[0].transaction()).unwrap();
 
         // B1 - burn all tokens in mainchain
@@ -1305,7 +1306,8 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id: OutPointSourceId = block.transactions()[0].get_id().into();
+        let issuance_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Try to transfer a bunch of outputs where each separately do not exceed input tokens value, but a sum of outputs larger than inputs.
@@ -1396,7 +1398,8 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id: OutPointSourceId = block.transactions()[0].get_id().into();
+        let issuance_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Try to transfer a bunch of outputs where each separately do not exceed input tokens value, but a sum of outputs larger than inputs.
@@ -1498,7 +1501,8 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let first_issuance_outpoint_id: OutPointSourceId = block.transactions()[0].get_id().into();
+        let first_issuance_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
         let first_token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
@@ -1541,7 +1545,8 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let second_issuance_outpoint_id: OutPointSourceId = block.transactions()[0].get_id().into();
+        let second_issuance_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
         let _ = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Try to spend sum of input tokens

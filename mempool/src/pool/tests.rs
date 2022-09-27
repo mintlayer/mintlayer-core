@@ -520,34 +520,34 @@ async fn try_replace_irreplaceable() -> anyhow::Result<()> {
     Ok(())
 }
 
-// #[tokio::test]
-// async fn tx_replace() -> anyhow::Result<()> {
-//     let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
-//     let replacement_fee = Amount::from_atoms(relay_fee + 100);
-//     test_replace_tx(Amount::from_atoms(100), replacement_fee).await?;
-//     let res = test_replace_tx(Amount::from_atoms(300), replacement_fee).await;
-//     assert!(matches!(
-//         res,
-//         Err(Error::TxValidationError(
-//             TxValidationError::InsufficientFeesToRelayRBF
-//         ))
-//     ));
-//     let res = test_replace_tx(Amount::from_atoms(100), Amount::from_atoms(100)).await;
-//     assert!(matches!(
-//         res,
-//         Err(Error::TxValidationError(
-//             TxValidationError::ReplacementFeeLowerThanOriginal { .. }
-//         ))
-//     ));
-//     let res = test_replace_tx(Amount::from_atoms(100), Amount::from_atoms(90)).await;
-//     assert!(matches!(
-//         res,
-//         Err(Error::TxValidationError(
-//             TxValidationError::ReplacementFeeLowerThanOriginal { .. }
-//         ))
-//     ));
-//     Ok(())
-// }
+#[tokio::test]
+async fn tx_replace() -> anyhow::Result<()> {
+    let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
+    let replacement_fee = Amount::from_atoms(relay_fee + 100);
+    test_replace_tx(Amount::from_atoms(100), replacement_fee).await?;
+    let res = test_replace_tx(Amount::from_atoms(300), replacement_fee).await;
+    assert!(matches!(
+        res,
+        Err(Error::TxValidationError(
+            TxValidationError::InsufficientFeesToRelayRBF
+        ))
+    ));
+    let res = test_replace_tx(Amount::from_atoms(100), Amount::from_atoms(100)).await;
+    assert!(matches!(
+        res,
+        Err(Error::TxValidationError(
+            TxValidationError::ReplacementFeeLowerThanOriginal { .. }
+        ))
+    ));
+    let res = test_replace_tx(Amount::from_atoms(100), Amount::from_atoms(90)).await;
+    assert!(matches!(
+        res,
+        Err(Error::TxValidationError(
+            TxValidationError::ReplacementFeeLowerThanOriginal { .. }
+        ))
+    ));
+    Ok(())
+}
 
 #[rstest]
 #[trace]
