@@ -1354,7 +1354,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
             )?)
         .unwrap()
     );
-    assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3130)));
+    assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3655)));
     log::debug!(
         "minimum rolling fee after child_0's eviction {:?}",
         rolling_fee
@@ -1442,7 +1442,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         )
         .add_output(TxOutput::new(
-            OutputValue::Coin(Amount::from_atoms(499999999105 - 77)),
+            OutputValue::Coin(Amount::from_atoms(499999999105 - 84)),
             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
         ))
         .build();
@@ -1452,6 +1452,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     let res = mempool.add_transaction(dummy_tx.clone()).await;
 
+    log::debug!("result of first attempt to add dummy: {:?}", res);
     assert!(matches!(
         res,
         Err(Error::TxValidationError(
