@@ -24,6 +24,7 @@ use common::primitives::amount::Amount;
 use common::primitives::id::WithId;
 use common::primitives::Id;
 use common::primitives::Idable;
+use serialization::Encode;
 
 use logging::log;
 
@@ -178,6 +179,7 @@ impl MempoolStore {
             let ancestor = self.txs_by_id.get_mut(&ancestor).expect("ancestor");
             ancestor.fees_with_descendants = (ancestor.fees_with_descendants + entry.fee)
                 .ok_or(TxValidationError::AncestorFeeUpdateOverflow)?;
+            ancestor.size_with_descendants += entry.size();
             ancestor.count_with_descendants += 1;
         }
         Ok(())
@@ -188,6 +190,7 @@ impl MempoolStore {
             let ancestor = self.txs_by_id.get_mut(&ancestor).expect("ancestor");
             ancestor.fees_with_descendants =
                 (ancestor.fees_with_descendants - entry.fee).expect("fee with descendants");
+            ancestor.size_with_descendants -= entry.size();
             ancestor.count_with_descendants -= 1;
         }
     }
@@ -221,7 +224,7 @@ impl MempoolStore {
     fn add_to_descendant_score_index(&mut self, entry: &TxMempoolEntry) {
         self.refresh_ancestors(entry);
         self.txs_by_descendant_score
-            .entry(entry.fees_with_descendants.into())
+            .entry(entry.descendant_score())
             .or_default()
             .insert(entry.tx_id());
     }
@@ -237,7 +240,7 @@ impl MempoolStore {
         for ancestor_id in ancestors.0 {
             let ancestor = self.txs_by_id.get(&ancestor_id).expect("Inconsistent mempool state");
             self.txs_by_descendant_score
-                .entry(ancestor.fees_with_descendants.into())
+                .entry(ancestor.descendant_score())
                 .or_default()
                 .insert(ancestor_id);
         }
@@ -276,16 +279,16 @@ impl MempoolStore {
     fn remove_from_descendant_score_index(&mut self, entry: &TxMempoolEntry) {
         self.refresh_ancestors(entry);
         self.txs_by_descendant_score
-            .entry(entry.fees_with_descendants.into())
+            .entry(entry.descendant_score())
             .or_default()
             .remove(&entry.tx_id());
         if self
             .txs_by_descendant_score
-            .get(&entry.fees_with_descendants.into())
+            .get(&entry.descendant_score())
             .expect("key must exist")
             .is_empty()
         {
-            self.txs_by_descendant_score.remove(&entry.fees_with_descendants.into());
+            self.txs_by_descendant_score.remove(&entry.descendant_score());
         }
     }
 
@@ -318,15 +321,23 @@ impl MempoolStore {
     }
 }
 
+impl Idable for TxMempoolEntry {
+    type Tag = Transaction;
+    fn get_id(&self) -> Id<Transaction> {
+        self.tx.get_id()
+    }
+}
+
 #[derive(Debug, Eq, Clone)]
 pub(super) struct TxMempoolEntry {
-    pub(super) tx: WithId<Transaction>,
-    pub(super) fee: Amount,
+    tx: WithId<Transaction>,
+    fee: Amount,
     parents: BTreeSet<Id<Transaction>>,
     children: BTreeSet<Id<Transaction>>,
-    pub(super) count_with_descendants: usize,
-    pub(super) fees_with_descendants: Amount,
-    pub(super) creation_time: Time,
+    count_with_descendants: usize,
+    fees_with_descendants: Amount,
+    size_with_descendants: usize,
+    creation_time: Time,
 }
 
 impl TxMempoolEntry {
@@ -337,22 +348,51 @@ impl TxMempoolEntry {
         creation_time: Time,
     ) -> TxMempoolEntry {
         Self {
-            tx: WithId::new(tx),
             fee,
             parents,
             children: BTreeSet::default(),
             count_with_descendants: 1,
             creation_time,
             fees_with_descendants: fee,
+            size_with_descendants: tx.encoded_size(),
+            tx: WithId::new(tx),
         }
+    }
+
+    pub(super) fn tx(&self) -> &WithId<Transaction> {
+        &self.tx
+    }
+
+    pub(super) fn fee(&self) -> Amount {
+        self.fee
     }
 
     pub(super) fn count_with_descendants(&self) -> usize {
         self.count_with_descendants
     }
 
+    pub(super) fn fees_with_descendants(&self) -> Amount {
+        self.fees_with_descendants
+    }
+
+    pub(super) fn descendant_score(&self) -> DescendantScore {
+        (self.fees_with_descendants
+            / u128::try_from(self.size_with_descendants).expect("conversion"))
+        .expect("nonzero tx_size")
+        .into()
+    }
+
     pub(super) fn tx_id(&self) -> Id<Transaction> {
         WithId::id(&self.tx)
+    }
+
+    pub(super) fn size(&self) -> usize {
+        // TODO(Roy) this should follow Bitcoin's GetTxSize, which weighs in sigops, etc.
+        self.tx.encoded_size()
+    }
+
+    pub(super) fn creation_time(&self) -> Time {
+        self.creation_time
     }
 
     fn unconfirmed_parents(&self) -> impl Iterator<Item = &Id<Transaction>> {

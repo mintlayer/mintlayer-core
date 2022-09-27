@@ -539,7 +539,7 @@ where
         });
 
         let total_conflict_fees = conflicts_with_descendants
-            .map(|conflict| conflict.fee)
+            .map(|conflict| conflict.fee())
             .sum::<Option<Amount>>()
             .ok_or(TxValidationError::ConflictsFeeOverflow)?;
 
@@ -558,7 +558,7 @@ where
     ) -> Result<(), TxValidationError> {
         let outpoints_spent_by_conflicts = conflicts
             .iter()
-            .flat_map(|conflict| conflict.tx.inputs().iter().map(|input| input.outpoint()))
+            .flat_map(|conflict| conflict.tx().inputs().iter().map(|input| input.outpoint()))
             .collect::<BTreeSet<_>>();
 
         tx.inputs()
@@ -580,13 +580,13 @@ where
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), TxValidationError> {
         let replacement_fee = self.try_get_fee(tx).await?;
-        conflicts.iter().find(|conflict| conflict.fee >= replacement_fee).map_or_else(
+        conflicts.iter().find(|conflict| conflict.fee() >= replacement_fee).map_or_else(
             || Ok(()),
             |conflict| {
                 Err(TxValidationError::ReplacementFeeLowerThanOriginal {
                     replacement_tx: tx.get_id().get(),
                     replacement_fee,
-                    original_fee: conflict.fee,
+                    original_fee: conflict.fee(),
                     original_tx: conflict.tx_id().get(),
                 })
             },
@@ -615,7 +615,7 @@ where
 
     async fn finalize_tx(&mut self, tx: Transaction) -> Result<(), Error> {
         let entry = self.create_entry(tx).await?;
-        let id = entry.tx.get_id();
+        let id = entry.get_id();
         self.store.add_tx(entry)?;
         self.remove_expired_transactions();
         ensure!(
@@ -652,12 +652,12 @@ where
             .map(|entry_id| self.store.txs_by_id.get(entry_id).expect("entry should exist"))
             .filter(|entry| {
                 let now = self.clock.get_time();
-                let expired = now.saturating_sub(entry.creation_time) > self.max_tx_age;
+                let expired = now.saturating_sub(entry.creation_time()) > self.max_tx_age;
                 if expired {
                     log::trace!(
                         "Evicting tx {} which was created at {:?}. It is now {:?}",
                         entry.tx_id(),
-                        entry.creation_time,
+                        entry.creation_time(),
                         now
                     );
                     true
@@ -668,7 +668,7 @@ where
             .cloned()
             .collect();
 
-        for tx_id in expired.iter().map(|entry| entry.tx.get_id()) {
+        for tx_id in expired.iter().map(|entry| entry.get_id()) {
             self.store.drop_tx_and_descendants(tx_id)
         }
     }
@@ -690,15 +690,14 @@ where
             log::debug!(
                 "Mempool trim: Evicting tx {} which has a descendant score of {:?} and has size {}",
                 removed.tx_id(),
-                removed.fees_with_descendants,
-                removed.tx.encoded_size()
+                removed.fees_with_descendants(),
+                removed.size()
             );
             removed_fees.push(FeeRate::from_total_tx_fee(
-                removed.fee,
-                NonZeroUsize::new(removed.tx.encoded_size())
-                    .expect("transaction cannot have zero size"),
+                removed.fee(),
+                NonZeroUsize::new(removed.size()).expect("transaction cannot have zero size"),
             )?);
-            self.store.drop_tx_and_descendants(removed.tx.get_id());
+            self.store.drop_tx_and_descendants(removed.get_id());
         }
         Ok(removed_fees)
     }
@@ -765,7 +764,14 @@ where
             .txs_by_descendant_score
             .values()
             .flatten()
-            .map(|id| WithId::get(&self.store.get_entry(id).expect("entry").tx))
+            .map(|id| {
+                WithId::get(
+                    self.store
+                        .get_entry(id)
+                        .unwrap_or_else(|| panic!("did not find entry with id {}", id))
+                        .tx(),
+                )
+            })
             .collect()
     }
 
