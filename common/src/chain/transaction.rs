@@ -75,7 +75,6 @@ pub enum TransactionCreationError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransactionUpdateError {
     InvalidWitnessCount,
-    Unknown, // TODO(PR) get rid of this arm
 }
 
 impl Transaction {
