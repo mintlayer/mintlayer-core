@@ -952,86 +952,74 @@ async fn not_too_many_conflicts(#[case] seed: Seed) -> anyhow::Result<()> {
     test_bip125_max_replacements(seed, num_potential_replacements).await
 }
 
-// #[rstest]
-// #[trace]
-// #[case(Seed::from_entropy())]
-// #[tokio::test]
-// async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
-//     let tf = TestFramework::default();
-//     let mut rng = make_seedable_rng(seed);
-//     let genesis = tf.genesis();
-//     let mut tx_builder = TransactionBuilder::new()
-//         .add_input(
-//             TxInput::new(
-//                 OutPointSourceId::BlockReward(genesis.get_id().into()),
-//                 0,
-//                 empty_witness(&mut rng),
-//             ),
-//             empty_witness(&mut rng),
-//         )
-//         .with_flags(1);
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
+    let tf = TestFramework::default();
+    let mut rng = make_seedable_rng(seed);
+    let genesis = tf.genesis();
+    let mut tx_builder = TransactionBuilder::new()
+        .add_input(
+            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            empty_witness(&mut rng),
+        )
+        .with_flags(1);
 
-//     for _ in 0..2 {
-//         tx_builder = tx_builder.add_output(TxOutput::new(
-//             OutputValue::Coin(Amount::from_atoms(999_999_999_000)),
-//             OutputPurpose::Transfer(anyonecanspend_address()),
-//         ));
-//     }
+    for _ in 0..2 {
+        tx_builder = tx_builder.add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(999_999_999_000)),
+            OutputPurpose::Transfer(anyonecanspend_address()),
+        ));
+    }
 
-//     let tx = tx_builder.build();
-//     let outpoint_source_id = OutPointSourceId::Transaction(tx.get_id());
-//     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
-//     mempool.add_transaction(tx).await?;
+    let tx = tx_builder.build();
+    let outpoint_source_id = OutPointSourceId::Transaction(tx.get_id());
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    mempool.add_transaction(tx).await?;
 
-//     let input1 = TxInput::new(
-//         outpoint_source_id.clone(),
-//         0,
-//         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-//     );
-//     let input2 = TxInput::new(
-//         outpoint_source_id,
-//         1,
-//         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-//     );
+    let input1 = TxInput::new(outpoint_source_id.clone(), 0);
+    let input2 = TxInput::new(outpoint_source_id, 1);
 
-//     let locktime = 0;
-//     let flags = 0;
-//     let original_fee = Amount::from_atoms(100);
-//     let replaced_tx = tx_spend_input(
-//         &mempool,
-//         input1.clone(),
-//         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-//         original_fee,
-//         flags,
-//         locktime,
-//     )
-//     .await?;
-//     mempool.add_transaction(replaced_tx).await?;
-//     let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
-//     let replacement_fee = Amount::from_atoms(100 + relay_fee);
-//     let incoming_tx = tx_spend_several_inputs(
-//         &mempool,
-//         &[input1, input2],
-//         &vec![
-//             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-//             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-//         ],
-//         replacement_fee,
-//         flags,
-//         locktime,
-//     )
-//     .await?;
+    let locktime = 0;
+    let flags = 0;
+    let original_fee = Amount::from_atoms(100);
+    let replaced_tx = tx_spend_input(
+        &mempool,
+        input1.clone(),
+        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+        original_fee,
+        flags,
+        locktime,
+    )
+    .await?;
+    mempool.add_transaction(replaced_tx).await?;
+    let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
+    let replacement_fee = Amount::from_atoms(100 + relay_fee);
+    let incoming_tx = tx_spend_several_inputs(
+        &mempool,
+        &[input1, input2],
+        &[
+            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+        ],
+        replacement_fee,
+        flags,
+        locktime,
+    )
+    .await?;
 
-//     let res = mempool.add_transaction(incoming_tx).await;
-//     assert!(matches!(
-//         res,
-//         Err(Error::TxValidationError(
-//             TxValidationError::SpendsNewUnconfirmedOutput
-//         ))
-//     ));
-//     mempool.store.assert_valid();
-//     Ok(())
-// }
+    let res = mempool.add_transaction(incoming_tx).await;
+    assert!(matches!(
+        res,
+        Err(Error::TxValidationError(
+            TxValidationError::SpendsNewUnconfirmedOutput
+        ))
+    ));
+    mempool.store.assert_valid();
+    Ok(())
+}
 
 #[rstest]
 #[trace]
