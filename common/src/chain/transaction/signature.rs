@@ -186,8 +186,7 @@ pub trait Signable {
 }
 
 pub trait Transactable: Signable {
-    // TODO(PR): change this return a slice (when started, this wasn't possible with block reward)
-    fn signatures(&self) -> Option<Vec<InputWitness>>;
+    fn signatures(&self) -> Option<&[InputWitness]>;
 }
 
 impl Signable for Transaction {
@@ -235,8 +234,8 @@ impl Signable for SignedTransaction {
 }
 
 impl Transactable for SignedTransaction {
-    fn signatures(&self) -> Option<Vec<InputWitness>> {
-        Some(self.signatures().to_vec())
+    fn signatures(&self) -> Option<&[InputWitness]> {
+        Some(self.signatures())
     }
 }
 
