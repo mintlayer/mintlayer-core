@@ -267,12 +267,7 @@ impl MempoolStore {
     fn drop_tx(&mut self, entry: &TxMempoolEntry) {
         self.update_for_drop(entry);
         self.remove_from_descendant_score_index(entry);
-        self.txs_by_creation_time.entry(entry.creation_time).and_modify(|entries| {
-            entries
-                .remove(&entry.tx_id())
-                .then_some(())
-                .expect("Inconsistent mempool store")
-        });
+        self.remove_from_creation_time_index(entry);
         self.unspend_outpoints(entry)
     }
 
@@ -280,8 +275,9 @@ impl MempoolStore {
         self.refresh_ancestors(entry);
         self.txs_by_descendant_score
             .entry(entry.descendant_score())
-            .or_default()
-            .remove(&entry.tx_id());
+            .and_modify(|entries| {
+                entries.remove(&entry.tx_id());
+            });
         if self
             .txs_by_descendant_score
             .get(&entry.descendant_score())
@@ -289,6 +285,20 @@ impl MempoolStore {
             .is_empty()
         {
             self.txs_by_descendant_score.remove(&entry.descendant_score());
+        }
+    }
+
+    fn remove_from_creation_time_index(&mut self, entry: &TxMempoolEntry) {
+        self.txs_by_creation_time.entry(entry.creation_time).and_modify(|entries| {
+            entries.remove(&entry.tx_id());
+        });
+        if self
+            .txs_by_creation_time
+            .get(&entry.creation_time())
+            .expect("key must exist")
+            .is_empty()
+        {
+            self.txs_by_creation_time.remove(&entry.creation_time());
         }
     }
 

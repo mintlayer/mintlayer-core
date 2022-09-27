@@ -1789,7 +1789,7 @@ async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test]
-async fn no_empty_bags_in_descendant_score_index(#[case] seed: Seed) -> anyhow::Result<()> {
+async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
@@ -1845,6 +1845,7 @@ async fn no_empty_bags_in_descendant_score_index(#[case] seed: Seed) -> anyhow::
         mempool.drop_transaction(&id)
     }
     assert!(mempool.store.txs_by_descendant_score.is_empty());
+    assert!(mempool.store.txs_by_creation_time.is_empty());
     mempool.store.assert_valid();
     Ok(())
 }
