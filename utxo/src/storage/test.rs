@@ -279,7 +279,7 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
             let id: Id<GenBlock> = Id::new(H256::random());
             let id = OutPointSourceId::BlockReward(id);
 
-            TxInput::new(id, i, InputWitness::NoSignature(None))
+            TxInput::new(id, i)
         })
         .collect();
 

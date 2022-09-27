@@ -16,10 +16,7 @@
 use super::test_helper::create_tx_outputs;
 use crate::{FlushableUtxoView, TxUndo, UtxoSource, UtxosCache, UtxosView};
 use common::{
-    chain::{
-        block::BlockReward, signature::inputsig::InputWitness, OutPoint, OutPointSourceId,
-        Transaction, TxInput,
-    },
+    chain::{block::BlockReward, OutPoint, OutPointSourceId, Transaction, TxInput},
     primitives::{BlockHeight, Id, Idable, H256},
 };
 use crypto::random::Rng;
@@ -149,11 +146,7 @@ fn populate_cache_with_undo(
                 };
 
                 //use this outpoint as input for transaction
-                let input = TxInput::new(
-                    outpoint.tx_id(),
-                    outpoint.output_index(),
-                    InputWitness::NoSignature(None),
-                );
+                let input = TxInput::new(outpoint.tx_id(), outpoint.output_index());
                 let tx =
                     Transaction::new(0x00, vec![input], create_tx_outputs(rng, 1), 0x01).unwrap();
 

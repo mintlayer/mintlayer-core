@@ -35,6 +35,7 @@ pub mod transaction_index;
 pub use transaction_index::*;
 
 use self::signature::inputsig::InputWitness;
+use self::signed_transaction::SignedTransaction;
 
 mod transaction_v1;
 
@@ -73,7 +74,8 @@ pub enum TransactionCreationError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransactionUpdateError {
-    Unknown,
+    InvalidWitnessCount,
+    Unknown, // TODO(PR) get rid of this arm
 }
 
 impl Transaction {
@@ -143,14 +145,25 @@ impl Transaction {
         }
     }
 
-    pub fn update_witness(
-        &mut self,
-        input_index: usize,
-        witness: InputWitness,
-    ) -> Result<(), TransactionUpdateError> {
-        match self {
-            Transaction::V1(tx) => tx.update_witness(input_index, witness),
+    // TODO(PR) this function must go
+    // pub fn update_witness(
+    //     &mut self,
+    //     input_index: usize,
+    //     witness: InputWitness,
+    // ) -> Result<(), TransactionUpdateError> {
+    //     match self {
+    //         Transaction::V1(tx) => tx.update_witness(input_index, witness),
+    //     }
+    // }
+
+    pub fn sign(
+        self,
+        witnesses: Vec<InputWitness>,
+    ) -> Result<SignedTransaction, TransactionUpdateError> {
+        if witnesses.len() != self.inputs().len() {
+            return Err(TransactionUpdateError::InvalidWitnessCount);
         }
+        Ok(SignedTransaction::new(self, witnesses))
     }
 }
 

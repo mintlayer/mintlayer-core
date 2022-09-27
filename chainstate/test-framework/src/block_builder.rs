@@ -119,11 +119,7 @@ impl<'f> BlockBuilder<'f> {
         let parent = TestBlockInfo::from_id(&self.framework.chainstate, parent);
         let (mut witnesses, mut inputs, outputs) = self.make_test_inputs_outputs(parent, rng);
         let spend_from = TestBlockInfo::from_id(&self.framework.chainstate, spend_from.into());
-        inputs.push(TxInput::new(
-            spend_from.txns[0].0.clone(),
-            0,
-            InputWitness::NoSignature(None),
-        ));
+        inputs.push(TxInput::new(spend_from.txns[0].0.clone(), 0));
         witnesses.push(InputWitness::NoSignature(None));
         self.transactions.push(SignedTransaction::new(
             Transaction::new(0, inputs, outputs, 0).unwrap(),

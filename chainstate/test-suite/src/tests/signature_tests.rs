@@ -47,7 +47,6 @@ fn signed_tx() {
                         tf.chainstate.get_chain_config().genesis_block_id(),
                     ),
                     0,
-                    InputWitness::NoSignature(None),
                 ),
                 InputWitness::NoSignature(None),
             )
@@ -59,13 +58,9 @@ fn signed_tx() {
 
         // The second transaction has the signed input.
         let tx_2 = {
-            let mut tx = TransactionBuilder::new()
+            let tx = TransactionBuilder::new()
                 .add_input(
-                    TxInput::new(
-                        OutPointSourceId::Transaction(tx_1.get_id()),
-                        0,
-                        InputWitness::NoSignature(None),
-                    ),
+                    TxInput::new(OutPointSourceId::Transaction(tx_1.get_id()), 0),
                     InputWitness::NoSignature(None),
                 )
                 .add_output(TxOutput::new(
@@ -83,7 +78,6 @@ fn signed_tx() {
                 0,
             )
             .unwrap();
-            tx.update_witness(0, InputWitness::Standard(input_sign.clone())).unwrap();
             SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)])
         };
 

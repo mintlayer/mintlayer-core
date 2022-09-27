@@ -93,8 +93,14 @@ impl BlockV1 {
             ConsensusData::None | ConsensusData::PoW(_) => None,
             ConsensusData::PoS(data) => Some(data.kernel_inputs().as_ref()),
         };
+        let witness = match &self.header.consensus_data {
+            ConsensusData::None | ConsensusData::PoW(_) => None,
+            ConsensusData::PoS(data) => Some(data.kernel_witness().as_ref()),
+        };
+
         BlockRewardTransactable {
             inputs,
+            witness,
             outputs: Some(self.body.reward.outputs()),
         }
     }

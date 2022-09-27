@@ -27,6 +27,7 @@ pub struct SignedTransaction {
 }
 
 impl SignedTransaction {
+    // TODO(PR) return Result instead of just Self, and check that witness size is equal to Transaction inputs size
     pub fn new(transaction: Transaction, signatures: Vec<InputWitness>) -> Self {
         Self {
             transaction,
@@ -70,3 +71,6 @@ impl Eq for WithId<SignedTransaction> {}
 
 // TODO(PR): add a check in check_transactions and ensure that all signed transactions have sizes equal in witness and inputs
 // TODO(PR): add tests to check that inputs and witnesses have the same size
+
+// TODO(PR) make the SignedTransaction serialization ignore the size of the witness vec and just use the size of the inputs
+// NOTE: there might be difficulties there as Encode cannot fail. It may lead to accepting a panic there

@@ -36,7 +36,7 @@ use common::{
     amount_sum,
     chain::{
         block::timestamp::BlockTimestamp,
-        signature::{verify_signature, Transactable},
+        signature::{verify_signature, Signable, Transactable},
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
@@ -451,12 +451,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 self.token_issuance_cache.register(block.get_id(), tx.transaction())?;
 
                 // verify input signatures
-                self.verify_signatures(
-                    block_index,
-                    tx.transaction(),
-                    spend_height,
-                    median_time_past,
-                )?;
+                self.verify_signatures(block_index, tx, spend_height, median_time_past)?;
 
                 // spend utxos
                 let tx_undo = self

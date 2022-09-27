@@ -381,14 +381,12 @@ mod tests {
 
     #[test]
     fn tx_with_witness_always_different_merkle_witness_root() {
-        let inputs = vec![TxInput::new(
-            OutPointSourceId::Transaction(H256::random().into()),
-            0,
-            InputWitness::NoSignature(Some(b"abc".to_vec())),
-        )];
+        let inputs = vec![TxInput::new(OutPointSourceId::Transaction(H256::random().into()), 0)];
 
-        let one_transaction =
-            SignedTransaction::new(Transaction::new(0, inputs, Vec::new(), 0).unwrap(), vec![]);
+        let one_transaction = SignedTransaction::new(
+            Transaction::new(0, inputs, Vec::new(), 0).unwrap(),
+            vec![InputWitness::NoSignature(Some(b"abc".to_vec()))],
+        );
         let body = BlockBody {
             reward: BlockReward::new(Vec::new()),
             transactions: vec![one_transaction],

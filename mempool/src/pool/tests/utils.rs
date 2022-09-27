@@ -35,15 +35,15 @@ impl std::cmp::Ord for ValuedOutPoint {
     }
 }
 
+fn dummy_witness() -> InputWitness {
+    let witness = DUMMY_WITNESS_MSG.to_vec();
+    InputWitness::NoSignature(Some(witness))
+}
+
 fn dummy_input() -> TxInput {
     let outpoint_source_id = OutPointSourceId::Transaction(Id::new(H256::zero()));
     let output_index = 0;
-    let witness = DUMMY_WITNESS_MSG.to_vec();
-    TxInput::new(
-        outpoint_source_id,
-        output_index,
-        InputWitness::NoSignature(Some(witness)),
-    )
+    TxInput::new(outpoint_source_id, output_index)
 }
 
 fn dummy_output() -> TxOutput {
@@ -53,11 +53,17 @@ fn dummy_output() -> TxOutput {
 }
 
 pub(in crate::pool::tests) fn estimate_tx_size(num_inputs: usize, num_outputs: usize) -> usize {
+    let witnesses: Vec<InputWitness> =
+        (0..num_inputs).into_iter().map(|_| dummy_witness()).collect();
     let inputs = (0..num_inputs).into_iter().map(|_| dummy_input()).collect();
     let outputs = (0..num_outputs).into_iter().map(|_| dummy_output()).collect();
     let flags = 0;
     let locktime = 0;
-    let size = Transaction::new(flags, inputs, outputs, locktime).unwrap().encoded_size();
+    let size = SignedTransaction::new(
+        Transaction::new(flags, inputs, outputs, locktime).unwrap(),
+        witnesses,
+    )
+    .encoded_size();
     // Take twice the encoded size of the dummy tx.Real Txs are larger than these dummy ones,
     // but taking 3 times the size seems to ensure our txs won't fail the minimum relay fee
     // validation (see the function `pays_minimum_relay_fees`)

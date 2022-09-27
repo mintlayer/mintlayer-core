@@ -64,11 +64,7 @@ fn real_size(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::new(
-            OutPointSourceId::BlockReward(genesis.get_id().into()),
-            0,
-            empty_witness(&mut rng),
-        ),
+        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),
     );
 
@@ -105,11 +101,7 @@ async fn add_single_tx() -> anyhow::Result<()> {
 
     let flags = 0;
     let locktime = 0;
-    let input = TxInput::new(
-        outpoint_source_id,
-        0,
-        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-    );
+    let input = TxInput::new(outpoint_source_id, 0);
     let relay_fee = Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE));
     let tx = tx_spend_input(
         &mempool,
@@ -147,11 +139,7 @@ async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
     let target_txs = 10;
 
     let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::new(
-            OutPointSourceId::BlockReward(genesis.get_id().into()),
-            0,
-            empty_witness(&mut rng),
-        ),
+        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),
     );
     for i in 0..target_txs {
@@ -166,11 +154,7 @@ async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
     for i in 0..target_txs {
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
-                    OutPointSourceId::Transaction(initial_tx_id),
-                    i as u32,
-                    empty_witness(&mut rng),
-                ),
+                TxInput::new(OutPointSourceId::Transaction(initial_tx_id), i as u32),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::new(
@@ -267,11 +251,7 @@ async fn tx_no_outputs(#[case] seed: Seed) -> anyhow::Result<()> {
     let genesis = tf.genesis();
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::new(
-                OutPointSourceId::BlockReward(genesis.get_id().into()),
-                0,
-                empty_witness(&mut rng),
-            ),
+            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .build();
@@ -289,17 +269,9 @@ async fn tx_duplicate_inputs() -> anyhow::Result<()> {
     let mut mempool = setup().await;
 
     let outpoint_source_id = OutPointSourceId::from(mempool.chain_config.genesis_block_id());
-    let input = TxInput::new(
-        outpoint_source_id.clone(),
-        0,
-        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-    );
+    let input = TxInput::new(outpoint_source_id.clone(), 0);
     let witness = b"attempted_double_spend".to_vec();
-    let duplicate_input = TxInput::new(
-        outpoint_source_id,
-        0,
-        InputWitness::NoSignature(Some(witness)),
-    );
+    let duplicate_input = TxInput::new(outpoint_source_id, 0);
     let flags = 0;
     let locktime = 0;
     let outputs = tx_spend_input(
@@ -317,7 +289,10 @@ async fn tx_duplicate_inputs() -> anyhow::Result<()> {
     let inputs = vec![input, duplicate_input];
     let tx = SignedTransaction::new(
         Transaction::new(flags, inputs, outputs, locktime)?,
-        vec![InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec()))],
+        vec![
+            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+            InputWitness::NoSignature(Some(witness)),
+        ],
     );
 
     assert!(matches!(
@@ -333,11 +308,7 @@ async fn tx_already_in_mempool() -> anyhow::Result<()> {
     let mut mempool = setup().await;
 
     let outpoint_source_id = OutPointSourceId::from(mempool.chain_config.genesis_block_id());
-    let input = TxInput::new(
-        outpoint_source_id,
-        0,
-        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-    );
+    let input = TxInput::new(outpoint_source_id, 0);
 
     let flags = 0;
     let locktime = 0;
@@ -370,11 +341,7 @@ async fn outpoint_not_found() -> anyhow::Result<()> {
 
     let outpoint_source_id = OutPointSourceId::from(mempool.chain_config.genesis_block_id());
 
-    let good_input = TxInput::new(
-        outpoint_source_id.clone(),
-        0,
-        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-    );
+    let good_input = TxInput::new(outpoint_source_id.clone(), 0);
     let flags = 0;
     let locktime = 0;
     let outputs = tx_spend_input(
@@ -391,11 +358,7 @@ async fn outpoint_not_found() -> anyhow::Result<()> {
     .clone();
 
     let bad_outpoint_index = 1;
-    let bad_input = TxInput::new(
-        outpoint_source_id,
-        bad_outpoint_index,
-        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-    );
+    let bad_input = TxInput::new(outpoint_source_id, bad_outpoint_index);
 
     let inputs = vec![bad_input];
     let tx = SignedTransaction::new(
@@ -430,11 +393,7 @@ async fn tx_too_big(#[case] seed: Seed) -> anyhow::Result<()> {
     .encoded_size();
     let too_many_outputs = MAX_BLOCK_SIZE_BYTES / single_output_size;
     let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::new(
-            OutPointSourceId::BlockReward(genesis.get_id().into()),
-            0,
-            empty_witness(&mut rng),
-        ),
+        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),
     );
     for _ in 0..too_many_outputs {
@@ -467,11 +426,7 @@ async fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Resul
 
     let outpoint_source_id = OutPointSourceId::BlockReward(genesis.get_id().into());
 
-    let input = TxInput::new(
-        outpoint_source_id,
-        0,
-        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-    );
+    let input = TxInput::new(outpoint_source_id, 0);
     let flags = 1;
     let locktime = 0;
 
@@ -521,11 +476,7 @@ async fn try_replace_irreplaceable() -> anyhow::Result<()> {
     let genesis = tf.genesis();
     let outpoint_source_id = OutPointSourceId::BlockReward(genesis.get_id().into());
 
-    let input = TxInput::new(
-        outpoint_source_id,
-        0,
-        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-    );
+    let input = TxInput::new(outpoint_source_id, 0);
     let flags = 0;
     let locktime = 0;
     let original_fee = Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE));
@@ -608,11 +559,7 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
     let genesis = tf.genesis();
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::new(
-                OutPointSourceId::BlockReward(genesis.get_id().into()),
-                0,
-                empty_witness(&mut rng),
-            ),
+            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::new(
@@ -625,11 +572,7 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.add_transaction(tx.clone()).await?;
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx.get_id());
-    let child_tx_input = TxInput::new(
-        outpoint_source_id,
-        0,
-        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-    );
+    let child_tx_input = TxInput::new(outpoint_source_id, 0);
     // We want to test that even though child_tx doesn't signal replaceability directly, it is replaceable because its parent signalled replaceability
     // replaced
     let flags = 0;
@@ -755,11 +698,7 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::new(
-            OutPointSourceId::BlockReward(genesis.get_id().into()),
-            0,
-            empty_witness(&mut rng),
-        ),
+        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),
     );
     let num_outputs = 2;
@@ -782,11 +721,7 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
     let outpoint_source_id = OutPointSourceId::Transaction(tx.get_id());
     let ancestor_with_signal = tx_spend_input(
         &mempool,
-        TxInput::new(
-            outpoint_source_id.clone(),
-            0,
-            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        ),
+        TxInput::new(outpoint_source_id.clone(), 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags_replaceable,
@@ -796,11 +731,7 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
 
     let ancestor_without_signal = tx_spend_input(
         &mempool,
-        TxInput::new(
-            outpoint_source_id,
-            1,
-            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        ),
+        TxInput::new(outpoint_source_id, 1),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags_irreplaceable,
@@ -814,13 +745,11 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
     let input_with_replaceable_parent = TxInput::new(
         OutPointSourceId::Transaction(ancestor_with_signal.get_id()),
         0,
-        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
     );
 
     let input_with_irreplaceable_parent = TxInput::new(
         OutPointSourceId::Transaction(ancestor_without_signal.get_id()),
         0,
-        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
     );
 
     // TODO compute minimum necessary relay fee instead of just overestimating it
@@ -938,11 +867,7 @@ async fn test_bip125_max_replacements(
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new()
         .add_input(
-            TxInput::new(
-                OutPointSourceId::BlockReward(genesis.get_id().into()),
-                0,
-                empty_witness(&mut rng),
-            ),
+            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .with_flags(1);
@@ -966,11 +891,7 @@ async fn test_bip125_max_replacements(
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
     let fee = 2_000;
     for (index, _) in outputs.iter().enumerate() {
-        let input = TxInput::new(
-            outpoint_source_id.clone(),
-            index.try_into().unwrap(),
-            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        );
+        let input = TxInput::new(outpoint_source_id.clone(), index.try_into().unwrap());
         let tx = tx_spend_input(
             &mempool,
             input,
@@ -1122,11 +1043,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     let genesis = tf.genesis();
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::new(
-                OutPointSourceId::BlockReward(genesis.get_id().into()),
-                0,
-                empty_witness(&mut rng),
-            ),
+            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::new(
@@ -1140,11 +1057,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     mempool.add_transaction(tx).await?;
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
-    let input = TxInput::new(
-        outpoint_source_id,
-        0,
-        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-    );
+    let input = TxInput::new(outpoint_source_id, 0);
 
     let locktime = 0;
     let rbf = 1;
@@ -1171,11 +1084,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     let descendant1_fee = Amount::from_atoms(100);
     let descendant1 = tx_spend_input(
         &mempool,
-        TxInput::new(
-            descendant_outpoint_source_id.clone(),
-            0,
-            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        ),
+        TxInput::new(descendant_outpoint_source_id.clone(), 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         descendant1_fee,
         no_rbf,
@@ -1188,11 +1097,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     let descendant2_fee = Amount::from_atoms(100);
     let descendant2 = tx_spend_input(
         &mempool,
-        TxInput::new(
-            descendant_outpoint_source_id,
-            1,
-            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        ),
+        TxInput::new(descendant_outpoint_source_id, 1),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         descendant2_fee,
         no_rbf,
@@ -1256,11 +1161,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     let genesis = tf.genesis();
     let num_outputs = 2;
     let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::new(
-            OutPointSourceId::BlockReward(genesis.get_id().into()),
-            0,
-            empty_witness(&mut rng),
-        ),
+        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),
     );
 
@@ -1296,11 +1197,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     let outpoint_source_id = OutPointSourceId::Transaction(parent_id);
     let child_0 = tx_spend_input(
         &mempool,
-        TxInput::new(
-            outpoint_source_id.clone(),
-            0,
-            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        ),
+        TxInput::new(outpoint_source_id.clone(), 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
@@ -1310,11 +1207,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
 
     let child_1 = tx_spend_input(
         &mempool,
-        TxInput::new(
-            outpoint_source_id,
-            1,
-            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        ),
+        TxInput::new(outpoint_source_id, 1),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
@@ -1381,11 +1274,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new()
         .add_input(
-            TxInput::new(
-                OutPointSourceId::BlockReward(genesis.get_id().into()),
-                0,
-                empty_witness(&mut rng),
-            ),
+            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .with_flags(1);
@@ -1421,11 +1310,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     // child_0 has the lower fee so it will be evicted when memory usage is too high
     let child_0 = tx_spend_input(
         &mempool,
-        TxInput::new(
-            outpoint_source_id.clone(),
-            0,
-            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        ),
+        TxInput::new(outpoint_source_id.clone(), 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
@@ -1440,11 +1325,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     let child_1 = tx_spend_input(
         &mempool,
-        TxInput::new(
-            outpoint_source_id.clone(),
-            1,
-            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        ),
+        TxInput::new(outpoint_source_id.clone(), 1),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         big_fee,
         flags,
@@ -1491,11 +1372,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     // validation
     let child_2 = tx_spend_input(
         &mempool,
-        TxInput::new(
-            outpoint_source_id.clone(),
-            2,
-            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        ),
+        TxInput::new(outpoint_source_id.clone(), 2),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
@@ -1520,11 +1397,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     // We provide a sufficient fee for the tx to pass the minimum rolling fee requirement
     let child_2_high_fee = tx_spend_input(
         &mempool,
-        TxInput::new(
-            outpoint_source_id,
-            2,
-            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        ),
+        TxInput::new(outpoint_source_id, 2),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         mempool.get_minimum_rolling_fee().compute_fee(estimate_tx_size(1, 1)).unwrap(),
         flags,
@@ -1565,11 +1438,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     let dummy_tx = TransactionBuilder::new()
         .add_input(
-            TxInput::new(
-                OutPointSourceId::Transaction(child_2_high_fee_id),
-                0,
-                InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-            ),
+            TxInput::new(OutPointSourceId::Transaction(child_2_high_fee_id), 0),
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         )
         .add_output(TxOutput::new(
@@ -1625,11 +1494,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let another_dummy = TransactionBuilder::new()
         .add_input(
-            TxInput::new(
-                OutPointSourceId::Transaction(child_1_id),
-                0,
-                InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-            ),
+            TxInput::new(OutPointSourceId::Transaction(child_1_id), 0),
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         )
         .add_output(TxOutput::new(
@@ -1660,11 +1525,7 @@ async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
 
     let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::new(
-            OutPointSourceId::BlockReward(genesis.get_id().into()),
-            0,
-            empty_witness(&mut rng),
-        ),
+        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),
     );
     for _ in 0..10_000 {
@@ -1690,7 +1551,6 @@ async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
                 TxInput::new(
                     OutPointSourceId::Transaction(initial_tx.get_id()),
                     100 * i + j,
-                    empty_witness(&mut rng),
                 ),
                 empty_witness(&mut rng),
             );
@@ -1739,11 +1599,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::new(
-                OutPointSourceId::BlockReward(genesis.get_id().into()),
-                0,
-                empty_witness(&mut rng),
-            ),
+            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::new(
@@ -1770,11 +1626,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let tx_c_fee = (tx_a_fee + Amount::from_atoms(1000)).unwrap();
     let tx_a = tx_spend_input(
         &mempool,
-        TxInput::new(
-            outpoint_source_id.clone(),
-            0,
-            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        ),
+        TxInput::new(outpoint_source_id.clone(), 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         tx_a_fee,
         flags,
@@ -1788,11 +1640,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let tx_b = tx_spend_input(
         &mempool,
-        TxInput::new(
-            outpoint_source_id,
-            1,
-            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        ),
+        TxInput::new(outpoint_source_id, 1),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         tx_b_fee,
         flags,
@@ -1806,11 +1654,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let tx_c = tx_spend_input(
         &mempool,
-        TxInput::new(
-            OutPointSourceId::Transaction(tx_b_id),
-            0,
-            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        ),
+        TxInput::new(OutPointSourceId::Transaction(tx_b_id), 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         tx_c_fee,
         flags,
@@ -1884,11 +1728,7 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let parent = TransactionBuilder::new()
         .add_input(
-            TxInput::new(
-                OutPointSourceId::BlockReward(genesis.get_id().into()),
-                0,
-                empty_witness(&mut rng),
-            ),
+            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::new(
@@ -1917,11 +1757,7 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     let outpoint_source_id = OutPointSourceId::Transaction(parent_id);
     let child = tx_spend_input(
         &mempool,
-        TxInput::new(
-            outpoint_source_id,
-            0,
-            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        ),
+        TxInput::new(outpoint_source_id, 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
@@ -1969,11 +1805,7 @@ async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::new(
-                OutPointSourceId::BlockReward(genesis.get_id().into()),
-                0,
-                empty_witness(&mut rng),
-            ),
+            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::new(
@@ -1999,11 +1831,7 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::new(
-            OutPointSourceId::BlockReward(genesis.get_id().into()),
-            0,
-            empty_witness(&mut rng),
-        ),
+        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),
     );
 
@@ -2030,11 +1858,7 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
         txs.push(
             tx_spend_input(
                 &mempool,
-                TxInput::new(
-                    outpoint_source_id.clone(),
-                    u32::try_from(i).unwrap(),
-                    InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-                ),
+                TxInput::new(outpoint_source_id.clone(), u32::try_from(i).unwrap()),
                 empty_witness(&mut rng),
                 Amount::from_atoms(fee + u128::try_from(i).unwrap()),
                 flags,

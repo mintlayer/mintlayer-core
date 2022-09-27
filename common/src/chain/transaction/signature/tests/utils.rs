@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use itertools::Itertools;
 use rand::Rng;
 
 use crypto::key::{PrivateKey, PublicKey};
@@ -26,6 +27,7 @@ use crate::{
             sighashtype::SigHashType,
             verify_signature, TransactionSigError,
         },
+        signed_transaction::SignedTransaction,
         tokens::OutputValue,
         Destination, OutputPurpose, Transaction, TransactionCreationError, TxInput, TxOutput,
     },
@@ -39,27 +41,33 @@ pub struct MutableTransaction {
     pub inputs: Vec<TxInput>,
     pub outputs: Vec<TxOutput>,
     pub lock_time: u32,
+    pub witness: Vec<InputWitness>,
 }
 
-impl From<&Transaction> for MutableTransaction {
-    fn from(tx: &Transaction) -> Self {
+impl From<&SignedTransaction> for MutableTransaction {
+    fn from(tx: &SignedTransaction) -> Self {
         Self {
-            flags: tx.flags(),
-            inputs: tx.inputs().clone(),
-            outputs: tx.outputs().clone(),
-            lock_time: tx.lock_time(),
+            flags: tx.transaction().flags(),
+            inputs: tx.transaction().inputs().clone(),
+            outputs: tx.transaction().outputs().clone(),
+            lock_time: tx.transaction().lock_time(),
+            witness: tx.signatures().to_vec(),
         }
     }
 }
 
 impl MutableTransaction {
-    pub fn generate_tx(&self) -> Result<Transaction, TransactionCreationError> {
-        Transaction::new(
-            self.flags,
-            self.inputs.clone(),
-            self.outputs.clone(),
-            self.lock_time,
-        )
+    pub fn generate_tx(&self) -> Result<SignedTransaction, TransactionCreationError> {
+        Ok(SignedTransaction::new(
+            Transaction::new(
+                self.flags,
+                self.inputs.clone(),
+                self.outputs.clone(),
+                self.lock_time,
+            )
+            .unwrap(),
+            self.witness.clone(),
+        ))
     }
 }
 
@@ -74,7 +82,6 @@ pub fn generate_unsigned_tx(
         Some(TxInput::new(
             Id::<Transaction>::new(H256::random()).into(),
             rng.gen(),
-            InputWitness::NoSignature(None),
         ))
     })
     .take(inputs_count)
@@ -94,15 +101,20 @@ pub fn generate_unsigned_tx(
 }
 
 pub fn sign_whole_tx(
-    tx: &mut Transaction,
+    tx: Transaction,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     destination: &Destination,
-) -> Result<(), TransactionSigError> {
-    for i in 0..tx.inputs().len() {
-        update_signature(tx, i, private_key, sighash_type, destination.clone())?;
-    }
-    Ok(())
+) -> Result<SignedTransaction, TransactionSigError> {
+    let sigs: Result<Vec<StandardInputSignature>, TransactionSigError> = tx
+        .inputs()
+        .iter()
+        .enumerate()
+        .map(|(i, _input)| make_signature(&tx, i, private_key, sighash_type, destination.clone()))
+        .collect();
+    let witnesses = sigs?.into_iter().map(InputWitness::Standard).collect_vec();
+
+    Ok(SignedTransaction::new(tx, witnesses))
 }
 
 pub fn generate_and_sign_tx(
@@ -111,36 +123,35 @@ pub fn generate_and_sign_tx(
     outputs: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
-) -> Result<Transaction, TransactionCreationError> {
-    let mut tx = generate_unsigned_tx(destination, inputs, outputs).unwrap();
-    sign_whole_tx(&mut tx, private_key, sighash_type, destination).unwrap();
-    assert_eq!(verify_signed_tx(&tx, destination), Ok(()));
-    Ok(tx)
+) -> Result<SignedTransaction, TransactionCreationError> {
+    let tx = generate_unsigned_tx(destination, inputs, outputs).unwrap();
+    let signed_tx = sign_whole_tx(tx, private_key, sighash_type, destination).unwrap();
+    assert_eq!(verify_signed_tx(&signed_tx, destination), Ok(()));
+    Ok(signed_tx)
 }
 
-pub fn update_signature(
-    tx: &mut Transaction,
+pub fn make_signature(
+    tx: &Transaction,
     input_num: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     outpoint_dest: Destination,
-) -> Result<(), TransactionSigError> {
-    let input_sign = StandardInputSignature::produce_signature_for_input(
+) -> Result<StandardInputSignature, TransactionSigError> {
+    let input_sig = StandardInputSignature::produce_signature_for_input(
         private_key,
         sighash_type,
         outpoint_dest,
         tx,
         input_num,
     )?;
-    tx.update_witness(input_num, InputWitness::Standard(input_sign)).unwrap();
-    Ok(())
+    Ok(input_sig)
 }
 
 pub fn verify_signed_tx(
-    tx: &Transaction,
+    tx: &SignedTransaction,
     destination: &Destination,
 ) -> Result<(), TransactionSigError> {
-    for i in 0..tx.inputs().len() {
+    for i in 0..tx.transaction().inputs().len() {
         verify_signature(destination, tx, i)?
     }
     Ok(())
@@ -162,6 +173,7 @@ pub fn sig_hash_types() -> impl Iterator<Item = SigHashType> + Clone {
 
 /// Returns an iterator over all possible destinations.
 pub fn destinations(public_key: PublicKey) -> impl Iterator<Item = Destination> {
+    // TODO: find a way to write this such that it loops over all possible arms instead of doing this manually
     [
         Destination::Address(PublicKeyHash::from(&public_key)),
         Destination::PublicKey(public_key),

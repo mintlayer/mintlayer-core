@@ -98,11 +98,7 @@ fn build_transaction() {
     let flags = 1;
     let lock_time = 2;
     let witness = InputWitness::NoSignature(None);
-    let input = TxInput::new(
-        OutPointSourceId::Transaction(Id::new(H256::random())),
-        0,
-        witness.clone(),
-    );
+    let input = TxInput::new(OutPointSourceId::Transaction(Id::new(H256::random())), 0);
 
     let tx = TransactionBuilder::new()
         .with_flags(flags)

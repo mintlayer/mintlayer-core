@@ -20,7 +20,7 @@ use crate::{
 use common::{
     chain::{
         block::{BlockReward, BlockRewardTransactable},
-        signature::Transactable,
+        signature::Signable,
         GenBlock, OutPoint, OutPointSourceId, Transaction,
     },
     primitives::{BlockHeight, Id, Idable},
