@@ -290,7 +290,8 @@ fn generate_random_invalid_block() -> Block {
             let inputs_count = tx.inputs().len();
             SignedTransaction::new(tx, generate_random_invalid_witness(inputs_count, &mut rng))
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()
+        .expect("invalid witness count");
     let time = rng.next_u64();
     let prev_id = Id::new(generate_random_h256(&mut rng));
     let reward = BlockReward::new(Vec::new());

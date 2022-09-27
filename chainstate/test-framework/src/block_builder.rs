@@ -93,20 +93,20 @@ impl<'f> BlockBuilder<'f> {
             TestBlockInfo::from_id(&self.framework.chainstate, parent),
             rng,
         );
-        self.add_transaction(SignedTransaction::new(
-            Transaction::new(0, inputs, outputs, 0).unwrap(),
-            witnesses,
-        ))
+        self.add_transaction(
+            SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
+                .expect("invalid witness count"),
+        )
     }
 
     /// Same as `add_test_transaction_with_parent`, but uses reference to a block.
     pub fn add_test_transaction_from_block(self, parent: &Block, rng: &mut impl Rng) -> Self {
         let (witnesses, inputs, outputs) =
             self.make_test_inputs_outputs(TestBlockInfo::from_block(parent), rng);
-        self.add_transaction(SignedTransaction::new(
-            Transaction::new(0, inputs, outputs, 0).unwrap(),
-            witnesses,
-        ))
+        self.add_transaction(
+            SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
+                .expect("invalid witness count"),
+        )
     }
 
     /// Adds a transaction that tries to spend the already spent output from the specified block.
@@ -121,10 +121,10 @@ impl<'f> BlockBuilder<'f> {
         let spend_from = TestBlockInfo::from_id(&self.framework.chainstate, spend_from.into());
         inputs.push(TxInput::new(spend_from.txns[0].0.clone(), 0));
         witnesses.push(InputWitness::NoSignature(None));
-        self.transactions.push(SignedTransaction::new(
-            Transaction::new(0, inputs, outputs, 0).unwrap(),
-            witnesses,
-        ));
+        self.transactions.push(
+            SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
+                .expect("invalid witness count"),
+        );
         self
     }
 

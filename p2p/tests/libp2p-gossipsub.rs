@@ -283,7 +283,10 @@ async fn test_libp2p_gossipsub_too_big_message() {
     pubsub2.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
 
     let txs = (0..200_000)
-        .map(|_| SignedTransaction::new(Transaction::new(0, vec![], vec![], 0).unwrap(), vec![]))
+        .map(|_| {
+            SignedTransaction::new(Transaction::new(0, vec![], vec![], 0).unwrap(), vec![])
+                .expect("invalid witness count")
+        })
         .collect::<Vec<_>>();
     let message = Announcement::Block(
         Block::new(

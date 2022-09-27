@@ -63,6 +63,7 @@ pub(in crate::pool::tests) fn estimate_tx_size(num_inputs: usize, num_outputs: u
         Transaction::new(flags, inputs, outputs, locktime).unwrap(),
         witnesses,
     )
+    .expect("invalid witness count")
     .encoded_size();
     // Take twice the encoded size of the dummy tx.Real Txs are larger than these dummy ones,
     // but taking 3 times the size seems to ensure our txs won't fail the minimum relay fee

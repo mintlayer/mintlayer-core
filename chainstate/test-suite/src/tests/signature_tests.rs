@@ -79,6 +79,7 @@ fn signed_tx() {
             )
             .unwrap();
             SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)])
+                .expect("invalid witness count")
         };
 
         tf.make_block_builder()

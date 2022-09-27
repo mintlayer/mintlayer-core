@@ -404,7 +404,7 @@ mod tests {
         let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
         let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
         let block0 = Block::new(
-            vec![SignedTransaction::new(tx0, vec![])],
+            vec![SignedTransaction::new(tx0, vec![]).expect("invalid witness count")],
             Id::<GenBlock>::new(H256([0x23; 32])),
             BlockTimestamp::from_int_seconds(12),
             ConsensusData::None,
@@ -412,7 +412,7 @@ mod tests {
         )
         .unwrap();
         let block1 = Block::new(
-            vec![SignedTransaction::new(tx1, vec![])],
+            vec![SignedTransaction::new(tx1, vec![]).expect("invalid witness count")],
             block0.get_id().into(),
             BlockTimestamp::from_int_seconds(34),
             ConsensusData::None,

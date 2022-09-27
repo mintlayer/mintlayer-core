@@ -293,7 +293,8 @@ async fn tx_duplicate_inputs() -> anyhow::Result<()> {
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
             InputWitness::NoSignature(Some(witness)),
         ],
-    );
+    )
+    .expect("invalid witness count");
 
     assert!(matches!(
         mempool.add_transaction(tx).await,
@@ -364,7 +365,8 @@ async fn outpoint_not_found() -> anyhow::Result<()> {
     let tx = SignedTransaction::new(
         Transaction::new(flags, inputs, outputs, locktime)?,
         vec![InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec()))],
-    );
+    )
+    .expect("invalid witness count");
 
     assert!(matches!(
         mempool.add_transaction(tx).await,
@@ -686,7 +688,8 @@ async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
     )
     .map_err(Into::into);
     let tx = tx?;
-    Ok(SignedTransaction::new(tx, witnesses.to_vec()))
+    SignedTransaction::new(tx, witnesses.to_vec())
+        .map_err(|_| anyhow::Error::msg("invalid witness count"))
 }
 
 #[rstest]
@@ -782,7 +785,8 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
             locktime,
         )?,
         vec![InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec()))],
-    );
+    )
+    .expect("invalid witness count");
 
     mempool.add_transaction(replacing_tx).await?;
     assert!(!mempool.contains_transaction(&replaced_tx_id));
@@ -804,6 +808,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
                 Transaction::new(i, vec![], vec![], 0).unwrap_or_else(|_| panic!("tx {}", i)),
                 vec![],
             )
+            .expect("invalid witness count")
         })
         .collect::<Vec<_>>();
     let fee = Amount::from_atoms(0);

@@ -14,11 +14,15 @@
 // limitations under the License.
 
 use super::{signature::inputsig::InputWitness, Transaction};
-use crate::primitives::{
-    id::{self, Idable, WithId},
-    Id,
+use crate::{
+    chain::TransactionCreationError,
+    primitives::{
+        id::{self, Idable, WithId},
+        Id,
+    },
 };
 use serialization::{Decode, Encode};
+use utils::ensure;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct SignedTransaction {
@@ -27,12 +31,18 @@ pub struct SignedTransaction {
 }
 
 impl SignedTransaction {
-    // TODO(PR) return Result instead of just Self, and check that witness size is equal to Transaction inputs size
-    pub fn new(transaction: Transaction, signatures: Vec<InputWitness>) -> Self {
-        Self {
+    pub fn new(
+        transaction: Transaction,
+        signatures: Vec<InputWitness>,
+    ) -> Result<Self, TransactionCreationError> {
+        ensure!(
+            signatures.len() == transaction.inputs().len(),
+            TransactionCreationError::InvalidWitnessCount
+        );
+        Ok(Self {
             transaction,
             signatures,
-        }
+        })
     }
 
     pub fn transaction(&self) -> &Transaction {

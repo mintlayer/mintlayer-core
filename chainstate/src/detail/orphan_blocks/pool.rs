@@ -191,7 +191,7 @@ mod tests {
             let tx = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
 
             Block::new(
-                vec![SignedTransaction::new(tx, vec![])],
+                vec![SignedTransaction::new(tx, vec![]).expect("invalid witness count")],
                 prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()).into()),
                 BlockTimestamp::from_int_seconds(rng.gen()),
                 ConsensusData::None,

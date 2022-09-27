@@ -64,7 +64,8 @@ fn create_transactions(
                     .collect::<Vec<_>>(),
             )
         })
-        .collect_vec()
+        .collect::<Result<Vec<_>, _>>()
+        .expect("invalid witness count")
 }
 
 fn create_block(

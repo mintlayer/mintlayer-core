@@ -382,7 +382,8 @@ fn transaction_processing_order(#[case] seed: Seed) {
             )
             .unwrap(),
             vec![empty_witness(&mut rng)],
-        );
+        )
+        .expect("invalid witness count");
 
         // Transaction that spends tx1
         let tx2 = SignedTransaction::new(
@@ -397,7 +398,8 @@ fn transaction_processing_order(#[case] seed: Seed) {
             )
             .unwrap(),
             vec![empty_witness(&mut rng)],
-        );
+        )
+        .expect("invalid witness count");
 
         // Create a new block with tx2 appearing before tx1
         let block = tf.make_block_builder().add_transaction(tx2).add_transaction(tx1).build();

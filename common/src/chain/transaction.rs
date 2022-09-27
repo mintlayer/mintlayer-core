@@ -68,13 +68,10 @@ impl Eq for WithId<Transaction> {}
 
 #[derive(Error, Debug, Clone)]
 pub enum TransactionCreationError {
+    #[error("The number of signatures does not match the number of inputs")]
+    InvalidWitnessCount,
     #[error("An unknown error has occurred")]
     Unknown,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TransactionUpdateError {
-    InvalidWitnessCount,
 }
 
 impl Transaction {
@@ -124,14 +121,6 @@ impl Transaction {
         }
     }
 
-    // TODO(PR): this has to go
-    /// provides the hash of a transaction including the witness (malleable)
-    pub fn serialized_hash(&self) -> Id<Transaction> {
-        match &self {
-            Transaction::V1(tx) => tx.serialized_hash(),
-        }
-    }
-
     pub fn has_smart_contracts(&self) -> bool {
         false
     }
@@ -144,25 +133,14 @@ impl Transaction {
         }
     }
 
-    // TODO(PR) this function must go
-    // pub fn update_witness(
-    //     &mut self,
-    //     input_index: usize,
-    //     witness: InputWitness,
-    // ) -> Result<(), TransactionUpdateError> {
-    //     match self {
-    //         Transaction::V1(tx) => tx.update_witness(input_index, witness),
-    //     }
-    // }
-
     pub fn sign(
         self,
         witnesses: Vec<InputWitness>,
-    ) -> Result<SignedTransaction, TransactionUpdateError> {
+    ) -> Result<SignedTransaction, TransactionCreationError> {
         if witnesses.len() != self.inputs().len() {
-            return Err(TransactionUpdateError::InvalidWitnessCount);
+            return Err(TransactionCreationError::InvalidWitnessCount);
         }
-        Ok(SignedTransaction::new(self, witnesses))
+        SignedTransaction::new(self, witnesses)
     }
 }
 

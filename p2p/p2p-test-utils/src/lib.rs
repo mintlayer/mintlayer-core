@@ -182,7 +182,8 @@ fn produce_test_block_with_consensus_data(
         vec![SignedTransaction::new(
             Transaction::new(0, inputs, outputs, 0).expect("not to fail"),
             witnesses,
-        )],
+        )
+        .expect("invalid witness count")],
         prev_block.id,
         BlockTimestamp::from_duration_since_epoch(time::get()),
         consensus_data,

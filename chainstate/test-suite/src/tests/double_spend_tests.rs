@@ -486,4 +486,5 @@ fn tx_from_tx(tx: &SignedTransaction, output_value: u128) -> SignedTransaction {
         Transaction::new(0, vec![input], vec![output], 0).unwrap(),
         vec![InputWitness::NoSignature(None)],
     )
+    .expect("invalid witness count")
 }

@@ -58,7 +58,7 @@ impl From<&SignedTransaction> for MutableTransaction {
 
 impl MutableTransaction {
     pub fn generate_tx(&self) -> Result<SignedTransaction, TransactionCreationError> {
-        Ok(SignedTransaction::new(
+        SignedTransaction::new(
             Transaction::new(
                 self.flags,
                 self.inputs.clone(),
@@ -67,7 +67,7 @@ impl MutableTransaction {
             )
             .unwrap(),
             self.witness.clone(),
-        ))
+        )
     }
 }
 
@@ -114,7 +114,7 @@ pub fn sign_whole_tx(
         .collect();
     let witnesses = sigs?.into_iter().map(InputWitness::Standard).collect_vec();
 
-    Ok(SignedTransaction::new(tx, witnesses))
+    SignedTransaction::new(tx, witnesses).map_err(|_| TransactionSigError::InvalidWitnessCount)
 }
 
 pub fn generate_and_sign_tx(

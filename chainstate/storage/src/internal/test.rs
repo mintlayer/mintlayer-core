@@ -52,7 +52,7 @@ fn test_storage_manipulation() {
     let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
     let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
     let block0 = Block::new(
-        vec![SignedTransaction::new(tx0.clone(), vec![])],
+        vec![SignedTransaction::new(tx0.clone(), vec![]).expect("invalid witness count")],
         Id::new(H256::default()),
         BlockTimestamp::from_int_seconds(12),
         ConsensusData::None,
@@ -60,7 +60,7 @@ fn test_storage_manipulation() {
     )
     .unwrap();
     let block1 = Block::new(
-        vec![SignedTransaction::new(tx1.clone(), vec![])],
+        vec![SignedTransaction::new(tx1.clone(), vec![]).expect("invalid witness count")],
         Id::new(block0.get_id().get()),
         BlockTimestamp::from_int_seconds(34),
         ConsensusData::None,

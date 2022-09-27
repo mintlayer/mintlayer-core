@@ -85,6 +85,7 @@ impl TransactionBuilder {
             Transaction::new(self.flags, self.inputs, self.outputs, self.lock_time).unwrap(),
             self.witnesses,
         )
+        .expect("invalid witness count")
     }
 }
 
