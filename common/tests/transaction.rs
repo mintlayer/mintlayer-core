@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::signature::inputsig::InputWitness;
 use common::chain::{tokens::OutputValue, transaction::*};
 use common::primitives::{Amount, Id, Idable, H256};
 use expect_test::expect;
@@ -24,6 +23,8 @@ fn transaction_id_snapshots() {
     let hash1 = H256([0x51; 32]);
     let hash2 = H256([0x52; 32]);
 
+    // TODO(PR) this used to have witnesses, we should restore them and check the id with witness
+
     let outs0: Vec<TxOutput> = [TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(25)),
         OutputPurpose::Transfer(Destination::ScriptHash(Id::new(hash0))),
@@ -32,19 +33,19 @@ fn transaction_id_snapshots() {
     let ins0: Vec<TxInput> = [TxInput::new(
         Id::<Transaction>::new(hash0).into(),
         5,
-        InputWitness::NoSignature(None),
+        // InputWitness::NoSignature(None),
     )]
     .to_vec();
     let ins1: Vec<TxInput> = [
         TxInput::new(
             Id::<Transaction>::new(hash1).into(),
             3,
-            InputWitness::NoSignature(Some(vec![0x01, 0x05, 0x09])),
+            // InputWitness::NoSignature(Some(vec![0x01, 0x05, 0x09])),
         ),
         TxInput::new(
             Id::<Transaction>::new(hash2).into(),
             0,
-            InputWitness::NoSignature(Some(vec![0x91, 0x55, 0x19, 0x00])),
+            // InputWitness::NoSignature(Some(vec![0x91, 0x55, 0x19, 0x00])),
         ),
     ]
     .to_vec();

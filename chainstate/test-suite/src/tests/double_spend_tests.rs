@@ -254,7 +254,7 @@ fn overspend_multiple_outputs(#[case] seed: Seed) {
         );
         let tx2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(tx1.get_id().into(), 0, InputWitness::NoSignature(None)),
+                TxInput::new(tx1.get_id().into(), 0),
                 InputWitness::NoSignature(None),
             )
             .with_outputs(vec![tx2_output.clone(), tx2_output])
@@ -301,7 +301,7 @@ fn duplicate_input_in_the_same_tx(#[case] seed: Seed) {
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
 
         let witness = InputWitness::NoSignature(None);
-        let input = TxInput::new(first_tx.get_id().into(), 0, witness.clone());
+        let input = TxInput::new(first_tx.get_id().into(), 0);
         let second_tx = TransactionBuilder::new()
             .add_input(input.clone(), witness.clone())
             .add_input(input, witness)
@@ -354,9 +354,9 @@ fn same_input_diff_sig_in_the_same_tx(#[case] seed: Seed) {
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
 
         let witness1 = InputWitness::NoSignature(Some(vec![0, 1, 2]));
-        let input1 = TxInput::new(first_tx.get_id().into(), 0, witness1.clone());
+        let input1 = TxInput::new(first_tx.get_id().into(), 0);
         let witness2 = InputWitness::NoSignature(Some(vec![0, 1, 2, 3]));
-        let input2 = TxInput::new(first_tx.get_id().into(), 0, witness2.clone());
+        let input2 = TxInput::new(first_tx.get_id().into(), 0);
         let second_tx = TransactionBuilder::new()
             .add_input(input1, witness1)
             .add_input(input2, witness2)
@@ -465,11 +465,7 @@ fn duplicate_odd_tx_in_the_same_block(#[case] seed: Seed) {
 fn tx_from_genesis(genesis: &Genesis, rng: &mut impl Rng, output_value: u128) -> SignedTransaction {
     TransactionBuilder::new()
         .add_input(
-            TxInput::new(
-                OutPointSourceId::BlockReward(genesis.get_id().into()),
-                0,
-                empty_witness(rng),
-            ),
+            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(rng),
         )
         .add_output(TxOutput::new(
@@ -481,7 +477,7 @@ fn tx_from_genesis(genesis: &Genesis, rng: &mut impl Rng, output_value: u128) ->
 
 // Creates a transaction with an input based on the specified transaction id.
 fn tx_from_tx(tx: &SignedTransaction, output_value: u128) -> SignedTransaction {
-    let input = TxInput::new(tx.get_id().into(), 0, InputWitness::NoSignature(None));
+    let input = TxInput::new(tx.get_id().into(), 0);
     let output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(output_value)),
         OutputPurpose::Transfer(anyonecanspend_address()),

@@ -357,7 +357,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
         let tx1 = SignedTransaction::new(
             Transaction::new(
                 0,
-                vec![TxInput::new(utx.clone(), 0, empty_witness(&mut rng))],
+                vec![TxInput::new(utx.clone(), 0)],
                 vec![TxOutput::new(
                     utxo[0].value().clone(),
                     OutputPurpose::Transfer(anyonecanspend_address()),
@@ -372,7 +372,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
         let tx2 = SignedTransaction::new(
             Transaction::new(
                 0,
-                vec![TxInput::new(tx1.get_id().into(), 0, empty_witness(&mut rng))],
+                vec![TxInput::new(tx1.get_id().into(), 0)],
                 vec![TxOutput::new(
                     tx1.transaction().outputs()[0].value().clone(),
                     OutputPurpose::Transfer(anyonecanspend_address()),
@@ -1145,7 +1145,6 @@ fn burn_inputs_in_tx(#[case] seed: Seed) {
                 TxInput::new(
                     OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
                     0,
-                    empty_witness(&mut rng),
                 ),
                 empty_witness(&mut rng),
             )

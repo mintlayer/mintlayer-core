@@ -20,9 +20,7 @@ use crate::primitives::{id, Id, Idable, VersionTag};
 use crypto::hash::StreamHasher;
 use serialization::{Decode, Encode, Tagged};
 
-use super::signature::inputsig::InputWitness;
 use super::Transaction;
-use super::TransactionUpdateError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Tagged)]
 pub struct TransactionV1 {
@@ -75,17 +73,18 @@ impl TransactionV1 {
         Id::new(id::hash_encoded(self))
     }
 
-    pub fn update_witness(
-        &mut self,
-        input_index: usize,
-        witness: InputWitness,
-    ) -> Result<(), TransactionUpdateError> {
-        match self.inputs.get_mut(input_index) {
-            Some(input) => input.update_witness(witness),
-            None => return Err(TransactionUpdateError::Unknown),
-        }
-        Ok(())
-    }
+    // TODO(PRO) this has to go
+    // pub fn update_witness(
+    //     &mut self,
+    //     input_index: usize,
+    //     witness: InputWitness,
+    // ) -> Result<(), TransactionUpdateError> {
+    //     match self.inputs.get_mut(input_index) {
+    //         Some(input) => input.update_witness(witness),
+    //         None => return Err(TransactionUpdateError::Unknown),
+    //     }
+    //     Ok(())
+    // }
 }
 
 impl Idable for TransactionV1 {

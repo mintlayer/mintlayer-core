@@ -161,7 +161,7 @@ fn create_utxo_data(
 ) -> Option<(InputWitness, TxInput, TxOutput)> {
     Some((
         empty_witness(rng),
-        TxInput::new(outsrc.clone(), index as u32, empty_witness(rng)),
+        TxInput::new(outsrc.clone(), index as u32),
         match output.value() {
             OutputValue::Coin(output_value) => {
                 let spent_value = Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
@@ -322,7 +322,6 @@ fn process_block() {
                     TxInput::new(
                         OutPointSourceId::BlockReward(<Id<GenBlock>>::from(gen_block_id)),
                         0,
-                        InputWitness::NoSignature(None),
                     ),
                     InputWitness::NoSignature(None),
                 )

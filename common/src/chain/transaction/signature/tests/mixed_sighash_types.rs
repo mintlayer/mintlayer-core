@@ -18,7 +18,7 @@ use itertools::iproduct;
 use crypto::key::{KeyKind, PrivateKey};
 
 use super::utils::*;
-use crate::chain::Destination;
+use crate::chain::{signature::inputsig::InputWitness, Destination};
 
 // Create a transaction with a different signature hash type for every input.
 // This test takes a long time to finish, so it is ignored by default.
@@ -37,9 +37,9 @@ fn mixed_sighash_types() {
         sig_hash_types(),
         sig_hash_types()
     ) {
-        let mut tx = generate_unsigned_tx(&destination, 6, 6).unwrap();
+        let tx = generate_unsigned_tx(&destination, 6, 6).unwrap();
 
-        for (input, sighash_type) in [
+        let sigs = [
             sighash_types.0,
             sighash_types.1,
             sighash_types.2,
@@ -49,17 +49,16 @@ fn mixed_sighash_types() {
         ]
         .into_iter()
         .enumerate()
-        {
-            update_signature(
-                &mut tx,
-                input,
-                &private_key,
-                sighash_type,
-                destination.clone(),
+        .map(|(input, sighash_type)| {
+            InputWitness::Standard(
+                make_signature(&tx, input, &private_key, sighash_type, destination.clone())
+                    .unwrap(),
             )
-            .unwrap();
-        }
+        })
+        .collect::<Vec<_>>();
 
-        assert_eq!(verify_signed_tx(&tx, &destination), Ok(()));
+        let signed_tx = tx.sign(sigs).unwrap();
+
+        verify_signed_tx(&signed_tx, &destination).expect("Signature verification failed")
     }
 }

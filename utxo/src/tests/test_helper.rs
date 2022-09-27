@@ -19,8 +19,8 @@ use crate::{
 };
 use common::{
     chain::{
-        signature::inputsig::InputWitness, tokens::OutputValue, Destination, GenBlock, OutPoint,
-        OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
+        tokens::OutputValue, Destination, GenBlock, OutPoint, OutPointSourceId, OutputPurpose,
+        Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, Id, H256},
 };
@@ -58,11 +58,7 @@ pub fn create_tx_inputs(rng: &mut impl Rng, outpoints: &[OutPoint]) -> Vec<TxInp
         .into_iter()
         .map(|idx| {
             let outpoint = outpoints.get(idx).expect("should return an outpoint");
-            TxInput::new(
-                outpoint.tx_id(),
-                outpoint.output_index(),
-                InputWitness::NoSignature(None),
-            )
+            TxInput::new(outpoint.tx_id(), outpoint.output_index())
         })
         .collect_vec()
 }

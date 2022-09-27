@@ -27,6 +27,7 @@ use super::{
 use crate::{
     chain::{
         signature::{verify_signature, TransactionSigError},
+        signed_transaction::SignedTransaction,
         tokens::OutputValue,
         Destination, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
     },
@@ -60,14 +61,14 @@ fn verify_no_signature() {
     let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
 
     for destination in destinations(public_key).filter(|d| d != &Destination::AnyoneCanSpend) {
-        let mut tx = generate_unsigned_tx(&destination, 3, 3).unwrap();
-        tx.update_witness(
-            0,
-            InputWitness::NoSignature(Some(vec![1, 2, 3, 4, 5, 6, 7, 8, 9])),
-        )
-        .unwrap();
+        let tx = generate_unsigned_tx(&destination, 3, 3).unwrap();
+        let witnesses = (0..tx.inputs().len())
+            .into_iter()
+            .map(|_| InputWitness::NoSignature(Some(vec![1, 2, 3, 4, 5, 6, 7, 8, 9])))
+            .collect_vec();
+        let signed_tx = tx.sign(witnesses).unwrap();
         assert_eq!(
-            verify_signature(&destination, &tx, 0),
+            verify_signature(&destination, &signed_tx, 0),
             Err(TransactionSigError::SignatureNotFound),
             "{destination:?}"
         );
@@ -85,18 +86,20 @@ fn verify_invalid_signature() {
     for (sighash_type, raw_signature) in
         sig_hash_types().cartesian_product([empty_signature, invalid_signature])
     {
-        let mut tx = generate_unsigned_tx(&destination, 3, 3).unwrap();
-        tx.update_witness(
-            0,
-            InputWitness::Standard(StandardInputSignature::new(
-                sighash_type,
-                raw_signature.clone(),
-            )),
-        )
-        .unwrap();
+        let tx = generate_unsigned_tx(&destination, 3, 3).unwrap();
+        let witnesses = (0..tx.inputs().len())
+            .into_iter()
+            .map(|_| {
+                InputWitness::Standard(StandardInputSignature::new(
+                    sighash_type,
+                    raw_signature.clone(),
+                ))
+            })
+            .collect_vec();
+        let signed_tx = tx.sign(witnesses).unwrap();
 
         assert_eq!(
-            verify_signature(&destination, &tx, 0),
+            verify_signature(&destination, &signed_tx, 0),
             Err(TransactionSigError::InvalidSignatureEncoding),
             "{sighash_type:?}, signature = {raw_signature:?}"
         );
@@ -231,7 +234,7 @@ fn sign_mutate_then_verify(
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     destination: &Destination,
-) -> Transaction {
+) -> SignedTransaction {
     // Create and sign tx, and then modify and verify it.
     let original_tx = generate_and_sign_tx(destination, 3, 3, private_key, sighash_type).unwrap();
     assert_eq!(verify_signed_tx(&original_tx, destination), Ok(()));
@@ -242,11 +245,11 @@ fn sign_mutate_then_verify(
     original_tx
 }
 
-fn check_change_flags(original_tx: &Transaction, destination: &Destination) {
+fn check_change_flags(original_tx: &SignedTransaction, destination: &Destination) {
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.flags = tx_updater.flags.wrapping_add(1234567890);
     let tx = tx_updater.generate_tx().unwrap();
-    for (input_num, _) in tx.inputs().iter().enumerate() {
+    for (input_num, _) in tx.transaction().inputs().iter().enumerate() {
         assert_eq!(
             verify_signature(destination, &tx, input_num),
             Err(TransactionSigError::SignatureVerificationFailed)
@@ -254,11 +257,11 @@ fn check_change_flags(original_tx: &Transaction, destination: &Destination) {
     }
 }
 
-fn check_change_locktime(original_tx: &Transaction, outpoint_dest: &Destination) {
+fn check_change_locktime(original_tx: &SignedTransaction, outpoint_dest: &Destination) {
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.lock_time = tx_updater.lock_time.wrapping_add(1234567890);
     let tx = tx_updater.generate_tx().unwrap();
-    for (input_num, _) in tx.inputs().iter().enumerate() {
+    for (input_num, _) in tx.transaction().inputs().iter().enumerate() {
         assert_eq!(
             verify_signature(outpoint_dest, &tx, input_num),
             Err(TransactionSigError::SignatureVerificationFailed)
@@ -266,14 +269,14 @@ fn check_change_locktime(original_tx: &Transaction, outpoint_dest: &Destination)
     }
 }
 
-fn check_insert_input(original_tx: &Transaction, destination: &Destination, should_fail: bool) {
+fn check_insert_input(
+    original_tx: &SignedTransaction,
+    destination: &Destination,
+    should_fail: bool,
+) {
     let mut tx_updater = MutableTransaction::from(original_tx);
     let outpoinr_source_id = OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random()));
-    tx_updater.inputs.push(TxInput::new(
-        outpoinr_source_id,
-        1,
-        InputWitness::NoSignature(None),
-    ));
+    tx_updater.inputs.push(TxInput::new(outpoinr_source_id, 1));
     let tx = tx_updater.generate_tx().unwrap();
     let res = verify_signature(destination, &tx, 0);
     if should_fail {
@@ -284,17 +287,17 @@ fn check_insert_input(original_tx: &Transaction, destination: &Destination, shou
 }
 
 // A witness mutation should result in signature verification error.
-fn check_mutate_witness(original_tx: &Transaction, outpoint_dest: &Destination) {
+fn check_mutate_witness(original_tx: &SignedTransaction, outpoint_dest: &Destination) {
     let mut tx_updater = MutableTransaction::from(original_tx);
-    for input in 0..original_tx.inputs().len() {
-        let signature = match tx_updater.inputs[0].witness() {
+    for input in 0..original_tx.transaction().inputs().len() {
+        let signature = match &tx_updater.witness[0] {
             InputWitness::Standard(signature) => signature,
             InputWitness::NoSignature(_) => panic!("Unexpected InputWitness::NoSignature"),
         };
 
         let raw_signature = signature.raw_signature().iter().map(|b| b.wrapping_add(1)).collect();
         let signature = StandardInputSignature::new(signature.sighash_type(), raw_signature);
-        tx_updater.inputs[input].update_witness(InputWitness::Standard(signature));
+        tx_updater.witness[input] = InputWitness::Standard(signature);
         let tx = tx_updater.generate_tx().unwrap();
 
         assert!(matches!(
@@ -305,7 +308,11 @@ fn check_mutate_witness(original_tx: &Transaction, outpoint_dest: &Destination) 
     }
 }
 
-fn check_insert_output(original_tx: &Transaction, destination: &Destination, should_fail: bool) {
+fn check_insert_output(
+    original_tx: &SignedTransaction,
+    destination: &Destination,
+    should_fail: bool,
+) {
     let mut tx_updater = MutableTransaction::from(original_tx);
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     tx_updater.outputs.push(TxOutput::new(
@@ -321,7 +328,11 @@ fn check_insert_output(original_tx: &Transaction, destination: &Destination, sho
     }
 }
 
-fn check_mutate_output(original_tx: &Transaction, destination: &Destination, should_fail: bool) {
+fn check_mutate_output(
+    original_tx: &SignedTransaction,
+    destination: &Destination,
+    should_fail: bool,
+) {
     // Should failed due to change in output value
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.outputs[0] = TxOutput::new(
@@ -342,13 +353,16 @@ fn check_mutate_output(original_tx: &Transaction, destination: &Destination, sho
     }
 }
 
-fn check_mutate_input(original_tx: &Transaction, destination: &Destination, should_fail: bool) {
+fn check_mutate_input(
+    original_tx: &SignedTransaction,
+    destination: &Destination,
+    should_fail: bool,
+) {
     // Should failed due to change in output value
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.inputs[0] = TxInput::new(
         OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random())),
         9999,
-        tx_updater.inputs[0].witness().clone(),
     );
     let tx = tx_updater.generate_tx().unwrap();
     let res = verify_signature(destination, &tx, 0);

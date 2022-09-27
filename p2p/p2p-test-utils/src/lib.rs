@@ -149,7 +149,7 @@ fn create_utxo_data(
     }
     Some((
         nosig_random_witness(),
-        TxInput::new(outsrc, index as u32, nosig_random_witness()),
+        TxInput::new(outsrc, index as u32),
         TxOutput::new(
             OutputValue::Coin(new_value),
             OutputPurpose::Transfer(anyonecanspend_address()),
