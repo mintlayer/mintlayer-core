@@ -275,8 +275,9 @@ impl MempoolStore {
         self.refresh_ancestors(entry);
         self.txs_by_descendant_score
             .entry(entry.descendant_score())
-            .or_default()
-            .remove(&entry.tx_id());
+            .and_modify(|entries| {
+                entries.remove(&entry.tx_id());
+            });
         if self
             .txs_by_descendant_score
             .get(&entry.descendant_score())
