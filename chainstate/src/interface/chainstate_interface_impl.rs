@@ -36,7 +36,7 @@ use common::{
     },
     primitives::{id::WithId, BlockHeight, Id},
 };
-use utils::eventhandler::EventHandler;
+use utils::event_handler::EventHandler;
 use utxo::UtxosView;
 
 use crate::ChainstateConfig;
@@ -65,37 +65,30 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         block: Block,
         source: BlockSource,
     ) -> Result<Option<BlockIndex>, ChainstateError> {
-        self.chainstate
-            .process_block(block.into(), source)
-            .map_err(ChainstateError::ProcessBlockError)
+        self.chainstate.process_block(block.into(), source).map_err(Into::into)
     }
 
     fn preliminary_header_check(&self, header: BlockHeader) -> Result<(), ChainstateError> {
-        self.chainstate
-            .preliminary_header_check(header)
-            .map_err(ChainstateError::ProcessBlockError)
+        self.chainstate.preliminary_header_check(header).map_err(Into::into)
     }
 
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError> {
         let block = self
             .chainstate
             .preliminary_block_check(block.into())
-            .map_err(ChainstateError::ProcessBlockError)?;
+            .map_err(ChainstateError::from)?;
         Ok(WithId::take(block))
     }
 
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError> {
-        self.chainstate
-            .query()
-            .get_best_block_id()
-            .map_err(ChainstateError::FailedToReadProperty)
+        self.chainstate.query().get_best_block_id().map_err(Into::into)
     }
 
     fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> Result<bool, ChainstateError> {
         self.chainstate
             .query()
             .get_block_height_in_main_chain(&(*block_id).into())
-            .map_err(ChainstateError::FailedToReadProperty)
+            .map_err(Into::into)
             .map(|ht| ht.is_some())
     }
 
@@ -106,38 +99,26 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         self.chainstate
             .query()
             .get_block_height_in_main_chain(block_id)
-            .map_err(ChainstateError::FailedToReadProperty)
+            .map_err(Into::into)
     }
 
     fn get_block_id_from_height(
         &self,
         height: &BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, ChainstateError> {
-        self.chainstate
-            .query()
-            .get_block_id_from_height(height)
-            .map_err(ChainstateError::FailedToReadProperty)
+        self.chainstate.query().get_block_id_from_height(height).map_err(Into::into)
     }
 
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ChainstateError> {
-        self.chainstate
-            .query()
-            .get_block(block_id)
-            .map_err(ChainstateError::FailedToReadProperty)
+        self.chainstate.query().get_block(block_id).map_err(Into::into)
     }
 
     fn get_locator(&self) -> Result<Locator, ChainstateError> {
-        self.chainstate
-            .query()
-            .get_locator()
-            .map_err(ChainstateError::FailedToReadProperty)
+        self.chainstate.query().get_locator().map_err(Into::into)
     }
 
     fn get_headers(&self, locator: Locator) -> Result<Vec<BlockHeader>, ChainstateError> {
-        self.chainstate
-            .query()
-            .get_headers(locator)
-            .map_err(ChainstateError::FailedToReadProperty)
+        self.chainstate.query().get_headers(locator).map_err(Into::into)
     }
 
     fn filter_already_existing_blocks(
@@ -147,7 +128,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         self.chainstate
             .query()
             .filter_already_existing_blocks(headers)
-            .map_err(ChainstateError::FailedToReadProperty)
+            .map_err(Into::into)
     }
 
     fn get_best_block_height(&self) -> Result<BlockHeight, ChainstateError> {
@@ -155,7 +136,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
             .chainstate
             .query()
             .get_best_block_index()
-            .map_err(ChainstateError::FailedToReadProperty)?
+            .map_err(ChainstateError::from)?
             .expect("Best block index could not be found");
         Ok(best_block_index.block_height())
     }
@@ -165,25 +146,19 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
             .chainstate
             .query()
             .get_best_block_index()
-            .map_err(ChainstateError::FailedToReadProperty)?
+            .map_err(ChainstateError::from)?
             .expect("Best block index could not be found"))
     }
 
     fn get_block_index(&self, block_id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError> {
-        self.chainstate
-            .query()
-            .get_block_index(block_id)
-            .map_err(ChainstateError::FailedToReadProperty)
+        self.chainstate.query().get_block_index(block_id).map_err(Into::into)
     }
 
     fn get_gen_block_index(
         &self,
         id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, ChainstateError> {
-        self.chainstate
-            .query()
-            .get_gen_block_index(id)
-            .map_err(ChainstateError::FailedToReadProperty)
+        self.chainstate.query().get_gen_block_index(id).map_err(Into::into)
     }
 
     fn get_chain_config(&self) -> Arc<ChainConfig> {
@@ -202,10 +177,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         &self,
         tx_id: &OutPointSourceId,
     ) -> Result<Option<TxMainChainIndex>, ChainstateError> {
-        self.chainstate
-            .query()
-            .get_mainchain_tx_index(tx_id)
-            .map_err(ChainstateError::FailedToReadProperty)
+        self.chainstate.query().get_mainchain_tx_index(tx_id).map_err(Into::into)
     }
 
     fn subscribers(&self) -> &Vec<EventHandler<ChainstateEvent>> {
@@ -235,7 +207,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         self.chainstate
             .make_db_tx_ro()
             .get_ancestor(block_index, ancestor_height)
-            .map_err(ChainstateError::FailedToReadProperty)
+            .map_err(Into::into)
     }
 
     fn last_common_ancestor(
@@ -246,7 +218,7 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         self.chainstate
             .make_db_tx_ro()
             .last_common_ancestor(first_block_index, second_block_index)
-            .map_err(ChainstateError::FailedToReadProperty)
+            .map_err(Into::into)
     }
 
     fn get_block_reward(
@@ -256,37 +228,28 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         self.chainstate
             .make_db_tx_ro()
             .get_block_reward(block_index)
-            .map_err(ChainstateError::FailedToReadProperty)
+            .map_err(Into::into)
     }
 
     fn get_token_info_for_rpc(
         &self,
         token_id: TokenId,
     ) -> Result<Option<RPCTokenInfo>, ChainstateError> {
-        self.chainstate
-            .query()
-            .get_token_info_for_rpc(token_id)
-            .map_err(ChainstateError::FailedToReadProperty)
+        self.chainstate.query().get_token_info_for_rpc(token_id).map_err(Into::into)
     }
 
     fn get_token_aux_data(
         &self,
         token_id: TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, ChainstateError> {
-        self.chainstate
-            .query()
-            .get_token_aux_data(&token_id)
-            .map_err(ChainstateError::FailedToReadProperty)
+        self.chainstate.query().get_token_aux_data(&token_id).map_err(Into::into)
     }
 
     fn get_token_id_from_issuance_tx(
         &self,
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TokenId>, ChainstateError> {
-        self.chainstate
-            .query()
-            .get_token_id_from_issuance_tx(tx_id)
-            .map_err(ChainstateError::FailedToReadProperty)
+        self.chainstate.query().get_token_id_from_issuance_tx(tx_id).map_err(Into::into)
     }
 
     fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError> {
@@ -330,17 +293,11 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
     }
 
     fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
-        self.chainstate
-            .query()
-            .get_mainchain_blocks_list()
-            .map_err(ChainstateError::FailedToReadProperty)
+        self.chainstate.query().get_mainchain_blocks_list().map_err(Into::into)
     }
 
     fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
-        self.chainstate
-            .query()
-            .get_block_id_tree_as_list()
-            .map_err(ChainstateError::FailedToReadProperty)
+        self.chainstate.query().get_block_id_tree_as_list().map_err(Into::into)
     }
 
     fn import_bootstrap_stream<'a>(

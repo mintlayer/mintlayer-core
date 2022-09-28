@@ -14,14 +14,14 @@
 // limitations under the License.
 
 #[macro_export]
-macro_rules! newtype {
+macro_rules! new_type {
     ($(#[$meta:meta])* $vis:vis struct $name:ident($wrapped:ty);) => {
         $(#[$meta])*
         $vis struct $name($wrapped);
 
         impl From<$name> for $wrapped {
-            fn from(newtype_instance: $name) -> Self {
-                newtype_instance.0
+            fn from(new_type_instance: $name) -> Self {
+                new_type_instance.0
             }
         }
 
@@ -65,7 +65,7 @@ mod tests {
         }
     }
 
-    newtype! {
+    new_type! {
         #[derive(Clone, Debug)]
         struct NewInt(OldInt);
     }

@@ -48,7 +48,7 @@ use common::{
     primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
 };
 use logging::log;
-use utils::eventhandler::{EventHandler, EventsController};
+use utils::event_handler::{EventHandler, EventsController};
 use utxo::UtxosDBMut;
 
 use self::{

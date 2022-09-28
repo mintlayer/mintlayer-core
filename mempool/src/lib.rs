@@ -28,7 +28,7 @@ use crate::pool::Mempool;
 
 mod config;
 pub mod error;
-mod feerate;
+mod fee_rate;
 pub mod pool;
 pub mod rpc;
 

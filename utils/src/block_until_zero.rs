@@ -20,7 +20,7 @@ use std::{
     time::Duration,
 };
 
-use crate::counttracker::CountTracker;
+use crate::count_tracker::CountTracker;
 
 pub struct BlockUntilZero<T>
 where

@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod blockuntilzero;
-pub mod counttracker;
+pub mod block_until_zero;
+pub mod count_tracker;
 pub mod ensure;
-pub mod eventhandler;
-pub mod newtype;
+pub mod event_handler;
+pub mod new_type;
 
 mod concurrency_impl;
 pub use concurrency_impl::*;

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::blockuntilzero::BlockUntilZero;
+use crate::block_until_zero::BlockUntilZero;
 
 use std::sync::{atomic::AtomicI32, Arc};
 

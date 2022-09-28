@@ -36,7 +36,7 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
-use utils::eventhandler::EventHandler;
+use utils::event_handler::EventHandler;
 
 use crate::ChainstateConfig;
 use crate::{

@@ -37,13 +37,13 @@ use common::primitives::Idable;
 use logging::log;
 
 use utils::ensure;
-use utils::newtype;
+use utils::new_type;
 
 use crate::error::Error;
 use crate::error::TxValidationError;
-use crate::feerate::FeeRate;
-use crate::feerate::INCREMENTAL_RELAY_FEE_RATE;
-use crate::feerate::INCREMENTAL_RELAY_THRESHOLD;
+use crate::fee_rate::FeeRate;
+use crate::fee_rate::INCREMENTAL_RELAY_FEE_RATE;
+use crate::fee_rate::INCREMENTAL_RELAY_THRESHOLD;
 use store::MempoolStore;
 use store::TxMempoolEntry;
 
@@ -128,17 +128,17 @@ trait TryGetFee {
     async fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError>;
 }
 
-newtype! {
+new_type! {
     #[derive(Debug)]
     struct Ancestors(BTreeSet<Id<Transaction>>);
 }
 
-newtype! {
+new_type! {
     #[derive(Debug)]
     struct Descendants(BTreeSet<Id<Transaction>>);
 }
 
-newtype! {
+new_type! {
     #[derive(Debug)]
     struct Conflicts(BTreeSet<Id<Transaction>>);
 }
@@ -384,7 +384,7 @@ where
         // Deviations from Bitcoin Core
         //
         // - In our FeeRate calculations, we use the `encoded_size`of a transaction. In contrast,
-        // see Bitcoin Core's `CTxMemPoolEntry::GetTxSize()`, which takes into account sigops cost
+        // see Bitcoin Core's `CTxMemPoolEntry::GetTxSize()`, which takes into account sig-ops cost
         // and witness data. This deviation is not intentional, but rather the result of wanting to
         // get a basic implementation working. TODO: weigh what notion of size/weight we wish to
         // use and whether to follow Bitcoin Core in this regard

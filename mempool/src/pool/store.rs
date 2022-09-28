@@ -28,7 +28,7 @@ use serialization::Encode;
 
 use logging::log;
 
-use utils::newtype;
+use utils::new_type;
 
 use crate::error::Error;
 use crate::error::TxValidationError;
@@ -38,7 +38,7 @@ use super::Conflicts;
 use super::Descendants;
 use super::Time;
 
-newtype! {
+new_type! {
     #[derive(Debug, PartialEq, Eq, Ord, PartialOrd)]
     pub(super) struct DescendantScore(Amount);
 }
@@ -58,10 +58,10 @@ pub struct MempoolStore {
     //
     // TODO: currently, the descendant score is the sum fee of the transaction to gether with all
     // of its descendants. If we wish to follow Bitcoin Core, we should use:
-    // max(feerate(tx, tx_with_descendants)),
-    // Where feerate is computed as fee(tx)/size(tx)
+    // max(fee_rate(tx, tx_with_descendants)),
+    // Where fee_rate is computed as fee(tx)/size(tx)
     // Note that if we wish to follow Bitcoin Bore, "size" is not simply the encoded size, but
-    // rather a value that takes into account witdess and sigop data (see CTxMemPoolEntry::GetTxSize).
+    // rather a value that takes into account witness and sig-op data (see CTxMemPoolEntry::GetTxSize).
     pub(super) txs_by_descendant_score: BTreeMap<DescendantScore, BTreeSet<Id<Transaction>>>,
 
     // Entries that have remained in the mempool for a long time (see DEFAULT_MEMPOOL_EXPIRY) are
@@ -397,7 +397,7 @@ impl TxMempoolEntry {
     }
 
     pub(super) fn size(&self) -> usize {
-        // TODO(Roy) this should follow Bitcoin's GetTxSize, which weighs in sigops, etc.
+        // TODO(Roy) this should follow Bitcoin's GetTxSize, which weighs in sig-ops, etc.
         self.tx.encoded_size()
     }
 

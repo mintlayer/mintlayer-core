@@ -27,7 +27,7 @@ use common::chain::{
     ChainConfig, OutPointSourceId, TxMainChainIndex,
 };
 use common::primitives::{Amount, BlockHeight, Id};
-use utils::eventhandler::EventHandler;
+use utils::event_handler::EventHandler;
 
 use crate::{ChainstateError, ChainstateEvent};
 use chainstate_types::Locator;

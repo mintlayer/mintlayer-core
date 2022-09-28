@@ -36,7 +36,7 @@ use chainstate_types::GenBlockIndex;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::tokens::TokenAuxiliaryData;
 use common::chain::ChainConfig;
-use utils::eventhandler::EventHandler;
+use utils::event_handler::EventHandler;
 
 use super::chainstate_interface::ChainstateInterface;
 
