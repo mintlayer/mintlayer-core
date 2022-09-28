@@ -24,18 +24,18 @@ use common::{
     primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
 
-use super::{chainstateref, orphan_blocks::OrphanBlocks, HEADER_LIMIT};
+use super::{chainstate_ref, orphan_blocks::OrphanBlocks, HEADER_LIMIT};
 
 pub fn locator_tip_distances() -> impl Iterator<Item = BlockDistance> {
     itertools::iterate(0, |&i| std::cmp::max(1, i * 2)).map(BlockDistance::new)
 }
 
 pub struct ChainstateQuery<'a, S, O> {
-    chainstate_ref: chainstateref::ChainstateRef<'a, S, O>,
+    chainstate_ref: chainstate_ref::ChainstateRef<'a, S, O>,
 }
 
 impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateQuery<'a, S, O> {
-    pub(crate) fn new(chainstate_ref: chainstateref::ChainstateRef<'a, S, O>) -> Self {
+    pub(crate) fn new(chainstate_ref: chainstate_ref::ChainstateRef<'a, S, O>) -> Self {
         Self { chainstate_ref }
     }
 

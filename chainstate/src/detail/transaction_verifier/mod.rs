@@ -53,7 +53,7 @@ use self::token_issuance_cache::TokenIssuanceCache;
 mod utils;
 use self::utils::{check_transferred_amount, get_input_token_id_and_amount};
 
-use super::chainstateref::{block_index_ancestor_getter, gen_block_index_getter};
+use super::chainstate_ref::{block_index_ancestor_getter, gen_block_index_getter};
 
 // TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee`
 //       that essentially belongs to this type, but return Amount

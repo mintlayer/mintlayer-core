@@ -29,7 +29,7 @@ pub use transaction_verifier::error::TokensError;
 
 mod block_index_history_iter;
 pub mod bootstrap;
-mod chainstateref;
+mod chainstate_ref;
 mod error;
 mod median_time;
 mod orphan_blocks;
@@ -90,9 +90,9 @@ impl<S: BlockchainStorage> Chainstate<S> {
     }
 
     #[must_use]
-    fn make_db_tx(&mut self) -> chainstateref::ChainstateRef<TxRw<'_, S>, OrphanBlocksRefMut> {
+    fn make_db_tx(&mut self) -> chainstate_ref::ChainstateRef<TxRw<'_, S>, OrphanBlocksRefMut> {
         let db_tx = self.chainstate_storage.transaction_rw();
-        chainstateref::ChainstateRef::new_rw(
+        chainstate_ref::ChainstateRef::new_rw(
             &self.chain_config,
             &self.chainstate_config,
             db_tx,
@@ -104,9 +104,9 @@ impl<S: BlockchainStorage> Chainstate<S> {
     #[must_use]
     pub(crate) fn make_db_tx_ro(
         &self,
-    ) -> chainstateref::ChainstateRef<TxRo<'_, S>, OrphanBlocksRef> {
+    ) -> chainstate_ref::ChainstateRef<TxRo<'_, S>, OrphanBlocksRef> {
         let db_tx = self.chainstate_storage.transaction_ro();
-        chainstateref::ChainstateRef::new_ro(
+        chainstate_ref::ChainstateRef::new_ro(
             &self.chain_config,
             &self.chainstate_config,
             db_tx,
