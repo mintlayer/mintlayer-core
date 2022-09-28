@@ -107,8 +107,8 @@ fn verify_invalid_signature() {
 }
 
 #[test]
-fn verify_signature_invalid_input_index() {
-    const INVALID_INPUT_INDEX: usize = 1234567890;
+fn verify_signature_invalid_signature_index() {
+    const INVALID_SIGNATURE_INDEX: usize = 1234567890;
 
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
@@ -116,9 +116,9 @@ fn verify_signature_invalid_input_index() {
     for sighash_type in sig_hash_types() {
         let tx = generate_and_sign_tx(&destination, 3, 3, &private_key, sighash_type).unwrap();
         assert_eq!(
-            verify_signature(&destination, &tx, INVALID_INPUT_INDEX),
-            Err(TransactionSigError::InvalidInputIndex(
-                INVALID_INPUT_INDEX,
+            verify_signature(&destination, &tx, INVALID_SIGNATURE_INDEX),
+            Err(TransactionSigError::InvalidSignatureIndex(
+                INVALID_SIGNATURE_INDEX,
                 3
             )),
             "{sighash_type:?}"
