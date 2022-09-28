@@ -310,7 +310,6 @@ pub fn verify_signature<T: Transactable>(
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
     let inputs = tx.inputs().ok_or(TransactionSigError::SignatureVerificationWithoutInputs)?;
-    // TODO(PR): test this error
     let sigs = tx.signatures().ok_or(TransactionSigError::SignatureVerificationWithoutSigs)?;
     let input_witness = sigs.get(input_num).ok_or(TransactionSigError::InvalidSignatureIndex(
         input_num,

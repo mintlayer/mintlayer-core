@@ -277,6 +277,7 @@ fn check_insert_input(
     let mut tx_updater = MutableTransaction::from(original_tx);
     let outpoinr_source_id = OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random()));
     tx_updater.inputs.push(TxInput::new(outpoinr_source_id, 1));
+    tx_updater.witness.push(InputWitness::NoSignature(Some(vec![1, 2, 3])));
     let tx = tx_updater.generate_tx().unwrap();
     let res = verify_signature(destination, &tx, 0);
     if should_fail {
