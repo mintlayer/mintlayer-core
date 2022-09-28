@@ -90,7 +90,6 @@ impl<S: BlockchainStorage> Chainstate<S> {
         self.events_controller.wait_for_all_events();
     }
 
-    #[must_use]
     fn make_db_tx(
         &mut self,
     ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRw<'_, S>, OrphanBlocksRefMut>>
@@ -105,7 +104,6 @@ impl<S: BlockchainStorage> Chainstate<S> {
         ))
     }
 
-    #[must_use]
     pub(crate) fn make_db_tx_ro(
         &self,
     ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRo<'_, S>, OrphanBlocksRef>>
@@ -120,7 +118,6 @@ impl<S: BlockchainStorage> Chainstate<S> {
         ))
     }
 
-    #[must_use]
     pub fn query(
         &self,
     ) -> Result<ChainstateQuery<TxRo<'_, S>, OrphanBlocksRef>, PropertyQueryError> {
