@@ -79,7 +79,6 @@ impl Eq for WithId<SignedTransaction> {}
 
 // TODO(PR): enforce that inputs size is equal to signatures size when decoding
 
-// TODO(PR): add a check in check_transactions and ensure that all signed transactions have sizes equal in witness and inputs
 // TODO(PR): add tests to check that inputs and witnesses have the same size
 
 // TODO(PR) make the SignedTransaction serialization ignore the size of the witness vec and just use the size of the inputs

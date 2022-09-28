@@ -482,6 +482,16 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
+    fn check_witness_count(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+        for tx in block.transactions() {
+            ensure!(
+                tx.transaction().inputs().len() == tx.signatures().len(),
+                CheckBlockTransactionsError::InvalidWitnessCount
+            )
+        }
+        Ok(())
+    }
+
     fn check_duplicate_inputs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         // check for duplicate inputs (see CVE-2018-17144)
         let mut block_inputs = BTreeSet::new();
@@ -546,6 +556,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         // Note: duplicate txs are detected through duplicate inputs
+        self.check_witness_count(block)?;
         self.check_duplicate_inputs(block)?;
         self.check_tokens_txs(block)?;
         Ok(())
