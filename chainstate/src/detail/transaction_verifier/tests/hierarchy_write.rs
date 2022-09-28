@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::flush::flush_to_storage;
 use super::*;
-
 use common::chain::{
     config::Builder as ConfigBuilder, tokens::TokenAuxiliaryData, TxMainChainIndex,
     TxMainChainPosition,

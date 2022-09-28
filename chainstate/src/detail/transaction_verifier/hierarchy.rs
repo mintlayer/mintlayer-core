@@ -108,7 +108,7 @@ impl<'a, S: TransactionVerifierStorageRef> UtxosStorageRead for TransactionVerif
     }
 
     fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, storage_result::Error> {
-        Ok(Some(self.utxo_cache.best_block_hash()))
+        Ok(Some(self.best_block))
     }
 
     fn get_undo_data(
@@ -133,7 +133,7 @@ impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
         tx_id: &OutPointSourceId,
         tx_index: &TxMainChainIndex,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.tx_index_cache.set_tx_index(tx_id, tx_index.clone());
+        let _ = self.tx_index_cache.set_tx_index(tx_id, tx_index.clone());
         Ok(())
     }
 
@@ -141,7 +141,7 @@ impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
         &mut self,
         tx_id: &OutPointSourceId,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.tx_index_cache.del_tx_index(tx_id);
+        let _ = self.tx_index_cache.del_tx_index(tx_id);
         Ok(())
     }
 
@@ -150,7 +150,7 @@ impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
         token_id: &TokenId,
         data: &TokenAuxiliaryData,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.token_issuance_cache.set_token_aux_data(token_id, data.clone());
+        let _ = self.token_issuance_cache.set_token_aux_data(token_id, data.clone());
         Ok(())
     }
 
@@ -158,7 +158,7 @@ impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
         &mut self,
         token_id: &TokenId,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.token_issuance_cache.del_token_aux_data(token_id);
+        let _ = self.token_issuance_cache.del_token_aux_data(token_id);
         Ok(())
     }
 
@@ -167,7 +167,7 @@ impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
         issuance_tx_id: &Id<Transaction>,
         token_id: &TokenId,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.token_issuance_cache.set_token_id(issuance_tx_id, token_id);
+        let _ = self.token_issuance_cache.set_token_id(issuance_tx_id, token_id);
         Ok(())
     }
 
@@ -175,7 +175,7 @@ impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
         &mut self,
         issuance_tx_id: &Id<Transaction>,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.token_issuance_cache.del_token_id(issuance_tx_id);
+        let _ = self.token_issuance_cache.del_token_id(issuance_tx_id);
         Ok(())
     }
 }

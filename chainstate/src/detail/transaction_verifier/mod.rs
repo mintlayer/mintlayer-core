@@ -23,7 +23,6 @@ mod tx_index_cache;
 use self::{
     amounts_map::AmountsMap,
     error::{ConnectTransactionError, TokensError},
-    flush::flush_to_storage,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{CachedTokensOperation, CoinOrTokenId},
     tx_index_cache::TxIndexCache,
@@ -94,6 +93,7 @@ pub struct TransactionVerifier<'a, S> {
     utxo_cache: UtxosCache<'a>,
     utxo_block_undo: BTreeMap<Id<Block>, BlockUndoEntry>,
     token_issuance_cache: TokenIssuanceCache,
+    best_block: Id<GenBlock>,
 }
 
 impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
@@ -105,6 +105,10 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
             utxo_cache: UtxosCache::from_owned_parent(Box::new(UtxosDB::new(storage_ref))),
             utxo_block_undo: BTreeMap::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
+            best_block: storage_ref
+                .get_best_block_for_utxos()
+                .expect("Database error while reading utxos best block")
+                .expect("best block should be some"),
         }
     }
 
@@ -577,6 +581,10 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         }
 
         Ok(())
+    }
+
+    pub fn set_best_block_for_utxos(&mut self, id: Id<GenBlock>) {
+        self.utxo_cache.set_best_block(id);
     }
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {

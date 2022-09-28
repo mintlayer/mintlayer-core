@@ -687,12 +687,15 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
             .log_err()?;
 
+        tx_verifier.set_best_block_for_utxos(block.get_id().into());
+
         Ok(tx_verifier)
     }
 
     fn make_cache_with_disconnected_transactions(
         &'a self,
         block: &WithId<Block>,
+        prev_block_id: Id<GenBlock>,
     ) -> Result<TransactionVerifier<Self>, BlockError> {
         let mut tx_verifier = TransactionVerifier::new(self, self.chain_config);
 
@@ -710,6 +713,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         tx_verifier
             .disconnect_transactable(BlockTransactableRef::BlockReward(block))
             .log_err()?;
+
+        tx_verifier.set_best_block_for_utxos(prev_block_id);
 
         Ok(tx_verifier)
     }
@@ -844,8 +849,12 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         Ok(())
     }
 
-    fn disconnect_transactions(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
-        let cached_inputs = self.make_cache_with_disconnected_transactions(block)?;
+    fn disconnect_transactions(
+        &mut self,
+        block: &WithId<Block>,
+        prev_block_id: Id<GenBlock>,
+    ) -> Result<(), BlockError> {
+        let cached_inputs = self.make_cache_with_disconnected_transactions(block, prev_block_id)?;
         let cached_inputs = cached_inputs.consume()?;
         flush_to_storage(self, cached_inputs)?;
 
@@ -909,7 +918,8 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             .expect("Best block index not present in the database");
         let block = self.get_block_from_index(&block_index).log_err()?.expect("Inconsistent DB");
         // Disconnect transactions
-        self.disconnect_transactions(&block.into()).log_err()?;
+        self.disconnect_transactions(&block.into(), *block_index.prev_block_id())
+            .log_err()?;
         self.db_tx.set_best_block_id(block_index.prev_block_id()).log_err()?;
         // Disconnect block
         self.db_tx.del_block_id_at_height(&block_index.block_height()).log_err()?;

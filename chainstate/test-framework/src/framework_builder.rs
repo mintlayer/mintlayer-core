@@ -57,6 +57,11 @@ impl TestFrameworkBuilder {
         }
     }
 
+    pub fn with_storage(mut self, s: Store) -> Self {
+        self.chainstate_storage = s;
+        self
+    }
+
     pub fn with_chain_config(mut self, chain_config: ChainConfig) -> Self {
         self.chain_config = chain_config;
         self
