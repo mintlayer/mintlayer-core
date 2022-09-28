@@ -1642,7 +1642,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     check_txs_sorted_by_descendant_sore(&mempool);
 
-    mempool.drop_transaction(&entry_c.get_id());
+    mempool.drop_transaction(&entry_c.tx_id());
     assert!(!mempool.store.txs_by_descendant_score.contains_key(&tx_c_fee.into()));
     let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
     assert_eq!(entry_b.fees_with_descendants(), entry_b.fee());

@@ -615,7 +615,7 @@ where
 
     async fn finalize_tx(&mut self, tx: Transaction) -> Result<(), Error> {
         let entry = self.create_entry(tx).await?;
-        let id = entry.get_id();
+        let id = entry.tx_id();
         self.store.add_tx(entry)?;
         self.remove_expired_transactions();
         ensure!(
@@ -668,7 +668,7 @@ where
             .cloned()
             .collect();
 
-        for tx_id in expired.iter().map(|entry| entry.get_id()) {
+        for tx_id in expired.iter().map(|entry| entry.tx_id()) {
             self.store.drop_tx_and_descendants(tx_id)
         }
     }
@@ -697,7 +697,7 @@ where
                 removed.fee(),
                 NonZeroUsize::new(removed.size()).expect("transaction cannot have zero size"),
             )?);
-            self.store.drop_tx_and_descendants(removed.get_id());
+            self.store.drop_tx_and_descendants(removed.tx_id());
         }
         Ok(removed_fees)
     }
