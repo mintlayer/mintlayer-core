@@ -441,7 +441,7 @@ fn check_mutations<M>(
 
         assert_eq!(
             verify_signature(destination, &tx, INVALID_INPUT),
-            Err(TransactionSigError::InvalidInputIndex(
+            Err(TransactionSigError::InvalidSignatureIndex(
                 INVALID_INPUT,
                 inputs
             ))
@@ -455,6 +455,7 @@ fn check_mutations<M>(
 fn add_input(tx: &SignedTransaction) -> SignedTransaction {
     let mut updater = MutableTransaction::from(tx);
     updater.inputs.push(updater.inputs[0].clone());
+    updater.witness.push(updater.witness[0].clone());
     updater.generate_tx().unwrap()
 }
 
@@ -470,6 +471,7 @@ fn mutate_input(tx: &SignedTransaction) -> SignedTransaction {
 fn remove_first_input(tx: &SignedTransaction) -> SignedTransaction {
     let mut updater = MutableTransaction::from(tx);
     updater.inputs.remove(0);
+    updater.witness.remove(0);
     updater.generate_tx().unwrap()
 }
 
@@ -477,12 +479,14 @@ fn remove_middle_input(tx: &SignedTransaction) -> SignedTransaction {
     let mut updater = MutableTransaction::from(tx);
     assert!(updater.inputs.len() > 8);
     updater.inputs.remove(7);
+    updater.witness.remove(7);
     updater.generate_tx().unwrap()
 }
 
 fn remove_last_input(tx: &SignedTransaction) -> SignedTransaction {
     let mut updater = MutableTransaction::from(tx);
     updater.inputs.pop().expect("Unexpected empty inputs");
+    updater.witness.pop().expect("Unexpected empty witness");
     updater.generate_tx().unwrap()
 }
 
