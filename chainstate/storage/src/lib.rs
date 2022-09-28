@@ -36,7 +36,7 @@ use utxo::{UtxosStorageRead, UtxosStorageWrite};
 pub type Result<T> = chainstate_types::storage_result::Result<T>;
 pub type Error = chainstate_types::storage_result::Error;
 
-pub mod inmemory {
+pub mod in_memory {
     pub type Store = super::Store<storage::inmemory::InMemory>;
 }
 

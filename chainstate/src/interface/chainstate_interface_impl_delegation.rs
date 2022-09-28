@@ -248,7 +248,7 @@ mod tests {
 
     use std::sync::Arc;
 
-    use chainstate_storage::inmemory::Store;
+    use chainstate_storage::in_memory::Store;
     use common::{
         chain::{config::create_unit_test_config, ChainConfig},
         primitives::BlockHeight,

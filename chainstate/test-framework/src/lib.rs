@@ -21,7 +21,7 @@ mod framework_builder;
 mod transaction_builder;
 
 /// Storage backend used for testing (the in-memory backend)
-pub type TestStore = chainstate_storage::inmemory::Store;
+pub type TestStore = chainstate_storage::in_memory::Store;
 
 /// Chainstate instantiation for testing, using the in-memory storage backend
 pub type TestChainstate = Box<dyn chainstate::chainstate_interface::ChainstateInterface>;

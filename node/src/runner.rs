@@ -48,7 +48,7 @@ pub async fn initialize(
 
     // Initialize storage.
     // TODO: Uses in-memory for now, will be configurable once multiple backends are implemented.
-    let storage = chainstate_storage::inmemory::Store::new_empty()?;
+    let storage = chainstate_storage::in_memory::Store::new_empty()?;
 
     // INITIALIZE SUBSYSTEMS
 

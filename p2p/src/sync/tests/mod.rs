@@ -51,7 +51,7 @@ where
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
     let (tx_pubsub, rx_pubsub) = mpsc::unbounded_channel();
     let (tx_swarm, rx_swarm) = mpsc::unbounded_channel();
-    let storage = chainstate_storage::inmemory::Store::new_empty().unwrap();
+    let storage = chainstate_storage::in_memory::Store::new_empty().unwrap();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let chainstate_config = ChainstateConfig::new();
     let mut man = subsystem::Manager::new("TODO");

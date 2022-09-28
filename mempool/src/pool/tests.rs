@@ -193,7 +193,7 @@ async fn tx_no_inputs() -> anyhow::Result<()> {
 pub async fn start_chainstate_with_config(
     chain_config: Arc<ChainConfig>,
 ) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
-    let storage = chainstate_storage::inmemory::Store::new_empty().unwrap();
+    let storage = chainstate_storage::in_memory::Store::new_empty().unwrap();
     let chainstate = make_chainstate(
         chain_config,
         ChainstateConfig::new(),

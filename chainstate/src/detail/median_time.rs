@@ -46,7 +46,7 @@ mod test {
     use common::time_getter::TimeGetter;
 
     use super::*;
-    use chainstate_storage::inmemory::Store;
+    use chainstate_storage::in_memory::Store;
     use common::{
         chain::{
             block::{

@@ -270,9 +270,9 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 _ if first_block_index.block_id() == second_block_index.block_id() => {
                     break Ok(first_block_index)
                 }
-                (GenBlockIndex::Block(first_blkidx), GenBlockIndex::Block(second_blkidx)) => {
-                    first_block_index = self.get_previous_block_index(first_blkidx)?;
-                    second_block_index = self.get_previous_block_index(second_blkidx)?;
+                (GenBlockIndex::Block(first_blk_idx), GenBlockIndex::Block(second_blk_idx)) => {
+                    first_block_index = self.get_previous_block_index(first_blk_idx)?;
+                    second_block_index = self.get_previous_block_index(second_blk_idx)?;
                 }
                 _ => panic!("Chain iteration not in lockstep"),
             }
@@ -349,7 +349,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             result.push(block_index.clone());
             block_index = match self.get_previous_block_index(&block_index)? {
                 GenBlockIndex::Genesis(_) => break,
-                GenBlockIndex::Block(blkidx) => blkidx,
+                GenBlockIndex::Block(blk_idx) => blk_idx,
             }
         }
         result.reverse();
@@ -806,7 +806,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
     }
 
     /// Does a read-modify-write operation on the database and disconnects a block
-    /// by unsetting the `next` pointer.
+    /// by un-setting the `next` pointer.
     /// Returns the previous block (the last block in the main-chain)
     fn disconnect_tip(
         &mut self,

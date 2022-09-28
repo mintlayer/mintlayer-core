@@ -260,7 +260,7 @@ mod tests {
         primitives::{Idable, H256},
     };
 
-    type TestStore = crate::inmemory::Store;
+    type TestStore = crate::in_memory::Store;
 
     const TXFAIL: crate::Error =
         crate::Error::Storage(storage::error::Recoverable::TransactionFailed);

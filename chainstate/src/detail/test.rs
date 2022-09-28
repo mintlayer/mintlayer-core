@@ -17,7 +17,7 @@ use crate::detail::query::locator_tip_distances;
 use crate::interface::chainstate_interface_impl::ChainstateInterfaceImpl;
 
 use super::*;
-use chainstate_storage::inmemory::Store;
+use chainstate_storage::in_memory::Store;
 use common::chain::config::Builder as ChainConfigBuilder;
 use common::chain::config::ChainType;
 use common::chain::Destination;
@@ -25,7 +25,7 @@ use common::chain::NetUpgrades;
 use common::Uint256;
 use static_assertions::*;
 
-assert_impl_all!(ChainstateInterfaceImpl<chainstate_storage::inmemory::Store>: Send);
+assert_impl_all!(ChainstateInterfaceImpl<chainstate_storage::in_memory::Store>: Send);
 
 // TODO: write tests for consensus crate
 #[test]
