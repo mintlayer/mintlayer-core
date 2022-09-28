@@ -26,7 +26,7 @@ decl_schema! {
 fn empty_ro() {
     utils::concurrency::model(|| {
         let store = Storage::<_, Schema>::new(inmemory::InMemory::new()).unwrap();
-        let tx = store.transaction_ro();
+        let tx = store.transaction_ro().unwrap();
         assert_eq!(tx.get::<Map1, _>().get(&b"foo".to_vec()), Ok(None));
     });
 }
@@ -35,7 +35,7 @@ fn empty_ro() {
 fn empty_rw() {
     utils::concurrency::model(|| {
         let store = Storage::<_, Schema>::new(inmemory::InMemory::new()).unwrap();
-        let tx = store.transaction_rw();
+        let tx = store.transaction_rw().unwrap();
         assert_eq!(tx.get::<Map1, _>().get(&b"foo".to_vec()), Ok(None));
     });
 }
@@ -62,7 +62,7 @@ fn prefix_iteration() {
         ];
 
         // Populate the database
-        let mut dbtx = store.transaction_rw();
+        let mut dbtx = store.transaction_rw().unwrap();
         let mut map = dbtx.get_mut::<Map2, _>();
         for (key, val) in &test_values {
             map.put(key, val).unwrap();
@@ -70,7 +70,7 @@ fn prefix_iteration() {
         dbtx.commit().unwrap();
 
         // Iterate over the "foo" prefix
-        let dbtx = store.transaction_ro();
+        let dbtx = store.transaction_ro().unwrap();
         let items: Vec<_> = dbtx
             .get::<Map2, _>()
             .prefix_iter(&("foo".into(),))
@@ -87,7 +87,7 @@ fn prefix_iteration() {
             values.sort();
             values
         };
-        let dbtx = store.transaction_ro();
+        let dbtx = store.transaction_ro().unwrap();
         let items: Vec<_> = dbtx
             .get::<Map2, _>()
             .prefix_iter(&())

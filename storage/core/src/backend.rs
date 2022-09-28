@@ -63,7 +63,7 @@ pub trait TransactionalRo<'tx> {
     type TxRo: TxRo + 'tx;
 
     /// Start a read-only transaction
-    fn transaction_ro<'st: 'tx>(&'st self) -> Self::TxRo;
+    fn transaction_ro<'st: 'tx>(&'st self) -> crate::Result<Self::TxRo>;
 }
 
 /// Read-write transactional interface to the storage
@@ -72,7 +72,7 @@ pub trait TransactionalRw<'tx> {
     type TxRw: TxRw + 'tx;
 
     /// Start a read-write transaction
-    fn transaction_rw<'st: 'tx>(&'st self) -> Self::TxRw;
+    fn transaction_rw<'st: 'tx>(&'st self) -> crate::Result<Self::TxRw>;
 }
 
 /// Storage backend internal implementation type

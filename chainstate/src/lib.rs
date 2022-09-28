@@ -59,9 +59,9 @@ pub enum ChainstateError {
     #[error("Initialization error")]
     FailedToInitializeChainstate(String),
     #[error("Block processing failed: `{0}`")]
-    ProcessBlockError(BlockError),
+    ProcessBlockError(#[from] BlockError),
     #[error("Property read error: `{0}`")]
-    FailedToReadProperty(PropertyQueryError),
+    FailedToReadProperty(#[from] PropertyQueryError),
     #[error("Block import error {0}")]
     BootstrapError(#[from] BootstrapError),
 }

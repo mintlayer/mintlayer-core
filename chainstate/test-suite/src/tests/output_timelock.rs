@@ -409,8 +409,9 @@ fn output_lock_until_time() {
 
         // Skip the genesis block and the block that contains the locked output.
         for (block_time, height) in block_times.iter().skip(2).zip(expected_height..) {
+            let mtp = tf.chainstate.calculate_median_time_past(&tf.best_block_id()).unwrap();
             assert_eq!(
-                tf.chainstate.calculate_median_time_past(&tf.best_block_id()).as_int_seconds(),
+                mtp.as_int_seconds(),
                 median_block_time(&block_times[..=height])
             );
 
@@ -553,8 +554,9 @@ fn output_lock_for_seconds() {
 
         // Skip the genesis block and the block that contains the locked output.
         for (block_time, height) in block_times.iter().skip(2).zip(expected_height..) {
+            let mtp = tf.chainstate.calculate_median_time_past(&tf.best_block_id()).unwrap();
             assert_eq!(
-                tf.chainstate.calculate_median_time_past(&tf.best_block_id()).as_int_seconds(),
+                mtp.as_int_seconds(),
                 median_block_time(&block_times[..=height])
             );
 

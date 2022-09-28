@@ -89,7 +89,10 @@ pub trait ChainstateInterface: Send {
         tx_id: &OutPointSourceId,
     ) -> Result<Option<TxMainChainIndex>, ChainstateError>;
     fn subscribers(&self) -> &Vec<EventHandler<ChainstateEvent>>;
-    fn calculate_median_time_past(&self, starting_block: &Id<GenBlock>) -> BlockTimestamp;
+    fn calculate_median_time_past(
+        &self,
+        starting_block: &Id<GenBlock>,
+    ) -> Result<BlockTimestamp, ChainstateError>;
     fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool;
     fn orphans_count(&self) -> usize;
     fn get_ancestor(
