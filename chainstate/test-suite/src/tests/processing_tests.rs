@@ -350,15 +350,12 @@ fn transaction_processing_order(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
 
-        // Genesis reward UTXO
-        let (utx, utxo) = &tf.best_block_info().txns[0];
-
         // Transaction that spends the genesis reward
         let tx1 = Transaction::new(
             0,
-            vec![TxInput::new(utx.clone(), 0, empty_witness(&mut rng))],
+            vec![TxInput::new(tf.genesis().get_id().into(), 0, empty_witness(&mut rng))],
             vec![TxOutput::new(
-                utxo[0].value().clone(),
+                tf.genesis().utxos()[0].value().clone(),
                 OutputPurpose::Transfer(anyonecanspend_address()),
             )],
             0,
