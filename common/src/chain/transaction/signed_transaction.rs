@@ -79,7 +79,62 @@ impl Eq for WithId<SignedTransaction> {}
 
 // TODO(PR): enforce that inputs size is equal to signatures size when decoding
 
-// TODO(PR): add tests to check that inputs and witnesses have the same size
-
 // TODO(PR) make the SignedTransaction serialization ignore the size of the witness vec and just use the size of the inputs
 // NOTE: there might be difficulties there as Encode cannot fail. It may lead to accepting a panic there
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::chain::TxInput;
+    use crate::primitives::H256;
+
+    #[test]
+    fn require_inputs_witnesses_same_size() {
+        let hash0 = H256([0x50; 32]);
+        let hash1 = H256([0x51; 32]);
+        let hash2 = H256([0x52; 32]);
+
+        let ins0: Vec<TxInput> = [TxInput::new(Id::<Transaction>::new(hash0).into(), 5)].to_vec();
+        let ins1: Vec<TxInput> = [
+            TxInput::new(Id::<Transaction>::new(hash1).into(), 3),
+            TxInput::new(Id::<Transaction>::new(hash2).into(), 0),
+        ]
+        .to_vec();
+
+        let tx = Transaction::new(0x00, vec![], vec![], 0x01).unwrap();
+        assert!(SignedTransaction::new(tx.clone(), vec![]).is_ok());
+        assert_eq!(
+            SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]),
+            Err(TransactionCreationError::InvalidWitnessCount)
+        );
+
+        let tx = Transaction::new(0x00, ins0, vec![], 0x00).unwrap();
+        assert!(SignedTransaction::new(tx.clone(), vec![InputWitness::NoSignature(None)]).is_ok());
+        assert_eq!(
+            SignedTransaction::new(tx, vec![]),
+            Err(TransactionCreationError::InvalidWitnessCount)
+        );
+
+        let tx = Transaction::new(0x00, ins1, vec![], 0x00).unwrap();
+        assert!(SignedTransaction::new(
+            tx.clone(),
+            vec![
+                InputWitness::NoSignature(Some(vec![0x01, 0x05, 0x09])),
+                InputWitness::NoSignature(Some(vec![0x91, 0x55, 0x19, 0x00])),
+            ],
+        )
+        .is_ok());
+        assert_eq!(
+            SignedTransaction::new(
+                tx.clone(),
+                vec![InputWitness::NoSignature(Some(vec![0x01, 0x05, 0x09]))]
+            ),
+            Err(TransactionCreationError::InvalidWitnessCount)
+        );
+        assert_eq!(
+            SignedTransaction::new(tx, vec![]),
+            Err(TransactionCreationError::InvalidWitnessCount)
+        );
+    }
+}

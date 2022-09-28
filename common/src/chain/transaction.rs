@@ -66,7 +66,7 @@ impl PartialEq for WithId<Transaction> {
 
 impl Eq for WithId<Transaction> {}
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum TransactionCreationError {
     #[error("The number of signatures does not match the number of inputs")]
     InvalidWitnessCount,
