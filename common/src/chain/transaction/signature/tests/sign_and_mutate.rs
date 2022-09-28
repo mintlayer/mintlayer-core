@@ -315,7 +315,7 @@ fn mutate_single() {
         }
         assert_eq!(
             verify_signature(&destination, &tx, inputs),
-            Err(TransactionSigError::InvalidInputIndex(inputs, inputs)),
+            Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
 
@@ -331,7 +331,7 @@ fn mutate_single() {
         }
         assert_eq!(
             verify_signature(&destination, &tx, inputs),
-            Err(TransactionSigError::InvalidInputIndex(inputs, inputs)),
+            Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
 
@@ -349,7 +349,7 @@ fn mutate_single() {
         }
         assert_eq!(
             verify_signature(&destination, &tx, inputs),
-            Err(TransactionSigError::InvalidInputIndex(inputs, inputs)),
+            Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
 }
@@ -379,7 +379,7 @@ fn mutate_single_anyonecanpay() {
         }
         assert_eq!(
             verify_signature(&destination, &tx, inputs),
-            Err(TransactionSigError::InvalidInputIndex(inputs, inputs))
+            Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs))
         );
     }
 
@@ -401,7 +401,7 @@ fn mutate_single_anyonecanpay() {
         }
         assert_eq!(
             verify_signature(&destination, &tx, inputs),
-            Err(TransactionSigError::InvalidInputIndex(inputs, inputs)),
+            Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
 
@@ -421,7 +421,7 @@ fn mutate_single_anyonecanpay() {
         }
         assert_eq!(
             verify_signature(&destination, &tx, inputs),
-            Err(TransactionSigError::InvalidInputIndex(inputs, inputs)),
+            Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
 }
