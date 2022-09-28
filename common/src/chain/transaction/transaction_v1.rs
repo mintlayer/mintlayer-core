@@ -72,19 +72,6 @@ impl TransactionV1 {
     pub fn serialized_hash(&self) -> Id<Transaction> {
         Id::new(id::hash_encoded(self))
     }
-
-    // TODO(PRO) this has to go
-    // pub fn update_witness(
-    //     &mut self,
-    //     input_index: usize,
-    //     witness: InputWitness,
-    // ) -> Result<(), TransactionUpdateError> {
-    //     match self.inputs.get_mut(input_index) {
-    //         Some(input) => input.update_witness(witness),
-    //         None => return Err(TransactionUpdateError::Unknown),
-    //     }
-    //     Ok(())
-    // }
 }
 
 impl Idable for TransactionV1 {
