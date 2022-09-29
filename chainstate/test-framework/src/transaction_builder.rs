@@ -51,6 +51,11 @@ impl TransactionBuilder {
         self
     }
 
+    pub fn with_witnesses(mut self, witnesses: Vec<InputWitness>) -> Self {
+        self.witnesses = witnesses;
+        self
+    }
+
     pub fn add_input(mut self, input: TxInput, witness: InputWitness) -> Self {
         self.inputs.push(input);
         self.witnesses.push(witness);
@@ -104,6 +109,7 @@ fn build_transaction() {
     let tx = TransactionBuilder::new()
         .with_flags(flags)
         .with_inputs(vec![input.clone()])
+        .with_witnesses(vec![InputWitness::NoSignature(None)])
         .add_input(input.clone(), witness)
         .with_outputs(vec![TxOutput::new(
             OutputValue::Coin(Amount::from_atoms(100)),
