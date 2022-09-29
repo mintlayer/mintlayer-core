@@ -26,7 +26,7 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 use utxo::{
-    BlockUndo, ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead, UtxosStorageWrite,
+    BlockUndo, ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead, UtxosUndoStorageWrite,
 };
 
 mockall::mock! {
@@ -101,17 +101,12 @@ mockall::mock! {
         fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, storage_result::Error>;
     }
 
-    impl FlushableUtxoView for Store {
-        fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error>;
-    }
-
-    impl UtxosStorageWrite for Store {
-        fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), storage_result::Error>;
-        fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), storage_result::Error>;
-
-        fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), storage_result::Error>;
-
+    impl UtxosUndoStorageWrite for Store {
         fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), storage_result::Error>;
         fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), storage_result::Error>;
+    }
+
+    impl FlushableUtxoView for Store {
+        fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error>;
     }
 }

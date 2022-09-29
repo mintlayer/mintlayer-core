@@ -29,14 +29,16 @@ pub trait UtxosStorageRead {
     fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, Error>;
 }
 
-pub trait UtxosStorageWrite: UtxosStorageRead {
+pub trait UtxosUndoStorageWrite {
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), Error>;
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Error>;
+}
+
+pub trait UtxosStorageWrite: UtxosUndoStorageWrite + UtxosStorageRead {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), Error>;
     fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), Error>;
 
     fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), Error>;
-
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), Error>;
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Error>;
 }
 
 #[must_use]

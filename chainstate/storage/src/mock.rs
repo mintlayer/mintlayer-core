@@ -27,7 +27,7 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
-use utxo::{BlockUndo, Utxo, UtxosStorageRead, UtxosStorageWrite};
+use utxo::{BlockUndo, Utxo, UtxosStorageRead, UtxosStorageWrite, UtxosUndoStorageWrite};
 
 mockall::mock! {
     /// A mock object for blockchain storage
@@ -98,14 +98,16 @@ mockall::mock! {
         fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()>;
     }
 
+    impl UtxosUndoStorageWrite for Store {
+        fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
+        fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+    }
+
     impl UtxosStorageWrite for Store {
         fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
         fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
 
         fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
-
-        fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
-        fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 
     #[allow(clippy::extra_unused_lifetimes)]
@@ -232,14 +234,16 @@ mockall::mock! {
         fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()>;
     }
 
+    impl UtxosUndoStorageWrite for StoreTxRw {
+        fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
+        fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+    }
+
     impl UtxosStorageWrite for StoreTxRw {
         fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
         fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
 
         fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
-
-        fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
-        fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 
     impl crate::TransactionRw for StoreTxRw {

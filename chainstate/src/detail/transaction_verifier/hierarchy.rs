@@ -22,7 +22,7 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 use utxo::{
-    BlockUndo, ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead, UtxosStorageWrite,
+    BlockUndo, ConsumedUtxoCache, FlushableUtxoView, UtxosStorageRead, UtxosUndoStorageWrite,
     UtxosView,
 };
 
@@ -180,7 +180,7 @@ impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
     }
 }
 
-impl<'a, S: TransactionVerifierStorageMut> UtxosStorageWrite for TransactionVerifier<'a, S> {
+impl<'a, S: TransactionVerifierStorageMut> UtxosUndoStorageWrite for TransactionVerifier<'a, S> {
     fn set_undo_data(
         &mut self,
         id: Id<Block>,
@@ -196,25 +196,6 @@ impl<'a, S: TransactionVerifierStorageMut> UtxosStorageWrite for TransactionVeri
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), storage_result::Error> {
         self.utxo_block_undo.remove(&id);
         Ok(())
-    }
-
-    fn set_utxo(
-        &mut self,
-        _outpoint: &OutPoint,
-        _entry: Utxo,
-    ) -> Result<(), storage_result::Error> {
-        unreachable!("use FlushableUtxoView::batch_write");
-    }
-
-    fn del_utxo(&mut self, _outpoint: &OutPoint) -> Result<(), storage_result::Error> {
-        unreachable!("use FlushableUtxoView::batch_write");
-    }
-
-    fn set_best_block_for_utxos(
-        &mut self,
-        _block_id: &Id<GenBlock>,
-    ) -> Result<(), storage_result::Error> {
-        unreachable!("use FlushableUtxoView::batch_write");
     }
 }
 

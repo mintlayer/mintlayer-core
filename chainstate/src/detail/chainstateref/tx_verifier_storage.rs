@@ -32,7 +32,9 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
-use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
+use utxo::{
+    ConsumedUtxoCache, FlushableUtxoView, UtxosDBMut, UtxosStorageRead, UtxosUndoStorageWrite,
+};
 
 impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionVerifierStorageRef
     for ChainstateRef<'a, S, O>
@@ -96,32 +98,9 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> UtxosStorageRead for Chainst
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks> UtxosStorageWrite for ChainstateRef<'a, S, O> {
-    fn set_utxo(
-        &mut self,
-        outpoint: &common::chain::OutPoint,
-        entry: utxo::Utxo,
-    ) -> Result<(), chainstate_types::storage_result::Error> {
-        //FIXME: unreachable??
-        self.db_tx.set_utxo(outpoint, entry)
-    }
-
-    fn del_utxo(
-        &mut self,
-        outpoint: &common::chain::OutPoint,
-    ) -> Result<(), chainstate_types::storage_result::Error> {
-        //FIXME: unreachable??
-        self.db_tx.del_utxo(outpoint)
-    }
-
-    fn set_best_block_for_utxos(
-        &mut self,
-        block_id: &Id<GenBlock>,
-    ) -> Result<(), chainstate_types::storage_result::Error> {
-        //FIXME: unreachable??
-        self.db_tx.set_best_block_for_utxos(block_id)
-    }
-
+impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks> UtxosUndoStorageWrite
+    for ChainstateRef<'a, S, O>
+{
     fn set_undo_data(
         &mut self,
         id: Id<Block>,
