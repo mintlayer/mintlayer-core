@@ -485,7 +485,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     fn check_witness_count(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         for tx in block.transactions() {
             ensure!(
-                tx.transaction().inputs().len() == tx.signatures().len(),
+                tx.inputs().len() == tx.signatures().len(),
                 CheckBlockTransactionsError::InvalidWitnessCount
             )
         }
@@ -496,7 +496,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         // check for duplicate inputs (see CVE-2018-17144)
         let mut block_inputs = BTreeSet::new();
         for tx in block.transactions() {
-            if tx.transaction().inputs().is_empty() || tx.transaction().outputs().is_empty() {
+            if tx.inputs().is_empty() || tx.outputs().is_empty() {
                 return Err(
                     CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
                         tx.get_id(),
@@ -505,7 +505,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 );
             }
             let mut tx_inputs = BTreeSet::new();
-            for input in tx.transaction().inputs() {
+            for input in tx.inputs() {
                 ensure!(
                     tx_inputs.insert(input.outpoint()),
                     CheckBlockTransactionsError::DuplicateInputInTransaction(
@@ -525,7 +525,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     fn check_tokens_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         for tx in block.transactions() {
             // We can't issue multiple tokens in a single tx
-            let issuance_count = get_tokens_issuance_count(tx.transaction().outputs());
+            let issuance_count = get_tokens_issuance_count(tx.outputs());
             ensure!(
                 issuance_count <= 1,
                 CheckBlockTransactionsError::TokensError(
@@ -534,8 +534,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             );
 
             // Check tokens
-            tx.transaction()
-                .outputs()
+            tx.outputs()
                 .iter()
                 .filter_map(|output| match output.value() {
                     OutputValue::Coin(_) => None,

@@ -249,7 +249,7 @@ fn check_change_flags(original_tx: &SignedTransaction, destination: &Destination
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.flags = tx_updater.flags.wrapping_add(1234567890);
     let tx = tx_updater.generate_tx().unwrap();
-    for (input_num, _) in tx.transaction().inputs().iter().enumerate() {
+    for (input_num, _) in tx.inputs().iter().enumerate() {
         assert_eq!(
             verify_signature(destination, &tx, input_num),
             Err(TransactionSigError::SignatureVerificationFailed)
@@ -261,7 +261,7 @@ fn check_change_locktime(original_tx: &SignedTransaction, outpoint_dest: &Destin
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.lock_time = tx_updater.lock_time.wrapping_add(1234567890);
     let tx = tx_updater.generate_tx().unwrap();
-    for (input_num, _) in tx.transaction().inputs().iter().enumerate() {
+    for (input_num, _) in tx.inputs().iter().enumerate() {
         assert_eq!(
             verify_signature(outpoint_dest, &tx, input_num),
             Err(TransactionSigError::SignatureVerificationFailed)
@@ -290,7 +290,7 @@ fn check_insert_input(
 // A witness mutation should result in signature verification error.
 fn check_mutate_witness(original_tx: &SignedTransaction, outpoint_dest: &Destination) {
     let mut tx_updater = MutableTransaction::from(original_tx);
-    for input in 0..original_tx.transaction().inputs().len() {
+    for input in 0..original_tx.inputs().len() {
         let signature = match &tx_updater.witness[0] {
             InputWitness::Standard(signature) => signature,
             InputWitness::NoSignature(_) => panic!("Unexpected InputWitness::NoSignature"),

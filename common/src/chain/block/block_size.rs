@@ -25,22 +25,18 @@ pub struct BlockSize {
 
 impl BlockSize {
     pub fn new_from_block(block: &Block) -> Self {
-        block
-            .transactions()
-            .iter()
-            .map(|tx| tx.transaction().transaction_data_size())
-            .fold(
-                BlockSize::new_with_header_size(block.header().encoded_size()),
-                |mut total, curr| {
-                    match curr {
-                        TransactionSize::ScriptedTransaction(size) => total.from_txs += size,
-                        TransactionSize::SmartContractTransaction(size) => {
-                            total.from_smart_contracts += size
-                        }
-                    };
-                    total
-                },
-            )
+        block.transactions().iter().fold(
+            BlockSize::new_with_header_size(block.header().encoded_size()),
+            |mut total, curr| {
+                match curr.transaction_data_size() {
+                    TransactionSize::ScriptedTransaction(size) => total.from_txs += size,
+                    TransactionSize::SmartContractTransaction(size) => {
+                        total.from_smart_contracts += size
+                    }
+                };
+                total
+            },
+        )
     }
 
     fn new_with_header_size(header_size: usize) -> Self {

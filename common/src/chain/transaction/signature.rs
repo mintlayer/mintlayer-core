@@ -215,23 +215,23 @@ impl Signable for Transaction {
 
 impl Signable for SignedTransaction {
     fn inputs(&self) -> Option<&[TxInput]> {
-        Some(self.transaction().inputs())
+        Some(self.inputs())
     }
 
     fn outputs(&self) -> Option<&[TxOutput]> {
-        Some(self.transaction().outputs())
+        Some(self.outputs())
     }
 
     fn version_byte(&self) -> Option<u8> {
-        Some(self.transaction().version_byte())
+        Some(self.version_byte())
     }
 
     fn lock_time(&self) -> Option<u32> {
-        Some(self.transaction().lock_time())
+        Some(self.lock_time())
     }
 
     fn flags(&self) -> Option<u32> {
-        Some(self.transaction().flags())
+        Some(self.flags())
     }
 }
 

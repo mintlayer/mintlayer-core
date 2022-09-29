@@ -322,10 +322,7 @@ fn test_indices_calculations() {
     for (tx_num, tx) in block.transactions().iter().enumerate() {
         let tx_index = calculate_tx_index_from_block(&block, tx_num).unwrap();
         assert!(!tx_index.all_outputs_spent());
-        assert_eq!(
-            tx_index.output_count(),
-            tx.transaction().outputs().len() as u32
-        );
+        assert_eq!(tx_index.output_count(), tx.outputs().len() as u32);
 
         let pos = match tx_index.position() {
             SpendablePosition::Transaction(pos) => pos,

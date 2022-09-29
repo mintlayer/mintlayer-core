@@ -51,8 +51,7 @@ use crate::{
 use super::signed_transaction::SignedTransaction;
 
 pub fn calculate_tx_merkle_root(body: &BlockBody) -> Result<H256, merkle::MerkleTreeFormError> {
-    const TX_HASHER: fn(&SignedTransaction) -> H256 =
-        |tx: &SignedTransaction| tx.transaction().get_id().get();
+    const TX_HASHER: fn(&SignedTransaction) -> H256 = |tx: &SignedTransaction| tx.get_id().get();
     calculate_generic_merkle_root(&TX_HASHER, body)
 }
 

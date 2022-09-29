@@ -47,10 +47,10 @@ pub struct MutableTransaction {
 impl From<&SignedTransaction> for MutableTransaction {
     fn from(tx: &SignedTransaction) -> Self {
         Self {
-            flags: tx.transaction().flags(),
-            inputs: tx.transaction().inputs().clone(),
-            outputs: tx.transaction().outputs().clone(),
-            lock_time: tx.transaction().lock_time(),
+            flags: tx.flags(),
+            inputs: tx.inputs().clone(),
+            outputs: tx.outputs().clone(),
+            lock_time: tx.lock_time(),
             witness: tx.signatures().to_vec(),
         }
     }
@@ -151,7 +151,7 @@ pub fn verify_signed_tx(
     tx: &SignedTransaction,
     destination: &Destination,
 ) -> Result<(), TransactionSigError> {
-    for i in 0..tx.transaction().inputs().len() {
+    for i in 0..tx.inputs().len() {
         verify_signature(destination, tx, i)?
     }
     Ok(())

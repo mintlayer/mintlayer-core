@@ -433,8 +433,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 )?;
 
                 // pre-cache all inputs
-                self.tx_index_cache
-                    .precache_inputs(tx.transaction().inputs(), tx_index_fetcher)?;
+                self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
 
                 // pre-cache token ids to check ensure it's not in the db when issuing
                 self.token_issuance_cache.precache_token_issuance(
@@ -464,7 +463,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
                 // mark tx index as spent
                 let spender = tx.get_id().into();
-                self.tx_index_cache.spend_tx_index_inputs(tx.transaction().inputs(), spender)?;
+                self.tx_index_cache.spend_tx_index_inputs(tx.inputs(), spender)?;
 
                 fee
             }
@@ -539,8 +538,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
 
                 // pre-cache all inputs
-                self.tx_index_cache
-                    .precache_inputs(tx.transaction().inputs(), tx_index_fetcher)?;
+                self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
 
                 // pre-cache token ids before removing them
                 self.token_issuance_cache.precache_token_issuance(
@@ -549,7 +547,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 )?;
 
                 // unspend inputs
-                self.tx_index_cache.unspend_tx_index_inputs(tx.transaction().inputs())?;
+                self.tx_index_cache.unspend_tx_index_inputs(tx.inputs())?;
 
                 // Remove issued tokens
                 self.token_issuance_cache.unregister(tx.transaction())?;

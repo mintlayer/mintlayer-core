@@ -173,8 +173,7 @@ pub fn calculate_tx_index_from_block(
 
     TxMainChainIndex::new(
         SpendablePosition::from(tx_position),
-        tx.transaction()
-            .outputs()
+        tx.outputs()
             .len()
             .try_into()
             .expect("Number conversion from usize to u32 should not fail here (3)"),

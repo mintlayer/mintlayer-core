@@ -205,7 +205,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
     // check that the inputs of the block do not exist in the utxo column.
     {
         block.transactions().iter().for_each(|tx| {
-            tx.transaction().inputs().iter().for_each(|input| {
+            tx.inputs().iter().for_each(|input| {
                 assert_eq!(db.utxo(input.outpoint()), None);
             });
         });
@@ -238,7 +238,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
             let undos = undo.inner();
 
             // add the undo utxos back to the view.
-            tx.transaction().inputs().iter().enumerate().for_each(|(in_idx, input)| {
+            tx.inputs().iter().enumerate().for_each(|(in_idx, input)| {
                 let utxo = undos.get(in_idx).unwrap();
                 cache.add_utxo(input.outpoint(), utxo.clone(), true).unwrap();
             });
