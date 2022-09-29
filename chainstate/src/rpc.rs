@@ -22,7 +22,7 @@ use common::{
     chain::tokens::{RPCTokenInfo, TokenId},
     primitives::{BlockHeight, Id},
 };
-use serialization::Decode;
+use serialization::{Decode, Encode};
 use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, namespace = "chainstate")]
@@ -34,6 +34,10 @@ trait ChainstateRpc {
     /// Get block ID at given height in the mainchain
     #[method(name = "block_id_at_height")]
     async fn block_id_at_height(&self, height: BlockHeight) -> rpc::Result<Option<Id<GenBlock>>>;
+
+    /// Returns a hex-encoded serialized block with the given id.
+    #[method(name = "block")]
+    async fn block(&self, id: Id<Block>) -> rpc::Result<Option<String>>;
 
     /// Submit a block to be included in the chain
     #[method(name = "submit_block")]
@@ -75,6 +79,11 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn block_id_at_height(&self, height: BlockHeight) -> rpc::Result<Option<Id<GenBlock>>> {
         handle_error(self.call(move |this| this.get_block_id_from_height(&height)).await)
+    }
+
+    async fn block(&self, id: Id<Block>) -> rpc::Result<Option<String>> {
+        let block = handle_error(self.call(move |this| this.get_block(id)).await)?;
+        Ok(block.map(|b| hex::encode(b.encode())))
     }
 
     async fn submit_block(&self, block_hex: String) -> rpc::Result<()> {
