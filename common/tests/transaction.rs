@@ -42,21 +42,21 @@ fn transaction_id_snapshots() {
     expect![[r#"
         0x28d1bb2ad7ae6ef483389ca2435b137a21cf362c9d697b24a356a3b5dc4a7ea8
     "#]]
-    .assert_debug_eq(&signed_tx.get_id().get());
+    .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
     let tx = Transaction::new(0x00, vec![], vec![], 0x02).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![]).unwrap();
     expect![[r#"
         0x62c656b7cfff992d9a57822cd53bb4443422deabcc80c57e64153e9954ea8f22
     "#]]
-    .assert_debug_eq(&signed_tx.get_id().get());
+    .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
     let tx = Transaction::new(0x00, ins0.clone(), vec![], 0x00).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap();
     expect![[r#"
         0xfc685449a89c79298273e765eceaa0f81f6b3863b70429820a07626b9d271852
     "#]]
-    .assert_debug_eq(&signed_tx.get_id().get());
+    .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
     let tx = Transaction::new(0x00, ins1.clone(), vec![], 0x00).unwrap();
     let signed_tx = SignedTransaction::new(
@@ -70,14 +70,14 @@ fn transaction_id_snapshots() {
     expect![[r#"
         0xb54806907fa4d0763489320a6fd9f3836c560f06313a41318c32d321973ad944
     "#]]
-    .assert_debug_eq(&signed_tx.get_id().get());
+    .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
     let tx = Transaction::new(0x00, ins0, outs0.clone(), 0x123456).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap();
     expect![[r#"
         0x6e05b8807d81956bda8ed231cfe4ffeb50f193af6bd3d441185470905486145f
     "#]]
-    .assert_debug_eq(&signed_tx.get_id().get());
+    .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
     let tx = Transaction::new(0x00, ins1, outs0, 0x00).unwrap();
     let signed_tx = SignedTransaction::new(
@@ -91,5 +91,5 @@ fn transaction_id_snapshots() {
     expect![[r#"
         0x425ca11b436a48b832e35475fa808fa9de0f8513ce9b4dd9cef39fccb2342c71
     "#]]
-    .assert_debug_eq(&signed_tx.get_id().get());
+    .assert_debug_eq(&signed_tx.transaction().get_id().get());
 }

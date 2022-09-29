@@ -320,7 +320,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         // Check that all tx not in the main chain
         for tx in block.transactions() {
             assert_eq!(
-                tf.chainstate.get_mainchain_tx_index(&tx.get_id().into()).unwrap(),
+                tf.chainstate.get_mainchain_tx_index(&tx.transaction().get_id().into()).unwrap(),
                 None
             );
         }
@@ -332,7 +332,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         // Check that the transactions are in the main-chain and ensure that the connected previous
         // outputs are spent.
         for tx in block.transactions() {
-            let tx_id = tx.get_id();
+            let tx_id = tx.transaction().get_id();
             // All inputs must spend a corresponding output
             for tx_in in tx.transaction().inputs() {
                 let outpoint = tx_in.outpoint();
@@ -389,7 +389,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
         let tx2 = SignedTransaction::new(
             Transaction::new(
                 0,
-                vec![TxInput::new(tx1.get_id().into(), 0)],
+                vec![TxInput::new(tx1.transaction().get_id().into(), 0)],
                 vec![TxOutput::new(
                     tx1.transaction().outputs()[0].value().clone(),
                     OutputPurpose::Transfer(anyonecanspend_address()),
@@ -1101,7 +1101,7 @@ fn empty_inputs_in_tx() {
         let mut tf = TestFramework::default();
 
         let first_tx = TransactionBuilder::new().build();
-        let first_tx_id = first_tx.get_id();
+        let first_tx_id = first_tx.transaction().get_id();
 
         let block = tf.make_block_builder().with_transactions(vec![first_tx]).build();
         let block_id = block.get_id();
@@ -1131,7 +1131,7 @@ fn empty_outputs_in_tx() {
                 OutputPurpose::Transfer(anyonecanspend_address()),
             ))
             .build();
-        let first_tx_id = first_tx.get_id();
+        let first_tx_id = first_tx.transaction().get_id();
 
         let block = tf.make_block_builder().with_transactions(vec![first_tx]).build();
         let block_id = block.get_id();
@@ -1167,7 +1167,7 @@ fn burn_inputs_in_tx(#[case] seed: Seed) {
                 empty_witness(&mut rng),
             )
             .build();
-        let first_tx_id = first_tx.get_id();
+        let first_tx_id = first_tx.transaction().get_id();
 
         let block = tf.make_block_builder().with_transactions(vec![first_tx]).build();
         let block_id = block.get_id();

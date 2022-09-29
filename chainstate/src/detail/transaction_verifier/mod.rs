@@ -462,7 +462,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 self.get_or_create_block_undo(&block_id).push_tx_undo(tx_undo);
 
                 // mark tx index as spent
-                let spender = tx.get_id().into();
+                let spender = tx.transaction().get_id().into();
                 self.tx_index_cache.spend_tx_index_inputs(tx.inputs(), spender)?;
 
                 fee

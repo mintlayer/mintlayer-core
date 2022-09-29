@@ -114,7 +114,7 @@ async fn add_single_tx() -> anyhow::Result<()> {
     .await?;
 
     let tx_clone = tx.clone();
-    let tx_id = tx.get_id();
+    let tx_id = tx.transaction().get_id();
     mempool.add_transaction(tx).await?;
     assert!(mempool.contains_transaction(&tx_id));
     let all_txs = mempool.get_all();
@@ -149,7 +149,7 @@ async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
         ))
     }
     let initial_tx = tx_builder.build();
-    let initial_tx_id = initial_tx.get_id();
+    let initial_tx_id = initial_tx.transaction().get_id();
     mempool.add_transaction(initial_tx).await?;
     for i in 0..target_txs {
         let tx = TransactionBuilder::new()
@@ -443,7 +443,7 @@ async fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Resul
     )
     .await
     .expect("should be able to spend here");
-    let original_id = original.get_id();
+    let original_id = original.transaction().get_id();
     log::debug!(
         "created a tx with fee {:?}",
         mempool.try_get_fee(&original).await
@@ -493,7 +493,7 @@ async fn try_replace_irreplaceable() -> anyhow::Result<()> {
     )
     .await
     .expect("should be able to spend here");
-    let original_id = original.get_id();
+    let original_id = original.transaction().get_id();
     mempool.add_transaction(original).await?;
 
     let flags = 0;
@@ -573,7 +573,7 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     mempool.add_transaction(tx.clone()).await?;
 
-    let outpoint_source_id = OutPointSourceId::Transaction(tx.get_id());
+    let outpoint_source_id = OutPointSourceId::Transaction(tx.transaction().get_id());
     let child_tx_input = TxInput::new(outpoint_source_id, 0);
     // We want to test that even though child_tx doesn't signal replaceability directly, it is replaceable because its parent signalled replaceability
     // replaced
@@ -721,7 +721,7 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
     let flags_irreplaceable = 0;
     let locktime = 0;
 
-    let outpoint_source_id = OutPointSourceId::Transaction(tx.get_id());
+    let outpoint_source_id = OutPointSourceId::Transaction(tx.transaction().get_id());
     let ancestor_with_signal = tx_spend_input(
         &mempool,
         TxInput::new(outpoint_source_id.clone(), 0),
@@ -746,12 +746,12 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
     mempool.add_transaction(ancestor_without_signal.clone()).await?;
 
     let input_with_replaceable_parent = TxInput::new(
-        OutPointSourceId::Transaction(ancestor_with_signal.get_id()),
+        OutPointSourceId::Transaction(ancestor_with_signal.transaction().get_id()),
         0,
     );
 
     let input_with_irreplaceable_parent = TxInput::new(
-        OutPointSourceId::Transaction(ancestor_without_signal.get_id()),
+        OutPointSourceId::Transaction(ancestor_without_signal.transaction().get_id()),
         0,
     );
 
@@ -773,7 +773,7 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
         locktime,
     )
     .await?;
-    let replaced_tx_id = replaced_tx.get_id();
+    let replaced_tx_id = replaced_tx.transaction().get_id();
 
     mempool.add_transaction(replaced_tx).await?;
 
@@ -888,7 +888,7 @@ async fn test_bip125_max_replacements(
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     let input = tx.transaction().inputs().first().expect("one input").clone();
     let outputs = tx.transaction().outputs().clone();
-    let tx_id = tx.get_id();
+    let tx_id = tx.transaction().get_id();
     mempool.add_transaction(tx).await?;
 
     let flags = 0;
@@ -980,7 +980,7 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     }
 
     let tx = tx_builder.build();
-    let outpoint_source_id = OutPointSourceId::Transaction(tx.get_id());
+    let outpoint_source_id = OutPointSourceId::Transaction(tx.transaction().get_id());
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     mempool.add_transaction(tx).await?;
 
@@ -1046,7 +1046,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
         .with_flags(1)
         .build();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
-    let tx_id = tx.get_id();
+    let tx_id = tx.transaction().get_id();
     mempool.add_transaction(tx).await?;
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
@@ -1068,7 +1068,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     )
     .await?;
     let replaced_tx_fee = mempool.try_get_fee(&replaced_tx).await?;
-    let replaced_id = replaced_tx.get_id();
+    let replaced_id = replaced_tx.transaction().get_id();
     mempool.add_transaction(replaced_tx).await?;
 
     // Create some children for this transaction
@@ -1084,7 +1084,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
         locktime,
     )
     .await?;
-    let descendant1_id = descendant1.get_id();
+    let descendant1_id = descendant1.transaction().get_id();
     mempool.add_transaction(descendant1).await?;
 
     let descendant2_fee = Amount::from_atoms(100);
@@ -1097,7 +1097,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
         locktime,
     )
     .await?;
-    let descendant2_id = descendant2.get_id();
+    let descendant2_id = descendant2.transaction().get_id();
     mempool.add_transaction(descendant2).await?;
 
     //Create a new incoming transaction that conflicts with `replaced_tx` because it spends
@@ -1182,7 +1182,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
         SystemUsageEstimator {},
     );
 
-    let parent_id = parent.get_id();
+    let parent_id = parent.transaction().get_id();
     mempool.add_transaction(parent.clone()).await?;
 
     let flags = 0;
@@ -1207,9 +1207,9 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
         locktime,
     )
     .await?;
-    let child_1_id = child_1.get_id();
+    let child_1_id = child_1.transaction().get_id();
 
-    let expired_tx_id = child_0.get_id();
+    let expired_tx_id = child_0.transaction().get_id();
     mempool.add_transaction(child_0).await?;
 
     // Simulate the parent being added to a block
@@ -1280,7 +1280,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         ));
     }
     let parent = tx_builder.build();
-    let parent_id = parent.get_id();
+    let parent_id = parent.transaction().get_id();
 
     let chainstate = tf.chainstate();
     let config = chainstate.get_chain_config();
@@ -1310,7 +1310,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         locktime,
     )
     .await?;
-    let child_0_id = child_0.get_id();
+    let child_0_id = child_0.transaction().get_id();
     log::debug!("child_0_id {}", child_0_id.get());
 
     let big_fee = Amount::from_atoms(
@@ -1325,7 +1325,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         locktime,
     )
     .await?;
-    let child_1_id = child_1.get_id();
+    let child_1_id = child_1.transaction().get_id();
     log::debug!("child_1_id {}", child_1_id.get());
     mempool.add_transaction(child_0.clone()).await?;
     log::debug!("added child_0");
@@ -1397,7 +1397,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         locktime,
     )
     .await?;
-    let child_2_high_fee_id = child_2_high_fee.get_id();
+    let child_2_high_fee_id = child_2_high_fee.transaction().get_id();
     log::debug!("before child2_high_fee");
     mempool.add_transaction(child_2_high_fee).await?;
 
@@ -1543,7 +1543,7 @@ async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
         for j in 0..num_inputs {
             tx_builder = tx_builder.add_input(
                 TxInput::new(
-                    OutPointSourceId::Transaction(initial_tx.get_id()),
+                    OutPointSourceId::Transaction(initial_tx.transaction().get_id()),
                     100 * i + j,
                 ),
                 empty_witness(&mut rng),
@@ -1605,7 +1605,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
         ))
         .build();
-    let tx_id = tx.get_id();
+    let tx_id = tx.transaction().get_id();
 
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     mempool.add_transaction(tx).await?;
@@ -1627,7 +1627,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
         locktime,
     )
     .await?;
-    let tx_a_id = tx_a.get_id();
+    let tx_a_id = tx_a.transaction().get_id();
     log::debug!("tx_a_id : {}", tx_a_id.get());
     log::debug!("tx_a fee : {:?}", mempool.try_get_fee(&tx_a).await?);
     mempool.add_transaction(tx_a).await?;
@@ -1641,7 +1641,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
         locktime,
     )
     .await?;
-    let tx_b_id = tx_b.get_id();
+    let tx_b_id = tx_b.transaction().get_id();
     log::debug!("tx_b_id : {}", tx_b_id.get());
     log::debug!("tx_b fee : {:?}", mempool.try_get_fee(&tx_b).await?);
     mempool.add_transaction(tx_b).await?;
@@ -1655,7 +1655,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
         locktime,
     )
     .await?;
-    let tx_c_id = tx_c.get_id();
+    let tx_c_id = tx_c.transaction().get_id();
     log::debug!("tx_c_id : {}", tx_c_id.get());
     log::debug!("tx_c fee : {:?}", mempool.try_get_fee(&tx_c).await?);
     mempool.add_transaction(tx_c).await?;
@@ -1735,7 +1735,7 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
         ))
         .build();
 
-    let parent_id = parent.get_id();
+    let parent_id = parent.transaction().get_id();
 
     let chainstate = tf.chainstate();
     let mut mempool = Mempool::new(
@@ -1758,7 +1758,7 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
         locktime,
     )
     .await?;
-    let child_id = child.get_id();
+    let child_id = child.transaction().get_id();
     mock_time.store(DEFAULT_MEMPOOL_EXPIRY.as_secs() + 1, Ordering::SeqCst);
 
     assert!(matches!(
@@ -1807,7 +1807,10 @@ async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
         ))
         .build();
-    log::debug!("mempool_full: tx has id {}", tx.get_id().get());
+    log::debug!(
+        "mempool_full: tx has id {}",
+        tx.transaction().get_id().get()
+    );
     assert!(matches!(
         mempool.add_transaction(tx).await,
         Err(Error::MempoolFull)
@@ -1839,9 +1842,9 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     let parent = tx_builder.build();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
 
-    let parent_id = parent.get_id();
+    let parent_id = parent.transaction().get_id();
 
-    let outpoint_source_id = OutPointSourceId::Transaction(parent.get_id());
+    let outpoint_source_id = OutPointSourceId::Transaction(parent.transaction().get_id());
     mempool.add_transaction(parent).await?;
     let num_child_txs = num_outputs;
     let flags = 0;
@@ -1861,7 +1864,7 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
             .await?,
         )
     }
-    let ids = txs.iter().map(|tx| tx.get_id()).collect::<Vec<_>>();
+    let ids = txs.iter().map(|tx| tx.transaction().get_id()).collect::<Vec<_>>();
 
     for tx in txs {
         mempool.add_transaction(tx).await?;

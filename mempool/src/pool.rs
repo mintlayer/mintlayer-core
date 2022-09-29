@@ -31,7 +31,6 @@ use common::chain::transaction::Transaction;
 use common::chain::transaction::TxInput;
 use common::chain::OutPoint;
 use common::primitives::amount::Amount;
-use common::primitives::id::WithId;
 use common::primitives::Id;
 use common::primitives::Idable;
 
@@ -320,7 +319,7 @@ where
                 |input| {
                     Err(TxValidationError::OutPointNotFound {
                         outpoint: input.outpoint().clone(),
-                        tx_id: tx.get_id(),
+                        tx_id: tx.transaction().get_id(),
                     })
                 },
             )
@@ -425,7 +424,7 @@ where
             return Err(TxValidationError::ExceedsMaxBlockSize);
         }
 
-        if self.contains_transaction(&tx.get_id()) {
+        if self.contains_transaction(&tx.transaction().get_id()) {
             return Err(TxValidationError::TransactionAlreadyInMempool);
         }
 
@@ -607,7 +606,7 @@ where
             || Ok(()),
             |conflict| {
                 Err(TxValidationError::ReplacementFeeLowerThanOriginal {
-                    replacement_tx: tx.get_id().get(),
+                    replacement_tx: tx.transaction().get_id().get(),
                     replacement_fee,
                     original_fee: conflict.fee(),
                     original_tx: conflict.tx_id().get(),
@@ -787,14 +786,7 @@ where
             .txs_by_descendant_score
             .values()
             .flatten()
-            .map(|id| {
-                WithId::get(
-                    self.store
-                        .get_entry(id)
-                        .unwrap_or_else(|| panic!("did not find entry with id {}", id))
-                        .tx(),
-                )
-            })
+            .map(|id| self.store.get_entry(id).expect("entry").tx())
             .collect()
     }
 

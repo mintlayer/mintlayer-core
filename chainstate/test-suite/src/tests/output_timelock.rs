@@ -173,7 +173,7 @@ fn output_lock_until_height_but_spend_at_same_block() {
             .build();
         let tx2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(OutPointSourceId::Transaction(tx1.get_id()), 1),
+                TxInput::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1),
                 InputWitness::NoSignature(None),
             )
             .add_anyone_can_spend_output(5000)
@@ -320,7 +320,7 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
             .build();
         let tx2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(OutPointSourceId::Transaction(tx1.get_id()), 1),
+                TxInput::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1),
                 InputWitness::NoSignature(None),
             )
             .add_anyone_can_spend_output(50000)
@@ -497,7 +497,7 @@ fn output_lock_until_time_but_spend_at_same_block() {
 
         let tx2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(OutPointSourceId::Transaction(tx1.get_id()), 1),
+                TxInput::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1),
                 InputWitness::NoSignature(None),
             )
             .add_anyone_can_spend_output(50000)
@@ -641,7 +641,7 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
 
         let tx2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(OutPointSourceId::Transaction(tx1.get_id()), 1),
+                TxInput::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1),
                 InputWitness::NoSignature(None),
             )
             .add_anyone_can_spend_output(50000)

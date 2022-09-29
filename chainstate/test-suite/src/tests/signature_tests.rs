@@ -60,7 +60,10 @@ fn signed_tx() {
         let tx_2 = {
             let tx = TransactionBuilder::new()
                 .add_input(
-                    TxInput::new(OutPointSourceId::Transaction(tx_1.get_id()), 0),
+                    TxInput::new(
+                        OutPointSourceId::Transaction(tx_1.transaction().get_id()),
+                        0,
+                    ),
                     InputWitness::NoSignature(None),
                 )
                 .add_output(TxOutput::new(

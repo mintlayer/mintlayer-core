@@ -17,7 +17,7 @@ use super::{signature::inputsig::InputWitness, Transaction, TransactionSize, TxO
 use crate::{
     chain::{TransactionCreationError, TxInput},
     primitives::{
-        id::{self, Idable, WithId},
+        id::{self},
         Id,
     },
 };
@@ -94,24 +94,6 @@ impl SignedTransaction {
         Id::new(id::hash_encoded(self))
     }
 }
-
-impl Idable for SignedTransaction {
-    type Tag = Transaction;
-
-    fn get_id(&self) -> Id<Self::Tag> {
-        match &self.transaction {
-            Transaction::V1(tx) => tx.get_id(),
-        }
-    }
-}
-
-impl PartialEq for WithId<SignedTransaction> {
-    fn eq(&self, other: &Self) -> bool {
-        WithId::get(self) == WithId::get(other)
-    }
-}
-
-impl Eq for WithId<SignedTransaction> {}
 
 // TODO enforce that inputs size is equal to signatures size when decoding
 

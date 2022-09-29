@@ -255,7 +255,7 @@ impl TestBlockInfo {
             .iter()
             .map(|tx| {
                 (
-                    OutPointSourceId::Transaction(tx.get_id()),
+                    OutPointSourceId::Transaction(tx.transaction().get_id()),
                     tx.transaction().outputs().clone(),
                 )
             })

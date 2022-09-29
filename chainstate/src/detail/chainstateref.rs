@@ -499,7 +499,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             if tx.inputs().is_empty() || tx.outputs().is_empty() {
                 return Err(
                     CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
-                        tx.get_id(),
+                        tx.transaction().get_id(),
                         block.get_id(),
                     ),
                 );
@@ -509,7 +509,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 ensure!(
                     tx_inputs.insert(input.outpoint()),
                     CheckBlockTransactionsError::DuplicateInputInTransaction(
-                        tx.get_id(),
+                        tx.transaction().get_id(),
                         block.get_id()
                     )
                 );
@@ -529,7 +529,10 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             ensure!(
                 issuance_count <= 1,
                 CheckBlockTransactionsError::TokensError(
-                    TokensError::MultipleTokenIssuanceInTransaction(tx.get_id(), block.get_id()),
+                    TokensError::MultipleTokenIssuanceInTransaction(
+                        tx.transaction().get_id(),
+                        block.get_id()
+                    ),
                 )
             );
 

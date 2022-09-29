@@ -406,7 +406,8 @@ fn token_transfer_test(#[case] seed: Seed) {
             block.transactions()[0].transaction().outputs()[0].value(),
             &output_value
         );
-        let issuance_outpoint_id: OutPointSourceId = block.transactions()[0].get_id().into();
+        let issuance_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
 
         // attempt double-spend
         let result = tf
@@ -759,7 +760,8 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
                     .build(),
             )
             .build();
-        let split_outpoint_id: OutPointSourceId = split_block.transactions()[0].get_id().into();
+        let split_outpoint_id: OutPointSourceId =
+            split_block.transactions()[0].transaction().get_id().into();
         tf.process_block(split_block, BlockSource::Local).unwrap().unwrap();
 
         // Collect these in one output
@@ -890,7 +892,8 @@ fn burn_tokens(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        let first_burn_outpoint_id: OutPointSourceId = block.transactions()[0].get_id().into();
+        let first_burn_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
 
         // Valid case: Burn 50% and 50% transfer
         let block_index = tf
@@ -921,7 +924,8 @@ fn burn_tokens(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        let second_burn_outpoint_id: OutPointSourceId = block.transactions()[0].get_id().into();
+        let second_burn_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
 
         // Valid case: Try to burn the rest 50%
         let block_index = tf
@@ -945,7 +949,7 @@ fn burn_tokens(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        let _: OutPointSourceId = block.transactions()[0].get_id().into();
+        let _: OutPointSourceId = block.transactions()[0].transaction().get_id().into();
 
         // Try to transfer burned tokens
         let result = tf
@@ -1064,7 +1068,8 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block_b1 = tf.block(*block_index.block_id());
-        let b1_outpoint_id: OutPointSourceId = block_b1.transactions()[0].get_id().into();
+        let b1_outpoint_id: OutPointSourceId =
+            block_b1.transactions()[0].transaction().get_id().into();
 
         // Try to transfer burnt tokens
         let result = tf
@@ -1119,7 +1124,8 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block_c1 = tf.block(*block_index.block_id());
-        let c1_outpoint_id: OutPointSourceId = block_c1.transactions()[0].get_id().into();
+        let c1_outpoint_id: OutPointSourceId =
+            block_c1.transactions()[0].transaction().get_id().into();
         // Let's add D1
         let block_index = tf
             .make_block_builder()
@@ -1139,7 +1145,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block_d1 = tf.block(*block_index.block_id());
-        let _: OutPointSourceId = block_d1.transactions()[0].get_id().into();
+        let _: OutPointSourceId = block_d1.transactions()[0].transaction().get_id().into();
 
         // Second chain - B2
         let block_b2 = tf
@@ -1165,7 +1171,8 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                     .build(),
             )
             .build();
-        let b2_outpoint_id: OutPointSourceId = block_b2.transactions()[0].get_id().into();
+        let b2_outpoint_id: OutPointSourceId =
+            block_b2.transactions()[0].transaction().get_id().into();
         assert!(
             tf.process_block(block_b2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
@@ -1199,7 +1206,8 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                     .build(),
             )
             .build();
-        let c2_outpoint_id: OutPointSourceId = block_c2.transactions()[0].get_id().into();
+        let c2_outpoint_id: OutPointSourceId =
+            block_c2.transactions()[0].transaction().get_id().into();
         assert!(
             tf.process_block(block_c2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
@@ -1233,7 +1241,8 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                     .build(),
             )
             .build();
-        let d2_outpoint_id: OutPointSourceId = block_d2.transactions()[0].get_id().into();
+        let d2_outpoint_id: OutPointSourceId =
+            block_d2.transactions()[0].transaction().get_id().into();
         assert!(
             tf.process_block(block_d2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
@@ -1636,7 +1645,7 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         // Check id
         assert!(issuance_block.get_id() == token_aux_data.issuance_block_id());
         let issuance_tx = &issuance_block.transactions()[0];
-        assert!(issuance_tx.get_id() == token_aux_data.issuance_tx().get_id());
+        assert!(issuance_tx.transaction().get_id() == token_aux_data.issuance_tx().get_id());
         // Check issuance storage in the chain and in the storage
         assert_eq!(
             issuance_tx.transaction().outputs()[0].value(),
@@ -1664,7 +1673,7 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         assert!(tf
             .chainstate
             .get_mainchain_tx_index(&common::chain::OutPointSourceId::Transaction(
-                issuance_tx.get_id()
+                issuance_tx.transaction().get_id()
             ))
             .unwrap()
             .is_none());
@@ -1672,7 +1681,7 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         // Check that tokens not in storage
         assert!(tf
             .chainstate
-            .get_token_id_from_issuance_tx(&issuance_tx.get_id())
+            .get_token_id_from_issuance_tx(&issuance_tx.transaction().get_id())
             .unwrap()
             .is_none());
 

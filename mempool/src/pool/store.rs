@@ -22,7 +22,6 @@ use common::chain::tokens::OutputValue;
 use common::chain::transaction::Transaction;
 use common::chain::OutPoint;
 use common::primitives::amount::Amount;
-use common::primitives::id::WithId;
 use common::primitives::Id;
 use common::primitives::Idable;
 use serialization::Encode;
@@ -322,11 +321,11 @@ impl MempoolStore {
                 tx_id.get(),
                 descendants.len()
             );
-            self.remove_tx(&entry.tx.get_id());
+            self.remove_tx(&entry.tx.transaction().get_id());
             for descendant_id in descendants.0 {
                 // It may be that this descendant has several ancestors and has already been removed
                 if let Some(descendant) = self.txs_by_id.get(&descendant_id).cloned() {
-                    self.remove_tx(&descendant.tx.get_id())
+                    self.remove_tx(&descendant.tx.transaction().get_id())
                 }
             }
         }
@@ -339,8 +338,8 @@ impl MempoolStore {
 
 #[derive(Debug, Eq, Clone)]
 pub(super) struct TxMempoolEntry {
-    tx: WithId<SignedTransaction>,
-    fee: Amount,
+    pub(super) tx: SignedTransaction,
+    pub(super) fee: Amount,
     parents: BTreeSet<Id<Transaction>>,
     children: BTreeSet<Id<Transaction>>,
     count_with_descendants: usize,
@@ -357,18 +356,18 @@ impl TxMempoolEntry {
         creation_time: Time,
     ) -> TxMempoolEntry {
         Self {
+            size_with_descendants: tx.encoded_size(),
+            tx,
             fee,
             parents,
             children: BTreeSet::default(),
             count_with_descendants: 1,
             creation_time,
             fees_with_descendants: fee,
-            size_with_descendants: tx.encoded_size(),
-            tx: WithId::new(tx),
         }
     }
 
-    pub(super) fn tx(&self) -> &WithId<SignedTransaction> {
+    pub(super) fn tx(&self) -> &SignedTransaction {
         &self.tx
     }
 
@@ -392,7 +391,7 @@ impl TxMempoolEntry {
     }
 
     pub(super) fn tx_id(&self) -> Id<Transaction> {
-        WithId::id(&self.tx)
+        self.tx.transaction().get_id()
     }
 
     pub(super) fn size(&self) -> usize {
