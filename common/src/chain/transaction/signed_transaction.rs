@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{signature::inputsig::InputWitness, Transaction};
+use super::{signature::inputsig::InputWitness, Transaction, TransactionSize, TxOutput};
 use crate::{
-    chain::TransactionCreationError,
+    chain::{TransactionCreationError, TxInput},
     primitives::{
         id::{self, Idable, WithId},
         Id,
@@ -47,6 +47,42 @@ impl SignedTransaction {
 
     pub fn transaction(&self) -> &Transaction {
         &self.transaction
+    }
+
+    pub fn version_byte(&self) -> u8 {
+        self.transaction.version_byte()
+    }
+
+    pub fn is_replaceable(&self) -> bool {
+        self.transaction.is_replaceable()
+    }
+
+    pub fn flags(&self) -> u32 {
+        self.transaction.flags()
+    }
+
+    pub fn inputs(&self) -> &Vec<TxInput> {
+        self.transaction.inputs()
+    }
+
+    pub fn outputs(&self) -> &Vec<TxOutput> {
+        self.transaction.outputs()
+    }
+
+    pub fn lock_time(&self) -> u32 {
+        self.transaction.lock_time()
+    }
+
+    pub fn has_smart_contracts(&self) -> bool {
+        self.transaction.has_smart_contracts()
+    }
+
+    pub fn transaction_data_size(&self) -> TransactionSize {
+        if self.has_smart_contracts() {
+            TransactionSize::SmartContractTransaction(self.encoded_size())
+        } else {
+            TransactionSize::ScriptedTransaction(self.encoded_size())
+        }
     }
 
     pub fn signatures(&self) -> &[InputWitness] {
