@@ -82,23 +82,18 @@ impl TestFramework {
         blocks: usize,
         rng: &mut impl Rng,
     ) -> Result<Id<GenBlock>, ChainstateError> {
-        // TODO: Instead of creating TestBlockInfo on every iteration, a proper UTXO set
-        // abstraction should be used. See https://github.com/mintlayer/mintlayer-core/issues/312
-        // for the details.
-        let mut prev_block = TestBlockInfo::from_id(&self.chainstate, *parent_block);
-
+        let mut prev_block_id = *parent_block;
         for _ in 0..blocks {
             let block = self
                 .make_block_builder()
-                // .with_transactions(vec![transaction])
-                .add_test_transaction_with_parent(prev_block.id, rng)
-                .with_parent(prev_block.id)
+                .add_test_transaction_with_parent(prev_block_id, rng)
+                .with_parent(prev_block_id)
                 .build();
-            prev_block = TestBlockInfo::from_block(&block);
+            prev_block_id = block.get_id().into();
             self.process_block(block, BlockSource::Local)?;
         }
 
-        Ok(prev_block.id)
+        Ok(prev_block_id)
     }
 
     /// Returns the genesis block of the chain.
@@ -122,6 +117,15 @@ impl TestFramework {
     #[track_caller]
     pub fn best_block_info(&self) -> TestBlockInfo {
         TestBlockInfo::from_id(&self.chainstate, self.best_block_id())
+    }
+
+    /// Returns a block identifier for the specified height.
+    #[track_caller]
+    pub fn block_id(&self, height: u64) -> Id<GenBlock> {
+        self.chainstate
+            .get_block_id_from_height(&BlockHeight::from(height))
+            .unwrap()
+            .unwrap()
     }
 
     /// Returns a test block information for the specified height.
