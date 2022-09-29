@@ -24,7 +24,7 @@ use self::{
     amounts_map::AmountsMap,
     error::{ConnectTransactionError, TokensError},
     storage::TransactionVerifierStorageRef,
-    token_issuance_cache::{CachedTokensOperation, CoinOrTokenId},
+    token_issuance_cache::{CoinOrTokenId, ConsumedTokenIssuanceCache},
     tx_index_cache::TxIndexCache,
     utils::get_output_token_id_and_amount,
 };
@@ -43,7 +43,7 @@ use common::{
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
-    primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable, H256},
+    primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 use utxo::{
     BlockRewardUndo, BlockUndo, ConsumedUtxoCache, TxUndo, Utxo, UtxosCache, UtxosDB, UtxosView,
@@ -70,6 +70,12 @@ pub struct BlockUndoEntry {
     is_fresh: bool,
 }
 
+pub enum CachedOperation<T> {
+    Write(T),
+    Read(T),
+    Erase,
+}
+
 /// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum BlockTransactableRef<'a> {
@@ -82,7 +88,7 @@ pub struct TransactionVerifierDelta {
     tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
     utxo_cache: ConsumedUtxoCache,
     utxo_block_undo: BTreeMap<Id<Block>, BlockUndoEntry>,
-    token_issuance_cache: BTreeMap<H256, CachedTokensOperation>,
+    token_issuance_cache: ConsumedTokenIssuanceCache,
 }
 
 /// The tool used to verify transaction and cache their updated states in memory
@@ -592,7 +598,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
             tx_index_cache: self.tx_index_cache.consume(),
             utxo_cache: self.utxo_cache.consume(),
             utxo_block_undo: self.utxo_block_undo,
-            token_issuance_cache: self.token_issuance_cache.take(),
+            token_issuance_cache: self.token_issuance_cache.consume(),
         })
     }
 }

@@ -16,12 +16,17 @@
 use std::sync::Arc;
 
 use super::*;
-
-use common::chain::{
-    config::Builder as ConfigBuilder, tokens::TokenAuxiliaryData, OutPoint, TxMainChainIndex,
-    TxMainChainPosition,
+use crate::detail::transaction_verifier::token_issuance_cache::{
+    CachedAuxDataOp, CachedTokenIndexOp,
 };
-use mockall::predicate;
+use common::{
+    chain::{
+        config::Builder as ConfigBuilder, tokens::TokenAuxiliaryData, OutPoint, TxMainChainIndex,
+        TxMainChainPosition,
+    },
+    primitives::H256,
+};
+use mockall::predicate::eq;
 use utxo::UtxosStorageRead;
 
 #[test]
@@ -37,12 +42,12 @@ fn hierarchy_test_utxo() {
         .return_const(Ok(Some(H256::zero().into())));
     store
         .expect_get_utxo()
-        .with(predicate::eq(outpoint0.clone()))
+        .with(eq(outpoint0.clone()))
         .times(1)
         .return_const(Ok(None));
     store
         .expect_get_undo_data()
-        .with(predicate::eq(block_undo_id_0))
+        .with(eq(block_undo_id_0))
         .times(1)
         .return_const(Ok(None));
 
@@ -124,7 +129,7 @@ fn hierarchy_test_tx_index() {
         .return_const(Ok(Some(H256::zero().into())));
     store
         .expect_get_mainchain_tx_index()
-        .with(predicate::eq(outpoint0.clone()))
+        .with(eq(outpoint0.clone()))
         .times(1)
         .return_const(Ok(None));
 
@@ -185,12 +190,12 @@ fn hierarchy_test_tokens() {
         .return_const(Ok(Some(H256::zero().into())));
     store
         .expect_get_token_aux_data()
-        .with(predicate::eq(token_id_0))
+        .with(eq(token_id_0))
         .times(1)
         .return_const(Ok(None));
     store
         .expect_get_token_id_from_issuance_tx()
-        .with(predicate::eq(tx_id_0))
+        .with(eq(tx_id_0))
         .times(1)
         .return_const(Ok(None));
 
@@ -202,11 +207,11 @@ fn hierarchy_test_tokens() {
     let verifier1 = {
         let mut verifier = TransactionVerifier::new(&store, &chain_config);
         verifier.token_issuance_cache = TokenIssuanceCache::new_for_test(
+            BTreeMap::from([(token_id_1, CachedAuxDataOp::Write(token_data_1.clone()))]),
             BTreeMap::from([(
-                token_id_1,
-                CachedTokensOperation::Write(token_data_1.clone()),
+                token_data_1.issuance_tx().get_id(),
+                CachedTokenIndexOp::Write(token_id_1),
             )]),
-            BTreeMap::from([(token_data_1.issuance_tx().get_id(), token_id_1)]),
         );
         verifier
     };
@@ -220,11 +225,11 @@ fn hierarchy_test_tokens() {
         //let mut verifier = verifier1.derive();
         let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
         verifier.token_issuance_cache = TokenIssuanceCache::new_for_test(
+            BTreeMap::from([(token_id_2, CachedAuxDataOp::Read(token_data_2.clone()))]),
             BTreeMap::from([(
-                token_id_2,
-                CachedTokensOperation::Read(token_data_2.clone()),
+                token_data_2.issuance_tx().get_id(),
+                CachedTokenIndexOp::Read(token_id_2),
             )]),
-            BTreeMap::from([(token_data_2.issuance_tx().get_id(), token_id_2)]),
         );
         verifier
     };

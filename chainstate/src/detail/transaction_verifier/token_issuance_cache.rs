@@ -23,13 +23,10 @@ use common::{
     primitives::{Id, Idable},
 };
 
-use super::error::TokensError;
+use super::{error::TokensError, CachedOperation};
 
-pub enum CachedTokensOperation {
-    Write(TokenAuxiliaryData),
-    Read(TokenAuxiliaryData),
-    Erase(Id<Transaction>),
-}
+pub type CachedAuxDataOp = CachedOperation<TokenAuxiliaryData>;
+pub type CachedTokenIndexOp = CachedOperation<TokenId>;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum CoinOrTokenId {
@@ -37,9 +34,14 @@ pub enum CoinOrTokenId {
     TokenId(TokenId),
 }
 
+pub struct ConsumedTokenIssuanceCache {
+    pub data: BTreeMap<TokenId, CachedAuxDataOp>,
+    pub txid_vs_tokenid: BTreeMap<Id<Transaction>, CachedTokenIndexOp>,
+}
+
 pub struct TokenIssuanceCache {
-    data: BTreeMap<TokenId, CachedTokensOperation>,
-    txid_vs_tokenid: BTreeMap<Id<Transaction>, TokenId>,
+    data: BTreeMap<TokenId, CachedAuxDataOp>,
+    txid_vs_tokenid: BTreeMap<Id<Transaction>, CachedTokenIndexOp>,
 }
 
 impl TokenIssuanceCache {
@@ -52,8 +54,8 @@ impl TokenIssuanceCache {
 
     #[cfg(test)]
     pub fn new_for_test(
-        data: BTreeMap<TokenId, CachedTokensOperation>,
-        txid_vs_tokenid: BTreeMap<Id<Transaction>, TokenId>,
+        data: BTreeMap<TokenId, CachedAuxDataOp>,
+        txid_vs_tokenid: BTreeMap<Id<Transaction>, CachedTokenIndexOp>,
     ) -> Self {
         Self {
             data,
@@ -83,24 +85,25 @@ impl TokenIssuanceCache {
 
     fn write_issuance(&mut self, block_id: Id<Block>, tx: &Transaction) -> Result<(), TokensError> {
         let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
-        self.insert_aux_data(token_id, TokenAuxiliaryData::new(tx.clone(), block_id))?;
+        let aux_data = TokenAuxiliaryData::new(tx.clone(), block_id);
+        self.insert_aux_data(token_id, CachedAuxDataOp::Write(aux_data))?;
 
         // TODO: this probably needs better modeling. Currently, we just want to know what the token id is for a given issuance tx id
-        self.txid_vs_tokenid.insert(tx.get_id(), token_id);
+        self.txid_vs_tokenid.insert(tx.get_id(), CachedTokenIndexOp::Write(token_id));
         Ok(())
     }
 
     fn insert_aux_data(
         &mut self,
         token_id: TokenId,
-        data: TokenAuxiliaryData,
+        op: CachedAuxDataOp,
     ) -> Result<(), TokensError> {
         match self.data.entry(token_id) {
             Entry::Occupied(_) => Err(TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(
                 token_id,
             )),
             Entry::Vacant(e) => {
-                e.insert(CachedTokensOperation::Write(data));
+                e.insert(op);
                 Ok(())
             }
         }
@@ -108,27 +111,17 @@ impl TokenIssuanceCache {
 
     fn write_undo_issuance(&mut self, tx: &Transaction) -> Result<(), TokensError> {
         let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
-        self.remove_aux_data(token_id, tx.get_id())?;
-
-        self.txid_vs_tokenid.insert(tx.get_id(), token_id);
-
-        Ok(())
-    }
-
-    fn remove_aux_data(
-        &mut self,
-        token_id: TokenId,
-        tx_id: Id<Transaction>,
-    ) -> Result<(), TokensError> {
         match self.data.entry(token_id) {
             Entry::Occupied(mut e) => {
-                e.insert(CachedTokensOperation::Erase(tx_id));
-                Ok(())
+                e.insert(CachedAuxDataOp::Erase);
             }
-            Entry::Vacant(_) => Err(TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(
-                token_id,
-            )),
+            Entry::Vacant(_) => {
+                return Err(TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(
+                    token_id,
+                ))
+            }
         }
+        Ok(())
     }
 
     pub fn precache_token_issuance<
@@ -164,19 +157,11 @@ impl TokenIssuanceCache {
         token_id: &TokenId,
         data: TokenAuxiliaryData,
     ) -> Result<(), TokensError> {
-        self.insert_aux_data(*token_id, data)
+        self.insert_aux_data(*token_id, CachedAuxDataOp::Write(data))
     }
 
     pub fn del_token_aux_data(&mut self, token_id: &TokenId) -> Result<(), TokensError> {
-        if let Some(op) = self.data.get(token_id) {
-            let tx_id = match op {
-                CachedTokensOperation::Write(data) => data.issuance_tx().get_id(),
-                CachedTokensOperation::Read(data) => data.issuance_tx().get_id(),
-                CachedTokensOperation::Erase(id) => *id,
-            };
-            self.remove_aux_data(*token_id, tx_id);
-        }
-        Ok(())
+        self.insert_aux_data(*token_id, CachedAuxDataOp::Erase)
     }
 
     pub fn set_token_id(
@@ -184,25 +169,29 @@ impl TokenIssuanceCache {
         issuance_tx_id: &Id<Transaction>,
         token_id: &TokenId,
     ) -> Result<(), TokensError> {
-        self.txid_vs_tokenid.insert(*issuance_tx_id, *token_id);
+        self.txid_vs_tokenid
+            .insert(*issuance_tx_id, CachedTokenIndexOp::Write(*token_id));
         Ok(())
     }
 
     pub fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> Result<(), TokensError> {
-        self.txid_vs_tokenid.remove(issuance_tx_id);
+        self.txid_vs_tokenid.insert(*issuance_tx_id, CachedTokenIndexOp::Erase);
         Ok(())
     }
 
-    pub fn data(&self) -> &BTreeMap<TokenId, CachedTokensOperation> {
+    pub fn data(&self) -> &BTreeMap<TokenId, CachedAuxDataOp> {
         &self.data
     }
 
-    pub fn txid_from_issuance(&self) -> &BTreeMap<Id<Transaction>, TokenId> {
+    pub fn txid_from_issuance(&self) -> &BTreeMap<Id<Transaction>, CachedTokenIndexOp> {
         &self.txid_vs_tokenid
     }
 
-    pub fn take(self) -> BTreeMap<TokenId, CachedTokensOperation> {
-        self.data
+    pub fn consume(self) -> ConsumedTokenIssuanceCache {
+        ConsumedTokenIssuanceCache {
+            data: self.data,
+            txid_vs_tokenid: self.txid_vs_tokenid,
+        }
     }
 }
 

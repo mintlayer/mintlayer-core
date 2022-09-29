@@ -14,13 +14,12 @@
 // limitations under the License.
 
 use super::{
-    error::ConnectTransactionError, storage::TransactionVerifierStorageMut,
-    token_issuance_cache::CachedTokensOperation, CachedInputsOperation, TransactionVerifierDelta,
+    error::ConnectTransactionError,
+    storage::TransactionVerifierStorageMut,
+    token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp, ConsumedTokenIssuanceCache},
+    CachedInputsOperation, TransactionVerifierDelta,
 };
-use common::{
-    chain::{tokens::TokenId, OutPointSourceId},
-    primitives::Idable,
-};
+use common::chain::OutPointSourceId;
 
 fn flush_tx_indexes(
     storage: &mut impl TransactionVerifierStorageMut,
@@ -39,20 +38,40 @@ fn flush_tx_indexes(
 
 fn flush_tokens(
     storage: &mut impl TransactionVerifierStorageMut,
-    token_id: TokenId,
-    token_op: CachedTokensOperation,
+    token_cache: &ConsumedTokenIssuanceCache,
 ) -> Result<(), ConnectTransactionError> {
-    match token_op {
-        CachedTokensOperation::Write(ref issuance_tx) => {
-            storage.set_token_aux_data(&token_id, issuance_tx)?;
-            storage.set_token_id(&issuance_tx.issuance_tx().get_id(), &token_id)?;
-        }
-        CachedTokensOperation::Read(_) => (),
-        CachedTokensOperation::Erase(issuance_tx) => {
-            storage.del_token_aux_data(&token_id)?;
-            storage.del_token_id(&issuance_tx)?;
-        }
-    }
+    //FIXME check len: assert or error?
+
+    assert_eq!(token_cache.data.len(), token_cache.txid_vs_tokenid.len());
+    token_cache.data.iter().try_for_each(
+        |(token_id, aux_data_op)| -> Result<(), ConnectTransactionError> {
+            match aux_data_op {
+                CachedAuxDataOp::Write(aux_data) => {
+                    storage.set_token_aux_data(&token_id, aux_data)?;
+                }
+                CachedAuxDataOp::Read(_) => (),
+                CachedAuxDataOp::Erase => {
+                    storage.del_token_aux_data(&token_id)?;
+                }
+            };
+            Ok(())
+        },
+    )?;
+
+    token_cache.txid_vs_tokenid.iter().try_for_each(
+        |(tx_id, token_index_op)| -> Result<(), ConnectTransactionError> {
+            match token_index_op {
+                CachedTokenIndexOp::Write(token_id) => {
+                    storage.set_token_id(&tx_id, &token_id)?;
+                }
+                CachedTokenIndexOp::Read(_) => (),
+                CachedTokenIndexOp::Erase => {
+                    storage.del_token_id(&tx_id)?;
+                }
+            };
+            Ok(())
+        },
+    )?;
     Ok(())
 }
 
@@ -63,19 +82,20 @@ pub fn flush_to_storage(
     for (tx_id, tx_index_op) in consumed.tx_index_cache {
         flush_tx_indexes(storage, tx_id, tx_index_op)?;
     }
-    for (token_id, token_op) in consumed.token_issuance_cache {
-        flush_tokens(storage, token_id, token_op)?;
-    }
+
+    flush_tokens(storage, &consumed.token_issuance_cache)?;
 
     // flush utxo set
     storage.batch_write(consumed.utxo_cache)?;
 
-    //flush block undo
+    // flush block undo
     for (block_id, entry) in consumed.utxo_block_undo {
         if entry.is_fresh {
             storage.set_undo_data(block_id, &entry.undo)?;
-        } else {
+        } else if entry.undo.is_empty() {
             storage.del_undo_data(block_id)?;
+        } else {
+            unreachable!("BlockUndo was not used up completely")
         }
     }
 

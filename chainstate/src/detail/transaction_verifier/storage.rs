@@ -34,6 +34,11 @@ pub enum TransactionVerifierStorageError {
     StatePersistenceError(#[from] chainstate_types::StatePersistenceError),
     #[error("Failed to persist state: {0}")]
     GetAncestorError(#[from] chainstate_types::GetAncestorError),
+    //FIXME need more errors
+    //#[error("Tokens error: {0}")]
+    //TokensError(#[from] TokensError),
+    //#[error("Tx index error: {0}")]
+    //TxIndexError(#[from] ConnectTransactionError),
 }
 
 pub trait TransactionVerifierStorageRef: UtxosStorageRead {

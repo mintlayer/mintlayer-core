@@ -27,10 +27,12 @@ use utxo::{
 };
 
 use super::{
+    cached_operation::CachedInputsOperation,
     storage::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,
     },
+    token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
     BlockUndoEntry, TransactionVerifier,
 };
 
@@ -42,9 +44,13 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
         tx_id: Id<Transaction>,
     ) -> Result<Option<TokenId>, TransactionVerifierStorageError> {
         match self.token_issuance_cache.txid_from_issuance().get(&tx_id) {
-            Some(v) => return Ok(Some(*v)),
+            Some(v) => match v {
+                CachedTokenIndexOp::Write(t) => return Ok(Some(t.clone())),
+                CachedTokenIndexOp::Read(t) => return Ok(Some(t.clone())),
+                CachedTokenIndexOp::Erase => return Ok(None),
+            },
             None => (),
-        };
+        }
         self.storage_ref.get_token_id_from_issuance_tx(tx_id)
     }
 
@@ -69,13 +75,9 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
     ) -> Result<Option<TxMainChainIndex>, TransactionVerifierStorageError> {
         match self.tx_index_cache.get_from_cached(tx_id) {
             Some(v) => match v {
-                super::cached_operation::CachedInputsOperation::Write(idx) => {
-                    return Ok(Some(idx.clone()))
-                }
-                super::cached_operation::CachedInputsOperation::Read(idx) => {
-                    return Ok(Some(idx.clone()))
-                }
-                super::cached_operation::CachedInputsOperation::Erase => return Ok(None),
+                CachedInputsOperation::Write(idx) => return Ok(Some(idx.clone())),
+                CachedInputsOperation::Read(idx) => return Ok(Some(idx.clone())),
+                CachedInputsOperation::Erase => return Ok(None),
             },
             None => (),
         };
@@ -88,13 +90,9 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
     ) -> Result<Option<TokenAuxiliaryData>, crate::TokensError> {
         match self.token_issuance_cache.data().get(token_id) {
             Some(v) => match v {
-                super::token_issuance_cache::CachedTokensOperation::Write(t) => {
-                    return Ok(Some(t.clone()))
-                }
-                super::token_issuance_cache::CachedTokensOperation::Read(t) => {
-                    return Ok(Some(t.clone()))
-                }
-                super::token_issuance_cache::CachedTokensOperation::Erase(_) => return Ok(None),
+                CachedAuxDataOp::Write(t) => return Ok(Some(t.clone())),
+                CachedAuxDataOp::Read(t) => return Ok(Some(t.clone())),
+                CachedAuxDataOp::Erase => return Ok(None),
             },
             None => (),
         }
@@ -194,7 +192,17 @@ impl<'a, S: TransactionVerifierStorageMut> UtxosUndoStorageWrite for Transaction
     }
 
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), storage_result::Error> {
-        self.utxo_block_undo.remove(&id);
+        // delete undo from current cache
+        if self.utxo_block_undo.remove(&id).is_none() {
+            //if current cache has not such data - insert empty undo to be flushed to the parent
+            self.utxo_block_undo.insert(
+                id,
+                BlockUndoEntry {
+                    undo: Default::default(),
+                    is_fresh: false,
+                },
+            );
+        }
         Ok(())
     }
 }

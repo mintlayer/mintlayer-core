@@ -13,13 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::error::ConnectTransactionError;
+use super::{error::ConnectTransactionError, CachedOperation};
 use common::chain::{Spender, TxMainChainIndex};
-pub enum CachedInputsOperation {
-    Write(TxMainChainIndex),
-    Read(TxMainChainIndex),
-    Erase,
-}
+
+pub type CachedInputsOperation = CachedOperation<TxMainChainIndex>;
 
 impl CachedInputsOperation {
     pub fn spend(

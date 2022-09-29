@@ -20,7 +20,7 @@ mod mock;
 use super::*;
 use common::{
     chain::{Destination, OutPoint, OutputPurpose},
-    primitives::amount::UnsignedIntType,
+    primitives::{amount::UnsignedIntType, H256},
 };
 use crypto::key::{KeyKind, PrivateKey};
 
