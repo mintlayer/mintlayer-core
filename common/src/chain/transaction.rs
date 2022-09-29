@@ -19,7 +19,7 @@ use serialization::{DirectDecode, DirectEncode, Encode};
 use typename::TypeName;
 
 use crate::chain::transaction::transaction_v1::TransactionV1;
-use crate::primitives::{id::WithId, Id, Idable};
+use crate::primitives::{id::WithId, Id, Idable, H256};
 
 pub mod input;
 pub use input::*;
@@ -118,6 +118,13 @@ impl Transaction {
     pub fn lock_time(&self) -> u32 {
         match &self {
             Transaction::V1(tx) => tx.lock_time(),
+        }
+    }
+
+    /// provides the hash of a transaction including the witness (malleable)
+    pub fn serialized_hash(&self) -> H256 {
+        match &self {
+            Transaction::V1(tx) => tx.serialized_hash(),
         }
     }
 

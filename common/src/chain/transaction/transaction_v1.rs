@@ -16,6 +16,7 @@
 pub use crate::chain::transaction::input::*;
 pub use crate::chain::transaction::output::*;
 pub use crate::chain::transaction::TransactionCreationError;
+use crate::primitives::H256;
 use crate::primitives::{id, Id, Idable, VersionTag};
 use crypto::hash::StreamHasher;
 use serialization::{Decode, Encode, Tagged};
@@ -66,6 +67,10 @@ impl TransactionV1 {
 
     pub fn lock_time(&self) -> u32 {
         self.lock_time
+    }
+
+    pub fn serialized_hash(&self) -> H256 {
+        id::hash_encoded(self)
     }
 }
 
