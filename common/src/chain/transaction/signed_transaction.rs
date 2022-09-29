@@ -77,9 +77,9 @@ impl PartialEq for WithId<SignedTransaction> {
 
 impl Eq for WithId<SignedTransaction> {}
 
-// TODO(PR): enforce that inputs size is equal to signatures size when decoding
+// TODO enforce that inputs size is equal to signatures size when decoding
 
-// TODO(PR) make the SignedTransaction serialization ignore the size of the witness vec and just use the size of the inputs
+// TODO make the SignedTransaction serialization ignore the size of the witness vec and just use the size of the inputs
 // NOTE: there might be difficulties there as Encode cannot fail. It may lead to accepting a panic there
 
 #[cfg(test)]
