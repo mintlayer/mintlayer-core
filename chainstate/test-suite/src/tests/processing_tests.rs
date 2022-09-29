@@ -1002,7 +1002,7 @@ fn blocks_from_the_future() {
         {
             // constrain the test to protect this test becoming legacy by changing the definition of median time for genesis
             assert_eq!(
-                tf.chainstate.calculate_median_time_past(&tf.genesis().get_id().into()),
+                tf.chainstate.calculate_median_time_past(&tf.genesis().get_id().into()).unwrap(),
                 tf.chainstate.get_chain_config().genesis_block().timestamp()
             );
         }

@@ -112,8 +112,8 @@ mockall::mock! {
     impl<'tx> crate::Transactional<'tx> for Store {
         type TransactionRo = MockStoreTxRo;
         type TransactionRw = MockStoreTxRw;
-        fn transaction_ro<'st>(&'st self) -> MockStoreTxRo where 'st: 'tx;
-        fn transaction_rw<'st>(&'st self) -> MockStoreTxRw where 'st: 'tx;
+        fn transaction_ro<'st>(&'st self) -> crate::Result<MockStoreTxRo> where 'st: 'tx;
+        fn transaction_rw<'st>(&'st self) -> crate::Result<MockStoreTxRw> where 'st: 'tx;
     }
 
     impl crate::BlockchainStorage for Store {}
@@ -305,6 +305,27 @@ mod tests {
     }
 
     #[test]
+    fn mock_transaction_fail() {
+        // Set up the mock store
+        let mut store = MockStore::new();
+        let err_f = || {
+            Err(crate::Error::Storage(
+                storage::error::Recoverable::TransactionFailed,
+            ))
+        };
+        store.expect_transaction_ro().returning(err_f);
+
+        // Check it returns an error
+        match store.transaction_ro() {
+            Ok(_) => panic!("Err expected"),
+            Err(e) => assert_eq!(
+                e,
+                crate::Error::Storage(storage::error::Recoverable::TransactionFailed)
+            ),
+        }
+    }
+
+    #[test]
     fn mock_transaction() {
         // Set up the mock store
         let mut store = MockStore::new();
@@ -316,18 +337,18 @@ mod tests {
                 .with(mockall::predicate::eq(4))
                 .return_const(Ok(()));
             mock_tx.expect_commit().times(1).return_const(Ok(()));
-            mock_tx
+            Ok(mock_tx)
         });
 
         // Test some code against the mock
-        let mut tx = store.transaction_rw();
+        let mut tx = store.transaction_rw().unwrap();
         let v = tx.get_storage_version().unwrap();
         tx.set_storage_version(v + 1).unwrap();
         tx.commit().unwrap();
     }
 
     fn generic_test<BS: crate::BlockchainStorage>(store: &BS) {
-        let tx = store.transaction_ro();
+        let tx = store.transaction_ro().unwrap();
         let _ = tx.get_best_block_id();
         tx.close();
     }
@@ -346,7 +367,7 @@ mod tests {
         block: &Block,
     ) -> &'static str {
         (|| {
-            let mut tx = store.transaction_rw();
+            let mut tx = store.transaction_rw().unwrap();
             // Get current best block ID
             let _best_id = match tx.get_best_block_id()? {
                 None => return Ok("top not set"),
@@ -423,7 +444,7 @@ mod tests {
                 .with(mockall::predicate::eq(expected_id))
                 .return_const(Ok(()));
             tx.expect_commit().return_const(Ok(()));
-            tx
+            Ok(tx)
         });
 
         let result = attach_block_to_top(&mut store, &block1);
@@ -438,7 +459,7 @@ mod tests {
             let mut tx = MockStoreTxRw::new();
             tx.expect_get_best_block_id().return_const(Ok(None));
             tx.expect_abort().return_const(());
-            tx
+            Ok(tx)
         });
 
         let result = attach_block_to_top(&mut store, &block1);
@@ -454,7 +475,7 @@ mod tests {
             let mut tx = MockStoreTxRw::new();
             tx.expect_get_best_block_id().return_const(Ok(Some(top_id)));
             tx.expect_abort().return_const(());
-            tx
+            Ok(tx)
         });
 
         let result = attach_block_to_top(&mut store, &block1);
@@ -475,7 +496,7 @@ mod tests {
                 .with(mockall::predicate::eq(expected_id))
                 .return_const(Ok(()));
             tx.expect_commit().return_const(Err(TXFAIL));
-            tx
+            Ok(tx)
         });
 
         let result = attach_block_to_top(&mut store, &block1);

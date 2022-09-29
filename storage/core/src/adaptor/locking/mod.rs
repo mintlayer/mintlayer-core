@@ -122,19 +122,19 @@ impl<T> Clone for TransactionLockImpl<T> {
 impl<'tx, T: 'tx + ReadOps> backend::TransactionalRo<'tx> for TransactionLockImpl<T> {
     type TxRo = TxRo<'tx, T>;
 
-    fn transaction_ro<'st: 'tx>(&'st self) -> Self::TxRo {
-        TxRo(self.db.read().expect("lock to be alive"))
+    fn transaction_ro<'st: 'tx>(&'st self) -> crate::Result<Self::TxRo> {
+        Ok(TxRo(self.db.read().expect("lock to be alive")))
     }
 }
 
 impl<'tx, T: 'tx + ReadOps + WriteOps> backend::TransactionalRw<'tx> for TransactionLockImpl<T> {
     type TxRw = TxRw<'tx, T>;
 
-    fn transaction_rw<'st: 'tx>(&'st self) -> Self::TxRw {
-        TxRw {
+    fn transaction_rw<'st: 'tx>(&'st self) -> crate::Result<Self::TxRw> {
+        Ok(TxRw {
             db: self.db.write().expect("lock to be alive"),
             deltas: vec![BTreeMap::new(); self.num_maps],
-        }
+        })
     }
 }
 

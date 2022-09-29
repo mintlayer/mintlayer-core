@@ -51,19 +51,19 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
     }
 
     /// Start a read-only transaction
-    pub fn transaction_ro<'tx, 'st: 'tx>(&'st self) -> TransactionRo<'tx, B, Sch> {
-        TransactionRo {
-            dbtx: backend::TransactionalRo::transaction_ro(&self.backend),
+    pub fn transaction_ro<'tx, 'st: 'tx>(&'st self) -> crate::Result<TransactionRo<'tx, B, Sch>> {
+        Ok(TransactionRo {
+            dbtx: backend::TransactionalRo::transaction_ro(&self.backend)?,
             _schema: Default::default(),
-        }
+        })
     }
 
     /// Start a read-write transaction
-    pub fn transaction_rw<'tx, 'st: 'tx>(&'st self) -> TransactionRw<'tx, B, Sch> {
-        TransactionRw {
-            dbtx: backend::TransactionalRw::transaction_rw(&self.backend),
+    pub fn transaction_rw<'tx, 'st: 'tx>(&'st self) -> crate::Result<TransactionRw<'tx, B, Sch>> {
+        Ok(TransactionRw {
+            dbtx: backend::TransactionalRw::transaction_rw(&self.backend)?,
             _schema: Default::default(),
-        }
+        })
     }
 }
 

@@ -116,12 +116,12 @@ impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
     type TransactionRo = StoreTxRo<'tx, B>;
     type TransactionRw = StoreTxRw<'tx, B>;
 
-    fn transaction_ro<'st: 'tx>(&'st self) -> Self::TransactionRo {
-        StoreTxRo(self.0.transaction_ro())
+    fn transaction_ro<'st: 'tx>(&'st self) -> crate::Result<Self::TransactionRo> {
+        self.0.transaction_ro().map_err(crate::Error::from).map(StoreTxRo)
     }
 
-    fn transaction_rw<'st: 'tx>(&'st self) -> Self::TransactionRw {
-        StoreTxRw(self.0.transaction_rw())
+    fn transaction_rw<'st: 'tx>(&'st self) -> crate::Result<Self::TransactionRw> {
+        self.0.transaction_rw().map_err(crate::Error::from).map(StoreTxRw)
     }
 }
 
@@ -146,7 +146,7 @@ macro_rules! delegate_to_transaction {
         ($($arg:ident: $aty:ty),* $(,)?)
     ) => {
         fn $f(&$($mut)? self $(, $arg: $aty)*) -> $ret {
-            let $($mut)? tx = self.$txfunc();
+            let $($mut)? tx = self.$txfunc()?;
             let val = tx.$f($($arg),*)?;
             $commit(tx).map(|_| val)
         }

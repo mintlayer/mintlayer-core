@@ -153,7 +153,10 @@ impl<
         self.deref().subscribers()
     }
 
-    fn calculate_median_time_past(&self, starting_block: &Id<GenBlock>) -> BlockTimestamp {
+    fn calculate_median_time_past(
+        &self,
+        starting_block: &Id<GenBlock>,
+    ) -> Result<BlockTimestamp, ChainstateError> {
         self.deref().calculate_median_time_past(starting_block)
     }
 

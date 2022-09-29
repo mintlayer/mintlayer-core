@@ -18,6 +18,7 @@ pub mod ban_score;
 pub use self::error::*;
 pub use self::median_time::calculate_median_time_past;
 pub use chainstate_types::Locator;
+use chainstate_types::PropertyQueryError;
 use common::time_getter::TimeGetter;
 pub use error::BlockError;
 pub use error::CheckBlockError;
@@ -89,35 +90,38 @@ impl<S: BlockchainStorage> Chainstate<S> {
         self.events_controller.wait_for_all_events();
     }
 
-    #[must_use]
-    fn make_db_tx(&mut self) -> chainstateref::ChainstateRef<TxRw<'_, S>, OrphanBlocksRefMut> {
-        let db_tx = self.chainstate_storage.transaction_rw();
-        chainstateref::ChainstateRef::new_rw(
+    fn make_db_tx(
+        &mut self,
+    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRw<'_, S>, OrphanBlocksRefMut>>
+    {
+        let db_tx = self.chainstate_storage.transaction_rw()?;
+        Ok(chainstateref::ChainstateRef::new_rw(
             &self.chain_config,
             &self.chainstate_config,
             db_tx,
             self.orphan_blocks.as_rw_ref(),
             self.time_getter.getter(),
-        )
+        ))
     }
 
-    #[must_use]
     pub(crate) fn make_db_tx_ro(
         &self,
-    ) -> chainstateref::ChainstateRef<TxRo<'_, S>, OrphanBlocksRef> {
-        let db_tx = self.chainstate_storage.transaction_ro();
-        chainstateref::ChainstateRef::new_ro(
+    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRo<'_, S>, OrphanBlocksRef>>
+    {
+        let db_tx = self.chainstate_storage.transaction_ro()?;
+        Ok(chainstateref::ChainstateRef::new_ro(
             &self.chain_config,
             &self.chainstate_config,
             db_tx,
             self.orphan_blocks.as_ro_ref(),
             self.time_getter.getter(),
-        )
+        ))
     }
 
-    #[must_use]
-    pub fn query(&self) -> ChainstateQuery<TxRo<'_, S>, OrphanBlocksRef> {
-        ChainstateQuery::new(self.make_db_tx_ro())
+    pub fn query(
+        &self,
+    ) -> Result<ChainstateQuery<TxRo<'_, S>, OrphanBlocksRef>, PropertyQueryError> {
+        self.make_db_tx_ro().map(ChainstateQuery::new).map_err(PropertyQueryError::from)
     }
 
     pub fn subscribe_to_events(&mut self, handler: ChainstateEventHandler) {
@@ -227,7 +231,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
     ) -> Result<Option<BlockIndex>, BlockError> {
         log::info!("Processing block: {}", block.get_id());
 
-        let mut chainstate_ref = self.make_db_tx();
+        let mut chainstate_ref = self.make_db_tx().map_err(BlockError::from)?;
 
         let block = chainstate_ref.check_legitimate_orphan(block_source, block)?;
 
@@ -286,7 +290,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
             .expect("Genesis not constructed correctly");
 
         // Initialize storage with given info
-        let mut db_tx = self.chainstate_storage.transaction_rw();
+        let mut db_tx = self.chainstate_storage.transaction_rw().map_err(BlockError::from)?;
         db_tx.set_best_block_id(&genesis_id).map_err(BlockError::StorageError)?;
         db_tx
             .set_block_id_at_height(&BlockHeight::zero(), &genesis_id)
@@ -306,13 +310,13 @@ impl<S: BlockchainStorage> Chainstate<S> {
         &self,
         block: WithId<Block>,
     ) -> Result<WithId<Block>, BlockError> {
-        let chainstate_ref = self.make_db_tx_ro();
+        let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
         chainstate_ref.check_block(&block)?;
         Ok(block)
     }
 
     pub fn preliminary_header_check(&self, block: BlockHeader) -> Result<(), BlockError> {
-        let chainstate_ref = self.make_db_tx_ro();
+        let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
         chainstate_ref.check_block_header(&block)?;
         Ok(())
     }

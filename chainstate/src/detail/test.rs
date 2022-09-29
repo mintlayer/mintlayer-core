@@ -49,10 +49,13 @@ fn process_genesis_block() {
         );
 
         chainstate.process_genesis().unwrap();
-        let chainstate_ref = chainstate.make_db_tx_ro();
+        let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
 
         // Check the genesis block is properly set up
-        assert_eq!(chainstate.query().get_best_block_id().unwrap(), genesis_id);
+        assert_eq!(
+            chainstate.query().unwrap().get_best_block_id().unwrap(),
+            genesis_id
+        );
         let genesis_index = chainstate_ref.get_gen_block_index(&genesis_id).unwrap().unwrap();
         assert_eq!(genesis_index.block_height(), BlockHeight::from(0));
         assert_eq!(genesis_index.block_id(), genesis_id);
@@ -88,6 +91,6 @@ fn empty_chainstate_no_genesis() {
             time_getter,
         );
         // This panics
-        let _ = chainstate.query().get_best_block_id();
+        let _ = chainstate.query().unwrap().get_best_block_id();
     })
 }
