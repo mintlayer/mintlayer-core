@@ -18,7 +18,7 @@ use serialization::{Decode, Encode};
 use crate::{
     chain::{
         block::{Block, BlockReward, BlockRewardTransactable, ConsensusData},
-        transaction::Transaction,
+        signed_transaction::SignedTransaction,
     },
     primitives::{
         id::{self, Idable},
@@ -31,7 +31,7 @@ use super::{block_header::BlockHeader, timestamp::BlockTimestamp};
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct BlockBody {
     pub(super) reward: BlockReward,
-    pub(super) transactions: Vec<Transaction>,
+    pub(super) transactions: Vec<SignedTransaction>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serialization::Tagged)]
@@ -72,7 +72,7 @@ impl BlockV1 {
         self.header.timestamp()
     }
 
-    pub fn transactions(&self) -> &Vec<Transaction> {
+    pub fn transactions(&self) -> &Vec<SignedTransaction> {
         &self.body.transactions
     }
 
@@ -93,8 +93,14 @@ impl BlockV1 {
             ConsensusData::None | ConsensusData::PoW(_) => None,
             ConsensusData::PoS(data) => Some(data.kernel_inputs().as_ref()),
         };
+        let witness = match &self.header.consensus_data {
+            ConsensusData::None | ConsensusData::PoW(_) => None,
+            ConsensusData::PoS(data) => Some(data.kernel_witness().as_ref()),
+        };
+
         BlockRewardTransactable {
             inputs,
+            witness,
             outputs: Some(self.body.reward.outputs()),
         }
     }

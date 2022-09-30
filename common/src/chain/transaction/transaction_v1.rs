@@ -16,13 +16,12 @@
 pub use crate::chain::transaction::input::*;
 pub use crate::chain::transaction::output::*;
 pub use crate::chain::transaction::TransactionCreationError;
+use crate::primitives::H256;
 use crate::primitives::{id, Id, Idable, VersionTag};
 use crypto::hash::StreamHasher;
 use serialization::{Decode, Encode, Tagged};
 
-use super::signature::inputsig::InputWitness;
 use super::Transaction;
-use super::TransactionUpdateError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Tagged)]
 pub struct TransactionV1 {
@@ -70,20 +69,8 @@ impl TransactionV1 {
         self.lock_time
     }
 
-    pub fn serialized_hash(&self) -> Id<Transaction> {
-        Id::new(id::hash_encoded(self))
-    }
-
-    pub fn update_witness(
-        &mut self,
-        input_index: usize,
-        witness: InputWitness,
-    ) -> Result<(), TransactionUpdateError> {
-        match self.inputs.get_mut(input_index) {
-            Some(input) => input.update_witness(witness),
-            None => return Err(TransactionUpdateError::Unknown),
-        }
-        Ok(())
+    pub fn serialized_hash(&self) -> H256 {
+        id::hash_encoded(self)
     }
 }
 

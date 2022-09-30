@@ -17,8 +17,8 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use common::{
     chain::{
-        calculate_tx_index_from_block, signature::Transactable, OutPoint, OutPointSourceId,
-        Spender, TxInput, TxMainChainIndex,
+        calculate_tx_index_from_block, signature::Signable, OutPoint, OutPointSourceId, Spender,
+        TxInput, TxMainChainIndex,
     },
     primitives::Idable,
 };
@@ -110,7 +110,7 @@ impl TxIndexCache {
                 let tx = block.transactions().get(tx_num).ok_or_else(|| {
                     ConnectTransactionError::InvariantErrorTxNumWrongInBlock(tx_num, block.get_id())
                 })?;
-                let tx_id = tx.get_id();
+                let tx_id = tx.transaction().get_id();
                 OutPointSourceId::from(tx_id)
             }
             BlockTransactableRef::BlockReward(block) => OutPointSourceId::from(block.get_id()),

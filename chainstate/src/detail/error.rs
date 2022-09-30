@@ -89,6 +89,8 @@ pub enum CheckBlockTransactionsError {
     DuplicateInputInTransaction(Id<Transaction>, Id<Block>),
     #[error("Duplicate input in block")]
     DuplicateInputInBlock(Id<Block>),
+    #[error("Number of signatures differs from number of inputs")]
+    InvalidWitnessCount,
     #[error("Empty inputs or outputs in transaction found in block")]
     EmptyInputsOutputsInTransactionInBlock(Id<Transaction>, Id<Block>),
     #[error("Tokens error: {0}")]

@@ -36,7 +36,7 @@ use common::{
     amount_sum,
     chain::{
         block::timestamp::BlockTimestamp,
-        signature::{verify_signature, Transactable},
+        signature::{verify_signature, Signable, Transactable},
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
@@ -438,14 +438,16 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 // pre-cache token ids to check ensure it's not in the db when issuing
                 self.token_issuance_cache.precache_token_issuance(
                     |id| self.db_tx.get_token_aux_data(id).map_err(TokensError::from),
-                    tx,
+                    tx.transaction(),
                 )?;
 
                 // check for attempted money printing
-                let fee = Some(self.check_transferred_amounts_and_get_fee(block.get_id(), tx)?);
+                let fee = Some(
+                    self.check_transferred_amounts_and_get_fee(block.get_id(), tx.transaction())?,
+                );
 
                 // Register tokens if tx has issuance data
-                self.token_issuance_cache.register(block.get_id(), tx)?;
+                self.token_issuance_cache.register(block.get_id(), tx.transaction())?;
 
                 // verify input signatures
                 self.verify_signatures(block_index, tx, spend_height, median_time_past)?;
@@ -453,14 +455,14 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 // spend utxos
                 let tx_undo = self
                     .utxo_cache
-                    .connect_transaction(tx, *spend_height)
+                    .connect_transaction(tx.transaction(), *spend_height)
                     .map_err(ConnectTransactionError::from)?;
 
                 // save spent utxos for undo
                 self.get_or_create_block_undo(&block_id).push_tx_undo(tx_undo);
 
                 // mark tx index as spent
-                let spender = tx.get_id().into();
+                let spender = tx.transaction().get_id().into();
                 self.tx_index_cache.spend_tx_index_inputs(tx.inputs(), spender)?;
 
                 fee
@@ -533,7 +535,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 )?;
 
                 let tx_undo = self.take_tx_undo(&block_id, tx_num)?;
-                self.utxo_cache.disconnect_transaction(tx, tx_undo)?;
+                self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
 
                 // pre-cache all inputs
                 self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
@@ -541,14 +543,14 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 // pre-cache token ids before removing them
                 self.token_issuance_cache.precache_token_issuance(
                     |id| self.db_tx.get_token_aux_data(id).map_err(TokensError::from),
-                    tx,
+                    tx.transaction(),
                 )?;
 
                 // unspend inputs
                 self.tx_index_cache.unspend_tx_index_inputs(tx.inputs())?;
 
                 // Remove issued tokens
-                self.token_issuance_cache.unregister(tx)?;
+                self.token_issuance_cache.unregister(tx.transaction())?;
             }
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.block_reward_transactable();

@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use common::{
-    chain::{tokens::OutputValue, Destination, OutputPurpose, Transaction, TxInput, TxOutput},
+    chain::{
+        signature::inputsig::InputWitness, signed_transaction::SignedTransaction,
+        tokens::OutputValue, Destination, OutputPurpose, Transaction, TxInput, TxOutput,
+    },
     primitives::Amount,
 };
 
@@ -23,6 +26,7 @@ pub struct TransactionBuilder {
     flags: u32,
     inputs: Vec<TxInput>,
     outputs: Vec<TxOutput>,
+    witnesses: Vec<InputWitness>,
     lock_time: u32,
 }
 
@@ -32,6 +36,7 @@ impl TransactionBuilder {
             flags: 0,
             inputs: Vec::new(),
             outputs: Vec::new(),
+            witnesses: Vec::new(),
             lock_time: 0,
         }
     }
@@ -46,8 +51,14 @@ impl TransactionBuilder {
         self
     }
 
-    pub fn add_input(mut self, input: TxInput) -> Self {
+    pub fn with_witnesses(mut self, witnesses: Vec<InputWitness>) -> Self {
+        self.witnesses = witnesses;
+        self
+    }
+
+    pub fn add_input(mut self, input: TxInput, witness: InputWitness) -> Self {
         self.inputs.push(input);
+        self.witnesses.push(witness);
         self
     }
 
@@ -74,8 +85,12 @@ impl TransactionBuilder {
         self
     }
 
-    pub fn build(self) -> Transaction {
-        Transaction::new(self.flags, self.inputs, self.outputs, self.lock_time).unwrap()
+    pub fn build(self) -> SignedTransaction {
+        SignedTransaction::new(
+            Transaction::new(self.flags, self.inputs, self.outputs, self.lock_time).unwrap(),
+            self.witnesses,
+        )
+        .expect("invalid witness count")
     }
 }
 
@@ -88,16 +103,14 @@ fn build_transaction() {
 
     let flags = 1;
     let lock_time = 2;
-    let input = TxInput::new(
-        OutPointSourceId::Transaction(Id::new(H256::random())),
-        0,
-        InputWitness::NoSignature(None),
-    );
+    let witness = InputWitness::NoSignature(None);
+    let input = TxInput::new(OutPointSourceId::Transaction(Id::new(H256::random())), 0);
 
     let tx = TransactionBuilder::new()
         .with_flags(flags)
         .with_inputs(vec![input.clone()])
-        .add_input(input.clone())
+        .with_witnesses(vec![InputWitness::NoSignature(None)])
+        .add_input(input.clone(), witness)
         .with_outputs(vec![TxOutput::new(
             OutputValue::Coin(Amount::from_atoms(100)),
             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -109,7 +122,7 @@ fn build_transaction() {
         .with_lock_time(lock_time)
         .build();
 
-    assert_eq!(flags, tx.flags());
-    assert_eq!(&vec![input.clone(), input], tx.inputs());
-    assert_eq!(lock_time, tx.lock_time());
+    assert_eq!(flags, tx.transaction().flags());
+    assert_eq!(&vec![input.clone(), input], tx.transaction().inputs());
+    assert_eq!(lock_time, tx.transaction().lock_time());
 }

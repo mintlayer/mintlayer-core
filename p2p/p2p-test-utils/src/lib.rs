@@ -31,6 +31,7 @@ use common::{
         block::{timestamp::BlockTimestamp, Block, BlockReward, ConsensusData},
         config::ChainConfig,
         signature::inputsig::InputWitness,
+        signed_transaction::SignedTransaction,
         tokens::OutputValue,
         transaction::Transaction,
         Destination, GenBlock, GenBlockId, Genesis, OutPointSourceId, OutputPurpose, TxInput,
@@ -101,8 +102,8 @@ impl TestBlockInfo {
             .iter()
             .map(|tx| {
                 (
-                    OutPointSourceId::Transaction(tx.get_id()),
-                    tx.outputs().clone(),
+                    OutPointSourceId::Transaction(tx.transaction().get_id()),
+                    tx.transaction().outputs().clone(),
                 )
             })
             .collect();
@@ -137,7 +138,7 @@ fn create_utxo_data(
     outsrc: OutPointSourceId,
     index: usize,
     output: &TxOutput,
-) -> Option<(TxInput, TxOutput)> {
+) -> Option<(InputWitness, TxInput, TxOutput)> {
     let output_value = match output.value() {
         OutputValue::Coin(coin) => *coin,
         OutputValue::Token(_) => return None,
@@ -147,7 +148,8 @@ fn create_utxo_data(
         return None;
     }
     Some((
-        TxInput::new(outsrc, index as u32, nosig_random_witness()),
+        nosig_random_witness(),
+        TxInput::new(outsrc, index as u32),
         TxOutput::new(
             OutputValue::Coin(new_value),
             OutputPurpose::Transfer(anyonecanspend_address()),
@@ -167,14 +169,21 @@ fn produce_test_block_with_consensus_data(
     // For each output we create a new input and output that will placed into a new block.
     // If value of original output is less than 1 then output will disappear in a new block.
     // Otherwise, value will be decreasing for 1.
-    let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
+    let wit_in_out = prev_block
         .txns
         .into_iter()
         .flat_map(|(outsrc, outs)| create_new_outputs(outsrc, &outs))
-        .unzip();
+        .collect::<Vec<_>>();
+    let witnesses = wit_in_out.iter().cloned().map(|e| e.0).collect::<Vec<_>>();
+    let inputs = wit_in_out.iter().cloned().map(|e| e.1).collect::<Vec<_>>();
+    let outputs = wit_in_out.iter().cloned().map(|e| e.2).collect::<Vec<_>>();
 
     Block::new(
-        vec![Transaction::new(0, inputs, outputs, 0).expect("not to fail")],
+        vec![SignedTransaction::new(
+            Transaction::new(0, inputs, outputs, 0).expect("not to fail"),
+            witnesses,
+        )
+        .expect("invalid witness count")],
         prev_block.id,
         BlockTimestamp::from_duration_since_epoch(time::get()),
         consensus_data,
@@ -183,7 +192,10 @@ fn produce_test_block_with_consensus_data(
     .expect("not to fail")
 }
 
-fn create_new_outputs(srcid: OutPointSourceId, outs: &[TxOutput]) -> Vec<(TxInput, TxOutput)> {
+fn create_new_outputs(
+    srcid: OutPointSourceId,
+    outs: &[TxOutput],
+) -> Vec<(InputWitness, TxInput, TxOutput)> {
     outs.iter()
         .enumerate()
         .filter_map(move |(index, output)| create_utxo_data(srcid.clone(), index, output))

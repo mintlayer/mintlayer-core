@@ -19,10 +19,12 @@ use serialization::{DirectDecode, DirectEncode, Encode};
 use typename::TypeName;
 
 use crate::chain::transaction::transaction_v1::TransactionV1;
-use crate::primitives::{id::WithId, Id, Idable};
+use crate::primitives::{id::WithId, Id, Idable, H256};
 
 pub mod input;
 pub use input::*;
+
+pub mod signed_transaction;
 
 pub mod output;
 pub use output::*;
@@ -33,6 +35,7 @@ pub mod transaction_index;
 pub use transaction_index::*;
 
 use self::signature::inputsig::InputWitness;
+use self::signed_transaction::SignedTransaction;
 
 mod transaction_v1;
 
@@ -63,14 +66,11 @@ impl PartialEq for WithId<Transaction> {
 
 impl Eq for WithId<Transaction> {}
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum TransactionCreationError {
+    #[error("The number of signatures does not match the number of inputs")]
+    InvalidWitnessCount,
     #[error("An unknown error has occurred")]
-    Unknown,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TransactionUpdateError {
     Unknown,
 }
 
@@ -122,7 +122,7 @@ impl Transaction {
     }
 
     /// provides the hash of a transaction including the witness (malleable)
-    pub fn serialized_hash(&self) -> Id<Transaction> {
+    pub fn serialized_hash(&self) -> H256 {
         match &self {
             Transaction::V1(tx) => tx.serialized_hash(),
         }
@@ -140,14 +140,14 @@ impl Transaction {
         }
     }
 
-    pub fn update_witness(
-        &mut self,
-        input_index: usize,
-        witness: InputWitness,
-    ) -> Result<(), TransactionUpdateError> {
-        match self {
-            Transaction::V1(tx) => tx.update_witness(input_index, witness),
+    pub fn sign(
+        self,
+        witnesses: Vec<InputWitness>,
+    ) -> Result<SignedTransaction, TransactionCreationError> {
+        if witnesses.len() != self.inputs().len() {
+            return Err(TransactionCreationError::InvalidWitnessCount);
         }
+        SignedTransaction::new(self, witnesses)
     }
 }
 

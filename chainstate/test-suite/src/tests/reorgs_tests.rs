@@ -403,7 +403,7 @@ fn check_block_status(
             Some(block_index) => {
                 let block = tf.chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
                 for tx in block.transactions() {
-                    check_spend_status(tf, tx, &spend_status);
+                    check_spend_status(tf, tx.transaction(), &spend_status);
                 }
             }
             None => {

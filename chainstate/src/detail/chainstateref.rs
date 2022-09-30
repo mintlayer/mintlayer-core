@@ -482,6 +482,16 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
+    fn check_witness_count(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+        for tx in block.transactions() {
+            ensure!(
+                tx.inputs().len() == tx.signatures().len(),
+                CheckBlockTransactionsError::InvalidWitnessCount
+            )
+        }
+        Ok(())
+    }
+
     fn check_duplicate_inputs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         // check for duplicate inputs (see CVE-2018-17144)
         let mut block_inputs = BTreeSet::new();
@@ -489,7 +499,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             if tx.inputs().is_empty() || tx.outputs().is_empty() {
                 return Err(
                     CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(
-                        tx.get_id(),
+                        tx.transaction().get_id(),
                         block.get_id(),
                     ),
                 );
@@ -499,7 +509,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 ensure!(
                     tx_inputs.insert(input.outpoint()),
                     CheckBlockTransactionsError::DuplicateInputInTransaction(
-                        tx.get_id(),
+                        tx.transaction().get_id(),
                         block.get_id()
                     )
                 );
@@ -519,7 +529,10 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             ensure!(
                 issuance_count <= 1,
                 CheckBlockTransactionsError::TokensError(
-                    TokensError::MultipleTokenIssuanceInTransaction(tx.get_id(), block.get_id()),
+                    TokensError::MultipleTokenIssuanceInTransaction(
+                        tx.transaction().get_id(),
+                        block.get_id()
+                    ),
                 )
             );
 
@@ -531,7 +544,12 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     OutputValue::Token(token_data) => Some(token_data),
                 })
                 .try_for_each(|token_data| {
-                    check_tokens_data(self.chain_config, token_data, tx, block.get_id())
+                    check_tokens_data(
+                        self.chain_config,
+                        token_data,
+                        tx.transaction(),
+                        block.get_id(),
+                    )
                 })
                 .map_err(CheckBlockTransactionsError::TokensError)?;
         }
@@ -540,6 +558,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         // Note: duplicate txs are detected through duplicate inputs
+        self.check_witness_count(block)?;
         self.check_duplicate_inputs(block)?;
         self.check_tokens_txs(block)?;
         Ok(())

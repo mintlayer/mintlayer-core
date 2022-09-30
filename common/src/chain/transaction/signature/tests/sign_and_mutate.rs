@@ -28,6 +28,7 @@ use crate::{
             },
             verify_signature, TransactionSigError,
         },
+        signed_transaction::SignedTransaction,
         tokens::OutputValue,
         Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
@@ -63,14 +64,14 @@ fn test_mutate_tx_internal_data() {
         .cartesian_product(sig_hash_types())
         .cartesian_product(test_data)
     {
-        let mut tx = generate_unsigned_tx(&destination, inputs, outputs).unwrap();
-        match sign_whole_tx(&mut tx, &private_key, sighash_type, &destination) {
-            Ok(()) => {
+        let tx = generate_unsigned_tx(&destination, inputs, outputs).unwrap();
+        match sign_whole_tx(tx, &private_key, sighash_type, &destination) {
+            Ok(signed_tx) => {
                 // Test flags change.
-                let updated_tx = change_flags(&tx, 1234567890);
+                let updated_tx = change_flags(&signed_tx, 1234567890);
                 assert_eq!(verify_signed_tx(&updated_tx, &destination), expected);
                 // Test locktime change.
-                let updated_tx = change_locktime(&tx, 1234567890);
+                let updated_tx = change_locktime(&signed_tx, 1234567890);
                 assert_eq!(verify_signed_tx(&updated_tx, &destination), expected)
             }
             // Not implemented.
@@ -83,7 +84,7 @@ fn test_mutate_tx_internal_data() {
             Err(TransactionSigError::InvalidInputIndex(0, 0)) => {
                 assert_eq!(sighash_type.outputs_mode(), OutputsMode::Single)
             }
-            e => assert_eq!(e, expected),
+            e => assert_eq!(e.unwrap_err(), expected.unwrap_err()),
         }
     }
 }
@@ -314,7 +315,7 @@ fn mutate_single() {
         }
         assert_eq!(
             verify_signature(&destination, &tx, inputs),
-            Err(TransactionSigError::InvalidInputIndex(inputs, inputs)),
+            Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
 
@@ -330,7 +331,7 @@ fn mutate_single() {
         }
         assert_eq!(
             verify_signature(&destination, &tx, inputs),
-            Err(TransactionSigError::InvalidInputIndex(inputs, inputs)),
+            Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
 
@@ -348,7 +349,7 @@ fn mutate_single() {
         }
         assert_eq!(
             verify_signature(&destination, &tx, inputs),
-            Err(TransactionSigError::InvalidInputIndex(inputs, inputs)),
+            Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
 }
@@ -378,7 +379,7 @@ fn mutate_single_anyonecanpay() {
         }
         assert_eq!(
             verify_signature(&destination, &tx, inputs),
-            Err(TransactionSigError::InvalidInputIndex(inputs, inputs))
+            Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs))
         );
     }
 
@@ -400,7 +401,7 @@ fn mutate_single_anyonecanpay() {
         }
         assert_eq!(
             verify_signature(&destination, &tx, inputs),
-            Err(TransactionSigError::InvalidInputIndex(inputs, inputs)),
+            Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
 
@@ -420,18 +421,18 @@ fn mutate_single_anyonecanpay() {
         }
         assert_eq!(
             verify_signature(&destination, &tx, inputs),
-            Err(TransactionSigError::InvalidInputIndex(inputs, inputs)),
+            Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
 }
 
 fn check_mutations<M>(
-    tx: &Transaction,
+    tx: &SignedTransaction,
     destination: &Destination,
     mutations: M,
     expected: Result<(), TransactionSigError>,
 ) where
-    M: IntoIterator<Item = fn(&Transaction) -> Transaction>,
+    M: IntoIterator<Item = fn(&SignedTransaction) -> SignedTransaction>,
 {
     for mutate in mutations.into_iter() {
         let tx = mutate(tx);
@@ -440,7 +441,7 @@ fn check_mutations<M>(
 
         assert_eq!(
             verify_signature(destination, &tx, INVALID_INPUT),
-            Err(TransactionSigError::InvalidInputIndex(
+            Err(TransactionSigError::InvalidSignatureIndex(
                 INVALID_INPUT,
                 inputs
             ))
@@ -451,48 +452,51 @@ fn check_mutations<M>(
     }
 }
 
-fn add_input(tx: &Transaction) -> Transaction {
+fn add_input(tx: &SignedTransaction) -> SignedTransaction {
     let mut updater = MutableTransaction::from(tx);
     updater.inputs.push(updater.inputs[0].clone());
+    updater.witness.push(updater.witness[0].clone());
     updater.generate_tx().unwrap()
 }
 
-fn mutate_input(tx: &Transaction) -> Transaction {
+fn mutate_input(tx: &SignedTransaction) -> SignedTransaction {
     let mut updater = MutableTransaction::from(tx);
     updater.inputs[0] = TxInput::new(
         OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random())),
         9999,
-        updater.inputs[0].witness().clone(),
     );
     updater.generate_tx().unwrap()
 }
 
-fn remove_first_input(tx: &Transaction) -> Transaction {
+fn remove_first_input(tx: &SignedTransaction) -> SignedTransaction {
     let mut updater = MutableTransaction::from(tx);
     updater.inputs.remove(0);
+    updater.witness.remove(0);
     updater.generate_tx().unwrap()
 }
 
-fn remove_middle_input(tx: &Transaction) -> Transaction {
+fn remove_middle_input(tx: &SignedTransaction) -> SignedTransaction {
     let mut updater = MutableTransaction::from(tx);
     assert!(updater.inputs.len() > 8);
     updater.inputs.remove(7);
+    updater.witness.remove(7);
     updater.generate_tx().unwrap()
 }
 
-fn remove_last_input(tx: &Transaction) -> Transaction {
+fn remove_last_input(tx: &SignedTransaction) -> SignedTransaction {
     let mut updater = MutableTransaction::from(tx);
     updater.inputs.pop().expect("Unexpected empty inputs");
+    updater.witness.pop().expect("Unexpected empty witness");
     updater.generate_tx().unwrap()
 }
 
-fn add_output(tx: &Transaction) -> Transaction {
+fn add_output(tx: &SignedTransaction) -> SignedTransaction {
     let mut updater = MutableTransaction::from(tx);
     updater.outputs.push(updater.outputs[0].clone());
     updater.generate_tx().unwrap()
 }
 
-fn mutate_output(tx: &Transaction) -> Transaction {
+fn mutate_output(tx: &SignedTransaction) -> SignedTransaction {
     let mut updater = MutableTransaction::from(tx);
     updater.outputs[0] = TxOutput::new(
         match updater.outputs[0].value() {
@@ -506,32 +510,32 @@ fn mutate_output(tx: &Transaction) -> Transaction {
     updater.generate_tx().unwrap()
 }
 
-fn remove_first_output(tx: &Transaction) -> Transaction {
+fn remove_first_output(tx: &SignedTransaction) -> SignedTransaction {
     let mut updater = MutableTransaction::from(tx);
     updater.outputs.remove(0);
     updater.generate_tx().unwrap()
 }
 
-fn remove_middle_output(tx: &Transaction) -> Transaction {
+fn remove_middle_output(tx: &SignedTransaction) -> SignedTransaction {
     let mut updater = MutableTransaction::from(tx);
     assert!(updater.outputs.len() > 8);
     updater.outputs.remove(7);
     updater.generate_tx().unwrap()
 }
 
-fn remove_last_output(tx: &Transaction) -> Transaction {
+fn remove_last_output(tx: &SignedTransaction) -> SignedTransaction {
     let mut updater = MutableTransaction::from(tx);
     updater.outputs.pop().expect("Unexpected empty outputs");
     updater.generate_tx().unwrap()
 }
 
-fn change_flags(original_tx: &Transaction, new_flags: u32) -> Transaction {
+fn change_flags(original_tx: &SignedTransaction, new_flags: u32) -> SignedTransaction {
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.flags = new_flags;
     tx_updater.generate_tx().unwrap()
 }
 
-fn change_locktime(original_tx: &Transaction, new_lock_time: u32) -> Transaction {
+fn change_locktime(original_tx: &SignedTransaction, new_lock_time: u32) -> SignedTransaction {
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.lock_time = new_lock_time;
     tx_updater.generate_tx().unwrap()

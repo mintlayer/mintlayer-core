@@ -25,10 +25,10 @@ pub struct BlockSize {
 
 impl BlockSize {
     pub fn new_from_block(block: &Block) -> Self {
-        block.transactions().iter().map(|tx| tx.transaction_data_size()).fold(
+        block.transactions().iter().fold(
             BlockSize::new_with_header_size(block.header().encoded_size()),
             |mut total, curr| {
-                match curr {
+                match curr.transaction_data_size() {
                     TransactionSize::ScriptedTransaction(size) => total.from_txs += size,
                     TransactionSize::SmartContractTransaction(size) => {
                         total.from_smart_contracts += size

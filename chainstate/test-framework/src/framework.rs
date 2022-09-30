@@ -162,9 +162,10 @@ fn create_utxo_data(
     index: usize,
     output: &TxOutput,
     rng: &mut impl Rng,
-) -> Option<(TxInput, TxOutput)> {
+) -> Option<(InputWitness, TxInput, TxOutput)> {
     Some((
-        TxInput::new(outsrc.clone(), index as u32, empty_witness(rng)),
+        empty_witness(rng),
+        TxInput::new(outsrc.clone(), index as u32),
         match output.value() {
             OutputValue::Coin(output_value) => {
                 let spent_value = Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
@@ -225,7 +226,7 @@ pub(crate) fn create_new_outputs(
     srcid: OutPointSourceId,
     outs: &[TxOutput],
     rng: &mut impl Rng,
-) -> Vec<(TxInput, TxOutput)> {
+) -> Vec<(InputWitness, TxInput, TxOutput)> {
     outs.iter()
         .enumerate()
         .filter_map(move |(index, output)| {
@@ -254,8 +255,8 @@ impl TestBlockInfo {
             .iter()
             .map(|tx| {
                 (
-                    OutPointSourceId::Transaction(tx.get_id()),
-                    tx.outputs().clone(),
+                    OutPointSourceId::Transaction(tx.transaction().get_id()),
+                    tx.transaction().outputs().clone(),
                 )
             })
             .collect();
@@ -321,11 +322,13 @@ fn process_block() {
     tf.make_block_builder()
         .add_transaction(
             TransactionBuilder::new()
-                .add_input(TxInput::new(
-                    OutPointSourceId::BlockReward(<Id<GenBlock>>::from(gen_block_id)),
-                    0,
+                .add_input(
+                    TxInput::new(
+                        OutPointSourceId::BlockReward(<Id<GenBlock>>::from(gen_block_id)),
+                        0,
+                    ),
                     InputWitness::NoSignature(None),
-                ))
+                )
                 .add_output(TxOutput::new(
                     OutputValue::Coin(Amount::from_atoms(0)),
                     OutputPurpose::Transfer(Destination::AnyoneCanSpend),

@@ -43,24 +43,20 @@ fn sign_and_verify_all_and_none() {
         .cartesian_product(sig_hash_types().filter(|t| t.outputs_mode() != OutputsMode::Single))
         .cartesian_product(test_data)
     {
-        let mut tx = generate_unsigned_tx(&destination, inputs, outputs).unwrap();
-        let res = sign_whole_tx(&mut tx, &private_key, sighash_type, &destination);
+        let tx = generate_unsigned_tx(&destination, inputs, outputs).unwrap();
+        let signed_tx = sign_whole_tx(tx, &private_key, sighash_type, &destination);
         // `sign_whole_tx` does nothing if there no inputs.
         if destination == Destination::AnyoneCanSpend && inputs > 0 {
             assert_eq!(
-                res,
+                signed_tx,
                 Err(TransactionSigError::AttemptedToProduceSignatureForAnyoneCanSpend)
             );
         } else if matches!(destination, Destination::ScriptHash(_)) && inputs > 0 {
             // This should be updated after ScriptHash support is implemented.
-            assert_eq!(res, Err(TransactionSigError::Unsupported));
+            assert_eq!(signed_tx, Err(TransactionSigError::Unsupported));
         } else {
-            assert_eq!(Ok(()), res, "{sighash_type:?} {destination:?}");
-            assert_eq!(
-                Ok(()),
-                verify_signed_tx(&tx, &destination),
-                "{sighash_type:?} {destination:?}"
-            );
+            let signed_tx = signed_tx.expect("{sighash_type:?} {destination:?}");
+            verify_signed_tx(&signed_tx, &destination).expect("{sighash_type:?} {destination:?}")
         }
     }
 }
@@ -224,13 +220,10 @@ fn sign_and_verify_single() {
     ];
 
     for (destination, sighash_type, inputs, outputs, expected) in test_data.into_iter() {
-        let mut tx = generate_unsigned_tx(&destination, inputs, outputs).unwrap();
-        match sign_whole_tx(&mut tx, &private_key, sighash_type, &destination) {
-            Ok(_) => assert_eq!(
-                verify_signed_tx(&tx, &destination),
-                expected,
-                "{sighash_type:X?}, {destination:?}"
-            ),
+        let tx = generate_unsigned_tx(&destination, inputs, outputs).unwrap();
+        match sign_whole_tx(tx, &private_key, sighash_type, &destination) {
+            Ok(signed_tx) => verify_signed_tx(&signed_tx, &destination)
+                .expect("{sighash_type:X?}, {destination:?}"),
             Err(err) => assert_eq!(Err(err), expected, "{sighash_type:X?}, {destination:?}"),
         }
     }

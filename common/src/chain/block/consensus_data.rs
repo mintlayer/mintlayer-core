@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::chain::signature::inputsig::InputWitness;
 use crate::chain::ChainConfig;
 use crate::primitives::Compact;
 use crate::Uint256;
@@ -54,19 +55,29 @@ impl ConsensusData {
 #[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode)]
 pub struct PoSData {
     kernel_inputs: Vec<TxInput>,
+    kernel_witness: Vec<InputWitness>,
     bits: Compact,
 }
 
 impl PoSData {
-    pub fn new(kernel_inputs: Vec<TxInput>, bits: Compact) -> Self {
+    pub fn new(
+        kernel_inputs: Vec<TxInput>,
+        kernel_witness: Vec<InputWitness>,
+        bits: Compact,
+    ) -> Self {
         Self {
             kernel_inputs,
+            kernel_witness,
             bits,
         }
     }
 
     pub fn kernel_inputs(&self) -> &Vec<TxInput> {
         &self.kernel_inputs
+    }
+
+    pub fn kernel_witness(&self) -> &Vec<InputWitness> {
+        &self.kernel_witness
     }
 
     pub fn bits(&self) -> &Compact {
