@@ -24,6 +24,11 @@ class ExampleTest(BitcoinTestFramework):
         tip = self.nodes[n].chainstate_best_block_id()
         return self.nodes[n].chainstate_block_height_in_main_chain(tip)
 
+    def assert_tip(self, n, expected):
+        tip = self.nodes[n].chainstate_best_block_id()
+        block = self.nodes[n].chainstate_get_block(tip)
+        assert_equal(block, expected)
+
     def run_test(self):
         # get current tip hash
         node0_tip = self.nodes[0].chainstate_best_block_id()
@@ -47,13 +52,13 @@ class ExampleTest(BitcoinTestFramework):
         self.nodes[0].chainstate_submit_block(blocks[0])
         assert_equal(self.block_height(0), 1)
         assert_equal(self.block_height(1), 0)
-        # TODO check that tip is blocks[0]
+        self.assert_tip(0, blocks[0])
 
         # add second block
         self.nodes[0].chainstate_submit_block(blocks[1])
         assert_equal(self.block_height(0), 2)
         assert_equal(self.block_height(1), 0)
-        # TODO check that tip is blocks[1]
+        self.assert_tip(0, blocks[1])
 
         # connect nodes
         self.connect_nodes(0, 1)
@@ -67,15 +72,18 @@ class ExampleTest(BitcoinTestFramework):
         assert_equal(self.block_height(0), 2)
         assert_equal(self.block_height(1), 2)
 
+        self.assert_tip(0, blocks[1])
+        self.assert_tip(1, blocks[1])
+
         # submit third block
         self.nodes[0].chainstate_submit_block(blocks[2])
         assert_equal(self.block_height(0), 3)
-        # TODO check that tip is blocks[2]
+        self.assert_tip(0, blocks[2])
 
         # submit final block
         self.nodes[0].chainstate_submit_block(blocks[3])
         assert_equal(self.block_height(0), 4)
-        # TODO check that tip is blocks[3]
+        self.assert_tip(0, blocks[3])
 
         # verify that they are in sync
         self.sync_all(self.nodes[0:2])
@@ -84,6 +92,7 @@ class ExampleTest(BitcoinTestFramework):
         assert_equal(node0_tip, node1_tip)
         assert_equal(self.block_height(0), 4)
         assert_equal(self.block_height(1), 4)
+        self.assert_tip(1, blocks[3])
 
 if __name__ == '__main__':
     ExampleTest().main()
