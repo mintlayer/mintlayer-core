@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common::chain::block::BlockReward;
+use common::chain::OutPoint;
 use common::chain::OutPointSourceId;
 use common::chain::Transaction;
 use common::chain::TxInput;
@@ -37,6 +38,7 @@ use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::tokens::TokenAuxiliaryData;
 use common::chain::ChainConfig;
 use utils::eventhandler::EventHandler;
+use utxo::Utxo;
 
 use super::chainstate_interface::ChainstateInterface;
 
@@ -128,5 +130,6 @@ mockall::mock! {
             writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
             include_orphans: bool,
         ) -> Result<(), ChainstateError>;
+        fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError>;
     }
 }

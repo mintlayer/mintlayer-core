@@ -16,6 +16,7 @@
 use std::sync::Arc;
 use std::{sync::atomic::Ordering, time::Duration};
 
+use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{
     make_chainstate, BlockError, BlockSource, ChainstateConfig, ChainstateError, CheckBlockError,
     CheckBlockTransactionsError, ConnectTransactionError, OrphanCheckError,
@@ -25,7 +26,7 @@ use chainstate_test_framework::{
     TransactionBuilder,
 };
 use chainstate_types::{GenBlockIndex, PropertyQueryError};
-use common::chain::Transaction;
+use common::chain::{OutPoint, Transaction};
 use common::primitives::BlockDistance;
 use common::{
     chain::{
@@ -47,6 +48,7 @@ use crypto::{
 };
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+use utxo::UtxoSource;
 
 #[rstest]
 #[trace]
@@ -301,6 +303,16 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
 
+        // Check that genesis utxos are present in the utxo set
+        let genesis_id = tf.genesis().get_id();
+        for (idx, txo) in tf.genesis().utxos().iter().enumerate() {
+            let idx = idx as u32;
+            let utxo = tf.chainstate.utxo(&OutPoint::new(genesis_id.into(), idx)).unwrap().unwrap();
+            assert!(!utxo.is_block_reward());
+            assert_eq!(utxo.output(), txo);
+            assert_eq!(utxo.source(), &UtxoSource::Blockchain(BlockHeight::new(0)));
+        }
+
         // Create a new block
         let block = tf.make_block_builder().add_test_transaction(&mut rng).build();
 
@@ -329,14 +341,20 @@ fn spend_inputs_simple(#[case] seed: Seed) {
                     prev_out_tx_index.get_spent_state(outpoint.output_index()).unwrap(),
                     OutputSpentState::SpentBy(tx_id.into())
                 );
+                assert_eq!(tf.chainstate.utxo(outpoint), Ok(None))
             }
             // All the outputs of this transaction should be unspent
             let tx_index = tf.chainstate.get_mainchain_tx_index(&tx_id.into()).unwrap().unwrap();
-            for idx in 0..tx.outputs().len() as u32 {
+            for (idx, txo) in tx.outputs().iter().enumerate() {
+                let idx = idx as u32;
                 assert_eq!(
                     tx_index.get_spent_state(idx).unwrap(),
                     OutputSpentState::Unspent
                 );
+                let utxo = tf.chainstate.utxo(&OutPoint::new(tx_id.into(), idx)).unwrap().unwrap();
+                assert!(!utxo.is_block_reward());
+                assert_eq!(utxo.output(), txo);
+                assert_eq!(utxo.source(), &UtxoSource::Blockchain(BlockHeight::new(1)));
             }
         }
     });

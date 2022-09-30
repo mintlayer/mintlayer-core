@@ -19,18 +19,19 @@ use crate::detail::BlockSource;
 use crate::ChainstateConfig;
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::tokens::TokenAuxiliaryData;
-use common::chain::Transaction;
 use common::chain::TxInput;
 use common::chain::{
     block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
     tokens::{RPCTokenInfo, TokenId},
     ChainConfig, OutPointSourceId, TxMainChainIndex,
 };
+use common::chain::{OutPoint, Transaction};
 use common::primitives::{Amount, BlockHeight, Id};
 use utils::eventhandler::EventHandler;
 
 use crate::{ChainstateError, ChainstateEvent};
 use chainstate_types::Locator;
+use utxo::Utxo;
 
 pub trait ChainstateInterface: Send {
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>);
@@ -151,4 +152,7 @@ pub trait ChainstateInterface: Send {
         writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
         include_orphans: bool,
     ) -> Result<(), ChainstateError>;
+
+    /// Returns the UTXO for a specified OutPoint
+    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError>;
 }
