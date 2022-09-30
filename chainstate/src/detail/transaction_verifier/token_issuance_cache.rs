@@ -121,6 +121,7 @@ impl TokenIssuanceCache {
                 ))
             }
         }
+        self.del_token_id(&tx.get_id())?;
         Ok(())
     }
 
