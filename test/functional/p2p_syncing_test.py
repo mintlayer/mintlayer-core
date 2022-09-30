@@ -26,7 +26,7 @@ class ExampleTest(BitcoinTestFramework):
 
     def assert_tip(self, n, expected):
         tip = self.nodes[n].chainstate_best_block_id()
-        block = self.nodes[n].chainstate_block(tip)
+        block = self.nodes[n].chainstate_get_block(tip)
         assert_equal(block, expected)
 
     def run_test(self):

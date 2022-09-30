@@ -36,8 +36,8 @@ trait ChainstateRpc {
     async fn block_id_at_height(&self, height: BlockHeight) -> rpc::Result<Option<Id<GenBlock>>>;
 
     /// Returns a hex-encoded serialized block with the given id.
-    #[method(name = "block")]
-    async fn block(&self, id: Id<Block>) -> rpc::Result<Option<String>>;
+    #[method(name = "get_block")]
+    async fn get_block(&self, id: Id<Block>) -> rpc::Result<Option<String>>;
 
     /// Submit a block to be included in the chain
     #[method(name = "submit_block")]
@@ -81,7 +81,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         handle_error(self.call(move |this| this.get_block_id_from_height(&height)).await)
     }
 
-    async fn block(&self, id: Id<Block>) -> rpc::Result<Option<String>> {
+    async fn get_block(&self, id: Id<Block>) -> rpc::Result<Option<String>> {
         let block = handle_error(self.call(move |this| this.get_block(id)).await)?;
         Ok(block.map(|b| hex::encode(b.encode())))
     }
