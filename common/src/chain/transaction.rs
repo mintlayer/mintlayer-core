@@ -140,7 +140,7 @@ impl Transaction {
         }
     }
 
-    pub fn sign(
+    pub fn with_signatures(
         self,
         witnesses: Vec<InputWitness>,
     ) -> Result<SignedTransaction, TransactionCreationError> {
