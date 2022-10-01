@@ -14,3 +14,15 @@
 // limitations under the License.
 
 pub mod argon2;
+
+#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
+pub enum KdfError {
+    #[error("Block storage error: {0}")]
+    Argon2HashingFailed(::argon2::Error),
+}
+
+impl From<::argon2::Error> for KdfError {
+    fn from(e: ::argon2::Error) -> Self {
+        KdfError::Argon2HashingFailed(e)
+    }
+}

@@ -16,17 +16,7 @@
 use argon2::Argon2;
 use generic_array::{ArrayLength, GenericArray};
 
-#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
-pub enum KdfError {
-    #[error("Block storage error: {0}")]
-    Argon2HashingFailed(argon2::Error),
-}
-
-impl From<argon2::Error> for KdfError {
-    fn from(e: argon2::Error) -> Self {
-        KdfError::Argon2HashingFailed(e)
-    }
-}
+use super::KdfError;
 
 pub fn argon2id_hash<OutputSize: ArrayLength<u8>, SaltSize: ArrayLength<u8>>(
     m_cost_memory_size: u32,
