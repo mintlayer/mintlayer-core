@@ -52,9 +52,9 @@ pub mod test {
         let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
             argon2id_hash(700, 16, 2, salt, b"password");
         let hash = hash.unwrap();
-        let hash1_hex: String = hash.encode_hex();
+        let hash_hex: String = hash.encode_hex();
         assert_eq!(
-            hash1_hex,
+            hash_hex,
             "0b549350ae93d48747c5b3a676589279a3cce4a7b9de79494e2f0b7193d0ae9b"
         );
     }
@@ -65,9 +65,9 @@ pub mod test {
         let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
             argon2id_hash(400, 16, 2, salt, b"password");
         let hash = hash.unwrap();
-        let hash1_hex: String = hash.encode_hex();
+        let hash_hex: String = hash.encode_hex();
         assert_eq!(
-            hash1_hex,
+            hash_hex,
             "f6acd6dc507655ef500975881f6ba642eb03d04ce71d3b3a139e04b321daa88a"
         );
     }
@@ -78,9 +78,9 @@ pub mod test {
         let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
             argon2id_hash(700, 12, 2, salt, b"password");
         let hash = hash.unwrap();
-        let hash1_hex: String = hash.encode_hex();
+        let hash_hex: String = hash.encode_hex();
         assert_eq!(
-            hash1_hex,
+            hash_hex,
             "e57d0a6482f160a9f9f6c23f480eb478fcf5b13e07445514a7d4d6e48c52c5e3"
         );
     }
@@ -91,9 +91,9 @@ pub mod test {
         let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
             argon2id_hash(700, 16, 4, salt, b"password");
         let hash = hash.unwrap();
-        let hash1_hex: String = hash.encode_hex();
+        let hash_hex: String = hash.encode_hex();
         assert_eq!(
-            hash1_hex,
+            hash_hex,
             "6e7833c72c1eaa5388b389f1cb657ee27858f062a164763d041c880fe7ced6d7"
         );
     }
@@ -104,9 +104,9 @@ pub mod test {
         let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
             argon2id_hash(700, 16, 6, salt, b"password");
         let hash = hash.unwrap();
-        let hash1_hex: String = hash.encode_hex();
+        let hash_hex: String = hash.encode_hex();
         assert_eq!(
-            hash1_hex,
+            hash_hex,
             "8dd956b8a3d0e0a28905a70cff97a63ecc764af44b73daaef608de5a593e7ea7"
         );
     }
@@ -117,9 +117,9 @@ pub mod test {
         let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
             argon2id_hash(500, 16, 2, salt, b"password");
         let hash = hash.unwrap();
-        let hash1_hex: String = hash.encode_hex();
+        let hash_hex: String = hash.encode_hex();
         assert_eq!(
-            hash1_hex,
+            hash_hex,
             "5aa54fa17129a5488e51a8c8ba6754921dfb0cbd88013942a4705ecb1789ab11"
         );
     }
@@ -130,9 +130,9 @@ pub mod test {
         let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
             argon2id_hash(500, 16, 2, salt, b"another password");
         let hash = hash.unwrap();
-        let hash1_hex: String = hash.encode_hex();
+        let hash_hex: String = hash.encode_hex();
         assert_eq!(
-            hash1_hex,
+            hash_hex,
             "d3fd0dc78bceed1c87d303aaead74177676157bed51b9e5479e09c905c5bf2b4"
         );
     }
@@ -143,8 +143,8 @@ pub mod test {
         let hash: Result<GenericArray<u8, typenum::U16>, KdfError> =
             argon2id_hash(500, 16, 2, salt, b"another password");
         let hash = hash.unwrap();
-        let hash1_hex: String = hash.encode_hex();
-        assert_eq!(hash1_hex, "1e67dcc183faab8ef49c5dcad921656d");
+        let hash_hex: String = hash.encode_hex();
+        assert_eq!(hash_hex, "1e67dcc183faab8ef49c5dcad921656d");
     }
 
     #[test]
@@ -153,9 +153,9 @@ pub mod test {
         let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
             argon2id_hash(500, 16, 2, salt, b"another password");
         let hash = hash.unwrap();
-        let hash1_hex: String = hash.encode_hex();
+        let hash_hex: String = hash.encode_hex();
         assert_eq!(
-            hash1_hex,
+            hash_hex,
             "495205d26d5184c4b90e41c98cd067f85b67cc303d86391dfd16436f5d272e58"
         );
     }
@@ -166,7 +166,7 @@ pub mod test {
         let hash: Result<GenericArray<u8, typenum::U16>, KdfError> =
             argon2id_hash(500, 16, 2, salt, b"another password");
         let hash = hash.unwrap();
-        let hash1_hex: String = hash.encode_hex();
-        assert_eq!(hash1_hex, "24d0c2a85b9103e6adba63dcfaac86f7");
+        let hash_hex: String = hash.encode_hex();
+        assert_eq!(hash_hex, "24d0c2a85b9103e6adba63dcfaac86f7");
     }
 }
