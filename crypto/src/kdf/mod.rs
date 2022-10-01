@@ -17,12 +17,6 @@ pub mod argon2;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum KdfError {
-    #[error("Block storage error: {0}")]
-    Argon2HashingFailed(::argon2::Error),
-}
-
-impl From<::argon2::Error> for KdfError {
-    fn from(e: ::argon2::Error) -> Self {
-        KdfError::Argon2HashingFailed(e)
-    }
+    #[error("Argon2 hashing error: {0}")]
+    Argon2HashingFailed(#[from] ::argon2::Error),
 }
