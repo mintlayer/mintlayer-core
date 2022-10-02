@@ -13,9 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::{BlockError, BlockSource, ChainstateError, TokensError};
+use std::vec;
+
 use chainstate::{
-    CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError, TxIndexError,
+    BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
+    ConnectTransactionError, TokensError,
+};
+use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
+use common::chain::tokens::{
+    Metadata, NftIssuanceV1, TokenBurnV1, TokenIssuanceV1, TokenTransferV1,
 };
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::primitives::{id, Id};
