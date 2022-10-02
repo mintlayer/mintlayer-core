@@ -21,6 +21,11 @@ use std::{
 
 use tokio::sync::mpsc;
 
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
+use crate::net::mock::transport::TcpMockTransport;
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
+use p2p_test_utils::MakeTcpAddress;
+
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource};
 use common::{
     chain::{config::ChainConfig, GenBlock},
@@ -33,10 +38,7 @@ use p2p::{
     net::{
         self,
         libp2p::Libp2pService,
-        mock::{
-            transport::{ChannelMockTransport, TcpMockTransport},
-            MockService,
-        },
+        mock::{transport::ChannelMockTransport, MockService},
         types::ConnectivityEvent,
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
@@ -44,8 +46,7 @@ use p2p::{
     sync::SyncState,
 };
 use p2p_test_utils::{
-    connect_services, MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress,
-    TestBlockInfo,
+    connect_services, MakeChannelAddress, MakeP2pAddress, MakeTestAddress, TestBlockInfo,
 };
 
 async fn make_sync_manager<T>(
@@ -264,7 +265,7 @@ async fn local_and_remote_in_sync_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn local_and_remote_in_sync_mock_tcp() {
     local_and_remote_in_sync::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -381,7 +382,7 @@ async fn remote_ahead_by_7_blocks_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn remote_ahead_by_7_blocks_mock_tcp() {
     remote_ahead_by_7_blocks::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -520,7 +521,7 @@ async fn local_ahead_by_12_blocks_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn local_ahead_by_12_blocks_mock_tcp() {
     local_ahead_by_12_blocks::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -685,7 +686,7 @@ async fn remote_local_diff_chains_local_higher_libp2p() {
 }
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 #[tokio::test]
 async fn remote_local_diff_chains_local_higher_mock_tcp() {
     remote_local_diff_chains_local_higher::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
@@ -853,7 +854,7 @@ async fn remote_local_diff_chains_remote_higher_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn remote_local_diff_chains_remote_higher_mock_tcp() {
     remote_local_diff_chains_remote_higher::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -982,7 +983,7 @@ async fn two_remote_nodes_different_chains_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn two_remote_nodes_different_chains_mock_tcp() {
     two_remote_nodes_different_chains::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -1128,7 +1129,7 @@ async fn two_remote_nodes_same_chains_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn two_remote_nodes_same_chains_mock_tcp() {
     two_remote_nodes_same_chains::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -1284,7 +1285,7 @@ async fn two_remote_nodes_same_chains_new_blocks_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn two_remote_nodes_same_chains_new_blocks_mock_tcp() {
     two_remote_nodes_same_chains_new_blocks::<MakeTcpAddress, MockService<TcpMockTransport>>()
         .await;
@@ -1424,7 +1425,7 @@ async fn test_connect_disconnect_resyncing_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn test_connect_disconnect_resyncing_mock_tcp() {
     test_connect_disconnect_resyncing::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }

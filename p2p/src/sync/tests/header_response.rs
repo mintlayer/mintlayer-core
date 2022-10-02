@@ -14,15 +14,15 @@
 // limitations under the License.
 
 use super::*;
-use crate::net::mock::{
-    transport::{ChannelMockTransport, TcpMockTransport},
-    types::MockPeerId,
-    MockService,
-};
+
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
+use crate::net::mock::transport::TcpMockTransport;
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
+use p2p_test_utils::MakeTcpAddress;
+
+use crate::net::mock::{transport::ChannelMockTransport, types::MockPeerId, MockService};
 use crypto::random::{Rng, SliceRandom};
-use p2p_test_utils::{
-    MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress, TestBlockInfo,
-};
+use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTestAddress, TestBlockInfo};
 
 // response contains more than 2000 headers
 async fn too_many_headers<A, P, T>()
@@ -62,7 +62,7 @@ async fn too_many_headers_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn too_many_headers_mock_tcp() {
     too_many_headers::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
 }
@@ -100,7 +100,7 @@ async fn empty_response_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn empty_response_mock_tcp() {
     empty_response::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
 }
@@ -152,7 +152,7 @@ async fn valid_response_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn valid_response_mock_tcp() {
     valid_response::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
 }
@@ -202,7 +202,7 @@ async fn header_doesnt_attach_to_local_chain_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn header_doesnt_attach_to_local_chain_mock_tcp() {
     header_doesnt_attach_to_local_chain::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>(
     )
@@ -261,7 +261,7 @@ async fn headers_not_in_order_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn headers_not_in_order_mock_tcp() {
     headers_not_in_order::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
 }
@@ -314,7 +314,7 @@ async fn invalid_state_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn invalid_state_mock_tcp() {
     invalid_state::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
 }
@@ -351,7 +351,7 @@ async fn peer_doesnt_exist_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn peer_doesnt_exist_mock_tcp() {
     peer_doesnt_exist::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
 }

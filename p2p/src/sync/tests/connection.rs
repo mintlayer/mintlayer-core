@@ -14,12 +14,14 @@
 // limitations under the License.
 
 use super::*;
-use crate::net::mock::{
-    transport::{ChannelMockTransport, TcpMockTransport},
-    types::MockPeerId,
-    MockService,
-};
-use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress};
+
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
+use crate::net::mock::transport::TcpMockTransport;
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
+use p2p_test_utils::MakeTcpAddress;
+
+use crate::net::mock::{transport::ChannelMockTransport, types::MockPeerId, MockService};
+use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTestAddress};
 
 // handle peer reconnection
 async fn test_peer_reconnected<A, P, T>()
@@ -50,7 +52,7 @@ async fn test_peer_reconnected_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn test_peer_reconnected_mock_tcp() {
     test_peer_reconnected::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
 }
@@ -95,7 +97,7 @@ async fn test_peer_disconnected_libp2p() {
 
 // TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "mac-force-p2p-tcp-tests"))]
 async fn test_peer_disconnected_mock_tcp() {
     test_peer_disconnected::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
 }

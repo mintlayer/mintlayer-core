@@ -58,3 +58,9 @@ crypto = { path = "../crypto/" }
 [dev-dependencies.p2p-test-utils]
 version = "0.1"
 path = "p2p-test-utils"
+
+# https://github.com/mintlayer/mintlayer-core/issues/375
+# comment or uncomment this to control the tests related to the issue
+# [features]
+# default = ["mac-force-p2p-tcp-tests"]
+# mac-force-p2p-tcp-tests = []
