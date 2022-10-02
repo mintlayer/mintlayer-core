@@ -48,9 +48,7 @@ async fn test_peer_reconnected_libp2p() {
     test_peer_reconnected::<MakeP2pAddress, PeerId, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn test_peer_reconnected_mock_tcp() {
     test_peer_reconnected::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
 }
@@ -93,9 +91,7 @@ async fn test_peer_disconnected_libp2p() {
     test_peer_disconnected::<MakeP2pAddress, PeerId, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn test_peer_disconnected_mock_tcp() {
     test_peer_disconnected::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
 }

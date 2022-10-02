@@ -262,9 +262,7 @@ async fn local_and_remote_in_sync_libp2p() {
     local_and_remote_in_sync::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn local_and_remote_in_sync_mock_tcp() {
     local_and_remote_in_sync::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -379,9 +377,7 @@ async fn remote_ahead_by_7_blocks_libp2p() {
     remote_ahead_by_7_blocks::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn remote_ahead_by_7_blocks_mock_tcp() {
     remote_ahead_by_7_blocks::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -518,9 +514,7 @@ async fn local_ahead_by_12_blocks_libp2p() {
     local_ahead_by_12_blocks::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn local_ahead_by_12_blocks_mock_tcp() {
     local_ahead_by_12_blocks::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -684,8 +678,6 @@ async fn remote_local_diff_chains_local_higher_libp2p() {
     remote_local_diff_chains_local_higher::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
-#[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn remote_local_diff_chains_local_higher_mock_tcp() {
     remote_local_diff_chains_local_higher::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
@@ -851,9 +843,7 @@ async fn remote_local_diff_chains_remote_higher_libp2p() {
     remote_local_diff_chains_remote_higher::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn remote_local_diff_chains_remote_higher_mock_tcp() {
     remote_local_diff_chains_remote_higher::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -980,9 +970,7 @@ async fn two_remote_nodes_different_chains_libp2p() {
     two_remote_nodes_different_chains::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn two_remote_nodes_different_chains_mock_tcp() {
     two_remote_nodes_different_chains::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -1126,9 +1114,7 @@ async fn two_remote_nodes_same_chains_libp2p() {
     two_remote_nodes_same_chains::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn two_remote_nodes_same_chains_mock_tcp() {
     two_remote_nodes_same_chains::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -1282,9 +1268,7 @@ async fn two_remote_nodes_same_chains_new_blocks_libp2p() {
     two_remote_nodes_same_chains_new_blocks::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn two_remote_nodes_same_chains_new_blocks_mock_tcp() {
     two_remote_nodes_same_chains_new_blocks::<MakeTcpAddress, MockService<TcpMockTransport>>()
         .await;
@@ -1422,9 +1406,7 @@ async fn test_connect_disconnect_resyncing_libp2p() {
     test_connect_disconnect_resyncing::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn test_connect_disconnect_resyncing_mock_tcp() {
     test_connect_disconnect_resyncing::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
