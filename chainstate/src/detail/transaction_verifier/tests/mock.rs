@@ -16,7 +16,6 @@
 use super::storage::{
     TransactionVerifierStorageError, TransactionVerifierStorageMut, TransactionVerifierStorageRef,
 };
-use crate::TokensError;
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
@@ -57,7 +56,7 @@ mockall::mock! {
         fn get_token_aux_data(
             &self,
             token_id: &TokenId,
-        ) -> Result<Option<TokenAuxiliaryData>, TokensError>;
+        ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError>;
     }
 
     impl TransactionVerifierStorageMut for Store {

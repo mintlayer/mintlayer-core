@@ -14,8 +14,7 @@
 // limitations under the License.
 
 use super::{
-    error::ConnectTransactionError,
-    storage::TransactionVerifierStorageMut,
+    storage::{TransactionVerifierStorageError, TransactionVerifierStorageMut},
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp, ConsumedTokenIssuanceCache},
     CachedInputsOperation, TransactionVerifierDelta,
 };
@@ -25,7 +24,7 @@ fn flush_tx_indexes(
     storage: &mut impl TransactionVerifierStorageMut,
     tx_id: OutPointSourceId,
     tx_index_op: CachedInputsOperation,
-) -> Result<(), ConnectTransactionError> {
+) -> Result<(), TransactionVerifierStorageError> {
     match tx_index_op {
         CachedInputsOperation::Write(ref tx_index) => {
             storage.set_mainchain_tx_index(&tx_id, tx_index)?
@@ -39,11 +38,11 @@ fn flush_tx_indexes(
 fn flush_tokens(
     storage: &mut impl TransactionVerifierStorageMut,
     token_cache: &ConsumedTokenIssuanceCache,
-) -> Result<(), ConnectTransactionError> {
+) -> Result<(), TransactionVerifierStorageError> {
     assert_eq!(token_cache.data.len(), token_cache.txid_vs_tokenid.len());
 
     token_cache.data.iter().try_for_each(
-        |(token_id, aux_data_op)| -> Result<(), ConnectTransactionError> {
+        |(token_id, aux_data_op)| -> Result<(), TransactionVerifierStorageError> {
             match aux_data_op {
                 CachedAuxDataOp::Write(aux_data) => {
                     storage.set_token_aux_data(&token_id, aux_data)?;
@@ -58,7 +57,7 @@ fn flush_tokens(
     )?;
 
     token_cache.txid_vs_tokenid.iter().try_for_each(
-        |(tx_id, token_index_op)| -> Result<(), ConnectTransactionError> {
+        |(tx_id, token_index_op)| -> Result<(), TransactionVerifierStorageError> {
             match token_index_op {
                 CachedTokenIndexOp::Write(token_id) => {
                     storage.set_token_id(&tx_id, &token_id)?;
@@ -77,7 +76,7 @@ fn flush_tokens(
 pub fn flush_to_storage(
     storage: &mut impl TransactionVerifierStorageMut,
     consumed: TransactionVerifierDelta,
-) -> Result<(), ConnectTransactionError> {
+) -> Result<(), TransactionVerifierStorageError> {
     for (tx_id, tx_index_op) in consumed.tx_index_cache {
         flush_tx_indexes(storage, tx_id, tx_index_op)?;
     }

@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::TokensError;
-
 use crate::detail::{
     chainstateref::{gen_block_index_getter, ChainstateRef},
     orphan_blocks::OrphanBlocks,
@@ -71,7 +69,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionVerifierStorageRe
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
-    ) -> Result<Option<TokenAuxiliaryData>, TokensError> {
+    ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError> {
         Ok(self.db_tx.get_token_aux_data(token_id)?)
     }
 }

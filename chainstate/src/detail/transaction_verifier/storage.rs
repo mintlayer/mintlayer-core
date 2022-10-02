@@ -24,7 +24,7 @@ use common::{
 use thiserror::Error;
 use utxo::{FlushableUtxoView, UtxosStorageRead, UtxosUndoStorageWrite};
 
-use crate::TokensError;
+use super::error::{TokensError, TxIndexError};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum TransactionVerifierStorageError {
@@ -34,11 +34,14 @@ pub enum TransactionVerifierStorageError {
     StatePersistenceError(#[from] chainstate_types::StatePersistenceError),
     #[error("Failed to persist state: {0}")]
     GetAncestorError(#[from] chainstate_types::GetAncestorError),
-    //FIXME need more errors
-    //#[error("Tokens error: {0}")]
-    //TokensError(#[from] TokensError),
-    //#[error("Tx index error: {0}")]
-    //TxIndexError(#[from] ConnectTransactionError),
+    #[error("Tokens error: {0}")]
+    TokensError(#[from] TokensError),
+    #[error("Utxo error: {0}")]
+    UtxoError(#[from] utxo::Error),
+    #[error("Storage error: {0}")]
+    StorageError(#[from] storage_result::Error),
+    #[error("Tx index error: {0}")]
+    TxIndexError(#[from] TxIndexError),
 }
 
 pub trait TransactionVerifierStorageRef: UtxosStorageRead {
@@ -66,7 +69,7 @@ pub trait TransactionVerifierStorageRef: UtxosStorageRead {
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
-    ) -> Result<Option<TokenAuxiliaryData>, TokensError>;
+    ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError>;
 }
 
 pub trait TransactionVerifierStorageMut:

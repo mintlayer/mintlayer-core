@@ -87,7 +87,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
-    ) -> Result<Option<TokenAuxiliaryData>, crate::TokensError> {
+    ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError> {
         match self.token_issuance_cache.data().get(token_id) {
             Some(v) => match v {
                 CachedAuxDataOp::Write(t) => return Ok(Some(t.clone())),
@@ -131,16 +131,18 @@ impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
         tx_id: &OutPointSourceId,
         tx_index: &TxMainChainIndex,
     ) -> Result<(), TransactionVerifierStorageError> {
-        let _ = self.tx_index_cache.set_tx_index(tx_id, tx_index.clone());
-        Ok(())
+        self.tx_index_cache
+            .set_tx_index(tx_id, tx_index.clone())
+            .map_err(TransactionVerifierStorageError::TxIndexError)
     }
 
     fn del_mainchain_tx_index(
         &mut self,
         tx_id: &OutPointSourceId,
     ) -> Result<(), TransactionVerifierStorageError> {
-        let _ = self.tx_index_cache.del_tx_index(tx_id);
-        Ok(())
+        self.tx_index_cache
+            .del_tx_index(tx_id)
+            .map_err(TransactionVerifierStorageError::TxIndexError)
     }
 
     fn set_token_aux_data(
@@ -148,16 +150,18 @@ impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
         token_id: &TokenId,
         data: &TokenAuxiliaryData,
     ) -> Result<(), TransactionVerifierStorageError> {
-        let _ = self.token_issuance_cache.set_token_aux_data(token_id, data.clone());
-        Ok(())
+        self.token_issuance_cache
+            .set_token_aux_data(token_id, data.clone())
+            .map_err(TransactionVerifierStorageError::TokensError)
     }
 
     fn del_token_aux_data(
         &mut self,
         token_id: &TokenId,
     ) -> Result<(), TransactionVerifierStorageError> {
-        let _ = self.token_issuance_cache.del_token_aux_data(token_id);
-        Ok(())
+        self.token_issuance_cache
+            .del_token_aux_data(token_id)
+            .map_err(TransactionVerifierStorageError::TokensError)
     }
 
     fn set_token_id(
@@ -165,16 +169,18 @@ impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
         issuance_tx_id: &Id<Transaction>,
         token_id: &TokenId,
     ) -> Result<(), TransactionVerifierStorageError> {
-        let _ = self.token_issuance_cache.set_token_id(issuance_tx_id, token_id);
-        Ok(())
+        self.token_issuance_cache
+            .set_token_id(issuance_tx_id, token_id)
+            .map_err(TransactionVerifierStorageError::TokensError)
     }
 
     fn del_token_id(
         &mut self,
         issuance_tx_id: &Id<Transaction>,
     ) -> Result<(), TransactionVerifierStorageError> {
-        let _ = self.token_issuance_cache.del_token_id(issuance_tx_id);
-        Ok(())
+        self.token_issuance_cache
+            .del_token_id(issuance_tx_id)
+            .map_err(TransactionVerifierStorageError::TokensError)
     }
 }
 

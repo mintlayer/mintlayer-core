@@ -19,7 +19,7 @@ use std::{sync::atomic::Ordering, time::Duration};
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{
     make_chainstate, BlockError, BlockSource, ChainstateConfig, ChainstateError, CheckBlockError,
-    CheckBlockTransactionsError, ConnectTransactionError, OrphanCheckError,
+    CheckBlockTransactionsError, ConnectTransactionError, OrphanCheckError, TxIndexError,
 };
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestBlockInfo, TestFramework, TestStore,
@@ -408,7 +408,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::TxIndexError(TxIndexError::MissingOutputOrSpent)
             ))
         );
     });

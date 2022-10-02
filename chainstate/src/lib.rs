@@ -21,16 +21,13 @@ pub use interface::chainstate_interface_impl_delegation;
 
 pub mod rpc;
 
-pub use crate::detail::calculate_median_time_past;
-pub use crate::detail::CheckBlockError;
-pub use crate::detail::CheckBlockTransactionsError;
-pub use crate::detail::ConnectTransactionError;
-pub use crate::detail::OrphanCheckError;
-pub use crate::detail::TokensError;
-
 pub use crate::{
     config::ChainstateConfig,
-    detail::{ban_score, BlockError, BlockSource, Locator, HEADER_LIMIT},
+    detail::{
+        ban_score, calculate_median_time_past, BlockError, BlockSource, CheckBlockError,
+        CheckBlockTransactionsError, ConnectTransactionError, Locator, OrphanCheckError,
+        TokensError, TransactionVerifierStorageError, TxIndexError, HEADER_LIMIT,
+    },
 };
 
 mod config;

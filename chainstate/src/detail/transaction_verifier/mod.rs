@@ -141,7 +141,9 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 let issuance_token_id_getter =
                     || -> Result<Option<TokenId>, ConnectTransactionError> {
                         // issuance transactions are unique, so we use them to get the token id
-                        Ok(self.storage_ref.get_token_id_from_issuance_tx(tx_id)?)
+                        self.storage_ref
+                            .get_token_id_from_issuance_tx(tx_id)
+                            .map_err(ConnectTransactionError::TransactionVerifierError)
                     };
                 let (key, amount) =
                     get_input_token_id_and_amount(utxo.output().value(), issuance_token_id_getter)?;
@@ -431,11 +433,8 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         spend_height: &BlockHeight,
         median_time_past: &BlockTimestamp,
     ) -> Result<Option<Fee>, ConnectTransactionError> {
-        let tx_index_fetcher = |tx_id: &OutPointSourceId| {
-            self.storage_ref
-                .get_mainchain_tx_index(tx_id)
-                .map_err(ConnectTransactionError::from)
-        };
+        let tx_index_fetcher =
+            |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
 
         let fee = match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
@@ -448,10 +447,8 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
 
                 // pre-cache token ids to check ensure it's not in the db when issuing
-                self.token_issuance_cache.precache_token_issuance(
-                    |id| self.storage_ref.get_token_aux_data(id).map_err(TokensError::from),
-                    tx.transaction(),
-                )?;
+                self.token_issuance_cache
+                    .precache_token_issuance(|id| self.storage_ref.get_token_aux_data(id), tx.transaction())?;
 
                 // check for attempted money printing
                 let fee = Some(
@@ -535,11 +532,8 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         // Delete TxMainChainIndex for the current tx
         self.tx_index_cache.remove_tx_index(spend_ref)?;
 
-        let tx_index_fetcher = |tx_id: &OutPointSourceId| {
-            self.storage_ref
-                .get_mainchain_tx_index(tx_id)
-                .map_err(ConnectTransactionError::from)
-        };
+        let tx_index_fetcher =
+            |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
 
         match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
@@ -555,10 +549,8 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
 
                 // pre-cache token ids before removing them
-                self.token_issuance_cache.precache_token_issuance(
-                    |id| self.storage_ref.get_token_aux_data(id).map_err(TokensError::from),
-                    tx,
-                )?;
+                self.token_issuance_cache
+                    .precache_token_issuance(|id| self.storage_ref.get_token_aux_data(id), tx)?;
 
                 // unspend inputs
                 self.tx_index_cache.unspend_tx_index_inputs(tx.inputs())?;

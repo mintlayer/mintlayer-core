@@ -23,7 +23,9 @@ use common::{
     primitives::{Id, Idable},
 };
 
-use super::{error::TokensError, CachedOperation};
+use crate::ConnectTransactionError;
+
+use super::{error::TokensError, storage::TransactionVerifierStorageError, CachedOperation};
 
 pub type CachedAuxDataOp = CachedOperation<TokenAuxiliaryData>;
 pub type CachedTokenIndexOp = CachedOperation<TokenId>;
@@ -126,12 +128,12 @@ impl TokenIssuanceCache {
     }
 
     pub fn precache_token_issuance<
-        F: Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, TokensError>,
+        F: Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError>,
     >(
         &mut self,
         token_data_getter: F,
         tx: &Transaction,
-    ) -> Result<(), TokensError> {
+    ) -> Result<(), ConnectTransactionError> {
         let has_token_issuance =
             tx.outputs().iter().any(|output| is_tokens_issuance(output.value()));
         if has_token_issuance {
@@ -144,8 +146,8 @@ impl TokenIssuanceCache {
                     }
                 }
                 Entry::Occupied(_) => {
-                    return Err(TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(
-                        token_id,
+                    return Err(ConnectTransactionError::TokensError(
+                        TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(token_id),
                     ));
                 }
             }
