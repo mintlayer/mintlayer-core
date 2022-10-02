@@ -16,24 +16,17 @@
 use chainstate::{BlockError, ChainstateError, TokensError};
 use chainstate::{CheckBlockError, CheckBlockTransactionsError};
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
+use common::chain::tokens::Metadata;
 use common::chain::tokens::NftIssuanceV1;
-use common::chain::tokens::{Metadata, TokenCreator};
 use common::chain::{
     signature::inputsig::InputWitness,
     tokens::{OutputValue, TokenData},
     Destination, OutputPurpose, TxInput, TxOutput,
 };
-use crypto::key::{KeyKind, PrivateKey};
-use crypto::random::distributions::uniform::SampleRange;
-use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
-// FIXME(nft_issuance): This is the copy of function from check block. Remove copy and use this func from more appropriate place.
-fn random_creator() -> TokenCreator {
-    let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    TokenCreator::from(public_key)
-}
+use crate::tests::{gen_text_with_non_ascii, random_creator, random_string};
 
 // FIXME(nft_issuance): This is the copy of function from check block. Remove copy and use this func from more appropriate place.
 fn is_rfc1738_valid_symbol(ch: char) -> bool {
@@ -41,35 +34,6 @@ fn is_rfc1738_valid_symbol(ch: char) -> bool {
     String::from(":._-~!/?#[]@$&\'()*+,;=")
         .chars()
         .any(|rfc1738_ch| ch == rfc1738_ch)
-}
-
-//FIXME(nft_issuance): Move it in super mod and use for all tokens tests
-fn random_string<R: SampleRange<usize>>(rng: &mut impl Rng, range_len: R) -> String {
-    use crypto::random::distributions::{Alphanumeric, DistString};
-    if range_len.is_empty() {
-        return String::new();
-    }
-    let len = rng.gen_range(range_len);
-    Alphanumeric.sample_string(rng, len)
-}
-
-//FIXME(nft_issuance): Move it in super mod and use for all tokens tests
-fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec<u8> {
-    assert!(!c.is_ascii_alphanumeric());
-    let text_len = 1 + rng.gen::<usize>() % max_len;
-    let random_index_to_replace = rng.gen::<usize>() % text_len;
-    let token_ticker: Vec<u8> = (0..text_len)
-        .into_iter()
-        .map(|idx| {
-            if idx != random_index_to_replace {
-                rng.sample(&crypto::random::distributions::Alphanumeric)
-            } else {
-                c
-            }
-        })
-        .take(text_len)
-        .collect();
-    token_ticker
 }
 
 #[rstest]

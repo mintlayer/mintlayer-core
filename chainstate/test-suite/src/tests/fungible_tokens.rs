@@ -1789,6 +1789,25 @@ fn chosen_hashes_for_token_data() {
         "#]]
     .assert_debug_eq(&Id::<TokenData>::new(hash_stream.finalize().into()).get());
 
+    // NFT issuance
+    let token_data = TokenData::NftIssuanceV1(NftIssuanceV1 {
+        metadata: Metadata {
+            creator: None,
+            name: b"SOME".to_vec(),
+            description: b"NFT".to_vec(),
+            ticker: b"Ticker".to_vec(),
+            icon_uri: Some(vec![9, 8, 7, 6, 5, 4, 3, 2, 1]),
+            additional_metadata_uri: Some(vec![10, 11, 12, 13, 14, 15, 16, 17, 18, 19]),
+            media_uri: Some(vec![20, 21, 22, 23, 24, 25, 26, 27, 28, 29]),
+            media_hash: vec![30, 31, 32, 33, 34, 35, 36, 37, 38, 39],
+        },
+    });
+    id::hash_encoded_to(&token_data, &mut hash_stream);
+    expect![[r#"
+            0x2cf9b548b02a6ad4870d577f946da305b5c47551b4dfab38d5280714f7db850b
+        "#]]
+    .assert_debug_eq(&Id::<TokenData>::new(hash_stream.finalize().into()).get());
+
     // Token burn
     let token_data = TokenData::TokenBurnV1(TokenBurnV1 {
         token_id: TokenId::zero(),

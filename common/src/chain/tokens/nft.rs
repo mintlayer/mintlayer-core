@@ -40,7 +40,9 @@ impl From<PublicKey> for TokenCreator {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct Metadata {
-    pub creator: TokenCreator,
+
+    // FIXME(nft_issuance): Can it be optional?
+    pub creator: Option<TokenCreator>,
     pub name: Vec<u8>,
     pub description: Vec<u8>,
     pub ticker: Vec<u8>,

@@ -80,6 +80,7 @@ impl OutputValue {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct TokenTransferV1 {
     pub token_id: TokenId,
+    // Todo(nft_issuance): Should we use enum here, to choose NFT or tokens?
     pub amount: Amount,
 }
 
