@@ -33,8 +33,8 @@ use crate::{
     net::{
         self,
         mock::transport::{MockListener, MockTransport},
-        types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent, ValidationResult},
-        ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,
+        types::{ConnectivityEvent, SyncingEvent},
+        ConnectivityService, NetworkingService, SyncingMessagingService,
     },
 };
 
@@ -112,20 +112,14 @@ where
     type Address = T::Address;
     type PeerId = types::MockPeerId;
     type SyncingPeerRequestId = types::MockRequestId;
-    type PubSubMessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self, T>;
-    type PubSubHandle = MockPubSubHandle<Self, T>;
     type SyncingMessagingHandle = MockSyncingMessagingHandle<Self, T>;
 
     async fn start(
         addr: Self::Address,
         _config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
-    ) -> crate::Result<(
-        Self::ConnectivityHandle,
-        Self::PubSubHandle,
-        Self::SyncingMessagingHandle,
-    )> {
+    ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (pubsub_tx, _pubsub_rx) = mpsc::channel(16);
@@ -158,11 +152,6 @@ where
                 cmd_tx: cmd_tx.clone(),
                 peer_id,
                 conn_rx,
-                _marker: Default::default(),
-            },
-            Self::PubSubHandle {
-                _cmd_tx: cmd_tx.clone(),
-                _pubsub_rx,
                 _marker: Default::default(),
             },
             Self::SyncingMessagingHandle {
@@ -259,34 +248,6 @@ where
 }
 
 #[async_trait]
-impl<S, T> PubSubService<S> for MockPubSubHandle<S, T>
-where
-    S: NetworkingService<PeerId = types::MockPeerId> + Send,
-    T: MockTransport,
-{
-    async fn publish(&mut self, _announcement: message::Announcement) -> crate::Result<()> {
-        todo!();
-    }
-
-    async fn report_validation_result(
-        &mut self,
-        _source: S::PeerId,
-        _msg_id: S::PubSubMessageId,
-        _result: ValidationResult,
-    ) -> crate::Result<()> {
-        todo!();
-    }
-
-    async fn subscribe(&mut self, _topics: &[PubSubTopic]) -> crate::Result<()> {
-        todo!();
-    }
-
-    async fn poll_next(&mut self) -> crate::Result<PubSubEvent<S>> {
-        todo!();
-    }
-}
-
-#[async_trait]
 impl<S, T> SyncingMessagingService<S> for MockSyncingMessagingHandle<S, T>
 where
     S: NetworkingService<PeerId = types::MockPeerId, SyncingPeerRequestId = types::MockRequestId>
@@ -370,7 +331,7 @@ mod tests {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
-        let (mut conn1, _, _) = MockService::<T>::start(
+        let (mut conn1, _) = MockService::<T>::start(
             A::make_address(),
             Arc::clone(&config),
             Arc::clone(&p2p_config),
@@ -378,7 +339,7 @@ mod tests {
         .await
         .unwrap();
 
-        let (conn2, _, _) = MockService::<T>::start(
+        let (conn2, _) = MockService::<T>::start(
             A::make_address(),
             Arc::clone(&config),
             Arc::clone(&p2p_config),
@@ -431,7 +392,7 @@ mod tests {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
-        let (mut conn1, _, _) = MockService::<T>::start(
+        let (mut conn1, _) = MockService::<T>::start(
             A::make_address(),
             Arc::clone(&config),
             Arc::clone(&p2p_config),
@@ -439,7 +400,7 @@ mod tests {
         .await
         .unwrap();
 
-        let (mut conn2, _, _) = MockService::<T>::start(
+        let (mut conn2, _) = MockService::<T>::start(
             A::make_address(),
             Arc::clone(&config),
             Arc::clone(&p2p_config),
@@ -492,14 +453,14 @@ mod tests {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
-        let (mut conn1, _, _) = MockService::<T>::start(
+        let (mut conn1, _) = MockService::<T>::start(
             A::make_address(),
             Arc::clone(&config),
             Arc::clone(&p2p_config),
         )
         .await
         .unwrap();
-        let (mut conn2, _, _) =
+        let (mut conn2, _) =
             MockService::<T>::start(A::make_address(), config, p2p_config).await.unwrap();
 
         let (_res1, res2) = tokio::join!(

@@ -138,22 +138,6 @@ pub enum ConnectivityEvent<T: NetworkingService> {
     },
 }
 
-/// Publish-subscribe related events
-#[derive(Debug)]
-pub enum PubSubEvent<T: NetworkingService> {
-    /// Block announcement received from peer
-    Announcement {
-        /// Unique ID of the sender
-        peer_id: T::PeerId,
-
-        /// Unique ID of the message
-        message_id: T::PubSubMessageId,
-
-        /// Received data, block/transaction
-        announcement: message::Announcement,
-    },
-}
-
 /// Request-response errors
 #[derive(Debug, PartialEq, Eq)]
 pub enum RequestResponseError {

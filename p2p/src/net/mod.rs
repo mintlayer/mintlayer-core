@@ -52,14 +52,8 @@ pub trait NetworkingService {
     /// Handle for sending/receiving connecitivity-related events
     type ConnectivityHandle: Send;
 
-    /// Handle for sending/receiving pubsub-related events
-    type PubSubHandle: Send;
-
     /// Handle for sending/receiving request-response messages
     type SyncingMessagingHandle: Send;
-
-    /// Unique ID assigned to each pubsub message
-    type PubSubMessageId: Clone + Debug + Send;
 
     /// Initialize the network service provider
     ///
@@ -75,11 +69,7 @@ pub trait NetworkingService {
         bind_addr: Self::Address,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
-    ) -> crate::Result<(
-        Self::ConnectivityHandle,
-        Self::PubSubHandle,
-        Self::SyncingMessagingHandle,
-    )>;
+    ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)>;
 }
 
 /// [ConnectivityService] provides an interface through which objects can send
@@ -123,47 +113,6 @@ where
     /// - new discovered peers
     /// - peer expiration events
     async fn poll_next(&mut self) -> crate::Result<types::ConnectivityEvent<T>>;
-}
-
-/// [PubSubService] provides an interface through which objects can send
-/// and receive pubsub-related events to/from the network service provider
-#[async_trait]
-pub trait PubSubService<T>
-where
-    T: NetworkingService,
-{
-    /// Publish a data announcement on the network
-    ///
-    /// # Arguments
-    /// `announcement` - SCALE-encodable block or transaction
-    async fn publish(&mut self, announcement: message::Announcement) -> crate::Result<()>;
-
-    /// Report message validation result back to the backend
-    ///
-    /// # Arguments
-    /// * `source` - source of the message
-    /// * `msg_id` - unique ID of the message
-    /// * `result` - result of validation, see [types::ValidationResult] for more details
-    async fn report_validation_result(
-        &mut self,
-        source: T::PeerId,
-        msg_id: T::PubSubMessageId,
-        result: types::ValidationResult,
-    ) -> crate::Result<()>;
-
-    /// Subscribe to publish-subscribe topics
-    ///
-    /// # Arguments
-    /// * `topics` - list of topics
-    async fn subscribe(&mut self, topics: &[types::PubSubTopic]) -> crate::Result<()>;
-
-    /// Poll unvalidated pubsub messages
-    ///
-    /// The message must be validated by the application layer and the validation
-    /// result must reported using [PubSubService::report_validation_result].
-    ///
-    /// The message is not forwarded to any other peer before that function is called.
-    async fn poll_next(&mut self) -> crate::Result<types::PubSubEvent<T>>;
 }
 
 /// [SyncingMessagingService] provides an interface for sending and receiving block

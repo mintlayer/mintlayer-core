@@ -42,7 +42,7 @@ where
     <T as NetworkingService>::Address: FromStr,
     <<T as NetworkingService>::Address as FromStr>::Err: Debug,
 {
-    let (conn, _, _) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
+    let (conn, _) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
     let (_, rx) = tokio::sync::mpsc::unbounded_channel();
     let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
 

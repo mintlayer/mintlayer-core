@@ -26,7 +26,7 @@ use crate::{
     },
 };
 use async_trait::async_trait;
-use libp2p::{core::PeerId, gossipsub::MessageId, request_response::*};
+use libp2p::{core::PeerId, request_response::*};
 use logging::log;
 use serialization::{Decode, Encode};
 use tokio::sync::{mpsc, oneshot};
@@ -56,11 +56,7 @@ impl<T: NetworkingService> Libp2pSyncHandle<T> {
 #[async_trait]
 impl<T> SyncingMessagingService<T> for Libp2pSyncHandle<T>
 where
-    T: NetworkingService<
-            PeerId = PeerId,
-            PubSubMessageId = MessageId,
-            SyncingPeerRequestId = RequestId,
-        > + Send,
+    T: NetworkingService<PeerId = PeerId, SyncingPeerRequestId = RequestId> + Send,
 {
     async fn send_request(
         &mut self,

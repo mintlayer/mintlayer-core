@@ -23,7 +23,6 @@ use crate::{
 use async_trait::async_trait;
 use libp2p::{
     core::{upgrade, PeerId},
-    gossipsub::MessageId,
     identity, mplex,
     noise::{self, AuthenticKeypair},
     request_response::*,
@@ -65,20 +64,14 @@ impl NetworkingService for Libp2pService {
     type Address = Multiaddr;
     type PeerId = PeerId;
     type SyncingPeerRequestId = RequestId;
-    type PubSubMessageId = MessageId;
     type ConnectivityHandle = service::connectivity::Libp2pConnectivityHandle<Self>;
-    type PubSubHandle = service::pubsub::Libp2pPubSubHandle<Self>;
     type SyncingMessagingHandle = service::syncing::Libp2pSyncHandle<Self>;
 
     async fn start(
         bind_addr: Self::Address,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
-    ) -> crate::Result<(
-        Self::ConnectivityHandle,
-        Self::PubSubHandle,
-        Self::SyncingMessagingHandle,
-    )> {
+    ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
         let (peer_id, id_keys, noise_keys) = make_libp2p_keys();
         let transport = TokioTcpTransport::new(GenTcpConfig::new().nodelay(true))
             .upgrade(upgrade::Version::V1)
@@ -128,7 +121,6 @@ impl NetworkingService for Libp2pService {
 
         Ok((
             Self::ConnectivityHandle::new(peer_id, cmd_tx.clone(), conn_rx),
-            Self::PubSubHandle::new(cmd_tx.clone(), gossip_rx),
             Self::SyncingMessagingHandle::new(cmd_tx, sync_rx),
         ))
     }

@@ -16,7 +16,7 @@
 use crate::{
     config::P2pConfig,
     error::{ConversionError, P2pError},
-    net::{ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService},
+    net::{ConnectivityService, NetworkingService, SyncingMessagingService},
 };
 use chainstate::chainstate_interface;
 use common::chain::ChainConfig;
@@ -135,7 +135,6 @@ where
     T: 'static + NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PubSubHandle: PubSubService<T>,
 {
     /// Start the P2P subsystem
     ///
@@ -151,7 +150,7 @@ where
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
     {
         let p2p_config = Arc::new(p2p_config);
-        let (conn, pubsub, sync) = T::start(
+        let (conn, sync) = T::start(
             p2p_config.bind_address.parse::<T::Address>().map_err(|_| {
                 P2pError::ConversionError(ConversionError::InvalidAddress(
                     p2p_config.bind_address.clone(),
@@ -201,7 +200,6 @@ where
                     consensus_handle,
                     rx_p2p_sync,
                     tx_swarm,
-                    //tx_pubsub,
                 )
                 .run()
                 .await
@@ -227,7 +225,6 @@ where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PubSubHandle: PubSubService<T>,
     <T as NetworkingService>::Address: FromStr,
     <<T as NetworkingService>::Address as FromStr>::Err: Debug,
     <T as NetworkingService>::PeerId: FromStr,

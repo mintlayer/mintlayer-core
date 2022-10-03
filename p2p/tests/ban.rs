@@ -130,10 +130,10 @@ where
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
-    let (mut conn1, _, sync1) =
+    let (mut conn1, sync1) =
         T::start(addr1, Arc::clone(&config), Default::default()).await.unwrap();
 
-    let (mut conn2, _, _sync2) =
+    let (mut conn2, _sync2) =
         T::start(addr2, Arc::clone(&config), Default::default()).await.unwrap();
 
     let mut sync1 = BlockSyncManager::<T>::new(

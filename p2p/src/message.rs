@@ -112,6 +112,7 @@ pub enum Response {
     BlockListResponse(BlockListResponse),
 }
 
+// TODO: FIXME: Remove?..
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Announcement {
     #[codec(index = 0)]

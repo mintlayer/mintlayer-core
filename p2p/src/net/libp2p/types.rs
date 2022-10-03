@@ -163,6 +163,7 @@ pub enum ConnectivityEvent {
     },
 }
 
+// TODO: FIXME: Remove?
 #[derive(Debug, Clone)]
 pub enum PubSubEvent {
     Announcement {
