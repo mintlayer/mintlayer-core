@@ -53,11 +53,10 @@ fn nft_issuance_name_too_long(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id,
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
@@ -111,11 +110,10 @@ fn nft_issuance_empty_name(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id,
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
@@ -175,11 +173,10 @@ fn nft_issuance_invalid_name(#[case] seed: Seed) {
                 .make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
-                        .add_input(TxInput::new(
-                            outpoint_source_id.clone(),
-                            0,
+                        .add_input(
+                            TxInput::new(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
-                        ))
+                        )
                         .add_output(TxOutput::new(
                             OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                                 metadata: Metadata {
@@ -233,11 +230,10 @@ fn issue_test_ticker_too_long(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id,
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
@@ -292,11 +288,10 @@ fn nft_issuance_empty_ticker(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id,
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
@@ -356,11 +351,10 @@ fn nft_issuance_invalid_ticker(#[case] seed: Seed) {
                 .make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
-                        .add_input(TxInput::new(
-                            outpoint_source_id.clone(),
-                            0,
+                        .add_input(
+                            TxInput::new(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
-                        ))
+                        )
                         .add_output(TxOutput::new(
                             OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                                 metadata: Metadata {
@@ -414,11 +408,10 @@ fn issue_test_description_too_long(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id,
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
@@ -473,11 +466,10 @@ fn nft_issuance_empty_description(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id,
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
@@ -537,11 +529,10 @@ fn nft_issuance_invalid_description(#[case] seed: Seed) {
                 .make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
-                        .add_input(TxInput::new(
-                            outpoint_source_id.clone(),
-                            0,
+                        .add_input(
+                            TxInput::new(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
-                        ))
+                        )
                         .add_output(TxOutput::new(
                             OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                                 metadata: Metadata {
@@ -594,11 +585,10 @@ fn nft_issuance_icon_uri_too_long(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id,
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
@@ -652,11 +642,10 @@ fn nft_issuance_icon_uri_empty(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id,
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
@@ -717,11 +706,10 @@ fn nft_issuance_icon_uri_invalid(#[case] seed: Seed) {
                 .make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
-                        .add_input(TxInput::new(
-                            outpoint_source_id.clone(),
-                            0,
+                        .add_input(
+                            TxInput::new(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
-                        ))
+                        )
                         .add_output(TxOutput::new(
                             OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                                 metadata: Metadata {
@@ -775,11 +763,10 @@ fn nft_issuance_metadata_uri_too_long(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id,
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
@@ -833,11 +820,10 @@ fn nft_issuance_metadata_uri_empty(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id,
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
@@ -898,11 +884,10 @@ fn nft_issuance_metadata_uri_invalid(#[case] seed: Seed) {
                 .make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
-                        .add_input(TxInput::new(
-                            outpoint_source_id.clone(),
-                            0,
+                        .add_input(
+                            TxInput::new(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
-                        ))
+                        )
                         .add_output(TxOutput::new(
                             OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                                 metadata: Metadata {
@@ -956,11 +941,10 @@ fn nft_issuance_media_uri_too_long(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id,
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
@@ -1014,11 +998,10 @@ fn nft_issuance_media_uri_empty(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id,
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
@@ -1079,11 +1062,10 @@ fn nft_issuance_media_uri_invalid(#[case] seed: Seed) {
                 .make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
-                        .add_input(TxInput::new(
-                            outpoint_source_id.clone(),
-                            0,
+                        .add_input(
+                            TxInput::new(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
-                        ))
+                        )
                         .add_output(TxOutput::new(
                             OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                                 metadata: Metadata {
@@ -1136,11 +1118,10 @@ fn nft_issuance_valid_case(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id,
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {

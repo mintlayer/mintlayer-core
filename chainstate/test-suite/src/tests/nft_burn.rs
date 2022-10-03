@@ -48,11 +48,10 @@ fn burn_nft_valid_case(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        genesis_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
@@ -76,18 +75,17 @@ fn burn_nft_valid_case(#[case] seed: Seed) {
 
         let block = tf.block(*block_index.block_id());
         let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
-        let token_id = token_id(&block.transactions()[0]).unwrap();
+        let token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Burn
         let block_index = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::TokenBurnV1(
                             common::chain::tokens::TokenBurnV1 {
@@ -110,11 +108,10 @@ fn burn_nft_valid_case(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        first_burn_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(first_burn_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
@@ -154,11 +151,10 @@ fn burn_nft_invalid_amount(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        genesis_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
@@ -182,18 +178,17 @@ fn burn_nft_invalid_amount(#[case] seed: Seed) {
 
         let block = tf.block(*block_index.block_id());
         let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
-        let token_id = token_id(&block.transactions()[0]).unwrap();
+        let token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Burn more NFT than we have
         let result = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::TokenBurnV1(
                             common::chain::tokens::TokenBurnV1 {
@@ -219,11 +214,10 @@ fn burn_nft_invalid_amount(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::TokenBurnV1(
                             common::chain::tokens::TokenBurnV1 {
