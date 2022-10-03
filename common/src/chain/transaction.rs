@@ -15,7 +15,7 @@
 
 use thiserror::Error;
 
-use serialization::{DirectDecode, DirectEncode, Encode};
+use serialization::{DirectDecode, DirectEncode};
 use typename::TypeName;
 
 use crate::chain::transaction::transaction_v1::TransactionV1;
@@ -132,15 +132,7 @@ impl Transaction {
         false
     }
 
-    pub fn transaction_data_size(&self) -> TransactionSize {
-        if self.has_smart_contracts() {
-            TransactionSize::SmartContractTransaction(self.encoded_size())
-        } else {
-            TransactionSize::ScriptedTransaction(self.encoded_size())
-        }
-    }
-
-    pub fn sign(
+    pub fn with_signatures(
         self,
         witnesses: Vec<InputWitness>,
     ) -> Result<SignedTransaction, TransactionCreationError> {
@@ -155,7 +147,7 @@ impl Transaction {
 mod test {
     use super::*;
     use crypto::random::RngCore;
-    use serialization::Decode;
+    use serialization::{Decode, Encode};
 
     #[test]
     #[allow(clippy::eq_op)]

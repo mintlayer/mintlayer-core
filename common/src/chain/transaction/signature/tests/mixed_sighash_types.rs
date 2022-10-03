@@ -57,7 +57,7 @@ fn mixed_sighash_types() {
         })
         .collect::<Vec<_>>();
 
-        let signed_tx = tx.sign(sigs).unwrap();
+        let signed_tx = tx.with_signatures(sigs).unwrap();
 
         verify_signed_tx(&signed_tx, &destination).expect("Signature verification failed")
     }

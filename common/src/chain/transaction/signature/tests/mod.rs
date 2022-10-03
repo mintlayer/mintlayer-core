@@ -66,7 +66,7 @@ fn verify_no_signature() {
             .into_iter()
             .map(|_| InputWitness::NoSignature(Some(vec![1, 2, 3, 4, 5, 6, 7, 8, 9])))
             .collect_vec();
-        let signed_tx = tx.sign(witnesses).unwrap();
+        let signed_tx = tx.with_signatures(witnesses).unwrap();
         assert_eq!(
             verify_signature(&destination, &signed_tx, 0),
             Err(TransactionSigError::SignatureNotFound),
@@ -96,7 +96,7 @@ fn verify_invalid_signature() {
                 ))
             })
             .collect_vec();
-        let signed_tx = tx.sign(witnesses).unwrap();
+        let signed_tx = tx.with_signatures(witnesses).unwrap();
 
         assert_eq!(
             verify_signature(&destination, &signed_tx, 0),
