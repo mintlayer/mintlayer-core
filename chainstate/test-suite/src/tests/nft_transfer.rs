@@ -359,7 +359,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         OutputValue::Token(TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id: first_token_id,
-                            amount: Amount::from_atoms(0),
+                            amount: Amount::from_atoms(1),
                         })),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
