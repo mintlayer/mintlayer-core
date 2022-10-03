@@ -15,7 +15,10 @@
 
 use std::num::NonZeroUsize;
 
-use crate::random::{CryptoRng, Rng};
+use crate::{
+    random::{CryptoRng, Rng},
+    util::eq::SliceEqualityCheckMethod,
+};
 use serialization::{Decode, Encode};
 
 pub mod argon2;
@@ -96,6 +99,7 @@ pub fn hash_password<R: Rng + CryptoRng>(
 pub fn verify_password(
     password: &[u8],
     previously_password_hash: KdfResult,
+    equality_test_type: SliceEqualityCheckMethod,
 ) -> Result<bool, KdfError> {
     match previously_password_hash {
         KdfResult::Argon2id {
@@ -113,20 +117,23 @@ pub fn verify_password(
                 hashed_password.len().try_into().map_err(|_| KdfError::InvalidHashSize)?,
                 password,
             )?;
-            Ok(new_hashed_password == hashed_password)
+            Ok(equality_test_type.is_equal(&new_hashed_password, &hashed_password))
         }
     }
 }
 
 #[cfg(test)]
 pub mod test {
-    use crate::random::make_true_rng;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
 
     use super::*;
 
-    #[test]
-    fn salt_generation() {
-        let mut rng = make_true_rng();
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn salt_generation(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
         let salt1 = make_salt(&mut rng, 32.try_into().unwrap()).unwrap();
         let salt2 = make_salt(&mut rng, 32.try_into().unwrap()).unwrap();
         assert_eq!(salt1.len(), 32);
@@ -134,21 +141,46 @@ pub mod test {
         assert_ne!(salt1, salt2);
     }
 
-    #[test]
-    fn password_hash_generation_argon2id() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn password_hash_generation_argon2id(#[case] seed: Seed) {
         let password = b"SomeIncrediblyStrong___youGuessedIt___password";
         let kdf_kind = KdfKind::Argon2id {
-            m_cost_memory_size: 2000,
+            m_cost_memory_size: 200,
             t_cost_iterations: 10,
-            p_cost_parallelism: 4,
+            p_cost_parallelism: 2,
             hash_length: 32.try_into().unwrap(),
             salt_length: 16.try_into().unwrap(),
         };
 
-        let mut rng = make_true_rng();
+        let mut rng = make_seedable_rng(seed);
         let password_hash = hash_password(&mut rng, kdf_kind, password).unwrap();
-        assert!(verify_password(password, password_hash.clone()).unwrap());
+        assert!(verify_password(
+            password,
+            password_hash.clone(),
+            SliceEqualityCheckMethod::Normal
+        )
+        .unwrap());
+        assert!(verify_password(
+            password,
+            password_hash.clone(),
+            SliceEqualityCheckMethod::TimingResistant
+        )
+        .unwrap());
+
         let wrong_password = b"RandomWrong____password?";
-        assert!(!verify_password(wrong_password, password_hash).unwrap());
+        assert!(!verify_password(
+            wrong_password,
+            password_hash.clone(),
+            SliceEqualityCheckMethod::Normal
+        )
+        .unwrap());
+        assert!(!verify_password(
+            wrong_password,
+            password_hash,
+            SliceEqualityCheckMethod::TimingResistant
+        )
+        .unwrap());
     }
 }

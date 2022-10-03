@@ -970,12 +970,14 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "ripemd",
+ "rstest",
  "schnorrkel",
  "serialization",
  "sha-1 0.10.0",
  "sha2 0.10.2",
  "sha3 0.10.2",
  "tari_crypto",
+ "test-utils",
  "thiserror",
 ]
 

@@ -28,5 +28,8 @@ merlin = { version = "3.0.0", default-features = false }
 argon2 = { version = "0.4", features = ["std"] }
 
 [dev-dependencies]
+test-utils = {path = '../test-utils'}
+rstest = "0.15"
+
 hex = "0.4"
 rand_chacha = "0.3.1"
