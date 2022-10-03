@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO: FIXME: Update the module documentation.
+
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event, message,
@@ -84,9 +86,6 @@ pub struct BlockSyncManager<T: NetworkingService> {
     /// TX channel for sending control events to swarm
     tx_swarm: mpsc::UnboundedSender<event::SwarmEvent<T>>,
 
-    /// TX channel for sending control events to pubsub (used to tell pubsub that syncing to best block is done)
-    tx_pubsub: mpsc::UnboundedSender<event::PubSubControlEvent>,
-
     /// Hashmap of connected peers
     peers: HashMap<T::PeerId, peer::PeerContext<T>>,
 
@@ -109,14 +108,12 @@ where
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         rx_sync: mpsc::UnboundedReceiver<event::SyncControlEvent<T>>,
         tx_swarm: mpsc::UnboundedSender<event::SwarmEvent<T>>,
-        tx_pubsub: mpsc::UnboundedSender<event::PubSubControlEvent>,
     ) -> Self {
         Self {
             config,
             peer_sync_handle: handle,
             rx_sync,
             tx_swarm,
-            tx_pubsub,
             chainstate_handle,
             peers: Default::default(),
             requests: HashMap::new(),
@@ -377,11 +374,9 @@ where
             }
         }
 
+        // TODO: FIXME:
         self.state = SyncState::Idle;
-        // TODO: global event system
-        self.tx_pubsub
-            .send(event::PubSubControlEvent::InitialBlockDownloadDone)
-            .map_err(P2pError::from)
+        Ok(())
     }
 
     pub async fn process_error(

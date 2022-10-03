@@ -33,7 +33,6 @@ pub mod event;
 pub mod message;
 pub mod net;
 pub mod peer_manager;
-pub mod pubsub;
 pub mod rpc;
 pub mod sync;
 
@@ -174,7 +173,6 @@ where
         let (tx_swarm, rx_swarm) = mpsc::unbounded_channel();
         let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
         let (_tx_sync, _rx_sync) = mpsc::unbounded_channel();
-        let (tx_pubsub, rx_pubsub) = mpsc::unbounded_channel();
 
         {
             let chain_config = Arc::clone(&chain_config);
@@ -203,29 +201,11 @@ where
                     consensus_handle,
                     rx_p2p_sync,
                     tx_swarm,
-                    tx_pubsub,
+                    //tx_pubsub,
                 )
                 .run()
                 .await
                 .tap_err(|err| log::error!("SyncManager failed: {err}"))
-            });
-        }
-
-        {
-            let tx_swarm = tx_swarm.clone();
-
-            tokio::spawn(async move {
-                pubsub::PubSubMessageHandler::<T>::new(
-                    chain_config,
-                    pubsub,
-                    consensus_handle,
-                    tx_swarm,
-                    rx_pubsub,
-                    &[net::types::PubSubTopic::Blocks],
-                )
-                .run()
-                .await
-                .tap_err(|err| log::error!("PubSubMessageHandler failed: {err}"))
             });
         }
 

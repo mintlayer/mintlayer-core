@@ -38,7 +38,7 @@ where
     let addr = A::make_address();
     let peer_id = P::random();
 
-    let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
+    let (mut mgr, _conn, _sync, _swarm) = make_sync_manager::<T>(addr).await;
 
     assert_eq!(
         mgr.validate_header_response(&peer_id, vec![]).await,
@@ -74,7 +74,7 @@ where
     let peer_id = P::random();
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
+    let (mut mgr, _conn, _sync, _swarm) = make_sync_manager::<T>(addr).await;
     register_peer(&mut mgr, peer_id).await;
 
     let blocks = p2p_test_utils::create_n_blocks(
@@ -123,7 +123,7 @@ where
     let peer_id = P::random();
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
+    let (mut mgr, _conn, _sync, _swarm) = make_sync_manager::<T>(addr).await;
     register_peer(&mut mgr, peer_id).await;
 
     let blocks = p2p_test_utils::create_n_blocks(
@@ -169,7 +169,7 @@ where
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
-    let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
+    let (mut mgr, _conn, _sync, _swarm) = make_sync_manager::<T>(addr).await;
     register_peer(&mut mgr, peer_id).await;
 
     let blocks = p2p_test_utils::create_n_blocks(
@@ -229,7 +229,7 @@ where
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
-    let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
+    let (mut mgr, _conn, _sync, _swarm) = make_sync_manager::<T>(addr).await;
     register_peer(&mut mgr, peer_id).await;
 
     let mut blocks = p2p_test_utils::create_n_blocks(

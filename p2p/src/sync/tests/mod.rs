@@ -22,7 +22,7 @@ use chainstate::{make_chainstate, ChainstateConfig};
 
 use super::*;
 use crate::{
-    event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
+    event::{SwarmEvent, SyncControlEvent},
     net::{
         libp2p::Libp2pService, mock::types::MockPeerId, types::ConnectivityEvent,
         ConnectivityService,
@@ -40,7 +40,6 @@ async fn make_sync_manager<T>(
     BlockSyncManager<T>,
     T::ConnectivityHandle,
     mpsc::UnboundedSender<SyncControlEvent<T>>,
-    mpsc::UnboundedReceiver<PubSubControlEvent>,
     mpsc::UnboundedReceiver<SwarmEvent<T>>,
 )
 where
@@ -49,7 +48,6 @@ where
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
-    let (tx_pubsub, rx_pubsub) = mpsc::unbounded_channel();
     let (tx_swarm, rx_swarm) = mpsc::unbounded_channel();
     let storage = chainstate_storage::inmemory::Store::new_empty().unwrap();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
@@ -72,17 +70,9 @@ where
     let (conn, _, sync) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
 
     (
-        BlockSyncManager::<T>::new(
-            Arc::clone(&config),
-            sync,
-            handle,
-            rx_p2p_sync,
-            tx_swarm,
-            tx_pubsub,
-        ),
+        BlockSyncManager::<T>::new(Arc::clone(&config), sync, handle, rx_p2p_sync, tx_swarm),
         conn,
         tx_p2p_sync,
-        rx_pubsub,
         rx_swarm,
     )
 }

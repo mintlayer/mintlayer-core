@@ -55,8 +55,3 @@ pub enum SyncControlEvent<T: NetworkingService> {
     /// Peer disconnected
     Disconnected(T::PeerId),
 }
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum PubSubControlEvent {
-    InitialBlockDownloadDone,
-}
