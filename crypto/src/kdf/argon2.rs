@@ -13,33 +13,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::num::NonZeroUsize;
+
 use argon2::Argon2;
-use generic_array::{ArrayLength, GenericArray};
 
 use super::KdfError;
 
-pub fn argon2id_hash<OutputSize: ArrayLength<u8>, SaltSize: ArrayLength<u8>>(
+pub fn argon2id_hash(
     m_cost_memory_size: u32,
     t_cost_iterations: u32,
     p_cost_parallelism: u32,
-    salt: GenericArray<u8, SaltSize>,
+    salt: &[u8],
+    desired_hash_len: NonZeroUsize,
     password: &[u8],
-) -> Result<GenericArray<u8, OutputSize>, KdfError> {
+) -> Result<Vec<u8>, KdfError> {
     let params = argon2::Params::new(
         m_cost_memory_size,
         t_cost_iterations,
         p_cost_parallelism,
-        Some(OutputSize::USIZE),
+        Some(desired_hash_len.into()),
     )?;
     let context = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
-    let mut result = GenericArray::<u8, OutputSize>::default();
+    let mut result = vec![0; desired_hash_len.into()];
     context.hash_password_into(password, &salt, &mut result)?;
     Ok(result)
 }
 
 #[cfg(test)]
 pub mod test {
-    use generic_array::typenum;
     use hex::ToHex;
 
     use super::*;
@@ -48,9 +49,8 @@ pub mod test {
 
     #[test]
     fn chosen_text1() {
-        let salt: GenericArray<u8, typenum::U9> = *GenericArray::from_slice(b"some salt");
-        let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
-            argon2id_hash(700, 16, 2, salt, b"password");
+        let salt = b"some salt";
+        let hash = argon2id_hash(700, 16, 2, salt, 32.try_into().unwrap(), b"password");
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(
@@ -61,9 +61,8 @@ pub mod test {
 
     #[test]
     fn chosen_text2() {
-        let salt: GenericArray<u8, typenum::U9> = *GenericArray::from_slice(b"some salt");
-        let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
-            argon2id_hash(400, 16, 2, salt, b"password");
+        let salt = b"some salt";
+        let hash = argon2id_hash(400, 16, 2, salt, 32.try_into().unwrap(), b"password");
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(
@@ -74,9 +73,8 @@ pub mod test {
 
     #[test]
     fn chosen_text3() {
-        let salt: GenericArray<u8, typenum::U9> = *GenericArray::from_slice(b"some salt");
-        let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
-            argon2id_hash(700, 12, 2, salt, b"password");
+        let salt = b"some salt";
+        let hash = argon2id_hash(700, 12, 2, salt, 32.try_into().unwrap(), b"password");
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(
@@ -87,9 +85,8 @@ pub mod test {
 
     #[test]
     fn chosen_text4() {
-        let salt: GenericArray<u8, typenum::U9> = *GenericArray::from_slice(b"some salt");
-        let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
-            argon2id_hash(700, 16, 4, salt, b"password");
+        let salt = b"some salt";
+        let hash = argon2id_hash(700, 16, 4, salt, 32.try_into().unwrap(), b"password");
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(
@@ -100,9 +97,8 @@ pub mod test {
 
     #[test]
     fn chosen_text5() {
-        let salt: GenericArray<u8, typenum::U9> = *GenericArray::from_slice(b"some salt");
-        let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
-            argon2id_hash(700, 16, 6, salt, b"password");
+        let salt = b"some salt";
+        let hash = argon2id_hash(700, 16, 6, salt, 32.try_into().unwrap(), b"password");
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(
@@ -113,9 +109,8 @@ pub mod test {
 
     #[test]
     fn chosen_text6() {
-        let salt: GenericArray<u8, typenum::U9> = *GenericArray::from_slice(b"some salt");
-        let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
-            argon2id_hash(500, 16, 2, salt, b"password");
+        let salt = b"some salt";
+        let hash = argon2id_hash(500, 16, 2, salt, 32.try_into().unwrap(), b"password");
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(
@@ -126,9 +121,15 @@ pub mod test {
 
     #[test]
     fn chosen_text7() {
-        let salt: GenericArray<u8, typenum::U9> = *GenericArray::from_slice(b"some salt");
-        let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
-            argon2id_hash(500, 16, 2, salt, b"another password");
+        let salt = b"some salt";
+        let hash = argon2id_hash(
+            500,
+            16,
+            2,
+            salt,
+            32.try_into().unwrap(),
+            b"another password",
+        );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(
@@ -139,9 +140,15 @@ pub mod test {
 
     #[test]
     fn chosen_text8() {
-        let salt: GenericArray<u8, typenum::U9> = *GenericArray::from_slice(b"some salt");
-        let hash: Result<GenericArray<u8, typenum::U16>, KdfError> =
-            argon2id_hash(500, 16, 2, salt, b"another password");
+        let salt = b"some salt";
+        let hash = argon2id_hash(
+            500,
+            16,
+            2,
+            salt,
+            16.try_into().unwrap(),
+            b"another password",
+        );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(hash_hex, "1e67dcc183faab8ef49c5dcad921656d");
@@ -149,9 +156,15 @@ pub mod test {
 
     #[test]
     fn chosen_text9() {
-        let salt: GenericArray<u8, typenum::U12> = *GenericArray::from_slice(b"another salt");
-        let hash: Result<GenericArray<u8, typenum::U32>, KdfError> =
-            argon2id_hash(500, 16, 2, salt, b"another password");
+        let salt = b"another salt";
+        let hash = argon2id_hash(
+            500,
+            16,
+            2,
+            salt,
+            32.try_into().unwrap(),
+            b"another password",
+        );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(
@@ -162,9 +175,15 @@ pub mod test {
 
     #[test]
     fn chosen_text10() {
-        let salt: GenericArray<u8, typenum::U12> = *GenericArray::from_slice(b"another salt");
-        let hash: Result<GenericArray<u8, typenum::U16>, KdfError> =
-            argon2id_hash(500, 16, 2, salt, b"another password");
+        let salt = b"another salt";
+        let hash = argon2id_hash(
+            500,
+            16,
+            2,
+            salt,
+            16.try_into().unwrap(),
+            b"another password",
+        );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(hash_hex, "24d0c2a85b9103e6adba63dcfaac86f7");
