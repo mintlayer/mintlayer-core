@@ -83,7 +83,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> BlockIndexHandle for Chainst
         ancestor_height: BlockHeight,
     ) -> Result<GenBlockIndex, PropertyQueryError> {
         self.get_ancestor(&GenBlockIndex::Block(block_index.clone()), ancestor_height)
-            .map_err(Into::into)
+            .map_err(PropertyQueryError::from)
     }
 
     fn get_block_reward(
@@ -183,11 +183,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         &self,
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
-        Ok(gen_block_index_getter(
-            &self.db_tx,
-            self.chain_config,
-            block_id,
-        )?)
+        gen_block_index_getter(&self.db_tx, self.chain_config, block_id)
+            .map_err(PropertyQueryError::from)
     }
 
     pub fn get_mainchain_tx_index(
