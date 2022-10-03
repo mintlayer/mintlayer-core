@@ -99,7 +99,7 @@ pub fn hash_password<R: Rng + CryptoRng>(
 pub fn verify_password(
     password: &[u8],
     previously_password_hash: KdfResult,
-    equality_test_type: SliceEqualityCheckMethod,
+    equality_checker: SliceEqualityCheckMethod,
 ) -> Result<bool, KdfError> {
     match previously_password_hash {
         KdfResult::Argon2id {
@@ -117,7 +117,7 @@ pub fn verify_password(
                 hashed_password.len().try_into().map_err(|_| KdfError::InvalidHashSize)?,
                 password,
             )?;
-            Ok(equality_test_type.is_equal(&new_hashed_password, &hashed_password))
+            Ok(equality_checker.is_equal(&new_hashed_password, &hashed_password))
         }
     }
 }
@@ -145,7 +145,7 @@ pub mod test {
     #[trace]
     #[case(Seed::from_entropy())]
     fn password_hash_generation_argon2id(#[case] seed: Seed) {
-        let password = b"SomeIncrediblyStrong___youGuessedIt___password";
+        let password = b"SomeIncrediblyStrong___youGuessedIt___password!";
         let kdf_kind = KdfKind::Argon2id {
             m_cost_memory_size: 200,
             t_cost_iterations: 10,
