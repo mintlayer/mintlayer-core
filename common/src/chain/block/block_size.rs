@@ -29,9 +29,7 @@ impl BlockSize {
             BlockSize::new_with_header_size(block.header().encoded_size()),
             |mut total, curr| {
                 match curr.transaction_data_size() {
-                    TransactionSize::ScriptedTransaction(size) => {
-                        total.from_txs += size + curr.signatures().encoded_size()
-                    }
+                    TransactionSize::ScriptedTransaction(size) => total.from_txs += size,
                     TransactionSize::SmartContractTransaction(size) => {
                         total.from_smart_contracts += size
                     }

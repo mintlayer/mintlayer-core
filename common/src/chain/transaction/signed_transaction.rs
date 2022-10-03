@@ -78,7 +78,11 @@ impl SignedTransaction {
     }
 
     pub fn transaction_data_size(&self) -> TransactionSize {
-        self.transaction.transaction_data_size()
+        if self.has_smart_contracts() {
+            TransactionSize::SmartContractTransaction(self.encoded_size())
+        } else {
+            TransactionSize::ScriptedTransaction(self.encoded_size())
+        }
     }
 
     pub fn signatures(&self) -> &[InputWitness] {
