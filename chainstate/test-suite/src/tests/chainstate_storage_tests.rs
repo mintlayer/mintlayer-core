@@ -27,6 +27,7 @@ use common::{
 };
 use utxo::UtxosStorageRead;
 
+// Process a tx with a coin. Check that new utxo and tx index are stored, best block is updated.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -95,6 +96,7 @@ fn store_coin(#[case] seed: Seed) {
     });
 }
 
+// Process a tx with a token issuance. Check that new token and tx index are stored, best block is updated.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -164,6 +166,10 @@ fn store_token(#[case] seed: Seed) {
     });
 }
 
+// Create a block '1' with a coin. Check that info is stored in the storage.
+// Create alternative chain with 2 blocks, which causes reorg.
+// Check that info from the block '1' was removed from the storage and the info from block '2' and '3'
+// was written.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -316,6 +322,10 @@ fn reorg_store_coin(#[case] seed: Seed) {
     });
 }
 
+// Create a block '1' with a token. Check that info is stored in the storage.
+// Create alternative chain with 2 blocks, which causes reorg.
+// Check that info from the block '1' was removed from the storage and the info from block '2' and '3'
+// was written.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]

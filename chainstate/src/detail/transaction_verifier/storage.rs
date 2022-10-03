@@ -17,12 +17,12 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        GenBlock, OutPointSourceId, Transaction, TxMainChainIndex,
+        Block, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex,
     },
     primitives::{BlockHeight, Id},
 };
 use thiserror::Error;
-use utxo::{FlushableUtxoView, UtxosStorageRead, UtxosUndoStorageWrite};
+use utxo::{BlockUndo, FlushableUtxoView, UtxosStorageRead};
 
 use super::error::{TokensError, TxIndexError};
 
@@ -31,15 +31,15 @@ pub enum TransactionVerifierStorageError {
     #[error("Gen block index not found")]
     GenBlockIndexRetrievalFailed(Id<GenBlock>),
     #[error("Failed to persist state: {0}")]
-    StatePersistenceError(#[from] chainstate_types::StatePersistenceError),
+    StatePersistenceError(#[from] storage_result::Error),
     #[error("Failed to persist state: {0}")]
     GetAncestorError(#[from] chainstate_types::GetAncestorError),
+    #[error("Duplicate undo info for block: {0}")]
+    DuplicateBlockUndo(Id<Block>),
     #[error("Tokens error: {0}")]
     TokensError(#[from] TokensError),
     #[error("Utxo error: {0}")]
     UtxoError(#[from] utxo::Error),
-    #[error("Storage error: {0}")]
-    StorageError(#[from] storage_result::Error),
     #[error("Tx index error: {0}")]
     TxIndexError(#[from] TxIndexError),
 }
@@ -72,9 +72,7 @@ pub trait TransactionVerifierStorageRef: UtxosStorageRead {
     ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError>;
 }
 
-pub trait TransactionVerifierStorageMut:
-    TransactionVerifierStorageRef + UtxosUndoStorageWrite + FlushableUtxoView
-{
+pub trait TransactionVerifierStorageMut: TransactionVerifierStorageRef + FlushableUtxoView {
     fn set_mainchain_tx_index(
         &mut self,
         tx_id: &OutPointSourceId,
@@ -107,4 +105,12 @@ pub trait TransactionVerifierStorageMut:
         &mut self,
         issuance_tx_id: &Id<Transaction>,
     ) -> Result<(), TransactionVerifierStorageError>;
+
+    fn set_undo_data(
+        &mut self,
+        id: Id<Block>,
+        undo: &BlockUndo,
+    ) -> Result<(), TransactionVerifierStorageError>;
+
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), TransactionVerifierStorageError>;
 }

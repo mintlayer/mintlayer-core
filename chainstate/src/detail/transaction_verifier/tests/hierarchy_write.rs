@@ -26,6 +26,13 @@ use mockall::predicate::eq;
 
 // TODO: ConsumedUtxoCache is not checked in these tests, think how to expose it from utxo crate
 
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+// utxo2 & block_undo2    utxo1 & block_undo1
+//
+// Check that data from TransactionVerifiers are flushed from one TransactionVerifier to another
+// and then to the store
 #[test]
 fn utxo_set_hierarchy() {
     let chain_config = ConfigBuilder::test_chain().build();
@@ -84,6 +91,13 @@ fn utxo_set_hierarchy() {
     flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
 }
 
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+// tx_index2              tx_index1
+//
+// Check that data from TransactionVerifiers are flushed from one TransactionVerifier to another
+// and then to the store
 #[test]
 fn tx_index_set_hierarchy() {
     let chain_config = ConfigBuilder::test_chain().build();
@@ -134,6 +148,13 @@ fn tx_index_set_hierarchy() {
     flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
 }
 
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+// token2 & tx_id2        token1 & tx_id1
+//
+// Check that data from TransactionVerifiers are flushed from one TransactionVerifier to another
+// and then to the store
 #[test]
 fn tokens_set_hierarchy() {
     let chain_config = ConfigBuilder::test_chain().build();
@@ -204,6 +225,13 @@ fn tokens_set_hierarchy() {
     flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
 }
 
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+//                                               utxo1 & block_undo1; utxo2 & block_undo2
+//
+// Spend utxo2 in TransactionVerifier2 and utxo1 in TransactionVerifier1.
+// Flush and check that the data was deleted from the store
 #[test]
 fn utxo_del_hierarchy() {
     let chain_config = ConfigBuilder::test_chain().build();
@@ -265,6 +293,13 @@ fn utxo_del_hierarchy() {
     flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
 }
 
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+//                                               tx_index1; tx_index2
+//
+// Erase tx_index2 in TransactionVerifier2 and tx_index1 in TransactionVerifier1.
+// Flush and check that the data was deleted from the store
 #[test]
 fn tx_index_del_hierarchy() {
     let chain_config = ConfigBuilder::test_chain().build();
@@ -310,6 +345,13 @@ fn tx_index_del_hierarchy() {
     flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
 }
 
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+//                                               token2 & tx_id2; token1 & tx_id1
+//
+// Erase token2 & tx_id2 in TransactionVerifier2 and token2 & tx_id2 in TransactionVerifier1.
+// Flush and check that the data was deleted from the store
 #[test]
 fn tokens_del_hierarchy() {
     let chain_config = ConfigBuilder::test_chain().build();
@@ -359,6 +401,13 @@ fn tokens_del_hierarchy() {
     flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
 }
 
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+// utxo1 & block_undo2    utxo1 & block_undo1
+//
+// The data in TransactionVerifiers conflicts
+// Check that data is flushed from one TransactionVerifier to another with an error
 #[test]
 fn utxo_conflict_hierarchy() {
     let chain_config = ConfigBuilder::test_chain().build();
@@ -366,8 +415,6 @@ fn utxo_conflict_hierarchy() {
     let (outpoint1, utxo1) = create_utxo(1000);
     let block_1_id: Id<Block> = Id::new(H256::random());
     let block_1_undo: BlockUndo = Default::default();
-
-    let block_2_id: Id<Block> = Id::new(H256::random());
     let block_2_undo: BlockUndo = Default::default();
 
     let mut store = mock::MockStore::new();
@@ -380,8 +427,11 @@ fn utxo_conflict_hierarchy() {
         .times(1)
         .return_const(Ok(Some(utxo1.clone())));
 
-    store.expect_del_undo_data().with(eq(block_1_id)).times(1).return_const(Ok(()));
-    store.expect_del_undo_data().with(eq(block_2_id)).times(1).return_const(Ok(()));
+    store
+        .expect_set_undo_data()
+        .with(eq(block_1_id), eq(block_1_undo.clone()))
+        .times(1)
+        .return_const(Ok(()));
     store.expect_batch_write().times(1).return_const(Ok(()));
 
     let mut verifier1 = TransactionVerifier::new(&store, &chain_config);
@@ -390,7 +440,7 @@ fn utxo_conflict_hierarchy() {
         block_1_id,
         BlockUndoEntry {
             undo: block_1_undo.clone(),
-            is_fresh: false,
+            is_fresh: true,
         },
     );
 
@@ -401,22 +451,32 @@ fn utxo_conflict_hierarchy() {
             Err(utxo::Error::NoUtxoFound)
         );
         verifier.utxo_block_undo.insert(
-            block_2_id,
+            block_1_id,
             BlockUndoEntry {
                 undo: block_2_undo.clone(),
-                is_fresh: false,
+                is_fresh: true,
             },
         );
         verifier
     };
 
     let consumed_verifier2 = verifier2.consume().unwrap();
-    flush::flush_to_storage(&mut verifier1, consumed_verifier2).unwrap();
+    assert_eq!(
+        flush::flush_to_storage(&mut verifier1, consumed_verifier2).unwrap_err(),
+        TransactionVerifierStorageError::DuplicateBlockUndo(block_1_id)
+    );
 
     let consumed_verifier1 = verifier1.consume().unwrap();
     flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
 }
 
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+// tx_index2              tx_index1
+//
+// The data in TransactionVerifiers conflicts
+// Check that data is flushed from one TransactionVerifier to another with an error
 #[test]
 fn tx_index_conflict_hierarchy() {
     let chain_config = ConfigBuilder::test_chain().build();
@@ -466,6 +526,13 @@ fn tx_index_conflict_hierarchy() {
     flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
 }
 
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+// token1                 token1
+//
+// The data in TransactionVerifiers conflicts
+// Check that data is flushed from one TransactionVerifier to another with an error
 #[test]
 fn tokens_conflict_hierarchy() {
     let chain_config = ConfigBuilder::test_chain().build();

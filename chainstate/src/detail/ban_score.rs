@@ -100,10 +100,10 @@ impl BanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::StatePersistenceError(_) => 0,
             TransactionVerifierStorageError::GenBlockIndexRetrievalFailed(_) => 100,
             TransactionVerifierStorageError::GetAncestorError(err) => err.ban_score(),
+            TransactionVerifierStorageError::DuplicateBlockUndo(_) => 100,
             TransactionVerifierStorageError::TokensError(err) => err.ban_score(),
             TransactionVerifierStorageError::UtxoError(err) => err.ban_score(),
             TransactionVerifierStorageError::TxIndexError(err) => err.ban_score(),
-            TransactionVerifierStorageError::StorageError(_) => 0,
         }
     }
 }

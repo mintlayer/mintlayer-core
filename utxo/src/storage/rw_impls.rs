@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{UtxosDB, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite, UtxosUndoStorageWrite};
+use super::{UtxosDB, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
 use crate::{BlockUndo, Utxo};
 use chainstate_types::storage_result::Error as StorageError;
 use common::{
@@ -35,16 +35,6 @@ impl<'a, S: UtxosStorageRead> UtxosStorageRead for UtxosDBMut<'a, S> {
     }
 }
 
-impl<'a, S: UtxosStorageWrite> UtxosUndoStorageWrite for UtxosDBMut<'a, S> {
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), StorageError> {
-        self.0.set_undo_data(id, undo)
-    }
-
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), StorageError> {
-        self.0.del_undo_data(id)
-    }
-}
-
 impl<'a, S: UtxosStorageWrite> UtxosStorageWrite for UtxosDBMut<'a, S> {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError> {
         self.0.set_utxo(outpoint, entry)
@@ -56,6 +46,13 @@ impl<'a, S: UtxosStorageWrite> UtxosStorageWrite for UtxosDBMut<'a, S> {
 
     fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError> {
         self.0.set_best_block_for_utxos(block_id)
+    }
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), StorageError> {
+        self.0.set_undo_data(id, undo)
+    }
+
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), StorageError> {
+        self.0.del_undo_data(id)
     }
 }
 

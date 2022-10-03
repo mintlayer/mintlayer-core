@@ -17,8 +17,7 @@ pub mod storage_result;
 
 pub use crate::{
     block_index::BlockIndex, error::GetAncestorError, error::PropertyQueryError,
-    error::StatePersistenceError, gen_block_index::GenBlockIndex, height_skip::get_skip_height,
-    locator::Locator,
+    gen_block_index::GenBlockIndex, height_skip::get_skip_height, locator::Locator,
 };
 
 mod block_index;

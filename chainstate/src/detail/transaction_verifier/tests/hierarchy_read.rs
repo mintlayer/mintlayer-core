@@ -21,7 +21,7 @@ use crate::detail::transaction_verifier::token_issuance_cache::{
 };
 use common::{
     chain::{
-        config::Builder as ConfigBuilder, tokens::TokenAuxiliaryData, OutPoint, TxMainChainIndex,
+        config::Builder as ConfigBuilder, tokens::TokenAuxiliaryData, TxMainChainIndex,
         TxMainChainPosition,
     },
     primitives::H256,
@@ -29,12 +29,30 @@ use common::{
 use mockall::predicate::eq;
 use utxo::UtxosStorageRead;
 
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+// utxo2 & block_undo2    utxo1 & block_undo1    utxo0 & block_undo0
+//
+// Check that data can be accessed through derived entities
 #[test]
 fn hierarchy_test_utxo() {
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let outpoint0 = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::random())), 0);
+    let (outpoint0, utxo0) = create_utxo(100);
     let block_undo_id_0: Id<Block> = Id::new(H256::random());
+    let (_, utxo0_undo) = create_utxo(100);
+    let block_undo_0 = BlockUndo::new(None, vec![TxUndo::new(vec![utxo0_undo])]);
+
+    let (outpoint1, utxo1) = create_utxo(1000);
+    let block_undo_id_1: Id<Block> = Id::new(H256::random());
+    let (_, utxo1_undo) = create_utxo(100);
+    let block_undo_1 = BlockUndo::new(None, vec![TxUndo::new(vec![utxo1_undo])]);
+
+    let (outpoint2, utxo2) = create_utxo(2000);
+    let block_undo_id_2: Id<Block> = Id::new(H256::random());
+    let (_, utxo1_undo) = create_utxo(100);
+    let block_undo_2 = BlockUndo::new(None, vec![TxUndo::new(vec![utxo1_undo])]);
 
     let mut store = mock::MockStore::new();
     store
@@ -43,18 +61,23 @@ fn hierarchy_test_utxo() {
     store
         .expect_get_utxo()
         .with(eq(outpoint0.clone()))
+        .times(2)
+        .return_const(Ok(Some(utxo0.clone())));
+    store
+        .expect_get_undo_data()
+        .with(eq(block_undo_id_0))
+        .times(2)
+        .return_const(Ok(Some(block_undo_0.clone())));
+    store
+        .expect_get_utxo()
+        .with(eq(outpoint2.clone()))
         .times(1)
         .return_const(Ok(None));
     store
         .expect_get_undo_data()
-        .with(eq(block_undo_id_0))
+        .with(eq(block_undo_id_2))
         .times(1)
         .return_const(Ok(None));
-
-    let (outpoint1, utxo1) = create_utxo(1000);
-    let block_undo_id_1: Id<Block> = Id::new(H256::random());
-    let (_, utxo1_undo) = create_utxo(100);
-    let block_undo_1 = BlockUndo::new(None, vec![TxUndo::new(vec![utxo1_undo])]);
 
     let verifier1 = {
         let mut verifier = TransactionVerifier::new(&store, &chain_config);
@@ -69,13 +92,7 @@ fn hierarchy_test_utxo() {
         verifier
     };
 
-    let (outpoint2, utxo2) = create_utxo(2000);
-    let block_undo_id_2: Id<Block> = Id::new(H256::random());
-    let (_, utxo1_undo) = create_utxo(100);
-    let block_undo_2 = BlockUndo::new(None, vec![TxUndo::new(vec![utxo1_undo])]);
-
     let verifier2 = {
-        //let mut verifier = verifier1.derive();
         let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
         verifier.utxo_cache.add_utxo(&outpoint2, utxo2.clone(), false).unwrap();
         verifier.utxo_block_undo.insert(
@@ -89,39 +106,71 @@ fn hierarchy_test_utxo() {
     };
 
     assert_eq!(
+        verifier1.get_utxo(&outpoint0).unwrap().as_ref(),
+        Some(&utxo0)
+    );
+    assert_eq!(
         verifier1.get_utxo(&outpoint1).unwrap().as_ref(),
+        Some(&utxo1)
+    );
+    assert_eq!(verifier1.get_utxo(&outpoint2).unwrap(), None);
+    assert_eq!(
+        verifier2.get_utxo(&outpoint0).unwrap().as_ref(),
+        Some(&utxo0)
+    );
+    assert_eq!(
+        verifier2.get_utxo(&outpoint1).unwrap().as_ref(),
         Some(&utxo1)
     );
     assert_eq!(
         verifier2.get_utxo(&outpoint2).unwrap().as_ref(),
         Some(&utxo2)
     );
-    assert_eq!(
-        verifier2.get_utxo(&outpoint1).unwrap().as_ref(),
-        Some(&utxo1)
-    );
-    assert_eq!(verifier2.get_utxo(&outpoint0).unwrap(), None);
 
     assert_eq!(
+        verifier1.get_undo_data(block_undo_id_0).unwrap().as_ref(),
+        Some(&block_undo_0)
+    );
+    assert_eq!(
         verifier1.get_undo_data(block_undo_id_1).unwrap().as_ref(),
+        Some(&block_undo_1)
+    );
+    assert_eq!(verifier1.get_undo_data(block_undo_id_2).unwrap(), None);
+    assert_eq!(
+        verifier2.get_undo_data(block_undo_id_0).unwrap().as_ref(),
+        Some(&block_undo_0)
+    );
+    assert_eq!(
+        verifier2.get_undo_data(block_undo_id_1).unwrap().as_ref(),
         Some(&block_undo_1)
     );
     assert_eq!(
         verifier2.get_undo_data(block_undo_id_2).unwrap().as_ref(),
         Some(&block_undo_2)
     );
-    assert_eq!(
-        verifier2.get_undo_data(block_undo_id_1).unwrap().as_ref(),
-        Some(&block_undo_1)
-    );
-    assert_eq!(verifier2.get_undo_data(block_undo_id_0).unwrap(), None);
 }
 
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+// tx_index2              tx_index1              tx_index0
+//
+// Check that data can be accessed through derived entities
 #[test]
 fn hierarchy_test_tx_index() {
     let chain_config = ConfigBuilder::test_chain().build();
 
     let outpoint0 = OutPointSourceId::Transaction(Id::new(H256::zero()));
+    let pos0 = TxMainChainPosition::new(H256::zero().into(), 1).into();
+    let tx_index_0 = TxMainChainIndex::new(pos0, 1).unwrap();
+
+    let outpoint1 = OutPointSourceId::Transaction(Id::new(H256::random()));
+    let pos1 = TxMainChainPosition::new(H256::from_low_u64_be(1).into(), 1).into();
+    let tx_index_1 = TxMainChainIndex::new(pos1, 1).unwrap();
+
+    let outpoint2 = OutPointSourceId::Transaction(Id::new(H256::random()));
+    let pos2 = TxMainChainPosition::new(H256::from_low_u64_be(2).into(), 1).into();
+    let tx_index_2 = TxMainChainIndex::new(pos2, 2).unwrap();
 
     let mut store = mock::MockStore::new();
     store
@@ -130,12 +179,13 @@ fn hierarchy_test_tx_index() {
     store
         .expect_get_mainchain_tx_index()
         .with(eq(outpoint0.clone()))
+        .times(2)
+        .return_const(Ok(Some(tx_index_0.clone())));
+    store
+        .expect_get_mainchain_tx_index()
+        .with(eq(outpoint2.clone()))
         .times(1)
         .return_const(Ok(None));
-
-    let outpoint1 = OutPointSourceId::Transaction(Id::new(H256::random()));
-    let pos1 = TxMainChainPosition::new(H256::from_low_u64_be(1).into(), 1).into();
-    let tx_index_1 = TxMainChainIndex::new(pos1, 1).unwrap();
 
     let verifier1 = {
         let mut verifier = TransactionVerifier::new(&store, &chain_config);
@@ -146,12 +196,7 @@ fn hierarchy_test_tx_index() {
         verifier
     };
 
-    let outpoint2 = OutPointSourceId::Transaction(Id::new(H256::random()));
-    let pos2 = TxMainChainPosition::new(H256::from_low_u64_be(2).into(), 1).into();
-    let tx_index_2 = TxMainChainIndex::new(pos2, 2).unwrap();
-
     let verifier2 = {
-        //let mut verifier = verifier1.derive();
         let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
         verifier.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
             outpoint2.clone(),
@@ -161,29 +206,57 @@ fn hierarchy_test_tx_index() {
     };
 
     assert_eq!(
+        verifier1.get_mainchain_tx_index(&outpoint0).unwrap().as_ref(),
+        Some(&tx_index_0)
+    );
+    assert_eq!(
         verifier1.get_mainchain_tx_index(&outpoint1).unwrap().as_ref(),
         Some(&tx_index_1)
     );
+    assert_eq!(verifier1.get_mainchain_tx_index(&outpoint2).unwrap(), None);
 
     assert_eq!(
-        verifier2.get_mainchain_tx_index(&outpoint2).unwrap(),
-        Some(tx_index_2)
+        verifier2.get_mainchain_tx_index(&outpoint0).unwrap(),
+        Some(tx_index_0)
     );
-
     assert_eq!(
         verifier2.get_mainchain_tx_index(&outpoint1).unwrap(),
         Some(tx_index_1)
     );
-
-    assert_eq!(verifier2.get_mainchain_tx_index(&outpoint0).unwrap(), None);
+    assert_eq!(
+        verifier2.get_mainchain_tx_index(&outpoint2).unwrap(),
+        Some(tx_index_2)
+    );
 }
 
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+// token2 & tx_id2        token1 & tx_id1        token0 & tx_id0
+//
+// Check that data can be accessed through derived entities
 #[test]
 fn hierarchy_test_tokens() {
     let chain_config = ConfigBuilder::test_chain().build();
 
     let token_id_0 = H256::random();
-    let tx_id_0: Id<Transaction> = Id::new(H256::random());
+    let token_data_0 = TokenAuxiliaryData::new(
+        Transaction::new(0, vec![], vec![], 0).unwrap(),
+        Id::new(H256::random()),
+    );
+
+    let token_id_1 = H256::random();
+    let token_data_1 = TokenAuxiliaryData::new(
+        Transaction::new(1, vec![], vec![], 1).unwrap(),
+        Id::new(H256::random()),
+    );
+
+    let token_id_2 = H256::random();
+    let token_data_2 = TokenAuxiliaryData::new(
+        Transaction::new(2, vec![], vec![], 2).unwrap(),
+        Id::new(H256::random()),
+    );
+
     let mut store = mock::MockStore::new();
     store
         .expect_get_best_block_for_utxos()
@@ -191,19 +264,24 @@ fn hierarchy_test_tokens() {
     store
         .expect_get_token_aux_data()
         .with(eq(token_id_0))
+        .times(2)
+        .return_const(Ok(Some(token_data_0.clone())));
+    store
+        .expect_get_token_id_from_issuance_tx()
+        .with(eq(token_data_0.issuance_tx().get_id()))
+        .times(2)
+        .return_const(Ok(Some(token_id_0)));
+    store
+        .expect_get_token_aux_data()
+        .with(eq(token_id_2))
         .times(1)
         .return_const(Ok(None));
     store
         .expect_get_token_id_from_issuance_tx()
-        .with(eq(tx_id_0))
+        .with(eq(token_data_2.issuance_tx().get_id()))
         .times(1)
         .return_const(Ok(None));
 
-    let token_id_1 = H256::random();
-    let token_data_1 = TokenAuxiliaryData::new(
-        Transaction::new(1, vec![], vec![], 1).unwrap(),
-        Id::new(H256::random()),
-    );
     let verifier1 = {
         let mut verifier = TransactionVerifier::new(&store, &chain_config);
         verifier.token_issuance_cache = TokenIssuanceCache::new_for_test(
@@ -216,13 +294,7 @@ fn hierarchy_test_tokens() {
         verifier
     };
 
-    let token_id_2 = H256::random();
-    let token_data_2 = TokenAuxiliaryData::new(
-        Transaction::new(2, vec![], vec![], 2).unwrap(),
-        Id::new(H256::random()),
-    );
     let verifier2 = {
-        //let mut verifier = verifier1.derive();
         let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
         verifier.token_issuance_cache = TokenIssuanceCache::new_for_test(
             BTreeMap::from([(token_id_2, CachedAuxDataOp::Read(token_data_2.clone()))]),
@@ -235,8 +307,17 @@ fn hierarchy_test_tokens() {
     };
 
     assert_eq!(
+        verifier1.get_token_aux_data(&token_id_0).unwrap().as_ref(),
+        Some(&token_data_0)
+    );
+    assert_eq!(
         verifier1.get_token_aux_data(&token_id_1).unwrap().as_ref(),
         Some(&token_data_1)
+    );
+    assert_eq!(verifier1.get_token_aux_data(&token_id_2).unwrap(), None);
+    assert_eq!(
+        verifier2.get_token_aux_data(&token_id_0).unwrap().as_ref(),
+        Some(&token_data_0)
     );
     assert_eq!(
         verifier2.get_token_aux_data(&token_id_1).unwrap().as_ref(),
@@ -246,14 +327,34 @@ fn hierarchy_test_tokens() {
         verifier2.get_token_aux_data(&token_id_2).unwrap().as_ref(),
         Some(&token_data_2)
     );
-    assert_eq!(verifier2.get_token_aux_data(&token_id_0).unwrap(), None);
 
+    assert_eq!(
+        verifier1
+            .get_token_id_from_issuance_tx(token_data_0.issuance_tx().get_id())
+            .unwrap()
+            .as_ref(),
+        Some(&token_id_0)
+    );
     assert_eq!(
         verifier1
             .get_token_id_from_issuance_tx(token_data_1.issuance_tx().get_id())
             .unwrap()
             .as_ref(),
         Some(&token_id_1)
+    );
+    assert_eq!(
+        verifier1
+            .get_token_id_from_issuance_tx(token_data_2.issuance_tx().get_id())
+            .unwrap()
+            .as_ref(),
+        None
+    );
+    assert_eq!(
+        verifier2
+            .get_token_id_from_issuance_tx(token_data_0.issuance_tx().get_id())
+            .unwrap()
+            .as_ref(),
+        Some(&token_id_0)
     );
     assert_eq!(
         verifier2
@@ -269,10 +370,6 @@ fn hierarchy_test_tokens() {
             .as_ref(),
         Some(&token_id_2)
     );
-    assert_eq!(
-        verifier2.get_token_id_from_issuance_tx(tx_id_0).unwrap(),
-        None
-    );
 }
 
 #[test]
@@ -280,15 +377,18 @@ fn hierarchy_test_ancestor() {
     let chain_config = ConfigBuilder::test_chain().build();
 
     let ancestor = GenBlockIndex::Genesis(Arc::clone(chain_config.genesis_block()));
+    let block_index = GenBlockIndex::Genesis(Arc::clone(chain_config.genesis_block()));
     let mut store = mock::MockStore::new();
     store
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
-    store.expect_get_ancestor().times(1).return_const(Ok(ancestor));
+    store.expect_get_ancestor().times(2).return_const(Ok(ancestor.clone()));
 
-    let verifier = TransactionVerifier::new(&store, &chain_config);
-    let block_index = GenBlockIndex::Genesis(Arc::clone(chain_config.genesis_block()));
-    verifier.get_ancestor(&block_index, BlockHeight::one()).unwrap();
+    let verifier1 = TransactionVerifier::new(&store, &chain_config);
+    verifier1.get_ancestor(&block_index, BlockHeight::one()).unwrap();
+
+    let verifier2 = TransactionVerifier::new(&verifier1, &chain_config);
+    verifier2.get_ancestor(&block_index, BlockHeight::one()).unwrap();
 }
 
 #[test]
@@ -301,8 +401,15 @@ fn hierarchy_test_block_index() {
     store
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
-    store.expect_get_gen_block_index().times(1).return_const(Ok(Some(block_index)));
+    store
+        .expect_get_gen_block_index()
+        .with(eq(Id::<GenBlock>::from(block_id)))
+        .times(2)
+        .return_const(Ok(Some(block_index.clone())));
 
-    let verifier = TransactionVerifier::new(&store, &chain_config);
-    verifier.get_gen_block_index(&block_id.into()).unwrap();
+    let verifier1 = TransactionVerifier::new(&store, &chain_config);
+    verifier1.get_gen_block_index(&block_id.into()).unwrap();
+
+    let verifier2 = TransactionVerifier::new(&verifier1, &chain_config);
+    verifier2.get_gen_block_index(&block_id.into()).unwrap();
 }

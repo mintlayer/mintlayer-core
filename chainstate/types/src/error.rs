@@ -64,10 +64,3 @@ pub enum GetAncestorError {
     #[error("Previous block index not found {0}")]
     PrevBlockIndexNotFound(Id<GenBlock>),
 }
-
-#[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum StatePersistenceError {
-    // TODO(PR) find a good name for this and see whether we really need this
-    #[error("Blockchain storage error: {0}")]
-    StorageError(#[from] crate::storage_result::Error),
-}

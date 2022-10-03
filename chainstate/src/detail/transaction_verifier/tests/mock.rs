@@ -24,9 +24,7 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
-use utxo::{
-    BlockUndo, ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead, UtxosUndoStorageWrite,
-};
+use utxo::{BlockUndo, ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead};
 
 mockall::mock! {
     pub Store {}
@@ -92,17 +90,15 @@ mockall::mock! {
             &mut self,
             issuance_tx_id: &Id<Transaction>,
         ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), TransactionVerifierStorageError>;
+        fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), TransactionVerifierStorageError>;
     }
 
     impl UtxosStorageRead for Store {
         fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, storage_result::Error>;
         fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>,storage_result::Error>;
         fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, storage_result::Error>;
-    }
-
-    impl UtxosUndoStorageWrite for Store {
-        fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), storage_result::Error>;
-        fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), storage_result::Error>;
     }
 
     impl FlushableUtxoView for Store {

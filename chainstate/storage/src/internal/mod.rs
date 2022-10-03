@@ -28,7 +28,7 @@ use common::{
 use serialization::{Codec, Decode, DecodeAll, Encode, EncodeLike};
 use std::collections::BTreeMap;
 use storage::schema;
-use utxo::{BlockUndo, Utxo, UtxosStorageRead, UtxosStorageWrite, UtxosUndoStorageWrite};
+use utxo::{BlockUndo, Utxo, UtxosStorageRead, UtxosStorageWrite};
 
 use crate::{
     BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
@@ -233,11 +233,6 @@ impl<B: storage::Backend> UtxosStorageWrite for Store<B> {
         fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
         fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
         fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
-    }
-}
-
-impl<B: storage::Backend> UtxosUndoStorageWrite for Store<B> {
-    delegate_to_transaction! {
         fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
         fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
@@ -467,16 +462,6 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     }
 }
 
-impl<'st, B: storage::Backend> UtxosUndoStorageWrite for StoreTxRw<'st, B> {
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()> {
-        self.write::<DBBlockUndo, _, _, _>(id, undo)
-    }
-
-    fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
-        self.0.get_mut::<DBBlockUndo, _>().del(id).map_err(Into::into)
-    }
-}
-
 impl<'st, B: storage::Backend> UtxosStorageWrite for StoreTxRw<'st, B> {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()> {
         self.write::<DBUtxo, _, _, _>(outpoint, entry)
@@ -488,6 +473,14 @@ impl<'st, B: storage::Backend> UtxosStorageWrite for StoreTxRw<'st, B> {
 
     fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()> {
         self.write_value::<well_known::UtxosBestBlockId>(block_id)
+    }
+
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()> {
+        self.write::<DBBlockUndo, _, _, _>(id, undo)
+    }
+
+    fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
+        self.0.get_mut::<DBBlockUndo, _>().del(id).map_err(Into::into)
     }
 }
 

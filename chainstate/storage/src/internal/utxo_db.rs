@@ -25,7 +25,7 @@ mod test {
     use crypto::random::Rng;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
-    use utxo::{Utxo, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite, UtxosUndoStorageWrite};
+    use utxo::{Utxo, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
 
     fn create_utxo(block_height: u64, output_value: u128) -> (Utxo, OutPoint) {
         // just a random value generated, and also a random `is_block_reward` value.
