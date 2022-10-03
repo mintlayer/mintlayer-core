@@ -46,9 +46,13 @@ pub enum KdfKind {
 
 #[derive(Clone, Debug, Encode, Decode)]
 pub enum KdfResult {
+    #[codec(index = 0)]
     Argon2id {
+        #[codec(compact)]
         m_cost_memory_size: u32,
+        #[codec(compact)]
         t_cost_iterations: u32,
+        #[codec(compact)]
         p_cost_parallelism: u32,
         salt: Vec<u8>,
         hashed_password: Vec<u8>,
