@@ -35,7 +35,7 @@ pub fn argon2id_hash(
     )?;
     let context = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
     let mut result = vec![0; desired_hash_len.into()];
-    context.hash_password_into(password, &salt, &mut result)?;
+    context.hash_password_into(password, salt, &mut result)?;
     Ok(result)
 }
 

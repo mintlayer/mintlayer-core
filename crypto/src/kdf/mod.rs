@@ -85,8 +85,8 @@ pub fn hash_password<R: Rng + CryptoRng>(
                 m_cost_memory_size,
                 t_cost_iterations,
                 p_cost_parallelism,
-                salt: salt.to_vec(),
-                hashed_password: hashed_password.to_vec(),
+                salt,
+                hashed_password,
             };
             Ok(result)
         }
