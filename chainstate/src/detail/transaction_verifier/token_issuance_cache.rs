@@ -142,7 +142,7 @@ impl TokenIssuanceCache {
                 Entry::Vacant(e) => {
                     let current_token_data = token_data_getter(&token_id)?;
                     if let Some(el) = current_token_data {
-                        e.insert(CachedTokensOperation::Read(el));
+                        e.insert(CachedAuxDataOp::Read(el));
                     }
                 }
                 Entry::Occupied(_) => {

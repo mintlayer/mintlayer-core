@@ -25,7 +25,7 @@ use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestBlockInfo, TestFramework, TestStore,
     TransactionBuilder,
 };
-use chainstate_types::{GenBlockIndex, PropertyQueryError};
+use chainstate_types::{GenBlockIndex, GetAncestorError, PropertyQueryError};
 use common::chain::OutPoint;
 use common::chain::{signed_transaction::SignedTransaction, Transaction};
 use common::primitives::BlockDistance;

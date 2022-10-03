@@ -44,23 +44,25 @@ fn store_coin(#[case] seed: Seed) {
 
         // spend coin
         let tx = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                0,
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
                 empty_witness(&mut rng),
-            ))
+            )
             .add_output(tx_output.clone())
             .build();
-        let tx_id = tx.get_id();
+        let tx_id = tx.transaction().get_id();
 
-        let tx_utxo_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx.get_id().into()), 0);
+        let tx_utxo_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx_id), 0);
 
         let block = tf.make_block_builder().add_transaction(tx).build();
         let block_id = block.get_id();
         tf.process_block(block, BlockSource::Local).unwrap();
 
         // best block has changed
-        let db_tx = storage.transaction_ro();
+        let db_tx = storage.transaction_ro().unwrap();
         assert_eq!(
             db_tx.get_best_block_for_utxos().expect("ok").expect("some"),
             Id::<GenBlock>::from(block_id)
@@ -108,11 +110,13 @@ fn store_token(#[case] seed: Seed) {
 
         // issue a token
         let tx = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                0,
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
                 InputWitness::NoSignature(None),
-            ))
+            )
             .add_output(TxOutput::new(
                 OutputValue::Token(TokenData::TokenIssuanceV1 {
                     token_ticker: "XXXX".as_bytes().to_vec(),
@@ -123,15 +127,15 @@ fn store_token(#[case] seed: Seed) {
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))
             .build();
-        let tx_id = tx.get_id();
-        let tx_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx_id.into()), 0);
-        let token_id = token_id(&tx).unwrap();
+        let tx_id = tx.transaction().get_id();
+        let tx_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx_id), 0);
+        let token_id = token_id(tx.transaction()).unwrap();
 
         let block = tf.make_block_builder().add_transaction(tx.clone()).build();
         let block_id = block.get_id();
         tf.process_block(block, BlockSource::Local).unwrap();
 
-        let db_tx = storage.transaction_ro();
+        let db_tx = storage.transaction_ro().unwrap();
 
         // best block has changed
         assert_eq!(
@@ -161,7 +165,7 @@ fn store_token(#[case] seed: Seed) {
             token_id
         );
         let aux_data = db_tx.get_token_aux_data(&token_id).expect("ok").expect("some");
-        let expected_aux_data = TokenAuxiliaryData::new(tx.clone(), block_id);
+        let expected_aux_data = TokenAuxiliaryData::new(tx.transaction().clone(), block_id);
         assert_eq!(aux_data, expected_aux_data);
     });
 }
@@ -186,15 +190,16 @@ fn reorg_store_coin(#[case] seed: Seed) {
             OutputPurpose::Transfer(anyonecanspend_address()),
         );
         let tx_1 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::BlockReward(genesis_id.into()),
-                0,
+            .add_input(
+                TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
                 empty_witness(&mut rng),
-            ))
-            .add_output(tx_1_output.clone())
+            )
+            .add_output(tx_1_output)
             .build();
-        let tx_1_utxo_outpoint =
-            OutPoint::new(OutPointSourceId::Transaction(tx_1.get_id().into()), 0);
+        let tx_1_utxo_outpoint = OutPoint::new(
+            OutPointSourceId::Transaction(tx_1.transaction().get_id()),
+            0,
+        );
 
         let block_1 = tf.make_block_builder().add_transaction(tx_1).build();
         let block_1_id = block_1.get_id();
@@ -206,16 +211,14 @@ fn reorg_store_coin(#[case] seed: Seed) {
             OutputPurpose::Transfer(anyonecanspend_address()),
         );
         let tx_2 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::BlockReward(genesis_id.into()),
-                0,
+            .add_input(
+                TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
                 empty_witness(&mut rng),
-            ))
-            .add_output(tx_2_output.clone())
+            )
+            .add_output(tx_2_output)
             .build();
-        let tx_2_id = tx_2.get_id();
-        let tx_2_utxo_outpoint =
-            OutPoint::new(OutPointSourceId::Transaction(tx_2.get_id().into()), 0);
+        let tx_2_id = tx_2.transaction().get_id();
+        let tx_2_utxo_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx_2_id), 0);
 
         let block_2 = tf
             .make_block_builder()
@@ -231,16 +234,14 @@ fn reorg_store_coin(#[case] seed: Seed) {
             OutputPurpose::Transfer(anyonecanspend_address()),
         );
         let tx_3 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::Transaction(tx_2_id),
-                0,
+            .add_input(
+                TxInput::new(OutPointSourceId::Transaction(tx_2_id), 0),
                 empty_witness(&mut rng),
-            ))
+            )
             .add_output(tx_3_output.clone())
             .build();
-        let tx_3_id = tx_3.get_id();
-        let tx_3_utxo_outpoint =
-            OutPoint::new(OutPointSourceId::Transaction(tx_3.get_id().into()), 0);
+        let tx_3_id = tx_3.transaction().get_id();
+        let tx_3_utxo_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx_3_id), 0);
 
         let block_3 = tf
             .make_block_builder()
@@ -251,7 +252,7 @@ fn reorg_store_coin(#[case] seed: Seed) {
         tf.process_block(block_3, BlockSource::Local).unwrap();
 
         // best block has changed
-        let db_tx = storage.transaction_ro();
+        let db_tx = storage.transaction_ro().unwrap();
         assert_eq!(
             db_tx.get_best_block_for_utxos().expect("ok").expect("some"),
             Id::<GenBlock>::from(block_3_id)
@@ -338,11 +339,13 @@ fn reorg_store_token(#[case] seed: Seed) {
 
         // create block
         let tx_1 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                0,
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
                 InputWitness::NoSignature(None),
-            ))
+            )
             .add_output(TxOutput::new(
                 OutputValue::Token(TokenData::TokenIssuanceV1 {
                     token_ticker: "AAAA".as_bytes().to_vec(),
@@ -353,9 +356,12 @@ fn reorg_store_token(#[case] seed: Seed) {
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))
             .build();
-        let tx_1_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx_1.get_id().into()), 0);
-        let token_1_id = token_id(&tx_1).unwrap();
-        let tx_1_id = tx_1.get_id();
+        let tx_1_outpoint = OutPoint::new(
+            OutPointSourceId::Transaction(tx_1.transaction().get_id()),
+            0,
+        );
+        let token_1_id = token_id(tx_1.transaction()).unwrap();
+        let tx_1_id = tx_1.transaction().get_id();
 
         let block_1 = tf.make_block_builder().add_transaction(tx_1).build();
         tf.process_block(block_1, BlockSource::Local).unwrap();
@@ -363,11 +369,13 @@ fn reorg_store_token(#[case] seed: Seed) {
         // create parallel chain
         let bbbb_tokens_amount = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         let tx_2 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                0,
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
                 InputWitness::NoSignature(None),
-            ))
+            )
             .add_output(TxOutput::new(
                 OutputValue::Token(TokenData::TokenIssuanceV1 {
                     token_ticker: "BBBB".as_bytes().to_vec(),
@@ -378,9 +386,9 @@ fn reorg_store_token(#[case] seed: Seed) {
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))
             .build();
-        let tx_2_id = tx_2.get_id();
-        let tx_2_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx_2.get_id().into()), 0);
-        let token_2_id = token_id(&tx_2).unwrap();
+        let tx_2_id = tx_2.transaction().get_id();
+        let tx_2_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx_2_id), 0);
+        let token_2_id = token_id(tx_2.transaction()).unwrap();
 
         let block_2 = tf
             .make_block_builder()
@@ -392,11 +400,10 @@ fn reorg_store_token(#[case] seed: Seed) {
 
         // produce one more block to cause reorg
         let tx_3 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::Transaction(tx_2_id),
-                0,
+            .add_input(
+                TxInput::new(OutPointSourceId::Transaction(tx_2_id), 0),
                 InputWitness::NoSignature(None),
-            ))
+            )
             .add_output(TxOutput::new(
                 OutputValue::Token(TokenData::TokenTransferV1 {
                     token_id: token_2_id,
@@ -405,20 +412,20 @@ fn reorg_store_token(#[case] seed: Seed) {
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))
             .build();
-        let tx_3_id = tx_3.get_id();
-        let tx_3_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx_3.get_id().into()), 0);
-        let token_3_id = token_id(&tx_3).unwrap();
+        let tx_3_id = tx_3.transaction().get_id();
+        let tx_3_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx_3_id), 0);
+        let token_3_id = token_id(tx_3.transaction()).unwrap();
 
         let block_3 = tf
             .make_block_builder()
-            .add_transaction(tx_3.clone())
+            .add_transaction(tx_3)
             .with_parent(block_2_id.into())
             .build();
         let block_3_id = block_3.get_id();
         tf.process_block(block_3, BlockSource::Local).unwrap();
 
         // best block has changed
-        let db_tx = storage.transaction_ro();
+        let db_tx = storage.transaction_ro().unwrap();
         assert_eq!(
             db_tx.get_best_block_for_utxos().expect("ok").expect("some"),
             Id::<GenBlock>::from(block_3_id)
@@ -474,7 +481,7 @@ fn reorg_store_token(#[case] seed: Seed) {
             token_2_id
         );
         let aux_data_b = db_tx.get_token_aux_data(&token_2_id).expect("ok").expect("some");
-        let expected_aux_data_b = TokenAuxiliaryData::new(tx_2.clone(), block_2_id);
+        let expected_aux_data_b = TokenAuxiliaryData::new(tx_2.transaction().clone(), block_2_id);
         assert_eq!(aux_data_b, expected_aux_data_b);
 
         //tx block_3 was Transfer so no data update

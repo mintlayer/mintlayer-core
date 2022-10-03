@@ -62,22 +62,22 @@ fn utxo_set_hierarchy() {
         .return_const(Ok(()));
 
     let mut verifier1 = TransactionVerifier::new(&store, &chain_config);
-    verifier1.utxo_cache.add_utxo(&outpoint1, utxo1.clone(), false).unwrap();
+    verifier1.utxo_cache.add_utxo(&outpoint1, utxo1, false).unwrap();
     verifier1.utxo_block_undo.insert(
         block_1_id,
         BlockUndoEntry {
-            undo: block_1_undo.clone(),
+            undo: block_1_undo,
             is_fresh: true,
         },
     );
 
     let verifier2 = {
         let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
-        verifier.utxo_cache.add_utxo(&outpoint2, utxo2.clone(), false).unwrap();
+        verifier.utxo_cache.add_utxo(&outpoint2, utxo2, false).unwrap();
         verifier.utxo_block_undo.insert(
             block_2_id,
             BlockUndoEntry {
-                undo: block_2_undo.clone(),
+                undo: block_2_undo,
                 is_fresh: true,
             },
         );
@@ -128,15 +128,15 @@ fn tx_index_set_hierarchy() {
 
     let mut verifier1 = TransactionVerifier::new(&store, &chain_config);
     verifier1.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
-        outpoint1.clone(),
-        CachedInputsOperation::Write(tx_index_1.clone()),
+        outpoint1,
+        CachedInputsOperation::Write(tx_index_1),
     )]));
 
     let verifier2 = {
         let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
         verifier.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
-            outpoint2.clone(),
-            CachedInputsOperation::Write(tx_index_2.clone()),
+            outpoint2,
+            CachedInputsOperation::Write(tx_index_2),
         )]));
         verifier
     };
@@ -252,12 +252,12 @@ fn utxo_del_hierarchy() {
         .expect_get_utxo()
         .with(eq(outpoint1.clone()))
         .times(1)
-        .return_const(Ok(Some(utxo1.clone())));
+        .return_const(Ok(Some(utxo1)));
     store
         .expect_get_utxo()
         .with(eq(outpoint2.clone()))
         .times(1)
-        .return_const(Ok(Some(utxo2.clone())));
+        .return_const(Ok(Some(utxo2)));
 
     store.expect_del_undo_data().with(eq(block_1_id)).times(1).return_const(Ok(()));
     store.expect_del_undo_data().with(eq(block_2_id)).times(1).return_const(Ok(()));
@@ -268,7 +268,7 @@ fn utxo_del_hierarchy() {
     verifier1.utxo_block_undo.insert(
         block_1_id,
         BlockUndoEntry {
-            undo: block_1_undo.clone(),
+            undo: block_1_undo,
             is_fresh: false,
         },
     );
@@ -279,7 +279,7 @@ fn utxo_del_hierarchy() {
         verifier.utxo_block_undo.insert(
             block_2_id,
             BlockUndoEntry {
-                undo: block_2_undo.clone(),
+                undo: block_2_undo,
                 is_fresh: false,
             },
         );
@@ -324,17 +324,13 @@ fn tx_index_del_hierarchy() {
         .return_const(Ok(()));
 
     let mut verifier1 = TransactionVerifier::new(&store, &chain_config);
-    verifier1.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
-        outpoint1.clone(),
-        CachedInputsOperation::Erase,
-    )]));
+    verifier1.tx_index_cache =
+        TxIndexCache::new_for_test(BTreeMap::from([(outpoint1, CachedInputsOperation::Erase)]));
 
     let verifier2 = {
         let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
-        verifier.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
-            outpoint2.clone(),
-            CachedInputsOperation::Erase,
-        )]));
+        verifier.tx_index_cache =
+            TxIndexCache::new_for_test(BTreeMap::from([(outpoint2, CachedInputsOperation::Erase)]));
         verifier
     };
 
@@ -425,7 +421,7 @@ fn utxo_conflict_hierarchy() {
         .expect_get_utxo()
         .with(eq(outpoint1.clone()))
         .times(1)
-        .return_const(Ok(Some(utxo1.clone())));
+        .return_const(Ok(Some(utxo1)));
 
     store
         .expect_set_undo_data()
@@ -439,7 +435,7 @@ fn utxo_conflict_hierarchy() {
     verifier1.utxo_block_undo.insert(
         block_1_id,
         BlockUndoEntry {
-            undo: block_1_undo.clone(),
+            undo: block_1_undo,
             is_fresh: true,
         },
     );
@@ -453,7 +449,7 @@ fn utxo_conflict_hierarchy() {
         verifier.utxo_block_undo.insert(
             block_1_id,
             BlockUndoEntry {
-                undo: block_2_undo.clone(),
+                undo: block_2_undo,
                 is_fresh: true,
             },
         );
@@ -502,14 +498,14 @@ fn tx_index_conflict_hierarchy() {
     let mut verifier1 = TransactionVerifier::new(&store, &chain_config);
     verifier1.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
         outpoint1.clone(),
-        CachedInputsOperation::Write(tx_index_1.clone()),
+        CachedInputsOperation::Write(tx_index_1),
     )]));
 
     let verifier2 = {
         let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
         verifier.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
-            outpoint1.clone(),
-            CachedInputsOperation::Write(tx_index_2.clone()),
+            outpoint1,
+            CachedInputsOperation::Write(tx_index_2),
         )]));
         verifier
     };

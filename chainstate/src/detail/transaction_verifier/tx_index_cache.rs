@@ -22,7 +22,7 @@ use super::{
 };
 use common::{
     chain::{
-        calculate_tx_index_from_block, signature::Transactable, OutPointSourceId, Spender, TxInput,
+        calculate_tx_index_from_block, signature::Signable, OutPointSourceId, Spender, TxInput,
         TxMainChainIndex,
     },
     primitives::Idable,

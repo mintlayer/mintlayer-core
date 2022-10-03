@@ -17,13 +17,13 @@ use chainstate::{BlockError, BlockSource, ChainstateError, TokensError};
 use chainstate::{
     CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError, TxIndexError,
 };
-use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::primitives::{id, Id};
 use common::{
     chain::{
         signature::inputsig::InputWitness,
         tokens::{token_id, OutputValue, TokenData, TokenId},
-        Destination, OutputPurpose, TxInput, TxOutput,
+        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };

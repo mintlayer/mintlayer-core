@@ -43,13 +43,12 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
     ) -> Result<Option<TokenId>, TransactionVerifierStorageError> {
         match self.token_issuance_cache.txid_from_issuance().get(&tx_id) {
             Some(v) => match v {
-                CachedTokenIndexOp::Write(t) => return Ok(Some(t.clone())),
-                CachedTokenIndexOp::Read(t) => return Ok(Some(t.clone())),
-                CachedTokenIndexOp::Erase => return Ok(None),
+                CachedTokenIndexOp::Write(id) => Ok(Some(*id)),
+                CachedTokenIndexOp::Read(id) => Ok(Some(*id)),
+                CachedTokenIndexOp::Erase => Ok(None),
             },
-            None => (),
+            None => self.storage_ref.get_token_id_from_issuance_tx(tx_id),
         }
-        self.storage_ref.get_token_id_from_issuance_tx(tx_id)
     }
 
     fn get_gen_block_index(
@@ -73,13 +72,12 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
     ) -> Result<Option<TxMainChainIndex>, TransactionVerifierStorageError> {
         match self.tx_index_cache.get_from_cached(tx_id) {
             Some(v) => match v {
-                CachedInputsOperation::Write(idx) => return Ok(Some(idx.clone())),
-                CachedInputsOperation::Read(idx) => return Ok(Some(idx.clone())),
-                CachedInputsOperation::Erase => return Ok(None),
+                CachedInputsOperation::Write(idx) => Ok(Some(idx.clone())),
+                CachedInputsOperation::Read(idx) => Ok(Some(idx.clone())),
+                CachedInputsOperation::Erase => Ok(None),
             },
-            None => (),
-        };
-        self.storage_ref.get_mainchain_tx_index(tx_id)
+            None => self.storage_ref.get_mainchain_tx_index(tx_id),
+        }
     }
 
     fn get_token_aux_data(
@@ -88,13 +86,12 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
     ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError> {
         match self.token_issuance_cache.data().get(token_id) {
             Some(v) => match v {
-                CachedAuxDataOp::Write(t) => return Ok(Some(t.clone())),
-                CachedAuxDataOp::Read(t) => return Ok(Some(t.clone())),
-                CachedAuxDataOp::Erase => return Ok(None),
+                CachedAuxDataOp::Write(t) => Ok(Some(t.clone())),
+                CachedAuxDataOp::Read(t) => Ok(Some(t.clone())),
+                CachedAuxDataOp::Erase => Ok(None),
             },
-            None => (),
+            None => self.storage_ref.get_token_aux_data(token_id),
         }
-        self.storage_ref.get_token_aux_data(token_id)
     }
 }
 
@@ -112,10 +109,9 @@ impl<'a, S: TransactionVerifierStorageRef> UtxosStorageRead for TransactionVerif
         id: Id<Block>,
     ) -> Result<Option<utxo::BlockUndo>, storage_result::Error> {
         match self.utxo_block_undo.get(&id) {
-            Some(v) => return Ok(Some(v.undo.clone())),
-            None => (),
-        };
-        self.storage_ref.get_undo_data(id)
+            Some(v) => Ok(Some(v.undo.clone())),
+            None => self.storage_ref.get_undo_data(id),
+        }
     }
 }
 

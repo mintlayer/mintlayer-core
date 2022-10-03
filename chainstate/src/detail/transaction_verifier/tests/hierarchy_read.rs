@@ -382,7 +382,7 @@ fn hierarchy_test_ancestor() {
     store
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
-    store.expect_get_ancestor().times(2).return_const(Ok(ancestor.clone()));
+    store.expect_get_ancestor().times(2).return_const(Ok(ancestor));
 
     let verifier1 = TransactionVerifier::new(&store, &chain_config);
     verifier1.get_ancestor(&block_index, BlockHeight::one()).unwrap();
@@ -405,7 +405,7 @@ fn hierarchy_test_block_index() {
         .expect_get_gen_block_index()
         .with(eq(Id::<GenBlock>::from(block_id)))
         .times(2)
-        .return_const(Ok(Some(block_index.clone())));
+        .return_const(Ok(Some(block_index)));
 
     let verifier1 = TransactionVerifier::new(&store, &chain_config);
     verifier1.get_gen_block_index(&block_id.into()).unwrap();

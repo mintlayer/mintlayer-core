@@ -447,8 +447,10 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
 
                 // pre-cache token ids to check ensure it's not in the db when issuing
-                self.token_issuance_cache
-                    .precache_token_issuance(|id| self.storage_ref.get_token_aux_data(id), tx.transaction())?;
+                self.token_issuance_cache.precache_token_issuance(
+                    |id| self.storage_ref.get_token_aux_data(id),
+                    tx.transaction(),
+                )?;
 
                 // check for attempted money printing
                 let fee = Some(
@@ -549,8 +551,10 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
 
                 // pre-cache token ids before removing them
-                self.token_issuance_cache
-                    .precache_token_issuance(|id| self.storage_ref.get_token_aux_data(id), tx)?;
+                self.token_issuance_cache.precache_token_issuance(
+                    |id| self.storage_ref.get_token_aux_data(id),
+                    tx.transaction(),
+                )?;
 
                 // unspend inputs
                 self.tx_index_cache.unspend_tx_index_inputs(tx.inputs())?;

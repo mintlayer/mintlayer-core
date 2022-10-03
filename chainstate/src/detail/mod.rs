@@ -40,7 +40,7 @@ use std::sync::Arc;
 use itertools::Itertools;
 
 use chainstate_storage::{BlockchainStorage, Transactional};
-use chainstate_types::{BlockIndex, GenBlockIndex};
+use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{block::BlockHeader, config::ChainConfig, Block},
     primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},

@@ -45,11 +45,11 @@ fn flush_tokens(
         |(token_id, aux_data_op)| -> Result<(), TransactionVerifierStorageError> {
             match aux_data_op {
                 CachedAuxDataOp::Write(aux_data) => {
-                    storage.set_token_aux_data(&token_id, aux_data)?;
+                    storage.set_token_aux_data(token_id, aux_data)?;
                 }
                 CachedAuxDataOp::Read(_) => (),
                 CachedAuxDataOp::Erase => {
-                    storage.del_token_aux_data(&token_id)?;
+                    storage.del_token_aux_data(token_id)?;
                 }
             };
             Ok(())
@@ -60,11 +60,11 @@ fn flush_tokens(
         |(tx_id, token_index_op)| -> Result<(), TransactionVerifierStorageError> {
             match token_index_op {
                 CachedTokenIndexOp::Write(token_id) => {
-                    storage.set_token_id(&tx_id, &token_id)?;
+                    storage.set_token_id(tx_id, token_id)?;
                 }
                 CachedTokenIndexOp::Read(_) => (),
                 CachedTokenIndexOp::Erase => {
-                    storage.del_token_id(&tx_id)?;
+                    storage.del_token_id(tx_id)?;
                 }
             };
             Ok(())
