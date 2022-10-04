@@ -68,7 +68,6 @@ pub async fn make_libp2p(
     Libp2pBackend,
     mpsc::UnboundedSender<types::Command>,
     mpsc::UnboundedReceiver<types::ConnectivityEvent>,
-    mpsc::UnboundedReceiver<types::PubSubEvent>,
     mpsc::UnboundedReceiver<types::SyncingEvent>,
 ) {
     let id_keys = identity::Keypair::generate_ed25519();
@@ -144,16 +143,14 @@ pub async fn make_libp2p(
     };
 
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
-    let (gossip_tx, gossip_rx) = mpsc::unbounded_channel();
     let (conn_tx, conn_rx) = mpsc::unbounded_channel();
     let (sync_tx, sync_rx) = mpsc::unbounded_channel();
 
     swarm.listen_on(addr).expect("swarm listen failed");
     (
-        Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
+        Libp2pBackend::new(swarm, cmd_rx, conn_tx, sync_tx),
         cmd_tx,
         conn_rx,
-        gossip_rx,
         sync_rx,
     )
 }
@@ -169,7 +166,6 @@ pub async fn make_libp2p_with_ping(
     Libp2pBackend,
     mpsc::UnboundedSender<types::Command>,
     mpsc::UnboundedReceiver<types::ConnectivityEvent>,
-    mpsc::UnboundedReceiver<types::PubSubEvent>,
     mpsc::UnboundedReceiver<types::SyncingEvent>,
 ) {
     let id_keys = identity::Keypair::generate_ed25519();
@@ -240,16 +236,14 @@ pub async fn make_libp2p_with_ping(
     };
 
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
-    let (gossip_tx, gossip_rx) = mpsc::unbounded_channel();
     let (conn_tx, conn_rx) = mpsc::unbounded_channel();
     let (sync_tx, sync_rx) = mpsc::unbounded_channel();
 
     swarm.listen_on(addr).expect("swarm listen failed");
     (
-        Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
+        Libp2pBackend::new(swarm, cmd_rx, conn_tx, sync_tx),
         cmd_tx,
         conn_rx,
-        gossip_rx,
         sync_rx,
     )
 }

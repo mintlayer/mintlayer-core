@@ -163,16 +163,6 @@ pub enum ConnectivityEvent {
     },
 }
 
-// TODO: FIXME: Remove?
-#[derive(Debug, Clone)]
-pub enum PubSubEvent {
-    Announcement {
-        peer_id: PeerId,
-        message_id: MessageId,
-        announcement: message::Announcement,
-    },
-}
-
 #[derive(Debug)]
 pub enum SyncingEvent {
     Request {
@@ -189,6 +179,11 @@ pub enum SyncingEvent {
         peer_id: PeerId,
         request_id: RequestId,
         error: net::types::RequestResponseError,
+    },
+    Announcement {
+        peer_id: PeerId,
+        message_id: MessageId,
+        announcement: message::Announcement,
     },
 }
 
@@ -233,6 +228,5 @@ impl From<net::types::ValidationResult> for MessageAcceptance {
 pub enum Libp2pBehaviourEvent {
     Connectivity(ConnectivityEvent),
     Syncing(SyncingEvent),
-    PubSub(PubSubEvent),
     Control(ControlEvent),
 }

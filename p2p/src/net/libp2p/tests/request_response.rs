@@ -27,7 +27,7 @@ use tokio::sync::oneshot;
 // try to send request to an uknown peer and verify that the request is not rejected
 #[tokio::test]
 async fn request_sent_directly_but_peer_not_part_of_swarm() {
-    let (mut backend, _cmd, _conn_rx, _gossip_rx, _sync_rx) = make_libp2p(
+    let (mut backend, _cmd, _conn_rx, _sync_rx) = make_libp2p(
         common::chain::config::create_mainnet(),
         Arc::new(Default::default()),
         MakeP2pAddress::make_address(),
@@ -50,7 +50,7 @@ async fn request_sent_directly_but_peer_not_part_of_swarm() {
 // that the request is rejected by the backend
 #[tokio::test]
 async fn request_sent_but_peer_not_part_of_swarm() {
-    let (mut backend, _cmd, _conn_rx, _gossip_rx, _sync_rx) = make_libp2p(
+    let (mut backend, _cmd, _conn_rx, _sync_rx) = make_libp2p(
         common::chain::config::create_mainnet(),
         Arc::new(Default::default()),
         MakeP2pAddress::make_address(),

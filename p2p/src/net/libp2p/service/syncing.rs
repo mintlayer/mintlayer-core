@@ -13,6 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_trait::async_trait;
+use libp2p::{core::PeerId, request_response::*};
+use tokio::sync::{mpsc, oneshot};
+
+use logging::log;
+use serialization::{Decode, Encode};
+
 use crate::{
     error::{P2pError, ProtocolError},
     message,
@@ -25,11 +32,6 @@ use crate::{
         NetworkingService, SyncingMessagingService,
     },
 };
-use async_trait::async_trait;
-use libp2p::{core::PeerId, request_response::*};
-use logging::log;
-use serialization::{Decode, Encode};
-use tokio::sync::{mpsc, oneshot};
 
 pub struct Libp2pSyncHandle<T: NetworkingService> {
     /// Channel for sending commands to libp2p backend
@@ -135,6 +137,10 @@ where
                 request_id,
                 error,
             }),
+            types::SyncingEvent::Announcement { .. } => {
+                todo!();
+                todo!()
+            }
         }
     }
 }

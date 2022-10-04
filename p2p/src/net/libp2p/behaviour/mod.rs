@@ -27,7 +27,7 @@ use crate::{
         self,
         libp2p::{
             constants::*,
-            types::{self, ConnectivityEvent, Libp2pBehaviourEvent, PubSubEvent},
+            types::{self, ConnectivityEvent, Libp2pBehaviourEvent, SyncingEvent},
         },
     },
 };
@@ -285,7 +285,7 @@ impl NetworkBehaviourEventProcess<gossipsub::GossipsubEvent> for Libp2pBehaviour
                     }
                 };
 
-                self.add_event(Libp2pBehaviourEvent::PubSub(PubSubEvent::Announcement {
+                self.add_event(Libp2pBehaviourEvent::Syncing(SyncingEvent::Announcement {
                     peer_id: propagation_source,
                     message_id,
                     announcement,

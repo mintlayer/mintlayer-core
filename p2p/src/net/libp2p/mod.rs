@@ -98,7 +98,6 @@ impl NetworkingService for Libp2pService {
         .build();
 
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
-        let (gossip_tx, gossip_rx) = mpsc::unbounded_channel();
         let (conn_tx, conn_rx) = mpsc::unbounded_channel();
         let (sync_tx, sync_rx) = mpsc::unbounded_channel();
 
@@ -106,7 +105,7 @@ impl NetworkingService for Libp2pService {
         tokio::spawn(async move {
             log::debug!("spawning libp2p backend to background");
 
-            Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx).run().await
+            Libp2pBackend::new(swarm, cmd_rx, conn_tx, sync_tx).run().await
         });
 
         // send listen command to the libp2p backend and if it succeeds,
