@@ -55,9 +55,8 @@ pub enum KdfResult {
 }
 
 fn make_salt<R: Rng + CryptoRng>(rng: &mut R, len: NonZeroUsize) -> Result<Vec<u8>, KdfError> {
-    let salt: Vec<u8> = (0..len.try_into().map_err(|_| KdfError::InvalidSaltSize)?)
-        .map(|_| rng.gen::<u8>())
-        .collect();
+    let len = len.try_into().map_err(|_| KdfError::InvalidSaltSize)?;
+    let salt: Vec<u8> = (0..len).map(|_| rng.gen::<u8>()).collect();
     Ok(salt)
 }
 
