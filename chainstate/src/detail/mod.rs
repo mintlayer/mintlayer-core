@@ -27,6 +27,7 @@ pub use error::OrphanCheckError;
 // TODO: ConnectTransactionError used in unit tests to check block processing results. We have to find more appropriate place for this error.
 pub use transaction_verifier::error::ConnectTransactionError;
 pub use transaction_verifier::error::TokensError;
+use utils::tap_error_log::LogError;
 
 mod block_index_history_iter;
 pub mod bootstrap;
@@ -137,9 +138,15 @@ impl<S: BlockchainStorage> Chainstate<S> {
     ) -> Result<Self, crate::ChainstateError> {
         use crate::ChainstateError;
 
-        let best_block_id = chainstate_storage.get_best_block_id().map_err(|e| {
-            ChainstateError::FailedToInitializeChainstate(format!("Database read error: {:?}", e))
-        })?;
+        let best_block_id = chainstate_storage
+            .get_best_block_id()
+            .map_err(|e| {
+                ChainstateError::FailedToInitializeChainstate(format!(
+                    "Database read error: {:?}",
+                    e
+                ))
+            })
+            .log_err()?;
 
         let mut chainstate = Self::new_no_genesis(
             chain_config,
@@ -152,7 +159,8 @@ impl<S: BlockchainStorage> Chainstate<S> {
         if best_block_id.is_none() {
             chainstate
                 .process_genesis()
-                .map_err(crate::ChainstateError::ProcessBlockError)?;
+                .map_err(crate::ChainstateError::ProcessBlockError)
+                .log_err()?;
         }
         Ok(chainstate)
     }
@@ -231,22 +239,29 @@ impl<S: BlockchainStorage> Chainstate<S> {
     ) -> Result<Option<BlockIndex>, BlockError> {
         log::info!("Processing block: {}", block.get_id());
 
-        let mut chainstate_ref = self.make_db_tx().map_err(BlockError::from)?;
+        let mut chainstate_ref = self.make_db_tx().map_err(BlockError::from).log_err()?;
 
-        let block = chainstate_ref.check_legitimate_orphan(block_source, block)?;
+        let block = chainstate_ref.check_legitimate_orphan(block_source, block).log_err()?;
 
-        let best_block_id =
-            chainstate_ref.get_best_block_id().map_err(BlockError::BestBlockLoadError)?;
+        let best_block_id = chainstate_ref
+            .get_best_block_id()
+            .map_err(BlockError::BestBlockLoadError)
+            .log_err()?;
 
-        chainstate_ref.check_block(&block).map_err(BlockError::CheckBlockFailed)?;
+        chainstate_ref
+            .check_block(&block)
+            .map_err(BlockError::CheckBlockFailed)
+            .log_err()?;
 
-        let block_index = chainstate_ref.accept_block(&block)?;
-        let result = chainstate_ref.activate_best_chain(block_index, best_block_id)?;
-        let db_commit_result = chainstate_ref.commit_db_tx();
+        let block_index = chainstate_ref.accept_block(&block).log_err()?;
+        let result = chainstate_ref.activate_best_chain(block_index, best_block_id).log_err()?;
+        let db_commit_result = chainstate_ref.commit_db_tx().log_err();
         match db_commit_result {
             Ok(_) => {}
             Err(err) => {
-                return self.process_db_commit_error(err, block, block_source, attempt_number)
+                return self
+                    .process_db_commit_error(err, block, block_source, attempt_number)
+                    .log_err()
             }
         }
 
@@ -290,14 +305,20 @@ impl<S: BlockchainStorage> Chainstate<S> {
             .expect("Genesis not constructed correctly");
 
         // Initialize storage with given info
-        let mut db_tx = self.chainstate_storage.transaction_rw().map_err(BlockError::from)?;
-        db_tx.set_best_block_id(&genesis_id).map_err(BlockError::StorageError)?;
+        let mut db_tx =
+            self.chainstate_storage.transaction_rw().map_err(BlockError::from).log_err()?;
+        db_tx
+            .set_best_block_id(&genesis_id)
+            .map_err(BlockError::StorageError)
+            .log_err()?;
         db_tx
             .set_block_id_at_height(&BlockHeight::zero(), &genesis_id)
-            .map_err(BlockError::StorageError)?;
+            .map_err(BlockError::StorageError)
+            .log_err()?;
         db_tx
             .set_mainchain_tx_index(&genesis_id.into(), &genesis_index)
-            .map_err(BlockError::StorageError)?;
+            .map_err(BlockError::StorageError)
+            .log_err()?;
 
         // initialize the utxo-set by adding genesis outputs to it
         UtxosDBMut::initialize_db(&mut db_tx, &self.chain_config);
@@ -311,13 +332,13 @@ impl<S: BlockchainStorage> Chainstate<S> {
         block: WithId<Block>,
     ) -> Result<WithId<Block>, BlockError> {
         let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
-        chainstate_ref.check_block(&block)?;
+        chainstate_ref.check_block(&block).log_err()?;
         Ok(block)
     }
 
     pub fn preliminary_header_check(&self, block: BlockHeader) -> Result<(), BlockError> {
         let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
-        chainstate_ref.check_block_header(&block)?;
+        chainstate_ref.check_block_header(&block).log_err()?;
         Ok(())
     }
 

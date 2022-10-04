@@ -589,6 +589,7 @@ dependencies = [
  "serialization",
  "static_assertions",
  "subsystem",
+ "tap",
  "test-utils",
  "thiserror",
  "tokio",
@@ -4723,6 +4724,7 @@ name = "utils"
 version = "0.1.0"
 dependencies = [
  "atomic-traits",
+ "logging",
  "loom",
  "num-traits",
  "slave-pool",

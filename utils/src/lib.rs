@@ -18,6 +18,7 @@ pub mod counttracker;
 pub mod ensure;
 pub mod eventhandler;
 pub mod newtype;
+pub mod tap_error_log;
 
 mod concurrency_impl;
 pub use concurrency_impl::*;
