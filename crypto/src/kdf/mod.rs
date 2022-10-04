@@ -21,6 +21,8 @@ use crate::{
 };
 use serialization::{Decode, Encode};
 
+use self::argon2::Argon2Config;
+
 pub mod argon2;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
@@ -36,9 +38,7 @@ pub enum KdfError {
 #[derive(Clone, Debug)]
 pub enum KdfKind {
     Argon2id {
-        m_cost_memory_size: u32,
-        t_cost_iterations: u32,
-        p_cost_parallelism: u32,
+        config: Argon2Config,
         hash_length: NonZeroUsize,
         salt_length: NonZeroUsize,
     },
@@ -48,12 +48,7 @@ pub enum KdfKind {
 pub enum KdfResult {
     #[codec(index = 0)]
     Argon2id {
-        #[codec(compact)]
-        m_cost_memory_size: u32,
-        #[codec(compact)]
-        t_cost_iterations: u32,
-        #[codec(compact)]
-        p_cost_parallelism: u32,
+        config: Argon2Config,
         salt: Vec<u8>,
         hashed_password: Vec<u8>,
     },
@@ -73,25 +68,14 @@ pub fn hash_password<R: Rng + CryptoRng>(
 ) -> Result<KdfResult, KdfError> {
     match kdf {
         KdfKind::Argon2id {
-            m_cost_memory_size,
-            t_cost_iterations,
-            p_cost_parallelism,
+            config,
             hash_length,
             salt_length,
         } => {
             let salt = make_salt(rng, salt_length)?;
-            let hashed_password = argon2::argon2id_hash(
-                m_cost_memory_size,
-                t_cost_iterations,
-                p_cost_parallelism,
-                &salt,
-                hash_length,
-                password,
-            )?;
+            let hashed_password = argon2::argon2id_hash(&config, &salt, hash_length, password)?;
             let result = KdfResult::Argon2id {
-                m_cost_memory_size,
-                t_cost_iterations,
-                p_cost_parallelism,
+                config,
                 salt,
                 hashed_password,
             };
@@ -107,16 +91,12 @@ pub fn verify_password(
 ) -> Result<bool, KdfError> {
     match previously_password_hash {
         KdfResult::Argon2id {
-            m_cost_memory_size,
-            t_cost_iterations,
-            p_cost_parallelism,
+            config,
             salt,
             hashed_password,
         } => {
             let new_hashed_password = argon2::argon2id_hash(
-                m_cost_memory_size,
-                t_cost_iterations,
-                p_cost_parallelism,
+                &config,
                 &salt,
                 hashed_password.len().try_into().map_err(|_| KdfError::InvalidHashSize)?,
                 password,
@@ -151,9 +131,11 @@ pub mod test {
     fn password_hash_generation_argon2id(#[case] seed: Seed) {
         let password = b"SomeIncrediblyStrong___youGuessedIt___password!";
         let kdf_kind = KdfKind::Argon2id {
-            m_cost_memory_size: 200,
-            t_cost_iterations: 10,
-            p_cost_parallelism: 2,
+            config: Argon2Config {
+                m_cost_memory_size: 200,
+                t_cost_iterations: 10,
+                p_cost_parallelism: 2,
+            },
             hash_length: 32.try_into().unwrap(),
             salt_length: 16.try_into().unwrap(),
         };

@@ -18,19 +18,38 @@ use std::num::NonZeroUsize;
 use argon2::Argon2;
 
 use super::KdfError;
+use serialization::{Decode, Encode};
+
+#[derive(Clone, Debug, Encode, Decode)]
+pub struct Argon2Config {
+    #[codec(compact)]
+    pub m_cost_memory_size: u32,
+    #[codec(compact)]
+    pub t_cost_iterations: u32,
+    #[codec(compact)]
+    pub p_cost_parallelism: u32,
+}
+
+impl Argon2Config {
+    pub fn new(m_cost_memory_size: u32, t_cost_iterations: u32, p_cost_parallelism: u32) -> Self {
+        Self {
+            m_cost_memory_size,
+            t_cost_iterations,
+            p_cost_parallelism,
+        }
+    }
+}
 
 pub fn argon2id_hash(
-    m_cost_memory_size: u32,
-    t_cost_iterations: u32,
-    p_cost_parallelism: u32,
+    config: &Argon2Config,
     salt: &[u8],
     desired_hash_len: NonZeroUsize,
     password: &[u8],
 ) -> Result<Vec<u8>, KdfError> {
     let params = argon2::Params::new(
-        m_cost_memory_size,
-        t_cost_iterations,
-        p_cost_parallelism,
+        config.m_cost_memory_size,
+        config.t_cost_iterations,
+        config.p_cost_parallelism,
         Some(desired_hash_len.into()),
     )?;
     let context = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
@@ -50,7 +69,12 @@ pub mod test {
     #[test]
     fn chosen_text1() {
         let salt = b"some salt";
-        let hash = argon2id_hash(700, 16, 2, salt, 32.try_into().unwrap(), b"password");
+        let hash = argon2id_hash(
+            &Argon2Config::new(700, 16, 2),
+            salt,
+            32.try_into().unwrap(),
+            b"password",
+        );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(
@@ -62,7 +86,12 @@ pub mod test {
     #[test]
     fn chosen_text2() {
         let salt = b"some salt";
-        let hash = argon2id_hash(400, 16, 2, salt, 32.try_into().unwrap(), b"password");
+        let hash = argon2id_hash(
+            &Argon2Config::new(400, 16, 2),
+            salt,
+            32.try_into().unwrap(),
+            b"password",
+        );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(
@@ -74,7 +103,12 @@ pub mod test {
     #[test]
     fn chosen_text3() {
         let salt = b"some salt";
-        let hash = argon2id_hash(700, 12, 2, salt, 32.try_into().unwrap(), b"password");
+        let hash = argon2id_hash(
+            &Argon2Config::new(700, 12, 2),
+            salt,
+            32.try_into().unwrap(),
+            b"password",
+        );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(
@@ -86,7 +120,12 @@ pub mod test {
     #[test]
     fn chosen_text4() {
         let salt = b"some salt";
-        let hash = argon2id_hash(700, 16, 4, salt, 32.try_into().unwrap(), b"password");
+        let hash = argon2id_hash(
+            &Argon2Config::new(700, 16, 4),
+            salt,
+            32.try_into().unwrap(),
+            b"password",
+        );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(
@@ -98,7 +137,12 @@ pub mod test {
     #[test]
     fn chosen_text5() {
         let salt = b"some salt";
-        let hash = argon2id_hash(700, 16, 6, salt, 32.try_into().unwrap(), b"password");
+        let hash = argon2id_hash(
+            &Argon2Config::new(700, 16, 6),
+            salt,
+            32.try_into().unwrap(),
+            b"password",
+        );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(
@@ -110,7 +154,12 @@ pub mod test {
     #[test]
     fn chosen_text6() {
         let salt = b"some salt";
-        let hash = argon2id_hash(500, 16, 2, salt, 32.try_into().unwrap(), b"password");
+        let hash = argon2id_hash(
+            &Argon2Config::new(500, 16, 2),
+            salt,
+            32.try_into().unwrap(),
+            b"password",
+        );
         let hash = hash.unwrap();
         let hash_hex: String = hash.encode_hex();
         assert_eq!(
@@ -123,9 +172,7 @@ pub mod test {
     fn chosen_text7() {
         let salt = b"some salt";
         let hash = argon2id_hash(
-            500,
-            16,
-            2,
+            &Argon2Config::new(500, 16, 2),
             salt,
             32.try_into().unwrap(),
             b"another password",
@@ -142,9 +189,7 @@ pub mod test {
     fn chosen_text8() {
         let salt = b"some salt";
         let hash = argon2id_hash(
-            500,
-            16,
-            2,
+            &Argon2Config::new(500, 16, 2),
             salt,
             16.try_into().unwrap(),
             b"another password",
@@ -158,9 +203,7 @@ pub mod test {
     fn chosen_text9() {
         let salt = b"another salt";
         let hash = argon2id_hash(
-            500,
-            16,
-            2,
+            &Argon2Config::new(500, 16, 2),
             salt,
             32.try_into().unwrap(),
             b"another password",
@@ -177,9 +220,7 @@ pub mod test {
     fn chosen_text10() {
         let salt = b"another salt";
         let hash = argon2id_hash(
-            500,
-            16,
-            2,
+            &Argon2Config::new(500, 16, 2),
             salt,
             16.try_into().unwrap(),
             b"another password",
