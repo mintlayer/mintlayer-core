@@ -247,7 +247,7 @@ pub mod test {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn passowrd_removal(#[case] seed: Seed) {
+    fn conversion_to_challenge(#[case] seed: Seed) {
         let password = b"SomeIncrediblyStrong___youGuessedIt___password!";
         let kdf_kind = KdfConfig::Argon2id {
             config: Argon2Config {
