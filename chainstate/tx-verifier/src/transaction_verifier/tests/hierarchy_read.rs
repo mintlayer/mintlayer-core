@@ -15,10 +15,9 @@
 
 use std::sync::Arc;
 
+use crate::transaction_verifier::token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp};
+
 use super::*;
-use crate::detail::transaction_verifier::token_issuance_cache::{
-    CachedAuxDataOp, CachedTokenIndexOp,
-};
 use common::{
     chain::{
         config::Builder as ConfigBuilder, tokens::TokenAuxiliaryData, TxMainChainIndex,

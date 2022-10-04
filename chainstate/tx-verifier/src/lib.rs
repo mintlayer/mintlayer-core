@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,19 +13,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod storage_result;
-
-pub use crate::{
-    ancestor::block_index_ancestor_getter, ancestor::gen_block_index_getter,
-    block_index::BlockIndex, block_index_handle::BlockIndexHandle, error::GetAncestorError,
-    error::PropertyQueryError, gen_block_index::GenBlockIndex, height_skip::get_skip_height,
-    locator::Locator,
-};
-
-mod ancestor;
-mod block_index;
-mod block_index_handle;
-mod error;
-mod gen_block_index;
-mod height_skip;
-mod locator;
+pub mod transaction_verifier;

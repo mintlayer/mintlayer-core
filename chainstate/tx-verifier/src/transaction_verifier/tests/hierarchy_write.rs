@@ -13,11 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
-use crate::{
-    detail::transaction_verifier::token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
-    TokensError, TransactionVerifierStorageError, TxIndexError,
+use crate::transaction_verifier::{
+    error::TxIndexError,
+    storage::TransactionVerifierStorageError,
+    token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
 };
+
+use super::*;
 use common::chain::{
     config::Builder as ConfigBuilder, tokens::TokenAuxiliaryData, TxMainChainIndex,
     TxMainChainPosition,

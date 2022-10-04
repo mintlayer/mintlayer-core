@@ -20,7 +20,7 @@ pub mod pow;
 pub use crate::{
     error::ConsensusVerificationError,
     pow::ConsensusPoWError,
-    validator::{validate_consensus, BlockIndexHandle, TransactionIndexHandle},
+    validator::{validate_consensus, TransactionIndexHandle},
 };
 
 mod error;

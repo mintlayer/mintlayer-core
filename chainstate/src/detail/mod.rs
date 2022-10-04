@@ -23,7 +23,6 @@ mod chainstateref;
 mod error;
 mod median_time;
 mod orphan_blocks;
-mod transaction_verifier;
 
 pub use self::error::*;
 pub use self::median_time::calculate_median_time_past;
@@ -34,6 +33,7 @@ pub use transaction_verifier::{
     error::{ConnectTransactionError, TokensError, TxIndexError},
     storage::TransactionVerifierStorageError,
 };
+use tx_verifier::transaction_verifier;
 
 use std::sync::Arc;
 

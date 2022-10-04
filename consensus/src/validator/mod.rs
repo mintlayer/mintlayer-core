@@ -13,13 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use self::{
-    block_index_handle::BlockIndexHandle, transaction_index_handle::TransactionIndexHandle,
-};
+pub use self::transaction_index_handle::TransactionIndexHandle;
 
-mod block_index_handle;
 mod transaction_index_handle;
 
+use chainstate_types::BlockIndexHandle;
 use common::{
     chain::{
         block::{BlockHeader, ConsensusData},

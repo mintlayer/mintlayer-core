@@ -13,8 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use crate::detail::{
-    chainstateref::{gen_block_index_getter, ChainstateRef},
+    chainstateref::ChainstateRef,
     orphan_blocks::OrphanBlocks,
     transaction_verifier::storage::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
@@ -26,7 +28,7 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, GenBlock, OutPointSourceId, Transaction,
+        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction,
     },
     primitives::{BlockHeight, Id},
 };
@@ -74,6 +76,21 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionVerifierStorageRe
         self.db_tx
             .get_token_aux_data(token_id)
             .map_err(TransactionVerifierStorageError::from)
+    }
+}
+
+// TODO: this function is a duplicate of one in chainstate-types; the cause for this is that BlockchainStorageRead causes a circular dependencies
+// BlockchainStorageRead should probably be moved out of storage
+pub fn gen_block_index_getter<S: BlockchainStorageRead>(
+    db_tx: &S,
+    chain_config: &ChainConfig,
+    block_id: &Id<GenBlock>,
+) -> Result<Option<GenBlockIndex>, storage_result::Error> {
+    match block_id.classify(chain_config) {
+        GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
+            chain_config.genesis_block(),
+        )))),
+        GenBlockId::Block(id) => db_tx.get_block_index(&id).map(|b| b.map(GenBlockIndex::Block)),
     }
 }
 

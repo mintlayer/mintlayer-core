@@ -23,9 +23,11 @@ use common::{
     primitives::{Id, Idable},
 };
 
-use crate::ConnectTransactionError;
-
-use super::{error::TokensError, storage::TransactionVerifierStorageError, CachedOperation};
+use super::{
+    error::{ConnectTransactionError, TokensError},
+    storage::TransactionVerifierStorageError,
+    CachedOperation,
+};
 
 pub type CachedAuxDataOp = CachedOperation<TokenAuxiliaryData>;
 pub type CachedTokenIndexOp = CachedOperation<TokenId>;

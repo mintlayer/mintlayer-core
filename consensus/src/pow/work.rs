@@ -15,7 +15,7 @@
 
 #![allow(dead_code)]
 
-use chainstate_types::BlockIndex;
+use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
     chain::{
         block::consensus_data::PoWData,
@@ -27,13 +27,10 @@ use common::{
     Uint256,
 };
 
-use crate::{
-    pow::{
-        error::ConsensusPoWError,
-        helpers::{calculate_new_target, due_for_retarget, get_starting_block_time, special_rules},
-        PoW,
-    },
-    validator::BlockIndexHandle,
+use crate::pow::{
+    error::ConsensusPoWError,
+    helpers::{calculate_new_target, due_for_retarget, get_starting_block_time, special_rules},
+    PoW,
 };
 
 pub fn check_proof_of_work(

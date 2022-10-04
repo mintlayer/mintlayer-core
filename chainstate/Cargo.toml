@@ -9,6 +9,7 @@ version = "0.1.0"
 [dependencies]
 chainstate-storage = {path = './storage'}
 chainstate-types = {path = './types'}
+tx-verifier = {path = './tx-verifier'}
 common = {path = '../common'}
 crypto = {path = '../crypto'}
 logging = {path = '../logging'}

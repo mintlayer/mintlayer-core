@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate_types::BlockIndexHandle;
 use itertools::Itertools;
 
 use common::{
     chain::{block::timestamp::BlockTimestamp, GenBlock},
     primitives::Id,
 };
-use consensus::BlockIndexHandle;
 
 use crate::detail::block_index_history_iter::BlockIndexHistoryIterator;
 
