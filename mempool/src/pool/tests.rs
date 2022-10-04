@@ -1879,3 +1879,88 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.store.assert_valid();
     Ok(())
 }
+
+struct TestTxAccumulator {
+    txs: Vec<SignedTransaction>,
+    total_size: usize,
+    target_size: usize,
+}
+
+impl TestTxAccumulator {
+    fn new(target_size: usize) -> Self {
+        Self {
+            txs: Vec::new(),
+            total_size: 0,
+            target_size,
+        }
+    }
+}
+
+impl TransactionAccumulator for TestTxAccumulator {
+    fn add_tx(&mut self, tx: SignedTransaction) {
+        self.total_size += tx.encoded_size();
+        self.txs.push(tx);
+    }
+
+    fn done(&self) -> bool {
+        self.target_size <= self.total_size
+    }
+
+    fn txs(&self) -> Vec<SignedTransaction> {
+        self.txs.clone()
+    }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
+    let tf = TestFramework::default();
+    let mut rng = make_seedable_rng(seed);
+    let genesis = tf.genesis();
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let target_txs = 10;
+
+    let mut tx_builder = TransactionBuilder::new().add_input(
+        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+        empty_witness(&mut rng),
+    );
+    for i in 0..target_txs {
+        tx_builder = tx_builder.add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(1000 * (target_txs + 1 - i))),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+    }
+    let initial_tx = tx_builder.build();
+    let initial_tx_id = initial_tx.transaction().get_id();
+    mempool.add_transaction(initial_tx).await?;
+    for i in 0..target_txs {
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(OutPointSourceId::Transaction(initial_tx_id), i as u32),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(0)),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .build();
+        mempool.add_transaction(tx.clone()).await?;
+    }
+    let tx_accumulator = TestTxAccumulator::new(200000);
+    let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
+    assert_eq!(
+        collected_txs.len(),
+        usize::try_from(target_txs + 1).unwrap()
+    );
+
+    let tx_accumulator = TestTxAccumulator::new(0);
+    let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
+    assert_eq!(collected_txs.len(), 0);
+
+    let tx_accumulator = TestTxAccumulator::new(1);
+    let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
+    assert_eq!(collected_txs.len(), 1);
+    Ok(())
+}

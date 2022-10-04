@@ -101,7 +101,7 @@ fn get_relay_fee(tx: &SignedTransaction) -> Amount {
 }
 
 pub trait TransactionAccumulator {
-    fn add_tx(&self, tx: SignedTransaction);
+    fn add_tx(&mut self, tx: SignedTransaction);
     fn done(&self) -> bool;
     fn txs(&self) -> Vec<SignedTransaction>;
 }
@@ -803,21 +803,19 @@ where
 
     fn collect_txs(
         &self,
-        tx_accumulator: Box<dyn TransactionAccumulator>,
+        mut tx_accumulator: Box<dyn TransactionAccumulator>,
     ) -> Vec<SignedTransaction> {
-        while !self.store.is_empty() && !tx_accumulator.done() {
-            let next_tx_id = self
-                .store
-                .txs_by_descendant_score
-                .values()
-                .next()
-                .expect("store not empty")
-                .iter()
-                .cloned()
-                .next()
-                .expect("store not empty");
-            let next_tx = self.store.txs_by_id.get(&next_tx_id).expect("tx to exist");
-            tx_accumulator.add_tx(next_tx.tx().clone());
+        if self.store.is_empty() {
+            return Vec::new();
+        }
+        let mut tx_iter = self.store.txs_by_descendant_score.values().flatten();
+        while !tx_accumulator.done() {
+            if let Some(next_tx_id) = tx_iter.next() {
+                let next_tx = self.store.txs_by_id.get(next_tx_id).expect("tx to exist");
+                tx_accumulator.add_tx(next_tx.tx().clone());
+            } else {
+                break;
+            }
         }
         tx_accumulator.txs()
     }
