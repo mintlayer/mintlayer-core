@@ -589,7 +589,6 @@ dependencies = [
  "serialization",
  "static_assertions",
  "subsystem",
- "tap",
  "test-utils",
  "thiserror",
  "tokio",
