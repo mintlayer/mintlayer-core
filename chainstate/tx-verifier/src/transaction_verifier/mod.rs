@@ -116,6 +116,18 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         }
     }
 
+    pub fn derive(&'a self) -> TransactionVerifier<'a, Self> {
+        TransactionVerifier {
+            storage_ref: self,
+            chain_config: self.chain_config,
+            tx_index_cache: TxIndexCache::new(),
+            utxo_cache: self.utxo_cache.derive_cache(),
+            utxo_block_undo: BTreeMap::new(),
+            token_issuance_cache: TokenIssuanceCache::new(),
+            best_block: self.best_block,
+        }
+    }
+
     fn calculate_total_outputs(
         outputs: &[TxOutput],
         include_issuance: Option<&Transaction>,
@@ -583,7 +595,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    pub fn set_best_block_for_utxos(&mut self, id: Id<GenBlock>) {
+    pub fn set_best_block(&mut self, id: Id<GenBlock>) {
         self.utxo_cache.set_best_block(id);
     }
 

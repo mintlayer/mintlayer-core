@@ -74,7 +74,7 @@ fn utxo_set_hierarchy() {
     );
 
     let verifier2 = {
-        let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
+        let mut verifier = verifier1.derive();
         verifier.utxo_cache.add_utxo(&outpoint2, utxo2, false).unwrap();
         verifier.utxo_block_undo.insert(
             block_2_id,
@@ -135,7 +135,7 @@ fn tx_index_set_hierarchy() {
     )]));
 
     let verifier2 = {
-        let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
+        let mut verifier = verifier1.derive();
         verifier.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
             outpoint2,
             CachedInputsOperation::Write(tx_index_2),
@@ -209,7 +209,7 @@ fn tokens_set_hierarchy() {
     );
 
     let verifier2 = {
-        let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
+        let mut verifier = verifier1.derive();
         verifier.token_issuance_cache = TokenIssuanceCache::new_for_test(
             BTreeMap::from([(token_id_2, CachedAuxDataOp::Write(token_data_2.clone()))]),
             BTreeMap::from([(
@@ -276,7 +276,7 @@ fn utxo_del_hierarchy() {
     );
 
     let verifier2 = {
-        let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
+        let mut verifier = verifier1.derive();
         verifier.utxo_cache.spend_utxo(&outpoint2).unwrap();
         verifier.utxo_block_undo.insert(
             block_2_id,
@@ -330,7 +330,7 @@ fn tx_index_del_hierarchy() {
         TxIndexCache::new_for_test(BTreeMap::from([(outpoint1, CachedInputsOperation::Erase)]));
 
     let verifier2 = {
-        let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
+        let mut verifier = verifier1.derive();
         verifier.tx_index_cache =
             TxIndexCache::new_for_test(BTreeMap::from([(outpoint2, CachedInputsOperation::Erase)]));
         verifier
@@ -384,7 +384,7 @@ fn tokens_del_hierarchy() {
     );
 
     let verifier2 = {
-        let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
+        let mut verifier = verifier1.derive();
         verifier.token_issuance_cache = TokenIssuanceCache::new_for_test(
             BTreeMap::from([(token_id_2, CachedAuxDataOp::Erase)]),
             BTreeMap::from([(tx_id_2, CachedTokenIndexOp::Erase)]),
@@ -443,7 +443,7 @@ fn utxo_conflict_hierarchy() {
     );
 
     let verifier2 = {
-        let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
+        let mut verifier = verifier1.derive();
         assert_eq!(
             verifier.utxo_cache.spend_utxo(&outpoint1),
             Err(utxo::Error::NoUtxoFound)
@@ -504,7 +504,7 @@ fn tx_index_conflict_hierarchy() {
     )]));
 
     let verifier2 = {
-        let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
+        let mut verifier = verifier1.derive();
         verifier.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
             outpoint1,
             CachedInputsOperation::Write(tx_index_2),
@@ -572,7 +572,7 @@ fn tokens_conflict_hierarchy() {
     );
 
     let verifier2 = {
-        let mut verifier = TransactionVerifier::new(&verifier1, &chain_config);
+        let mut verifier = verifier1.derive();
         verifier.token_issuance_cache = TokenIssuanceCache::new_for_test(
             BTreeMap::from([(token_id_1, CachedAuxDataOp::Write(token_data_2.clone()))]),
             BTreeMap::from([(

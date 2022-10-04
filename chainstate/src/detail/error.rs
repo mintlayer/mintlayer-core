@@ -52,8 +52,8 @@ pub enum BlockError {
     DatabaseCommitError(Id<Block>, usize, chainstate_storage::Error),
     #[error("Block proof calculation error for block: {0}")]
     BlockProofCalculationError(Id<Block>),
-    #[error("Error while flushing state to storage: {0}")]
-    FlushError(#[from] TransactionVerifierStorageError),
+    #[error("TransactionVerifier error: {0}")]
+    TransactionVerifierError(#[from] TransactionVerifierStorageError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

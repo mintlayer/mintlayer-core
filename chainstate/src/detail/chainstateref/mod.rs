@@ -686,7 +686,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
             .log_err()?;
 
-        tx_verifier.set_best_block_for_utxos(block.get_id().into());
+        tx_verifier.set_best_block(block.get_id().into());
 
         Ok(tx_verifier)
     }
@@ -713,7 +713,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             .disconnect_transactable(BlockTransactableRef::BlockReward(block))
             .log_err()?;
 
-        tx_verifier.set_best_block_for_utxos(prev_block_id);
+        tx_verifier.set_best_block(prev_block_id);
 
         Ok(tx_verifier)
     }
