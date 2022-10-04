@@ -100,6 +100,12 @@ fn get_relay_fee(tx: &SignedTransaction) -> Amount {
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
 }
 
+pub trait TransactionAccumulator {
+    fn add_tx(&self, tx: SignedTransaction);
+    fn done(&self) -> bool;
+    fn txs(&self) -> Vec<SignedTransaction>;
+}
+
 #[async_trait::async_trait]
 pub trait MempoolInterface: Send {
     async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error>;
@@ -113,6 +119,11 @@ pub trait MempoolInterface: Send {
     // count with descendants) of the transaction's ancestors. In addition, outpoints spent by this
     // transaction are no longer marked as spent
     fn drop_transaction(&mut self, tx: &Id<Transaction>);
+
+    fn collect_txs(
+        &self,
+        tx_accumulator: Box<dyn TransactionAccumulator>,
+    ) -> Vec<SignedTransaction>;
 
     // Add/remove transactions to/from the mempool according to a new tip
     #[cfg(test)]
@@ -788,6 +799,27 @@ where
             .flatten()
             .map(|id| self.store.get_entry(id).expect("entry").tx())
             .collect()
+    }
+
+    fn collect_txs(
+        &self,
+        tx_accumulator: Box<dyn TransactionAccumulator>,
+    ) -> Vec<SignedTransaction> {
+        while !self.store.is_empty() && !tx_accumulator.done() {
+            let next_tx_id = self
+                .store
+                .txs_by_descendant_score
+                .values()
+                .next()
+                .expect("store not empty")
+                .iter()
+                .cloned()
+                .next()
+                .expect("store not empty");
+            let next_tx = self.store.txs_by_id.get(&next_tx_id).expect("tx to exist");
+            tx_accumulator.add_tx(next_tx.tx().clone());
+        }
+        tx_accumulator.txs()
     }
 
     fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
