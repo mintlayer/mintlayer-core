@@ -175,7 +175,7 @@ pub fn verify_password(
                 hashed_password.len().try_into().map_err(|_| KdfError::InvalidHashSize)?,
                 password,
             )?;
-            Ok(equality_checker.is_equal(&new_hashed_password, &hashed_password))
+            Ok(equality_checker.are_equal(&new_hashed_password, &hashed_password))
         }
     }
 }

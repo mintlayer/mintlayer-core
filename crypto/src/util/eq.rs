@@ -35,7 +35,7 @@ impl SliceEqualityCheckMethod {
         accumulated == 0
     }
 
-    pub fn is_equal<T: Eq + BitXor + Copy>(&self, a: &[T], b: &[T]) -> bool
+    pub fn are_equal<T: Eq + BitXor + Copy>(&self, a: &[T], b: &[T]) -> bool
     where
         <T as BitXor>::Output: Into<usize>,
     {
@@ -64,8 +64,8 @@ pub mod test {
         let empty_slice2 = b"";
         assert_eq!(empty_slice1.len(), 0);
         assert_eq!(empty_slice2.len(), 0);
-        assert!(normal.is_equal(empty_slice1, empty_slice2));
-        assert!(timing_resistant.is_equal(empty_slice1, empty_slice2));
+        assert!(normal.are_equal(empty_slice1, empty_slice2));
+        assert!(timing_resistant.are_equal(empty_slice1, empty_slice2));
     }
 
     #[rstest]
@@ -87,11 +87,11 @@ pub mod test {
         assert_eq!(data2.len(), data1_len);
         assert_eq!(data3.len(), data3_len);
 
-        assert!(normal.is_equal(&data1, &data2));
-        assert!(timing_resistant.is_equal(&data1, &data2));
+        assert!(normal.are_equal(&data1, &data2));
+        assert!(timing_resistant.are_equal(&data1, &data2));
 
-        assert!(!normal.is_equal(&data1, &data3));
-        assert!(!timing_resistant.is_equal(&data1, &data3));
+        assert!(!normal.are_equal(&data1, &data3));
+        assert!(!timing_resistant.are_equal(&data1, &data3));
     }
 
     #[rstest]
@@ -112,11 +112,11 @@ pub mod test {
         assert_eq!(data2.len(), data_len);
         assert_eq!(data3.len(), data_len);
 
-        assert!(normal.is_equal(&data1, &data2));
-        assert!(timing_resistant.is_equal(&data1, &data2));
+        assert!(normal.are_equal(&data1, &data2));
+        assert!(timing_resistant.are_equal(&data1, &data2));
 
-        assert!(!normal.is_equal(&data1, &data3));
-        assert!(!timing_resistant.is_equal(&data1, &data3));
+        assert!(!normal.are_equal(&data1, &data3));
+        assert!(!timing_resistant.are_equal(&data1, &data3));
     }
 
     #[rstest]
@@ -134,9 +134,9 @@ pub mod test {
         let data: Vec<u8> = (0..data_len).map(|_| rng.gen::<u8>()).collect();
         assert_eq!(data.len(), data_len);
 
-        assert!(!normal.is_equal(empty_slice, &data));
-        assert!(!normal.is_equal(&data, empty_slice));
-        assert!(!timing_resistant.is_equal(empty_slice, &data));
-        assert!(!timing_resistant.is_equal(&data, empty_slice));
+        assert!(!normal.are_equal(empty_slice, &data));
+        assert!(!normal.are_equal(&data, empty_slice));
+        assert!(!timing_resistant.are_equal(empty_slice, &data));
+        assert!(!timing_resistant.are_equal(&data, empty_slice));
     }
 }
