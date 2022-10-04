@@ -25,8 +25,8 @@ impl SliceEqualityCheckMethod {
     where
         <T as BitXor>::Output: Into<usize>,
     {
-        if a.is_empty() {
-            return b.is_empty();
+        if b.is_empty() {
+            return a.is_empty();
         }
         let accumulated = (0..a.len()).into_iter().fold(a.len() ^ b.len(), |accumulated, idx| {
             let step: usize = (a[idx] ^ b[idx % b.len()]).into();
@@ -117,5 +117,26 @@ pub mod test {
 
         assert!(!normal.is_equal(&data1, &data3));
         assert!(!timing_resistant.is_equal(&data1, &data3));
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn one_empty_other_not(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let normal = SliceEqualityCheckMethod::Normal;
+        let timing_resistant = SliceEqualityCheckMethod::TimingResistant;
+
+        let empty_slice = b"";
+        let data_len = rng.gen_range(1..256);
+
+        let data: Vec<u8> = (0..data_len).map(|_| rng.gen::<u8>()).collect();
+        assert_eq!(data.len(), data_len);
+
+        assert!(!normal.is_equal(empty_slice, &data));
+        assert!(!normal.is_equal(&data, empty_slice));
+        assert!(!timing_resistant.is_equal(empty_slice, &data));
+        assert!(!timing_resistant.is_equal(&data, empty_slice));
     }
 }
