@@ -92,7 +92,7 @@ fn hierarchy_test_utxo() {
     };
 
     let verifier2 = {
-        let mut verifier = verifier1.derive();
+        let mut verifier = verifier1.derive_child();
         verifier.utxo_cache.add_utxo(&outpoint2, utxo2.clone(), false).unwrap();
         verifier.utxo_block_undo.insert(
             block_undo_id_2,
@@ -196,7 +196,7 @@ fn hierarchy_test_tx_index() {
     };
 
     let verifier2 = {
-        let mut verifier = verifier1.derive();
+        let mut verifier = verifier1.derive_child();
         verifier.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
             outpoint2.clone(),
             CachedInputsOperation::Read(tx_index_2.clone()),
@@ -294,7 +294,7 @@ fn hierarchy_test_tokens() {
     };
 
     let verifier2 = {
-        let mut verifier = verifier1.derive();
+        let mut verifier = verifier1.derive_child();
         verifier.token_issuance_cache = TokenIssuanceCache::new_for_test(
             BTreeMap::from([(token_id_2, CachedAuxDataOp::Read(token_data_2.clone()))]),
             BTreeMap::from([(
@@ -386,7 +386,7 @@ fn hierarchy_test_ancestor() {
     let verifier1 = TransactionVerifier::new(&store, &chain_config);
     verifier1.get_ancestor(&block_index, BlockHeight::one()).unwrap();
 
-    let verifier2 = verifier1.derive();
+    let verifier2 = verifier1.derive_child();
     verifier2.get_ancestor(&block_index, BlockHeight::one()).unwrap();
 }
 
@@ -409,6 +409,6 @@ fn hierarchy_test_block_index() {
     let verifier1 = TransactionVerifier::new(&store, &chain_config);
     verifier1.get_gen_block_index(&block_id.into()).unwrap();
 
-    let verifier2 = verifier1.derive();
+    let verifier2 = verifier1.derive_child();
     verifier2.get_gen_block_index(&block_id.into()).unwrap();
 }

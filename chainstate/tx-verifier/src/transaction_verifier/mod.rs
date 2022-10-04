@@ -116,7 +116,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         }
     }
 
-    pub fn derive(&'a self) -> TransactionVerifier<'a, Self> {
+    pub fn derive_child(&'a self) -> TransactionVerifier<'a, Self> {
         TransactionVerifier {
             storage_ref: self,
             chain_config: self.chain_config,

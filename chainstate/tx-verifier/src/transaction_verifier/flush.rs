@@ -39,7 +39,7 @@ fn flush_tokens(
     storage: &mut impl TransactionVerifierStorageMut,
     token_cache: &ConsumedTokenIssuanceCache,
 ) -> Result<(), TransactionVerifierStorageError> {
-    assert_eq!(token_cache.data.len(), token_cache.txid_vs_tokenid.len());
+    debug_assert_eq!(token_cache.data.len(), token_cache.txid_vs_tokenid.len());
 
     token_cache.data.iter().try_for_each(
         |(token_id, aux_data_op)| -> Result<(), TransactionVerifierStorageError> {

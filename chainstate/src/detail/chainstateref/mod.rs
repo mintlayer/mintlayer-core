@@ -36,7 +36,7 @@ use common::{
 use consensus::TransactionIndexHandle;
 use logging::log;
 use utils::{ensure, tap_error_log::LogError};
-use utxo::{UtxosDB, UtxosStorageRead, UtxosStorageWrite, UtxosView};
+use utxo::{UtxosDB, UtxosView};
 
 use crate::{BlockError, BlockSource, ChainstateConfig};
 
