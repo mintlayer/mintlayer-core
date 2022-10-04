@@ -20,7 +20,7 @@ use argon2::Argon2;
 use super::KdfError;
 use serialization::{Decode, Encode};
 
-#[derive(Clone, Debug, Encode, Decode)]
+#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 pub struct Argon2Config {
     #[codec(compact)]
     pub m_cost_memory_size: u32,

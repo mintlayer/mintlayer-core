@@ -35,8 +35,10 @@ pub enum KdfError {
     InvalidHashSize,
 }
 
-#[derive(Clone, Debug)]
-pub enum KdfKind {
+/// The object that contains the hashing configuration of every
+/// supported algorithm
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum KdfConfig {
     Argon2id {
         config: Argon2Config,
         hash_length: NonZeroUsize,
@@ -44,7 +46,11 @@ pub enum KdfKind {
     },
 }
 
-#[derive(Clone, Debug, Encode, Decode)]
+/// The result of hashing a password.
+/// Note that the result stores the hashed password as it's appropriate
+/// for client/server authentciation. To use this for encryption,
+/// call the function into_challenge() to remove the hased password.
+#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 pub enum KdfResult {
     #[codec(index = 0)]
     Argon2id {
@@ -54,19 +60,87 @@ pub enum KdfResult {
     },
 }
 
+impl KdfResult {
+    /// Removes the hashed password from a hashing operation.
+    /// This is appropriarte for storage as header for encrypted
+    /// data (such as wallets, where the hashed password is the
+    /// symmetric encryption key)
+    pub fn into_challenge(self) -> KdfChallenge {
+        match self {
+            KdfResult::Argon2id {
+                config,
+                salt,
+                hashed_password,
+            } => KdfChallenge::Argon2id {
+                config,
+                salt,
+                password_hash_len: hashed_password.len() as u32,
+            },
+        }
+    }
+}
+
+/// The object to be stored to be able to recalculate the encryption key.
+/// This is appropriate for storage in wallets as header.
+#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
+pub enum KdfChallenge {
+    #[codec(index = 0)]
+    Argon2id {
+        config: Argon2Config,
+        salt: Vec<u8>,
+        #[codec(compact)]
+        password_hash_len: u32,
+    },
+}
+
 fn make_salt<R: Rng + CryptoRng>(rng: &mut R, len: NonZeroUsize) -> Result<Vec<u8>, KdfError> {
     let len = len.try_into().map_err(|_| KdfError::InvalidSaltSize)?;
     let salt: Vec<u8> = (0..len).map(|_| rng.gen::<u8>()).collect();
     Ok(salt)
 }
 
-pub fn hash_password<R: Rng + CryptoRng>(
-    rng: &mut R,
-    kdf: KdfKind,
+/// Recalculate a previously hashed password to recover an encryption key
+/// for a decryption operation.
+/// The idea is that the KdfChallenge can be deserialized from some header,
+/// and then directly used with a password to re-derive the encryption key.
+pub fn hash_from_challenge(
+    challenge: KdfChallenge,
     password: &[u8],
 ) -> Result<KdfResult, KdfError> {
-    match kdf {
-        KdfKind::Argon2id {
+    match challenge {
+        KdfChallenge::Argon2id {
+            config,
+            salt,
+            password_hash_len,
+        } => {
+            let hashed_password = argon2::argon2id_hash(
+                &config,
+                &salt,
+                (password_hash_len as usize).try_into().map_err(|_| KdfError::InvalidHashSize)?,
+                password,
+            )?;
+            let result = KdfResult::Argon2id {
+                config,
+                salt,
+                hashed_password,
+            };
+            Ok(result)
+        }
+    }
+}
+
+/// Hash a password using any provided kdf-configuration
+/// The result from this function is appropriate only for
+/// client/server applications. To use this for encryption,
+/// convert the result into a challenge using into_challenge(),
+/// which removes the hashed password.
+pub fn hash_password<R: Rng + CryptoRng>(
+    rng: &mut R,
+    kdf_config: KdfConfig,
+    password: &[u8],
+) -> Result<KdfResult, KdfError> {
+    match kdf_config {
+        KdfConfig::Argon2id {
             config,
             hash_length,
             salt_length,
@@ -83,6 +157,7 @@ pub fn hash_password<R: Rng + CryptoRng>(
     }
 }
 
+/// Verify a password in a client/server setup by comparing its hash to the stored value
 pub fn verify_password(
     password: &[u8],
     previously_password_hash: KdfResult,
@@ -129,7 +204,7 @@ pub mod test {
     #[case(Seed::from_entropy())]
     fn password_hash_generation_argon2id(#[case] seed: Seed) {
         let password = b"SomeIncrediblyStrong___youGuessedIt___password!";
-        let kdf_kind = KdfKind::Argon2id {
+        let kdf_kind = KdfConfig::Argon2id {
             config: Argon2Config {
                 m_cost_memory_size: 200,
                 t_cost_iterations: 10,
@@ -167,5 +242,42 @@ pub mod test {
             SliceEqualityCheckMethod::TimingResistant
         )
         .unwrap());
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn passowrd_removal(#[case] seed: Seed) {
+        let password = b"SomeIncrediblyStrong___youGuessedIt___password!";
+        let kdf_kind = KdfConfig::Argon2id {
+            config: Argon2Config {
+                m_cost_memory_size: 200,
+                t_cost_iterations: 10,
+                p_cost_parallelism: 2,
+            },
+            hash_length: 32.try_into().unwrap(),
+            salt_length: 16.try_into().unwrap(),
+        };
+
+        let mut rng = make_seedable_rng(seed);
+        let password_hash = hash_password(&mut rng, kdf_kind, password).unwrap();
+        assert!(verify_password(
+            password,
+            password_hash.clone(),
+            SliceEqualityCheckMethod::Normal
+        )
+        .unwrap());
+        assert!(verify_password(
+            password,
+            password_hash.clone(),
+            SliceEqualityCheckMethod::TimingResistant
+        )
+        .unwrap());
+
+        let challenge = password_hash.into_challenge();
+
+        let challenge_recreated = hash_from_challenge(challenge.clone(), password).unwrap();
+
+        assert_eq!(challenge_recreated.into_challenge(), challenge);
     }
 }
