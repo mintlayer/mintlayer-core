@@ -34,6 +34,7 @@ use common::{
 use consensus::{BlockIndexHandle, TransactionIndexHandle};
 use logging::log;
 use utils::ensure;
+use utils::tap_error_log::LogError;
 use utxo::{UtxosDB, UtxosView};
 
 use super::median_time::calculate_median_time_past;
@@ -213,11 +214,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         &self,
         block_id: &Id<GenBlock>,
     ) -> Result<bool, PropertyQueryError> {
-        let ht = match self.get_block_height_in_main_chain(block_id)? {
+        let ht = match self.get_block_height_in_main_chain(block_id).log_err()? {
             None => return Ok(false),
             Some(ht) => ht,
         };
-        let bid = self.get_block_id_by_height(&ht)?;
+        let bid = self.get_block_id_by_height(&ht).log_err()?;
         Ok(bid == Some(*block_id))
     }
 
@@ -227,7 +228,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         block_index: &BlockIndex,
     ) -> Result<GenBlockIndex, PropertyQueryError> {
         let prev_block_id = block_index.prev_block_id();
-        self.get_gen_block_index(prev_block_id)?
+        self.get_gen_block_index(prev_block_id)
+            .log_err()?
             .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))
     }
 
@@ -255,12 +257,14 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         let mut second_block_index = second_block_index.clone();
         match first_block_index.block_height().cmp(&second_block_index.block_height()) {
             std::cmp::Ordering::Greater => {
-                first_block_index =
-                    self.get_ancestor(&first_block_index, second_block_index.block_height())?;
+                first_block_index = self
+                    .get_ancestor(&first_block_index, second_block_index.block_height())
+                    .log_err()?;
             }
             std::cmp::Ordering::Less => {
-                second_block_index =
-                    self.get_ancestor(&second_block_index, first_block_index.block_height())?;
+                second_block_index = self
+                    .get_ancestor(&second_block_index, first_block_index.block_height())
+                    .log_err()?;
             }
             std::cmp::Ordering::Equal => {}
         }
@@ -271,8 +275,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     break Ok(first_block_index)
                 }
                 (GenBlockIndex::Block(first_blkidx), GenBlockIndex::Block(second_blkidx)) => {
-                    first_block_index = self.get_previous_block_index(first_blkidx)?;
-                    second_block_index = self.get_previous_block_index(second_blkidx)?;
+                    first_block_index = self.get_previous_block_index(first_blkidx).log_err()?;
+                    second_block_index = self.get_previous_block_index(second_blkidx).log_err()?;
                 }
                 _ => panic!("Chain iteration not in lockstep"),
             }
@@ -280,7 +284,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
-        self.get_gen_block_index(&self.get_best_block_id()?)
+        self.get_gen_block_index(&self.get_best_block_id().log_err()?)
     }
 
     pub fn get_token_aux_data(
@@ -302,20 +306,26 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         height: &BlockHeight,
     ) -> Result<Option<BlockHeader>, PropertyQueryError> {
         let id = self
-            .get_block_id_by_height(height)?
-            .ok_or(PropertyQueryError::BlockForHeightNotFound(*height))?;
+            .get_block_id_by_height(height)
+            .log_err()?
+            .ok_or(PropertyQueryError::BlockForHeightNotFound(*height))
+            .log_err()?;
         let id = id
             .classify(self.chain_config)
             .chain_block_id()
-            .ok_or(PropertyQueryError::GenesisHeaderRequested)?;
-        Ok(self.get_block_index(&id)?.map(|block_index| block_index.into_block_header()))
+            .ok_or(PropertyQueryError::GenesisHeaderRequested)
+            .log_err()?;
+        Ok(self
+            .get_block_index(&id)
+            .log_err()?
+            .map(|block_index| block_index.into_block_header()))
     }
 
     pub fn get_block_reward(
         &self,
         block_index: &BlockIndex,
     ) -> Result<Option<BlockReward>, PropertyQueryError> {
-        Ok(self.db_tx.get_block_reward(block_index)?)
+        Ok(self.db_tx.get_block_reward(block_index).log_err()?)
     }
 
     pub fn get_block_height_in_main_chain(
@@ -326,8 +336,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             GenBlockId::Block(id) => id,
             GenBlockId::Genesis(_) => return Ok(Some(BlockHeight::zero())),
         };
-        let block_index = self.get_block_index(&id)?;
-        let block_index = block_index.ok_or(PropertyQueryError::BlockNotFound(id))?;
+        let block_index = self.get_block_index(&id).log_err()?;
+        let block_index = block_index.ok_or(PropertyQueryError::BlockNotFound(id)).log_err()?;
         if block_index.block_id() == &id {
             Ok(Some(block_index.block_height()))
         } else {
@@ -345,9 +355,9 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         // TODO: looping like this isn't efficient. We should use some new common ancestor
         //       function that uses the some_ancestor member to quickly roll back in history
         //       to find the closest ancestor that's in the mainchain
-        while !self.is_block_in_main_chain(&(*block_index.block_id()).into())? {
+        while !self.is_block_in_main_chain(&(*block_index.block_id()).into()).log_err()? {
             result.push(block_index.clone());
-            block_index = match self.get_previous_block_index(&block_index)? {
+            block_index = match self.get_previous_block_index(&block_index).log_err()? {
                 GenBlockIndex::Genesis(_) => break,
                 GenBlockIndex::Block(blkidx) => blkidx,
             }
@@ -359,7 +369,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     fn check_block_index(&self, block_index: &BlockIndex) -> Result<(), BlockError> {
         // BlockIndex is already known or block exists
-        if self.db_tx.get_block_index(block_index.block_id())?.is_some() {
+        if self.db_tx.get_block_index(block_index.block_id()).log_err()?.is_some() {
             return Err(BlockError::BlockAlreadyExists(*block_index.block_id()));
         }
         // TODO: Will be expanded
@@ -367,10 +377,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     pub fn check_block_header(&self, header: &BlockHeader) -> Result<(), CheckBlockError> {
-        self.check_header_size(header)?;
+        self.check_header_size(header).log_err()?;
 
         consensus::validate_consensus(self.chain_config, header, self)
-            .map_err(CheckBlockError::ConsensusVerificationFailed)?;
+            .map_err(CheckBlockError::ConsensusVerificationFailed)
+            .log_err()?;
 
         let prev_block_id = header.prev_block_id();
         let median_time_past = calculate_median_time_past(self, prev_block_id);
@@ -410,12 +421,15 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                         ))
                     }
                     common::chain::timelock::OutputTimeLock::ForBlockCount(c) => {
-                        let cs: i64 = (*c).try_into().map_err(|_| {
-                            CheckBlockError::InvalidBlockRewardMaturityDistanceValue(
-                                block.get_id(),
-                                *c,
-                            )
-                        })?;
+                        let cs: i64 = (*c)
+                            .try_into()
+                            .map_err(|_| {
+                                CheckBlockError::InvalidBlockRewardMaturityDistanceValue(
+                                    block.get_id(),
+                                    *c,
+                                )
+                            })
+                            .log_err()?;
                         let given = BlockDistance::new(cs);
                         if given < required {
                             return Err(CheckBlockError::InvalidBlockRewardMaturityDistance(
@@ -551,58 +565,63 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                         block.get_id(),
                     )
                 })
-                .map_err(CheckBlockTransactionsError::TokensError)?;
+                .map_err(CheckBlockTransactionsError::TokensError)
+                .log_err()?;
         }
         Ok(())
     }
 
     fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         // Note: duplicate txs are detected through duplicate inputs
-        self.check_witness_count(block)?;
-        self.check_duplicate_inputs(block)?;
-        self.check_tokens_txs(block)?;
+        self.check_witness_count(block).log_err()?;
+        self.check_duplicate_inputs(block).log_err()?;
+        self.check_tokens_txs(block).log_err()?;
         Ok(())
     }
 
     fn get_block_from_index(&self, block_index: &BlockIndex) -> Result<Option<Block>, BlockError> {
-        Ok(self.db_tx.get_block(*block_index.block_id())?)
+        Ok(self.db_tx.get_block(*block_index.block_id()).log_err()?)
     }
 
     pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
-        self.check_block_header(block.header())?;
+        self.check_block_header(block.header()).log_err()?;
 
-        self.check_block_size(block).map_err(CheckBlockError::BlockSizeError)?;
+        self.check_block_size(block)
+            .map_err(CheckBlockError::BlockSizeError)
+            .log_err()?;
 
-        self.check_block_reward_maturity_settings(block)?;
+        self.check_block_reward_maturity_settings(block).log_err()?;
 
         // MerkleTree root
         let merkle_tree_root = block.merkle_root();
-        calculate_tx_merkle_root(block.body()).map_or(
-            Err(CheckBlockError::MerkleRootMismatch),
-            |merkle_tree| {
+        calculate_tx_merkle_root(block.body())
+            .map_or(Err(CheckBlockError::MerkleRootMismatch), |merkle_tree| {
                 ensure!(
                     merkle_tree_root == merkle_tree,
                     CheckBlockError::MerkleRootMismatch
                 );
                 Ok(())
-            },
-        )?;
+            })
+            .log_err()?;
 
         // Witness merkle root
         let witness_merkle_root = block.witness_merkle_root();
-        calculate_witness_merkle_root(block.body()).map_or(
-            Err(CheckBlockError::WitnessMerkleRootMismatch),
-            |witness_merkle| {
-                ensure!(
-                    witness_merkle_root == witness_merkle,
-                    CheckBlockError::WitnessMerkleRootMismatch,
-                );
-                Ok(())
-            },
-        )?;
+        calculate_witness_merkle_root(block.body())
+            .map_or(
+                Err(CheckBlockError::WitnessMerkleRootMismatch),
+                |witness_merkle| {
+                    ensure!(
+                        witness_merkle_root == witness_merkle,
+                        CheckBlockError::WitnessMerkleRootMismatch,
+                    );
+                    Ok(())
+                },
+            )
+            .log_err()?;
 
         self.check_transactions(block)
-            .map_err(CheckBlockError::CheckTransactionFailed)?;
+            .map_err(CheckBlockError::CheckTransactionFailed)
+            .log_err()?;
 
         Ok(())
     }
@@ -626,31 +645,39 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
         let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
 
-        let reward_fees = tx_verifier.connect_transactable(
-            block_index,
-            BlockTransactableRef::BlockReward(block),
-            spend_height,
-            &median_time_past,
-        )?;
+        let reward_fees = tx_verifier
+            .connect_transactable(
+                block_index,
+                BlockTransactableRef::BlockReward(block),
+                spend_height,
+                &median_time_past,
+            )
+            .log_err()?;
         debug_assert!(reward_fees.is_none());
 
-        let total_fees = block.transactions().iter().enumerate().try_fold(
-            Amount::from_atoms(0),
-            |total, (tx_num, _)| {
-                let fee = tx_verifier.connect_transactable(
-                    block_index,
-                    BlockTransactableRef::Transaction(block, tx_num),
-                    spend_height,
-                    &median_time_past,
-                )?;
+        let total_fees = block
+            .transactions()
+            .iter()
+            .enumerate()
+            .try_fold(Amount::from_atoms(0), |total, (tx_num, _)| {
+                let fee = tx_verifier
+                    .connect_transactable(
+                        block_index,
+                        BlockTransactableRef::Transaction(block, tx_num),
+                        spend_height,
+                        &median_time_past,
+                    )
+                    .log_err()?;
                 (total + fee.expect("connect tx should return fees").0).ok_or_else(|| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
                 })
-            },
-        )?;
+            })
+            .log_err()?;
 
         let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
-        tx_verifier.check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))?;
+        tx_verifier
+            .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
+            .log_err()?;
 
         Ok(tx_verifier)
     }
@@ -662,10 +689,19 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
 
         // TODO: add a test that checks the order in which txs are disconnected
-        block.transactions().iter().enumerate().rev().try_for_each(|(tx_num, _)| {
-            tx_verifier.disconnect_transactable(BlockTransactableRef::Transaction(block, tx_num))
-        })?;
-        tx_verifier.disconnect_transactable(BlockTransactableRef::BlockReward(block))?;
+        block
+            .transactions()
+            .iter()
+            .enumerate()
+            .rev()
+            .try_for_each(|(tx_num, _)| {
+                tx_verifier
+                    .disconnect_transactable(BlockTransactableRef::Transaction(block, tx_num))
+            })
+            .log_err()?;
+        tx_verifier
+            .disconnect_transactable(BlockTransactableRef::BlockReward(block))
+            .log_err()?;
 
         Ok(tx_verifier)
     }
@@ -674,7 +710,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         let id_from_height = |block_height: u64| -> Result<Id<Block>, PropertyQueryError> {
             let block_height: BlockHeight = block_height.into();
             let block_id = self
-                .get_block_id_by_height(&block_height)?
+                .get_block_id_by_height(&block_height)
+                .log_err()?
                 .expect("Since block_height is >= best_height, this must exist");
             let block_id = block_id
                 .classify(self.chain_config)
@@ -684,18 +721,18 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         };
 
         let best_block_index =
-            self.get_best_block_index()?.expect("Failed to get best block index");
+            self.get_best_block_index().log_err()?.expect("Failed to get best block index");
         let best_height = best_block_index.block_height();
         let best_height_int: u64 = best_height.into();
         let mut result = Vec::with_capacity(best_height_int as usize);
         for block_height in 1..=best_height_int {
-            result.push(id_from_height(block_height)?);
+            result.push(id_from_height(block_height).log_err()?);
         }
         Ok(result)
     }
 
     pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
-        let block_tree_map = self.db_tx.get_block_tree_by_height()?;
+        let block_tree_map = self.db_tx.get_block_tree_by_height().log_err()?;
         let result = block_tree_map
             .into_iter()
             .flat_map(|(_height, ids_per_height)| ids_per_height)
@@ -714,11 +751,12 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
 
         let block_index_found = self
             .get_gen_block_index(&prev_block_id)
-            .map_err(OrphanCheckError::PrevBlockIndexNotFound)?
+            .map_err(OrphanCheckError::PrevBlockIndexNotFound)
+            .log_err()?
             .is_some();
 
         if block_source == BlockSource::Local && !block_index_found {
-            self.new_orphan_block(block)?;
+            self.new_orphan_block(block).log_err()?;
             return Err(OrphanCheckError::LocalOrphan);
         }
         Ok(block)
@@ -735,7 +773,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
                 GenBlockIndex::Genesis(_) => panic!("Attempt to disconnect genesis"),
                 GenBlockIndex::Block(block_index) => block_index,
             };
-            to_disconnect = self.disconnect_tip(Some(to_disconnect_block.block_id()))?;
+            to_disconnect = self.disconnect_tip(Some(to_disconnect_block.block_id())).log_err()?;
         }
         Ok(())
     }
@@ -745,13 +783,16 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         best_block_id: &Id<GenBlock>,
         new_block_index: &BlockIndex,
     ) -> Result<(), BlockError> {
-        let new_chain = self.get_new_chain(new_block_index).map_err(|e| {
-            BlockError::InvariantErrorFailedToFindNewChainPath(
-                *new_block_index.block_id(),
-                *best_block_id,
-                e,
-            )
-        })?;
+        let new_chain = self
+            .get_new_chain(new_block_index)
+            .map_err(|e| {
+                BlockError::InvariantErrorFailedToFindNewChainPath(
+                    *new_block_index.block_id(),
+                    *best_block_id,
+                    e,
+                )
+            })
+            .log_err()?;
 
         let common_ancestor_id = {
             let err = "This vector cannot be empty since there is at least one block to connect";
@@ -763,16 +804,17 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         if let GenBlockId::Block(best_block_id) = best_block_id.classify(self.chain_config) {
             let mainchain_tip = self
                 .get_block_index(&best_block_id)
-                .map_err(BlockError::BestBlockLoadError)?
+                .map_err(BlockError::BestBlockLoadError)
+                .log_err()?
                 .expect("Can't get block index. Inconsistent DB");
 
             // Disconnect blocks
-            self.disconnect_until(&mainchain_tip, common_ancestor_id)?;
+            self.disconnect_until(&mainchain_tip, common_ancestor_id).log_err()?;
         }
 
         // Connect the new chain
         for block_index in new_chain {
-            self.connect_tip(&block_index)?;
+            self.connect_tip(&block_index).log_err()?;
         }
 
         Ok(())
@@ -784,43 +826,53 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         block: &WithId<Block>,
         spend_height: &BlockHeight,
     ) -> Result<(), BlockError> {
-        let connected_txs =
-            self.make_cache_with_connected_transactions(block_index, block, spend_height)?;
+        let connected_txs = self
+            .make_cache_with_connected_transactions(block_index, block, spend_height)
+            .log_err()?;
 
-        let consumed = connected_txs.consume()?;
-        TransactionVerifier::flush_to_storage(&mut self.db_tx, consumed)?;
+        let consumed = connected_txs.consume().log_err()?;
+        TransactionVerifier::flush_to_storage(&mut self.db_tx, consumed).log_err()?;
 
         Ok(())
     }
 
     fn disconnect_transactions(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
-        let cached_inputs = self.make_cache_with_disconnected_transactions(block)?;
-        let cached_inputs = cached_inputs.consume()?;
-        TransactionVerifier::flush_to_storage(&mut self.db_tx, cached_inputs)?;
+        let cached_inputs = self.make_cache_with_disconnected_transactions(block).log_err()?;
+        let cached_inputs = cached_inputs.consume().log_err()?;
+        TransactionVerifier::flush_to_storage(&mut self.db_tx, cached_inputs).log_err()?;
 
         Ok(())
     }
 
     // Connect new block
     fn connect_tip(&mut self, new_tip_block_index: &BlockIndex) -> Result<(), BlockError> {
-        let best_block_id = self.get_best_block_id().map_err(BlockError::BestBlockLoadError)?;
+        let best_block_id =
+            self.get_best_block_id().map_err(BlockError::BestBlockLoadError).log_err()?;
         utils::ensure!(
             &best_block_id == new_tip_block_index.prev_block_id(),
             BlockError::InvariantErrorInvalidTip,
         );
-        let block = self.get_block_from_index(new_tip_block_index)?.expect("Inconsistent DB");
+        let block = self
+            .get_block_from_index(new_tip_block_index)
+            .log_err()?
+            .expect("Inconsistent DB");
 
         self.connect_transactions(
             new_tip_block_index,
             &block.into(),
             &new_tip_block_index.block_height(),
-        )?;
+        )
+        .log_err()?;
 
-        self.db_tx.set_block_id_at_height(
-            &new_tip_block_index.block_height(),
-            &(*new_tip_block_index.block_id()).into(),
-        )?;
-        self.db_tx.set_best_block_id(&(*new_tip_block_index.block_id()).into())?;
+        self.db_tx
+            .set_block_id_at_height(
+                &new_tip_block_index.block_height(),
+                &(*new_tip_block_index.block_id()).into(),
+            )
+            .log_err()?;
+        self.db_tx
+            .set_best_block_id(&(*new_tip_block_index.block_id()).into())
+            .log_err()?;
         Ok(())
     }
 
@@ -847,12 +899,12 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             .get_block_index(&best_block_id)
             .expect("Database error on retrieving current best block index")
             .expect("Best block index not present in the database");
-        let block = self.get_block_from_index(&block_index)?.expect("Inconsistent DB");
+        let block = self.get_block_from_index(&block_index).log_err()?.expect("Inconsistent DB");
         // Disconnect transactions
-        self.disconnect_transactions(&block.into())?;
-        self.db_tx.set_best_block_id(block_index.prev_block_id())?;
+        self.disconnect_transactions(&block.into()).log_err()?;
+        self.db_tx.set_best_block_id(block_index.prev_block_id()).log_err()?;
         // Disconnect block
-        self.db_tx.del_block_id_at_height(&block_index.block_height())?;
+        self.db_tx.del_block_id_at_height(&block_index.block_height()).log_err()?;
 
         let prev_block_index = self
             .get_previous_block_index(&block_index)
@@ -868,11 +920,12 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         // Chain trust is higher than the best block
         let current_best_block_index = self
             .get_gen_block_index(&best_block_id)
-            .map_err(BlockError::BestBlockLoadError)?
+            .map_err(BlockError::BestBlockLoadError)
+            .log_err()?
             .expect("Inconsistent DB");
 
         if new_block_index.chain_trust() > current_best_block_index.chain_trust() {
-            self.reorganize(&best_block_id, &new_block_index)?;
+            self.reorganize(&best_block_id, &new_block_index).log_err()?;
             return Ok(Some(new_block_index));
         }
 
@@ -880,14 +933,21 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
     }
 
     fn add_to_block_index(&mut self, block: &WithId<Block>) -> Result<BlockIndex, BlockError> {
-        if let Some(bi) = self.db_tx.get_block_index(&block.get_id()).map_err(BlockError::from)? {
+        if let Some(bi) = self
+            .db_tx
+            .get_block_index(&block.get_id())
+            .map_err(BlockError::from)
+            .log_err()?
+        {
             return Ok(bi);
         }
 
         let prev_block_index = self
             .get_gen_block_index(&block.prev_block_id())
-            .map_err(BlockError::BestBlockLoadError)?
-            .ok_or(BlockError::PrevBlockNotFound)?;
+            .map_err(BlockError::BestBlockLoadError)
+            .log_err()?
+            .ok_or(BlockError::PrevBlockNotFound)
+            .log_err()?;
 
         // Set the block height
         let height = prev_block_index.block_height().next_height();
@@ -902,20 +962,21 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         let time_max = std::cmp::max(prev_block_index.chain_timestamps_max(), block.timestamp());
 
         // Set Chain Trust
-        let chain_trust = *prev_block_index.chain_trust() + self.get_block_proof(block)?;
+        let chain_trust =
+            *prev_block_index.chain_trust() + self.get_block_proof(block).log_err()?;
         let block_index = BlockIndex::new(block, chain_trust, some_ancestor, height, time_max);
         Ok(block_index)
     }
 
     pub fn accept_block(&mut self, block: &WithId<Block>) -> Result<BlockIndex, BlockError> {
-        let block_index = self.add_to_block_index(block)?;
-        if (self.db_tx.get_block(block.get_id()).map_err(BlockError::from)?).is_some() {
+        let block_index = self.add_to_block_index(block).log_err()?;
+        if (self.db_tx.get_block(block.get_id()).map_err(BlockError::from).log_err()?).is_some() {
             return Err(BlockError::BlockAlreadyExists(block.get_id()));
         }
 
-        self.check_block_index(&block_index)?;
-        self.db_tx.set_block_index(&block_index).map_err(BlockError::from)?;
-        self.db_tx.add_block(block).map_err(BlockError::from)?;
+        self.check_block_index(&block_index).log_err()?;
+        self.db_tx.set_block_index(&block_index).map_err(BlockError::from).log_err()?;
+        self.db_tx.add_block(block).map_err(BlockError::from).log_err()?;
         Ok(block_index)
     }
 
@@ -971,13 +1032,16 @@ where
         let prev_too_close = height_skip_prev >= target_height;
 
         if at_target || (still_not_there && !(too_close && prev_too_close)) {
-            block_index_walk = gen_block_index_getter(db_tx, chain_config, ancestor)?
+            block_index_walk = gen_block_index_getter(db_tx, chain_config, ancestor)
+                .log_err()?
                 .expect("Block index of ancestor must exist, since id exists");
             height_walk = height_skip;
         } else {
             let prev_block_id = cur_block_index.prev_block_id();
-            block_index_walk = gen_block_index_getter(db_tx, chain_config, prev_block_id)?
-                .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))?;
+            block_index_walk = gen_block_index_getter(db_tx, chain_config, prev_block_id)
+                .log_err()?
+                .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))
+                .log_err()?;
             height_walk = height_walk_prev;
         }
     }
