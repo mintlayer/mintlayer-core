@@ -17,8 +17,8 @@
 
 use crate::prelude::*;
 
-fn put_and_commit<B: Backend>(backend: B) {
-    let store = backend.open(desc(1)).expect("db open to succeed");
+fn put_and_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     // Create a transaction, modify storage and abort transaction
     let mut dbtx = store.transaction_rw().unwrap();
@@ -31,8 +31,8 @@ fn put_and_commit<B: Backend>(backend: B) {
     drop(dbtx);
 }
 
-fn put_and_abort<B: Backend>(backend: B) {
-    let store = backend.open(desc(1)).expect("db open to succeed");
+fn put_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     // Create a transaction, modify storage and abort transaction
     let mut dbtx = store.transaction_rw().unwrap();
@@ -45,8 +45,8 @@ fn put_and_abort<B: Backend>(backend: B) {
     drop(dbtx);
 }
 
-fn put_two_under_different_keys<B: Backend>(backend: B) {
-    let store = backend.open(desc(1)).expect("db open to succeed");
+fn put_two_under_different_keys<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     // Create a transaction, modify storage and commit
     let mut dbtx = store.transaction_rw().unwrap();
@@ -73,8 +73,8 @@ fn put_two_under_different_keys<B: Backend>(backend: B) {
     drop(dbtx);
 }
 
-fn put_twice_then_commit_read_last<B: Backend>(backend: B) {
-    let store = backend.open(desc(1)).expect("db open to succeed");
+fn put_twice_then_commit_read_last<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     let mut dbtx = store.transaction_rw().unwrap();
     dbtx.put(IDX.0, b"hello".to_vec(), b"a".to_vec()).unwrap();
@@ -87,8 +87,8 @@ fn put_twice_then_commit_read_last<B: Backend>(backend: B) {
     assert_eq!(dbtx.get(IDX.0, b"hello"), Ok(Some(b"b".as_ref())),);
 }
 
-fn put_iterator_count_matches<B: Backend>(backend: B) {
-    let store = backend.open(desc(1)).expect("db open to succeed");
+fn put_iterator_count_matches<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     let mut dbtx = store.transaction_rw().unwrap();
     dbtx.put(IDX.0, vec![0x00], vec![]).unwrap();
@@ -101,8 +101,8 @@ fn put_iterator_count_matches<B: Backend>(backend: B) {
     assert_eq!(dbtx.prefix_iter(IDX.0, vec![]).unwrap().count(), 4);
 }
 
-fn put_and_iterate_over_prefixes<B: Backend>(backend: B) {
-    let store = backend.open(desc(1)).expect("db open to succeed");
+fn put_and_iterate_over_prefixes<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     // Populate the database with some values
     let mut dbtx = store.transaction_rw().unwrap();
@@ -155,8 +155,8 @@ fn check_prefix<Tx: ReadOps>(dbtx: &Tx, prefix: Data, expected: &[(&str, &str)])
     assert!(entries.eq(expected));
 }
 
-fn put_and_iterate_delete_some<B: Backend>(backend: B) {
-    let store = backend.open(desc(1)).expect("db open to succeed");
+fn put_and_iterate_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     let expected_full_0 =
         [("aa", "0"), ("ab", "1"), ("ac", "2"), ("aca", "3"), ("acb", "4"), ("b", "5")];

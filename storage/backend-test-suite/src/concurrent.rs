@@ -27,8 +27,8 @@ fn setup<B: Backend>(backend: B, init: Vec<u8>) -> B::Impl {
     store
 }
 
-fn read_initialize_race<B: Backend>(backend: B) {
-    let store = backend.open(desc(1)).expect("db open to succeed");
+fn read_initialize_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     let thr0 = thread::spawn({
         let store = store.clone();
@@ -47,8 +47,8 @@ fn read_initialize_race<B: Backend>(backend: B) {
     thr0.join().unwrap();
 }
 
-fn read_write_race<B: Backend>(backend: B) {
-    let store = setup(backend, vec![0]);
+fn read_write_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    let store = setup(backend_fn(), vec![0]);
 
     let thr0 = thread::spawn({
         let store = store.clone();
@@ -67,8 +67,8 @@ fn read_write_race<B: Backend>(backend: B) {
     thr0.join().unwrap();
 }
 
-fn commutative_read_modify_write<B: Backend>(backend: B) {
-    let store = setup(backend, vec![0]);
+fn commutative_read_modify_write<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    let store = setup(backend_fn(), vec![0]);
 
     let thr0 = thread::spawn({
         let store = store.clone();
@@ -96,9 +96,9 @@ fn commutative_read_modify_write<B: Backend>(backend: B) {
     assert_eq!(dbtx.get(IDX.0, TEST_KEY), Ok(Some([8].as_ref())));
 }
 
-fn threaded_reads_consistent<B: Backend>(backend: B) {
+fn threaded_reads_consistent<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     let val = [0x77, 0x88, 0x99].as_ref();
-    let store = setup(backend, val.to_vec());
+    let store = setup(backend_fn(), val.to_vec());
 
     let thr0 = thread::spawn({
         let store = store.clone();
@@ -126,8 +126,8 @@ fn threaded_reads_consistent<B: Backend>(backend: B) {
     assert_eq!(thr1.join().unwrap(), val);
 }
 
-fn write_different_keys_and_iterate<B: Backend>(backend: B) {
-    let store = backend.open(desc(1)).expect("db open to succeed");
+fn write_different_keys_and_iterate<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     let thr0 = thread::spawn({
         let store = store.clone();
