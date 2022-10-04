@@ -33,38 +33,14 @@ use common::{
     },
     primitives::{Amount, Idable},
 };
-use crypto::random::distributions::uniform::SampleRange;
 use crypto::{hash::StreamHasher, random::Rng};
 use expect_test::expect;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
-
-fn random_string<R: SampleRange<usize>>(rng: &mut impl Rng, range_len: R) -> String {
-    use crypto::random::distributions::{Alphanumeric, DistString};
-    if range_len.is_empty() {
-        return String::new();
-    }
-    let len = rng.gen_range(range_len);
-    Alphanumeric.sample_string(rng, len)
-}
-
-fn gen_ticker_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec<u8> {
-    assert!(!c.is_ascii_alphanumeric());
-    let ticker_len = 1 + rng.gen::<usize>() % max_len;
-    let random_index_to_replace = rng.gen::<usize>() % ticker_len;
-    let token_ticker: Vec<u8> = (0..ticker_len)
-        .into_iter()
-        .map(|idx| {
-            if idx != random_index_to_replace {
-                rng.sample(&crypto::random::distributions::Alphanumeric)
-            } else {
-                c
-            }
-        })
-        .take(ticker_len)
-        .collect();
-    token_ticker
-}
+use test_utils::{
+    gen_text_with_non_ascii,
+    random::{make_seedable_rng, Seed},
+    random_string,
+};
 
 #[rstest]
 #[trace]
@@ -151,7 +127,7 @@ fn token_issue_test(#[case] seed: Seed) {
                     continue;
                 }
 
-                let token_ticker = gen_ticker_with_non_ascii(
+                let token_ticker = gen_text_with_non_ascii(
                     c,
                     &mut rng,
                     tf.chainstate.get_chain_config().token_max_ticker_len(),

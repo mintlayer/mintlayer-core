@@ -122,5 +122,3 @@ pub enum TokenData {
     //     amount_to_issue: Amount,
     // },
 }
-
-// TODO(NFT): Uncomment NftIssuanceV1

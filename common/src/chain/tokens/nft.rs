@@ -13,18 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serialization::{Decode, Encode};
-use std::collections::HashMap;
-
 use crypto::key::PublicKey;
-
-use crate::{chain::Destination, primitives::Amount};
+use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct NftIssuanceV1 {
     pub metadata: Metadata,
-    // pub payout: Payout, /// ???? Multisig contract with amount enforcement
-    // pub royalty: Royalty,
+    // TODO: Implement after additional research payout, royalty and refund.
+    //       Payout might be Multisig contract with amount enforcement.
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
@@ -49,19 +45,4 @@ pub struct Metadata {
     pub additional_metadata_uri: Option<Vec<u8>>,
     pub media_uri: Option<Vec<u8>>,
     pub media_hash: Vec<u8>,
-    // FIXME(nft_issuance): Check how it is should work
-    // pub issuead_at: Option<u64>,
-    // pub expired_at: Option<u64>,
-    // pub valid_since: Option<u64>,
-    // pub refund_period: Option<u64>,
 }
-
-pub struct Payout {
-    pub payout: HashMap<Destination, Amount>,
-}
-
-pub struct Royalty {
-    pub royalties: HashMap<Destination, Percentage>,
-}
-
-pub type Percentage = u8;

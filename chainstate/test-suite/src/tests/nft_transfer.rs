@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::tests::{random_creator, random_string};
+use crate::tests::random_creator;
 use chainstate::{
     BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError, TokensError,
@@ -31,7 +31,10 @@ use common::{
 };
 use crypto::random::Rng;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    random_string,
+};
 
 #[rstest]
 #[trace]

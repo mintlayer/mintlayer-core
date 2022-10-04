@@ -28,7 +28,6 @@ use common::{
     Uint256,
 };
 use crypto::key::{KeyKind, PrivateKey};
-use crypto::random::distributions::uniform::SampleRange;
 use crypto::random::Rng;
 use rstest::rstest;
 use serialization::Encode;
@@ -58,33 +57,12 @@ pub fn random_creator() -> Option<TokenCreator> {
     Some(TokenCreator::from(public_key))
 }
 
-//FIXME(nft_issuance): Move it in super mod and use for all tokens tests
-pub fn random_string<R: SampleRange<usize>>(rng: &mut impl Rng, range_len: R) -> String {
-    use crypto::random::distributions::{Alphanumeric, DistString};
-    if range_len.is_empty() {
-        return String::new();
-    }
-    let len = rng.gen_range(range_len);
-    Alphanumeric.sample_string(rng, len)
-}
-
-//FIXME(nft_issuance): Move it in super mod and use for all tokens tests
-fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec<u8> {
-    assert!(!c.is_ascii_alphanumeric());
-    let text_len = 1 + rng.gen::<usize>() % max_len;
-    let random_index_to_replace = rng.gen::<usize>() % text_len;
-    let token_ticker: Vec<u8> = (0..text_len)
-        .into_iter()
-        .map(|idx| {
-            if idx != random_index_to_replace {
-                rng.sample(&crypto::random::distributions::Alphanumeric)
-            } else {
-                c
-            }
-        })
-        .take(text_len)
-        .collect();
-    token_ticker
+// FIXME(nft_issuance): This is the copy of function from check block. Remove copy and use this func from more appropriate place.
+fn is_rfc1738_valid_symbol(ch: char) -> bool {
+    // RFC 1738 alphabet
+    String::from(":._-~!/?#[]@$&\'()*+,;=")
+        .chars()
+        .any(|rfc1738_ch| ch == rfc1738_ch)
 }
 
 // Generate 5 regtest blocks and print their hex encoding, which is useful for functional tests.

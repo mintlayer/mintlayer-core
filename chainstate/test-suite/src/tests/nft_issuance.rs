@@ -24,17 +24,13 @@ use common::chain::{
     Destination, OutputPurpose, TxInput, TxOutput,
 };
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    gen_text_with_non_ascii,
+    random::{make_seedable_rng, Seed},
+    random_string,
+};
 
-use crate::tests::{gen_text_with_non_ascii, random_creator, random_string};
-
-// FIXME(nft_issuance): This is the copy of function from check block. Remove copy and use this func from more appropriate place.
-fn is_rfc1738_valid_symbol(ch: char) -> bool {
-    // RFC 1738 alphabet
-    String::from(":._-~!/?#[]@$&\'()*+,;=")
-        .chars()
-        .any(|rfc1738_ch| ch == rfc1738_ch)
-}
+use crate::tests::{is_rfc1738_valid_symbol, random_creator};
 
 #[rstest]
 #[trace]
@@ -61,7 +57,6 @@ fn nft_issuance_name_too_long(#[case] seed: Seed) {
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
-                                //FIXME(nft_issuance): Decide how long nft name might be
                                 name: random_string(
                                     &mut rng,
                                     max_name_len + 1..max_name_len + 1000,
@@ -118,7 +113,6 @@ fn nft_issuance_empty_name(#[case] seed: Seed) {
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
-                                //FIXME(nft_issuance): Decide how long nft name might be
                                 name: vec![],
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -181,7 +175,6 @@ fn nft_issuance_invalid_name(#[case] seed: Seed) {
                             OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                                 metadata: Metadata {
                                     creator: random_creator(),
-                                    //FIXME(nft_issuance): Decide how long nft name might be
                                     name,
                                     description: random_string(&mut rng, 1..max_desc_len)
                                         .into_bytes(),
@@ -238,7 +231,6 @@ fn issue_test_ticker_too_long(#[case] seed: Seed) {
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
-                                //FIXME(nft_issuance): Decide how long nft name might be
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(
@@ -296,7 +288,6 @@ fn nft_issuance_empty_ticker(#[case] seed: Seed) {
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
-                                //FIXME(nft_issuance): Decide how long nft name might be
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: vec![],
@@ -359,7 +350,6 @@ fn nft_issuance_invalid_ticker(#[case] seed: Seed) {
                             OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                                 metadata: Metadata {
                                     creator: random_creator(),
-                                    //FIXME(nft_issuance): Decide how long nft name might be
                                     name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                     description: random_string(&mut rng, 1..max_desc_len)
                                         .into_bytes(),
@@ -416,7 +406,6 @@ fn issue_test_description_too_long(#[case] seed: Seed) {
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
-                                //FIXME(nft_issuance): Decide how long nft name might be
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(
                                     &mut rng,
@@ -474,7 +463,6 @@ fn nft_issuance_empty_description(#[case] seed: Seed) {
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
-                                //FIXME(nft_issuance): Decide how long nft name might be
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: vec![],
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -537,7 +525,6 @@ fn nft_issuance_invalid_description(#[case] seed: Seed) {
                             OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                                 metadata: Metadata {
                                     creator: random_creator(),
-                                    //FIXME(nft_issuance): Decide how long nft name might be
                                     name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                     description,
                                     ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -593,7 +580,6 @@ fn nft_issuance_icon_uri_too_long(#[case] seed: Seed) {
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
-                                //FIXME(nft_issuance): Decide how long nft name might be
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -650,7 +636,6 @@ fn nft_issuance_icon_uri_empty(#[case] seed: Seed) {
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
-                                //FIXME(nft_issuance): Decide how long nft name might be
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -714,7 +699,6 @@ fn nft_issuance_icon_uri_invalid(#[case] seed: Seed) {
                             OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                                 metadata: Metadata {
                                     creator: random_creator(),
-                                    //FIXME(nft_issuance): Decide how long nft name might be
                                     name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                     description: random_string(&mut rng, 1..max_desc_len)
                                         .into_bytes(),
@@ -771,7 +755,6 @@ fn nft_issuance_metadata_uri_too_long(#[case] seed: Seed) {
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
-                                //FIXME(nft_issuance): Decide how long nft name might be
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -828,7 +811,6 @@ fn nft_issuance_metadata_uri_empty(#[case] seed: Seed) {
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
-                                //FIXME(nft_issuance): Decide how long nft name might be
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -892,7 +874,6 @@ fn nft_issuance_metadata_uri_invalid(#[case] seed: Seed) {
                             OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                                 metadata: Metadata {
                                     creator: random_creator(),
-                                    //FIXME(nft_issuance): Decide how long nft name might be
                                     name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                     description: random_string(&mut rng, 1..max_desc_len)
                                         .into_bytes(),
@@ -949,7 +930,6 @@ fn nft_issuance_media_uri_too_long(#[case] seed: Seed) {
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
-                                //FIXME(nft_issuance): Decide how long nft name might be
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -1006,7 +986,6 @@ fn nft_issuance_media_uri_empty(#[case] seed: Seed) {
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
-                                //FIXME(nft_issuance): Decide how long nft name might be
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -1070,7 +1049,6 @@ fn nft_issuance_media_uri_invalid(#[case] seed: Seed) {
                             OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                                 metadata: Metadata {
                                     creator: random_creator(),
-                                    //FIXME(nft_issuance): Decide how long nft name might be
                                     name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                     description: random_string(&mut rng, 1..max_desc_len)
                                         .into_bytes(),
@@ -1126,7 +1104,6 @@ fn nft_issuance_valid_case(#[case] seed: Seed) {
                         OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
-                                //FIXME(nft_issuance): Decide how long nft name might be
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -1145,6 +1122,3 @@ fn nft_issuance_valid_case(#[case] seed: Seed) {
             .unwrap();
     })
 }
-
-//FIXME(nft_issuance): NFT burn checks
-//FIXME(nft_issuance): Can we check somehow media hash? Need research

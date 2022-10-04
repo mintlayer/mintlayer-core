@@ -60,6 +60,6 @@ pub fn check_uri(chain_config: &ChainConfig, uri: &[u8]) -> Result<(), CheckToke
 }
 
 pub fn check_media_hash(_hash: &[u8]) -> Result<(), TokensError> {
-    // FIXME(nft_issuance): Research: What kinds of Hash might be here? Can we check correctness of the hash.
+    //FIXME(nft_issuance): For now, we can use arbitrary hashes, but should we check them?
     Ok(())
 }

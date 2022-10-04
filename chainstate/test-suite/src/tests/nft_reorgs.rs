@@ -26,9 +26,12 @@ use common::{
     primitives::{Amount, Idable},
 };
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    random_string,
+};
 
-use crate::tests::{random_creator, random_string};
+use crate::tests::random_creator;
 
 #[rstest]
 #[trace]
@@ -59,7 +62,6 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
         let issuance_data = OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
             metadata: Metadata {
                 creator: random_creator(),
-                //FIXME(nft_issuance): Decide how long nft name might be
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),

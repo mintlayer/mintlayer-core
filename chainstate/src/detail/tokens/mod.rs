@@ -62,8 +62,6 @@ pub fn check_nft_issuance_data(
     tx_id: Id<Transaction>,
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
-    //FIXME(nft_issuance)
-
     // Ticker
     check_token_text_length(
         &issuance.metadata.ticker,
@@ -116,17 +114,6 @@ pub fn check_nft_issuance_data(
 
     // Check media hash
     check_media_hash(&issuance.metadata.media_hash)?;
-
-    // Check issued time
-    // Check expired time
-    // Check start time
-
-    // issuance.metadata.creator: TokenCreator,
-    // issuance.metadata.media_hash: Vec<u8>,
-    // issuance.metadata.issuead_at: Option<u64>,
-    // issuance.metadata.expired_at: Option<u64>,
-    // issuance.metadata.valid_since: Option<u64>,
-    // issuance.metadata.refund_period: Option<u64>,
 
     Ok(())
 }

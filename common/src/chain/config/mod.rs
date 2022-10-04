@@ -198,12 +198,12 @@ const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 524_288;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 524_288;
 const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
-const TOKEN_MAX_URI_LEN: usize = 1024;
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
 const TOKEN_MAX_TICKER_LEN: usize = 5;
-// FIXME(nft_issuance): Check how long name might be
+// FIXME(nft_issuance): Decide how long name, description and URI might be
 const TOKEN_MAX_NAME_LEN: usize = 10;
 const TOKEN_MAX_DESCRIPTION_LEN: usize = 100;
+const TOKEN_MAX_URI_LEN: usize = 1024;
 
 fn create_mainnet_genesis() -> Genesis {
     use crate::chain::transaction::TxOutput;

@@ -26,9 +26,12 @@ use common::chain::{
 use common::primitives::Amount;
 use crypto::random::Rng;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    random_string,
+};
 
-use crate::tests::{random_creator, random_string};
+use crate::tests::random_creator;
 
 #[rstest]
 #[trace]
