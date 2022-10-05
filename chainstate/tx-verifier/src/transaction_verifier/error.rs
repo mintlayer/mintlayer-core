@@ -194,4 +194,8 @@ pub enum TokensError {
     InvariantBrokenUndoIssuanceOnNonexistentToken(TokenId),
     #[error("Invariant broken - attempt register issuance on non-existent token {0}")]
     InvariantBrokenRegisterIssuanceWithDuplicateId(TokenId),
+    #[error("The media hash is too short")]
+    MediaHashTooShort,
+    #[error("The media hash is too long")]
+    MediaHashTooLong,
 }

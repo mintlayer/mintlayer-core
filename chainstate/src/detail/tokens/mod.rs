@@ -102,7 +102,7 @@ pub fn check_nft_issuance_data(
             TokensError::IssueErrorIncorrectMediaURI(tx_id, source_block_id)
         );
     }
-    check_media_hash(&issuance.metadata.media_hash)?;
+    check_media_hash(chain_config, &issuance.metadata.media_hash)?;
     Ok(())
 }
 
