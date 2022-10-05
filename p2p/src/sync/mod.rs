@@ -58,6 +58,7 @@ pub enum SyncState {
     /// Downloading blocks from remote node(s)
     DownloadingBlocks,
 
+    // TODO: FIXME: Rename to something like "initial block download done".
     /// Local block index is fully synced
     Idle,
 }
