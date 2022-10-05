@@ -56,10 +56,10 @@ mod gen {
     }
 }
 
-fn overwrite_and_abort<B: Backend + ThreadSafe + Clone>(backend: B) {
+fn overwrite_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     using_proptest(
         file!(),
-        backend,
+        backend_fn,
         (gen::key(100), gen::any::<Data>(), gen::any::<Data>())
             .prop_filter("not equal", |(_, a, b)| a != b),
         |backend, (key, val0, val1)| {
@@ -103,11 +103,11 @@ fn overwrite_and_abort<B: Backend + ThreadSafe + Clone>(backend: B) {
     )
 }
 
-fn add_and_delete<B: Backend + ThreadSafe + Clone>(backend: B) {
+fn add_and_delete<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     const NUM_DBS: usize = 5;
     using_proptest(
         file!(),
-        backend,
+        backend_fn,
         gen::entries(NUM_DBS, 0usize..20),
         |backend, entries| {
             let store = backend.open(desc(NUM_DBS)).expect("db open to succeed");
@@ -143,10 +143,10 @@ fn add_and_delete<B: Backend + ThreadSafe + Clone>(backend: B) {
     )
 }
 
-fn last_write_wins<B: Backend + ThreadSafe + Clone>(backend: B) {
+fn last_write_wins<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     using_proptest(
         file!(),
-        backend,
+        backend_fn,
         (
             gen::key(1000),
             gen::prop::collection::vec(gen::any::<Data>(), 0..100),
@@ -168,11 +168,11 @@ fn last_write_wins<B: Backend + ThreadSafe + Clone>(backend: B) {
     )
 }
 
-fn add_and_delete_some<B: Backend + ThreadSafe + Clone>(backend: B) {
+fn add_and_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     const NUM_DBS: usize = 5;
     using_proptest(
         file!(),
-        backend,
+        backend_fn,
         (
             gen::entries(NUM_DBS, 0usize..20),
             gen::entries(NUM_DBS, 0usize..20),
@@ -218,10 +218,10 @@ fn add_and_delete_some<B: Backend + ThreadSafe + Clone>(backend: B) {
     )
 }
 
-fn add_modify_abort_modify_commit<B: Backend + ThreadSafe + Clone>(backend: B) {
+fn add_modify_abort_modify_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     using_proptest(
         file!(),
-        backend,
+        backend_fn,
         (
             gen::actions(100, 0..20),
             gen::actions(100, 0..20),
@@ -263,10 +263,10 @@ fn add_modify_abort_modify_commit<B: Backend + ThreadSafe + Clone>(backend: B) {
     )
 }
 
-fn add_modify_abort_replay_commit<B: Backend + ThreadSafe + Clone>(backend: B) {
+fn add_modify_abort_replay_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     using_proptest(
         file!(),
-        backend,
+        backend_fn,
         (gen::actions(100, 0..20), gen::actions(100, 0..20)),
         |backend, (initial, actions)| {
             let store = backend.open(desc(1)).expect("db open to succeed");
@@ -294,10 +294,10 @@ fn add_modify_abort_replay_commit<B: Backend + ThreadSafe + Clone>(backend: B) {
     )
 }
 
-fn db_writes_do_not_interfere<B: Backend + ThreadSafe + Clone>(backend: B) {
+fn db_writes_do_not_interfere<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     using_proptest(
         file!(),
-        backend,
+        backend_fn,
         (gen::actions(100, 0..20), gen::actions(100, 0..20)),
         |backend, (actions0, actions1)| {
             let store = backend.open(desc(2)).expect("db open to succeed");
@@ -319,10 +319,10 @@ fn db_writes_do_not_interfere<B: Backend + ThreadSafe + Clone>(backend: B) {
     )
 }
 
-fn empty_after_abort<B: Backend + ThreadSafe + Clone>(backend: B) {
+fn empty_after_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     using_proptest(
         file!(),
-        backend,
+        backend_fn,
         (
             gen::actions(100, 0..20),
             gen::prop::collection::vec(gen::key(100), 0..20),
@@ -347,10 +347,10 @@ fn empty_after_abort<B: Backend + ThreadSafe + Clone>(backend: B) {
     )
 }
 
-fn prefix_iteration<B: Backend + ThreadSafe + Clone>(backend: B) {
+fn prefix_iteration<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     using_proptest(
         file!(),
-        backend,
+        backend_fn,
         (gen::actions(100, 0..20), gen::actions(100, 0..20)),
         |backend, (actions_a, actions_b)| {
             // Add prefixes to action keys
@@ -407,10 +407,10 @@ fn prefix_iteration<B: Backend + ThreadSafe + Clone>(backend: B) {
     )
 }
 
-fn post_commit_consistency<B: Backend + ThreadSafe + Clone>(backend: B) {
+fn post_commit_consistency<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     using_proptest(
         file!(),
-        backend,
+        backend_fn,
         gen::actions(100, 0..50),
         |backend, actions| {
             // Open storage
