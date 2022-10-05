@@ -95,24 +95,21 @@ pub fn check_nft_issuance_data(
     })?;
 
     // Icon URL
-    match &issuance.metadata.icon_uri {
-        Some(uri) => check_uri(chain_config, uri)
-            .map_err(|_| TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id))?,
-        None => (),
+    if let Some(uri) = &issuance.metadata.icon_uri {
+        check_uri(chain_config, uri)
+            .map_err(|_| TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id))?;
     }
 
     // Metadata URL
-    match &issuance.metadata.additional_metadata_uri {
-        Some(uri) => check_uri(chain_config, uri)
-            .map_err(|_| TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id))?,
-        None => (),
+    if let Some(uri) = &issuance.metadata.additional_metadata_uri {
+        check_uri(chain_config, uri)
+            .map_err(|_| TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id))?;
     }
 
     // Media URL
-    match &issuance.metadata.media_uri {
-        Some(uri) => check_uri(chain_config, uri)
-            .map_err(|_| TokensError::IssueErrorIncorrectMediaURI(tx_id, source_block_id))?,
-        None => (),
+    if let Some(uri) = &issuance.metadata.media_uri {
+        check_uri(chain_config, uri)
+            .map_err(|_| TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id))?;
     }
 
     // Check media hash

@@ -30,11 +30,11 @@ pub fn check_token_text_length(text: &[u8], max_len: usize) -> Result<(), CheckT
 
 pub fn check_is_text_alphanumeric(str: &[u8]) -> Result<(), CheckTokensError> {
     let is_alphanumeric = String::from_utf8(str.to_vec())
-        .map_err(|_| CheckTokensError::InvalidCharancter)?
+        .map_err(|_| CheckTokensError::InvalidCharacter)?
         .chars()
         .all(char::is_alphanumeric);
 
-    ensure!(is_alphanumeric, CheckTokensError::InvalidCharancter);
+    ensure!(is_alphanumeric, CheckTokensError::InvalidCharacter);
     Ok(())
 }
 

@@ -105,7 +105,7 @@ pub fn get_input_token_id_and_amount<
             }
 
             TokenData::NftIssuanceV1(_) => issuance_token_id_getter()?
-                // TODO: Find more appropriate way to check NFTs when we add multi-token feature 
+                // TODO: Find more appropriate way to check NFTs when we add multi-token feature
                 .map(|token_id| (CoinOrTokenId::TokenId(token_id), Amount::from_atoms(1)))
                 .ok_or(ConnectTransactionError::TokensError(
                     TokensError::TokenIdCantBeCalculated,

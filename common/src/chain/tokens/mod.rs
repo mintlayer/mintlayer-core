@@ -98,7 +98,7 @@ pub struct TokenBurnV1 {
     pub amount_to_burn: Amount,
 }
 
-//FIXME(nft_issuance): The same issue above in OutputValue. 
+//FIXME(nft_issuance): The same issue above in OutputValue.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 #[allow(clippy::large_enum_variant)]
 pub enum TokenData {

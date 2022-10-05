@@ -20,7 +20,7 @@ pub enum CheckTokensError {
     #[error("URL is invalid")]
     InvalidURI,
     #[error("Invalid character in the text")]
-    InvalidCharancter,
+    InvalidCharacter,
     #[error("Invalid text length")]
     InvalidTextLength,
 }
