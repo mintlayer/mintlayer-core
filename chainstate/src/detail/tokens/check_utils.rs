@@ -40,9 +40,7 @@ pub fn check_is_text_alphanumeric(str: &[u8]) -> Result<(), CheckTokensError> {
 
 pub fn is_rfc1738_valid_symbol(ch: char) -> bool {
     // RFC 1738 alphabet
-    String::from(":._-~!/?#[]@$&\'()*+,;=")
-        .chars()
-        .any(|rfc1738_ch| ch == rfc1738_ch)
+    ":._-~!/?#[]@$&\'()*+,;=".chars().any(|rfc1738_ch| ch == rfc1738_ch)
 }
 
 pub fn check_uri(chain_config: &ChainConfig, uri: &[u8]) -> Result<(), CheckTokensError> {
