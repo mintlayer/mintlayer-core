@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::tests::nft_utils::random_creator;
 use chainstate::{BlockError, BlockSource, ChainstateError, ConnectTransactionError, TokensError};
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
 use common::{
@@ -30,8 +31,6 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     random_string,
 };
-
-use crate::tests::random_creator;
 
 #[rstest]
 #[trace]
@@ -334,90 +333,99 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
     })
 }
 
-// #[rstest]
-// #[trace]
-// #[case(Seed::from_entropy())]
-// fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
-//     utils::concurrency::model(move || {
-//         let mut rng = make_seedable_rng(seed);
-//         let mut tf = TestFramework::default();
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::default();
 
-//         // Issue a new token
-//         let issuance_value = OutputValue::Token(TokenData::TokenIssuanceV1(TokenIssuanceV1 {
-//             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
-//             amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
-//             number_of_decimals: rng.gen_range(1..18),
-//             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-//         }));
-//         let genesis_id = tf.genesis().get_id();
-//         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-//         let block_index = tf
-//             .make_block_builder()
-//             .with_parent(genesis_id.into())
-//             .add_transaction(
-//                 TransactionBuilder::new()
-//                     .add_input(TxInput::new(
-//                         genesis_outpoint_id,
-//                         0,
-//                         InputWitness::NoSignature(None),
-//                     ))
-//                     .add_output(TxOutput::new(
-//                         issuance_value.clone(),
-//                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-//                     ))
-//                     .build(),
-//             )
-//             .build_and_process()
-//             .unwrap()
-//             .unwrap();
+        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
-//         let issuance_block = tf.block(*block_index.block_id());
-//         let token_id = token_id(&issuance_block.transactions()[0]).unwrap();
+        // Issue a new token
+        let issuance_value = OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
+            metadata: Metadata {
+                creator: random_creator(),
+                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                icon_uri: None,
+                additional_metadata_uri: None,
+                media_uri: None,
+                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+            },
+        }));
+        let genesis_id = tf.genesis().get_id();
+        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let block_index = tf
+            .make_block_builder()
+            .with_parent(genesis_id.into())
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id, 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::new(
+                        issuance_value.clone(),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap()
+            .unwrap();
 
-//         // Check tokens available in storage
-//         let token_aux_data = tf.chainstate.get_token_aux_data(token_id).unwrap().unwrap();
-//         // Check id
-//         assert!(issuance_block.get_id() == token_aux_data.issuance_block_id());
-//         let issuance_tx = &issuance_block.transactions()[0];
-//         assert!(issuance_tx.get_id() == token_aux_data.issuance_tx().get_id());
-//         // Check issuance storage in the chain and in the storage
-//         assert_eq!(issuance_tx.outputs()[0].value(), &issuance_value);
-//         assert_eq!(
-//             token_aux_data.issuance_tx().outputs()[0].value(),
-//             &issuance_value
-//         );
+        let issuance_block = tf.block(*block_index.block_id());
+        let token_id = token_id(issuance_block.transactions()[0].transaction()).unwrap();
 
-//         // Cause reorg
-//         tf.create_chain(&tf.genesis().get_id().into(), 5, &mut rng).unwrap();
+        // Check tokens available in storage
+        let token_aux_data = tf.chainstate.get_token_aux_data(token_id).unwrap().unwrap();
+        // Check id
+        assert!(issuance_block.get_id() == token_aux_data.issuance_block_id());
+        let issuance_tx = &issuance_block.transactions()[0];
+        assert!(issuance_tx.transaction().get_id() == token_aux_data.issuance_tx().get_id());
+        // Check issuance storage in the chain and in the storage
+        assert_eq!(issuance_tx.outputs()[0].value(), &issuance_value);
+        assert_eq!(
+            token_aux_data.issuance_tx().outputs()[0].value(),
+            &issuance_value
+        );
 
-//         // Check that reorg happened
-//         let height = block_index.block_height();
-//         assert!(
-//             tf.chainstate.get_block_id_from_height(&height).unwrap().map_or(false, |id| &id
-//                 .classify(&tf.chainstate.get_chain_config())
-//                 .chain_block_id()
-//                 .unwrap()
-//                 != block_index.block_id())
-//         );
+        // Cause reorg
+        tf.create_chain(&tf.genesis().get_id().into(), 5, &mut rng).unwrap();
 
-//         // Check that issuance transaction in the storage is removed
-//         assert!(tf
-//             .chainstate
-//             .get_mainchain_tx_index(&common::chain::OutPointSourceId::Transaction(
-//                 issuance_tx.get_id()
-//             ))
-//             .unwrap()
-//             .is_none());
+        // Check that reorg happened
+        let height = block_index.block_height();
+        assert!(
+            tf.chainstate.get_block_id_from_height(&height).unwrap().map_or(false, |id| &id
+                .classify(&tf.chainstate.get_chain_config())
+                .chain_block_id()
+                .unwrap()
+                != block_index.block_id())
+        );
 
-//         // Check that tokens not in storage
-//         assert!(tf
-//             .chainstate
-//             .get_token_id_from_issuance_tx(&issuance_tx.get_id())
-//             .unwrap()
-//             .is_none());
+        // Check that issuance transaction in the storage is removed
+        assert!(tf
+            .chainstate
+            .get_mainchain_tx_index(&common::chain::OutPointSourceId::Transaction(
+                issuance_tx.transaction().get_id()
+            ))
+            .unwrap()
+            .is_none());
 
-//         assert!(tf.chainstate.get_token_info_for_rpc(token_id).unwrap().is_none());
+        // Check that tokens not in storage
+        assert!(tf
+            .chainstate
+            .get_token_id_from_issuance_tx(&issuance_tx.transaction().get_id())
+            .unwrap()
+            .is_none());
 
-//         assert!(tf.chainstate.get_token_aux_data(token_id).unwrap().is_none());
-//     })
-// }
+        assert!(tf.chainstate.get_token_info_for_rpc(token_id).unwrap().is_none());
+
+        assert!(tf.chainstate.get_token_aux_data(token_id).unwrap().is_none());
+    })
+}
