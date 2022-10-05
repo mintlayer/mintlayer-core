@@ -214,12 +214,12 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
                         issuance.metadata_uri.clone(),
                     )))
                 }
-                TokenData::NftIssuanceV1(_) => {
+                TokenData::NftIssuanceV1(nft) => {
                     Some(RPCTokenInfo::new_nonfungible(RPCNonFungibleTokenInfo::new(
                         token_id,
                         token_aux_data.issuance_tx().get_id(),
                         token_aux_data.issuance_block_id(),
-                        // FIXME(nft_issuance): Add other fields
+                        nft.metadata.clone(),
                     )))
                 }
                 TokenData::TokenTransferV1(_) | TokenData::TokenBurnV1(_) => None,

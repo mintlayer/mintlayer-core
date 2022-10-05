@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::TokenId;
+use super::{Metadata, TokenId};
 use crate::{
     chain::{Block, Transaction},
     primitives::{Amount, Id},
@@ -76,7 +76,7 @@ pub struct RPCNonFungibleTokenInfo {
     pub token_id: TokenId,
     pub creation_tx_id: Id<Transaction>,
     pub creation_block_id: Id<Block>,
-    //FIXME(nft_issuance): Add other fields
+    pub metadata: Metadata,
 }
 
 impl RPCNonFungibleTokenInfo {
@@ -84,11 +84,13 @@ impl RPCNonFungibleTokenInfo {
         token_id: TokenId,
         creation_tx_id: Id<Transaction>,
         creation_block_id: Id<Block>,
+        metadata: Metadata,
     ) -> Self {
         Self {
             token_id,
             creation_tx_id,
             creation_block_id,
+            metadata,
         }
     }
 }
