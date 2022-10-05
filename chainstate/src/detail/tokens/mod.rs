@@ -25,7 +25,10 @@ use utils::ensure;
 use super::transaction_verifier::error::TokensError;
 
 mod check_utils;
-use check_utils::*;
+pub use check_utils::is_rfc1738_valid_symbol;
+use check_utils::{
+    check_is_text_alphanumeric, check_media_hash, check_token_text_length, check_uri,
+};
 
 mod error;
 

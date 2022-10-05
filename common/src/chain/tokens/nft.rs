@@ -23,18 +23,42 @@ pub struct NftIssuanceV1 {
     //       Payout might be Multisig contract with amount enforcement.
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct TokenCreator {
-    pub public_key: PublicKey,
+    pub public_key_data: Vec<u8>,
 }
 
 impl From<PublicKey> for TokenCreator {
     fn from(public_key: PublicKey) -> Self {
-        Self { public_key }
+        Self {
+            public_key_data: public_key.encode(),
+        }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct Metadata {
     // FIXME(nft_issuance): Can it be optional?
     pub creator: Option<TokenCreator>,

@@ -18,7 +18,6 @@ use std::sync::Mutex;
 
 use chainstate::BlockSource;
 use chainstate_test_framework::TestFramework;
-use common::chain::tokens::TokenCreator;
 use common::{
     chain::{
         config::create_regtest, signature::inputsig::InputWitness, Block, GenBlock, Genesis,
@@ -27,7 +26,6 @@ use common::{
     primitives::{BlockHeight, Id},
     Uint256,
 };
-use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::Rng;
 use rstest::rstest;
 use serialization::Encode;
@@ -38,11 +36,11 @@ mod chainstate_storage_tests;
 mod double_spend_tests;
 mod events_tests;
 mod fungible_tokens;
-
 mod nft_burn;
 mod nft_issuance;
 mod nft_reorgs;
 mod nft_transfer;
+mod nft_utils;
 mod output_timelock;
 mod processing_tests;
 mod reorgs_tests;
@@ -50,20 +48,6 @@ mod signature_tests;
 mod syncing_tests;
 
 type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
-
-// FIXME(nft_issuance): This is the copy of function from check block. Remove copy and use this func from more appropriate place.
-pub fn random_creator() -> Option<TokenCreator> {
-    let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    Some(TokenCreator::from(public_key))
-}
-
-// FIXME(nft_issuance): This is the copy of function from check block. Remove copy and use this func from more appropriate place.
-fn is_rfc1738_valid_symbol(ch: char) -> bool {
-    // RFC 1738 alphabet
-    String::from(":._-~!/?#[]@$&\'()*+,;=")
-        .chars()
-        .any(|rfc1738_ch| ch == rfc1738_ch)
-}
 
 // Generate 5 regtest blocks and print their hex encoding, which is useful for functional tests.
 // TODO: remove when block production is ready

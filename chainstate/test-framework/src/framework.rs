@@ -203,7 +203,6 @@ fn create_utxo_data(
                             }
                             OutPointSourceId::BlockReward(_) => return None,
                         },
-                        //FIXME(nft): Make it better
                         amount: Amount::from_atoms(1),
                     })),
                     OutputPurpose::Transfer(anyonecanspend_address()),

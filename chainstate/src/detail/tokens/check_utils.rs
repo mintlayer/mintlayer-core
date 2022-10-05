@@ -38,7 +38,7 @@ pub fn check_is_text_alphanumeric(str: &[u8]) -> Result<(), CheckTokensError> {
     Ok(())
 }
 
-fn is_rfc1738_valid_symbol(ch: char) -> bool {
+pub fn is_rfc1738_valid_symbol(ch: char) -> bool {
     // RFC 1738 alphabet
     String::from(":._-~!/?#[]@$&\'()*+,;=")
         .chars()

@@ -13,11 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::{BlockError, ChainstateError, TokensError};
-use chainstate::{CheckBlockError, CheckBlockTransactionsError};
+use crate::tests::nft_utils::random_creator;
+use chainstate::{
+    is_rfc1738_valid_symbol, BlockError, ChainstateError, CheckBlockError,
+    CheckBlockTransactionsError, TokensError,
+};
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
-use common::chain::tokens::Metadata;
-use common::chain::tokens::NftIssuanceV1;
+use common::chain::tokens::{Metadata, NftIssuanceV1};
 use common::chain::{
     signature::inputsig::InputWitness,
     tokens::{OutputValue, TokenData},
@@ -29,8 +31,6 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     random_string,
 };
-
-use crate::tests::{is_rfc1738_valid_symbol, random_creator};
 
 #[rstest]
 #[trace]

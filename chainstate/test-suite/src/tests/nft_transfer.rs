@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::tests::random_creator;
+use crate::tests::nft_utils::random_creator;
 use chainstate::{
     BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError, TokensError,
