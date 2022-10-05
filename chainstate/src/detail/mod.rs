@@ -23,6 +23,7 @@ mod chainstateref;
 mod error;
 mod median_time;
 mod orphan_blocks;
+pub mod tx_verification_strategy;
 
 pub use self::error::*;
 pub use self::median_time::calculate_median_time_past;

@@ -29,7 +29,7 @@ use common::{
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction,
     },
-    primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetterFn,
     Uint256,
 };
@@ -46,11 +46,8 @@ use super::{
     median_time::calculate_median_time_past,
     orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
     tokens::check_tokens_data,
-    transaction_verifier::{
-        error::{ConnectTransactionError, TokensError},
-        flush::flush_to_storage,
-        BlockTransactableRef, Fee, Subsidy, TransactionVerifier,
-    },
+    transaction_verifier::{error::TokensError, flush::flush_to_storage},
+    tx_verification_strategy::TransactionVerificationStrategy,
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
 };
 
@@ -641,83 +638,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             .ok_or_else(|| BlockError::BlockProofCalculationError(block.get_id()))
     }
 
-    fn make_cache_with_connected_transactions(
-        &'a self,
-        block_index: &'a BlockIndex,
-        block: &WithId<Block>,
-        spend_height: &BlockHeight,
-    ) -> Result<TransactionVerifier<Self>, BlockError> {
-        // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
-        let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
-
-        let mut tx_verifier = TransactionVerifier::new(self, self.chain_config);
-
-        let reward_fees = tx_verifier
-            .connect_transactable(
-                block_index,
-                BlockTransactableRef::BlockReward(block),
-                spend_height,
-                &median_time_past,
-            )
-            .log_err()?;
-        debug_assert!(reward_fees.is_none());
-
-        let total_fees = block
-            .transactions()
-            .iter()
-            .enumerate()
-            .try_fold(Amount::from_atoms(0), |total, (tx_num, _)| {
-                let fee = tx_verifier
-                    .connect_transactable(
-                        block_index,
-                        BlockTransactableRef::Transaction(block, tx_num),
-                        spend_height,
-                        &median_time_past,
-                    )
-                    .log_err()?;
-                (total + fee.expect("connect tx should return fees").0).ok_or_else(|| {
-                    ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
-                })
-            })
-            .log_err()?;
-
-        let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
-        tx_verifier
-            .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
-            .log_err()?;
-
-        tx_verifier.set_best_block(block.get_id().into());
-
-        Ok(tx_verifier)
-    }
-
-    fn make_cache_with_disconnected_transactions(
-        &'a self,
-        block: &WithId<Block>,
-        prev_block_id: Id<GenBlock>,
-    ) -> Result<TransactionVerifier<Self>, BlockError> {
-        let mut tx_verifier = TransactionVerifier::new(self, self.chain_config);
-
-        // TODO: add a test that checks the order in which txs are disconnected
-        block
-            .transactions()
-            .iter()
-            .enumerate()
-            .rev()
-            .try_for_each(|(tx_num, _)| {
-                tx_verifier
-                    .disconnect_transactable(BlockTransactableRef::Transaction(block, tx_num))
-            })
-            .log_err()?;
-        tx_verifier
-            .disconnect_transactable(BlockTransactableRef::BlockReward(block))
-            .log_err()?;
-
-        tx_verifier.set_best_block(prev_block_id);
-
-        Ok(tx_verifier)
-    }
-
     pub fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
         let id_from_height = |block_height: u64| -> Result<Id<Block>, PropertyQueryError> {
             let block_height: BlockHeight = block_height.into();
@@ -838,9 +758,9 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         block: &WithId<Block>,
         spend_height: &BlockHeight,
     ) -> Result<(), BlockError> {
-        let connected_txs = self
-            .make_cache_with_connected_transactions(block_index, block, spend_height)
-            .log_err()?;
+        let strategy = TransactionVerificationStrategy::new(self, self, self.chain_config);
+
+        let connected_txs = strategy.connect_block(block_index, block, spend_height).log_err()?;
 
         let consumed = connected_txs.consume()?;
         flush_to_storage(self, consumed)?;
@@ -853,7 +773,8 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         block: &WithId<Block>,
         prev_block_id: Id<GenBlock>,
     ) -> Result<(), BlockError> {
-        let cached_inputs = self.make_cache_with_disconnected_transactions(block, prev_block_id)?;
+        let strategy = TransactionVerificationStrategy::new(self, self, self.chain_config);
+        let cached_inputs = strategy.disconnect_block(block, prev_block_id)?;
         let cached_inputs = cached_inputs.consume()?;
         flush_to_storage(self, cached_inputs)?;
 
