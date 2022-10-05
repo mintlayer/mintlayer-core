@@ -1102,7 +1102,7 @@ fn nft_issuance_valid_case(#[case] seed: Seed) {
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
                 icon_uri: Some(valid_rfc1738_url.clone()),
                 additional_metadata_uri: Some(valid_rfc1738_url.clone()),
-                media_uri: Some(valid_rfc1738_url.clone()),
+                media_uri: Some(valid_rfc1738_url),
                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
             },
         }));

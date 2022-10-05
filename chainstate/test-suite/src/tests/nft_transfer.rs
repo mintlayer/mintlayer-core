@@ -319,7 +319,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
         let second_issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
         let _ = token_id(block.transactions()[0].transaction()).unwrap();
 
-        // Try to spend sum of input tokens
+        // Try to spend 2 NFTs but use one ID
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
         let result = tf
