@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 RBB S.r.l
+// Copyright (c) 2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,10 +13,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod hash;
-pub mod kdf;
-pub mod key;
-pub mod random;
-pub mod symkey;
-pub mod util;
-pub mod vrf;
+pub mod eq;
