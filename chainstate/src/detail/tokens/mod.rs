@@ -27,10 +27,8 @@ use super::transaction_verifier::error::TokensError;
 mod check_utils;
 pub use check_utils::is_rfc1738_valid_symbol;
 use check_utils::{
-    check_is_text_alphanumeric, check_media_hash, check_token_text_length, check_uri,
+    check_media_hash, check_nft_description, check_nft_name, check_token_ticker, is_uri_valid,
 };
-
-mod error;
 
 pub fn check_tokens_transfer_data(
     source_block_id: Id<Block>,
@@ -65,56 +63,46 @@ pub fn check_nft_issuance_data(
     tx_id: Id<Transaction>,
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
-    // Ticker
-    check_token_text_length(
+    check_token_ticker(
+        chain_config,
         &issuance.metadata.ticker,
-        chain_config.token_max_ticker_len(),
-    )
-    .map_err(|_| TokensError::IssueErrorInvalidTickerLength(tx_id, source_block_id))?;
-
-    check_is_text_alphanumeric(&issuance.metadata.ticker).map_err(|_| {
-        TokensError::IssueErrorTickerHasNoneAlphaNumericChar(tx_id, source_block_id)
-    })?;
-
-    // Name
-    check_token_text_length(&issuance.metadata.name, chain_config.token_max_name_len())
-        .map_err(|_| TokensError::IssueErrorInvalidNameLength(tx_id, source_block_id))?;
-
-    check_is_text_alphanumeric(&issuance.metadata.name)
-        .map_err(|_| TokensError::IssueErrorNameHasNoneAlphaNumericChar(tx_id, source_block_id))?;
-
-    // Description
-    check_token_text_length(
+        tx_id,
+        source_block_id,
+    )?;
+    check_nft_name(
+        chain_config,
+        &issuance.metadata.name,
+        tx_id,
+        source_block_id,
+    )?;
+    check_nft_description(
+        chain_config,
         &issuance.metadata.description,
-        chain_config.token_max_description_len(),
-    )
-    .map_err(|_| TokensError::IssueErrorInvalidDescriptionLength(tx_id, source_block_id))?;
+        tx_id,
+        source_block_id,
+    )?;
 
-    check_is_text_alphanumeric(&issuance.metadata.description).map_err(|_| {
-        TokensError::IssueErrorDescriptionHasNoneAlphaNumericChar(tx_id, source_block_id)
-    })?;
-
-    // Icon URL
-    if let Some(uri) = &issuance.metadata.icon_uri {
-        check_uri(chain_config, uri)
-            .map_err(|_| TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id))?;
+    if let Some(icon_uri) = &issuance.metadata.icon_uri {
+        ensure!(
+            is_uri_valid(icon_uri),
+            TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id)
+        );
     }
 
-    // Metadata URL
-    if let Some(uri) = &issuance.metadata.additional_metadata_uri {
-        check_uri(chain_config, uri)
-            .map_err(|_| TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id))?;
+    if let Some(additional_metadata_uri) = &issuance.metadata.additional_metadata_uri {
+        ensure!(
+            is_uri_valid(additional_metadata_uri),
+            TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id)
+        );
     }
 
-    // Media URL
-    if let Some(uri) = &issuance.metadata.media_uri {
-        check_uri(chain_config, uri)
-            .map_err(|_| TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id))?;
+    if let Some(media_uri) = &issuance.metadata.media_uri {
+        ensure!(
+            is_uri_valid(media_uri),
+            TokensError::IssueErrorIncorrectMediaURI(tx_id, source_block_id)
+        );
     }
-
-    // Check media hash
     check_media_hash(&issuance.metadata.media_hash)?;
-
     Ok(())
 }
 
@@ -127,14 +115,8 @@ pub fn check_tokens_issuance_data(
     tx_id: Id<Transaction>,
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
-    // Check token name
-    check_token_text_length(token_ticker, chain_config.token_max_ticker_len())
-        .map_err(|_| TokensError::IssueErrorInvalidTickerLength(tx_id, source_block_id))?;
-
-    // Check the name consists of alphanumeric characters only
-    check_is_text_alphanumeric(token_ticker).map_err(|_| {
-        TokensError::IssueErrorTickerHasNoneAlphaNumericChar(tx_id, source_block_id)
-    })?;
+    // Check token ticker
+    check_token_ticker(chain_config, token_ticker, tx_id, source_block_id)?;
 
     // Check amount
     if amount_to_issue == &Amount::from_atoms(0) {
@@ -150,8 +132,10 @@ pub fn check_tokens_issuance_data(
     }
 
     // Check URI
-    check_uri(chain_config, metadata_uri)
-        .map_err(|_| TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id))?;
+    ensure!(
+        is_uri_valid(metadata_uri),
+        TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id)
+    );
 
     ensure!(
         metadata_uri.len() <= chain_config.token_max_uri_len(),

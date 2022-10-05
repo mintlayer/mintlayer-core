@@ -13,29 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::ChainConfig;
+use crate::TokensError;
+use common::{
+    chain::{Block, ChainConfig, Transaction},
+    primitives::Id,
+};
 use utils::ensure;
 
-use crate::TokensError;
-
-use super::error::CheckTokensError;
-
-pub fn check_token_text_length(text: &[u8], max_len: usize) -> Result<(), CheckTokensError> {
-    if text.len() > max_len || text.is_empty() {
-        return Err(CheckTokensError::InvalidTextLength);
+fn check_is_text_alphanumeric(str: &[u8]) -> bool {
+    match String::from_utf8(str.to_vec()) {
+        Ok(text) => text.chars().all(char::is_alphanumeric),
+        Err(_) => false,
     }
-
-    Ok(())
-}
-
-pub fn check_is_text_alphanumeric(str: &[u8]) -> Result<(), CheckTokensError> {
-    let is_alphanumeric = String::from_utf8(str.to_vec())
-        .map_err(|_| CheckTokensError::InvalidCharacter)?
-        .chars()
-        .all(char::is_alphanumeric);
-
-    ensure!(is_alphanumeric, CheckTokensError::InvalidCharacter);
-    Ok(())
 }
 
 pub fn is_rfc1738_valid_symbol(ch: char) -> bool {
@@ -43,21 +32,83 @@ pub fn is_rfc1738_valid_symbol(ch: char) -> bool {
     ":._-~!/?#[]@$&\'()*+,;=".chars().any(|rfc1738_ch| ch == rfc1738_ch)
 }
 
-pub fn check_uri(chain_config: &ChainConfig, uri: &[u8]) -> Result<(), CheckTokensError> {
-    let is_validated = String::from_utf8(uri.to_vec())
-        .map_err(|_| CheckTokensError::InvalidURI)?
-        .chars()
-        // TODO: this is probably an invalid way to validate URLs. Find the proper way to do this in rust.
-        .all(|ch| ch.is_alphanumeric() || is_rfc1738_valid_symbol(ch));
-
-    ensure!(
-        is_validated && (uri.len() <= chain_config.token_max_uri_len()) && !uri.is_empty(),
-        CheckTokensError::InvalidURI
-    );
-    Ok(())
+pub fn is_uri_valid(uri: &[u8]) -> bool {
+    match String::from_utf8(uri.to_vec()) {
+        Ok(uri) => uri
+            .chars()
+            // TODO: this is probably an invalid way to validate URLs. Find the proper way to do this in rust.
+            .all(|ch| ch.is_alphanumeric() || is_rfc1738_valid_symbol(ch)),
+        Err(_) => false,
+    }
 }
 
 pub fn check_media_hash(_hash: &[u8]) -> Result<(), TokensError> {
     //FIXME(nft_issuance): For now, we can use arbitrary hashes, but should we check them?
+    Ok(())
+}
+
+pub fn check_token_ticker(
+    chain_config: &ChainConfig,
+    ticker: &[u8],
+    tx_id: Id<Transaction>,
+    source_block_id: Id<Block>,
+) -> Result<(), TokensError> {
+    // Check length
+    if ticker.len() > chain_config.token_max_ticker_len() || ticker.is_empty() {
+        return Err(TokensError::IssueErrorInvalidTickerLength(
+            tx_id,
+            source_block_id,
+        ));
+    }
+
+    // Check is ticker has alphanumeric chars
+    ensure!(
+        check_is_text_alphanumeric(ticker),
+        TokensError::IssueErrorTickerHasNoneAlphaNumericChar(tx_id, source_block_id)
+    );
+    Ok(())
+}
+
+pub fn check_nft_name(
+    chain_config: &ChainConfig,
+    name: &[u8],
+    tx_id: Id<Transaction>,
+    source_block_id: Id<Block>,
+) -> Result<(), TokensError> {
+    // Check length
+    if name.len() > chain_config.token_max_name_len() || name.is_empty() {
+        return Err(TokensError::IssueErrorInvalidNameLength(
+            tx_id,
+            source_block_id,
+        ));
+    }
+
+    // Check is name has alphanumeric chars
+    ensure!(
+        check_is_text_alphanumeric(name),
+        TokensError::IssueErrorNameHasNoneAlphaNumericChar(tx_id, source_block_id)
+    );
+    Ok(())
+}
+
+pub fn check_nft_description(
+    chain_config: &ChainConfig,
+    description: &[u8],
+    tx_id: Id<Transaction>,
+    source_block_id: Id<Block>,
+) -> Result<(), TokensError> {
+    // Check length
+    if description.len() > chain_config.token_max_description_len() || description.is_empty() {
+        return Err(TokensError::IssueErrorInvalidDescriptionLength(
+            tx_id,
+            source_block_id,
+        ));
+    }
+
+    // Check is description has alphanumeric chars
+    ensure!(
+        check_is_text_alphanumeric(description),
+        TokensError::IssueErrorDescriptionHasNoneAlphaNumericChar(tx_id, source_block_id)
+    );
     Ok(())
 }
