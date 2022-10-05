@@ -163,6 +163,7 @@ pub enum ConnectivityEvent {
     },
 }
 
+// TODO: FIXME: I don't like that we have two syncing events: `p2p/src/net/libp2p/types.rs` and `p2p/src/net/types/mod.rs`.
 #[derive(Debug)]
 pub enum SyncingEvent {
     Request {

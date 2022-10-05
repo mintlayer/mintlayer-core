@@ -592,8 +592,26 @@ where
                         self.unregister_peer(peer_id)
                     }
                 }
+                // TODO: FIXME:
+                // event = self.pubsub_handle.poll_next() => match event? {
+                //     PubSubEvent::Announcement { peer_id, message_id, announcement } => match announcement {
+                //         // TODO: FIXME: Use headers instead of blocks.
+                //         message::Announcement::Block(block) => {
+                //             self.process_block_announcement(peer_id, message_id, block).await?;
+                //         },
+                //     }
+                // },
+                // block_id = block_rx.recv().fuse() => {
+                //     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
+                //
+                //     match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
+                //         Some(block) => self.announce_block(block).await?,
+                //         None => log::error!("CRITICAL: best block not available"),
+                //     }
+                // }
             };
 
+            // TODO: FIXME: Instead of this just stop the syncing process and process announcements?..
             self.check_state()?;
         }
     }
