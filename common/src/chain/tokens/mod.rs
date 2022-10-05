@@ -57,7 +57,8 @@ impl TokenAuxiliaryData {
 #[allow(clippy::large_enum_variant)]
 pub enum OutputValue {
     Coin(Amount),
-    //FIXME(nft_issuance): Clippy warning on this. Should we use Box here?
+    //FIXME(nft_issuance): Clippy warning on this due to differences between sizes of enum arms. Clippy suggest to use Box, but I have doubts.
+    //                     Should we use clippy attribute to skip that?
     Token(TokenData),
 }
 
@@ -80,7 +81,6 @@ impl OutputValue {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct TokenTransferV1 {
     pub token_id: TokenId,
-    // Todo(nft_issuance): Should we use enum here, to choose NFT or tokens?
     pub amount: Amount,
 }
 
@@ -98,7 +98,7 @@ pub struct TokenBurnV1 {
     pub amount_to_burn: Amount,
 }
 
-//FIXME(nft_issuance): Clippy warning on this. Should we use Box here?
+//FIXME(nft_issuance): The same issue above in OutputValue. 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 #[allow(clippy::large_enum_variant)]
 pub enum TokenData {

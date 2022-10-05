@@ -72,7 +72,6 @@ pub fn get_output_token_id_and_amount(
             TokenData::NftIssuanceV1(_) => match include_issuance {
                 Some(tx) => {
                     let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
-                    // FIXME(nft_issuance): Is it okay for now? I guess, in the future PR we'll send
                     Some((CoinOrTokenId::TokenId(token_id), Amount::from_atoms(1)))
                 }
                 None => None,
@@ -104,8 +103,9 @@ pub fn get_input_token_id_and_amount<
                     TokensError::AttemptToTransferBurnedTokens,
                 ));
             }
-            // FIXME(nft_issuance): Find more appropriate way to check nfts
+
             TokenData::NftIssuanceV1(_) => issuance_token_id_getter()?
+                // TODO: Find more appropriate way to check NFTs when we add multi-token feature 
                 .map(|token_id| (CoinOrTokenId::TokenId(token_id), Amount::from_atoms(1)))
                 .ok_or(ConnectTransactionError::TokensError(
                     TokensError::TokenIdCantBeCalculated,
