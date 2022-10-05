@@ -22,7 +22,25 @@ use serialization_core::{Decode, Encode};
 /// - If the Vec has no data, it encodes to None
 /// - Some(vec![]) and None are equivalent when encoded, but when decoded result in None
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct DataOrNoVec<T>(pub Option<Vec<T>>);
+pub struct DataOrNoVec<T>(Option<Vec<T>>);
+
+impl<T> AsRef<Option<Vec<T>>> for DataOrNoVec<T> {
+    fn as_ref(&self) -> &Option<Vec<T>> {
+        &self.0
+    }
+}
+
+impl<T> From<Option<Vec<T>>> for DataOrNoVec<T> {
+    fn from(val: Option<Vec<T>>) -> Self {
+        DataOrNoVec(val)
+    }
+}
+
+impl<T> From<DataOrNoVec<T>> for Option<Vec<T>> {
+    fn from(val: DataOrNoVec<T>) -> Self {
+        val.0
+    }
+}
 
 impl<U: Encode> Encode for DataOrNoVec<U> {
     fn encode_to<T: serialization_core::Output + ?Sized>(&self, dest: &mut T) {
