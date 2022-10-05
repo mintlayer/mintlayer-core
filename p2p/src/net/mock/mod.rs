@@ -122,7 +122,6 @@ where
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
-        let (pubsub_tx, _pubsub_rx) = mpsc::channel(16);
         let (sync_tx, sync_rx) = mpsc::channel(16);
         let socket = T::bind(addr).await?;
         let local_addr = socket.local_address().expect("to have bind address available");
@@ -135,7 +134,6 @@ where
                 Arc::clone(&_config),
                 cmd_rx,
                 conn_tx,
-                pubsub_tx,
                 sync_tx,
                 std::time::Duration::from_secs(p2p_config.outbound_connection_timeout),
             );

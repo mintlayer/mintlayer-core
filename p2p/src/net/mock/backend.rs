@@ -89,9 +89,6 @@ pub struct Backend<T: MockTransport> {
     /// TX channel for sending syncing events
     sync_tx: mpsc::Sender<types::SyncingEvent>,
 
-    /// TX channel for sending events to the frontend
-    _pubsub_tx: mpsc::Sender<types::PubSubEvent<T>>,
-
     /// Timeout for outbound operations
     timeout: std::time::Duration,
 
@@ -113,7 +110,6 @@ where
         config: Arc<ChainConfig>,
         cmd_rx: mpsc::Receiver<types::Command<T>>,
         conn_tx: mpsc::Sender<types::ConnectivityEvent<T>>,
-        _pubsub_tx: mpsc::Sender<types::PubSubEvent<T>>,
         sync_tx: mpsc::Sender<types::SyncingEvent>,
         timeout: std::time::Duration,
     ) -> Self {
@@ -124,7 +120,6 @@ where
             cmd_rx,
             conn_tx,
             config,
-            _pubsub_tx,
             sync_tx,
             timeout,
             peers: HashMap::new(),
