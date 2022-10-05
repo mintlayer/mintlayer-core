@@ -13,42 +13,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, convert::TryInto, sync::Arc};
+use std::{collections::BTreeSet, convert::TryInto};
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
-use chainstate_types::{get_skip_height, BlockIndex, GenBlockIndex, PropertyQueryError};
-use common::chain::tokens::TokenAuxiliaryData;
-use common::chain::Transaction;
-use common::time_getter::TimeGetterFn;
+use chainstate_types::{
+    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, GenBlockIndex,
+    GetAncestorError, PropertyQueryError,
+};
 use common::{
     chain::{
         block::{
             calculate_tx_merkle_root, calculate_witness_merkle_root, BlockHeader, BlockReward,
         },
+        tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
-        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
+        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction,
     },
     primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable},
+    time_getter::TimeGetterFn,
     Uint256,
 };
-use consensus::{BlockIndexHandle, TransactionIndexHandle};
+use consensus::TransactionIndexHandle;
 use logging::log;
-use utils::ensure;
-use utils::tap_error_log::LogError;
+use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosDB, UtxosView};
 
-use super::median_time::calculate_median_time_past;
-use crate::detail::tokens::check_tokens_data;
-use crate::detail::transaction_verifier::error::TokensError;
 use crate::{BlockError, BlockSource, ChainstateConfig};
 
+use self::tx_verifier_storage::gen_block_index_getter;
+
 use super::{
+    median_time::calculate_median_time_past,
     orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
+    tokens::check_tokens_data,
     transaction_verifier::{
-        error::ConnectTransactionError, BlockTransactableRef, Fee, Subsidy, TransactionVerifier,
+        error::{ConnectTransactionError, TokensError},
+        flush::flush_to_storage,
+        BlockTransactableRef, Fee, Subsidy, TransactionVerifier,
     },
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
 };
+
+mod tx_verifier_storage;
 
 pub(crate) struct ChainstateRef<'a, S, O> {
     chain_config: &'a ChainConfig,
@@ -79,6 +85,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> BlockIndexHandle for Chainst
         ancestor_height: BlockHeight,
     ) -> Result<GenBlockIndex, PropertyQueryError> {
         self.get_ancestor(&GenBlockIndex::Block(block_index.clone()), ancestor_height)
+            .map_err(PropertyQueryError::from)
     }
 
     fn get_block_reward(
@@ -179,6 +186,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
         gen_block_index_getter(&self.db_tx, self.chain_config, block_id)
+            .map_err(PropertyQueryError::from)
     }
 
     pub fn get_mainchain_tx_index(
@@ -237,7 +245,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         &self,
         block_index: &GenBlockIndex,
         target_height: BlockHeight,
-    ) -> Result<GenBlockIndex, PropertyQueryError> {
+    ) -> Result<GenBlockIndex, GetAncestorError> {
         block_index_ancestor_getter(
             gen_block_index_getter,
             &self.db_tx,
@@ -247,7 +255,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         )
     }
 
-    #[allow(unused)]
     pub fn last_common_ancestor(
         &self,
         first_block_index: &GenBlockIndex,
@@ -639,11 +646,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         block_index: &'a BlockIndex,
         block: &WithId<Block>,
         spend_height: &BlockHeight,
-    ) -> Result<TransactionVerifier<S>, BlockError> {
+    ) -> Result<TransactionVerifier<Self>, BlockError> {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
 
-        let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
+        let mut tx_verifier = TransactionVerifier::new(self, self.chain_config);
 
         let reward_fees = tx_verifier
             .connect_transactable(
@@ -679,14 +686,17 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
             .log_err()?;
 
+        tx_verifier.set_best_block(block.get_id().into());
+
         Ok(tx_verifier)
     }
 
     fn make_cache_with_disconnected_transactions(
         &'a self,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<S>, BlockError> {
-        let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
+        prev_block_id: Id<GenBlock>,
+    ) -> Result<TransactionVerifier<Self>, BlockError> {
+        let mut tx_verifier = TransactionVerifier::new(self, self.chain_config);
 
         // TODO: add a test that checks the order in which txs are disconnected
         block
@@ -702,6 +712,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         tx_verifier
             .disconnect_transactable(BlockTransactableRef::BlockReward(block))
             .log_err()?;
+
+        tx_verifier.set_best_block(prev_block_id);
 
         Ok(tx_verifier)
     }
@@ -830,16 +842,20 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             .make_cache_with_connected_transactions(block_index, block, spend_height)
             .log_err()?;
 
-        let consumed = connected_txs.consume().log_err()?;
-        TransactionVerifier::flush_to_storage(&mut self.db_tx, consumed).log_err()?;
+        let consumed = connected_txs.consume()?;
+        flush_to_storage(self, consumed)?;
 
         Ok(())
     }
 
-    fn disconnect_transactions(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
-        let cached_inputs = self.make_cache_with_disconnected_transactions(block).log_err()?;
-        let cached_inputs = cached_inputs.consume().log_err()?;
-        TransactionVerifier::flush_to_storage(&mut self.db_tx, cached_inputs).log_err()?;
+    fn disconnect_transactions(
+        &mut self,
+        block: &WithId<Block>,
+        prev_block_id: Id<GenBlock>,
+    ) -> Result<(), BlockError> {
+        let cached_inputs = self.make_cache_with_disconnected_transactions(block, prev_block_id)?;
+        let cached_inputs = cached_inputs.consume()?;
+        flush_to_storage(self, cached_inputs)?;
 
         Ok(())
     }
@@ -901,7 +917,8 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             .expect("Best block index not present in the database");
         let block = self.get_block_from_index(&block_index).log_err()?.expect("Inconsistent DB");
         // Disconnect transactions
-        self.disconnect_transactions(&block.into()).log_err()?;
+        self.disconnect_transactions(&block.into(), *block_index.prev_block_id())
+            .log_err()?;
         self.db_tx.set_best_block_id(block_index.prev_block_id()).log_err()?;
         // Disconnect block
         self.db_tx.del_block_id_at_height(&block_index.block_height()).log_err()?;
@@ -986,79 +1003,5 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             Ok(_) => Ok(()),
             Err(err) => err.into(),
         }
-    }
-}
-
-pub fn block_index_ancestor_getter<S, G>(
-    gen_block_index_getter: G,
-    db_tx: &S,
-    chain_config: &ChainConfig,
-    block_index: &GenBlockIndex,
-    target_height: BlockHeight,
-) -> Result<GenBlockIndex, PropertyQueryError>
-where
-    G: Fn(&S, &ChainConfig, &Id<GenBlock>) -> Result<Option<GenBlockIndex>, PropertyQueryError>,
-{
-    if target_height > block_index.block_height() {
-        return Err(PropertyQueryError::InvalidAncestorHeight {
-            block_height: block_index.block_height(),
-            ancestor_height: target_height,
-        });
-    }
-
-    let mut height_walk = block_index.block_height();
-    let mut block_index_walk = block_index.clone();
-    loop {
-        assert!(height_walk >= target_height, "Skipped too much");
-        if height_walk == target_height {
-            break Ok(block_index_walk);
-        }
-        let cur_block_index = match block_index_walk {
-            GenBlockIndex::Genesis(_) => break Ok(block_index_walk),
-            GenBlockIndex::Block(idx) => idx,
-        };
-
-        let ancestor = cur_block_index.some_ancestor();
-
-        let height_walk_prev =
-            height_walk.prev_height().expect("Can never fail because prev is zero at worst");
-        let height_skip = get_skip_height(height_walk);
-        let height_skip_prev = get_skip_height(height_walk_prev);
-
-        // prepare the booleans for the check
-        let at_target = height_skip == target_height;
-        let still_not_there = height_skip > target_height;
-        let too_close = height_skip_prev.next_height().next_height() < height_skip;
-        let prev_too_close = height_skip_prev >= target_height;
-
-        if at_target || (still_not_there && !(too_close && prev_too_close)) {
-            block_index_walk = gen_block_index_getter(db_tx, chain_config, ancestor)
-                .log_err()?
-                .expect("Block index of ancestor must exist, since id exists");
-            height_walk = height_skip;
-        } else {
-            let prev_block_id = cur_block_index.prev_block_id();
-            block_index_walk = gen_block_index_getter(db_tx, chain_config, prev_block_id)
-                .log_err()?
-                .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))
-                .log_err()?;
-            height_walk = height_walk_prev;
-        }
-    }
-}
-
-pub fn gen_block_index_getter<S: BlockchainStorageRead>(
-    db_tx: &S,
-    chain_config: &ChainConfig,
-    block_id: &Id<GenBlock>,
-) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
-    match block_id.classify(chain_config) {
-        GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
-            chain_config.genesis_block(),
-        )))),
-        GenBlockId::Block(id) => db_tx
-            .get_block_index(&id)
-            .map_err(PropertyQueryError::from)
-            .map(|b| b.map(GenBlockIndex::Block)),
     }
 }

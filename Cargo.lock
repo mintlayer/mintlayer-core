@@ -590,15 +590,11 @@ dependencies = [
  "common",
  "consensus",
  "crypto",
- "expect-test",
- "fallible-iterator",
  "hex",
  "itertools",
  "jsonrpsee",
  "logging",
  "mockall",
- "rand 0.8.5",
- "replace_with",
  "rpc",
  "rstest",
  "serde",
@@ -609,6 +605,7 @@ dependencies = [
  "test-utils",
  "thiserror",
  "tokio",
+ "tx-verifier",
  "utils",
  "utxo",
 ]
@@ -655,6 +652,7 @@ name = "chainstate-test-suite"
 version = "0.1.0"
 dependencies = [
  "chainstate",
+ "chainstate-storage",
  "chainstate-test-framework",
  "chainstate-types",
  "common",
@@ -4621,6 +4619,23 @@ name = "try-lock"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
+
+[[package]]
+name = "tx-verifier"
+version = "0.1.0"
+dependencies = [
+ "chainstate-storage",
+ "chainstate-types",
+ "common",
+ "crypto",
+ "fallible-iterator",
+ "logging",
+ "mockall",
+ "replace_with",
+ "thiserror",
+ "utils",
+ "utxo",
+]
 
 [[package]]
 name = "typename"

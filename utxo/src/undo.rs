@@ -76,6 +76,10 @@ impl BlockUndo {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.reward_undo.is_none() && self.tx_undos.is_empty()
+    }
+
     pub fn tx_undos(&self) -> &[TxUndo] {
         &self.tx_undos
     }

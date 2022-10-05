@@ -19,13 +19,13 @@ use std::{sync::atomic::Ordering, time::Duration};
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{
     make_chainstate, BlockError, BlockSource, ChainstateConfig, ChainstateError, CheckBlockError,
-    CheckBlockTransactionsError, ConnectTransactionError, OrphanCheckError,
+    CheckBlockTransactionsError, ConnectTransactionError, OrphanCheckError, TxIndexError,
 };
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestBlockInfo, TestFramework, TestStore,
     TransactionBuilder,
 };
-use chainstate_types::{GenBlockIndex, PropertyQueryError};
+use chainstate_types::{GenBlockIndex, GetAncestorError, PropertyQueryError};
 use common::chain::OutPoint;
 use common::chain::{signed_transaction::SignedTransaction, Transaction};
 use common::primitives::BlockDistance;
@@ -408,7 +408,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::TxIndexError(TxIndexError::MissingOutputOrSpent)
             ))
         );
     });
@@ -475,10 +475,12 @@ fn get_ancestor_invalid_height(#[case] seed: Seed) {
 
     let invalid_height = height + 1;
     assert_eq!(
-        ChainstateError::FailedToReadProperty(PropertyQueryError::InvalidAncestorHeight {
-            ancestor_height: u64::try_from(invalid_height).unwrap().into(),
-            block_height: u64::try_from(height).unwrap().into(),
-        }),
+        ChainstateError::FailedToReadProperty(PropertyQueryError::GetAncestorError(
+            GetAncestorError::InvalidAncestorHeight {
+                ancestor_height: u64::try_from(invalid_height).unwrap().into(),
+                block_height: u64::try_from(height).unwrap().into(),
+            }
+        )),
         tf.chainstate
             .get_ancestor(
                 &tf.best_block_index(),

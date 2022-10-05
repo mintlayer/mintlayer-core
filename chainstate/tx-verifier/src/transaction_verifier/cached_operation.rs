@@ -13,27 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::error::ConnectTransactionError;
+use super::{error::TxIndexError, CachedOperation};
 use common::chain::{Spender, TxMainChainIndex};
-pub enum CachedInputsOperation {
-    Write(TxMainChainIndex),
-    Read(TxMainChainIndex),
-    Erase,
-}
+
+pub type CachedInputsOperation = CachedOperation<TxMainChainIndex>;
 
 impl CachedInputsOperation {
-    pub fn spend(
-        &mut self,
-        output_index: u32,
-        spender: Spender,
-    ) -> Result<(), ConnectTransactionError> {
+    pub fn spend(&mut self, output_index: u32, spender: Spender) -> Result<(), TxIndexError> {
         // spend the output
         match self {
             CachedInputsOperation::Write(tx_index) | CachedInputsOperation::Read(tx_index) => {
-                tx_index.spend(output_index, spender).map_err(ConnectTransactionError::from)?
+                tx_index.spend(output_index, spender).map_err(TxIndexError::from)?
             }
             CachedInputsOperation::Erase => {
-                return Err(ConnectTransactionError::MissingOutputOrSpentOutputErasedOnConnect)
+                return Err(TxIndexError::MissingOutputOrSpentOutputErasedOnConnect)
             }
         }
 
@@ -42,14 +35,14 @@ impl CachedInputsOperation {
         Ok(())
     }
 
-    pub fn unspend(&mut self, output_index: u32) -> Result<(), ConnectTransactionError> {
+    pub fn unspend(&mut self, output_index: u32) -> Result<(), TxIndexError> {
         // unspend the output
         match self {
             CachedInputsOperation::Write(tx_index) | CachedInputsOperation::Read(tx_index) => {
-                tx_index.unspend(output_index).map_err(ConnectTransactionError::from)?
+                tx_index.unspend(output_index).map_err(TxIndexError::from)?
             }
             CachedInputsOperation::Erase => {
-                return Err(ConnectTransactionError::MissingOutputOrSpentOutputErasedOnDisconnect)
+                return Err(TxIndexError::MissingOutputOrSpentOutputErasedOnDisconnect)
             }
         }
 

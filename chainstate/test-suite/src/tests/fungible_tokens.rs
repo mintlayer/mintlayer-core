@@ -14,15 +14,16 @@
 // limitations under the License.
 
 use chainstate::{BlockError, BlockSource, ChainstateError, TokensError};
-use chainstate::{CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError};
+use chainstate::{
+    CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError, TxIndexError,
+};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
-use common::chain::OutPointSourceId;
 use common::primitives::{id, Id};
 use common::{
     chain::{
         signature::inputsig::InputWitness,
         tokens::{token_id, OutputValue, TokenData, TokenId},
-        Destination, OutputPurpose, TxInput, TxOutput,
+        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
@@ -1272,7 +1273,9 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         assert!(matches!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
+                BlockError::StateUpdateFailed(ConnectTransactionError::TxIndexError(
+                    TxIndexError::MissingOutputOrSpent
+                ))
             ))
         ));
     })

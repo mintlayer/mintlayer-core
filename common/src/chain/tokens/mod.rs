@@ -28,7 +28,7 @@ pub use tokens_utils::*;
 use super::{Block, Transaction};
 
 /// The data that is created when a token is issued to track it (and to update it with ACL commands)
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, Eq, PartialEq)]
 pub struct TokenAuxiliaryData {
     issuance_tx: Transaction,
     issuance_block_id: Id<Block>,
