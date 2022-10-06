@@ -13,13 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO: FIXME: Update the module documentation.
+//! This module is responsible for both initial syncing and further blocks processing (the reaction
+//! to block announcement from peers and the announcement of blocks produced by this node).
 
-use crate::{
-    error::{P2pError, PeerError, ProtocolError},
-    event, message,
-    net::{self, types::SyncingEvent, NetworkingService, SyncingMessagingService},
-};
+pub mod peer;
+
+mod request;
+
+use std::{collections::HashMap, sync::Arc};
+
+use futures::FutureExt;
+use tokio::sync::{mpsc, oneshot};
+use void::Void;
+
 use chainstate::{
     ban_score::BanScore, chainstate_interface, BlockError, ChainstateError::ProcessBlockError,
     Locator,
@@ -31,14 +37,14 @@ use common::{
     },
     primitives::{Id, Idable},
 };
-use futures::FutureExt;
 use logging::log;
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::{mpsc, oneshot};
 use utils::ensure;
 
-pub mod peer;
-mod request;
+use crate::{
+    error::{P2pError, PeerError, ProtocolError},
+    event, message,
+    net::{self, types::SyncingEvent, NetworkingService, SyncingMessagingService},
+};
 
 // TODO: from config? global constant?
 const HEADER_LIMIT: usize = 2000;
@@ -58,9 +64,8 @@ pub enum SyncState {
     /// Downloading blocks from remote node(s)
     DownloadingBlocks,
 
-    // TODO: FIXME: Rename to something like "initial block download done".
-    /// Local block index is fully synced
-    Idle,
+    /// The local block index is fully synced.
+    Done,
 }
 
 /// Sync manager is responsible for syncing the local blockchain to the chain with most trust
@@ -346,38 +351,34 @@ where
         }
     }
 
-    /// Check the current state of syncing
+    /// Checks the current state of the initial block download and returns true if it is finished.
     ///
-    /// The node is considered fully synced, i.e., that its initial block download is done, if:
-    /// - all of its peers are in `Idle` state
-    ///
-    /// When the node is synced, [`crate::pubsub::PubSubMessageHandler`] is notified so it knows to
-    /// subscribe to the needed publish-subscribe topics.
-    pub fn check_state(&mut self) -> crate::Result<()> {
+    /// The node is considered fully synced (its initial block download is done) if all its peers
+    /// are in the `Done` state.
+    pub fn check_sync_state(&mut self) -> bool {
         // TODO: improve "initial block download done" check
 
         if self.peers.is_empty() {
             self.state = SyncState::Uninitialized;
-            return Ok(());
+            return false;
         }
 
         for peer in self.peers.values() {
             match peer.state() {
                 peer::PeerSyncState::UploadingBlocks(_) => {
                     self.state = SyncState::DownloadingBlocks;
-                    return Ok(());
+                    return false;
                 }
                 peer::PeerSyncState::UploadingHeaders(_) | peer::PeerSyncState::Unknown => {
                     self.state = SyncState::Uninitialized;
-                    return Ok(());
+                    return false;
                 }
                 peer::PeerSyncState::Idle => {}
             }
         }
 
-        // TODO: FIXME:
-        self.state = SyncState::Idle;
-        Ok(())
+        self.state = SyncState::Done;
+        true
     }
 
     pub async fn process_error(
@@ -501,10 +502,16 @@ where
         }
     }
 
-    /// Run SyncManager event loop
-    pub async fn run(&mut self) -> crate::Result<void::Void> {
+    /// Runs the SyncManager event loop.
+    pub async fn run(&mut self) -> crate::Result<Void> {
         log::info!("Starting SyncManager");
 
+        self.sync().await?;
+        self.process_blocks().await
+    }
+
+    /// TODO: FIXME:
+    async fn sync(&mut self) -> crate::Result<()> {
         loop {
             tokio::select! {
                 event = self.peer_sync_handle.poll_next() => match event? {
@@ -592,28 +599,33 @@ where
                         self.unregister_peer(peer_id)
                     }
                 }
-                // TODO: FIXME:
-                // event = self.pubsub_handle.poll_next() => match event? {
-                //     PubSubEvent::Announcement { peer_id, message_id, announcement } => match announcement {
-                //         // TODO: FIXME: Use headers instead of blocks.
-                //         message::Announcement::Block(block) => {
-                //             self.process_block_announcement(peer_id, message_id, block).await?;
-                //         },
-                //     }
-                // },
-                // block_id = block_rx.recv().fuse() => {
-                //     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
-                //
-                //     match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
-                //         Some(block) => self.announce_block(block).await?,
-                //         None => log::error!("CRITICAL: best block not available"),
-                //     }
-                // }
             };
 
-            // TODO: FIXME: Instead of this just stop the syncing process and process announcements?..
-            self.check_state()?;
+            if self.check_sync_state() {
+                return Ok(());
+            }
         }
+    }
+
+    async fn process_blocks(&mut self) -> crate::Result<Void> {
+        // TODO: FIXME:
+        // event = self.pubsub_handle.poll_next() => match event? {
+        //     PubSubEvent::Announcement { peer_id, message_id, announcement } => match announcement {
+        //         // TODO: FIXME: Use headers instead of blocks.
+        //         message::Announcement::Block(block) => {
+        //             self.process_block_announcement(peer_id, message_id, block).await?;
+        //         },
+        //     }
+        // },
+        // block_id = block_rx.recv().fuse() => {
+        //     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
+        //
+        //     match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
+        //         Some(block) => self.announce_block(block).await?,
+        //         None => log::error!("CRITICAL: best block not available"),
+        //     }
+        // }
+        todo!()
     }
 }
 

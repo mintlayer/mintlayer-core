@@ -202,7 +202,8 @@ where
         }
     }
 
-    mgr.check_state()
+    mgr.check_sync_state();
+    Ok(())
 }
 
 async fn local_and_remote_in_sync<A, T>()
@@ -240,7 +241,7 @@ where
     assert_eq!(res2, Ok(()));
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(mgr1.state(), &SyncState::Done);
     // TODO: FIXME:
     // assert_eq!(
     //     pubsub.try_recv(),
@@ -353,10 +354,10 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().unwrap();
+    assert!(mgr1.check_sync_state());
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(mgr1.state(), &SyncState::Done);
     // TODO: FIXME:
     // assert_eq!(
     //     pubsub.try_recv(),
@@ -490,11 +491,11 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().unwrap();
-    mgr2.check_state().unwrap();
+    assert!(mgr1.check_sync_state());
+    assert!(mgr2.check_sync_state());
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(mgr1.state(), &SyncState::Done);
     // TODO: FIXME:
     // assert_eq!(
     //     pubsub.try_recv(),
@@ -652,13 +653,13 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().unwrap();
-    mgr2.check_state().unwrap();
+    assert!(mgr1.check_sync_state());
+    assert!(mgr2.check_sync_state());
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await == local_tip);
     assert!(get_tip(&mgr2_handle).await != remote_tip);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(mgr1.state(), &SyncState::Done);
     // TODO: FIXME:
     // assert_eq!(
     //     pubsub.try_recv(),
@@ -819,13 +820,13 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().unwrap();
-    mgr2.check_state().unwrap();
+    assert!(mgr1.check_sync_state());
+    assert!(mgr2.check_sync_state());
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await != local_tip);
     assert!(get_tip(&mgr2_handle).await == remote_tip);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(mgr1.state(), &SyncState::Done);
     //  TODO: FIXME:
     // assert_eq!(
     //     pubsub.try_recv(),
@@ -948,12 +949,12 @@ where
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().unwrap();
+    assert!(mgr1.check_sync_state());
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
     assert!(get_tip(&mgr3_handle).await == mgr3_tip);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(mgr1.state(), &SyncState::Done);
     //  TODO: FIXME:
     // assert_eq!(
     //     pubsub.try_recv(),
@@ -1029,7 +1030,7 @@ where
         loop {
             advance_mgr_state(&mut mgr1).await.unwrap();
 
-            if mgr1.state() == &SyncState::Idle {
+            if mgr1.state() == &SyncState::Done {
                 break;
             }
         }
@@ -1093,12 +1094,12 @@ where
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().unwrap();
+    assert!(mgr1.check_sync_state());
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
     assert!(get_tip(&mgr3_handle).await == mgr3_tip);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(mgr1.state(), &SyncState::Done);
     // TODO: FIXME:
     // assert_eq!(
     //     pubsub.try_recv(),
@@ -1169,7 +1170,7 @@ where
         loop {
             advance_mgr_state(&mut mgr1).await.unwrap();
 
-            if mgr1.state() == &SyncState::Idle {
+            if mgr1.state() == &SyncState::Done {
                 break;
             }
         }
@@ -1249,11 +1250,11 @@ where
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().unwrap();
+    assert!(mgr1.check_sync_state());
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(same_tip(&mgr2_handle, &mgr3_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(mgr1.state(), &SyncState::Done);
     // TODO: FIXME:
     // assert_eq!(
     //     pubsub.try_recv(),
@@ -1314,7 +1315,7 @@ where
     assert_eq!(res2, Ok(()));
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(mgr1.state(), &SyncState::Done);
 
     mgr1.unregister_peer(*conn2.peer_id());
     assert_eq!(conn1.disconnect(*conn2.peer_id()).await, Ok(()));
@@ -1393,10 +1394,10 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().unwrap();
+    assert!(mgr1.check_sync_state());
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(mgr1.state(), &SyncState::Done);
 }
 
 #[tokio::test]
