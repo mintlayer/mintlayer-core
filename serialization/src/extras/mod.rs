@@ -13,12 +13,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Blockchain data encoding and decoding tools
-
-pub mod encoded;
-pub mod extras;
-
-// Re-export all the constituent parts
-pub use serialization_core::*;
-pub use serialization_tagged as tagged;
-pub use tagged::{DirectDecode, DirectEncode, Tag, Tagged};
+pub mod non_empty_vec;
