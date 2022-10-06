@@ -1880,43 +1880,6 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     Ok(())
 }
 
-struct TestTxAccumulator {
-    txs: Vec<SignedTransaction>,
-    total_size: usize,
-    target_size: usize,
-    done: bool,
-}
-
-impl TestTxAccumulator {
-    fn new(target_size: usize) -> Self {
-        Self {
-            txs: Vec::new(),
-            total_size: 0,
-            target_size,
-            done: false,
-        }
-    }
-}
-
-impl TransactionAccumulator for TestTxAccumulator {
-    fn add_tx(&mut self, tx: SignedTransaction) {
-        if self.total_size + tx.encoded_size() <= self.target_size {
-            self.total_size += tx.encoded_size();
-            self.txs.push(tx);
-        } else {
-            self.done = true
-        };
-    }
-
-    fn done(&self) -> bool {
-        self.done
-    }
-
-    fn txs(&self) -> Vec<SignedTransaction> {
-        self.txs.clone()
-    }
-}
-
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -1954,18 +1917,18 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
             .build();
         mempool.add_transaction(tx.clone()).await?;
     }
-    let tx_accumulator = TestTxAccumulator::new(200000);
+    let tx_accumulator = DefaultTxAccumulator::new(200000);
     let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
     assert_eq!(
         collected_txs.len(),
         usize::try_from(target_txs + 1).unwrap()
     );
 
-    let tx_accumulator = TestTxAccumulator::new(0);
+    let tx_accumulator = DefaultTxAccumulator::new(0);
     let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
     assert_eq!(collected_txs.len(), 0);
 
-    let tx_accumulator = TestTxAccumulator::new(1);
+    let tx_accumulator = DefaultTxAccumulator::new(1);
     let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
     assert_eq!(collected_txs.len(), 0);
     Ok(())

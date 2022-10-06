@@ -106,6 +106,43 @@ pub trait TransactionAccumulator {
     fn txs(&self) -> Vec<SignedTransaction>;
 }
 
+pub struct DefaultTxAccumulator {
+    txs: Vec<SignedTransaction>,
+    total_size: usize,
+    target_size: usize,
+    done: bool,
+}
+
+impl DefaultTxAccumulator {
+    pub fn new(target_size: usize) -> Self {
+        Self {
+            txs: Vec::new(),
+            total_size: 0,
+            target_size,
+            done: false,
+        }
+    }
+}
+
+impl TransactionAccumulator for DefaultTxAccumulator {
+    fn add_tx(&mut self, tx: SignedTransaction) {
+        if self.total_size + tx.encoded_size() <= self.target_size {
+            self.total_size += tx.encoded_size();
+            self.txs.push(tx);
+        } else {
+            self.done = true
+        };
+    }
+
+    fn done(&self) -> bool {
+        self.done
+    }
+
+    fn txs(&self) -> Vec<SignedTransaction> {
+        self.txs.clone()
+    }
+}
+
 #[async_trait::async_trait]
 pub trait MempoolInterface: Send {
     async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error>;
