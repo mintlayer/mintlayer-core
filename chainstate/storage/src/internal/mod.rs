@@ -94,6 +94,11 @@ impl<B: storage::Backend> Store<B> {
         storage.set_storage_version(1)?;
         Ok(storage)
     }
+
+    /// Dump raw database contents
+    pub fn dump_raw(&self) -> crate::Result<storage::raw::RawDb> {
+        self.0.dump_raw().map_err(crate::Error::from)
+    }
 }
 
 impl<B: Default + storage::Backend> Store<B> {
