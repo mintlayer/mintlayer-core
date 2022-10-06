@@ -325,13 +325,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn verify_signatures<T: Transactable>(
-        &self,
-        block_index: &BlockIndex,
-        tx: &T,
-        spend_height: &BlockHeight,
-        spending_time: &BlockTimestamp,
-    ) -> Result<(), ConnectTransactionError> {
+    fn verify_signatures<T: Transactable>(&self, tx: &T) -> Result<(), ConnectTransactionError> {
         let inputs = match tx.inputs() {
             Some(ins) => ins,
             None => return Ok(()),
@@ -347,6 +341,29 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
             // TODO: see if a different treatment should be done for different output purposes
             verify_signature(utxo.output().purpose().destination(), tx, input_idx)
                 .map_err(|_| ConnectTransactionError::SignatureVerificationFailed)?;
+        }
+
+        Ok(())
+    }
+
+    fn check_timelocks<T: Transactable>(
+        &self,
+        block_index: &BlockIndex,
+        tx: &T,
+        spend_height: &BlockHeight,
+        spending_time: &BlockTimestamp,
+    ) -> Result<(), ConnectTransactionError> {
+        let inputs = match tx.inputs() {
+            Some(ins) => ins,
+            None => return Ok(()),
+        };
+
+        for (_input_idx, input) in inputs.iter().enumerate() {
+            let outpoint = input.outpoint();
+            let utxo = self
+                .utxo_cache
+                .utxo(outpoint)
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
             {
                 let height = match utxo.source() {
@@ -470,8 +487,11 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 // Register tokens if tx has issuance data
                 self.token_issuance_cache.register(block.get_id(), tx.transaction())?;
 
+                // check timelocks of the outputs and make sure there's no premature spending
+                self.check_timelocks(block_index, tx, spend_height, median_time_past)?;
+
                 // verify input signatures
-                self.verify_signatures(block_index, tx, spend_height, median_time_past)?;
+                self.verify_signatures(tx)?;
 
                 // spend utxos
                 let tx_undo = self
@@ -496,12 +516,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                     self.tx_index_cache.precache_inputs(inputs, tx_index_fetcher)?;
 
                     // verify input signatures
-                    self.verify_signatures(
-                        block_index,
-                        &reward_transactable,
-                        spend_height,
-                        median_time_past,
-                    )?;
+                    self.verify_signatures(&reward_transactable)?;
                 }
 
                 let fee = None;
