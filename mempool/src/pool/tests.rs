@@ -1879,3 +1879,66 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.store.assert_valid();
     Ok(())
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
+    let tf = TestFramework::default();
+    let mut rng = make_seedable_rng(seed);
+    let genesis = tf.genesis();
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+
+    let size_limit: usize = 1_000;
+    let tx_accumulator = DefaultTxAccumulator::new(size_limit);
+    let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
+    let expected_num_txs_collected: usize = 0;
+    assert_eq!(collected_txs.len(), expected_num_txs_collected);
+
+    let target_txs = 10;
+
+    let mut tx_builder = TransactionBuilder::new().add_input(
+        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+        empty_witness(&mut rng),
+    );
+    for i in 0..target_txs {
+        tx_builder = tx_builder.add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(1000 * (target_txs + 1 - i))),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+    }
+    let initial_tx = tx_builder.build();
+    let initial_tx_id = initial_tx.transaction().get_id();
+    mempool.add_transaction(initial_tx).await?;
+    for i in 0..target_txs {
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(OutPointSourceId::Transaction(initial_tx_id), i as u32),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(0)),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .build();
+        mempool.add_transaction(tx.clone()).await?;
+    }
+
+    let size_limit = 1_000;
+    let tx_accumulator = DefaultTxAccumulator::new(size_limit);
+    let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
+    let expected_num_txs_collected = 6;
+    assert_eq!(collected_txs.len(), expected_num_txs_collected);
+    let total_tx_size: usize = collected_txs.iter().map(|tx| tx.encoded_size()).sum();
+    assert!(total_tx_size <= size_limit);
+
+    let tx_accumulator = DefaultTxAccumulator::new(0);
+    let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
+    assert_eq!(collected_txs.len(), 0);
+
+    let tx_accumulator = DefaultTxAccumulator::new(1);
+    let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
+    assert_eq!(collected_txs.len(), 0);
+    Ok(())
+}
