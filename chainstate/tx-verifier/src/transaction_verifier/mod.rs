@@ -359,7 +359,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
             None => return Ok(()),
         };
 
-        for (_input_idx, input) in inputs.iter().enumerate() {
+        for input in inputs {
             let outpoint = input.outpoint();
             let utxo = self
                 .utxo_cache
