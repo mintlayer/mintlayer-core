@@ -29,12 +29,13 @@ use common::{
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction,
     },
-    primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetterFn,
     Uint256,
 };
 use consensus::TransactionIndexHandle;
 use logging::log;
+use tx_verifier::transaction_verifier::TransactionVerifier;
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosDB, UtxosView};
 
@@ -46,25 +47,25 @@ use super::{
     median_time::calculate_median_time_past,
     orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
     tokens::check_tokens_data,
-    transaction_verifier::{
-        error::{ConnectTransactionError, TokensError},
-        flush::flush_to_storage,
-        BlockTransactableRef, Fee, Subsidy, TransactionVerifier,
-    },
+    transaction_verifier::{error::TokensError, flush::flush_to_storage},
+    tx_verification_strategy::TransactionVerificationStrategy,
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
 };
 
 mod tx_verifier_storage;
 
-pub(crate) struct ChainstateRef<'a, S, O> {
+pub(crate) struct ChainstateRef<'a, S, O, V> {
     chain_config: &'a ChainConfig,
     _chainstate_config: &'a ChainstateConfig,
+    tx_verification_strategy: &'a V,
     db_tx: S,
     orphan_blocks: O,
     time_getter: &'a TimeGetterFn,
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> BlockIndexHandle for ChainstateRef<'a, S, O> {
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    BlockIndexHandle for ChainstateRef<'a, S, O, V>
+{
     fn get_block_index(
         &self,
         block_id: &Id<Block>,
@@ -96,8 +97,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> BlockIndexHandle for Chainst
     }
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionIndexHandle
-    for ChainstateRef<'a, S, O>
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    TransactionIndexHandle for ChainstateRef<'a, S, O, V>
 {
     fn get_mainchain_tx_index(
         &self,
@@ -114,24 +115,28 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionIndexHandle
     }
 }
 
-impl<'a, S: TransactionRw, O> ChainstateRef<'a, S, O> {
+impl<'a, S: TransactionRw, O, V> ChainstateRef<'a, S, O, V> {
     pub fn commit_db_tx(self) -> chainstate_storage::Result<()> {
         self.db_tx.commit()
     }
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    ChainstateRef<'a, S, O, V>
+{
     pub fn new_rw(
         chain_config: &'a ChainConfig,
         chainstate_config: &'a ChainstateConfig,
+        tx_verification_strategy: &'a V,
         db_tx: S,
         orphan_blocks: O,
         time_getter: &'a TimeGetterFn,
-    ) -> ChainstateRef<'a, S, O> {
+    ) -> ChainstateRef<'a, S, O, V> {
         ChainstateRef {
             chain_config,
             _chainstate_config: chainstate_config,
             db_tx,
+            tx_verification_strategy,
             orphan_blocks,
             time_getter,
         }
@@ -140,14 +145,16 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     pub fn new_ro(
         chain_config: &'a ChainConfig,
         chainstate_config: &'a ChainstateConfig,
+        tx_verification_strategy: &'a V,
         db_tx: S,
         orphan_blocks: O,
         time_getter: &'a TimeGetterFn,
-    ) -> ChainstateRef<'a, S, O> {
+    ) -> ChainstateRef<'a, S, O, V> {
         ChainstateRef {
             chain_config,
             _chainstate_config: chainstate_config,
             db_tx,
+            tx_verification_strategy,
             orphan_blocks,
             time_getter,
         }
@@ -641,83 +648,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             .ok_or_else(|| BlockError::BlockProofCalculationError(block.get_id()))
     }
 
-    fn make_cache_with_connected_transactions(
-        &'a self,
-        block_index: &'a BlockIndex,
-        block: &WithId<Block>,
-        spend_height: &BlockHeight,
-    ) -> Result<TransactionVerifier<Self>, BlockError> {
-        // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
-        let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
-
-        let mut tx_verifier = TransactionVerifier::new(self, self.chain_config);
-
-        let reward_fees = tx_verifier
-            .connect_transactable(
-                block_index,
-                BlockTransactableRef::BlockReward(block),
-                spend_height,
-                &median_time_past,
-            )
-            .log_err()?;
-        debug_assert!(reward_fees.is_none());
-
-        let total_fees = block
-            .transactions()
-            .iter()
-            .enumerate()
-            .try_fold(Amount::from_atoms(0), |total, (tx_num, _)| {
-                let fee = tx_verifier
-                    .connect_transactable(
-                        block_index,
-                        BlockTransactableRef::Transaction(block, tx_num),
-                        spend_height,
-                        &median_time_past,
-                    )
-                    .log_err()?;
-                (total + fee.expect("connect tx should return fees").0).ok_or_else(|| {
-                    ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
-                })
-            })
-            .log_err()?;
-
-        let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
-        tx_verifier
-            .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
-            .log_err()?;
-
-        tx_verifier.set_best_block(block.get_id().into());
-
-        Ok(tx_verifier)
-    }
-
-    fn make_cache_with_disconnected_transactions(
-        &'a self,
-        block: &WithId<Block>,
-        prev_block_id: Id<GenBlock>,
-    ) -> Result<TransactionVerifier<Self>, BlockError> {
-        let mut tx_verifier = TransactionVerifier::new(self, self.chain_config);
-
-        // TODO: add a test that checks the order in which txs are disconnected
-        block
-            .transactions()
-            .iter()
-            .enumerate()
-            .rev()
-            .try_for_each(|(tx_num, _)| {
-                tx_verifier
-                    .disconnect_transactable(BlockTransactableRef::Transaction(block, tx_num))
-            })
-            .log_err()?;
-        tx_verifier
-            .disconnect_transactable(BlockTransactableRef::BlockReward(block))
-            .log_err()?;
-
-        tx_verifier.set_best_block(prev_block_id);
-
-        Ok(tx_verifier)
-    }
-
     pub fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
         let id_from_height = |block_height: u64| -> Result<Id<Block>, PropertyQueryError> {
             let block_height: BlockHeight = block_height.into();
@@ -753,7 +683,9 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> {
+impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificationStrategy>
+    ChainstateRef<'a, S, O, V>
+{
     pub fn check_legitimate_orphan(
         &mut self,
         block_source: BlockSource,
@@ -836,10 +768,17 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         &mut self,
         block_index: &BlockIndex,
         block: &WithId<Block>,
-        spend_height: &BlockHeight,
     ) -> Result<(), BlockError> {
         let connected_txs = self
-            .make_cache_with_connected_transactions(block_index, block, spend_height)
+            .tx_verification_strategy
+            .connect_block(
+                TransactionVerifier::new,
+                self,
+                self,
+                self.chain_config,
+                block_index,
+                block,
+            )
             .log_err()?;
 
         let consumed = connected_txs.consume()?;
@@ -848,12 +787,13 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         Ok(())
     }
 
-    fn disconnect_transactions(
-        &mut self,
-        block: &WithId<Block>,
-        prev_block_id: Id<GenBlock>,
-    ) -> Result<(), BlockError> {
-        let cached_inputs = self.make_cache_with_disconnected_transactions(block, prev_block_id)?;
+    fn disconnect_transactions(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
+        let cached_inputs = self.tx_verification_strategy.disconnect_block(
+            TransactionVerifier::new,
+            self,
+            self.chain_config,
+            block,
+        )?;
         let cached_inputs = cached_inputs.consume()?;
         flush_to_storage(self, cached_inputs)?;
 
@@ -873,12 +813,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             .log_err()?
             .expect("Inconsistent DB");
 
-        self.connect_transactions(
-            new_tip_block_index,
-            &block.into(),
-            &new_tip_block_index.block_height(),
-        )
-        .log_err()?;
+        self.connect_transactions(new_tip_block_index, &block.into()).log_err()?;
 
         self.db_tx
             .set_block_id_at_height(
@@ -917,8 +852,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             .expect("Best block index not present in the database");
         let block = self.get_block_from_index(&block_index).log_err()?.expect("Inconsistent DB");
         // Disconnect transactions
-        self.disconnect_transactions(&block.into(), *block_index.prev_block_id())
-            .log_err()?;
+        self.disconnect_transactions(&block.into()).log_err()?;
         self.db_tx.set_best_block_id(block_index.prev_block_id()).log_err()?;
         // Disconnect block
         self.db_tx.del_block_id_at_height(&block_index.block_height()).log_err()?;

@@ -73,7 +73,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::MissingOutputOrSpent => 100,
             ConnectTransactionError::AttemptToPrintMoney(_, _) => 100,
             ConnectTransactionError::TxFeeTotalCalcFailed(_, _) => 100,
-            ConnectTransactionError::SignatureVerificationFailed => 100,
+            ConnectTransactionError::SignatureVerificationFailed(_) => 100,
             ConnectTransactionError::BlockHeightArithmeticError => 100,
             ConnectTransactionError::BlockTimestampArithmeticError => 100,
             // Even though this is an invariant error, it stems from a block reward that doesn't exist

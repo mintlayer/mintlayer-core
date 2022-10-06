@@ -18,6 +18,7 @@ use std::sync::Arc;
 use crate::detail::bootstrap::export_bootstrap_stream;
 use crate::detail::bootstrap::import_bootstrap_stream;
 use crate::detail::calculate_median_time_past;
+use crate::detail::tx_verification_strategy::TransactionVerificationStrategy;
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::block::BlockReward;
@@ -45,17 +46,19 @@ use crate::{
     ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
 };
 
-pub struct ChainstateInterfaceImpl<S> {
-    chainstate: detail::Chainstate<S>,
+pub struct ChainstateInterfaceImpl<S, V> {
+    chainstate: detail::Chainstate<S, V>,
 }
 
-impl<S> ChainstateInterfaceImpl<S> {
-    pub fn new(chainstate: detail::Chainstate<S>) -> Self {
+impl<S, V> ChainstateInterfaceImpl<S, V> {
+    pub fn new(chainstate: detail::Chainstate<S, V>) -> Self {
         Self { chainstate }
     }
 }
 
-impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
+impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterface
+    for ChainstateInterfaceImpl<S, V>
+{
     fn subscribe_to_events(&mut self, handler: EventHandler<ChainstateEvent>) {
         self.chainstate.subscribe_to_events(handler)
     }

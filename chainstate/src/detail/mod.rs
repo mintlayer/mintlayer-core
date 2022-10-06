@@ -23,6 +23,7 @@ mod chainstateref;
 mod error;
 mod median_time;
 mod orphan_blocks;
+pub mod tx_verification_strategy;
 
 pub use self::error::*;
 pub use self::median_time::calculate_median_time_past;
@@ -56,6 +57,7 @@ use utxo::UtxosDBMut;
 use self::{
     orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut},
     query::ChainstateQuery,
+    tx_verification_strategy::TransactionVerificationStrategy,
 };
 use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
 
@@ -69,10 +71,11 @@ pub const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 
 #[must_use]
-pub struct Chainstate<S> {
+pub struct Chainstate<S, V> {
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,
     chainstate_storage: S,
+    tx_verification_strategy: V,
     orphan_blocks: OrphanBlocksPool,
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     events_controller: EventsController<ChainstateEvent>,
@@ -85,7 +88,7 @@ pub enum BlockSource {
     Local,
 }
 
-impl<S: BlockchainStorage> Chainstate<S> {
+impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> {
     #[allow(dead_code)]
     pub fn wait_for_all_events(&self) {
         self.events_controller.wait_for_all_events();
@@ -93,12 +96,13 @@ impl<S: BlockchainStorage> Chainstate<S> {
 
     fn make_db_tx(
         &mut self,
-    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRw<'_, S>, OrphanBlocksRefMut>>
+    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRw<'_, S>, OrphanBlocksRefMut, V>>
     {
         let db_tx = self.chainstate_storage.transaction_rw()?;
         Ok(chainstateref::ChainstateRef::new_rw(
             &self.chain_config,
             &self.chainstate_config,
+            &self.tx_verification_strategy,
             db_tx,
             self.orphan_blocks.as_rw_ref(),
             self.time_getter.getter(),
@@ -107,12 +111,13 @@ impl<S: BlockchainStorage> Chainstate<S> {
 
     pub(crate) fn make_db_tx_ro(
         &self,
-    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRo<'_, S>, OrphanBlocksRef>>
+    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRo<'_, S>, OrphanBlocksRef, V>>
     {
         let db_tx = self.chainstate_storage.transaction_ro()?;
         Ok(chainstateref::ChainstateRef::new_ro(
             &self.chain_config,
             &self.chainstate_config,
+            &self.tx_verification_strategy,
             db_tx,
             self.orphan_blocks.as_ro_ref(),
             self.time_getter.getter(),
@@ -121,7 +126,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
 
     pub fn query(
         &self,
-    ) -> Result<ChainstateQuery<TxRo<'_, S>, OrphanBlocksRef>, PropertyQueryError> {
+    ) -> Result<ChainstateQuery<TxRo<'_, S>, OrphanBlocksRef, V>, PropertyQueryError> {
         self.make_db_tx_ro().map(ChainstateQuery::new).map_err(PropertyQueryError::from)
     }
 
@@ -133,6 +138,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
         chain_config: Arc<ChainConfig>,
         chainstate_config: ChainstateConfig,
         chainstate_storage: S,
+        tx_verification_strategy: V,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
     ) -> Result<Self, crate::ChainstateError> {
@@ -152,6 +158,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
             chain_config,
             chainstate_config,
             chainstate_storage,
+            tx_verification_strategy,
             custom_orphan_error_hook,
             time_getter,
         );
@@ -169,6 +176,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
         chain_config: Arc<ChainConfig>,
         chainstate_config: ChainstateConfig,
         chainstate_storage: S,
+        tx_verification_strategy: V,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
     ) -> Self {
@@ -177,6 +185,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
             chain_config,
             chainstate_config,
             chainstate_storage,
+            tx_verification_strategy,
             orphan_blocks,
             custom_orphan_error_hook,
             events_controller: EventsController::new(),

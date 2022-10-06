@@ -15,6 +15,7 @@
 
 use crate::detail::query::locator_tip_distances;
 use crate::interface::chainstate_interface_impl::ChainstateInterfaceImpl;
+use crate::DefaultTransactionVerificationStrategy;
 
 use super::*;
 use chainstate_storage::inmemory::Store;
@@ -25,7 +26,7 @@ use common::chain::NetUpgrades;
 use common::Uint256;
 use static_assertions::*;
 
-assert_impl_all!(ChainstateInterfaceImpl<chainstate_storage::inmemory::Store>: Send);
+assert_impl_all!(ChainstateInterfaceImpl<chainstate_storage::inmemory::Store, DefaultTransactionVerificationStrategy>: Send);
 
 // TODO: write tests for consensus crate
 #[test]
@@ -44,6 +45,7 @@ fn process_genesis_block() {
             Arc::new(chain_config),
             chainstate_config,
             chainstate_storage,
+            DefaultTransactionVerificationStrategy::new(),
             None,
             time_getter,
         );
@@ -87,6 +89,7 @@ fn empty_chainstate_no_genesis() {
             Arc::new(chain_config),
             chainstate_config,
             chainstate_storage,
+            DefaultTransactionVerificationStrategy::new(),
             None,
             time_getter,
         );

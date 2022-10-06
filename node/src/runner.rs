@@ -20,7 +20,7 @@ use std::{fs, path::Path, str::FromStr, sync::Arc, time::Duration};
 use anyhow::{anyhow, Context, Result};
 use paste::paste;
 
-use chainstate::rpc::ChainstateRpcServer;
+use chainstate::{rpc::ChainstateRpcServer, DefaultTransactionVerificationStrategy};
 use common::{
     chain::config::{
         Builder as ChainConfigBuilder, ChainConfig, ChainType, EmissionScheduleTabular,
@@ -62,6 +62,7 @@ pub async fn initialize(
             Arc::clone(&chain_config),
             node_config.chainstate,
             storage.clone(),
+            DefaultTransactionVerificationStrategy::new(),
             None,
             Default::default(),
         )?,
