@@ -1884,6 +1884,7 @@ struct TestTxAccumulator {
     txs: Vec<SignedTransaction>,
     total_size: usize,
     target_size: usize,
+    done: bool,
 }
 
 impl TestTxAccumulator {
@@ -1892,18 +1893,23 @@ impl TestTxAccumulator {
             txs: Vec::new(),
             total_size: 0,
             target_size,
+            done: false,
         }
     }
 }
 
 impl TransactionAccumulator for TestTxAccumulator {
     fn add_tx(&mut self, tx: SignedTransaction) {
-        self.total_size += tx.encoded_size();
-        self.txs.push(tx);
+        if self.total_size + tx.encoded_size() <= self.target_size {
+            self.total_size += tx.encoded_size();
+            self.txs.push(tx);
+        } else {
+            self.done = true
+        };
     }
 
     fn done(&self) -> bool {
-        self.target_size <= self.total_size
+        self.done
     }
 
     fn txs(&self) -> Vec<SignedTransaction> {
@@ -1961,6 +1967,6 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let tx_accumulator = TestTxAccumulator::new(1);
     let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
-    assert_eq!(collected_txs.len(), 1);
+    assert_eq!(collected_txs.len(), 0);
     Ok(())
 }
