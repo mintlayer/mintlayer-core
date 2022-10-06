@@ -71,4 +71,12 @@ impl TxOutput {
     pub fn purpose(&self) -> &OutputPurpose {
         &self.purpose
     }
+
+    pub fn has_timelock(&self) -> bool {
+        match &self.purpose {
+            OutputPurpose::Transfer(_) => false,
+            OutputPurpose::LockThenTransfer(_, _) => true,
+            OutputPurpose::StakeLock(_) => false,
+        }
+    }
 }

@@ -22,7 +22,7 @@ use common::{
         tokens::{TokenAuxiliaryData, TokenId},
         Block, GenBlock, OutPoint, OutPointSourceId, Transaction, TxMainChainIndex,
     },
-    primitives::{BlockHeight, Id},
+    primitives::Id,
 };
 use utxo::{BlockUndo, ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead};
 
@@ -39,12 +39,6 @@ mockall::mock! {
             &self,
             block_id: &Id<GenBlock>,
         ) -> Result<Option<GenBlockIndex>, storage_result::Error>;
-
-        fn get_ancestor(
-            &self,
-            block_index: &GenBlockIndex,
-            target_height: BlockHeight,
-        ) -> Result<GenBlockIndex, TransactionVerifierStorageError>;
 
         fn get_mainchain_tx_index(
             &self,

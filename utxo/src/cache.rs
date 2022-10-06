@@ -30,7 +30,7 @@ use std::{
     fmt::{Debug, Formatter},
 };
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ConsumedUtxoCache {
     pub(crate) container: BTreeMap<OutPoint, UtxoEntry>,
     pub(crate) best_block: Id<GenBlock>,

@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use crate::transaction_verifier::{
-    error::TxIndexError,
     storage::TransactionVerifierStorageError,
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
 };
@@ -402,7 +401,7 @@ fn tokens_del_hierarchy() {
 // Create the following hierarchy:
 //
 // TransactionVerifier -> TransactionVerifier -> MockStore
-// utxo1 & block_undo2    utxo1 & block_undo1
+// utxo1                  utxo1
 //
 // The data in TransactionVerifiers conflicts
 // Check that data is flushed from one TransactionVerifier to another with an error
@@ -411,47 +410,80 @@ fn utxo_conflict_hierarchy() {
     let chain_config = ConfigBuilder::test_chain().build();
 
     let (outpoint1, utxo1) = create_utxo(1000);
-    let block_1_id: Id<Block> = Id::new(H256::random());
-    let block_1_undo: BlockUndo = Default::default();
-    let block_2_undo: BlockUndo = Default::default();
+    let (_, utxo2) = create_utxo(2000);
+
+    let mut store = mock::MockStore::new();
+    store
+        .expect_get_best_block_for_utxos()
+        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_batch_write().times(1).return_const(Ok(()));
+
+    let mut verifier1 = TransactionVerifier::new(&store, &chain_config);
+    verifier1.utxo_cache.add_utxo(&outpoint1, utxo1.clone(), false).unwrap();
+
+    let verifier2 = {
+        let mut verifier = verifier1.derive_child();
+        verifier.utxo_cache.add_utxo(&outpoint1, utxo2.clone(), false).unwrap();
+        verifier
+    };
+
+    let consumed_verifier2 = verifier2.consume().unwrap();
+    assert_eq!(
+        flush::flush_to_storage(&mut verifier1, consumed_verifier2).unwrap_err(),
+        TransactionVerifierStorageError::UtxoError(utxo::Error::FreshUtxoAlreadyExists)
+    );
+
+    let consumed_verifier1 = verifier1.consume().unwrap();
+    flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
+}
+
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+// block                  utxo1
+//
+// The data in TransactionVerifiers conflicts
+// Check that data from one TransactionVerifier to another was merged during flush
+#[test]
+fn block_undo_conflict_hierarchy() {
+    let chain_config = ConfigBuilder::test_chain().build();
+
+    let (_, utxo1) = create_utxo(1000);
+    let (_, utxo2) = create_utxo(2000);
+    let block_id: Id<Block> = Id::new(H256::random());
+    let block_undo_1 = BlockUndo::new(None, vec![TxUndo::new(vec![utxo1.clone()])]);
+    let block_undo_2 = BlockUndo::new(None, vec![TxUndo::new(vec![utxo2.clone()])]);
+    let expected_block_undo = BlockUndo::new(
+        None,
+        vec![TxUndo::new(vec![utxo1]), TxUndo::new(vec![utxo2])],
+    );
 
     let mut store = mock::MockStore::new();
     store
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store
-        .expect_get_utxo()
-        .with(eq(outpoint1.clone()))
-        .times(1)
-        .return_const(Ok(Some(utxo1)));
-
-    store
         .expect_set_undo_data()
-        .with(eq(block_1_id), eq(block_1_undo.clone()))
+        .with(eq(block_id), eq(expected_block_undo))
         .times(1)
         .return_const(Ok(()));
     store.expect_batch_write().times(1).return_const(Ok(()));
 
     let mut verifier1 = TransactionVerifier::new(&store, &chain_config);
-    verifier1.utxo_cache.spend_utxo(&outpoint1).unwrap();
     verifier1.utxo_block_undo.insert(
-        block_1_id,
+        block_id,
         BlockUndoEntry {
-            undo: block_1_undo,
+            undo: block_undo_1,
             is_fresh: true,
         },
     );
 
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
-        assert_eq!(
-            verifier.utxo_cache.spend_utxo(&outpoint1),
-            Err(utxo::Error::NoUtxoFound)
-        );
         verifier.utxo_block_undo.insert(
-            block_1_id,
+            block_id,
             BlockUndoEntry {
-                undo: block_2_undo,
+                undo: block_undo_2,
                 is_fresh: true,
             },
         );
@@ -459,10 +491,7 @@ fn utxo_conflict_hierarchy() {
     };
 
     let consumed_verifier2 = verifier2.consume().unwrap();
-    assert_eq!(
-        flush::flush_to_storage(&mut verifier1, consumed_verifier2).unwrap_err(),
-        TransactionVerifierStorageError::DuplicateBlockUndo(block_1_id)
-    );
+    flush::flush_to_storage(&mut verifier1, consumed_verifier2).unwrap();
 
     let consumed_verifier1 = verifier1.consume().unwrap();
     flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
@@ -474,7 +503,7 @@ fn utxo_conflict_hierarchy() {
 // tx_index2              tx_index1
 //
 // The data in TransactionVerifiers conflicts
-// Check that data is flushed from one TransactionVerifier to another with an error
+// Check that tx_index1 was overwritten by tx_index2
 #[test]
 fn tx_index_conflict_hierarchy() {
     let chain_config = ConfigBuilder::test_chain().build();
@@ -493,7 +522,7 @@ fn tx_index_conflict_hierarchy() {
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
         .expect_set_mainchain_tx_index()
-        .with(eq(outpoint1.clone()), eq(tx_index_1.clone()))
+        .with(eq(outpoint1.clone()), eq(tx_index_2.clone()))
         .times(1)
         .return_const(Ok(()));
 
@@ -513,12 +542,7 @@ fn tx_index_conflict_hierarchy() {
     };
 
     let consumed_verifier2 = verifier2.consume().unwrap();
-    assert_eq!(
-        flush::flush_to_storage(&mut verifier1, consumed_verifier2).unwrap_err(),
-        TransactionVerifierStorageError::TxIndexError(
-            TxIndexError::OutputAlreadyPresentInInputsCache
-        )
-    );
+    flush::flush_to_storage(&mut verifier1, consumed_verifier2).unwrap();
 
     let consumed_verifier1 = verifier1.consume().unwrap();
     flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();

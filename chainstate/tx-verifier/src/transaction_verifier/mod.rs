@@ -62,12 +62,14 @@ pub struct Fee(pub Amount);
 
 pub struct Subsidy(pub Amount);
 
+#[derive(Debug, Eq, PartialEq)]
 pub struct BlockUndoEntry {
     undo: BlockUndo,
     // indicates whether this BlockUndo was fetched from the db or it's new
     is_fresh: bool,
 }
 
+#[derive(Debug, Eq, PartialEq)]
 pub enum CachedOperation<T> {
     Write(T),
     Read(T),
@@ -82,6 +84,7 @@ pub enum BlockTransactableRef<'a> {
 }
 
 /// The change that a block has caused to the blockchain state
+#[derive(Debug, Eq, PartialEq)]
 pub struct TransactionVerifierDelta {
     tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
     utxo_cache: ConsumedUtxoCache,
@@ -366,7 +369,11 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 .utxo(outpoint)
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
-            {
+            // TODO: See if we can check timelocks for the current block without needing the block index.
+            //       The problem is that it won't be possible to use tx_verifier without the block index history
+            //       if this is not restricted with the 'if' condition. But the side effect is that all
+            //       timelock txs be rejected if they spend outputs from the same block.
+            if utxo.output().has_timelock() {
                 let height = match utxo.source() {
                     utxo::UtxoSource::Blockchain(h) => h,
                     utxo::UtxoSource::Mempool => {

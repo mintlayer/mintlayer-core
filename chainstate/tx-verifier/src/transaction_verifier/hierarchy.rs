@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::btree_map::Entry;
-
 use super::{
     cached_operation::CachedInputsOperation,
     storage::{
@@ -30,7 +28,7 @@ use common::{
         tokens::{TokenAuxiliaryData, TokenId},
         Block, GenBlock, OutPoint, OutPointSourceId, Transaction, TxMainChainIndex,
     },
-    primitives::{BlockHeight, Id},
+    primitives::Id,
 };
 use utxo::{BlockUndo, ConsumedUtxoCache, FlushableUtxoView, UtxosStorageRead, UtxosView};
 
@@ -56,14 +54,6 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
         self.storage_ref.get_gen_block_index(block_id)
-    }
-
-    fn get_ancestor(
-        &self,
-        block_index: &GenBlockIndex,
-        target_height: BlockHeight,
-    ) -> Result<GenBlockIndex, TransactionVerifierStorageError> {
-        self.storage_ref.get_ancestor(block_index, target_height)
     }
 
     fn get_mainchain_tx_index(
@@ -178,18 +168,24 @@ impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
     fn set_undo_data(
         &mut self,
         id: Id<Block>,
-        undo: &BlockUndo,
+        new_undo: &BlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
-        match self.utxo_block_undo.entry(id) {
-            Entry::Occupied(_) => Err(TransactionVerifierStorageError::DuplicateBlockUndo(id)),
-            Entry::Vacant(entry) => {
-                entry.insert(BlockUndoEntry {
-                    undo: undo.clone(),
-                    is_fresh: true,
-                });
-                Ok(())
-            }
-        }
+        // FIXME: what about reward_undo?
+        self.utxo_block_undo
+            .entry(id)
+            .and_modify(|cached_undo| {
+                // FIXME: the assumption that tx_undo info can be just pushed to the end of block undo
+                // looks weak
+                new_undo
+                    .tx_undos()
+                    .iter()
+                    .for_each(|u| cached_undo.undo.push_tx_undo(u.clone()))
+            })
+            .or_insert(BlockUndoEntry {
+                undo: new_undo.clone(),
+                is_fresh: true,
+            });
+        Ok(())
     }
 
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), TransactionVerifierStorageError> {

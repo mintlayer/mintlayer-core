@@ -19,6 +19,7 @@ utils = { path = '../../utils' }
 consensus = { path = '../../consensus' }
 logging = { path = '../../logging' }
 utxo = { path = '../../utxo' }
+tx-verifier = { path = '../tx-verifier'}
 
 rstest = "0.15"
 hex = "0.4"

@@ -372,25 +372,6 @@ fn hierarchy_test_tokens() {
 }
 
 #[test]
-fn hierarchy_test_ancestor() {
-    let chain_config = ConfigBuilder::test_chain().build();
-
-    let ancestor = GenBlockIndex::Genesis(Arc::clone(chain_config.genesis_block()));
-    let block_index = GenBlockIndex::Genesis(Arc::clone(chain_config.genesis_block()));
-    let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
-    store.expect_get_ancestor().times(2).return_const(Ok(ancestor));
-
-    let verifier1 = TransactionVerifier::new(&store, &chain_config);
-    verifier1.get_ancestor(&block_index, BlockHeight::one()).unwrap();
-
-    let verifier2 = verifier1.derive_child();
-    verifier2.get_ancestor(&block_index, BlockHeight::one()).unwrap();
-}
-
-#[test]
 fn hierarchy_test_block_index() {
     let chain_config = ConfigBuilder::test_chain().build();
 
