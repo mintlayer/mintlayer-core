@@ -1917,12 +1917,15 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
             .build();
         mempool.add_transaction(tx.clone()).await?;
     }
-    let tx_accumulator = DefaultTxAccumulator::new(200000);
+
+    const SIZE_LIMIT: usize = 1_000;
+    let tx_accumulator = DefaultTxAccumulator::new(SIZE_LIMIT);
     let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
-    assert_eq!(
-        collected_txs.len(),
-        usize::try_from(target_txs + 1).unwrap()
-    );
+    const EXPECTED_NUM_TXS_COLLECTED: usize = 6;
+    assert_eq!(collected_txs.len(), EXPECTED_NUM_TXS_COLLECTED);
+    let total_tx_size: usize = collected_txs.iter().map(|tx| tx.encoded_size()).sum();
+    eprintln!("total size: {}", total_tx_size);
+    assert!(total_tx_size <= SIZE_LIMIT);
 
     let tx_accumulator = DefaultTxAccumulator::new(0);
     let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
