@@ -23,8 +23,8 @@ use common::chain::{
 
 use crate::TestFramework;
 
-use chainstate::BlockError;
 use chainstate::ChainstateConfig;
+use chainstate::{BlockError, DefaultTransactionVerificationStrategy};
 use common::time_getter::TimeGetter;
 
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
@@ -87,6 +87,7 @@ impl TestFrameworkBuilder {
             Arc::new(self.chain_config),
             self.chainstate_config,
             self.chainstate_storage,
+            DefaultTransactionVerificationStrategy::new(),
             self.custom_orphan_error_hook,
             self.time_getter,
         )

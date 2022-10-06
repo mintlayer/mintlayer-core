@@ -18,6 +18,7 @@ use chainstate::chainstate_interface;
 use chainstate::make_chainstate;
 use chainstate::BlockSource;
 use chainstate::ChainstateConfig;
+use chainstate::DefaultTransactionVerificationStrategy;
 use chainstate_test_framework::anyonecanspend_address;
 use chainstate_test_framework::empty_witness;
 use chainstate_test_framework::TestFramework;
@@ -199,6 +200,7 @@ pub async fn start_chainstate_with_config(
         chain_config,
         ChainstateConfig::new(),
         storage,
+        DefaultTransactionVerificationStrategy::new(),
         None,
         Default::default(),
     )

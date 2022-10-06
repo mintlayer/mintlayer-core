@@ -148,7 +148,7 @@ fn handle_error<T>(e: Result<Result<T, ChainstateError>, CallError>) -> rpc::Res
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ChainstateConfig;
+    use crate::{ChainstateConfig, DefaultTransactionVerificationStrategy};
     use serde_json::Value;
     use std::{future::Future, sync::Arc};
 
@@ -165,6 +165,7 @@ mod test {
                 chain_config,
                 chainstate_config,
                 storage,
+                DefaultTransactionVerificationStrategy::new(),
                 None,
                 Default::default(),
             )

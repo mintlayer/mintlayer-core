@@ -22,6 +22,7 @@ use crate::detail::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,
     },
+    tx_verification_strategy::TransactionVerificationStrategy,
 };
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use chainstate_types::{storage_result, GenBlockIndex};
@@ -34,8 +35,8 @@ use common::{
 };
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDBMut, UtxosStorageRead};
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionVerifierStorageRef
-    for ChainstateRef<'a, S, O>
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    TransactionVerifierStorageRef for ChainstateRef<'a, S, O, V>
 {
     fn get_token_id_from_issuance_tx(
         &self,
@@ -94,7 +95,9 @@ pub fn gen_block_index_getter<S: BlockchainStorageRead>(
     }
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> UtxosStorageRead for ChainstateRef<'a, S, O> {
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    UtxosStorageRead for ChainstateRef<'a, S, O, V>
+{
     fn get_utxo(
         &self,
         outpoint: &common::chain::OutPoint,
@@ -116,15 +119,17 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> UtxosStorageRead for Chainst
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks> FlushableUtxoView for ChainstateRef<'a, S, O> {
+impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    FlushableUtxoView for ChainstateRef<'a, S, O, V>
+{
     fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error> {
         let mut db = UtxosDBMut::new(&mut self.db_tx);
         db.batch_write(utxos)
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks> TransactionVerifierStorageMut
-    for ChainstateRef<'a, S, O>
+impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    TransactionVerifierStorageMut for ChainstateRef<'a, S, O, V>
 {
     fn set_mainchain_tx_index(
         &mut self,

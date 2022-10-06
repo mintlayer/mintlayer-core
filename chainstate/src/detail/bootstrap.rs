@@ -22,7 +22,10 @@ use serialization::{Decode, Encode};
 
 use crate::{BlockError, ChainstateConfig};
 
-use super::{orphan_blocks::OrphanBlocks, query::ChainstateQuery};
+use super::{
+    orphan_blocks::OrphanBlocks, query::ChainstateQuery,
+    tx_verification_strategy::TransactionVerificationStrategy,
+};
 
 const DEFAULT_MIN_IMPORT_BUFFER_SIZE: usize = 1 << 22; // 4 MB
 const DEFAULT_MAX_IMPORT_BUFFER_SIZE: usize = 1 << 26; // 64 MB
@@ -112,11 +115,16 @@ fn fill_buffer<S: std::io::Read>(
     Ok(())
 }
 
-pub fn export_bootstrap_stream<'a, S: BlockchainStorageRead, O: OrphanBlocks>(
+pub fn export_bootstrap_stream<
+    'a,
+    S: BlockchainStorageRead,
+    O: OrphanBlocks,
+    V: TransactionVerificationStrategy,
+>(
     magic_bytes: &[u8],
     writer: &mut std::io::BufWriter<Box<dyn std::io::Write + 'a + Send>>,
     include_orphans: bool,
-    query_interface: &ChainstateQuery<'a, S, O>,
+    query_interface: &ChainstateQuery<'a, S, O, V>,
 ) -> Result<(), BootstrapError>
 where
 {

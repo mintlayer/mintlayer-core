@@ -42,7 +42,10 @@ pub fn calculate_median_time_past<H: BlockIndexHandle>(
 
 #[cfg(test)]
 mod test {
-    use crate::{BlockSource, Chainstate, ChainstateConfig};
+    use crate::{
+        detail::tx_verification_strategy::DefaultTransactionVerificationStrategy, BlockSource,
+        Chainstate, ChainstateConfig,
+    };
     use common::time_getter::TimeGetter;
 
     use super::*;
@@ -101,6 +104,7 @@ mod test {
                 chain_config,
                 chainstate_config,
                 storage,
+                DefaultTransactionVerificationStrategy::new(),
                 None,
                 Default::default(),
             )
@@ -176,9 +180,15 @@ mod test {
 
             let storage = Store::new_empty().unwrap();
             let chainstate_config = ChainstateConfig::new();
-            let mut chainstate =
-                Chainstate::new(chain_config, chainstate_config, storage, None, time_getter)
-                    .unwrap();
+            let mut chainstate = Chainstate::new(
+                chain_config,
+                chainstate_config,
+                storage,
+                DefaultTransactionVerificationStrategy::new(),
+                None,
+                time_getter,
+            )
+            .unwrap();
 
             // we use unordered block times, and ensure that the median will be in the right spot
             let block1_time = current_time.load(Ordering::SeqCst) + 1;

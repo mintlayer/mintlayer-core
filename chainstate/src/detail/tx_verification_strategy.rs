@@ -27,7 +27,7 @@ use utils::tap_error_log::LogError;
 use crate::{calculate_median_time_past, BlockError};
 
 /// A trait that specifies how a block will be verified
-pub trait TransactionVerificationStrategy: Sized {
+pub trait TransactionVerificationStrategy: Sized + Send {
     fn connect_block<'a, H: BlockIndexHandle, S: TransactionVerifierStorageRef>(
         &self,
         block_index_handle: &'a H,

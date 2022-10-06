@@ -25,6 +25,7 @@ use tokio::{
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, BlockSource, ChainstateConfig,
+    DefaultTransactionVerificationStrategy,
 };
 use common::{
     chain::{
@@ -225,6 +226,7 @@ pub async fn start_chainstate(
             chain_config,
             ChainstateConfig::new(),
             storage,
+            DefaultTransactionVerificationStrategy::new(),
             None,
             Default::default(),
         )

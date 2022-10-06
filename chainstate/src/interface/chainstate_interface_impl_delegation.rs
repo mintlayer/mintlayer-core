@@ -262,7 +262,10 @@ mod tests {
         primitives::BlockHeight,
     };
 
-    use crate::{chainstate_interface::ChainstateInterface, make_chainstate, ChainstateConfig};
+    use crate::{
+        chainstate_interface::ChainstateInterface, make_chainstate, ChainstateConfig,
+        DefaultTransactionVerificationStrategy,
+    };
     use common::time_getter::TimeGetter;
 
     fn test_interface_ref<C: ChainstateInterface>(chainstate: &C, chain_config: &ChainConfig) {
@@ -302,6 +305,7 @@ mod tests {
                 chain_config.clone(),
                 chainstate_config,
                 chainstate_storage,
+                DefaultTransactionVerificationStrategy::new(),
                 None,
                 TimeGetter::default(),
             )

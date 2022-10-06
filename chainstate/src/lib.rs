@@ -15,6 +15,7 @@
 
 mod interface;
 use detail::bootstrap::BootstrapError;
+pub use detail::tx_verification_strategy::*;
 pub use interface::chainstate_interface;
 use interface::chainstate_interface_impl;
 pub use interface::chainstate_interface_impl_delegation;
@@ -67,10 +68,14 @@ impl subsystem::Subsystem for Box<dyn ChainstateInterface> {}
 
 type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface>>;
 
-pub fn make_chainstate<S: chainstate_storage::BlockchainStorage + 'static>(
+pub fn make_chainstate<
+    S: chainstate_storage::BlockchainStorage + 'static,
+    V: TransactionVerificationStrategy + 'static,
+>(
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,
     chainstate_storage: S,
+    tx_verification_strategy: V,
     custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
     time_getter: TimeGetter,
 ) -> Result<Box<dyn ChainstateInterface>, ChainstateError> {
@@ -78,6 +83,7 @@ pub fn make_chainstate<S: chainstate_storage::BlockchainStorage + 'static>(
         chain_config,
         chainstate_config,
         chainstate_storage,
+        tx_verification_strategy,
         custom_orphan_error_hook,
         time_getter,
     )?;

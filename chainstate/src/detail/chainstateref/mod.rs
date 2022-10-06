@@ -47,23 +47,24 @@ use super::{
     orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
     tokens::check_tokens_data,
     transaction_verifier::{error::TokensError, flush::flush_to_storage},
-    tx_verification_strategy::{
-        DefaultTransactionVerificationStrategy, TransactionVerificationStrategy,
-    },
+    tx_verification_strategy::TransactionVerificationStrategy,
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
 };
 
 mod tx_verifier_storage;
 
-pub(crate) struct ChainstateRef<'a, S, O> {
+pub(crate) struct ChainstateRef<'a, S, O, V> {
     chain_config: &'a ChainConfig,
     _chainstate_config: &'a ChainstateConfig,
+    tx_verification_strategy: &'a V,
     db_tx: S,
     orphan_blocks: O,
     time_getter: &'a TimeGetterFn,
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> BlockIndexHandle for ChainstateRef<'a, S, O> {
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    BlockIndexHandle for ChainstateRef<'a, S, O, V>
+{
     fn get_block_index(
         &self,
         block_id: &Id<Block>,
@@ -95,8 +96,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> BlockIndexHandle for Chainst
     }
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionIndexHandle
-    for ChainstateRef<'a, S, O>
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    TransactionIndexHandle for ChainstateRef<'a, S, O, V>
 {
     fn get_mainchain_tx_index(
         &self,
@@ -113,24 +114,28 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionIndexHandle
     }
 }
 
-impl<'a, S: TransactionRw, O> ChainstateRef<'a, S, O> {
+impl<'a, S: TransactionRw, O, V> ChainstateRef<'a, S, O, V> {
     pub fn commit_db_tx(self) -> chainstate_storage::Result<()> {
         self.db_tx.commit()
     }
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    ChainstateRef<'a, S, O, V>
+{
     pub fn new_rw(
         chain_config: &'a ChainConfig,
         chainstate_config: &'a ChainstateConfig,
+        tx_verification_strategy: &'a V,
         db_tx: S,
         orphan_blocks: O,
         time_getter: &'a TimeGetterFn,
-    ) -> ChainstateRef<'a, S, O> {
+    ) -> ChainstateRef<'a, S, O, V> {
         ChainstateRef {
             chain_config,
             _chainstate_config: chainstate_config,
             db_tx,
+            tx_verification_strategy,
             orphan_blocks,
             time_getter,
         }
@@ -139,14 +144,16 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     pub fn new_ro(
         chain_config: &'a ChainConfig,
         chainstate_config: &'a ChainstateConfig,
+        tx_verification_strategy: &'a V,
         db_tx: S,
         orphan_blocks: O,
         time_getter: &'a TimeGetterFn,
-    ) -> ChainstateRef<'a, S, O> {
+    ) -> ChainstateRef<'a, S, O, V> {
         ChainstateRef {
             chain_config,
             _chainstate_config: chainstate_config,
             db_tx,
+            tx_verification_strategy,
             orphan_blocks,
             time_getter,
         }
@@ -675,7 +682,9 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> {
+impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificationStrategy>
+    ChainstateRef<'a, S, O, V>
+{
     pub fn check_legitimate_orphan(
         &mut self,
         block_source: BlockSource,
@@ -760,9 +769,8 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         block: &WithId<Block>,
         spend_height: &BlockHeight,
     ) -> Result<(), BlockError> {
-        let strategy = DefaultTransactionVerificationStrategy::new();
-
-        let connected_txs = strategy
+        let connected_txs = self
+            .tx_verification_strategy
             .connect_block(
                 self,
                 self,
@@ -784,9 +792,12 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         block: &WithId<Block>,
         prev_block_id: Id<GenBlock>,
     ) -> Result<(), BlockError> {
-        let strategy = DefaultTransactionVerificationStrategy::new();
-        let cached_inputs =
-            strategy.disconnect_block(self, self.chain_config, block, prev_block_id)?;
+        let cached_inputs = self.tx_verification_strategy.disconnect_block(
+            self,
+            self.chain_config,
+            block,
+            prev_block_id,
+        )?;
         let cached_inputs = cached_inputs.consume()?;
         flush_to_storage(self, cached_inputs)?;
 

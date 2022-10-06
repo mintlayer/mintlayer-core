@@ -19,7 +19,8 @@ use std::{sync::atomic::Ordering, time::Duration};
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{
     make_chainstate, BlockError, BlockSource, ChainstateConfig, ChainstateError, CheckBlockError,
-    CheckBlockTransactionsError, ConnectTransactionError, OrphanCheckError, TxIndexError,
+    CheckBlockTransactionsError, ConnectTransactionError, DefaultTransactionVerificationStrategy,
+    OrphanCheckError, TxIndexError,
 };
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestBlockInfo, TestFramework, TestStore,
@@ -1091,6 +1092,7 @@ fn mainnet_initialization() {
         chain_config,
         chainstate_config,
         storage,
+        DefaultTransactionVerificationStrategy::new(),
         None,
         Default::default(),
     )
