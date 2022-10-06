@@ -339,8 +339,9 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
             // TODO: see if a different treatment should be done for different output purposes
+            // TODO: ensure that signature verification is tested in the test-suite, they seem to be tested only internally
             verify_signature(utxo.output().purpose().destination(), tx, input_idx)
-                .map_err(|_| ConnectTransactionError::SignatureVerificationFailed)?;
+                .map_err(ConnectTransactionError::SignatureVerificationFailed)?;
         }
 
         Ok(())
