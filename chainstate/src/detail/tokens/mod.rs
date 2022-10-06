@@ -25,7 +25,7 @@ use utils::ensure;
 use super::transaction_verifier::error::TokensError;
 
 mod check_utils;
-pub use check_utils::is_rfc1738_valid_symbol;
+pub use check_utils::is_rfc3986_valid_symbol;
 use check_utils::{
     check_media_hash, check_nft_description, check_nft_name, check_token_ticker, is_uri_valid,
 };

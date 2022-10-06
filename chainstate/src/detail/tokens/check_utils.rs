@@ -27,9 +27,9 @@ fn check_is_text_alphanumeric(str: &[u8]) -> bool {
     }
 }
 
-pub fn is_rfc1738_valid_symbol(ch: char) -> bool {
-    // RFC 1738 alphabet
-    ":._-~!/?#[]@$&\'()*+,;=".chars().any(|rfc1738_ch| ch == rfc1738_ch)
+pub fn is_rfc3986_valid_symbol(ch: char) -> bool {
+    // RFC 3986 alphabet taken from https://www.rfc-editor.org/rfc/rfc3986#section-2.1
+    "%:/?#[]@!$&\'()*+,;=-._~".chars().any(|rfc1738_ch| ch == rfc1738_ch)
 }
 
 pub fn is_uri_valid(uri: &[u8]) -> bool {
@@ -37,7 +37,7 @@ pub fn is_uri_valid(uri: &[u8]) -> bool {
         Ok(uri) => uri
             .chars()
             // TODO: this is probably an invalid way to validate URLs. Find the proper way to do this in rust.
-            .all(|ch| ch.is_alphanumeric() || is_rfc1738_valid_symbol(ch)),
+            .all(|ch| ch.is_alphanumeric() || is_rfc3986_valid_symbol(ch)),
         Err(_) => false,
     }
 }

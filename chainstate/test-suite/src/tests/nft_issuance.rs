@@ -15,14 +15,13 @@
 
 use crate::tests::nft_utils::random_creator;
 use chainstate::{
-    is_rfc1738_valid_symbol, BlockError, ChainstateError, CheckBlockError,
+    is_rfc3986_valid_symbol, BlockError, ChainstateError, CheckBlockError,
     CheckBlockTransactionsError, TokensError,
 };
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
-use common::chain::tokens::{Metadata, NftIssuanceV1};
 use common::chain::{
     signature::inputsig::InputWitness,
-    tokens::{OutputValue, TokenData},
+    tokens::{Metadata, NftIssuanceV1, OutputValue, TokenData},
     Destination, OutputPurpose, TxInput, TxOutput,
 };
 use rstest::rstest;
@@ -681,7 +680,7 @@ fn nft_issuance_icon_uri_invalid(#[case] seed: Seed) {
         // try all possible chars for description and ensure everything fails except for alphanumeric chars
         for c in u8::MIN..u8::MAX {
             // if c is alphanumeric, then this doesn't produce an error, skip it
-            if c.is_ascii_alphanumeric() || is_rfc1738_valid_symbol(char::from(c)) {
+            if c.is_ascii_alphanumeric() || is_rfc3986_valid_symbol(char::from(c)) {
                 continue;
             }
 
@@ -856,7 +855,7 @@ fn nft_issuance_metadata_uri_invalid(#[case] seed: Seed) {
         // try all possible chars for description and ensure everything fails except for alphanumeric chars
         for c in u8::MIN..u8::MAX {
             // if c is alphanumeric or valid symbol according to rfc1738, then this doesn't produce an error, skip it
-            if c.is_ascii_alphanumeric() || is_rfc1738_valid_symbol(char::from(c)) {
+            if c.is_ascii_alphanumeric() || is_rfc3986_valid_symbol(char::from(c)) {
                 continue;
             }
 
@@ -1031,7 +1030,7 @@ fn nft_issuance_media_uri_invalid(#[case] seed: Seed) {
         // try all possible chars for description and ensure everything fails except for alphanumeric chars
         for c in u8::MIN..u8::MAX {
             // if c is alphanumeric or valid symbol according to rfc1738, then this doesn't produce an error, skip it
-            if c.is_ascii_alphanumeric() || is_rfc1738_valid_symbol(char::from(c)) {
+            if c.is_ascii_alphanumeric() || is_rfc3986_valid_symbol(char::from(c)) {
                 continue;
             }
 
@@ -1091,7 +1090,7 @@ fn nft_issuance_valid_case(#[case] seed: Seed) {
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
-        let valid_rfc1738_url =
+        let valid_rfc3986_uri =
             b"https://something.com/?a:b.c_d-e~f!g/h?I#J[K]L@M$N&O/P'Q(R)S*T+U,V;W=Xyz".to_vec();
 
         let output_value = OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
@@ -1100,9 +1099,9 @@ fn nft_issuance_valid_case(#[case] seed: Seed) {
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                icon_uri: Some(valid_rfc1738_url.clone()),
-                additional_metadata_uri: Some(valid_rfc1738_url.clone()),
-                media_uri: Some(valid_rfc1738_url),
+                icon_uri: Some(valid_rfc3986_uri.clone()),
+                additional_metadata_uri: Some(valid_rfc3986_uri.clone()),
+                media_uri: Some(valid_rfc3986_uri),
                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
             },
         }));

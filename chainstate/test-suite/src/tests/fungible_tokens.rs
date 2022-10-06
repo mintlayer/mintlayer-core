@@ -17,13 +17,12 @@ use std::vec;
 
 use chainstate::{
     BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
-    ConnectTransactionError, TokensError,
+    ConnectTransactionError, TokensError, TxIndexError,
 };
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
 use common::chain::tokens::{
     Metadata, NftIssuanceV1, TokenBurnV1, TokenIssuanceV1, TokenTransferV1,
 };
-use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::primitives::{id, Id};
 use common::{
     chain::{

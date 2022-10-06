@@ -27,6 +27,7 @@ pub mod tx_verification_strategy;
 
 pub use self::error::*;
 pub use self::median_time::calculate_median_time_past;
+pub use self::tokens::is_rfc3986_valid_symbol;
 pub use chainstate_types::Locator;
 pub use error::{BlockError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError};
 // TODO: ConnectTransactionError used in unit tests to check block processing results. We have to find more appropriate place for this error.

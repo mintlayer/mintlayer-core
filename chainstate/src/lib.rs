@@ -25,9 +25,9 @@ pub mod rpc;
 pub use crate::{
     config::ChainstateConfig,
     detail::{
-        ban_score, calculate_median_time_past, is_rfc1738_valid_symbol, BlockError, BlockSource, CheckBlockError,
-        CheckBlockTransactionsError, ConnectTransactionError, Locator, OrphanCheckError,
-        TokensError, TransactionVerifierStorageError, TxIndexError, HEADER_LIMIT,
+        ban_score, calculate_median_time_past, is_rfc3986_valid_symbol, BlockError, BlockSource,
+        CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError, Locator,
+        OrphanCheckError, TokensError, TransactionVerifierStorageError, TxIndexError, HEADER_LIMIT,
     },
 };
 
