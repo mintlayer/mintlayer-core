@@ -768,7 +768,6 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         &mut self,
         block_index: &BlockIndex,
         block: &WithId<Block>,
-        spend_height: &BlockHeight,
     ) -> Result<(), BlockError> {
         let connected_txs = self
             .tx_verification_strategy
@@ -779,7 +778,6 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
                 self.chain_config,
                 block_index,
                 block,
-                spend_height,
             )
             .log_err()?;
 
@@ -789,17 +787,12 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         Ok(())
     }
 
-    fn disconnect_transactions(
-        &mut self,
-        block: &WithId<Block>,
-        prev_block_id: Id<GenBlock>,
-    ) -> Result<(), BlockError> {
+    fn disconnect_transactions(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
         let cached_inputs = self.tx_verification_strategy.disconnect_block(
             TransactionVerifier::new,
             self,
             self.chain_config,
             block,
-            prev_block_id,
         )?;
         let cached_inputs = cached_inputs.consume()?;
         flush_to_storage(self, cached_inputs)?;
@@ -820,12 +813,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
             .log_err()?
             .expect("Inconsistent DB");
 
-        self.connect_transactions(
-            new_tip_block_index,
-            &block.into(),
-            &new_tip_block_index.block_height(),
-        )
-        .log_err()?;
+        self.connect_transactions(new_tip_block_index, &block.into()).log_err()?;
 
         self.db_tx
             .set_block_id_at_height(
@@ -864,8 +852,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
             .expect("Best block index not present in the database");
         let block = self.get_block_from_index(&block_index).log_err()?.expect("Inconsistent DB");
         // Disconnect transactions
-        self.disconnect_transactions(&block.into(), *block_index.prev_block_id())
-            .log_err()?;
+        self.disconnect_transactions(&block.into()).log_err()?;
         self.db_tx.set_best_block_id(block_index.prev_block_id()).log_err()?;
         // Disconnect block
         self.db_tx.del_block_id_at_height(&block_index.block_height()).log_err()?;

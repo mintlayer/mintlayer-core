@@ -15,8 +15,8 @@
 
 use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
-    chain::{Block, ChainConfig, GenBlock},
-    primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
+    chain::{Block, ChainConfig},
+    primitives::{id::WithId, Amount, Idable},
 };
 use tx_verifier::transaction_verifier::{
     error::ConnectTransactionError, storage::TransactionVerifierStorageRef, BlockTransactableRef,
@@ -42,7 +42,6 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         chain_config: &'a ChainConfig,
         block_index: &'a BlockIndex,
         block: &WithId<Block>,
-        spend_height: &BlockHeight,
     ) -> Result<TransactionVerifier<'a, S>, BlockError>
     where
         H: BlockIndexHandle,
@@ -61,7 +60,6 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
         block: &WithId<Block>,
-        prev_block_id: Id<GenBlock>,
     ) -> Result<TransactionVerifier<'a, S>, BlockError>
     where
         S: TransactionVerifierStorageRef,
@@ -91,7 +89,6 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         chain_config: &'a ChainConfig,
         block_index: &'a BlockIndex,
         block: &WithId<Block>,
-        spend_height: &BlockHeight,
     ) -> Result<TransactionVerifier<'a, S>, BlockError>
     where
         H: BlockIndexHandle,
@@ -108,7 +105,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
             .connect_transactable(
                 block_index,
                 BlockTransactableRef::BlockReward(block),
-                spend_height,
+                &block_index.block_height(),
                 &median_time_past,
             )
             .log_err()?;
@@ -123,7 +120,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
                     .connect_transactable(
                         block_index,
                         BlockTransactableRef::Transaction(block, tx_num),
-                        spend_height,
+                        &block_index.block_height(),
                         &median_time_past,
                     )
                     .log_err()?;
@@ -133,7 +130,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
             })
             .log_err()?;
 
-        let block_subsidy = chain_config.block_subsidy_at_height(spend_height);
+        let block_subsidy = chain_config.block_subsidy_at_height(&block_index.block_height());
         tx_verifier
             .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
             .log_err()?;
@@ -149,7 +146,6 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
         block: &WithId<Block>,
-        prev_block_id: Id<GenBlock>,
     ) -> Result<TransactionVerifier<'a, S>, BlockError>
     where
         S: TransactionVerifierStorageRef,
@@ -172,7 +168,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
             .disconnect_transactable(BlockTransactableRef::BlockReward(block))
             .log_err()?;
 
-        tx_verifier.set_best_block(prev_block_id);
+        tx_verifier.set_best_block(block.prev_block_id());
 
         Ok(tx_verifier)
     }
