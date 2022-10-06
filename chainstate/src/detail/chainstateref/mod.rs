@@ -35,6 +35,7 @@ use common::{
 };
 use consensus::TransactionIndexHandle;
 use logging::log;
+use tx_verifier::transaction_verifier::TransactionVerifier;
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosDB, UtxosView};
 
@@ -772,6 +773,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         let connected_txs = self
             .tx_verification_strategy
             .connect_block(
+                TransactionVerifier::new,
                 self,
                 self,
                 self.chain_config,
@@ -793,6 +795,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         prev_block_id: Id<GenBlock>,
     ) -> Result<(), BlockError> {
         let cached_inputs = self.tx_verification_strategy.disconnect_block(
+            TransactionVerifier::new,
             self,
             self.chain_config,
             block,
