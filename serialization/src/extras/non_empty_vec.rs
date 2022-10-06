@@ -131,7 +131,7 @@ mod test {
     fn back_and_forth() {
         {
             let the_vec = vec![1, 2, 3];
-            let data: DataOrNoVec<u8> = Some(the_vec.clone()).into();
+            let data: DataOrNoVec<u8> = Some(the_vec).into();
             test_back_and_forth(data);
         }
         {
