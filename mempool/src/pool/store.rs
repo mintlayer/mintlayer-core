@@ -43,6 +43,11 @@ newtype! {
     pub(super) struct DescendantScore(Amount);
 }
 
+newtype! {
+    #[derive(Debug, PartialEq, Eq, Ord, PartialOrd)]
+    pub(super) struct AncestorScore(Amount);
+}
+
 #[derive(Debug)]
 pub struct MempoolStore {
     // This is the "main" data structure storing Mempool entries. All other structures in the
@@ -64,6 +69,9 @@ pub struct MempoolStore {
     // rather a value that takes into account witdess and sigop data (see CTxMemPoolEntry::GetTxSize).
     pub(super) txs_by_descendant_score: BTreeMap<DescendantScore, BTreeSet<Id<Transaction>>>,
 
+    // Mempool entries sorted by ancestor score
+    pub(super) txs_by_ancestor_score: BTreeMap<AncestorScore, BTreeSet<Id<Transaction>>>,
+
     // Entries that have remained in the mempool for a long time (see DEFAULT_MEMPOOL_EXPIRY) are
     // evicted. To efficiently know which entries to evict, we store the mempool entries sorted by
     // their creation time, from earliest to latest.
@@ -81,6 +89,7 @@ impl MempoolStore {
     pub(super) fn new() -> Self {
         Self {
             txs_by_descendant_score: BTreeMap::new(),
+            txs_by_ancestor_score: BTreeMap::new(),
             txs_by_id: BTreeMap::new(),
             txs_by_creation_time: BTreeMap::new(),
             spender_txs: BTreeMap::new(),
@@ -222,6 +231,7 @@ impl MempoolStore {
         self.txs_by_id.insert(tx_id, entry.clone());
 
         self.add_to_descendant_score_index(&entry);
+        self.add_to_ancestor_score_index(&entry);
         self.txs_by_creation_time.entry(creation_time).or_default().insert(tx_id);
         Ok(())
     }
@@ -230,6 +240,14 @@ impl MempoolStore {
         self.refresh_ancestors(entry);
         self.txs_by_descendant_score
             .entry(entry.descendant_score())
+            .or_default()
+            .insert(entry.tx_id());
+    }
+
+    fn add_to_ancestor_score_index(&mut self, entry: &TxMempoolEntry) {
+        //TODO(PR) maybe refresh descendant state, need to look into how Bitcoin does this
+        self.txs_by_ancestor_score
+            .entry(entry.ancestor_score())
             .or_default()
             .insert(entry.tx_id());
     }
@@ -344,7 +362,9 @@ pub(super) struct TxMempoolEntry {
     children: BTreeSet<Id<Transaction>>,
     count_with_descendants: usize,
     fees_with_descendants: Amount,
+    fees_with_ancestors: Amount,
     size_with_descendants: usize,
+    size_with_ancestors: usize,
     creation_time: Time,
 }
 
@@ -356,6 +376,8 @@ impl TxMempoolEntry {
         creation_time: Time,
     ) -> TxMempoolEntry {
         Self {
+            // TODO(PR) actually compute the size with ancestors
+            size_with_ancestors: tx.encoded_size(),
             size_with_descendants: tx.encoded_size(),
             tx,
             fee,
@@ -364,6 +386,8 @@ impl TxMempoolEntry {
             count_with_descendants: 1,
             creation_time,
             fees_with_descendants: fee,
+            // TODO(PR) actually compute the fee with ancestors
+            fees_with_ancestors: fee,
         }
     }
 
@@ -388,6 +412,12 @@ impl TxMempoolEntry {
             / u128::try_from(self.size_with_descendants).expect("conversion"))
         .expect("nonzero tx_size")
         .into()
+    }
+
+    pub(super) fn ancestor_score(&self) -> AncestorScore {
+        (self.fees_with_ancestors / u128::try_from(self.size_with_ancestors).expect("conversion"))
+            .expect("nonzero tx_size")
+            .into()
     }
 
     pub(super) fn tx_id(&self) -> Id<Transaction> {
