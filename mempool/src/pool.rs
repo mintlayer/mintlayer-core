@@ -810,8 +810,8 @@ where
         }
         let mut tx_iter = self.store.txs_by_descendant_score.values().flatten();
         while !tx_accumulator.done() {
-            if let Some(next_tx_id) = tx_iter.next() {
-                let next_tx = self.store.txs_by_id.get(next_tx_id).expect("tx to exist");
+            if let Some(tx_id) = tx_iter.next() {
+                let next_tx = self.store.txs_by_id.get(tx_id).expect("tx to exist");
                 tx_accumulator.add_tx(next_tx.tx().clone());
             } else {
                 break;
