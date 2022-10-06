@@ -1889,6 +1889,13 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let genesis = tf.genesis();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+
+    let size_limit: usize = 1_000;
+    let tx_accumulator = DefaultTxAccumulator::new(size_limit);
+    let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
+    let expected_num_txs_collected: usize = 0;
+    assert_eq!(collected_txs.len(), expected_num_txs_collected);
+
     let target_txs = 10;
 
     let mut tx_builder = TransactionBuilder::new().add_input(
@@ -1918,14 +1925,13 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
         mempool.add_transaction(tx.clone()).await?;
     }
 
-    const SIZE_LIMIT: usize = 1_000;
-    let tx_accumulator = DefaultTxAccumulator::new(SIZE_LIMIT);
+    let size_limit = 1_000;
+    let tx_accumulator = DefaultTxAccumulator::new(size_limit);
     let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
-    const EXPECTED_NUM_TXS_COLLECTED: usize = 6;
-    assert_eq!(collected_txs.len(), EXPECTED_NUM_TXS_COLLECTED);
+    let expected_num_txs_collected = 6;
+    assert_eq!(collected_txs.len(), expected_num_txs_collected);
     let total_tx_size: usize = collected_txs.iter().map(|tx| tx.encoded_size()).sum();
-    eprintln!("total size: {}", total_tx_size);
-    assert!(total_tx_size <= SIZE_LIMIT);
+    assert!(total_tx_size <= size_limit);
 
     let tx_accumulator = DefaultTxAccumulator::new(0);
     let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));

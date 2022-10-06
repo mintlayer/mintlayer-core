@@ -842,9 +842,6 @@ where
         &self,
         mut tx_accumulator: Box<dyn TransactionAccumulator>,
     ) -> Vec<SignedTransaction> {
-        if self.store.is_empty() {
-            return Vec::new();
-        }
         let mut tx_iter = self.store.txs_by_descendant_score.values().flatten();
         while !tx_accumulator.done() {
             if let Some(tx_id) = tx_iter.next() {
