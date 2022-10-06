@@ -13,7 +13,7 @@ inmemory = [ 'storage-inmemory' ]
 serialization = { path = "../serialization" }
 storage-core = { path = "core" }
 storage-inmemory = { path = "inmemory", optional = true }
+utils = { path = "../utils" }
 
 [dev-dependencies]
-utils = { path = "../utils" }
 storage-inmemory = { path = "inmemory" }
