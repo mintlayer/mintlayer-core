@@ -16,6 +16,7 @@
 //! High-level application-agnostic storage interface
 
 mod internal;
+pub mod raw;
 
 use internal::{EntryIterator, TxImpl};
 
@@ -48,6 +49,11 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
             backend: backend.open(Sch::desc_iter().collect())?,
             _schema: Default::default(),
         })
+    }
+
+    /// Dump raw database contents into a data structure
+    pub fn dump_raw(&self) -> crate::Result<raw::RawDb> {
+        raw::RawDb::from_db(self)
     }
 
     /// Start a read-only transaction
