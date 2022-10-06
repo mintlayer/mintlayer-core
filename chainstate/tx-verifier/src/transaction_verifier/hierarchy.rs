@@ -123,7 +123,7 @@ impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
         tx_id: &OutPointSourceId,
     ) -> Result<(), TransactionVerifierStorageError> {
         self.tx_index_cache
-            .del_tx_index(tx_id)
+            .remove_tx_index_by_id(tx_id.clone())
             .map_err(TransactionVerifierStorageError::TxIndexError)
     }
 
@@ -170,16 +170,10 @@ impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
         id: Id<Block>,
         new_undo: &BlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
-        // FIXME: what about reward_undo?
         self.utxo_block_undo
             .entry(id)
             .and_modify(|cached_undo| {
-                // FIXME: the assumption that tx_undo info can be just pushed to the end of block undo
-                // looks weak
-                new_undo
-                    .tx_undos()
-                    .iter()
-                    .for_each(|u| cached_undo.undo.push_tx_undo(u.clone()))
+                cached_undo.undo.merge(new_undo.clone());
             })
             .or_insert(BlockUndoEntry {
                 undo: new_undo.clone(),

@@ -29,7 +29,7 @@ use common::{
     primitives::{id::WithId, Amount, Idable},
 };
 
-// proper description
+// FIXME: proper description
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]

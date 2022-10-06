@@ -104,6 +104,19 @@ impl BlockUndo {
     pub fn take_block_reward_undo(&mut self) -> Option<BlockRewardUndo> {
         self.reward_undo.take()
     }
+
+    pub fn merge(&mut self, other: BlockUndo) {
+        // FIXME: assumption that utxos can be just pushed to the end of block undo looks weak
+        if let Some(reward_undo) = other.reward_undo {
+            if self.reward_undo.is_none() && !reward_undo.inner().is_empty() {
+                self.reward_undo = Some(Default::default());
+            }
+            reward_undo.0.into_iter().for_each(|u| {
+                self.reward_undo.as_mut().expect("must've been already initialized ").0.push(u);
+            })
+        }
+        other.tx_undos.into_iter().for_each(|u| self.push_tx_undo(u));
+    }
 }
 
 #[cfg(test)]

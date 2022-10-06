@@ -79,8 +79,12 @@ impl TxIndexCache {
 
     pub fn remove_tx_index(&mut self, spend_ref: BlockTransactableRef) -> Result<(), TxIndexError> {
         let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
+        self.remove_tx_index_by_id(outpoint_source_id)
+    }
 
-        self.data.insert(outpoint_source_id, CachedInputsOperation::Erase);
+    pub fn remove_tx_index_by_id(&mut self, tx_id: OutPointSourceId) -> Result<(), TxIndexError> {
+        // possible overwrite is ok
+        self.data.insert(tx_id, CachedInputsOperation::Erase);
         Ok(())
     }
 
@@ -91,12 +95,6 @@ impl TxIndexCache {
     ) -> Result<(), TxIndexError> {
         // possible overwrite is ok
         self.data.insert(tx_id.clone(), CachedInputsOperation::Write(tx_index));
-        Ok(())
-    }
-
-    pub fn del_tx_index(&mut self, tx_id: &OutPointSourceId) -> Result<(), TxIndexError> {
-        // possible overwrite is ok
-        self.data.insert(tx_id.clone(), CachedInputsOperation::Erase);
         Ok(())
     }
 

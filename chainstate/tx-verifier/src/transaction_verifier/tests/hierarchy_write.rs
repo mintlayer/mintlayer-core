@@ -450,12 +450,20 @@ fn block_undo_conflict_hierarchy() {
 
     let (_, utxo1) = create_utxo(1000);
     let (_, utxo2) = create_utxo(2000);
+    let (_, utxo3) = create_utxo(3000);
+    let (_, utxo4) = create_utxo(4000);
     let block_id: Id<Block> = Id::new(H256::random());
-    let block_undo_1 = BlockUndo::new(None, vec![TxUndo::new(vec![utxo1.clone()])]);
-    let block_undo_2 = BlockUndo::new(None, vec![TxUndo::new(vec![utxo2.clone()])]);
+    let block_undo_1 = BlockUndo::new(
+        Some(BlockRewardUndo::new(vec![utxo1.clone()])),
+        vec![TxUndo::new(vec![utxo2.clone()])],
+    );
+    let block_undo_2 = BlockUndo::new(
+        Some(BlockRewardUndo::new(vec![utxo3.clone()])),
+        vec![TxUndo::new(vec![utxo4.clone()])],
+    );
     let expected_block_undo = BlockUndo::new(
-        None,
-        vec![TxUndo::new(vec![utxo1]), TxUndo::new(vec![utxo2])],
+        Some(BlockRewardUndo::new(vec![utxo1.clone(), utxo3.clone()])),
+        vec![TxUndo::new(vec![utxo2]), TxUndo::new(vec![utxo4])],
     );
 
     let mut store = mock::MockStore::new();
