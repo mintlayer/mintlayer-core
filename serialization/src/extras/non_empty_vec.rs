@@ -72,11 +72,7 @@ impl<U: Decode> Decode for DataOrNoVec<U> {
         input: &mut I,
     ) -> Result<Self, serialization_core::Error> {
         let v = Vec::decode(input)?;
-        if v.is_empty() {
-            Ok(DataOrNoVec(None))
-        } else {
-            Ok(DataOrNoVec(Some(v)))
-        }
+        Ok(Some(v).into())
     }
 }
 
