@@ -26,38 +26,56 @@ use utils::tap_error_log::LogError;
 
 use crate::{calculate_median_time_past, BlockError};
 
-pub struct TransactionVerificationStrategy<'a, H, S> {
-    block_index_handle: &'a H,
-    storage_backend: &'a S,
-    chain_config: &'a ChainConfig,
-}
-
-impl<'a, H: BlockIndexHandle, S: TransactionVerifierStorageRef>
-    TransactionVerificationStrategy<'a, H, S>
-{
-    pub fn new(
+/// A trait that specifies how a block will be verified
+pub trait TransactionVerificationStrategy: Sized {
+    fn connect_block<'a, H: BlockIndexHandle, S: TransactionVerifierStorageRef>(
+        &self,
         block_index_handle: &'a H,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
-    ) -> Self {
-        Self {
-            block_index_handle,
-            storage_backend,
-            chain_config,
-        }
-    }
-
-    pub fn connect_block(
-        &'a self,
         block_index: &'a BlockIndex,
         block: &WithId<Block>,
         spend_height: &BlockHeight,
-    ) -> Result<TransactionVerifier<S>, BlockError> {
+    ) -> Result<TransactionVerifier<'a, S>, BlockError>;
+
+    fn disconnect_block<'a, S: TransactionVerifierStorageRef>(
+        &self,
+        storage_backend: &'a S,
+        chain_config: &'a ChainConfig,
+        block: &WithId<Block>,
+        prev_block_id: Id<GenBlock>,
+    ) -> Result<TransactionVerifier<'a, S>, BlockError>;
+}
+
+pub struct DefaultTransactionVerificationStrategy {}
+
+impl DefaultTransactionVerificationStrategy {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl Default for DefaultTransactionVerificationStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy {
+    fn connect_block<'a, H: BlockIndexHandle, S: TransactionVerifierStorageRef>(
+        &self,
+        block_index_handle: &'a H,
+        storage_backend: &'a S,
+        chain_config: &'a ChainConfig,
+        block_index: &'a BlockIndex,
+        block: &WithId<Block>,
+        spend_height: &BlockHeight,
+    ) -> Result<TransactionVerifier<'a, S>, BlockError> {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past =
-            calculate_median_time_past(self.block_index_handle, &block.prev_block_id());
+            calculate_median_time_past(block_index_handle, &block.prev_block_id());
 
-        let mut tx_verifier = TransactionVerifier::new(self.storage_backend, self.chain_config);
+        let mut tx_verifier = TransactionVerifier::new(storage_backend, chain_config);
 
         let reward_fees = tx_verifier
             .connect_transactable(
@@ -88,7 +106,7 @@ impl<'a, H: BlockIndexHandle, S: TransactionVerifierStorageRef>
             })
             .log_err()?;
 
-        let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
+        let block_subsidy = chain_config.block_subsidy_at_height(spend_height);
         tx_verifier
             .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
             .log_err()?;
@@ -98,12 +116,14 @@ impl<'a, H: BlockIndexHandle, S: TransactionVerifierStorageRef>
         Ok(tx_verifier)
     }
 
-    pub fn disconnect_block(
-        &'a self,
+    fn disconnect_block<'a, S: TransactionVerifierStorageRef>(
+        &self,
+        storage_backend: &'a S,
+        chain_config: &'a ChainConfig,
         block: &WithId<Block>,
         prev_block_id: Id<GenBlock>,
-    ) -> Result<TransactionVerifier<S>, BlockError> {
-        let mut tx_verifier = TransactionVerifier::new(self.storage_backend, self.chain_config);
+    ) -> Result<TransactionVerifier<'a, S>, BlockError> {
+        let mut tx_verifier = TransactionVerifier::new(storage_backend, chain_config);
 
         // TODO: add a test that checks the order in which txs are disconnected
         block

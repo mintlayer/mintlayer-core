@@ -47,7 +47,9 @@ use super::{
     orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
     tokens::check_tokens_data,
     transaction_verifier::{error::TokensError, flush::flush_to_storage},
-    tx_verification_strategy::TransactionVerificationStrategy,
+    tx_verification_strategy::{
+        DefaultTransactionVerificationStrategy, TransactionVerificationStrategy,
+    },
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
 };
 
@@ -758,9 +760,18 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         block: &WithId<Block>,
         spend_height: &BlockHeight,
     ) -> Result<(), BlockError> {
-        let strategy = TransactionVerificationStrategy::new(self, self, self.chain_config);
+        let strategy = DefaultTransactionVerificationStrategy::new();
 
-        let connected_txs = strategy.connect_block(block_index, block, spend_height).log_err()?;
+        let connected_txs = strategy
+            .connect_block(
+                self,
+                self,
+                self.chain_config,
+                block_index,
+                block,
+                spend_height,
+            )
+            .log_err()?;
 
         let consumed = connected_txs.consume()?;
         flush_to_storage(self, consumed)?;
@@ -773,8 +784,9 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         block: &WithId<Block>,
         prev_block_id: Id<GenBlock>,
     ) -> Result<(), BlockError> {
-        let strategy = TransactionVerificationStrategy::new(self, self, self.chain_config);
-        let cached_inputs = strategy.disconnect_block(block, prev_block_id)?;
+        let strategy = DefaultTransactionVerificationStrategy::new();
+        let cached_inputs =
+            strategy.disconnect_block(self, self.chain_config, block, prev_block_id)?;
         let cached_inputs = cached_inputs.consume()?;
         flush_to_storage(self, cached_inputs)?;
 
