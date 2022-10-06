@@ -32,7 +32,16 @@ impl<T> AsRef<Option<Vec<T>>> for DataOrNoVec<T> {
 
 impl<T> From<Option<Vec<T>>> for DataOrNoVec<T> {
     fn from(val: Option<Vec<T>>) -> Self {
-        DataOrNoVec(val)
+        match val {
+            Some(ref v) => {
+                if v.is_empty() {
+                    DataOrNoVec(None)
+                } else {
+                    DataOrNoVec(val)
+                }
+            }
+            None => DataOrNoVec(None),
+        }
     }
 }
 
@@ -109,5 +118,29 @@ mod test {
         let data_decoded = DataOrNoVec::<u8>::decode_all(&mut data_encoded.as_slice());
         let the_vec_decoded = Vec::<u8>::decode_all(&mut the_vec_encoded.as_slice());
         assert_eq!(data_decoded.unwrap().0.unwrap(), the_vec_decoded.unwrap());
+    }
+
+    fn test_back_and_forth(data: DataOrNoVec<u8>) {
+        assert_eq!(
+            DataOrNoVec::<u8>::decode_all(&mut data.encode().as_slice()),
+            Ok(data)
+        );
+    }
+
+    #[test]
+    fn back_and_forth() {
+        {
+            let the_vec = vec![1, 2, 3];
+            let data: DataOrNoVec<u8> = Some(the_vec.clone()).into();
+            test_back_and_forth(data);
+        }
+        {
+            let data: DataOrNoVec<u8> = Some(vec![]).into();
+            test_back_and_forth(data);
+        }
+        {
+            let data: DataOrNoVec<u8> = None.into();
+            test_back_and_forth(data);
+        }
     }
 }
