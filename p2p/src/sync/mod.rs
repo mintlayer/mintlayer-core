@@ -510,7 +510,7 @@ where
         self.process_blocks().await
     }
 
-    /// TODO: FIXME:
+    /// Performs initial block download.
     async fn sync(&mut self) -> crate::Result<()> {
         loop {
             tokio::select! {
@@ -599,7 +599,7 @@ where
                         self.unregister_peer(peer_id)
                     }
                 }
-            };
+            }
 
             if self.check_sync_state() {
                 return Ok(());
@@ -607,24 +607,96 @@ where
         }
     }
 
+    /// Runs blocks processing event loop.
     async fn process_blocks(&mut self) -> crate::Result<Void> {
-        // TODO: FIXME:
-        // event = self.pubsub_handle.poll_next() => match event? {
-        //     PubSubEvent::Announcement { peer_id, message_id, announcement } => match announcement {
-        //         // TODO: FIXME: Use headers instead of blocks.
-        //         message::Announcement::Block(block) => {
-        //             self.process_block_announcement(peer_id, message_id, block).await?;
-        //         },
-        //     }
-        // },
-        // block_id = block_rx.recv().fuse() => {
-        //     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
+        log::info!("Initial block download done, starting PubSubMessageHandler");
+
+        let mut block_rx = self.subscribe_to_chainstate_events().await?;
+        let FIXME_pubsub_handle = todo!();
+        // TODO: FIXME: Subscribe to pubsub events.
+
+        // // tell peers what topics we're interested in
+        // self.pubsub_handle.subscribe(&self.topics).await?;
+
+        loop {
+            tokio::select! {
+                // event = self.pubsub_handle.poll_next() => match event? {
+                //     PubSubEvent::Announcement { peer_id, message_id, announcement } => match announcement {
+                //         // TODO: we should discuss whether we should use blocks or headers (like bitcoin) here, because
+                //         //       announcing blocks seems wasteful, in the sense that it's possible for peers to get blocks
+                //         //       again, and again, wasting their bandwidth. The question is, whether the mechanism of
+                //         //       libp2p's pubsub solves this problem. Libp2p now seems to be probabilistically distributing the
+                //         //       blocks to a subset of the peers. We will have a discussion on whether we should continue
+                //         //       announcing blocks
+                //         message::Announcement::Block(block) => {
+                //             self.process_block_announcement(peer_id, message_id, block).await?;
+                //         },
+                //     }
+                // },
+                block_id = block_rx.recv().fuse() => {
+                    let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
+
+                    match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
+                        Some(block) => self.announce_block(block).await?,
+                        None => log::error!("CRITICAL: best block not available"),
+                    }
+                }
+            }
+        }
+    }
+
+    /// Returns a receiver for the chainstate `NewTip` events.
+    async fn subscribe_to_chainstate_events(
+        &mut self,
+    ) -> crate::Result<mpsc::UnboundedReceiver<Id<Block>>> {
+        let (tx, rx) = mpsc::unbounded_channel();
+
+        let subscribe_func =
+            Arc::new(
+                move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
+                    chainstate::ChainstateEvent::NewTip(block_id, _) => {
+                        futures::executor::block_on(async {
+                            if let Err(e) = tx.send(block_id) {
+                                log::error!("PubSubMessageHandler closed: {e:?}")
+                            }
+                        });
+                    }
+                },
+            );
+
+        self.chainstate_handle
+            .call_mut(|this| this.subscribe_to_events(subscribe_func))
+            .await
+            .map_err(|_| P2pError::SubsystemFailure)?;
+
+        Ok(rx)
+    }
+
+    /// TODO: FIXME:
+    async fn announce_block(&mut self, block: Block) -> crate::Result<()> {
+        // let result = self.pubsub_handle.publish(message::Announcement::Block(block)).await;
         //
-        //     match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
-        //         Some(block) => self.announce_block(block).await?,
-        //         None => log::error!("CRITICAL: best block not available"),
+        // match result {
+        //     Ok(_) => Ok(()),
+        //     Err(P2pError::ChannelClosed) => result,
+        //     Err(P2pError::PublishError(ref error)) => match error {
+        //         PublishError::InsufficientPeers => Ok(()),
+        //         PublishError::TransformFailed => result,
+        //         PublishError::Duplicate => result,
+        //         PublishError::MessageTooLarge(_size, _limit) => result,
+        //         PublishError::SigningFailed => result,
+        //     },
+        //     Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)) => result,
+        //     Err(err) => {
+        //         log::error!(
+        //             "Unexpected error occurred while trying to announce block: {}",
+        //             err
+        //         );
+        //         Ok(())
         //     }
         // }
+        // TODO: FIXME: Publish event.
+        todo!();
         todo!()
     }
 }
