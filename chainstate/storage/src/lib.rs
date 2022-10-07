@@ -19,6 +19,7 @@ mod internal;
 mod is_transaction_seal;
 #[cfg(any(test, feature = "mock"))]
 pub mod mock;
+pub mod schema;
 
 use std::collections::BTreeMap;
 
