@@ -23,17 +23,20 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         config::Builder as ConfigBuilder,
-        tokens::{OutputValue, TokenData},
+        tokens::{token_id, OutputValue, TokenData},
         Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{id::WithId, Amount, Idable},
 };
 
-// FIXME: proper description
+// These tests prove that TransactionVerifiers hierarchy has homomorphic property: f(ab) == f(a)f(b)
+// Meaning that multiple operations done via a single verifier give the same result as using one
+// verifier per operation and then combining the result.
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn homomorphism(#[case] seed: Seed) {
+fn coins_homomorphism(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
@@ -58,9 +61,7 @@ fn homomorphism(#[case] seed: Seed) {
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::new(
-                OutputValue::Coin(
-                    (tf.chainstate.get_chain_config().token_min_issuance_fee() * 2).unwrap(),
-                ),
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
                 OutputPurpose::Transfer(anyonecanspend_address()),
             ))
             .build();
@@ -74,11 +75,124 @@ fn homomorphism(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1000..2000))),
+                OutputPurpose::Transfer(anyonecanspend_address()),
+            ))
+            .build();
+
+        let block: WithId<Block> = tf
+            .make_block_builder()
+            .add_transaction(tx_1.clone())
+            .add_transaction(tx_2.clone())
+            .build()
+            .into();
+
+        let fake_block_index = BlockIndex::new(
+            &block,
+            Uint256::ZERO,
+            block.get_id().into(),
+            BlockHeight::one(),
+            BlockTimestamp::from_int_seconds(1),
+        );
+
+        let mut verifier_1 = TransactionVerifier::new(&storage1, &chain_config);
+        verifier_1
+            .connect_transactable(
+                &fake_block_index,
+                BlockTransactableRef::Transaction(&block, 0),
+                &BlockHeight::one(),
+                &BlockTimestamp::from_int_seconds(1),
+            )
+            .unwrap();
+        verifier_1
+            .connect_transactable(
+                &fake_block_index,
+                BlockTransactableRef::Transaction(&block, 1),
+                &BlockHeight::one(),
+                &BlockTimestamp::from_int_seconds(1),
+            )
+            .unwrap();
+
+        let mut verifier_2 = TransactionVerifier::new(&storage2, &chain_config);
+        verifier_2
+            .connect_transactable(
+                &fake_block_index,
+                BlockTransactableRef::Transaction(&block, 0),
+                &BlockHeight::one(),
+                &BlockTimestamp::from_int_seconds(1),
+            )
+            .unwrap();
+
+        let mut verifier_3 = verifier_2.derive_child();
+        verifier_3
+            .connect_transactable(
+                &fake_block_index,
+                BlockTransactableRef::Transaction(&block, 1),
+                &BlockHeight::one(),
+                &BlockTimestamp::from_int_seconds(1),
+            )
+            .unwrap();
+
+        let consumed_cache_3 = verifier_3.consume().unwrap();
+        flush::flush_to_storage(&mut verifier_2, consumed_cache_3).unwrap();
+
+        let consumed_cache_1 = verifier_1.consume().unwrap();
+        let consumed_cache_2 = verifier_2.consume().unwrap();
+        assert_eq!(consumed_cache_1, consumed_cache_2);
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn tokens_homomorphism(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = ConfigBuilder::test_chain().build();
+        let storage1 = InMemoryStorageWrapper {
+            storage: Store::new_empty().unwrap(),
+            chain_config: chain_config.clone(),
+        };
+        let storage2 = InMemoryStorageWrapper {
+            storage: Store::new_empty().unwrap(),
+            chain_config: chain_config.clone(),
+        };
+        let mut tf = TestFramework::builder().with_storage(storage1.storage.clone()).build();
+        let mut _tf_2 = TestFramework::builder().with_storage(storage2.storage.clone()).build();
+
+        let tx_1 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::new(
                 OutputValue::Token(TokenData::TokenIssuanceV1 {
                     token_ticker: "XXXX".as_bytes().to_vec(),
-                    amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
+                    amount_to_issue: Amount::from_atoms(rng.gen_range(100_000..u128::MAX)),
                     number_of_decimals: rng.gen_range(1..18),
                     metadata_uri: "http://uri".as_bytes().to_vec(),
+                }),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .build();
+        let token_id = token_id(tx_1.transaction()).unwrap();
+
+        let tx_2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::Transaction(tx_1.transaction().get_id().into()),
+                    0,
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Token(TokenData::TokenTransferV1 {
+                    token_id,
+                    amount: Amount::from_atoms(rng.gen_range(1..100_000)),
                 }),
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))

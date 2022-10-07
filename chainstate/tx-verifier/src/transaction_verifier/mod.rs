@@ -154,8 +154,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 let issuance_token_id_getter =
                     || -> Result<Option<TokenId>, ConnectTransactionError> {
                         // issuance transactions are unique, so we use them to get the token id
-                        self.storage_ref
-                            .get_token_id_from_issuance_tx(tx_id)
+                        self.get_token_id_from_issuance_tx(tx_id)
                             .map_err(ConnectTransactionError::TransactionVerifierError)
                     };
                 let (key, amount) =
