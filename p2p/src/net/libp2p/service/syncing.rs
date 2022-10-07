@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use libp2p::{core::PeerId, request_response::RequestId};
+use libp2p::{core::PeerId, gossipsub::MessageId, request_response::RequestId};
 use tokio::sync::{mpsc, oneshot};
 
 use logging::log;
@@ -28,7 +28,7 @@ use crate::{
             behaviour::sync_codec::message_types::{SyncRequest, SyncResponse},
             types::{Command, SyncingEvent as P2pSyncingEvent},
         },
-        types::SyncingEvent,
+        types::{PubSubTopic, SyncingEvent},
         NetworkingService, SyncingMessagingService,
     },
 };
@@ -58,7 +58,11 @@ impl<T: NetworkingService> Libp2pSyncHandle<T> {
 #[async_trait]
 impl<T> SyncingMessagingService<T> for Libp2pSyncHandle<T>
 where
-    T: NetworkingService<PeerId = PeerId, SyncingPeerRequestId = RequestId> + Send,
+    T: NetworkingService<
+            PeerId = PeerId,
+            SyncingPeerRequestId = RequestId,
+            SyncingMessageId = MessageId,
+        > + Send,
 {
     async fn send_request(
         &mut self,
@@ -73,6 +77,20 @@ where
         })?;
 
         // The first error indicates the channel being closed and the second one is a p2p error.
+        rx.await?
+    }
+
+    async fn send_announcement(
+        &mut self,
+        topic: PubSubTopic,
+        message: Vec<u8>,
+    ) -> crate::Result<()> {
+        let (response, rx) = oneshot::channel();
+        self.cmd_tx.send(Command::AnnounceData {
+            topic,
+            message,
+            response,
+        })?;
         rx.await?
     }
 
@@ -137,10 +155,15 @@ where
                 request_id,
                 error,
             }),
-            P2pSyncingEvent::Announcement { .. } => {
-                todo!();
-                todo!()
-            }
+            P2pSyncingEvent::Announcement {
+                peer_id,
+                message_id,
+                announcement,
+            } => Ok(SyncingEvent::Announcement {
+                peer_id,
+                message_id,
+                announcement,
+            }),
         }
     }
 }

@@ -200,6 +200,10 @@ where
         } => {
             mgr.process_error(peer_id, request_id, error).await?;
         }
+        net::types::SyncingEvent::Announcement { .. } => {
+            todo!();
+            todo!()
+        }
     }
 
     mgr.check_sync_state();

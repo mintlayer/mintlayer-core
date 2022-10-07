@@ -27,7 +27,7 @@ use async_trait::async_trait;
 
 use common::primitives;
 
-use crate::{config, error, message};
+use crate::{config, error, message, net::types::PubSubTopic};
 
 /// [NetworkingService] provides the low-level network interface
 /// that each network service provider must implement
@@ -48,6 +48,9 @@ pub trait NetworkingService {
 
     /// Unique ID assigned to each received request from a peer
     type SyncingPeerRequestId: Debug + Eq + Hash + Send + Sync;
+
+    /// Unique ID assigned to each pubsub message
+    type SyncingMessageId: Clone + Debug + Send;
 
     /// Handle for sending/receiving connecitivity-related events
     type ConnectivityHandle: Send;
@@ -142,6 +145,12 @@ where
         &mut self,
         request_id: T::SyncingPeerRequestId,
         response: message::Response,
+    ) -> crate::Result<()>;
+
+    async fn send_announcement(
+        &mut self,
+        topic: PubSubTopic,
+        message: Vec<u8>,
     ) -> crate::Result<()>;
 
     /// Poll syncing-related event from the networking service

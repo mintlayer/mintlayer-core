@@ -23,9 +23,10 @@ use crate::{
 use async_trait::async_trait;
 use libp2p::{
     core::{upgrade, PeerId},
+    gossipsub::MessageId,
     identity, mplex,
     noise::{self, AuthenticKeypair},
-    request_response::*,
+    request_response::RequestId,
     swarm::SwarmBuilder,
     tcp::{GenTcpConfig, TokioTcpTransport},
     Multiaddr, Transport,
@@ -36,10 +37,10 @@ use tokio::sync::{mpsc, oneshot};
 
 mod backend;
 pub mod behaviour;
-mod constants;
+pub mod constants;
 pub mod service;
 mod tests;
-mod types;
+pub mod types;
 
 #[derive(Debug)]
 pub struct Libp2pService;
@@ -64,6 +65,7 @@ impl NetworkingService for Libp2pService {
     type Address = Multiaddr;
     type PeerId = PeerId;
     type SyncingPeerRequestId = RequestId;
+    type SyncingMessageId = MessageId;
     type ConnectivityHandle = service::connectivity::Libp2pConnectivityHandle<Self>;
     type SyncingMessagingHandle = service::syncing::Libp2pSyncHandle<Self>;
 

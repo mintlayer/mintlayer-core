@@ -112,6 +112,7 @@ where
     type Address = T::Address;
     type PeerId = types::MockPeerId;
     type SyncingPeerRequestId = types::MockRequestId;
+    type SyncingMessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self, T>;
     type SyncingMessagingHandle = MockSyncingMessagingHandle<Self, T>;
 
@@ -284,6 +285,15 @@ where
             })
             .await?;
         rx.await?
+    }
+
+    async fn send_announcement(
+        &mut self,
+        topic: net::types::PubSubTopic,
+        message: Vec<u8>,
+    ) -> crate::Result<()> {
+        todo!();
+        todo!();
     }
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent<S>> {

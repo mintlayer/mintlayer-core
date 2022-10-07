@@ -38,12 +38,19 @@ use common::{
     primitives::{Id, Idable},
 };
 use logging::log;
+use serialization::Encode;
 use utils::ensure;
 
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
-    event, message,
-    net::{self, types::SyncingEvent, NetworkingService, SyncingMessagingService},
+    event,
+    message::{self, Announcement},
+    net::{
+        self,
+        libp2p::{constants::GOSSIPSUB_MAX_TRANSMIT_SIZE, types::Command},
+        types::{PubSubTopic, SyncingEvent},
+        NetworkingService, SyncingMessagingService,
+    },
 };
 
 // TODO: from config? global constant?
@@ -587,6 +594,12 @@ where
                         let result = self.process_error(peer_id, request_id, error).await;
                         self.handle_error(peer_id, result).await?;
                     },
+                    // TODO: FIXME: Remove this from syncing events?..
+                    SyncingEvent::Announcement{ .. } => {
+                        // TODO: FIXME:
+                        todo!();
+                        todo!()
+                    }
                 },
                 event = self.rx_sync.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     event::SyncControlEvent::Connected(peer_id) => {
@@ -674,30 +687,16 @@ where
 
     /// TODO: FIXME:
     async fn announce_block(&mut self, block: Block) -> crate::Result<()> {
-        // let result = self.pubsub_handle.publish(message::Announcement::Block(block)).await;
-        //
-        // match result {
-        //     Ok(_) => Ok(()),
-        //     Err(P2pError::ChannelClosed) => result,
-        //     Err(P2pError::PublishError(ref error)) => match error {
-        //         PublishError::InsufficientPeers => Ok(()),
-        //         PublishError::TransformFailed => result,
-        //         PublishError::Duplicate => result,
-        //         PublishError::MessageTooLarge(_size, _limit) => result,
-        //         PublishError::SigningFailed => result,
-        //     },
-        //     Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)) => result,
-        //     Err(err) => {
-        //         log::error!(
-        //             "Unexpected error occurred while trying to announce block: {}",
-        //             err
-        //         );
-        //         Ok(())
-        //     }
-        // }
-        // TODO: FIXME: Publish event.
-        todo!();
-        todo!()
+        let message = Announcement::Block(block).encode();
+        // TODO: FIXME:
+        // ensure!(
+        //     message.len() <= GOSSIPSUB_MAX_TRANSMIT_SIZE,
+        //     P2pError::PublishError(PublishError::MessageTooLarge(
+        //         Some(encoded.len()),
+        //         Some(GOSSIPSUB_MAX_TRANSMIT_SIZE),
+        //     ))
+        // );
+        self.peer_sync_handle.send_announcement(PubSubTopic::Blocks, message).await
     }
 }
 

@@ -178,6 +178,12 @@ pub enum SyncingEvent<T: NetworkingService> {
         request_id: T::SyncingPeerRequestId,
         error: RequestResponseError,
     },
+
+    Announcement {
+        peer_id: T::PeerId,
+        message_id: T::SyncingMessageId,
+        announcement: message::Announcement,
+    },
 }
 
 /// Publish-subscribe topics
