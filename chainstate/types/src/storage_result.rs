@@ -14,7 +14,7 @@
 // limitations under the License.
 
 /// Blockchain storage error
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, thiserror::Error)]
 pub enum Error {
     #[error("Storage error: {0}")]
     Storage(storage::error::Recoverable),
