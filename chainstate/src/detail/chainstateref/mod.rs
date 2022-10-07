@@ -35,7 +35,6 @@ use common::{
 };
 use consensus::TransactionIndexHandle;
 use logging::log;
-use tx_verifier::transaction_verifier::TransactionVerifier;
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosDB, UtxosView};
 
@@ -771,14 +770,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
     ) -> Result<(), BlockError> {
         let connected_txs = self
             .tx_verification_strategy
-            .connect_block(
-                TransactionVerifier::new,
-                self,
-                self,
-                self.chain_config,
-                block_index,
-                block,
-            )
+            .connect_block(self, self, self.chain_config, block_index, block)
             .log_err()?;
 
         let consumed = connected_txs.consume()?;
@@ -788,12 +780,8 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
     }
 
     fn disconnect_transactions(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
-        let cached_inputs = self.tx_verification_strategy.disconnect_block(
-            TransactionVerifier::new,
-            self,
-            self.chain_config,
-            block,
-        )?;
+        let cached_inputs =
+            self.tx_verification_strategy.disconnect_block(self, self.chain_config, block)?;
         let cached_inputs = cached_inputs.consume()?;
         flush_to_storage(self, cached_inputs)?;
 

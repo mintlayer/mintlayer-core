@@ -13,77 +13,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::TransactionVerificationStrategy;
+use crate::{calculate_median_time_past, BlockError};
 use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
     chain::{Block, ChainConfig},
     primitives::{id::WithId, Amount, Idable},
 };
 use tx_verifier::transaction_verifier::{
-    error::ConnectTransactionError, storage::TransactionVerifierStorageRef, BlockTransactableRef,
-    Fee, Subsidy, TransactionVerifier,
+    error::ConnectTransactionError, flush::flush_to_storage,
+    storage::TransactionVerifierStorageRef, BlockTransactableRef, Fee, Subsidy,
+    TransactionVerifier,
 };
 use utils::tap_error_log::LogError;
 
-use crate::{calculate_median_time_past, BlockError};
+/// Strategy that creates separate instances of TransactionVerifier on every tx, flushing the
+/// result to a single TransactionVerifier that is returned from the connect/disconnect functions.
+/// For now this is only used for testing purposes.
+pub struct DisposableTransactionVerificationStrategy {}
 
-/// A trait that specifies how a block will be verified
-pub trait TransactionVerificationStrategy: Sized + Send {
-    /// Connect the transactions given by block and block_index,
-    /// and return a TransactionVerifier with an internal state
-    /// that represents them being connected.
-    /// Notice that this doesn't modify the internal database/storage
-    /// state. It just returns a TransactionVerifier that can be
-    /// used to update the database/storage state.
-    fn connect_block<'a, H, S, M>(
-        &self,
-        tx_verifier_maker: M,
-        block_index_handle: &'a H,
-        storage_backend: &'a S,
-        chain_config: &'a ChainConfig,
-        block_index: &'a BlockIndex,
-        block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S>, BlockError>
-    where
-        H: BlockIndexHandle,
-        S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>;
-
-    /// Disconnect the transactions given by block and block_index,
-    /// and return a TransactionVerifier with an internal state
-    /// that represents them being disconnected.
-    /// Notice that this doesn't modify the internal database/storage
-    /// state. It just returns a TransactionVerifier that can be
-    /// used to update the database/storage state.
-    fn disconnect_block<'a, S, M>(
-        &self,
-        tx_verifier_maker: M,
-        storage_backend: &'a S,
-        chain_config: &'a ChainConfig,
-        block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S>, BlockError>
-    where
-        S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>;
-}
-
-pub struct DefaultTransactionVerificationStrategy {}
-
-impl DefaultTransactionVerificationStrategy {
+impl DisposableTransactionVerificationStrategy {
     pub fn new() -> Self {
         Self {}
     }
 }
 
-impl Default for DefaultTransactionVerificationStrategy {
+impl Default for DisposableTransactionVerificationStrategy {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy {
-    fn connect_block<'a, H, S, M>(
+impl TransactionVerificationStrategy for DisposableTransactionVerificationStrategy {
+    fn connect_block<'a, H, S>(
         &self,
-        tx_verifier_maker: M,
         block_index_handle: &'a H,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
@@ -93,15 +56,14 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
     where
         H: BlockIndexHandle,
         S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>,
     {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past =
             calculate_median_time_past(block_index_handle, &block.prev_block_id());
 
-        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config);
+        let mut base_tx_verifier = TransactionVerifier::new(storage_backend, chain_config);
 
-        let reward_fees = tx_verifier
+        let reward_fees = base_tx_verifier
             .connect_transactable(
                 block_index,
                 BlockTransactableRef::BlockReward(block),
@@ -116,6 +78,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
             .iter()
             .enumerate()
             .try_fold(Amount::from_atoms(0), |total, (tx_num, _)| {
+                let mut tx_verifier = base_tx_verifier.derive_child();
                 let fee = tx_verifier
                     .connect_transactable(
                         block_index,
@@ -123,35 +86,41 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
                         &block_index.block_height(),
                         &median_time_past,
                     )
+                    .map_err(BlockError::StateUpdateFailed)
                     .log_err()?;
+                let consumed_cache = tx_verifier.consume()?;
+                flush_to_storage(&mut base_tx_verifier, consumed_cache)
+                    .map_err(BlockError::TransactionVerifierError)
+                    .log_err()?;
+
                 (total + fee.expect("connect tx should return fees").0).ok_or_else(|| {
-                    ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
+                    BlockError::StateUpdateFailed(
+                        ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id()),
+                    )
                 })
             })
             .log_err()?;
 
         let block_subsidy = chain_config.block_subsidy_at_height(&block_index.block_height());
-        tx_verifier
+        base_tx_verifier
             .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
             .log_err()?;
 
-        tx_verifier.set_best_block(block.get_id().into());
+        base_tx_verifier.set_best_block(block.get_id().into());
 
-        Ok(tx_verifier)
+        Ok(base_tx_verifier)
     }
 
-    fn disconnect_block<'a, S, M>(
+    fn disconnect_block<'a, S>(
         &self,
-        tx_verifier_maker: M,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<'a, S>, BlockError>
     where
         S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>,
     {
-        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config);
+        let mut base_tx_verifier = TransactionVerifier::new(storage_backend, chain_config);
 
         // TODO: add a test that checks the order in which txs are disconnected
         block
@@ -160,16 +129,27 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
             .enumerate()
             .rev()
             .try_for_each(|(tx_num, _)| {
+                let mut tx_verifier = base_tx_verifier.derive_child();
+
                 tx_verifier
                     .disconnect_transactable(BlockTransactableRef::Transaction(block, tx_num))
+                    .log_err()?;
+
+                let consumed_cache = tx_verifier.consume()?;
+                flush_to_storage(&mut base_tx_verifier, consumed_cache)
+                    .map_err(BlockError::TransactionVerifierError)
             })
             .log_err()?;
+
+        let mut tx_verifier = base_tx_verifier.derive_child();
         tx_verifier
             .disconnect_transactable(BlockTransactableRef::BlockReward(block))
             .log_err()?;
+        let consumed_cache = tx_verifier.consume()?;
+        flush_to_storage(&mut base_tx_verifier, consumed_cache)?;
 
-        tx_verifier.set_best_block(block.prev_block_id());
+        base_tx_verifier.set_best_block(block.prev_block_id());
 
-        Ok(tx_verifier)
+        Ok(base_tx_verifier)
     }
 }

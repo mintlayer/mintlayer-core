@@ -105,7 +105,7 @@ impl<'a, S: TransactionVerifierStorageRef> UtxosStorageRead for TransactionVerif
     }
 }
 
-impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
+impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageMut
     for TransactionVerifier<'a, S>
 {
     fn set_mainchain_tx_index(
