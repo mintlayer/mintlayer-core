@@ -513,6 +513,8 @@ where
     pub async fn run(&mut self) -> crate::Result<Void> {
         log::info!("Starting SyncManager");
 
+        // TODO: FIXME: Perhaps we don't neet two separate steps?..
+        // !!! FIXME !!!
         self.sync().await?;
         self.process_blocks().await
     }
@@ -628,8 +630,7 @@ where
         let FIXME_pubsub_handle = todo!();
         // TODO: FIXME: Subscribe to pubsub events.
 
-        // // tell peers what topics we're interested in
-        // self.pubsub_handle.subscribe(&self.topics).await?;
+        self.peer_sync_handle.subscribe(&[PubSubTopic::Blocks]).await?;
 
         loop {
             tokio::select! {

@@ -147,11 +147,15 @@ where
         response: message::Response,
     ) -> crate::Result<()>;
 
+    // TODO: FIXME:
     async fn send_announcement(
         &mut self,
         topic: PubSubTopic,
         message: Vec<u8>,
     ) -> crate::Result<()>;
+
+    // TODO: FIXME:
+    async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()>;
 
     /// Poll syncing-related event from the networking service
     async fn poll_next(&mut self) -> crate::Result<types::SyncingEvent<T>>;

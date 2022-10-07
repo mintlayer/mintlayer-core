@@ -80,6 +80,22 @@ where
         rx.await?
     }
 
+    async fn send_response(
+        &mut self,
+        request_id: T::SyncingPeerRequestId,
+        response: message::Response,
+    ) -> crate::Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(Command::SendResponse {
+            request_id,
+            response: Box::new(SyncResponse::new(response.encode())),
+            channel: tx,
+        })?;
+
+        // The first error indicates the channel being closed and the second one is a p2p error.
+        rx.await?
+    }
+
     async fn send_announcement(
         &mut self,
         topic: PubSubTopic,
@@ -94,16 +110,11 @@ where
         rx.await?
     }
 
-    async fn send_response(
-        &mut self,
-        request_id: T::SyncingPeerRequestId,
-        response: message::Response,
-    ) -> crate::Result<()> {
+    async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();
-        self.cmd_tx.send(Command::SendResponse {
-            request_id,
-            response: Box::new(SyncResponse::new(response.encode())),
-            channel: tx,
+        self.cmd_tx.send(Command::Subscribe {
+            topics: topics.iter().map(|topic| topic.into()).collect::<Vec<_>>(),
+            response: tx,
         })?;
 
         // The first error indicates the channel being closed and the second one is a p2p error.
@@ -155,6 +166,7 @@ where
                 request_id,
                 error,
             }),
+            // TODO: FIXME: Is this needed?..
             P2pSyncingEvent::Announcement {
                 peer_id,
                 message_id,

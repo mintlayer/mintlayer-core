@@ -33,7 +33,7 @@ use crate::{
     net::{
         self,
         mock::transport::{MockListener, MockTransport},
-        types::{ConnectivityEvent, SyncingEvent},
+        types::{ConnectivityEvent, PubSubTopic, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
 };
@@ -293,7 +293,12 @@ where
         message: Vec<u8>,
     ) -> crate::Result<()> {
         todo!();
+        todo!()
+    }
+
+    async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()> {
         todo!();
+        todo!()
     }
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent<S>> {
