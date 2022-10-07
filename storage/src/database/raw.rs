@@ -41,6 +41,11 @@ impl<Sch> DbIndex<Sch> {
     fn from_usize_unchecked(idx: usize) -> Self {
         Self::from_idx_unchecked(storage_core::DbIndex::new(idx))
     }
+
+    /// Get index as usize
+    pub fn as_usize(&self) -> usize {
+        self.idx.get()
+    }
 }
 
 impl<Sch: Schema> DbIndex<Sch> {
@@ -70,6 +75,11 @@ impl<Sch: Schema> DbIndex<Sch> {
         Sch::desc_iter()
             .nth(self.idx.get())
             .expect("index to be in range due to schema")
+    }
+
+    /// Get map name at this index
+    pub fn name(&self) -> String {
+        self.info().name
     }
 }
 
@@ -113,48 +123,19 @@ pub type MapContents = BTreeMap<Data, Data>;
 /// Low-level represenatation of the whole storage
 pub type StorageContents<Sch> = BTreeMap<DbIndex<Sch>, MapContents>;
 
-/// Raw database contents
-#[derive(Eq, PartialEq, Debug, Clone)]
-pub struct RawDb<Sch>(StorageContents<Sch>);
-
-impl<Sch: Schema> RawDb<Sch> {
-    /// Get raw database by dumping database data
-    pub fn from_db<B: Backend>(storage: &Storage<B, Sch>) -> crate::Result<Self> {
-        let dbtx = storage.transaction_ro()?;
-        Sch::desc_iter()
-            .enumerate()
-            .map(|(idx, _dbinfo)| {
-                let idx = storage_core::DbIndex::new(idx);
-                let items = dbtx.dbtx.prefix_iter(idx, Vec::new())?;
-                Ok((DbIndex::from_idx_unchecked(idx), items.collect()))
-            })
-            .collect::<crate::Result<StorageContents<Sch>>>()
-            .map(RawDb)
-    }
-
-    /// Get database contents
-    pub fn contents(&self) -> &StorageContents<Sch> {
-        &self.0
-    }
-
-    /// Take database contents
-    pub fn into_contents(self) -> StorageContents<Sch> {
-        self.0
-    }
-}
-
-impl<Sch: Schema> std::ops::Index<DbIndex<Sch>> for RawDb<Sch> {
-    type Output = MapContents;
-
-    fn index(&self, index: DbIndex<Sch>) -> &Self::Output {
-        self.0.get(&index).expect("key to exist due to schema")
-    }
-}
-
-impl<Sch> From<StorageContents<Sch>> for RawDb<Sch> {
-    fn from(contents: StorageContents<Sch>) -> Self {
-        RawDb(contents)
-    }
+/// Get raw database by dumping database data
+pub fn dump_storage<B: Backend, Sch: Schema>(
+    storage: &Storage<B, Sch>,
+) -> crate::Result<StorageContents<Sch>> {
+    let dbtx = storage.transaction_ro()?;
+    Sch::desc_iter()
+        .enumerate()
+        .map(|(idx, _dbinfo)| {
+            let idx = storage_core::DbIndex::new(idx);
+            let items = dbtx.dbtx.prefix_iter(idx, Vec::new())?;
+            Ok((DbIndex::from_idx_unchecked(idx), items.collect()))
+        })
+        .collect::<crate::Result<StorageContents<Sch>>>()
 }
 
 #[cfg(test)]
@@ -197,8 +178,8 @@ mod test {
             {
                 // Check the DB dump is empty initially
                 let raw_db = storage.dump_raw().unwrap();
-                assert_eq!(raw_db.contents().len(), 2);
-                assert!(raw_db.contents().iter().all(|x| x.1.is_empty()));
+                assert_eq!(raw_db.len(), 2);
+                assert!(raw_db.iter().all(|x| x.1.is_empty()));
             }
 
             // Add some valuex, check the dump contents
@@ -209,10 +190,10 @@ mod test {
 
             {
                 let raw_db = storage.dump_raw().unwrap();
-                assert_eq!(raw_db[db1].len(), 1);
-                assert_eq!(raw_db[db1][[42, 0, 0, 0].as_ref()], vec![57, 5, 0, 0]);
-                assert_eq!(raw_db[db2].len(), 1);
-                assert_eq!(raw_db[db2][[21, 0].as_ref()], vec![4 << 2, 1, 2, 3, 4]);
+                assert_eq!(raw_db[&db1].len(), 1);
+                assert_eq!(raw_db[&db1][[42, 0, 0, 0].as_ref()], vec![57, 5, 0, 0]);
+                assert_eq!(raw_db[&db2].len(), 1);
+                assert_eq!(raw_db[&db2][[21, 0].as_ref()], vec![4 << 2, 1, 2, 3, 4]);
             }
 
             // More modifications, check contents
@@ -223,10 +204,10 @@ mod test {
 
             {
                 let raw_db = storage.dump_raw().unwrap();
-                assert_eq!(raw_db[db1].len(), 0);
-                assert_eq!(raw_db[db2].len(), 2);
-                assert_eq!(raw_db[db2][[21, 0].as_ref()], vec![4 << 2, 1, 2, 3, 4]);
-                assert_eq!(raw_db[db2][[22, 0].as_ref()], vec![2 << 2, 1, 2]);
+                assert_eq!(raw_db[&db1].len(), 0);
+                assert_eq!(raw_db[&db2].len(), 2);
+                assert_eq!(raw_db[&db2][[21, 0].as_ref()], vec![4 << 2, 1, 2, 3, 4]);
+                assert_eq!(raw_db[&db2][[22, 0].as_ref()], vec![2 << 2, 1, 2]);
             }
         })
     }

@@ -52,8 +52,8 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
     }
 
     /// Dump raw database contents into a data structure
-    pub fn dump_raw(&self) -> crate::Result<raw::RawDb<Sch>> {
-        raw::RawDb::from_db(self)
+    pub fn dump_raw(&self) -> crate::Result<raw::StorageContents<Sch>> {
+        raw::dump_storage(self)
     }
 
     /// Start a read-only transaction
