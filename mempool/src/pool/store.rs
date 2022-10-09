@@ -247,7 +247,10 @@ impl MempoolStore {
     }
 
     fn add_to_ancestor_score_index(&mut self, entry: &TxMempoolEntry) {
-        //TODO(PR) maybe refresh descendant state, need to look into how Bitcoin does this
+        // TODO in the normal case of a new transaction arriving, there can't be any children
+        // because such children would be orphans.
+        // When we implement disconnecting a block, we'll need to clean up the mess we're leaving
+        // here.
         self.txs_by_ancestor_score
             .entry(entry.ancestor_score())
             .or_default()
