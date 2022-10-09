@@ -424,16 +424,25 @@ impl TxMempoolEntry {
     }
 
     pub(super) fn descendant_score(&self) -> DescendantScore {
-        (self.fees_with_descendants
-            / u128::try_from(self.size_with_descendants).expect("conversion"))
-        .expect("nonzero tx_size")
+        std::cmp::max(
+            (self.fees_with_descendants
+                / u128::try_from(self.size_with_descendants).expect("conversion"))
+            .expect("nonzero tx_size"),
+            (self.fee / u128::try_from(self.tx.encoded_size()).expect("conversion"))
+                .expect("nonzero tx size"),
+        )
         .into()
     }
 
     pub(super) fn ancestor_score(&self) -> AncestorScore {
-        (self.fees_with_ancestors / u128::try_from(self.size_with_ancestors).expect("conversion"))
-            .expect("nonzero tx_size")
-            .into()
+        std::cmp::min(
+            (self.fees_with_ancestors
+                / u128::try_from(self.size_with_ancestors).expect("conversion"))
+            .expect("nonzero tx_size"),
+            (self.fee / u128::try_from(self.tx.encoded_size()).expect("conversion"))
+                .expect("nonzero tx size"),
+        )
+        .into()
     }
 
     pub(super) fn tx_id(&self) -> Id<Transaction> {
