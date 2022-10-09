@@ -36,6 +36,7 @@ mod chainstate_storage_tests;
 mod double_spend_tests;
 mod events_tests;
 mod fungible_tokens;
+mod homomorphism;
 mod nft_burn;
 mod nft_issuance;
 mod nft_reorgs;
@@ -46,7 +47,6 @@ mod processing_tests;
 mod reorgs_tests;
 mod signature_tests;
 mod syncing_tests;
-mod tx_verifier;
 
 type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
 

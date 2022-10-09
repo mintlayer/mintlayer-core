@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use super::*;
+use chainstate_storage::inmemory::Store;
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
     TxVerificationStrategy,
@@ -66,7 +67,7 @@ fn coins_homomorphism(#[case] seed: Seed) {
         let tx_2 = TransactionBuilder::new()
             .add_input(
                 TxInput::new(
-                    OutPointSourceId::Transaction(tx_1.transaction().get_id().into()),
+                    OutPointSourceId::Transaction(tx_1.transaction().get_id()),
                     0,
                 ),
                 InputWitness::NoSignature(None),
@@ -80,7 +81,7 @@ fn coins_homomorphism(#[case] seed: Seed) {
         let tx_3 = TransactionBuilder::new()
             .add_input(
                 TxInput::new(
-                    OutPointSourceId::Transaction(tx_2.transaction().get_id().into()),
+                    OutPointSourceId::Transaction(tx_2.transaction().get_id()),
                     0,
                 ),
                 InputWitness::NoSignature(None),
@@ -107,8 +108,7 @@ fn coins_homomorphism(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        //FIXME: compare dumps
-        //assert_eq!(storage1, storage2);
+        assert_eq!(storage1.dump_raw(), storage2.dump_raw());
     });
 }
 
@@ -154,7 +154,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
         let tx_2 = TransactionBuilder::new()
             .add_input(
                 TxInput::new(
-                    OutPointSourceId::Transaction(tx_1.transaction().get_id().into()),
+                    OutPointSourceId::Transaction(tx_1.transaction().get_id()),
                     0,
                 ),
                 InputWitness::NoSignature(None),
@@ -182,7 +182,6 @@ fn tokens_homomorphism(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        //FIXME: compare dumps
-        //assert_eq!(storage1, storage2);
+        assert_eq!(storage1.dump_raw(), storage2.dump_raw());
     });
 }

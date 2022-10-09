@@ -1887,7 +1887,7 @@ fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
         let tx_2 = TransactionBuilder::new()
             .add_input(
                 TxInput::new(
-                    OutPointSourceId::Transaction(tx_1.transaction().get_id().into()),
+                    OutPointSourceId::Transaction(tx_1.transaction().get_id()),
                     0,
                 ),
                 InputWitness::NoSignature(None),

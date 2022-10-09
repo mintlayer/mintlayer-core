@@ -419,11 +419,11 @@ fn utxo_conflict_hierarchy() {
     store.expect_batch_write().times(1).return_const(Ok(()));
 
     let mut verifier1 = TransactionVerifier::new(&store, &chain_config);
-    verifier1.utxo_cache.add_utxo(&outpoint1, utxo1.clone(), false).unwrap();
+    verifier1.utxo_cache.add_utxo(&outpoint1, utxo1, false).unwrap();
 
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
-        verifier.utxo_cache.add_utxo(&outpoint1, utxo2.clone(), false).unwrap();
+        verifier.utxo_cache.add_utxo(&outpoint1, utxo2, false).unwrap();
         verifier
     };
 
@@ -462,7 +462,7 @@ fn block_undo_conflict_hierarchy() {
         vec![TxUndo::new(vec![utxo4.clone()])],
     );
     let expected_block_undo = BlockUndo::new(
-        Some(BlockRewardUndo::new(vec![utxo1.clone(), utxo3.clone()])),
+        Some(BlockRewardUndo::new(vec![utxo1, utxo3])),
         vec![TxUndo::new(vec![utxo2]), TxUndo::new(vec![utxo4])],
     );
 

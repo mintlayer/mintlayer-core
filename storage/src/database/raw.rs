@@ -120,7 +120,7 @@ impl<Sch> std::fmt::Debug for DbIndex<Sch> {
 /// Low-level representation of single key-value store
 pub type MapContents = BTreeMap<Data, Data>;
 
-/// Low-level represenatation of the whole storage
+/// Low-level representation of the whole storage
 pub type StorageContents<Sch> = BTreeMap<DbIndex<Sch>, MapContents>;
 
 /// Get raw database by dumping database data
@@ -182,7 +182,7 @@ mod test {
                 assert!(raw_db.iter().all(|x| x.1.is_empty()));
             }
 
-            // Add some valuex, check the dump contents
+            // Add some values, check the dump contents
             let mut dbtx = storage.transaction_rw().unwrap();
             dbtx.get_mut::<Db0, _>().put(42, 1337).unwrap();
             dbtx.get_mut::<Db1, _>().put(21, vec![1, 2, 3, 4]).unwrap();
