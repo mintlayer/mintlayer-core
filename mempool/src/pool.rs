@@ -385,10 +385,18 @@ where
             .filter_map(|input| input.outpoint().tx_id().get_tx_id().cloned())
             .filter_map(|id| self.store.txs_by_id.contains_key(&id).then_some(id))
             .collect::<BTreeSet<_>>();
+        let ancestor_ids =
+            TxMempoolEntry::unconfirmed_ancestors_from_parents(parents.clone(), &self.store);
+        let ancestors = ancestor_ids
+            .0
+            .into_iter()
+            .map(|id| self.store.get_entry(&id).expect("ancestors to exist"))
+            .cloned()
+            .collect();
 
         let fee = self.try_get_fee(&tx).await?;
         let time = self.clock.get_time();
-        Ok(TxMempoolEntry::new(tx, fee, parents, time))
+        TxMempoolEntry::new(tx, fee, parents, ancestors, time)
     }
 
     fn get_update_minimum_mempool_fee(

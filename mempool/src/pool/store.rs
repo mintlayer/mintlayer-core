@@ -221,6 +221,8 @@ impl MempoolStore {
     }
 
     pub(super) fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), Error> {
+        // TODO(PR) remove this
+        eprintln!("add_tx: entry {:?}", entry);
         self.append_to_parents(&entry);
         self.update_ancestor_state_for_add(&entry)?;
         self.mark_outpoints_as_spent(&entry);
@@ -373,11 +375,22 @@ impl TxMempoolEntry {
         tx: SignedTransaction,
         fee: Amount,
         parents: BTreeSet<Id<Transaction>>,
+        ancestors: BTreeSet<TxMempoolEntry>,
         creation_time: Time,
-    ) -> TxMempoolEntry {
-        Self {
+    ) -> Result<TxMempoolEntry, TxValidationError> {
+        let size_with_ancestors: usize =
+            ancestors.iter().map(|ancestor| ancestor.tx().encoded_size()).sum::<usize>()
+                + tx.encoded_size();
+        let ancestor_fees = ancestors
+            .iter()
+            .map(|ancestor| ancestor.fee())
+            .sum::<Option<_>>()
+            .ok_or(TxValidationError::AncestorFeeOverflow)?;
+        let fees_with_ancestors =
+            (fee + ancestor_fees).ok_or(TxValidationError::AncestorFeeOverflow)?;
+        Ok(Self {
             // TODO(PR) actually compute the size with ancestors
-            size_with_ancestors: tx.encoded_size(),
+            size_with_ancestors,
             size_with_descendants: tx.encoded_size(),
             tx,
             fee,
@@ -387,8 +400,8 @@ impl TxMempoolEntry {
             creation_time,
             fees_with_descendants: fee,
             // TODO(PR) actually compute the fee with ancestors
-            fees_with_ancestors: fee,
-        }
+            fees_with_ancestors,
+        })
     }
 
     pub(super) fn tx(&self) -> &SignedTransaction {
@@ -460,6 +473,21 @@ impl TxMempoolEntry {
         let mut visited = Ancestors(BTreeSet::new());
         self.unconfirmed_ancestors_inner(&mut visited, store);
         visited
+    }
+
+    pub(super) fn unconfirmed_ancestors_from_parents(
+        parents: BTreeSet<Id<Transaction>>,
+        store: &MempoolStore,
+    ) -> Ancestors {
+        parents
+            .clone()
+            .into_iter()
+            .chain(parents.into_iter().flat_map(|parent| {
+                // TODO(PR) Remove expect call, maybe use fallible iterator
+                store.get_entry(&parent).expect("parent").unconfirmed_ancestors(store).0
+            }))
+            .collect::<BTreeSet<_>>()
+            .into()
     }
 
     fn unconfirmed_ancestors_inner(&self, visited: &mut Ancestors, store: &MempoolStore) {

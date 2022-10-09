@@ -817,23 +817,74 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
 
     // Generation 1
     let tx1_parents = BTreeSet::default();
-    let entry1 = TxMempoolEntry::new(txs.get(0).unwrap().clone(), fee, tx1_parents, time::get());
+    let entry_1_ancestors = BTreeSet::default();
+    let entry1 = TxMempoolEntry::new(
+        txs.get(0).unwrap().clone(),
+        fee,
+        tx1_parents,
+        entry_1_ancestors,
+        time::get(),
+    )
+    .unwrap();
     let tx2_parents = BTreeSet::default();
-    let entry2 = TxMempoolEntry::new(txs.get(1).unwrap().clone(), fee, tx2_parents, time::get());
+    let entry_2_ancestors = BTreeSet::default();
+    let entry2 = TxMempoolEntry::new(
+        txs.get(1).unwrap().clone(),
+        fee,
+        tx2_parents,
+        entry_2_ancestors,
+        time::get(),
+    )
+    .unwrap();
 
     // Generation 2
     let tx3_parents = vec![entry1.tx_id(), entry2.tx_id()].into_iter().collect();
-    let entry3 = TxMempoolEntry::new(txs.get(2).unwrap().clone(), fee, tx3_parents, time::get());
+    let tx3_ancestors = vec![entry1.clone(), entry2.clone()].into_iter().collect();
+    let entry3 = TxMempoolEntry::new(
+        txs.get(2).unwrap().clone(),
+        fee,
+        tx3_parents,
+        tx3_ancestors,
+        time::get(),
+    )
+    .unwrap();
 
     // Generation 3
     let tx4_parents = vec![entry3.tx_id()].into_iter().collect();
+    let tx4_ancestors = vec![entry1.clone(), entry2.clone(), entry3.clone()].into_iter().collect();
     let tx5_parents = vec![entry3.tx_id()].into_iter().collect();
-    let entry4 = TxMempoolEntry::new(txs.get(3).unwrap().clone(), fee, tx4_parents, time::get());
-    let entry5 = TxMempoolEntry::new(txs.get(4).unwrap().clone(), fee, tx5_parents, time::get());
+    let tx5_ancestors = vec![entry1.clone(), entry2.clone(), entry3.clone()].into_iter().collect();
+    let entry4 = TxMempoolEntry::new(
+        txs.get(3).unwrap().clone(),
+        fee,
+        tx4_parents,
+        tx4_ancestors,
+        time::get(),
+    )
+    .unwrap();
+    let entry5 = TxMempoolEntry::new(
+        txs.get(4).unwrap().clone(),
+        fee,
+        tx5_parents,
+        tx5_ancestors,
+        time::get(),
+    )
+    .unwrap();
 
     // Generation 4
     let tx6_parents = vec![entry3.tx_id(), entry4.tx_id(), entry5.tx_id()].into_iter().collect();
-    let entry6 = TxMempoolEntry::new(txs.get(5).unwrap().clone(), fee, tx6_parents, time::get());
+    let tx6_ancestors =
+        vec![entry1.clone(), entry2.clone(), entry3.clone(), entry4.clone(), entry5.clone()]
+            .into_iter()
+            .collect();
+    let entry6 = TxMempoolEntry::new(
+        txs.get(5).unwrap().clone(),
+        fee,
+        tx6_parents,
+        tx6_ancestors,
+        time::get(),
+    )
+    .unwrap();
 
     let entries = vec![entry1, entry2, entry3, entry4, entry5, entry6];
     let ids = entries.clone().into_iter().map(|entry| entry.tx_id()).collect::<Vec<_>>();
