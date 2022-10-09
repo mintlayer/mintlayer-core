@@ -221,8 +221,6 @@ impl MempoolStore {
     }
 
     pub(super) fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), Error> {
-        // TODO(PR) remove this
-        eprintln!("add_tx: entry {:?}", entry);
         self.append_to_parents(&entry);
         self.update_ancestor_state_for_add(&entry)?;
         self.mark_outpoints_as_spent(&entry);
@@ -392,7 +390,6 @@ impl TxMempoolEntry {
         let fees_with_ancestors =
             (fee + ancestor_fees).ok_or(TxValidationError::AncestorFeeOverflow)?;
         Ok(Self {
-            // TODO(PR) actually compute the size with ancestors
             size_with_ancestors,
             size_with_descendants: tx.encoded_size(),
             tx,
@@ -402,7 +399,6 @@ impl TxMempoolEntry {
             count_with_descendants: 1,
             creation_time,
             fees_with_descendants: fee,
-            // TODO(PR) actually compute the fee with ancestors
             fees_with_ancestors,
         })
     }
