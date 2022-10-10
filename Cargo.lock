@@ -4148,6 +4148,7 @@ name = "storage-backend-test-suite"
 version = "0.1.0"
 dependencies = [
  "libtest-mimic",
+ "logging",
  "proptest",
  "storage-core",
  "utils",
