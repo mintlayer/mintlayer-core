@@ -36,14 +36,12 @@ pub struct NftIssuanceV1 {
     serde::Deserialize,
 )]
 pub struct TokenCreator {
-    pub public_key_data: Vec<u8>,
+    pub public_key: PublicKey,
 }
 
 impl From<PublicKey> for TokenCreator {
     fn from(public_key: PublicKey) -> Self {
-        Self {
-            public_key_data: public_key.encode(),
-        }
+        Self { public_key }
     }
 }
 

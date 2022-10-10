@@ -970,6 +970,7 @@ dependencies = [
  "ripemd",
  "rstest",
  "schnorrkel",
+ "serde",
  "serialization",
  "sha-1 0.10.0",
  "sha2 0.10.2",

@@ -26,6 +26,7 @@ thiserror = "1.0"
 schnorrkel = "0.10.2"
 merlin = { version = "3.0.0", default-features = false }
 argon2 = { version = "0.4", features = ["std"] }
+serde = "1.0"
 
 [dev-dependencies]
 test-utils = {path = '../test-utils'}
