@@ -362,30 +362,30 @@ where
     ///
     /// The node is considered fully synced (its initial block download is done) if all its peers
     /// are in the `Done` state.
-    pub fn check_sync_state(&mut self) -> bool {
+    pub async fn update_state(&mut self) -> crate::Result<()> {
         // TODO: improve "initial block download done" check
 
         if self.peers.is_empty() {
             self.state = SyncState::Uninitialized;
-            return false;
+            return Ok(());
         }
 
         for peer in self.peers.values() {
             match peer.state() {
                 peer::PeerSyncState::UploadingBlocks(_) => {
                     self.state = SyncState::DownloadingBlocks;
-                    return false;
+                    return Ok(());
                 }
                 peer::PeerSyncState::UploadingHeaders(_) | peer::PeerSyncState::Unknown => {
                     self.state = SyncState::Uninitialized;
-                    return false;
+                    return Ok(());
                 }
                 peer::PeerSyncState::Idle => {}
             }
         }
 
         self.state = SyncState::Done;
-        true
+        self.peer_sync_handle.subscribe(&[PubSubTopic::Blocks]).await
     }
 
     pub async fn process_error(
@@ -397,16 +397,11 @@ where
         match error {
             net::types::RequestResponseError::Timeout => {
                 if let Some(request) = self.requests.remove(&request_id) {
-                    log::warn!(
-                        "outbound request {:?} for peer {} timed out",
-                        request_id,
-                        peer_id
-                    );
+                    log::warn!("outbound request {request_id:?} for peer {peer_id} timed out");
 
                     if request.retry_count == RETRY_LIMIT {
                         log::error!(
-                            "peer {} failed to respond to request, close connection",
-                            peer_id
+                            "peer {peer_id} failed to respond to request, close connection"
                         );
                         self.unregister_peer(peer_id);
                         // TODO: global event system
@@ -451,7 +446,7 @@ where
             Ok(_) => Ok(()),
             Err(P2pError::ChannelClosed) => Err(P2pError::ChannelClosed),
             Err(P2pError::ProtocolError(err)) => {
-                log::error!("Peer {} commited a protocol error: {}", peer_id, err);
+                log::error!("Peer {peer_id} commited a protocol error: {err}");
 
                 let (tx, rx) = oneshot::channel();
                 self.tx_swarm
@@ -480,16 +475,16 @@ where
                     Ok(())
                 }
                 err => {
-                    log::error!("Peer {} caused a chainstate error: {}", peer_id, err);
+                    log::error!("Peer {peer_id} caused a chainstate error: {err}");
                     Ok(())
                 }
             },
             Err(P2pError::PeerError(err)) => {
-                log::error!("Peer error: {}", err);
+                log::error!("Peer error: {err}");
                 Ok(())
             }
             Err(err) => {
-                log::error!("Unexpected error occurred: {}", err);
+                log::error!("Unexpected error occurred: {err}");
 
                 if err.ban_score() > 0 {
                     // TODO: better abstraction over channels
@@ -513,14 +508,8 @@ where
     pub async fn run(&mut self) -> crate::Result<Void> {
         log::info!("Starting SyncManager");
 
-        // TODO: FIXME: Perhaps we don't neet two separate steps?..
-        // !!! FIXME !!!
-        self.sync().await?;
-        self.process_blocks().await
-    }
+        let mut block_rx = self.subscribe_to_chainstate_events().await?;
 
-    /// Performs initial block download.
-    async fn sync(&mut self) -> crate::Result<()> {
         loop {
             tokio::select! {
                 event = self.peer_sync_handle.poll_next() => match event? {
@@ -530,10 +519,7 @@ where
                         request,
                     } => match request {
                         message::Request::HeaderListRequest(request) => {
-                            log::debug!(
-                                "process header request (id {:?}) from peer {}",
-                                request_id, peer_id
-                            );
+                            log::debug!("process header request (id {request_id:?}) from peer {peer_id}");
                             log::trace!("locator: {:#?}", request.locator());
 
                             let result = self.process_header_request(
@@ -544,10 +530,7 @@ where
                             self.handle_error(peer_id, result).await?;
                         }
                         message::Request::BlockListRequest(request) => {
-                            log::debug!(
-                                "process block request (id {:?}) from peer {}",
-                                request_id, peer_id
-                            );
+                            log::debug!("process block request (id {request_id:?}) from peer {peer_id}");
                             log::trace!("requested block ids: {:#?}", request.block_ids());
 
                             let result = self.process_block_request(
@@ -564,20 +547,14 @@ where
                         response,
                     } => match response {
                         message::Response::HeaderListResponse(response) => {
-                            log::debug!(
-                                "process header response (id {:?}) from peer {}",
-                                request_id, peer_id
-                            );
+                            log::debug!("process header response (id {request_id:?}) from peer {peer_id}");
                             log::trace!("received headers: {:#?}", response.headers());
 
                             let result = self.process_header_response(peer_id, response.into_headers()).await;
                             self.handle_error(peer_id, result).await?;
                         }
                         message::Response::BlockListResponse(response) => {
-                            log::debug!(
-                                "process block response (id {:?}) from peer {}",
-                                request_id, peer_id
-                            );
+                            log::debug!("process block response (id {request_id:?}) from peer {peer_id}");
                             log::trace!(
                                 "# of received blocks: {}, block ids: {:#?}",
                                 response.blocks().len(),
@@ -596,58 +573,30 @@ where
                         let result = self.process_error(peer_id, request_id, error).await;
                         self.handle_error(peer_id, result).await?;
                     },
-                    // TODO: FIXME: Remove this from syncing events?..
-                    SyncingEvent::Announcement{ .. } => {
-                        // TODO: FIXME:
-                        todo!();
-                        todo!()
+                    SyncingEvent::Announcement{ peer_id, message_id, announcement } => match announcement {
+                        // TODO: we should discuss whether we should use blocks or headers (like bitcoin) here, because
+                        //       announcing blocks seems wasteful, in the sense that it's possible for peers to get blocks
+                        //       again, and again, wasting their bandwidth. The question is, whether the mechanism of
+                        //       libp2p's pubsub solves this problem. Libp2p now seems to be probabilistically distributing the
+                        //       blocks to a subset of the peers. We will have a discussion on whether we should continue
+                        //       announcing blocks
+                        Announcement::Block(block) => {
+                            self.process_block_announcement(peer_id, message_id, block).await?;
+                        },
                     }
                 },
                 event = self.rx_sync.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     event::SyncControlEvent::Connected(peer_id) => {
-                        log::debug!("register peer {} to sync manager", peer_id);
+                        log::debug!("register peer {peer_id} to sync manager");
                         let result = self.register_peer(peer_id).await;
                         self.handle_error(peer_id, result).await?;
                     }
                     event::SyncControlEvent::Disconnected(peer_id) => {
-                        log::debug!("unregister peer {} from sync manager", peer_id);
+                        log::debug!("unregister peer {peer_id} from sync manager");
                         self.unregister_peer(peer_id)
                     }
-                }
-            }
-
-            if self.check_sync_state() {
-                return Ok(());
-            }
-        }
-    }
-
-    /// Runs blocks processing event loop.
-    async fn process_blocks(&mut self) -> crate::Result<Void> {
-        log::info!("Initial block download done, starting PubSubMessageHandler");
-
-        let mut block_rx = self.subscribe_to_chainstate_events().await?;
-        let FIXME_pubsub_handle = todo!();
-        // TODO: FIXME: Subscribe to pubsub events.
-
-        self.peer_sync_handle.subscribe(&[PubSubTopic::Blocks]).await?;
-
-        loop {
-            tokio::select! {
-                // event = self.pubsub_handle.poll_next() => match event? {
-                //     PubSubEvent::Announcement { peer_id, message_id, announcement } => match announcement {
-                //         // TODO: we should discuss whether we should use blocks or headers (like bitcoin) here, because
-                //         //       announcing blocks seems wasteful, in the sense that it's possible for peers to get blocks
-                //         //       again, and again, wasting their bandwidth. The question is, whether the mechanism of
-                //         //       libp2p's pubsub solves this problem. Libp2p now seems to be probabilistically distributing the
-                //         //       blocks to a subset of the peers. We will have a discussion on whether we should continue
-                //         //       announcing blocks
-                //         message::Announcement::Block(block) => {
-                //             self.process_block_announcement(peer_id, message_id, block).await?;
-                //         },
-                //     }
-                // },
-                block_id = block_rx.recv().fuse() => {
+                },
+                block_id = block_rx.recv().fuse(), if self.state == SyncState::Done => {
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
 
                     match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
@@ -656,6 +605,8 @@ where
                     }
                 }
             }
+
+            self.update_state();
         }
     }
 
@@ -698,6 +649,53 @@ where
         //     ))
         // );
         self.peer_sync_handle.send_announcement(PubSubTopic::Blocks, message).await
+    }
+
+    /// TODO: FIXME:
+    async fn process_block_announcement(
+        &mut self,
+        peer_id: T::PeerId,
+        message_id: T::SyncingMessageId,
+        block: Block,
+    ) -> crate::Result<()> {
+        let result = match self
+            .chainstate_handle
+            .call(move |this| this.preliminary_block_check(block))
+            .await?
+        {
+            Ok(block) => {
+                self.chainstate_handle
+                    .call_mut(move |this| this.process_block(block, chainstate::BlockSource::Peer))
+                    .await?
+            }
+            Err(err) => Err(err),
+        };
+
+        // TODO: FIXME:
+        result?;
+        Ok(())
+        // let score = match result {
+        //     Ok(_) => 0,
+        //     Err(e) => match e {
+        //         FailedToInitializeChainstate(_) => 0,
+        //         ProcessBlockError(err) => err.ban_score(),
+        //         FailedToReadProperty(_) => 0,
+        //         BootstrapError(_) => 0,
+        //     },
+        // };
+        //
+        // if score > 0 {
+        //     // TODO: better abstraction over channels
+        //     let (tx, rx) = oneshot::channel();
+        //     self.tx_swarm
+        //         .send(event::SwarmEvent::AdjustPeerScore(peer_id, score, tx))
+        //         .map_err(P2pError::from)?;
+        //     let _ = rx.await.map_err(P2pError::from)?;
+        // }
+        //
+        // self.pubsub_handle
+        //     .report_validation_result(peer_id, message_id, ValidationResult::Ignore)
+        //     .await
     }
 }
 
