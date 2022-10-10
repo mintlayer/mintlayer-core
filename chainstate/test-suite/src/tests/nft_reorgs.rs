@@ -59,18 +59,19 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
 
         // Issue a new NFT
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let issuance_data = OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
-            metadata: Metadata {
-                creator: random_creator(),
-                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                icon_uri: DataOrNoVec::from(None),
-                additional_metadata_uri: DataOrNoVec::from(None),
-                media_uri: DataOrNoVec::from(None),
-                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-            },
-        }));
+        let issuance_data =
+            OutputValue::new_boxed_token(TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                metadata: Metadata {
+                    creator: random_creator(),
+                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                    description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                    icon_uri: DataOrNoVec::from(None),
+                    additional_metadata_uri: DataOrNoVec::from(None),
+                    media_uri: DataOrNoVec::from(None),
+                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                },
+            }));
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
         let block_index = tf
@@ -113,7 +114,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenBurnV1(TokenBurnV1 {
+                        OutputValue::new_boxed_token(TokenData::TokenBurnV1(TokenBurnV1 {
                             token_id,
                             amount_to_burn: Amount::from_atoms(1),
                         })),
@@ -141,7 +142,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1(TokenTransferV1 {
+                        OutputValue::new_boxed_token(TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: Amount::from_atoms(1),
                         })),
@@ -217,7 +218,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1(TokenTransferV1 {
+                        OutputValue::new_boxed_token(TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: Amount::from_atoms(1),
                         })),
@@ -251,7 +252,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenBurnV1(TokenBurnV1 {
+                        OutputValue::new_boxed_token(TokenData::TokenBurnV1(TokenBurnV1 {
                             token_id,
                             amount_to_burn: Amount::from_atoms(1),
                         })),
@@ -285,7 +286,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenBurnV1(TokenBurnV1 {
+                        OutputValue::new_boxed_token(TokenData::TokenBurnV1(TokenBurnV1 {
                             token_id,
                             amount_to_burn: Amount::from_atoms(1),
                         })),
@@ -347,18 +348,19 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
         // Issue a new token
-        let issuance_value = OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
-            metadata: Metadata {
-                creator: random_creator(),
-                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                icon_uri: DataOrNoVec::from(None),
-                additional_metadata_uri: DataOrNoVec::from(None),
-                media_uri: DataOrNoVec::from(None),
-                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-            },
-        }));
+        let issuance_value =
+            OutputValue::new_boxed_token(TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                metadata: Metadata {
+                    creator: random_creator(),
+                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                    description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                    icon_uri: DataOrNoVec::from(None),
+                    additional_metadata_uri: DataOrNoVec::from(None),
+                    media_uri: DataOrNoVec::from(None),
+                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                },
+            }));
         let genesis_id = tf.genesis().get_id();
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let block_index = tf

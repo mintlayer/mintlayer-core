@@ -56,10 +56,15 @@ impl TokenAuxiliaryData {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum OutputValue {
     Coin(Amount),
-    Token(TokenData),
+    Token(Box<TokenData>),
 }
 
 impl OutputValue {
+    // FIXME(nft_issuance): Maybe we can use a better name
+    pub fn new_boxed_token(token_data: TokenData) -> Self {
+        Self::Token(Box::new(token_data))
+    }
+
     pub fn coin_amount(&self) -> Option<Amount> {
         match self {
             OutputValue::Coin(v) => Some(*v),
@@ -102,13 +107,13 @@ pub enum TokenData {
     TokenTransferV1(TokenTransferV1),
     /// New token creation
     #[codec(index = 2)]
-    TokenIssuanceV1(TokenIssuanceV1),
+    TokenIssuanceV1(Box<TokenIssuanceV1>),
     /// Burning a token or NFT
     #[codec(index = 3)]
     TokenBurnV1(TokenBurnV1),
     // A new NFT creation
     #[codec(index = 4)]
-    NftIssuanceV1(NftIssuanceV1),
+    NftIssuanceV1(Box<NftIssuanceV1>),
     // TODO: These types will be implemented in the future PRs
     // // Increase amount of tokens
     // #[codec(index = 4)]
@@ -116,4 +121,16 @@ pub enum TokenData {
     //     token_id: TokenId,
     //     amount_to_issue: Amount,
     // },
+}
+
+impl TokenData {
+    // FIXME(nft_issuance): Maybe we can use better names
+
+    pub fn new_boxed_nft_issuance(issuance: NftIssuanceV1) -> Self {
+        Self::NftIssuanceV1(Box::new(issuance))
+    }
+
+    pub fn new_boxed_token_issuance(issuance: TokenIssuanceV1) -> Self {
+        Self::TokenIssuanceV1(Box::new(issuance))
+    }
 }

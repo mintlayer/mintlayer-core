@@ -56,18 +56,21 @@ fn burn_nft_invalid_amount(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
-                            metadata: Metadata {
-                                creator: random_creator(),
-                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                                icon_uri: DataOrNoVec::from(None),
-                                additional_metadata_uri: DataOrNoVec::from(None),
-                                media_uri: DataOrNoVec::from(None),
-                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                        OutputValue::new_boxed_token(TokenData::new_boxed_nft_issuance(
+                            NftIssuanceV1 {
+                                metadata: Metadata {
+                                    creator: random_creator(),
+                                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                    description: random_string(&mut rng, 1..max_desc_len)
+                                        .into_bytes(),
+                                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                    icon_uri: DataOrNoVec::from(None),
+                                    additional_metadata_uri: DataOrNoVec::from(None),
+                                    media_uri: DataOrNoVec::from(None),
+                                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                                },
                             },
-                        })),
+                        )),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -90,7 +93,7 @@ fn burn_nft_invalid_amount(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenBurnV1(
+                        OutputValue::new_boxed_token(TokenData::TokenBurnV1(
                             common::chain::tokens::TokenBurnV1 {
                                 token_id,
                                 amount_to_burn: Amount::from_atoms(rng.gen_range(2..123)),
@@ -119,7 +122,7 @@ fn burn_nft_invalid_amount(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenBurnV1(
+                        OutputValue::new_boxed_token(TokenData::TokenBurnV1(
                             common::chain::tokens::TokenBurnV1 {
                                 token_id,
                                 amount_to_burn: Amount::from_atoms(0),
@@ -165,18 +168,21 @@ fn burn_nft_valid_case(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::NftIssuanceV1(NftIssuanceV1 {
-                            metadata: Metadata {
-                                creator: random_creator(),
-                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                                icon_uri: DataOrNoVec::from(None),
-                                additional_metadata_uri: DataOrNoVec::from(None),
-                                media_uri: DataOrNoVec::from(None),
-                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                        OutputValue::new_boxed_token(TokenData::new_boxed_nft_issuance(
+                            NftIssuanceV1 {
+                                metadata: Metadata {
+                                    creator: random_creator(),
+                                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                    description: random_string(&mut rng, 1..max_desc_len)
+                                        .into_bytes(),
+                                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                    icon_uri: DataOrNoVec::from(None),
+                                    additional_metadata_uri: DataOrNoVec::from(None),
+                                    media_uri: DataOrNoVec::from(None),
+                                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                                },
                             },
-                        })),
+                        )),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -199,7 +205,7 @@ fn burn_nft_valid_case(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenBurnV1(
+                        OutputValue::new_boxed_token(TokenData::TokenBurnV1(
                             common::chain::tokens::TokenBurnV1 {
                                 token_id,
                                 amount_to_burn: Amount::from_atoms(1),
@@ -225,7 +231,7 @@ fn burn_nft_valid_case(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1(TokenTransferV1 {
+                        OutputValue::new_boxed_token(TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: Amount::from_atoms(1),
                         })),

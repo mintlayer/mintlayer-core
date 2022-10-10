@@ -55,7 +55,7 @@ pub fn get_output_token_id_and_amount(
 ) -> Result<Option<(CoinOrTokenId, Amount)>, TokensError> {
     Ok(match output_value {
         OutputValue::Coin(amount) => Some((CoinOrTokenId::Coin, *amount)),
-        OutputValue::Token(token_data) => match token_data {
+        OutputValue::Token(token_data) => match &**token_data {
             TokenData::TokenTransferV1(transfer) => {
                 Some((CoinOrTokenId::TokenId(transfer.token_id), transfer.amount))
             }
@@ -88,7 +88,7 @@ pub fn get_input_token_id_and_amount<
 ) -> Result<(CoinOrTokenId, Amount), ConnectTransactionError> {
     Ok(match output_value {
         OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
-        OutputValue::Token(token_data) => match token_data {
+        OutputValue::Token(token_data) => match &**token_data {
             TokenData::TokenTransferV1(transfer) => {
                 (CoinOrTokenId::TokenId(transfer.token_id), transfer.amount)
             }

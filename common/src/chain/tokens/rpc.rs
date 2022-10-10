@@ -24,7 +24,7 @@ use serialization::{Decode, Encode};
 
 pub enum RPCTokenInfo {
     FungibleToken(RPCFungibleTokenInfo),
-    NonFungibleToken(RPCNonFungibleTokenInfo),
+    NonFungibleToken(Box<RPCNonFungibleTokenInfo>),
 }
 
 impl RPCTokenInfo {
@@ -33,7 +33,7 @@ impl RPCTokenInfo {
     }
 
     pub fn new_nonfungible(token_info: RPCNonFungibleTokenInfo) -> Self {
-        Self::NonFungibleToken(token_info)
+        Self::NonFungibleToken(Box::new(token_info))
     }
 }
 

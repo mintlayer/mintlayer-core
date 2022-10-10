@@ -177,9 +177,9 @@ fn create_utxo_data(
                     OutputPurpose::Transfer(anyonecanspend_address()),
                 )
             }
-            OutputValue::Token(asset) => match asset {
+            OutputValue::Token(token_data) => match &**token_data {
                 TokenData::TokenTransferV1(_transfer) => TxOutput::new(
-                    OutputValue::Token(asset.clone()),
+                    OutputValue::Token(token_data.clone()),
                     OutputPurpose::Transfer(anyonecanspend_address()),
                 ),
                 TokenData::TokenIssuanceV1(issuance) => {
@@ -200,7 +200,7 @@ fn new_token_transfer_output(
     amount: Amount,
 ) -> Option<TxOutput> {
     Some(TxOutput::new(
-        OutputValue::Token(TokenData::TokenTransferV1(TokenTransferV1 {
+        OutputValue::Token(Box::new(TokenData::TokenTransferV1(TokenTransferV1 {
             token_id: match outsrc {
                 OutPointSourceId::Transaction(prev_tx) => {
                     chainstate.get_token_id_from_issuance_tx(&prev_tx).unwrap().unwrap()
@@ -208,7 +208,7 @@ fn new_token_transfer_output(
                 OutPointSourceId::BlockReward(_) => return None,
             },
             amount,
-        })),
+        }))),
         OutputPurpose::Transfer(anyonecanspend_address()),
     ))
 }

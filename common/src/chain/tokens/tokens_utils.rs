@@ -26,7 +26,7 @@ pub fn token_id(tx: &Transaction) -> Option<TokenId> {
 pub fn is_tokens_issuance(output_value: &OutputValue) -> bool {
     match output_value {
         OutputValue::Coin(_) => false,
-        OutputValue::Token(token_data) => match token_data {
+        OutputValue::Token(token_data) => match **token_data {
             TokenData::TokenIssuanceV1(_) | TokenData::NftIssuanceV1(_) => true,
             TokenData::TokenTransferV1(_) | TokenData::TokenBurnV1(_) => false,
         },

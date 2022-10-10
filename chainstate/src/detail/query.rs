@@ -202,7 +202,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
                 OutputValue::Token(token_data) => Some(token_data),
             })
             // Find issuance data and return RPCTokenInfo
-            .find_map(|token_data| match token_data {
+            .find_map(|token_data| match &**token_data {
                 TokenData::TokenIssuanceV1(issuance) => {
                     Some(RPCTokenInfo::new_fungible(RPCFungibleTokenInfo::new(
                         token_id,
