@@ -31,6 +31,7 @@ use common::{
 };
 use crypto::random::Rng;
 use rstest::rstest;
+use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     random::{make_seedable_rng, Seed},
     random_string,
@@ -55,9 +56,9 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                icon_uri: None,
-                additional_metadata_uri: None,
-                media_uri: None,
+                icon_uri: DataOrNoVec::from(None),
+                additional_metadata_uri: DataOrNoVec::from(None),
+                media_uri: DataOrNoVec::from(None),
                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
             },
         }));
@@ -131,9 +132,9 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                icon_uri: None,
-                additional_metadata_uri: None,
-                media_uri: None,
+                icon_uri: DataOrNoVec::from(None),
+                additional_metadata_uri: DataOrNoVec::from(None),
+                media_uri: DataOrNoVec::from(None),
                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
             },
         }));
@@ -237,9 +238,9 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                icon_uri: None,
-                additional_metadata_uri: None,
-                media_uri: None,
+                icon_uri: DataOrNoVec::from(None),
+                additional_metadata_uri: DataOrNoVec::from(None),
+                media_uri: DataOrNoVec::from(None),
                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
             },
         }));
@@ -297,9 +298,9 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                                icon_uri: None,
-                                additional_metadata_uri: None,
-                                media_uri: None,
+                                icon_uri: DataOrNoVec::from(None),
+                                additional_metadata_uri: DataOrNoVec::from(None),
+                                media_uri: DataOrNoVec::from(None),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
                         })),
@@ -381,9 +382,9 @@ fn nft_valid_transfer(#[case] seed: Seed) {
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                icon_uri: None,
-                additional_metadata_uri: None,
-                media_uri: None,
+                icon_uri: DataOrNoVec::from(None),
+                additional_metadata_uri: DataOrNoVec::from(None),
+                media_uri: DataOrNoVec::from(None),
                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
             },
         }));

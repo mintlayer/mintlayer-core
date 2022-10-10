@@ -35,6 +35,7 @@ use common::{
 use crypto::{hash::StreamHasher, random::Rng};
 use expect_test::expect;
 use rstest::rstest;
+use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     gen_text_with_non_ascii,
     random::{make_seedable_rng, Seed},
@@ -1777,9 +1778,9 @@ fn chosen_hashes_for_token_data() {
             name: b"SOME".to_vec(),
             description: b"NFT".to_vec(),
             ticker: b"Ticker".to_vec(),
-            icon_uri: Some(vec![9, 8, 7, 6, 5, 4, 3, 2, 1]),
-            additional_metadata_uri: Some(vec![10, 11, 12, 13, 14, 15, 16, 17, 18, 19]),
-            media_uri: Some(vec![20, 21, 22, 23, 24, 25, 26, 27, 28, 29]),
+            icon_uri: DataOrNoVec::from(Some(vec![9, 8, 7, 6, 5, 4, 3, 2, 1])),
+            additional_metadata_uri: DataOrNoVec::from(Some(vec![10, 11, 12, 13, 14, 15, 16, 17, 18, 19])),
+            media_uri: DataOrNoVec::from(Some(vec![20, 21, 22, 23, 24, 25, 26, 27, 28, 29])),
             media_hash: vec![30, 31, 32, 33, 34, 35, 36, 37, 38, 39],
         },
     });

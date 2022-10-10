@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use self::check_utils::check_media_hash;
+
+use super::transaction_verifier::error::TokensError;
 use common::{
     chain::{
         tokens::{NftIssuanceV1, TokenData},
@@ -20,15 +23,12 @@ use common::{
     },
     primitives::{Amount, Id, Idable},
 };
+use serialization::Encode;
 use utils::ensure;
-
-use super::transaction_verifier::error::TokensError;
 
 mod check_utils;
 pub use check_utils::is_rfc3986_valid_symbol;
-use check_utils::{
-    check_media_hash, check_nft_description, check_nft_name, check_token_ticker, is_uri_valid,
-};
+use check_utils::{check_nft_description, check_nft_name, check_token_ticker, is_uri_valid};
 
 pub fn check_tokens_transfer_data(
     source_block_id: Id<Block>,
@@ -82,23 +82,26 @@ pub fn check_nft_issuance_data(
         source_block_id,
     )?;
 
-    if let Some(icon_uri) = &issuance.metadata.icon_uri {
+    let icon_uri = issuance.metadata.icon_uri.encode();
+    if !icon_uri.is_empty() {
         ensure!(
-            is_uri_valid(icon_uri),
+            is_uri_valid(&icon_uri),
             TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id)
         );
     }
 
-    if let Some(additional_metadata_uri) = &issuance.metadata.additional_metadata_uri {
+    let additional_metadata_uri = issuance.metadata.additional_metadata_uri.encode();
+    if !additional_metadata_uri.is_empty() {
         ensure!(
-            is_uri_valid(additional_metadata_uri),
+            is_uri_valid(&additional_metadata_uri),
             TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id)
         );
     }
 
-    if let Some(media_uri) = &issuance.metadata.media_uri {
+    let media_uri = issuance.metadata.media_uri.encode();
+    if !media_uri.is_empty() {
         ensure!(
-            is_uri_valid(media_uri),
+            is_uri_valid(&media_uri),
             TokensError::IssueErrorIncorrectMediaURI(tx_id, source_block_id)
         );
     }

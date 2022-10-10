@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crypto::key::PublicKey;
-use serialization::{Decode, Encode};
+use serialization::{extras::non_empty_vec::DataOrNoVec, Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct NftIssuanceV1 {
@@ -65,8 +65,42 @@ pub struct Metadata {
     pub name: Vec<u8>,
     pub description: Vec<u8>,
     pub ticker: Vec<u8>,
-    pub icon_uri: Option<Vec<u8>>,
-    pub additional_metadata_uri: Option<Vec<u8>>,
-    pub media_uri: Option<Vec<u8>>,
+    pub icon_uri: DataOrNoVec<u8>,
+    pub additional_metadata_uri: DataOrNoVec<u8>,
+    pub media_uri: DataOrNoVec<u8>,
     pub media_hash: Vec<u8>,
+}
+
+impl Metadata {
+    pub fn creator(&self) -> &Option<TokenCreator> {
+        &self.creator
+    }
+
+    pub fn name(&self) -> &Vec<u8> {
+        &self.name
+    }
+
+    pub fn description(&self) -> &Vec<u8> {
+        &self.description
+    }
+
+    pub fn ticker(&self) -> &Vec<u8> {
+        &self.ticker
+    }
+
+    pub fn icon_uri(&self) -> &DataOrNoVec<u8> {
+        &self.icon_uri
+    }
+
+    pub fn additional_metadata_uri(&self) -> &DataOrNoVec<u8> {
+        &self.additional_metadata_uri
+    }
+
+    pub fn media_uri(&self) -> &DataOrNoVec<u8> {
+        &self.media_uri
+    }
+
+    pub fn media_hash(&self) -> &Vec<u8> {
+        &self.media_hash
+    }
 }
