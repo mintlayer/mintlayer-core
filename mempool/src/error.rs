@@ -85,6 +85,8 @@ pub enum TxValidationError {
     AncestorFeeUpdateOverflow,
     #[error("Fee overflow")]
     FeeOverflow,
+    #[error("Get parent error")]
+    GetParentError,
     #[error("Transaction is a descendant of expired transaction.")]
     DescendantOfExpiredTransaction,
     #[error("Chainstate error")]

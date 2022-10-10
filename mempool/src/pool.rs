@@ -386,7 +386,7 @@ where
             .filter_map(|id| self.store.txs_by_id.contains_key(&id).then_some(id))
             .collect::<BTreeSet<_>>();
         let ancestor_ids =
-            TxMempoolEntry::unconfirmed_ancestors_from_parents(parents.clone(), &self.store);
+            TxMempoolEntry::unconfirmed_ancestors_from_parents(parents.clone(), &self.store)?;
         let ancestors = ancestor_ids
             .0
             .into_iter()

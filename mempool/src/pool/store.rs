@@ -486,16 +486,15 @@ impl TxMempoolEntry {
     pub(super) fn unconfirmed_ancestors_from_parents(
         parents: BTreeSet<Id<Transaction>>,
         store: &MempoolStore,
-    ) -> Ancestors {
-        parents
-            .clone()
-            .into_iter()
-            .chain(parents.into_iter().flat_map(|parent| {
-                // TODO(PR) Remove expect call, maybe use fallible iterator
-                store.get_entry(&parent).expect("parent").unconfirmed_ancestors(store).0
-            }))
-            .collect::<BTreeSet<_>>()
-            .into()
+    ) -> Result<Ancestors, TxValidationError> {
+        let mut ancestors = BTreeSet::new();
+        for parent in parents {
+            ancestors.insert(parent);
+            let parent = store.get_entry(&parent).ok_or(TxValidationError::GetParentError)?;
+            let parent_ancestors = parent.unconfirmed_ancestors(store).0;
+            ancestors.extend(parent_ancestors);
+        }
+        Ok(ancestors.into())
     }
 
     fn unconfirmed_ancestors_inner(&self, visited: &mut Ancestors, store: &MempoolStore) {
