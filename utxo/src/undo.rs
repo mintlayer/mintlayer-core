@@ -105,8 +105,7 @@ impl BlockUndo {
         self.reward_undo.take()
     }
 
-    pub fn merge(&mut self, other: BlockUndo) {
-        // FIXME: assumption that utxos can be just pushed to the end of block undo looks weak
+    pub fn append(&mut self, other: BlockUndo) {
         if let Some(reward_undo) = other.reward_undo {
             if self.reward_undo.is_none() && !reward_undo.inner().is_empty() {
                 self.reward_undo = Some(Default::default());

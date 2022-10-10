@@ -173,7 +173,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageMut
         self.utxo_block_undo
             .entry(id)
             .and_modify(|cached_undo| {
-                cached_undo.undo.merge(new_undo.clone());
+                cached_undo.undo.append(new_undo.clone());
             })
             .or_insert(BlockUndoEntry {
                 undo: new_undo.clone(),
