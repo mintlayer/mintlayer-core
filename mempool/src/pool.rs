@@ -304,7 +304,6 @@ where
     pub(crate) fn get_update_min_fee_rate(&self) -> FeeRate {
         log::debug!("get_update_min_fee_rate");
         let rolling_fee_rate = *self.rolling_fee_rate.read();
-        log::debug!("after read");
         if !rolling_fee_rate.block_since_last_rolling_fee_bump
             || rolling_fee_rate.rolling_minimum_fee_rate == FeeRate::new(Amount::from_atoms(0))
         {
@@ -338,12 +337,10 @@ where
     }
 
     fn decay_rolling_fee_rate(&self) {
-        log::debug!("decay_rolling_fee_rate");
         let halflife = self.rolling_fee_halflife();
         let time = self.clock.get_time();
         let mut rolling_fee_rate = self.rolling_fee_rate.write();
         *rolling_fee_rate = (*rolling_fee_rate).decay_fee(halflife, time);
-        log::debug!("decay_rolling_fee_rate_end: {:?}", self.rolling_fee_rate);
     }
 
     async fn verify_inputs_available(
