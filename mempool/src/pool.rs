@@ -864,7 +864,7 @@ where
         self.store.txs_by_id.contains_key(tx_id)
     }
 
-    // TODO Consider returning an error
+    // TODO Remove this from MempoolInterface
     fn drop_transaction(&mut self, tx_id: &Id<Transaction>) {
         self.store.remove_tx(tx_id);
         self.store.assert_valid();
