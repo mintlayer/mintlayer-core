@@ -1714,11 +1714,11 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.add_transaction(tx_c).await?;
 
     let entry_a = mempool.store.txs_by_id.get(&tx_a_id).expect("tx_a");
-    log::debug!("entry a has score {:?}", entry_a.fees_with_descendants());
+    log::debug!("entry a has score {:?}", entry_a.descendant_score());
     let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
-    log::debug!("entry b has score {:?}", entry_b.fees_with_descendants());
+    log::debug!("entry b has score {:?}", entry_b.descendant_score());
     let entry_c = mempool.store.txs_by_id.get(&tx_c_id).expect("tx_c").clone();
-    log::debug!("entry c has score {:?}", entry_c.fees_with_descendants());
+    log::debug!("entry c has score {:?}", entry_c.descendant_score());
     assert_eq!(entry_a.fee(), entry_a.fees_with_descendants());
     assert_eq!(
         entry_b.fees_with_descendants(),
