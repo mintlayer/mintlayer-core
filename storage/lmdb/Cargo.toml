@@ -1,0 +1,19 @@
+[package]
+name = "storage-lmdb"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+storage-core = { path = '../core' }
+utils = { path = '../../utils' }
+
+lmdb-rkv = "0.14"
+
+[dev-dependencies]
+storage-backend-test-suite = { path = "../backend-test-suite" }
+rand = "0.8"
+
+[[test]]
+name = "backend"
+harness = false
