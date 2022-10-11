@@ -44,7 +44,11 @@ pub fn using_proptest<B: Backend, F: BackendFn<B>, S: proptest::prelude::Strateg
     strategy: S,
     test: impl Fn(B, S::Value),
 ) {
-    let config = proptest::prelude::ProptestConfig::with_source_file(source_file);
+    let config = {
+        let mut config = proptest::prelude::ProptestConfig::with_source_file(source_file);
+        config.cases = 64;
+        config
+    };
     let mut runner = proptest::test_runner::TestRunner::new(config);
     let result = runner.run(&strategy, |val| {
         test(backend_fn(), val);
