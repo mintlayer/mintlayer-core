@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use chainstate::{
     BlockError, ChainstateConfig, DefaultTransactionVerificationStrategy,
-    DisposableTransactionVerificationStrategy,
+    DisposableTransactionVerificationStrategy, RandomizedTransactionVerificationStrategy,
 };
 use chainstate_storage::inmemory::Store;
 use common::{
@@ -33,6 +33,7 @@ use crate::TestFramework;
 pub enum TxVerificationStrategy {
     Default,
     Disposable,
+    Randomized(Seed),
 }
 
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
@@ -113,6 +114,14 @@ impl TestFrameworkBuilder {
                 self.chainstate_config,
                 self.chainstate_storage,
                 DisposableTransactionVerificationStrategy::new(),
+                self.custom_orphan_error_hook,
+                self.time_getter,
+            ),
+            TxVerificationStrategy::Randomized(seed) => chainstate::make_chainstate(
+                Arc::new(self.chain_config),
+                self.chainstate_config,
+                self.chainstate_storage,
+                RandomizedTransactionVerificationStrategy::new(seed),
                 self.custom_orphan_error_hook,
                 self.time_getter,
             ),

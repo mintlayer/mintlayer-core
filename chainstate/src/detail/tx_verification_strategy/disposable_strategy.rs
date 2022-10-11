@@ -126,7 +126,6 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
     {
         let mut base_tx_verifier = tx_verifier_maker(storage_backend, chain_config);
 
-        // TODO: add a test that checks the order in which txs are disconnected
         block
             .transactions()
             .iter()
