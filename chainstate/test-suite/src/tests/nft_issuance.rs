@@ -41,7 +41,6 @@ fn nft_issuance_name_too_long(#[case] seed: Seed) {
         let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let mut rng = make_seedable_rng(seed);
 
-        // Name is too long
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
@@ -101,7 +100,6 @@ fn nft_issuance_empty_name(#[case] seed: Seed) {
         let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let mut rng = make_seedable_rng(seed);
 
-        // Name is empty
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         let result = tf
@@ -160,7 +158,7 @@ fn nft_issuance_invalid_name(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
-        // try all possible chars for ticker and ensure everything fails except for alphanumeric chars
+        // try all possible chars for name and ensure everything fails except for alphanumeric chars
         for c in u8::MIN..u8::MAX {
             // if c is alphanumeric, then this doesn't produce an error, skip it
             if c.is_ascii_alphanumeric() {
@@ -227,7 +225,6 @@ fn issue_test_ticker_too_long(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
-        // Ticker is too long
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -287,7 +284,6 @@ fn nft_issuance_empty_ticker(#[case] seed: Seed) {
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
 
-        // Ticker is empty
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -410,7 +406,6 @@ fn issue_test_description_too_long(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
-        // Description is too long
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -469,7 +464,6 @@ fn nft_issuance_empty_description(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
-        // Description is empty
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -587,7 +581,6 @@ fn nft_issuance_icon_uri_too_long(#[case] seed: Seed) {
         let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let mut rng = make_seedable_rng(seed);
 
-        // Ticker is too long
         let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -650,7 +643,6 @@ fn nft_issuance_icon_uri_empty(#[case] seed: Seed) {
         let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let mut rng = make_seedable_rng(seed);
 
-        // Ticker is too long
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
@@ -711,7 +703,7 @@ fn nft_issuance_icon_uri_invalid(#[case] seed: Seed) {
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
 
-        // try all possible chars for description and ensure everything fails except for alphanumeric chars
+        // try all possible chars for icon_uri and ensure everything fails except for alphanumeric chars
         for c in u8::MIN..u8::MAX {
             // if c is alphanumeric, then this doesn't produce an error, skip it
             if c.is_ascii_alphanumeric() || is_rfc3986_valid_symbol(char::from(c)) {
@@ -899,7 +891,7 @@ fn nft_issuance_metadata_uri_invalid(#[case] seed: Seed) {
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
 
-        // try all possible chars for description and ensure everything fails except for alphanumeric chars
+        // try all possible chars for additional_metadata_uri and ensure everything fails except for alphanumeric chars
         for c in u8::MIN..u8::MAX {
             // if c is alphanumeric or valid symbol according to rfc1738, then this doesn't produce an error, skip it
             if c.is_ascii_alphanumeric() || is_rfc3986_valid_symbol(char::from(c)) {
@@ -1087,7 +1079,7 @@ fn nft_issuance_media_uri_invalid(#[case] seed: Seed) {
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
 
-        // try all possible chars for description and ensure everything fails except for alphanumeric chars
+        // try all possible chars for media_uri and ensure everything fails except for alphanumeric chars
         for c in u8::MIN..u8::MAX {
             // if c is alphanumeric or valid symbol according to rfc1738, then this doesn't produce an error, skip it
             if c.is_ascii_alphanumeric() || is_rfc3986_valid_symbol(char::from(c)) {

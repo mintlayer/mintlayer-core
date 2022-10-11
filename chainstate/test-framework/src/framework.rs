@@ -185,7 +185,7 @@ fn create_utxo_data(
                 TokenData::TokenIssuanceV1(issuance) => {
                     new_token_transfer_output(chainstate, outsrc, issuance.amount_to_issue)?
                 }
-                TokenData::NftIssuanceV1(_) => {
+                TokenData::NftIssuanceV1(_issuance) => {
                     new_token_transfer_output(chainstate, outsrc, Amount::from_atoms(1))?
                 }
                 TokenData::TokenBurnV1(_burn) => return None,

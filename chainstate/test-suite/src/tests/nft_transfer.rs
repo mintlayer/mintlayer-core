@@ -418,8 +418,7 @@ fn nft_valid_transfer(#[case] seed: Seed) {
         assert_eq!(block.transactions()[0].outputs()[0].value(), &output_value);
         let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
 
-        // Try to transfer exceed amount
-
+        // Valid case
         let transfer_value =
             OutputValue::new_boxed_token(TokenData::TokenTransferV1(TokenTransferV1 {
                 token_id,

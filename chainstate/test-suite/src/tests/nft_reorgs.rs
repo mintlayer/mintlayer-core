@@ -100,7 +100,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
         let issuance_outpoint_id = TestBlockInfo::from_block(&issuance_block).txns[0].0.clone();
         let token_id = token_id(issuance_block.transactions()[0].transaction()).unwrap();
 
-        // B1 - burn all tokens in mainchain
+        // B1 - burn NFT in mainchain
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -132,7 +132,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
         let block_b1 = tf.block(*block_index.block_id());
         let b1_outpoint_id = TestBlockInfo::from_block(&block_b1).txns[0].0.clone();
 
-        // Try to transfer burnt tokens
+        // Try to transfer burnt NFT
         let result = tf
             .make_block_builder()
             .add_transaction(
@@ -237,7 +237,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             "Reorg shouldn't have happened yet"
         );
 
-        // C2 - burn all tokens in a second chain
+        // C2 - burn NFT in a second chain
         let block_c2 = tf
             .make_block_builder()
             .with_parent(issuance_block.get_id().into())
@@ -271,7 +271,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             "Reorg shouldn't have happened yet"
         );
 
-        // Now D2 trying to spend tokens from mainchain
+        // Now D2 trying to spend NFT from mainchain
         let block_d2 = tf
             .make_block_builder()
             .with_parent(issuance_block.get_id().into())
@@ -347,7 +347,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
-        // Issue a new token
+        // Issue a new NFT
         let issuance_value =
             OutputValue::new_boxed_token(TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
                 metadata: Metadata {
@@ -385,7 +385,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let issuance_block = tf.block(*block_index.block_id());
         let token_id = token_id(issuance_block.transactions()[0].transaction()).unwrap();
 
-        // Check tokens available in storage
+        // Check NFT available in storage
         let token_aux_data = tf.chainstate.get_token_aux_data(token_id).unwrap().unwrap();
         // Check id
         assert!(issuance_block.get_id() == token_aux_data.issuance_block_id());
