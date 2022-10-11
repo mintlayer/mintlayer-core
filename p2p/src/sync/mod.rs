@@ -606,7 +606,7 @@ where
                 }
             }
 
-            self.update_state();
+            self.update_state().await?;
         }
     }
 
