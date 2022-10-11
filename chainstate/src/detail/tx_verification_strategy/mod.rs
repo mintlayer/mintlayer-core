@@ -39,8 +39,9 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     /// Notice that this doesn't modify the internal database/storage
     /// state. It just returns a TransactionVerifier that can be
     /// used to update the database/storage state.
-    fn connect_block<'a, H, S>(
+    fn connect_block<'a, H, S, M>(
         &self,
+        tx_verifier_maker: M,
         block_index_handle: &'a H,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
@@ -49,7 +50,8 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     ) -> Result<TransactionVerifier<'a, S>, BlockError>
     where
         H: BlockIndexHandle,
-        S: TransactionVerifierStorageRef;
+        S: TransactionVerifierStorageRef,
+        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>;
 
     /// Disconnect the transactions given by block and block_index,
     /// and return a TransactionVerifier with an internal state
@@ -57,12 +59,14 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     /// Notice that this doesn't modify the internal database/storage
     /// state. It just returns a TransactionVerifier that can be
     /// used to update the database/storage state.
-    fn disconnect_block<'a, S>(
+    fn disconnect_block<'a, S, M>(
         &self,
+        tx_verifier_maker: M,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<'a, S>, BlockError>
     where
-        S: TransactionVerifierStorageRef;
+        S: TransactionVerifierStorageRef,
+        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>;
 }

@@ -1874,12 +1874,13 @@ fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
-                OutputValue::Token(TokenData::TokenIssuanceV1 {
+                TokenIssuanceV1 {
                     token_ticker: "XXXX".as_bytes().to_vec(),
                     amount_to_issue: Amount::from_atoms(rng.gen_range(100_000..u128::MAX)),
                     number_of_decimals: rng.gen_range(1..18),
                     metadata_uri: "http://uri".as_bytes().to_vec(),
-                }),
+                }
+                .into(),
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))
             .build();
@@ -1893,10 +1894,11 @@ fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
-                OutputValue::Token(TokenData::TokenTransferV1 {
+                TokenData::TokenTransferV1(TokenTransferV1 {
                     token_id: token_id(tx_1.transaction()).unwrap(),
                     amount: Amount::from_atoms(rng.gen_range(1..100_000)),
-                }),
+                })
+                .into(),
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))
             .build();
