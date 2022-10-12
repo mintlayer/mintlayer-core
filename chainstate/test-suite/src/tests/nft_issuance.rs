@@ -21,11 +21,15 @@ use chainstate::{
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
 use common::chain::tokens::OutputValue;
 use common::chain::tokens::TokenData;
+use common::chain::Block;
+use common::chain::OutPointSourceId;
 use common::chain::{
     signature::inputsig::InputWitness,
     tokens::{Metadata, NftIssuanceV1},
     Destination, OutputPurpose, TxInput, TxOutput,
 };
+use common::primitives::Idable;
+use crypto::random::Rng;
 use rstest::rstest;
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
@@ -1101,6 +1105,125 @@ fn nft_issuance_media_uri_invalid(#[case] seed: Seed) {
                     ))
                 ))
             ));
+        }
+    })
+}
+
+fn new_block_with_hash(
+    rng: &mut impl Rng,
+    tf: &mut TestFramework,
+    input_source_id: &OutPointSourceId,
+    media_hash: Vec<u8>,
+) -> Block {
+    let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
+    let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
+    let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+    let name = random_string(rng, 1..max_name_len).into_bytes();
+    let description = random_string(rng, 1..max_desc_len).into_bytes();
+    let ticker = random_string(rng, 1..max_ticker_len).into_bytes();
+    let genesis_id = tf.genesis().get_id();
+    tf.make_block_builder()
+        .with_parent(genesis_id.into())
+        .add_transaction(
+            TransactionBuilder::new()
+                .add_input(
+                    TxInput::new(input_source_id.clone(), 0),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::new(
+                    NftIssuanceV1 {
+                        metadata: Metadata {
+                            creator: random_creator(),
+                            name,
+                            description,
+                            ticker,
+                            icon_uri: DataOrNoVec::from(None),
+                            additional_metadata_uri: DataOrNoVec::from(None),
+                            media_uri: DataOrNoVec::from(None),
+                            media_hash,
+                        },
+                    }
+                    .into(),
+                    OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                ))
+                .build(),
+        )
+        .build()
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nft_issuance_check_hash(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let mut rng = make_seedable_rng(seed);
+
+        let min_hash_len = tf.chainstate.get_chain_config().min_hash_len();
+        let max_hash_len = tf.chainstate.get_chain_config().max_hash_len();
+
+        // Check too short hash
+        for i in 0..min_hash_len {
+            let media_hash = vec![rng.gen::<u8>()].repeat(i);
+
+            let block = new_block_with_hash(&mut rng, &mut tf, &outpoint_source_id, media_hash);
+            let result = tf.process_block(block, chainstate::BlockSource::Local);
+
+            assert!(matches!(
+                result,
+                Err(ChainstateError::ProcessBlockError(
+                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                        CheckBlockTransactionsError::TokensError(TokensError::MediaHashTooShort)
+                    ))
+                ))
+            ));
+        }
+
+        // Check too long hash
+        for i in (max_hash_len + 1)..=(u8::MAX as usize) {
+            let media_hash = vec![rng.gen::<u8>()].repeat(i);
+
+            let block = new_block_with_hash(&mut rng, &mut tf, &outpoint_source_id, media_hash);
+            let result = tf.process_block(block, chainstate::BlockSource::Local);
+
+            assert!(matches!(
+                result,
+                Err(ChainstateError::ProcessBlockError(
+                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                        CheckBlockTransactionsError::TokensError(TokensError::MediaHashTooLong)
+                    ))
+                ))
+            ));
+        }
+
+        // Valid cases
+        for hash_size in [
+            min_hash_len,
+            min_hash_len + 4,
+            min_hash_len + 8,
+            min_hash_len + 12,
+            min_hash_len + 16,
+            min_hash_len + 20,
+            max_hash_len,
+        ] {
+            let media_hash = vec![rng.gen::<u8>()].repeat(hash_size);
+
+            let block =
+                new_block_with_hash(&mut rng, &mut tf, &outpoint_source_id, media_hash.clone());
+            let block_id = block.get_id();
+            let _ = tf.process_block(block, chainstate::BlockSource::Local).unwrap();
+
+            let block = tf.block(block_id);
+            let outputs = &TestBlockInfo::from_block(&block).txns[0].1;
+            let issuance_output = &outputs[0];
+
+            match issuance_output.value().token_data().unwrap() {
+                TokenData::NftIssuanceV1(nft) => {
+                    assert_eq!(nft.metadata.media_hash(), &media_hash);
+                }
+                _ => panic!("NFT issuance not found"),
+            }
         }
     })
 }
