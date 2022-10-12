@@ -120,7 +120,7 @@ async fn add_single_tx() -> anyhow::Result<()> {
     assert!(mempool.contains_transaction(&tx_id));
     let all_txs = mempool.get_all();
     assert_eq!(all_txs, vec![&tx_clone]);
-    mempool.drop_transaction(&tx_id);
+    mempool.store.remove_tx(&tx_id, MempoolRemovalReason::Block);
     assert!(!mempool.contains_transaction(&tx_id));
     let all_txs = mempool.get_all();
     assert_eq!(all_txs, Vec::<&SignedTransaction>::new());
@@ -517,7 +517,7 @@ async fn try_replace_irreplaceable() -> anyhow::Result<()> {
         ))
     ));
 
-    mempool.drop_transaction(&original_id);
+    mempool.store.remove_tx(&original_id, MempoolRemovalReason::Block);
     mempool.add_transaction(replacement).await?;
     mempool.store.assert_valid();
 
@@ -1277,7 +1277,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
         BlockReward::new(vec![]),
     )
     .map_err(|_| anyhow::Error::msg("block creation error"))?;
-    mempool.drop_transaction(&parent_id);
+    mempool.store.remove_tx(&parent_id, MempoolRemovalReason::Block);
 
     mempool
         .chainstate_handle
@@ -1731,7 +1731,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     check_txs_sorted_by_descendant_sore(&mempool);
 
-    mempool.drop_transaction(&entry_c.tx_id());
+    mempool.store.remove_tx(&entry_c.tx_id(), MempoolRemovalReason::Block);
     assert!(!mempool.store.txs_by_descendant_score.contains_key(&tx_c_fee.into()));
     let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
     assert_eq!(entry_b.fees_with_descendants(), entry_b.fee());
@@ -1923,9 +1923,9 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
         mempool.add_transaction(tx).await?;
     }
 
-    mempool.drop_transaction(&parent_id);
+    mempool.store.remove_tx(&parent_id, MempoolRemovalReason::Block);
     for id in ids {
-        mempool.drop_transaction(&id)
+        mempool.store.remove_tx(&id, MempoolRemovalReason::Block)
     }
     assert!(mempool.store.txs_by_descendant_score.is_empty());
     assert!(mempool.store.txs_by_creation_time.is_empty());

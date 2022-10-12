@@ -152,12 +152,6 @@ pub trait MempoolInterface: Send {
     // Returns `true` if the mempool contains a transaction with the given id, `false` otherwise.
     fn contains_transaction(&self, tx: &Id<Transaction>) -> bool;
 
-    // Drops a transaction from the mempool, updating its in-mempool parents and children. This
-    // operation removes the transaction from all indices, as well as updating the state (fee,
-    // count with descendants) of the transaction's ancestors. In addition, outpoints spent by this
-    // transaction are no longer marked as spent
-    fn drop_transaction(&mut self, tx: &Id<Transaction>);
-
     fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator>,
@@ -864,12 +858,6 @@ where
 
     fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
         self.store.txs_by_id.contains_key(tx_id)
-    }
-
-    // TODO Remove this from MempoolInterface
-    fn drop_transaction(&mut self, tx_id: &Id<Transaction>) {
-        self.store.remove_tx(tx_id, MempoolRemovalReason::Block);
-        self.store.assert_valid();
     }
 }
 
