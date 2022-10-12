@@ -53,7 +53,7 @@ impl TokenAuxiliaryData {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum OutputValue {
     Coin(Amount),
     Token(Box<TokenData>),
@@ -100,7 +100,7 @@ pub struct TokenBurnV1 {
     pub amount_to_burn: Amount,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum TokenData {
     /// TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.
     #[codec(index = 1)]

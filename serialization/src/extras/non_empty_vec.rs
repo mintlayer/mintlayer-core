@@ -21,7 +21,7 @@ use serialization_core::{Decode, Encode};
 /// - If the Vec has data, it encodes to just the Vec, the Option is omitted
 /// - If the Vec has no data, it encodes to None
 /// - Some(vec![]) and None are equivalent when encoded, but when decoded result in None
-#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct DataOrNoVec<T>(Option<Vec<T>>);
 
 impl<T> AsRef<Option<Vec<T>>> for DataOrNoVec<T> {
