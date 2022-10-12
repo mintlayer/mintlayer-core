@@ -1792,20 +1792,20 @@ fn chosen_hashes_for_token_data() {
     let mut hash_stream = id::DefaultHashAlgoStream::new();
 
     // Token issuance
-    let token_data = TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+    let token_issuance = TokenIssuanceV1 {
         token_ticker: b"SOME".to_vec(),
         amount_to_issue: Amount::from_atoms(123456789),
         number_of_decimals: 123,
         metadata_uri: "https://some_site.some".as_bytes().to_vec(),
-    });
-    id::hash_encoded_to(&token_data, &mut hash_stream);
+    };
+    id::hash_encoded_to(&token_issuance, &mut hash_stream);
     expect![[r#"
-            0x7b0482a8a4ebe22005777f6380a8a10432758146c60e7f8b61a768d9152de3f0
+            0xa63a4ae4146ff43096baa2b8e648edca108abf34960e746def28443957ffe04e
         "#]]
-    .assert_debug_eq(&Id::<TokenData>::new(hash_stream.finalize().into()).get());
+    .assert_debug_eq(&Id::<TokenIssuanceV1>::new(hash_stream.finalize().into()).get());
 
     // NFT issuance
-    let token_data = TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+    let nft_issuance = NftIssuanceV1 {
         metadata: Metadata {
             creator: None,
             name: b"SOME".to_vec(),
@@ -1818,12 +1818,12 @@ fn chosen_hashes_for_token_data() {
             media_uri: DataOrNoVec::from(Some(vec![20, 21, 22, 23, 24, 25, 26, 27, 28, 29])),
             media_hash: vec![30, 31, 32, 33, 34, 35, 36, 37, 38, 39],
         },
-    });
-    id::hash_encoded_to(&token_data, &mut hash_stream);
+    };
+    id::hash_encoded_to(&nft_issuance, &mut hash_stream);
     expect![[r#"
-            0x2cf9b548b02a6ad4870d577f946da305b5c47551b4dfab38d5280714f7db850b
+            0xbe6ad7ed36c9f898fae21bf5f3164c090c979a5b4083643a60276028012db15a
         "#]]
-    .assert_debug_eq(&Id::<TokenData>::new(hash_stream.finalize().into()).get());
+    .assert_debug_eq(&Id::<NftIssuanceV1>::new(hash_stream.finalize().into()).get());
 
     // Token burn
     let token_data = TokenData::TokenBurnV1(TokenBurnV1 {
