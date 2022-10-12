@@ -60,11 +60,6 @@ pub enum OutputValue {
 }
 
 impl OutputValue {
-    // FIXME(nft_issuance): Maybe we can use a better name
-    pub fn new_boxed_token(token_data: TokenData) -> Self {
-        Self::Token(Box::new(token_data))
-    }
-
     pub fn coin_amount(&self) -> Option<Amount> {
         match self {
             OutputValue::Coin(v) => Some(*v),
@@ -77,6 +72,12 @@ impl OutputValue {
             OutputValue::Coin(_) => None,
             OutputValue::Token(d) => Some(d),
         }
+    }
+}
+
+impl From<TokenData> for OutputValue {
+    fn from(d: TokenData) -> Self {
+        Self::Token(Box::new(d))
     }
 }
 

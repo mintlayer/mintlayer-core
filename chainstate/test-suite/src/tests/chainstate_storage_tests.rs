@@ -120,14 +120,13 @@ fn store_token(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
-                OutputValue::new_boxed_token(TokenData::new_boxed_token_issuance(
-                    TokenIssuanceV1 {
-                        token_ticker: "XXXX".as_bytes().to_vec(),
-                        amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
-                        number_of_decimals: rng.gen_range(1..18),
-                        metadata_uri: "http://uri".as_bytes().to_vec(),
-                    },
-                )),
+                TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+                    token_ticker: "XXXX".as_bytes().to_vec(),
+                    amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
+                    number_of_decimals: rng.gen_range(1..18),
+                    metadata_uri: "http://uri".as_bytes().to_vec(),
+                })
+                .into(),
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))
             .build();
@@ -351,14 +350,13 @@ fn reorg_store_token(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
-                OutputValue::new_boxed_token(TokenData::new_boxed_token_issuance(
-                    TokenIssuanceV1 {
-                        token_ticker: "AAAA".as_bytes().to_vec(),
-                        amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
-                        number_of_decimals: rng.gen_range(1..18),
-                        metadata_uri: "http://uri".as_bytes().to_vec(),
-                    },
-                )),
+                TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+                    token_ticker: "AAAA".as_bytes().to_vec(),
+                    amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
+                    number_of_decimals: rng.gen_range(1..18),
+                    metadata_uri: "http://uri".as_bytes().to_vec(),
+                })
+                .into(),
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))
             .build();
@@ -383,14 +381,13 @@ fn reorg_store_token(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
-                OutputValue::new_boxed_token(TokenData::new_boxed_token_issuance(
-                    TokenIssuanceV1 {
-                        token_ticker: "BBBB".as_bytes().to_vec(),
-                        amount_to_issue: bbbb_tokens_amount,
-                        number_of_decimals: rng.gen_range(1..18),
-                        metadata_uri: "http://uri".as_bytes().to_vec(),
-                    },
-                )),
+                TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+                    token_ticker: "BBBB".as_bytes().to_vec(),
+                    amount_to_issue: bbbb_tokens_amount,
+                    number_of_decimals: rng.gen_range(1..18),
+                    metadata_uri: "http://uri".as_bytes().to_vec(),
+                })
+                .into(),
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))
             .build();
@@ -413,10 +410,11 @@ fn reorg_store_token(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
-                OutputValue::new_boxed_token(TokenData::TokenTransferV1(TokenTransferV1 {
+                TokenData::TokenTransferV1(TokenTransferV1 {
                     token_id: token_2_id,
                     amount: bbbb_tokens_amount,
-                })),
+                })
+                .into(),
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))
             .build();

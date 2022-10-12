@@ -50,19 +50,18 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         // Issue a new NFT
-        let output_value =
-            OutputValue::new_boxed_token(TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
-                metadata: Metadata {
-                    creator: random_creator(),
-                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                    description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                    icon_uri: DataOrNoVec::from(None),
-                    additional_metadata_uri: DataOrNoVec::from(None),
-                    media_uri: DataOrNoVec::from(None),
-                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                },
-            }));
+        let output_value = TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+            metadata: Metadata {
+                creator: random_creator(),
+                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                icon_uri: DataOrNoVec::from(None),
+                additional_metadata_uri: DataOrNoVec::from(None),
+                media_uri: DataOrNoVec::from(None),
+                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+            },
+        });
 
         let block_index = tf
             .make_block_builder()
@@ -73,7 +72,7 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        output_value.clone(),
+                        output_value.clone().into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -82,7 +81,10 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        assert_eq!(block.transactions()[0].outputs()[0].value(), &output_value);
+        assert_eq!(
+            block.transactions()[0].outputs()[0].value(),
+            &output_value.into()
+        );
         let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
 
         // Try to transfer NFT with wrong ID
@@ -95,10 +97,11 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::new_boxed_token(TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id: TokenId::random(),
                             amount: Amount::from_atoms(1),
-                        })),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -127,19 +130,18 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         // Issue a new NFT
-        let output_value =
-            OutputValue::new_boxed_token(TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
-                metadata: Metadata {
-                    creator: random_creator(),
-                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                    description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                    icon_uri: DataOrNoVec::from(None),
-                    additional_metadata_uri: DataOrNoVec::from(None),
-                    media_uri: DataOrNoVec::from(None),
-                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                },
-            }));
+        let output_value = TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+            metadata: Metadata {
+                creator: random_creator(),
+                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                icon_uri: DataOrNoVec::from(None),
+                additional_metadata_uri: DataOrNoVec::from(None),
+                media_uri: DataOrNoVec::from(None),
+                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+            },
+        });
 
         let block_index = tf
             .make_block_builder()
@@ -150,7 +152,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        output_value.clone(),
+                        output_value.clone().into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -160,7 +162,10 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
             .unwrap();
         let block = tf.block(*block_index.block_id());
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
-        assert_eq!(block.transactions()[0].outputs()[0].value(), &output_value);
+        assert_eq!(
+            block.transactions()[0].outputs()[0].value(),
+            &output_value.into()
+        );
         let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
 
         // Try to transfer 0 NFT
@@ -173,10 +178,11 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::new_boxed_token(TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: Amount::from_atoms(0),
-                        })),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -202,10 +208,11 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::new_boxed_token(TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: Amount::from_atoms(rng.gen_range(2..123)),
-                        })),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -234,19 +241,19 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
 
         // Issuance a few different NFT
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value =
-            OutputValue::new_boxed_token(TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
-                metadata: Metadata {
-                    creator: random_creator(),
-                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                    description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                    icon_uri: DataOrNoVec::from(None),
-                    additional_metadata_uri: DataOrNoVec::from(None),
-                    media_uri: DataOrNoVec::from(None),
-                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                },
-            }));
+        let output_value = TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+            metadata: Metadata {
+                creator: random_creator(),
+                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                icon_uri: DataOrNoVec::from(None),
+                additional_metadata_uri: DataOrNoVec::from(None),
+                media_uri: DataOrNoVec::from(None),
+                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+            },
+        })
+        .into();
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
         let block_index = tf
             .make_block_builder()
@@ -288,28 +295,27 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::new_boxed_token(TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id: first_token_id,
                             amount: Amount::from_atoms(1),
-                        })),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        OutputValue::new_boxed_token(TokenData::new_boxed_nft_issuance(
-                            NftIssuanceV1 {
-                                metadata: Metadata {
-                                    creator: random_creator(),
-                                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                    description: random_string(&mut rng, 1..max_desc_len)
-                                        .into_bytes(),
-                                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                                    icon_uri: DataOrNoVec::from(None),
-                                    additional_metadata_uri: DataOrNoVec::from(None),
-                                    media_uri: DataOrNoVec::from(None),
-                                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                                },
+                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                            metadata: Metadata {
+                                creator: random_creator(),
+                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                icon_uri: DataOrNoVec::from(None),
+                                additional_metadata_uri: DataOrNoVec::from(None),
+                                media_uri: DataOrNoVec::from(None),
+                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        )),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
@@ -346,10 +352,11 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::new_boxed_token(TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id: first_token_id,
                             amount: Amount::from_atoms(2),
-                        })),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
@@ -382,19 +389,18 @@ fn nft_valid_transfer(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         // Issue a new NFT
-        let output_value =
-            OutputValue::new_boxed_token(TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
-                metadata: Metadata {
-                    creator: random_creator(),
-                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                    description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                    icon_uri: DataOrNoVec::from(None),
-                    additional_metadata_uri: DataOrNoVec::from(None),
-                    media_uri: DataOrNoVec::from(None),
-                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                },
-            }));
+        let output_value = TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+            metadata: Metadata {
+                creator: random_creator(),
+                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                icon_uri: DataOrNoVec::from(None),
+                additional_metadata_uri: DataOrNoVec::from(None),
+                media_uri: DataOrNoVec::from(None),
+                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+            },
+        });
 
         let block_index = tf
             .make_block_builder()
@@ -405,7 +411,7 @@ fn nft_valid_transfer(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        output_value.clone(),
+                        output_value.clone().into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -415,15 +421,17 @@ fn nft_valid_transfer(#[case] seed: Seed) {
             .unwrap();
         let block = tf.block(*block_index.block_id());
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
-        assert_eq!(block.transactions()[0].outputs()[0].value(), &output_value);
+        assert_eq!(
+            block.transactions()[0].outputs()[0].value(),
+            &output_value.into()
+        );
         let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
 
         // Valid case
-        let transfer_value =
-            OutputValue::new_boxed_token(TokenData::TokenTransferV1(TokenTransferV1 {
-                token_id,
-                amount: Amount::from_atoms(1),
-            }));
+        let transfer_value = TokenData::TokenTransferV1(TokenTransferV1 {
+            token_id,
+            amount: Amount::from_atoms(1),
+        });
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -433,7 +441,7 @@ fn nft_valid_transfer(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        transfer_value.clone(),
+                        transfer_value.clone().into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -448,6 +456,6 @@ fn nft_valid_transfer(#[case] seed: Seed) {
         let outputs = &TestBlockInfo::from_block(&block).txns[0].1;
         let transfer_output = &outputs[0];
 
-        assert_eq!(transfer_output.value(), &transfer_value);
+        assert_eq!(transfer_output.value(), &transfer_value.into());
     })
 }

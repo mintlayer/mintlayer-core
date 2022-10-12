@@ -21,7 +21,7 @@ use chainstate::{
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
 use common::chain::{
     signature::inputsig::InputWitness,
-    tokens::{token_id, Metadata, NftIssuanceV1, OutputValue, TokenData, TokenTransferV1},
+    tokens::{token_id, Metadata, NftIssuanceV1, TokenData, TokenTransferV1},
     Destination, OutputPurpose, TxInput, TxOutput,
 };
 use common::primitives::Amount;
@@ -56,21 +56,19 @@ fn burn_nft_invalid_amount(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::new_boxed_token(TokenData::new_boxed_nft_issuance(
-                            NftIssuanceV1 {
-                                metadata: Metadata {
-                                    creator: random_creator(),
-                                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                    description: random_string(&mut rng, 1..max_desc_len)
-                                        .into_bytes(),
-                                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                                    icon_uri: DataOrNoVec::from(None),
-                                    additional_metadata_uri: DataOrNoVec::from(None),
-                                    media_uri: DataOrNoVec::from(None),
-                                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                                },
+                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                            metadata: Metadata {
+                                creator: random_creator(),
+                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                icon_uri: DataOrNoVec::from(None),
+                                additional_metadata_uri: DataOrNoVec::from(None),
+                                media_uri: DataOrNoVec::from(None),
+                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        )),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -93,12 +91,11 @@ fn burn_nft_invalid_amount(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::new_boxed_token(TokenData::TokenBurnV1(
-                            common::chain::tokens::TokenBurnV1 {
-                                token_id,
-                                amount_to_burn: Amount::from_atoms(rng.gen_range(2..123)),
-                            },
-                        )),
+                        TokenData::TokenBurnV1(common::chain::tokens::TokenBurnV1 {
+                            token_id,
+                            amount_to_burn: Amount::from_atoms(rng.gen_range(2..123)),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -122,12 +119,11 @@ fn burn_nft_invalid_amount(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::new_boxed_token(TokenData::TokenBurnV1(
-                            common::chain::tokens::TokenBurnV1 {
-                                token_id,
-                                amount_to_burn: Amount::from_atoms(0),
-                            },
-                        )),
+                        TokenData::TokenBurnV1(common::chain::tokens::TokenBurnV1 {
+                            token_id,
+                            amount_to_burn: Amount::from_atoms(0),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -168,21 +164,19 @@ fn burn_nft_valid_case(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::new_boxed_token(TokenData::new_boxed_nft_issuance(
-                            NftIssuanceV1 {
-                                metadata: Metadata {
-                                    creator: random_creator(),
-                                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                    description: random_string(&mut rng, 1..max_desc_len)
-                                        .into_bytes(),
-                                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                                    icon_uri: DataOrNoVec::from(None),
-                                    additional_metadata_uri: DataOrNoVec::from(None),
-                                    media_uri: DataOrNoVec::from(None),
-                                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                                },
+                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                            metadata: Metadata {
+                                creator: random_creator(),
+                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                                icon_uri: DataOrNoVec::from(None),
+                                additional_metadata_uri: DataOrNoVec::from(None),
+                                media_uri: DataOrNoVec::from(None),
+                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        )),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -205,12 +199,11 @@ fn burn_nft_valid_case(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::new_boxed_token(TokenData::TokenBurnV1(
-                            common::chain::tokens::TokenBurnV1 {
-                                token_id,
-                                amount_to_burn: Amount::from_atoms(1),
-                            },
-                        )),
+                        TokenData::TokenBurnV1(common::chain::tokens::TokenBurnV1 {
+                            token_id,
+                            amount_to_burn: Amount::from_atoms(1),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -231,10 +224,11 @@ fn burn_nft_valid_case(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        OutputValue::new_boxed_token(TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: Amount::from_atoms(1),
-                        })),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
