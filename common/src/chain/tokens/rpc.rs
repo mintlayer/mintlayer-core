@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{Metadata, TokenId};
+use super::{Metadata, TokenCreator, TokenId};
 use crate::{
     chain::{Block, Transaction},
     primitives::{Amount, Id},
@@ -76,7 +76,7 @@ pub struct RPCNonFungibleTokenInfo {
     pub token_id: TokenId,
     pub creation_tx_id: Id<Transaction>,
     pub creation_block_id: Id<Block>,
-    pub metadata: Metadata,
+    pub metadata: RPCNonFungibleTokenMetadata,
 }
 
 impl RPCNonFungibleTokenInfo {
@@ -84,13 +84,50 @@ impl RPCNonFungibleTokenInfo {
         token_id: TokenId,
         creation_tx_id: Id<Transaction>,
         creation_block_id: Id<Block>,
-        metadata: Metadata,
+        metadata: &Metadata,
     ) -> Self {
         Self {
             token_id,
             creation_tx_id,
             creation_block_id,
-            metadata,
+            metadata: RPCNonFungibleTokenMetadata::from(metadata),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+pub struct RPCTokenCreator(Vec<u8>);
+
+impl From<&TokenCreator> for RPCTokenCreator {
+    fn from(creator: &TokenCreator) -> Self {
+        // None-RPC type mustn't have serde requirements
+        RPCTokenCreator(creator.encode())
+    }
+}
+
+#[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
+pub struct RPCNonFungibleTokenMetadata {
+    pub creator: Option<RPCTokenCreator>,
+    pub name: Vec<u8>,
+    pub description: Vec<u8>,
+    pub ticker: Vec<u8>,
+    pub icon_uri: Vec<u8>,
+    pub additional_metadata_uri: Vec<u8>,
+    pub media_uri: Vec<u8>,
+    pub media_hash: Vec<u8>,
+}
+
+impl From<&Metadata> for RPCNonFungibleTokenMetadata {
+    fn from(metadata: &Metadata) -> Self {
+        Self {
+            creator: metadata.creator().as_ref().map(RPCTokenCreator::from),
+            name: metadata.name().clone(),
+            description: metadata.description().clone(),
+            ticker: metadata.ticker().clone(),
+            icon_uri: metadata.icon_uri().encode(),
+            additional_metadata_uri: metadata.additional_metadata_uri().encode(),
+            media_uri: metadata.media_uri().encode(),
+            media_hash: metadata.media_hash().clone(),
         }
     }
 }

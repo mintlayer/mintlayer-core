@@ -219,7 +219,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
                         token_id,
                         token_aux_data.issuance_tx().get_id(),
                         token_aux_data.issuance_block_id(),
-                        nft.metadata.clone(),
+                        &nft.metadata,
                     )))
                 }
                 TokenData::TokenTransferV1(_) | TokenData::TokenBurnV1(_) => None,

@@ -40,18 +40,7 @@ pub struct PrivateKey {
     key: PrivateKeyHolder,
 }
 
-#[derive(
-    Debug,
-    PartialOrd,
-    Ord,
-    PartialEq,
-    Eq,
-    Clone,
-    Decode,
-    Encode,
-    serde::Serialize,
-    serde::Deserialize,
-)]
+#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Decode, Encode)]
 pub struct PublicKey {
     pub_key: PublicKeyHolder,
 }
@@ -61,18 +50,7 @@ pub(crate) enum PrivateKeyHolder {
     RistrettoSchnorr(rschnorr::MLRistrettoPrivateKey),
 }
 
-#[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Clone,
-    Decode,
-    Encode,
-    serde::Serialize,
-    serde::Deserialize,
-)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Decode, Encode)]
 pub(crate) enum PublicKeyHolder {
     RistrettoSchnorr(rschnorr::MLRistrettoPublicKey),
 }

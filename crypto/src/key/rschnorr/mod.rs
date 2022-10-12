@@ -119,7 +119,7 @@ impl MLRistrettoPrivateKey {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct MLRistrettoPublicKey {
     pubkey_data: RistrettoPublicKey,
 }
