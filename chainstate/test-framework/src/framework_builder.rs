@@ -15,10 +15,7 @@
 
 use std::sync::Arc;
 
-use chainstate::{
-    BlockError, ChainstateConfig, DefaultTransactionVerificationStrategy,
-    DisposableTransactionVerificationStrategy, RandomizedTransactionVerificationStrategy,
-};
+use chainstate::{BlockError, ChainstateConfig, DefaultTransactionVerificationStrategy};
 use chainstate_storage::inmemory::Store;
 use common::{
     chain::{
@@ -27,8 +24,14 @@ use common::{
     },
     time_getter::TimeGetter,
 };
+use test_utils::random::Seed;
 
-use crate::TestFramework;
+use crate::{
+    tx_verification_strategy::{
+        DisposableTransactionVerificationStrategy, RandomizedTransactionVerificationStrategy,
+    },
+    TestFramework,
+};
 
 pub enum TxVerificationStrategy {
     Default,

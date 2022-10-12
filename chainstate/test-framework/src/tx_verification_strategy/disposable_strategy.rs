@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::TransactionVerificationStrategy;
-use crate::{calculate_median_time_past, BlockError};
+use chainstate::{calculate_median_time_past, BlockError, TransactionVerificationStrategy};
 use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
     chain::{Block, ChainConfig},

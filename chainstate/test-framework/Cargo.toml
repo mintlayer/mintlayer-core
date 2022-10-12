@@ -7,11 +7,13 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chainstate = { path = '..', features = ["randomized"] }
+chainstate = { path = '..'}
 chainstate-storage = { path = '../storage' }
 chainstate-types = { path = '../types' }
 common = { path = '../../common' }
 crypto = { path = '../../crypto' }
+test-utils = {path = '../../test-utils'}
+tx-verifier = { path = '../tx-verifier'}
 utils = { path = '../../utils' }
 
 [dev-dependencies]

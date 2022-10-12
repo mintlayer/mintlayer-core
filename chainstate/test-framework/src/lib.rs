@@ -19,6 +19,7 @@ mod block_builder;
 mod framework;
 mod framework_builder;
 mod transaction_builder;
+mod tx_verification_strategy;
 
 /// Storage backend used for testing (the in-memory backend)
 pub type TestStore = chainstate_storage::inmemory::Store;

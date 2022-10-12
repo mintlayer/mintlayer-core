@@ -14,17 +14,8 @@
 // limitations under the License.
 
 pub mod default_strategy;
-pub mod disposable_strategy;
 
-#[cfg(any(test, feature = "randomized"))]
-pub mod randomized_strategy;
-#[cfg(any(test, feature = "randomized"))]
-pub use randomized_strategy::RandomizedTransactionVerificationStrategy;
-
-pub use {
-    default_strategy::DefaultTransactionVerificationStrategy,
-    disposable_strategy::DisposableTransactionVerificationStrategy,
-};
+pub use default_strategy::DefaultTransactionVerificationStrategy;
 
 use crate::BlockError;
 use chainstate_types::{BlockIndex, BlockIndexHandle};

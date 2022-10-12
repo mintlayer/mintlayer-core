@@ -15,8 +15,7 @@
 
 use std::cell::RefCell;
 
-use super::TransactionVerificationStrategy;
-use crate::{calculate_median_time_past, BlockError};
+use chainstate::{calculate_median_time_past, BlockError, TransactionVerificationStrategy};
 use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block, ChainConfig},

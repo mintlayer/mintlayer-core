@@ -47,6 +47,7 @@ mod processing_tests;
 mod reorgs_tests;
 mod signature_tests;
 mod syncing_tests;
+mod tx_verification_simulation;
 
 type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
 
