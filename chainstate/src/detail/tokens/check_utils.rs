@@ -61,12 +61,10 @@ pub fn check_token_ticker(
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
     // Check length
-    if ticker.len() > chain_config.token_max_ticker_len() || ticker.is_empty() {
-        return Err(TokensError::IssueErrorInvalidTickerLength(
-            tx_id,
-            source_block_id,
-        ));
-    }
+    ensure!(
+        ticker.len() <= chain_config.token_max_ticker_len() && !ticker.is_empty(),
+        TokensError::IssueErrorInvalidTickerLength(tx_id, source_block_id,)
+    );
 
     // Check is ticker has alphanumeric chars
     ensure!(
@@ -83,12 +81,10 @@ pub fn check_nft_name(
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
     // Check length
-    if name.len() > chain_config.token_max_name_len() || name.is_empty() {
-        return Err(TokensError::IssueErrorInvalidNameLength(
-            tx_id,
-            source_block_id,
-        ));
-    }
+    ensure!(
+        name.len() <= chain_config.token_max_name_len() && !name.is_empty(),
+        TokensError::IssueErrorInvalidNameLength(tx_id, source_block_id,)
+    );
 
     // Check is name has alphanumeric chars
     ensure!(
@@ -105,12 +101,10 @@ pub fn check_nft_description(
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
     // Check length
-    if description.len() > chain_config.token_max_description_len() || description.is_empty() {
-        return Err(TokensError::IssueErrorInvalidDescriptionLength(
-            tx_id,
-            source_block_id,
-        ));
-    }
+    ensure!(
+        description.len() <= chain_config.token_max_description_len() && !description.is_empty(),
+        TokensError::IssueErrorInvalidDescriptionLength(tx_id, source_block_id,)
+    );
 
     // Check is description has alphanumeric chars
     ensure!(
