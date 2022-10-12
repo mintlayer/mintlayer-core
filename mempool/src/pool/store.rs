@@ -442,8 +442,14 @@ impl TxMempoolEntry {
         self.count_with_descendants
     }
 
+    #[cfg(test)]
     pub(super) fn fees_with_descendants(&self) -> Amount {
         self.fees_with_descendants
+    }
+
+    #[cfg(test)]
+    pub(super) fn fees_with_ancestors(&self) -> Amount {
+        self.fees_with_ancestors
     }
 
     pub(super) fn descendant_score(&self) -> DescendantScore {
@@ -458,6 +464,14 @@ impl TxMempoolEntry {
     }
 
     pub(super) fn ancestor_score(&self) -> AncestorScore {
+        log::debug!("ancestor score for {:?}", self.tx_id());
+        log::debug!(
+            "fees with ancestors: {:?}, size_with_ancestors: {}, fee: {:?}, size: {}",
+            self.fees_with_ancestors,
+            self.size_with_ancestors,
+            self.fee,
+            self.tx.encoded_size()
+        );
         std::cmp::min(
             (self.fees_with_ancestors
                 / u128::try_from(self.size_with_ancestors).expect("conversion"))

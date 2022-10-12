@@ -1639,6 +1639,160 @@ async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test]
+async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
+    let tf = TestFramework::default();
+    let genesis = tf.genesis();
+    let mut rng = make_seedable_rng(seed);
+
+    let tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(10_000)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+        .add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(10_000)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+        .build();
+    let tx_id = tx.transaction().get_id();
+
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    mempool.add_transaction(tx).await?;
+
+    let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
+
+    let flags = 0;
+    let locktime = 0;
+
+    let tx_b_fee = Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2)));
+    let tx_a_fee = (tx_b_fee + Amount::from_atoms(1000)).unwrap();
+    let tx_c_fee = (tx_a_fee + Amount::from_atoms(1000)).unwrap();
+    let tx_a = tx_spend_input(
+        &mempool,
+        TxInput::new(outpoint_source_id.clone(), 0),
+        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+        tx_a_fee,
+        flags,
+        locktime,
+    )
+    .await?;
+    let tx_a_id = tx_a.transaction().get_id();
+    log::debug!("tx id is: {}", tx_id);
+    log::debug!("tx_a_id : {}", tx_a_id.get());
+    log::debug!("tx_a fee : {:?}", mempool.try_get_fee(&tx_a).await?);
+    mempool.add_transaction(tx_a).await?;
+
+    let tx_b = tx_spend_input(
+        &mempool,
+        TxInput::new(outpoint_source_id, 1),
+        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+        tx_b_fee,
+        flags,
+        locktime,
+    )
+    .await?;
+    let tx_b_id = tx_b.transaction().get_id();
+    log::debug!("tx_b_id : {}", tx_b_id.get());
+    log::debug!("tx_b fee : {:?}", mempool.try_get_fee(&tx_b).await?);
+    mempool.add_transaction(tx_b).await?;
+
+    let tx_c = tx_spend_input(
+        &mempool,
+        TxInput::new(OutPointSourceId::Transaction(tx_b_id), 0),
+        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+        tx_c_fee,
+        flags,
+        locktime,
+    )
+    .await?;
+    let tx_c_id = tx_c.transaction().get_id();
+    log::debug!("tx_c_id : {}", tx_c_id.get());
+    log::debug!("tx_c fee : {:?}", mempool.try_get_fee(&tx_c).await?);
+    mempool.add_transaction(tx_c).await?;
+
+    let entry_tx = mempool.store.txs_by_id.get(&tx_id).expect("tx");
+    log::debug!(
+        "at first, entry tx has score {:?}",
+        entry_tx.ancestor_score()
+    );
+    let entry_a = mempool.store.txs_by_id.get(&tx_a_id).expect("tx_a").clone();
+    log::debug!("AT FIRST, entry a has score {:?}", entry_a.ancestor_score());
+    let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
+    log::debug!("AT FIRST, entry b has score {:?}", entry_b.ancestor_score());
+    let entry_c = mempool.store.txs_by_id.get(&tx_c_id).expect("tx_c").clone();
+    log::debug!(
+        "AT FIRST, entry c looks like {:?} and has score {:?}",
+        entry_c,
+        entry_c.ancestor_score()
+    );
+    assert_eq!(
+        entry_a.fees_with_ancestors(),
+        (entry_a.fee() + entry_tx.fee()).unwrap()
+    );
+    assert_eq!(
+        entry_b.fees_with_ancestors(),
+        (entry_b.fee() + entry_tx.fee()).unwrap()
+    );
+    assert!(!mempool.store.txs_by_ancestor_score.contains_key(&tx_b_fee.into()));
+    log::debug!(
+        "BEFORE REMOVAL raw txs_by_ancestor_score {:?}",
+        mempool.store.txs_by_ancestor_score
+    );
+    check_txs_sorted_by_ancestor_score(&mempool);
+
+    mempool.store.remove_tx(&entry_tx.tx_id(), MempoolRemovalReason::Block);
+    log::debug!(
+        "AFTER REMOVAL raw txs_by_ancestor_score {:?}",
+        mempool.store.txs_by_ancestor_score
+    );
+    let entry_a = mempool.store.txs_by_id.get(&tx_a_id).expect("tx_a");
+    log::debug!(
+        "AFTER removing tx, entry a has score {:?}",
+        entry_a.ancestor_score()
+    );
+    let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
+    log::debug!(
+        "AFTER removing tx, entry b has score {:?}",
+        entry_b.ancestor_score()
+    );
+    let entry_c = mempool.store.txs_by_id.get(&tx_c_id).expect("tx_b");
+    log::debug!(
+        "AFTER removing tx, entry c looks like {:?} and has score {:?}",
+        entry_c,
+        entry_c.ancestor_score()
+    );
+
+    assert!(!mempool.store.txs_by_ancestor_score.contains_key(&tx_c_fee.into()));
+
+    check_txs_sorted_by_ancestor_score(&mempool);
+    mempool.store.assert_valid();
+
+    Ok(())
+}
+
+fn check_txs_sorted_by_ancestor_score(mempool: &Mempool<SystemUsageEstimator>) {
+    let txs_by_ancestor_score =
+        mempool.store.txs_by_descendant_score.values().flatten().collect::<Vec<_>>();
+    for i in 0..(txs_by_ancestor_score.len() - 1) {
+        log::debug!("i =  {}", i);
+        let tx_id = txs_by_ancestor_score.get(i).unwrap();
+        let next_tx_id = txs_by_ancestor_score.get(i + 1).unwrap();
+        let entry_score = mempool.store.txs_by_id.get(tx_id).unwrap().descendant_score();
+        let next_entry_score = mempool.store.txs_by_id.get(next_tx_id).unwrap().descendant_score();
+        log::debug!("entry_score: {:?}", entry_score);
+        log::debug!("next_entry_score: {:?}", next_entry_score);
+        assert!(entry_score <= next_entry_score)
+    }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
 async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let genesis = tf.genesis();
