@@ -36,7 +36,7 @@ use test_utils::{
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn burn_nft_invalid_amount(#[case] seed: Seed) {
+fn nft_burn_invalid_amount(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
@@ -144,7 +144,7 @@ fn burn_nft_invalid_amount(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn burn_nft_valid_case(#[case] seed: Seed) {
+fn nft_burn_valid_case(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
