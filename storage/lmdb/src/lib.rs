@@ -40,7 +40,14 @@ impl std::ops::Index<DbIndex> for DbList {
 pub struct PrefixIter<'tx> {
     iter: lmdb::Iter<'tx>,
     prefix: Data,
-    // Cursor needs to be kept alive for the duration of the iterator lifetime
+    /// Cursor needs to be kept alive for the duration of the iterator lifetime
+    /// Problem explanation:
+    /// As it stands, the `RoCursor<'tx>::iter()` method doesn't relate the lifetime of `&self` to the iterator's,
+    /// where we can see a signature in the form
+    /// `fn iter_from<K>(&mut self, key: K) -> Iter<'txn>` but
+    /// `&mut self` should be `&'txn mut self`
+    /// otherwise, the iterator can live longer than the cursor,
+    /// leading to memory access violations.
     _cursor: lmdb::RoCursor<'tx>,
 }
 
