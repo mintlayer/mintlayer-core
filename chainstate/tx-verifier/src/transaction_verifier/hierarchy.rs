@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::btree_map::Entry;
-
 use super::{
     cached_operation::CachedInputsOperation,
     storage::{
@@ -30,7 +28,7 @@ use common::{
         tokens::{TokenAuxiliaryData, TokenId},
         Block, GenBlock, OutPoint, OutPointSourceId, Transaction, TxMainChainIndex,
     },
-    primitives::{BlockHeight, Id},
+    primitives::Id,
 };
 use utxo::{BlockUndo, ConsumedUtxoCache, FlushableUtxoView, UtxosStorageRead, UtxosView};
 
@@ -56,14 +54,6 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
         self.storage_ref.get_gen_block_index(block_id)
-    }
-
-    fn get_ancestor(
-        &self,
-        block_index: &GenBlockIndex,
-        target_height: BlockHeight,
-    ) -> Result<GenBlockIndex, TransactionVerifierStorageError> {
-        self.storage_ref.get_ancestor(block_index, target_height)
     }
 
     fn get_mainchain_tx_index(
@@ -115,7 +105,7 @@ impl<'a, S: TransactionVerifierStorageRef> UtxosStorageRead for TransactionVerif
     }
 }
 
-impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
+impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageMut
     for TransactionVerifier<'a, S>
 {
     fn set_mainchain_tx_index(
@@ -133,7 +123,7 @@ impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
         tx_id: &OutPointSourceId,
     ) -> Result<(), TransactionVerifierStorageError> {
         self.tx_index_cache
-            .del_tx_index(tx_id)
+            .remove_tx_index_by_id(tx_id.clone())
             .map_err(TransactionVerifierStorageError::TxIndexError)
     }
 
@@ -178,18 +168,18 @@ impl<'a, S: TransactionVerifierStorageMut> TransactionVerifierStorageMut
     fn set_undo_data(
         &mut self,
         id: Id<Block>,
-        undo: &BlockUndo,
+        new_undo: &BlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
-        match self.utxo_block_undo.entry(id) {
-            Entry::Occupied(_) => Err(TransactionVerifierStorageError::DuplicateBlockUndo(id)),
-            Entry::Vacant(entry) => {
-                entry.insert(BlockUndoEntry {
-                    undo: undo.clone(),
-                    is_fresh: true,
-                });
-                Ok(())
-            }
-        }
+        self.utxo_block_undo
+            .entry(id)
+            .and_modify(|cached_undo| {
+                cached_undo.undo.append(new_undo.clone());
+            })
+            .or_insert(BlockUndoEntry {
+                undo: new_undo.clone(),
+                is_fresh: true,
+            });
+        Ok(())
     }
 
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), TransactionVerifierStorageError> {

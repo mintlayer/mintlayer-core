@@ -27,7 +27,8 @@ pub type TestStore = chainstate_storage::inmemory::Store;
 pub type TestChainstate = Box<dyn chainstate::chainstate_interface::ChainstateInterface>;
 
 pub use {
-    block_builder::BlockBuilder, framework::anyonecanspend_address, framework::empty_witness,
-    framework::TestBlockInfo, framework::TestFramework, framework_builder::OrphanErrorHandler,
-    framework_builder::TestFrameworkBuilder, transaction_builder::TransactionBuilder,
+    block_builder::BlockBuilder,
+    framework::{anyonecanspend_address, empty_witness, TestBlockInfo, TestFramework},
+    framework_builder::{OrphanErrorHandler, TestFrameworkBuilder, TxVerificationStrategy},
+    transaction_builder::TransactionBuilder,
 };

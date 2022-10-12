@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::TransactionVerificationStrategy;
+use crate::{calculate_median_time_past, BlockError};
 use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
     chain::{Block, ChainConfig},
@@ -23,48 +25,6 @@ use tx_verifier::transaction_verifier::{
     Fee, Subsidy, TransactionVerifier,
 };
 use utils::tap_error_log::LogError;
-
-use crate::{calculate_median_time_past, BlockError};
-
-/// A trait that specifies how a block will be verified
-pub trait TransactionVerificationStrategy: Sized + Send {
-    /// Connect the transactions given by block and block_index,
-    /// and return a TransactionVerifier with an internal state
-    /// that represents them being connected.
-    /// Notice that this doesn't modify the internal database/storage
-    /// state. It just returns a TransactionVerifier that can be
-    /// used to update the database/storage state.
-    fn connect_block<'a, H, S, M>(
-        &self,
-        tx_verifier_maker: M,
-        block_index_handle: &'a H,
-        storage_backend: &'a S,
-        chain_config: &'a ChainConfig,
-        block_index: &'a BlockIndex,
-        block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S>, BlockError>
-    where
-        H: BlockIndexHandle,
-        S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>;
-
-    /// Disconnect the transactions given by block and block_index,
-    /// and return a TransactionVerifier with an internal state
-    /// that represents them being disconnected.
-    /// Notice that this doesn't modify the internal database/storage
-    /// state. It just returns a TransactionVerifier that can be
-    /// used to update the database/storage state.
-    fn disconnect_block<'a, S, M>(
-        &self,
-        tx_verifier_maker: M,
-        storage_backend: &'a S,
-        chain_config: &'a ChainConfig,
-        block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S>, BlockError>
-    where
-        S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>;
-}
 
 pub struct DefaultTransactionVerificationStrategy {}
 

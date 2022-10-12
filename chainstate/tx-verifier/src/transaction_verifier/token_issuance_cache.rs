@@ -38,6 +38,7 @@ pub enum CoinOrTokenId {
     TokenId(TokenId),
 }
 
+#[derive(Debug, Eq, PartialEq)]
 pub struct ConsumedTokenIssuanceCache {
     pub data: BTreeMap<TokenId, CachedAuxDataOp>,
     pub txid_vs_tokenid: BTreeMap<Id<Transaction>, CachedTokenIndexOp>,

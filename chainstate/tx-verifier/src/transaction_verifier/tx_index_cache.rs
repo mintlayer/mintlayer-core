@@ -65,27 +65,26 @@ impl TxIndexCache {
         };
 
         let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
-        self.insert_tx_index(&outpoint_source_id, tx_index)?;
-
-        Ok(())
-    }
-
-    fn insert_tx_index(
-        &mut self,
-        outpoint_source_id: &OutPointSourceId,
-        tx_index: CachedInputsOperation,
-    ) -> Result<(), TxIndexError> {
-        match self.data.entry(outpoint_source_id.clone()) {
-            Entry::Occupied(_) => return Err(TxIndexError::OutputAlreadyPresentInInputsCache),
-            Entry::Vacant(entry) => entry.insert(tx_index),
+        match self.data.entry(outpoint_source_id) {
+            Entry::Occupied(_) => {
+                return Err(TxIndexError::OutputAlreadyPresentInInputsCache);
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(tx_index);
+            }
         };
+
         Ok(())
     }
 
     pub fn remove_tx_index(&mut self, spend_ref: BlockTransactableRef) -> Result<(), TxIndexError> {
         let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
+        self.remove_tx_index_by_id(outpoint_source_id)
+    }
 
-        self.data.insert(outpoint_source_id, CachedInputsOperation::Erase);
+    pub fn remove_tx_index_by_id(&mut self, tx_id: OutPointSourceId) -> Result<(), TxIndexError> {
+        // possible overwrite is ok
+        self.data.insert(tx_id, CachedInputsOperation::Erase);
         Ok(())
     }
 
@@ -94,11 +93,9 @@ impl TxIndexCache {
         tx_id: &OutPointSourceId,
         tx_index: TxMainChainIndex,
     ) -> Result<(), TxIndexError> {
-        self.insert_tx_index(tx_id, CachedInputsOperation::Write(tx_index))
-    }
-
-    pub fn del_tx_index(&mut self, tx_id: &OutPointSourceId) -> Result<(), TxIndexError> {
-        self.insert_tx_index(tx_id, CachedInputsOperation::Erase)
+        // possible overwrite is ok
+        self.data.insert(tx_id.clone(), CachedInputsOperation::Write(tx_index));
+        Ok(())
     }
 
     fn outpoint_source_id_from_spend_ref(

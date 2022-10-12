@@ -31,7 +31,7 @@ use common::{
         tokens::{TokenAuxiliaryData, TokenId},
         Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction,
     },
-    primitives::{BlockHeight, Id},
+    primitives::Id,
 };
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDBMut, UtxosStorageRead};
 
@@ -50,15 +50,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
         gen_block_index_getter(&self.db_tx, self.chain_config, block_id)
-    }
-
-    fn get_ancestor(
-        &self,
-        block_index: &GenBlockIndex,
-        target_height: BlockHeight,
-    ) -> Result<GenBlockIndex, TransactionVerifierStorageError> {
-        self.get_ancestor(block_index, target_height)
-            .map_err(TransactionVerifierStorageError::from)
     }
 
     fn get_mainchain_tx_index(

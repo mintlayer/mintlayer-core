@@ -19,7 +19,7 @@ use common::{
         tokens::{TokenAuxiliaryData, TokenId},
         Block, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex,
     },
-    primitives::{BlockHeight, Id},
+    primitives::Id,
 };
 use thiserror::Error;
 use utxo::{BlockUndo, FlushableUtxoView, UtxosStorageRead};
@@ -50,16 +50,15 @@ pub trait TransactionVerifierStorageRef: UtxosStorageRead {
         tx_id: Id<Transaction>,
     ) -> Result<Option<TokenId>, TransactionVerifierStorageError>;
 
+    // TODO: Study whether moving this to a closure on tx_verifier construction is helpful.
+    //       The issue here is that looking into history prevents testing the tx_verifier independently
+    //       where the state of the tx index should be prepared before constructing the tx_verifier
+    //       which sabotages the ability to look into the history and find the block that is being
+    //       connected with the current tx.
     fn get_gen_block_index(
         &self,
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error>;
-
-    fn get_ancestor(
-        &self,
-        block_index: &GenBlockIndex,
-        target_height: BlockHeight,
-    ) -> Result<GenBlockIndex, TransactionVerifierStorageError>;
 
     fn get_mainchain_tx_index(
         &self,
