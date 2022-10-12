@@ -28,7 +28,7 @@ use crate::{
             behaviour::sync_codec::message_types::{SyncRequest, SyncResponse},
             types::{Command, SyncingEvent as P2pSyncingEvent},
         },
-        types::{PubSubTopic, SyncingEvent},
+        types::{PubSubTopic, SyncingEvent, ValidationResult},
         NetworkingService, SyncingMessagingService,
     },
 };
@@ -114,6 +114,24 @@ where
         let (tx, rx) = oneshot::channel();
         self.cmd_tx.send(Command::Subscribe {
             topics: topics.iter().map(|topic| topic.into()).collect::<Vec<_>>(),
+            response: tx,
+        })?;
+
+        // The first error indicates the channel being closed and the second one is a p2p error.
+        rx.await?
+    }
+
+    async fn report_validation_result(
+        &mut self,
+        source: T::PeerId,
+        message_id: T::SyncingMessageId,
+        result: ValidationResult,
+    ) -> crate::Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(Command::ReportValidationResult {
+            message_id,
+            source,
+            result: result.into(),
             response: tx,
         })?;
 

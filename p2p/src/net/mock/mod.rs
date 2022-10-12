@@ -33,7 +33,7 @@ use crate::{
     net::{
         self,
         mock::transport::{MockListener, MockTransport},
-        types::{ConnectivityEvent, PubSubTopic, SyncingEvent},
+        types::{ConnectivityEvent, PubSubTopic, SyncingEvent, ValidationResult},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
 };
@@ -297,6 +297,16 @@ where
     }
 
     async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()> {
+        todo!();
+        todo!()
+    }
+
+    async fn report_validation_result(
+        &mut self,
+        source: S::PeerId,
+        message_id: S::SyncingMessageId,
+        result: ValidationResult,
+    ) -> crate::Result<()> {
         todo!();
         todo!()
     }

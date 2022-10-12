@@ -157,6 +157,14 @@ where
     // TODO: FIXME:
     async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()>;
 
+    // TODO: FIXME:
+    async fn report_validation_result(
+        &mut self,
+        source: T::PeerId,
+        msg_id: T::SyncingMessageId,
+        result: types::ValidationResult,
+    ) -> crate::Result<()>;
+
     /// Poll syncing-related event from the networking service
     async fn poll_next(&mut self) -> crate::Result<types::SyncingEvent<T>>;
 }

@@ -26,10 +26,7 @@ use futures::FutureExt;
 use tokio::sync::{mpsc, oneshot};
 use void::Void;
 
-use chainstate::{
-    ban_score::BanScore, chainstate_interface, BlockError, ChainstateError::ProcessBlockError,
-    Locator,
-};
+use chainstate::{ban_score::BanScore, chainstate_interface, BlockError, ChainstateError, Locator};
 use common::{
     chain::{
         block::{Block, BlockHeader},
@@ -48,7 +45,7 @@ use crate::{
     net::{
         self,
         libp2p::{constants::GOSSIPSUB_MAX_TRANSMIT_SIZE, types::Command},
-        types::{PubSubTopic, SyncingEvent},
+        types::{PubSubTopic, SyncingEvent, ValidationResult},
         NetworkingService, SyncingMessagingService,
     },
 };
@@ -328,7 +325,7 @@ where
 
         match result {
             Ok(_) => {}
-            Err(ProcessBlockError(BlockError::BlockAlreadyExists(_id))) => {}
+            Err(ChainstateError::ProcessBlockError(BlockError::BlockAlreadyExists(_id))) => {}
             Err(err) => return Err(P2pError::ChainstateError(err)),
         }
 
@@ -459,7 +456,7 @@ where
                 rx.await.map_err(P2pError::from)?
             }
             Err(P2pError::ChainstateError(err)) => match err {
-                ProcessBlockError(err) => {
+                ChainstateError::ProcessBlockError(err) => {
                     if err.ban_score() > 0 {
                         let (tx, rx) = oneshot::channel();
                         self.tx_swarm
@@ -671,31 +668,28 @@ where
             Err(err) => Err(err),
         };
 
-        // TODO: FIXME:
-        result?;
-        Ok(())
-        // let score = match result {
-        //     Ok(_) => 0,
-        //     Err(e) => match e {
-        //         FailedToInitializeChainstate(_) => 0,
-        //         ProcessBlockError(err) => err.ban_score(),
-        //         FailedToReadProperty(_) => 0,
-        //         BootstrapError(_) => 0,
-        //     },
-        // };
-        //
-        // if score > 0 {
-        //     // TODO: better abstraction over channels
-        //     let (tx, rx) = oneshot::channel();
-        //     self.tx_swarm
-        //         .send(event::SwarmEvent::AdjustPeerScore(peer_id, score, tx))
-        //         .map_err(P2pError::from)?;
-        //     let _ = rx.await.map_err(P2pError::from)?;
-        // }
-        //
-        // self.pubsub_handle
-        //     .report_validation_result(peer_id, message_id, ValidationResult::Ignore)
-        //     .await
+        let score = match result {
+            Ok(_) => 0,
+            Err(e) => match e {
+                ChainstateError::FailedToInitializeChainstate(_) => 0,
+                ChainstateError::ProcessBlockError(err) => err.ban_score(),
+                ChainstateError::FailedToReadProperty(_) => 0,
+                ChainstateError::BootstrapError(_) => 0,
+            },
+        };
+
+        if score > 0 {
+            // TODO: better abstraction over channels
+            let (tx, rx) = oneshot::channel();
+            self.tx_swarm
+                .send(event::SwarmEvent::AdjustPeerScore(peer_id, score, tx))
+                .map_err(P2pError::from)?;
+            let _ = rx.await.map_err(P2pError::from)?;
+        }
+
+        self.peer_sync_handle
+            .report_validation_result(peer_id, message_id, ValidationResult::Ignore)
+            .await
     }
 }
 
