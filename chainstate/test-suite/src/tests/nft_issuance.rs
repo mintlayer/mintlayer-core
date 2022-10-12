@@ -20,6 +20,7 @@ use chainstate::{
 };
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
 use common::chain::tokens::OutputValue;
+use common::chain::tokens::TokenData;
 use common::chain::{
     signature::inputsig::InputWitness,
     tokens::{Metadata, NftIssuanceV1},
@@ -628,7 +629,7 @@ fn nft_issuance_icon_uri_empty(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
-        let output_value: OutputValue = TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+        let output_value: OutputValue = TokenData::from(NftIssuanceV1 {
             metadata: Metadata {
                 creator: random_creator(),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -810,7 +811,7 @@ fn nft_issuance_metadata_uri_empty(#[case] seed: Seed) {
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
-        let output_value: OutputValue = TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+        let output_value: OutputValue = TokenData::from(NftIssuanceV1 {
             metadata: Metadata {
                 creator: random_creator(),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -992,7 +993,7 @@ fn nft_issuance_media_uri_empty(#[case] seed: Seed) {
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
-        let output_value: OutputValue = TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+        let output_value: OutputValue = TokenData::from(NftIssuanceV1 {
             metadata: Metadata {
                 creator: random_creator(),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
