@@ -52,7 +52,7 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
         // Issue a new NFT
         let output_value = NftIssuanceV1 {
             metadata: Metadata {
-                creator: random_creator(),
+                creator: Some(random_creator()),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -132,7 +132,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
         // Issue a new NFT
         let output_value = NftIssuanceV1 {
             metadata: Metadata {
-                creator: random_creator(),
+                creator: Some(random_creator()),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -243,7 +243,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let output_value = NftIssuanceV1 {
             metadata: Metadata {
-                creator: random_creator(),
+                creator: Some(random_creator()),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -305,7 +305,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         NftIssuanceV1 {
                             metadata: Metadata {
-                                creator: random_creator(),
+                                creator: Some(random_creator()),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -391,7 +391,7 @@ fn nft_valid_transfer(#[case] seed: Seed) {
         // Issue a new NFT
         let output_value = NftIssuanceV1 {
             metadata: Metadata {
-                creator: random_creator(),
+                creator: Some(random_creator()),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),

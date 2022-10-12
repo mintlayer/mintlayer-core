@@ -58,7 +58,7 @@ fn burn_nft_invalid_amount(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         NftIssuanceV1 {
                             metadata: Metadata {
-                                creator: random_creator(),
+                                creator: Some(random_creator()),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -166,7 +166,7 @@ fn burn_nft_valid_case(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         NftIssuanceV1 {
                             metadata: Metadata {
-                                creator: random_creator(),
+                                creator: Some(random_creator()),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
