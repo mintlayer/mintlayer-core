@@ -13,19 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    config::P2pConfig,
-    error::{ConversionError, P2pError},
-    net::{ConnectivityService, NetworkingService, SyncingMessagingService},
-};
-use chainstate::chainstate_interface;
-use common::chain::ChainConfig;
-use logging::log;
-use mempool::pool::MempoolInterface;
-use std::{fmt::Debug, str::FromStr, sync::Arc};
-use tap::TapFallible;
-use tokio::sync::{mpsc, oneshot};
-
 pub mod config;
 pub mod constants;
 pub mod error;
@@ -35,6 +22,22 @@ pub mod net;
 pub mod peer_manager;
 pub mod rpc;
 pub mod sync;
+
+use std::{fmt::Debug, str::FromStr, sync::Arc};
+
+use tap::TapFallible;
+use tokio::sync::{mpsc, oneshot};
+
+use chainstate::chainstate_interface;
+use common::chain::ChainConfig;
+use logging::log;
+use mempool::pool::MempoolInterface;
+
+use crate::{
+    config::P2pConfig,
+    error::{ConversionError, P2pError},
+    net::{ConnectivityService, NetworkingService, SyncingMessagingService},
+};
 
 /// Result type with P2P errors
 pub type Result<T> = core::result::Result<T, P2pError>;

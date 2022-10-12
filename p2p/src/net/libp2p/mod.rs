@@ -15,11 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    config,
-    error::{DialError, P2pError},
-    net::{libp2p::backend::Libp2pBackend, NetworkingService},
-};
+pub mod behaviour;
+pub mod constants;
+pub mod service;
+
+mod backend;
+mod tests;
+mod types;
+
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use libp2p::{
     core::{upgrade, PeerId},
@@ -31,16 +36,15 @@ use libp2p::{
     tcp::{GenTcpConfig, TokioTcpTransport},
     Multiaddr, Transport,
 };
-use logging::log;
-use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
-mod backend;
-pub mod behaviour;
-pub mod constants;
-pub mod service;
-mod tests;
-pub mod types;
+use logging::log;
+
+use crate::{
+    config,
+    error::{DialError, P2pError},
+    net::{libp2p::backend::Libp2pBackend, NetworkingService},
+};
 
 #[derive(Debug)]
 pub struct Libp2pService;

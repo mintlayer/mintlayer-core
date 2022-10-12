@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use behaviour::sync_codec::*;
-
-use crate::net::{
-    self, config,
-    libp2p::{backend::Libp2pBackend, behaviour, types},
+use std::{
+    collections::{HashMap, VecDeque},
+    iter,
+    num::NonZeroU32,
+    sync::Arc,
+    time::Duration,
 };
+
 use futures::prelude::*;
 use libp2p::{
     core::{muxing::StreamMuxerBox, transport::Boxed, upgrade, PeerId},
@@ -31,17 +33,21 @@ use libp2p::{
     tcp::{GenTcpConfig, TokioTcpTransport},
     Multiaddr, Swarm, Transport,
 };
-use logging::log;
-use std::{
-    collections::{HashMap, VecDeque},
-    iter,
-    num::NonZeroU32,
-    sync::Arc,
-    time::Duration,
-};
 use tokio::{sync::mpsc, time::timeout};
 
-use super::behaviour::{connection_manager, discovery};
+use logging::log;
+
+use crate::net::{
+    self, config,
+    libp2p::{
+        backend::Libp2pBackend,
+        behaviour::{
+            self, connection_manager, discovery,
+            sync_codec::{SyncMessagingCodec, SyncingProtocol},
+        },
+        types,
+    },
+};
 
 #[cfg(test)]
 mod frontend;

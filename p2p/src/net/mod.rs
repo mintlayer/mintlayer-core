@@ -27,7 +27,7 @@ use async_trait::async_trait;
 
 use common::primitives;
 
-use crate::{config, error, message, net::types::PubSubTopic};
+use crate::{config, error, message, message::Announcement};
 
 /// [NetworkingService] provides the low-level network interface
 /// that each network service provider must implement
@@ -49,14 +49,14 @@ pub trait NetworkingService {
     /// Unique ID assigned to each received request from a peer
     type SyncingPeerRequestId: Debug + Eq + Hash + Send + Sync;
 
-    /// Unique ID assigned to each pubsub message
-    type SyncingMessageId: Clone + Debug + Send;
-
     /// Handle for sending/receiving connecitivity-related events
     type ConnectivityHandle: Send;
 
     /// Handle for sending/receiving request-response messages
     type SyncingMessagingHandle: Send;
+
+    /// Unique ID assigned to each pubsub message
+    type SyncingMessageId: Clone + Debug + Send;
 
     /// Initialize the network service provider
     ///
@@ -147,17 +147,15 @@ where
         response: message::Response,
     ) -> crate::Result<()>;
 
-    // TODO: FIXME:
-    async fn send_announcement(
-        &mut self,
-        topic: PubSubTopic,
-        message: Vec<u8>,
-    ) -> crate::Result<()>;
+    /// Publishes an announcement on the network.
+    async fn make_announcement(&mut self, announcement: Announcement) -> crate::Result<()>;
 
-    // TODO: FIXME:
-    async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()>;
+    /// Subscribes to the specified list of topics.
+    async fn subscribe(&mut self, topics: &[types::PubSubTopic]) -> crate::Result<()>;
 
-    // TODO: FIXME:
+    /// Reports a message validation result back to the backend.
+    ///
+    /// This function must be called as a result of an announcement processing.
     async fn report_validation_result(
         &mut self,
         source: T::PeerId,

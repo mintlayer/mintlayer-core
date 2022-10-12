@@ -35,7 +35,6 @@ use common::{
     primitives::{Id, Idable},
 };
 use logging::log;
-use serialization::Encode;
 use utils::ensure;
 
 use crate::{
@@ -44,7 +43,6 @@ use crate::{
     message::{self, Announcement},
     net::{
         self,
-        libp2p::{constants::GOSSIPSUB_MAX_TRANSMIT_SIZE, types::Command},
         types::{PubSubTopic, SyncingEvent, ValidationResult},
         NetworkingService, SyncingMessagingService,
     },
@@ -355,7 +353,7 @@ where
         }
     }
 
-    /// Checks the current state of the initial block download and returns true if it is finished.
+    /// Checks the current state of syncing.
     ///
     /// The node is considered fully synced (its initial block download is done) if all its peers
     /// are in the `Done` state.
@@ -571,12 +569,9 @@ where
                         self.handle_error(peer_id, result).await?;
                     },
                     SyncingEvent::Announcement{ peer_id, message_id, announcement } => match announcement {
-                        // TODO: we should discuss whether we should use blocks or headers (like bitcoin) here, because
-                        //       announcing blocks seems wasteful, in the sense that it's possible for peers to get blocks
-                        //       again, and again, wasting their bandwidth. The question is, whether the mechanism of
-                        //       libp2p's pubsub solves this problem. Libp2p now seems to be probabilistically distributing the
-                        //       blocks to a subset of the peers. We will have a discussion on whether we should continue
-                        //       announcing blocks
+                        // TODO: Discuss if we should announce blocks or headers, because announcing
+                        // blocks seems wasteful, in the sense that it's possible for peers to get
+                        // blocks again, and again, wasting their bandwidth.
                         Announcement::Block(block) => {
                             self.process_block_announcement(peer_id, message_id, block).await?;
                         },
@@ -597,7 +592,7 @@ where
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
 
                     match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
-                        Some(block) => self.announce_block(block).await?,
+                        Some(block) => self.peer_sync_handle.make_announcement(Announcement::Block(block)).await?,
                         None => log::error!("CRITICAL: best block not available"),
                     }
                 }
@@ -634,21 +629,6 @@ where
         Ok(rx)
     }
 
-    /// TODO: FIXME:
-    async fn announce_block(&mut self, block: Block) -> crate::Result<()> {
-        let message = Announcement::Block(block).encode();
-        // TODO: FIXME:
-        // ensure!(
-        //     message.len() <= GOSSIPSUB_MAX_TRANSMIT_SIZE,
-        //     P2pError::PublishError(PublishError::MessageTooLarge(
-        //         Some(encoded.len()),
-        //         Some(GOSSIPSUB_MAX_TRANSMIT_SIZE),
-        //     ))
-        // );
-        self.peer_sync_handle.send_announcement(PubSubTopic::Blocks, message).await
-    }
-
-    /// TODO: FIXME:
     async fn process_block_announcement(
         &mut self,
         peer_id: T::PeerId,

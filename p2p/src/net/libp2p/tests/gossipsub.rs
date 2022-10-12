@@ -21,8 +21,6 @@ use libp2p::gossipsub::IdentTopic as Topic;
 use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 use serialization::Encode;
 
-// TODO: FIXME: Check if these tests are still needed.
-
 #[tokio::test]
 async fn test_invalid_message() {
     let (mut backend1, _cmd1, _conn1, _sync1) = make_libp2p(

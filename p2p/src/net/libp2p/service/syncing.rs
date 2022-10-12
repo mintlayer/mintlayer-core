@@ -21,11 +21,12 @@ use logging::log;
 use serialization::{Decode, Encode};
 
 use crate::{
-    error::{P2pError, ProtocolError},
+    error::{P2pError, ProtocolError, PublishError},
     message,
     net::{
         libp2p::{
             behaviour::sync_codec::message_types::{SyncRequest, SyncResponse},
+            constants::GOSSIPSUB_MAX_TRANSMIT_SIZE,
             types::{Command, SyncingEvent as P2pSyncingEvent},
         },
         types::{PubSubTopic, SyncingEvent, ValidationResult},
@@ -60,8 +61,8 @@ impl<T> SyncingMessagingService<T> for Libp2pSyncHandle<T>
 where
     T: NetworkingService<
             PeerId = PeerId,
-            SyncingPeerRequestId = RequestId,
             SyncingMessageId = MessageId,
+            SyncingPeerRequestId = RequestId,
         > + Send,
 {
     async fn send_request(
@@ -96,11 +97,22 @@ where
         rx.await?
     }
 
-    async fn send_announcement(
+    async fn make_announcement(
         &mut self,
-        topic: PubSubTopic,
-        message: Vec<u8>,
+        announcement: message::Announcement,
     ) -> crate::Result<()> {
+        let message = announcement.encode();
+        if message.len() > GOSSIPSUB_MAX_TRANSMIT_SIZE {
+            return Err(P2pError::PublishError(PublishError::MessageTooLarge(
+                Some(message.len()),
+                Some(GOSSIPSUB_MAX_TRANSMIT_SIZE),
+            )));
+        }
+
+        let topic = match &announcement {
+            message::Announcement::Block(_) => PubSubTopic::Blocks,
+        };
+
         let (response, rx) = oneshot::channel();
         self.cmd_tx.send(Command::AnnounceData {
             topic,
@@ -116,8 +128,6 @@ where
             topics: topics.iter().map(|topic| topic.into()).collect::<Vec<_>>(),
             response: tx,
         })?;
-
-        // The first error indicates the channel being closed and the second one is a p2p error.
         rx.await?
     }
 
@@ -134,8 +144,6 @@ where
             result: result.into(),
             response: tx,
         })?;
-
-        // The first error indicates the channel being closed and the second one is a p2p error.
         rx.await?
     }
 
@@ -184,7 +192,6 @@ where
                 request_id,
                 error,
             }),
-            // TODO: FIXME: Is this needed?..
             P2pSyncingEvent::Announcement {
                 peer_id,
                 message_id,
@@ -192,7 +199,7 @@ where
             } => Ok(SyncingEvent::Announcement {
                 peer_id,
                 message_id,
-                announcement,
+                announcement: *announcement,
             }),
         }
     }

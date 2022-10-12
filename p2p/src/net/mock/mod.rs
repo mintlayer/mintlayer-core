@@ -287,28 +287,24 @@ where
         rx.await?
     }
 
-    async fn send_announcement(
+    async fn make_announcement(
         &mut self,
-        topic: net::types::PubSubTopic,
-        message: Vec<u8>,
+        _announcement: message::Announcement,
     ) -> crate::Result<()> {
         todo!();
-        todo!()
     }
 
-    async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()> {
+    async fn subscribe(&mut self, _topics: &[PubSubTopic]) -> crate::Result<()> {
         todo!();
-        todo!()
     }
 
     async fn report_validation_result(
         &mut self,
-        source: S::PeerId,
-        message_id: S::SyncingMessageId,
-        result: ValidationResult,
+        _source: S::PeerId,
+        _message_id: S::SyncingMessageId,
+        _result: ValidationResult,
     ) -> crate::Result<()> {
         todo!();
-        todo!()
     }
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent<S>> {

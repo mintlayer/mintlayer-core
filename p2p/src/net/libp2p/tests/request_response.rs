@@ -16,8 +16,7 @@
 use super::*;
 use crate::{
     error::{P2pError, PeerError},
-    net::libp2p::tests::message_types::SyncRequest,
-    net::libp2p::types,
+    net::libp2p::{behaviour::sync_codec::message_types::SyncRequest, types},
 };
 use futures::StreamExt;
 use libp2p::swarm::SwarmEvent;

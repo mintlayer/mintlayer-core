@@ -47,7 +47,6 @@ pub enum Command<T: MockTransport> {
         message: message::Request,
         response: oneshot::Sender<crate::Result<MockRequestId>>,
     },
-
     /// Send response to remote peer
     SendResponse {
         request_id: MockRequestId,

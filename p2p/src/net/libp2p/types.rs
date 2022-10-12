@@ -14,13 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    error, message,
-    net::{
-        self,
-        libp2p::behaviour::sync_codec::message_types::{SyncRequest, SyncResponse},
-    },
-};
 use libp2p::{
     gossipsub::{IdentTopic as Topic, MessageAcceptance, MessageId, TopicHash},
     identify::IdentifyInfo,
@@ -28,6 +21,14 @@ use libp2p::{
     Multiaddr, PeerId,
 };
 use tokio::sync::oneshot;
+
+use crate::{
+    error, message,
+    net::{
+        self,
+        libp2p::behaviour::sync_codec::message_types::{SyncRequest, SyncResponse},
+    },
+};
 
 #[derive(Debug)]
 pub struct IdentifyInfoWrapper(Box<IdentifyInfo>);
@@ -163,7 +164,6 @@ pub enum ConnectivityEvent {
     },
 }
 
-// TODO: FIXME: I don't like that we have two syncing events: `p2p/src/net/libp2p/types.rs` and `p2p/src/net/types/mod.rs`.
 #[derive(Debug)]
 pub enum SyncingEvent {
     Request {
@@ -184,7 +184,7 @@ pub enum SyncingEvent {
     Announcement {
         peer_id: PeerId,
         message_id: MessageId,
-        announcement: message::Announcement,
+        announcement: Box<message::Announcement>,
     },
 }
 
