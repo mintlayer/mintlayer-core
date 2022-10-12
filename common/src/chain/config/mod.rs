@@ -253,7 +253,7 @@ fn create_unit_test_genesis(premine_destination: Destination) -> Genesis {
     let genesis_message = String::new();
 
     let output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(100000000000000)),
+        OutputValue::Coin(Amount::from_atoms(100_000_000_000_000)),
         OutputPurpose::Transfer(premine_destination),
     );
 

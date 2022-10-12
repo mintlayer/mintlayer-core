@@ -13,24 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{
-    chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
-        signature::inputsig::InputWitness,
-        signed_transaction::SignedTransaction,
-        Transaction, TxInput, TxOutput,
-    },
-    primitives::{time, Id, H256},
-};
-use crypto::random::Rng;
-
 use crate::framework::create_new_outputs;
 use crate::framework::TestBlockInfo;
 use crate::TestFramework;
 use chainstate::{BlockSource, ChainstateError};
 use chainstate_types::BlockIndex;
-use common::chain::Block;
-use common::chain::GenBlock;
+use common::{
+    chain::{
+        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        signature::inputsig::InputWitness,
+        signed_transaction::SignedTransaction,
+        Block, GenBlock, Transaction, TxInput, TxOutput,
+    },
+    primitives::{time, Id, H256},
+};
+use crypto::random::Rng;
+use itertools::Itertools;
 
 /// The block builder that allows construction and processing of a block.
 pub struct BlockBuilder<'f> {
@@ -189,14 +187,12 @@ impl<'f> BlockBuilder<'f> {
         parent: TestBlockInfo,
         rng: &mut impl Rng,
     ) -> (Vec<InputWitness>, Vec<TxInput>, Vec<TxOutput>) {
-        let res = parent
+        parent
             .txns
             .into_iter()
             .flat_map(|(s, o)| create_new_outputs(&self.framework.chainstate, s, &o, rng))
-            .collect::<Vec<_>>();
-        let witnesses = res.iter().cloned().map(|e| e.0).collect::<Vec<_>>();
-        let inputs = res.iter().cloned().map(|e| e.1).collect::<Vec<_>>();
-        let outputs = res.iter().cloned().map(|e| e.2).collect::<Vec<_>>();
-        (witnesses, inputs, outputs)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .multiunzip()
     }
 }
