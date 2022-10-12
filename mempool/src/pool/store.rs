@@ -85,6 +85,14 @@ pub struct MempoolStore {
     pub(super) spender_txs: BTreeMap<OutPoint, Id<Transaction>>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum MempoolRemovalReason {
+    Block,
+    Expiry,
+    SizeLimit,
+    Replaced,
+}
+
 impl MempoolStore {
     pub(super) fn new() -> Self {
         Self {
@@ -274,10 +282,23 @@ impl MempoolStore {
         self.txs_by_descendant_score.retain(|_score, txs| !txs.is_empty());
     }
 
-    pub(super) fn remove_tx(&mut self, tx_id: &Id<Transaction>) {
+    fn update_descendant_state_for_drop(&mut self, entry: &TxMempoolEntry) {
+        for descendant in entry.unconfirmed_descendants(self).0 {
+            let descendant = self.txs_by_id.get_mut(&descendant).expect("descendant");
+            descendant.fees_with_ancestors =
+                (descendant.fees_with_ancestors - entry.fee).expect("fee with descendants");
+            descendant.size_with_ancestors -= entry.size();
+            descendant.count_with_ancestors -= 1;
+        }
+    }
+
+    pub(super) fn remove_tx(&mut self, tx_id: &Id<Transaction>, reason: MempoolRemovalReason) {
         log::info!("remove_tx: {}", tx_id.get());
         if let Some(entry) = self.txs_by_id.remove(tx_id) {
             self.update_ancestor_state_for_drop(&entry);
+            if reason == MempoolRemovalReason::Block {
+                self.update_descendant_state_for_drop(&entry)
+            }
             self.drop_tx(&entry);
         } else {
             assert!(!self.txs_by_descendant_score.values().flatten().any(|id| *id == *tx_id));
@@ -330,11 +351,15 @@ impl MempoolStore {
 
     pub(super) fn drop_conflicts(&mut self, conflicts: Conflicts) {
         for conflict in conflicts.0 {
-            self.remove_tx(&conflict)
+            self.remove_tx(&conflict, MempoolRemovalReason::Replaced)
         }
     }
 
-    pub(super) fn drop_tx_and_descendants(&mut self, tx_id: Id<Transaction>) {
+    pub(super) fn drop_tx_and_descendants(
+        &mut self,
+        tx_id: Id<Transaction>,
+        reason: MempoolRemovalReason,
+    ) {
         if let Some(entry) = self.txs_by_id.get(&tx_id).cloned() {
             let descendants = entry.unconfirmed_descendants(self);
             log::trace!(
@@ -342,11 +367,11 @@ impl MempoolStore {
                 tx_id.get(),
                 descendants.len()
             );
-            self.remove_tx(&entry.tx.transaction().get_id());
+            self.remove_tx(&entry.tx.transaction().get_id(), reason);
             for descendant_id in descendants.0 {
                 // It may be that this descendant has several ancestors and has already been removed
                 if let Some(descendant) = self.txs_by_id.get(&descendant_id).cloned() {
-                    self.remove_tx(&descendant.tx.transaction().get_id())
+                    self.remove_tx(&descendant.tx.transaction().get_id(), reason)
                 }
             }
         }
@@ -364,6 +389,7 @@ pub(super) struct TxMempoolEntry {
     parents: BTreeSet<Id<Transaction>>,
     children: BTreeSet<Id<Transaction>>,
     count_with_descendants: usize,
+    count_with_ancestors: usize,
     fees_with_descendants: Amount,
     fees_with_ancestors: Amount,
     size_with_descendants: usize,
@@ -391,6 +417,7 @@ impl TxMempoolEntry {
             (fee + ancestor_fees).ok_or(TxValidationError::AncestorFeeOverflow)?;
         Ok(Self {
             size_with_ancestors,
+            count_with_ancestors: 1 + ancestors.len(),
             size_with_descendants: tx.encoded_size(),
             tx,
             fee,

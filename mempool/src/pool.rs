@@ -44,6 +44,7 @@ use crate::error::TxValidationError;
 use crate::feerate::FeeRate;
 use crate::feerate::INCREMENTAL_RELAY_FEE_RATE;
 use crate::feerate::INCREMENTAL_RELAY_THRESHOLD;
+use store::MempoolRemovalReason;
 use store::MempoolStore;
 use store::TxMempoolEntry;
 
@@ -744,7 +745,7 @@ where
             .collect();
 
         for tx_id in expired.iter().map(|entry| entry.tx_id()) {
-            self.store.drop_tx_and_descendants(tx_id)
+            self.store.drop_tx_and_descendants(tx_id, MempoolRemovalReason::Expiry)
         }
     }
 
@@ -772,7 +773,8 @@ where
                 removed.fee(),
                 NonZeroUsize::new(removed.size()).expect("transaction cannot have zero size"),
             )?);
-            self.store.drop_tx_and_descendants(removed.tx_id());
+            self.store
+                .drop_tx_and_descendants(removed.tx_id(), MempoolRemovalReason::SizeLimit);
         }
         Ok(removed_fees)
     }
@@ -866,7 +868,7 @@ where
 
     // TODO Remove this from MempoolInterface
     fn drop_transaction(&mut self, tx_id: &Id<Transaction>) {
-        self.store.remove_tx(tx_id);
+        self.store.remove_tx(tx_id, MempoolRemovalReason::Block);
         self.store.assert_valid();
     }
 }
