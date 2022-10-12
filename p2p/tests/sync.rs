@@ -200,9 +200,12 @@ where
         } => {
             mgr.process_error(peer_id, request_id, error).await?;
         }
-        net::types::SyncingEvent::Announcement { .. } => {
-            todo!();
-            todo!()
+        net::types::SyncingEvent::Announcement {
+            peer_id,
+            message_id,
+            announcement,
+        } => {
+            mgr.process_announcement(peer_id, message_id, announcement).await?;
         }
     }
 
@@ -246,11 +249,6 @@ where
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Done);
-    // TODO: FIXME:
-    // assert_eq!(
-    //     pubsub.try_recv(),
-    //     Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    // );
 }
 
 #[tokio::test]
@@ -362,11 +360,6 @@ where
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Done);
-    // TODO: FIXME:
-    // assert_eq!(
-    //     pubsub.try_recv(),
-    //     Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    // );
 }
 
 #[tokio::test]
@@ -500,11 +493,6 @@ where
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Done);
-    // TODO: FIXME:
-    // assert_eq!(
-    //     pubsub.try_recv(),
-    //     Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    // );
 }
 
 #[tokio::test]
@@ -664,11 +652,6 @@ where
     assert!(get_tip(&mgr1_handle).await == local_tip);
     assert!(get_tip(&mgr2_handle).await != remote_tip);
     assert_eq!(mgr1.state(), &SyncState::Done);
-    // TODO: FIXME:
-    // assert_eq!(
-    //     pubsub.try_recv(),
-    //     Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    // );
 }
 
 // TODO: Use something like `libtest_mimic`.
@@ -831,11 +814,6 @@ where
     assert!(get_tip(&mgr1_handle).await != local_tip);
     assert!(get_tip(&mgr2_handle).await == remote_tip);
     assert_eq!(mgr1.state(), &SyncState::Done);
-    //  TODO: FIXME:
-    // assert_eq!(
-    //     pubsub.try_recv(),
-    //     Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    // );
 }
 
 #[tokio::test]
@@ -959,11 +937,6 @@ where
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
     assert!(get_tip(&mgr3_handle).await == mgr3_tip);
     assert_eq!(mgr1.state(), &SyncState::Done);
-    //  TODO: FIXME:
-    // assert_eq!(
-    //     pubsub.try_recv(),
-    //     Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    // );
 }
 
 #[tokio::test]
@@ -1104,11 +1077,6 @@ where
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
     assert!(get_tip(&mgr3_handle).await == mgr3_tip);
     assert_eq!(mgr1.state(), &SyncState::Done);
-    // TODO: FIXME:
-    // assert_eq!(
-    //     pubsub.try_recv(),
-    //     Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    // );
 }
 
 #[tokio::test]
@@ -1259,11 +1227,6 @@ where
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(same_tip(&mgr2_handle, &mgr3_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Done);
-    // TODO: FIXME:
-    // assert_eq!(
-    //     pubsub.try_recv(),
-    //     Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    // );
 }
 
 #[tokio::test]

@@ -18,7 +18,9 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use p2p::{
+    error::{P2pError, PublishError},
     event::SwarmEvent,
+    message::Announcement,
     net::{
         self,
         libp2p::Libp2pService,
@@ -35,82 +37,79 @@ use p2p_test_utils::{
     TestBlockInfo,
 };
 
-// TODO: FIXME: Update the test using the sync-manager.
-// // start two libp2p services, spawn a `PubSubMessageHandler` for the first service,
-// // publish an invalid block from the first service and verify that the `PeerManager`
-// // of the first service receives a `AdjustPeerScore` event which bans the peer of
-// // the second service.
-// #[tokio::test]
-// async fn invalid_pubsub_block() {
-//     let (tx_pubsub, rx_pubsub) = mpsc::unbounded_channel();
-//     let (tx_swarm, mut rx_swarm) = mpsc::unbounded_channel();
-//     let config = Arc::new(common::chain::config::create_unit_test_config());
-//     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
-//
-//     let (mut conn1, pubsub, _sync) = Libp2pService::start(
-//         MakeP2pAddress::make_address(),
-//         Arc::clone(&config),
-//         Default::default(),
-//     )
-//     .await
-//     .unwrap();
-//
-//     let mut pubsub1 = PubSubMessageHandler::<Libp2pService>::new(
-//         Arc::clone(&config),
-//         pubsub,
-//         handle.clone(),
-//         tx_swarm,
-//         rx_pubsub,
-//         &[net::types::PubSubTopic::Blocks],
-//     );
-//
-//     let (mut conn2, mut pubsub2, _) = Libp2pService::start(
-//         MakeP2pAddress::make_address(),
-//         Arc::clone(&config),
-//         Default::default(),
-//     )
-//     .await
-//     .unwrap();
-//
-//     // connect the services together, spawn `pubsub1` into the background
-//     // and subscriber to events
-//     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
-//
-//     // create few blocks so `pubsub2` has something to send to `pubsub1`
-//     let best_block = TestBlockInfo::from_genesis(config.genesis_block());
-//     let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&config), best_block, 3);
-//
-//     tokio::spawn(async move {
-//         tx_pubsub.send(PubSubControlEvent::InitialBlockDownloadDone).unwrap();
-//         pubsub1.run().await
-//     });
-//
-//     // spawn `pubsub2` into background and spam an orphan block on the network
-//     tokio::spawn(async move {
-//         pubsub2.subscribe(&[net::types::PubSubTopic::Blocks]).await.unwrap();
-//
-//         loop {
-//             let res = pubsub2.publish(Announcement::Block(blocks[2].clone())).await;
-//
-//             if res.is_ok() {
-//                 break;
-//             } else {
-//                 assert_eq!(
-//                     res,
-//                     Err(P2pError::PublishError(PublishError::InsufficientPeers))
-//                 );
-//             }
-//         }
-//     });
-//
-//     let event = rx_swarm.recv().await;
-//     if let Some(SwarmEvent::AdjustPeerScore(peer_id, score, _)) = event {
-//         assert_eq!(&peer_id, conn2.peer_id());
-//         assert_eq!(score, 100);
-//     } else {
-//         panic!("invalid event received: {:?}", event);
-//     }
-// }
+// TODO: FIXME:
+#[ignore]
+// start two libp2p services, spawn a `SyncMessageHandler` for the first service,
+// publish an invalid block from the first service and verify that the `SyncManager`
+// of the first service receives a `AdjustPeerScore` event which bans the peer of
+// the second service.
+#[tokio::test]
+async fn invalid_pubsub_block() {
+    let (_tx_sync, rx_sync) = mpsc::unbounded_channel();
+    let (tx_swarm, mut rx_swarm) = mpsc::unbounded_channel();
+    let config = Arc::new(common::chain::config::create_unit_test_config());
+    let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
+
+    let (mut conn1, sync) = Libp2pService::start(
+        MakeP2pAddress::make_address(),
+        Arc::clone(&config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
+
+    let mut sync1 = BlockSyncManager::<Libp2pService>::new(
+        Arc::clone(&config),
+        sync,
+        handle.clone(),
+        rx_sync,
+        tx_swarm,
+    );
+
+    let (mut conn2, mut sync2) = Libp2pService::start(
+        MakeP2pAddress::make_address(),
+        Arc::clone(&config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
+
+    // connect the services together, spawn `sync1` into the background
+    // and subscriber to events
+    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+
+    // create few blocks so `sync2` has something to send to `sync1`
+    let best_block = TestBlockInfo::from_genesis(config.genesis_block());
+    let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&config), best_block, 3);
+
+    tokio::spawn(async move { sync1.run().await });
+
+    // spawn `sync2` into background and spam an orphan block on the network
+    tokio::spawn(async move {
+        sync2.subscribe(&[net::types::PubSubTopic::Blocks]).await.unwrap();
+
+        loop {
+            let res = sync2.make_announcement(Announcement::Block(blocks[2].clone())).await;
+
+            if res.is_ok() {
+                break;
+            } else {
+                assert_eq!(
+                    res,
+                    Err(P2pError::PublishError(PublishError::InsufficientPeers))
+                );
+            }
+        }
+    });
+
+    let event = rx_swarm.recv().await;
+    if let Some(SwarmEvent::AdjustPeerScore(peer_id, score, _)) = event {
+        assert_eq!(&peer_id, conn2.peer_id());
+        assert_eq!(score, 100);
+    } else {
+        panic!("invalid event received: {:?}", event);
+    }
+}
 
 // start two networking services and give an invalid block, verify that `PeerManager` is informed
 async fn invalid_sync_block<A, T>()

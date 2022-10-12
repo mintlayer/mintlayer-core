@@ -431,6 +431,22 @@ where
         Ok(())
     }
 
+    pub async fn process_announcement(
+        &mut self,
+        peer_id: T::PeerId,
+        message_id: T::SyncingMessageId,
+        announcement: Announcement,
+    ) -> crate::Result<()> {
+        // TODO: Discuss if we should announce blocks or headers, because announcing
+        // blocks seems wasteful, in the sense that it's possible for peers to get
+        // blocks again, and again, wasting their bandwidth.
+        match announcement {
+            Announcement::Block(block) => {
+                self.process_block_announcement(peer_id, message_id, block).await
+            }
+        }
+    }
+
     // TODO: refactor this
     pub async fn handle_error(
         &mut self,
@@ -568,13 +584,8 @@ where
                         let result = self.process_error(peer_id, request_id, error).await;
                         self.handle_error(peer_id, result).await?;
                     },
-                    SyncingEvent::Announcement{ peer_id, message_id, announcement } => match announcement {
-                        // TODO: Discuss if we should announce blocks or headers, because announcing
-                        // blocks seems wasteful, in the sense that it's possible for peers to get
-                        // blocks again, and again, wasting their bandwidth.
-                        Announcement::Block(block) => {
-                            self.process_block_announcement(peer_id, message_id, block).await?;
-                        },
+                    SyncingEvent::Announcement{ peer_id, message_id, announcement } => {
+                        self.process_announcement(peer_id, message_id, announcement).await?;
                     }
                 },
                 event = self.rx_sync.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
