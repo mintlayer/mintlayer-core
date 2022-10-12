@@ -38,14 +38,17 @@ use crate::{
     net::mock::{
         peer, request_manager,
         transport::{MockListener, MockTransport},
-        types,
+        types::{
+            Command, ConnectivityEvent, Message, MockEvent, MockPeerId, MockPeerInfo,
+            MockRequestId, PeerEvent, SyncingEvent,
+        },
     },
 };
 
 #[derive(Debug)]
 struct PeerContext {
-    _peer_id: types::MockPeerId,
-    tx: mpsc::Sender<types::MockEvent>,
+    _peer_id: MockPeerId,
+    tx: mpsc::Sender<MockEvent>,
 }
 
 #[derive(Debug)]
@@ -68,32 +71,32 @@ pub struct Backend<T: MockTransport> {
     config: Arc<ChainConfig>,
 
     /// RX channel for receiving commands from the frontend
-    cmd_rx: mpsc::Receiver<types::Command<T>>,
+    cmd_rx: mpsc::Receiver<Command<T>>,
 
     /// Active peers
-    peers: HashMap<types::MockPeerId, PeerContext>,
+    peers: HashMap<MockPeerId, PeerContext>,
 
     /// Pending connections
-    pending: HashMap<types::MockPeerId, (mpsc::Sender<types::MockEvent>, ConnectionState<T>)>,
+    pending: HashMap<MockPeerId, (mpsc::Sender<MockEvent>, ConnectionState<T>)>,
 
     /// RX channel for receiving events from peers
     #[allow(clippy::type_complexity)]
     peer_chan: (
-        mpsc::Sender<(types::MockPeerId, types::PeerEvent)>,
-        mpsc::Receiver<(types::MockPeerId, types::PeerEvent)>,
+        mpsc::Sender<(MockPeerId, PeerEvent)>,
+        mpsc::Receiver<(MockPeerId, PeerEvent)>,
     ),
 
     /// TX channel for sending events to the frontend
-    conn_tx: mpsc::Sender<types::ConnectivityEvent<T>>,
+    conn_tx: mpsc::Sender<ConnectivityEvent<T>>,
 
     /// TX channel for sending syncing events
-    sync_tx: mpsc::Sender<types::SyncingEvent>,
+    sync_tx: mpsc::Sender<SyncingEvent>,
 
     /// Timeout for outbound operations
     timeout: std::time::Duration,
 
     /// Local peer ID
-    local_peer_id: types::MockPeerId,
+    local_peer_id: MockPeerId,
 
     /// Request manager for managing inbound/outbound requests and responses
     request_mgr: request_manager::RequestManager,
@@ -108,12 +111,12 @@ where
         address: T::Address,
         socket: T::Listener,
         config: Arc<ChainConfig>,
-        cmd_rx: mpsc::Receiver<types::Command<T>>,
-        conn_tx: mpsc::Sender<types::ConnectivityEvent<T>>,
-        sync_tx: mpsc::Sender<types::SyncingEvent>,
+        cmd_rx: mpsc::Receiver<Command<T>>,
+        conn_tx: mpsc::Sender<ConnectivityEvent<T>>,
+        sync_tx: mpsc::Sender<SyncingEvent>,
         timeout: std::time::Duration,
     ) -> Self {
-        let local_peer_id = types::MockPeerId::from_socket_address::<T>(&address);
+        let local_peer_id = MockPeerId::from_socket_address::<T>(&address);
         Self {
             address,
             socket,
@@ -138,8 +141,8 @@ where
     async fn create_peer(
         &mut self,
         socket: T::Stream,
-        local_peer_id: types::MockPeerId,
-        remote_peer_id: types::MockPeerId,
+        local_peer_id: MockPeerId,
+        remote_peer_id: MockPeerId,
         role: peer::Role,
         state: ConnectionState<T>,
     ) -> crate::Result<()> {
@@ -185,7 +188,7 @@ where
                     self.create_peer(
                         socket,
                         self.local_peer_id,
-                        types::MockPeerId::from_socket_address::<T>(&address),
+                        MockPeerId::from_socket_address::<T>(&address),
                         peer::Role::Outbound,
                         ConnectionState::OutboundAccepted { address },
                     )
@@ -195,7 +198,7 @@ where
                     log::error!("Failed to establish connection: {err}");
 
                     self.conn_tx
-                        .send(types::ConnectivityEvent::ConnectionError {
+                        .send(ConnectivityEvent::ConnectionError {
                             address,
                             error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
                         })
@@ -205,7 +208,7 @@ where
             },
             Err(_err) => self
                 .conn_tx
-                .send(types::ConnectivityEvent::ConnectionError {
+                .send(ConnectivityEvent::ConnectionError {
                     address,
                     error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
                 })
@@ -215,13 +218,13 @@ where
     }
 
     /// Disconnect remote peer
-    async fn disconnect_peer(&mut self, peer_id: &types::MockPeerId) -> crate::Result<()> {
+    async fn disconnect_peer(&mut self, peer_id: &MockPeerId) -> crate::Result<()> {
         self.request_mgr.unregister_peer(peer_id);
         self.peers
             .remove(peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
             .tx
-            .send(types::MockEvent::Disconnect)
+            .send(MockEvent::Disconnect)
             .await
             .map_err(P2pError::from)
     }
@@ -229,9 +232,9 @@ where
     /// Send request to remote peer
     async fn send_request(
         &mut self,
-        peer_id: &types::MockPeerId,
+        peer_id: &MockPeerId,
         request: message::Request,
-    ) -> crate::Result<types::MockRequestId> {
+    ) -> crate::Result<MockRequestId> {
         let peer = self
             .peers
             .get_mut(peer_id)
@@ -239,10 +242,7 @@ where
 
         let (request_id, request) = self.request_mgr.make_request(peer_id, request)?;
 
-        peer.tx
-            .send(types::MockEvent::SendMessage(request))
-            .await
-            .map_err(P2pError::from)?;
+        peer.tx.send(MockEvent::SendMessage(request)).await.map_err(P2pError::from)?;
 
         Ok(request_id)
     }
@@ -250,7 +250,7 @@ where
     /// Send response to a request
     async fn send_response(
         &mut self,
-        request_id: types::MockRequestId,
+        request_id: MockRequestId,
         response: message::Response,
     ) -> crate::Result<()> {
         log::trace!(
@@ -264,7 +264,7 @@ where
                 .get_mut(&peer_id)
                 .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
                 .tx
-                .send(types::MockEvent::SendMessage(response))
+                .send(MockEvent::SendMessage(response))
                 .await
                 .map_err(P2pError::from);
         }
@@ -276,8 +276,8 @@ where
     /// Handle incoming request
     async fn handle_incoming_request(
         &mut self,
-        peer_id: types::MockPeerId,
-        request_id: types::MockRequestId,
+        peer_id: MockPeerId,
+        request_id: MockRequestId,
         request: message::Request,
     ) -> crate::Result<()> {
         log::trace!("request received from peer {peer_id}, request id {request_id}");
@@ -285,7 +285,7 @@ where
         let request_id = self.request_mgr.register_request(&peer_id, &request_id, &request)?;
 
         self.sync_tx
-            .send(types::SyncingEvent::Request {
+            .send(SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request,
@@ -297,15 +297,15 @@ where
     /// Handle incoming response
     async fn handle_incoming_response(
         &mut self,
-        peer_id: types::MockPeerId,
-        request_id: types::MockRequestId,
+        peer_id: MockPeerId,
+        request_id: MockRequestId,
         response: message::Response,
     ) -> crate::Result<()> {
         log::trace!("response received from peer {peer_id}, request id {request_id}");
 
         self.request_mgr.register_response(&peer_id, &request_id, &response)?;
         self.sync_tx
-            .send(types::SyncingEvent::Response {
+            .send(SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response,
@@ -322,7 +322,7 @@ where
                         self.create_peer(
                             info.0,
                             self.local_peer_id,
-                            types::MockPeerId::from_socket_address::<T>(&info.1),
+                            MockPeerId::from_socket_address::<T>(&info.1),
                             peer::Role::Inbound,
                             ConnectionState::InboundAccepted { address: info.1 }
                         ).await?;
@@ -333,14 +333,14 @@ where
                     let (peer_id, event) = event.ok_or(P2pError::ChannelClosed)?;
 
                     match event {
-                        types::PeerEvent::PeerInfoReceived { peer_id: received_id, network, version, protocols } => {
+                        PeerEvent::PeerInfoReceived { peer_id: received_id, network, version, protocols } => {
                             let (tx, state) = self.pending.remove(&peer_id).expect("peer to exist");
 
                             match state {
                                 ConnectionState::OutboundAccepted { address } => {
-                                    self.conn_tx.send(types::ConnectivityEvent::OutboundAccepted {
+                                    self.conn_tx.send(ConnectivityEvent::OutboundAccepted {
                                         address,
-                                        peer_info: types::MockPeerInfo {
+                                        peer_info: MockPeerInfo {
                                             peer_id: received_id,
                                             network,
                                             version,
@@ -352,9 +352,9 @@ where
                                     .map_err(P2pError::from)?;
                                 }
                                 ConnectionState::InboundAccepted { address } => {
-                                    self.conn_tx.send(types::ConnectivityEvent::InboundAccepted {
+                                    self.conn_tx.send(ConnectivityEvent::InboundAccepted {
                                         address,
-                                        peer_info: types::MockPeerInfo {
+                                        peer_info: MockPeerInfo {
                                             peer_id: received_id,
                                             network,
                                             version,
@@ -373,21 +373,21 @@ where
                             });
                             let _ = self.request_mgr.register_peer(received_id);
                         }
-                        types::PeerEvent::MessageReceived { message } => match message {
-                            types::Message::Handshake(_) => {
+                        PeerEvent::MessageReceived { message } => match message {
+                            Message::Handshake(_) => {
                                 log::error!("peer {peer_id} sent handshaking message");
                             }
-                            types::Message::Request { request_id, request } => {
+                            Message::Request { request_id, request } => {
                                 self.handle_incoming_request(peer_id, request_id, request).await?;
                             }
-                            types::Message::Response { request_id, response} => {
+                            Message::Response { request_id, response} => {
                                 self.handle_incoming_response(peer_id, request_id, response).await?;
                             }
                         }
-                        types::PeerEvent::ConnectionClosed => {
+                        PeerEvent::ConnectionClosed => {
                             self.peers.remove(&peer_id);
                             self.request_mgr.unregister_peer(&peer_id);
-                            self.conn_tx.send(types::ConnectivityEvent::ConnectionClosed {
+                            self.conn_tx.send(ConnectivityEvent::ConnectionClosed {
                                 peer_id,
                             })
                             .await
@@ -396,22 +396,25 @@ where
                     }
                 },
                 event = self.cmd_rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
-                    types::Command::Connect { address, response } => {
+                    Command::Connect { address, response } => {
                         self.connect(address, response).await?;
                     }
-                    types::Command::Disconnect { peer_id, response } |
+                    Command::Disconnect { peer_id, response } |
                     // TODO: implement proper banning mechanism
-                    types::Command::BanPeer { peer_id, response } => {
+                    Command::BanPeer { peer_id, response } => {
                         let res = self.disconnect_peer(&peer_id).await;
                         response.send(res).map_err(|_| P2pError::ChannelClosed)?;
                     }
-                    types::Command::SendRequest { peer_id, message, response } => {
+                    Command::SendRequest { peer_id, message, response } => {
                         let res = self.send_request(&peer_id, message).await;
                         response.send(res).map_err(|_| P2pError::ChannelClosed)?;
                     }
-                    types::Command::SendResponse { request_id, message, response } => {
+                    Command::SendResponse { request_id, message, response } => {
                         let res = self.send_response(request_id, message).await;
                         response.send(res).map_err(|_| P2pError::ChannelClosed)?;
+                    }
+                    Command::AnnounceData { topic, message, response } => {
+                        todo!()
                     }
                 }
             }

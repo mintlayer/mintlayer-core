@@ -26,7 +26,11 @@ use serialization::{Decode, Encode};
 
 use crate::{
     error, message,
-    net::{self, mock::transport::MockTransport, types::Protocol},
+    net::{
+        self,
+        mock::transport::MockTransport,
+        types::{Protocol, PubSubTopic},
+    },
 };
 
 pub enum Command<T: MockTransport> {
@@ -51,6 +55,11 @@ pub enum Command<T: MockTransport> {
     SendResponse {
         request_id: MockRequestId,
         message: message::Response,
+        response: oneshot::Sender<crate::Result<()>>,
+    },
+    AnnounceData {
+        topic: PubSubTopic,
+        message: Vec<u8>,
         response: oneshot::Sender<crate::Result<()>>,
     },
 }

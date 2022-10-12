@@ -25,6 +25,7 @@ use async_trait::async_trait;
 use tokio::sync::{mpsc, oneshot};
 
 use logging::log;
+use serialization::Encode;
 
 use crate::{
     config,
@@ -276,7 +277,6 @@ where
         response: message::Response,
     ) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();
-
         self.cmd_tx
             .send(types::Command::SendResponse {
                 request_id,
@@ -289,9 +289,23 @@ where
 
     async fn make_announcement(
         &mut self,
-        _announcement: message::Announcement,
+        announcement: message::Announcement,
     ) -> crate::Result<()> {
-        todo!();
+        let message = announcement.encode();
+
+        let topic = match &announcement {
+            message::Announcement::Block(_) => PubSubTopic::Blocks,
+        };
+
+        let (response, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(types::Command::AnnounceData {
+                topic,
+                message,
+                response,
+            })
+            .await?;
+        rx.await?
     }
 
     async fn subscribe(&mut self, _topics: &[PubSubTopic]) -> crate::Result<()> {
