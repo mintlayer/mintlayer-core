@@ -5,6 +5,5 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-serde = "1.0"
 serialization-core = { path = 'core' }
 serialization-tagged = { path = 'tagged' }

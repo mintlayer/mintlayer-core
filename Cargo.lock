@@ -3895,7 +3895,6 @@ dependencies = [
 name = "serialization"
 version = "0.1.0"
 dependencies = [
- "serde",
  "serialization-core",
  "serialization-tagged",
 ]
