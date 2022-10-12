@@ -19,6 +19,7 @@ use chainstate::{
     CheckBlockTransactionsError, TokensError,
 };
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
+use common::chain::tokens::OutputValue;
 use common::chain::{
     signature::inputsig::InputWitness,
     tokens::{Metadata, NftIssuanceV1},
@@ -627,19 +628,19 @@ fn nft_issuance_icon_uri_empty(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
-        let output_value =
-           TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
-                metadata: Metadata {
-                    creator: random_creator(),
-                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                    description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                    icon_uri: DataOrNoVec::from(Some(vec![])),
-                    additional_metadata_uri: DataOrNoVec::from(None),
-                    media_uri: DataOrNoVec::from(None),
-                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                },
-            }).into();
+        let output_value: OutputValue = TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+            metadata: Metadata {
+                creator: random_creator(),
+                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                icon_uri: DataOrNoVec::from(Some(vec![])),
+                additional_metadata_uri: DataOrNoVec::from(None),
+                media_uri: DataOrNoVec::from(None),
+                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+            },
+        })
+        .into();
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -809,19 +810,19 @@ fn nft_issuance_metadata_uri_empty(#[case] seed: Seed) {
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
-        let output_value =
-           TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
-                metadata: Metadata {
-                    creator: random_creator(),
-                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                    description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                    icon_uri: DataOrNoVec::from(None),
-                    additional_metadata_uri: DataOrNoVec::from(Some(vec![])),
-                    media_uri: DataOrNoVec::from(None),
-                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                },
-            }).into();
+        let output_value: OutputValue = TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+            metadata: Metadata {
+                creator: random_creator(),
+                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                icon_uri: DataOrNoVec::from(None),
+                additional_metadata_uri: DataOrNoVec::from(Some(vec![])),
+                media_uri: DataOrNoVec::from(None),
+                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+            },
+        })
+        .into();
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -991,19 +992,19 @@ fn nft_issuance_media_uri_empty(#[case] seed: Seed) {
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
-        let output_value =
-            TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
-                metadata: Metadata {
-                    creator: random_creator(),
-                    name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                    description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                    ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                    icon_uri: DataOrNoVec::from(None),
-                    additional_metadata_uri: DataOrNoVec::from(None),
-                    media_uri: DataOrNoVec::from(Some(vec![])),
-                    media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                },
-            }).into();
+        let output_value: OutputValue = TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+            metadata: Metadata {
+                creator: random_creator(),
+                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                icon_uri: DataOrNoVec::from(None),
+                additional_metadata_uri: DataOrNoVec::from(None),
+                media_uri: DataOrNoVec::from(Some(vec![])),
+                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+            },
+        })
+        .into();
 
         let block_index = tf
             .make_block_builder()
