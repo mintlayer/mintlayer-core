@@ -59,7 +59,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
 
         // Issue a new NFT
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let issuance_data = TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+        let issuance_data = NftIssuanceV1 {
             metadata: Metadata {
                 creator: random_creator(),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -70,7 +70,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                 media_uri: DataOrNoVec::from(None),
                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
             },
-        })
+        }
         .into();
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
@@ -353,7 +353,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
         // Issue a new NFT
-        let issuance_value = TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+        let issuance_value = NftIssuanceV1 {
             metadata: Metadata {
                 creator: random_creator(),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -364,7 +364,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
                 media_uri: DataOrNoVec::from(None),
                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
             },
-        });
+        };
         let genesis_id = tf.genesis().get_id();
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
         let block_index = tf

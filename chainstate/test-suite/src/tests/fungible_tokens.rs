@@ -61,14 +61,14 @@ fn token_issue_test(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+                        TokenIssuanceV1 {
                             token_ticker: random_string(&mut rng, 10..u16::MAX as usize)
                                 .as_bytes()
                                 .to_vec(),
                             amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                             number_of_decimals: rng.gen_range(1..18),
                             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -97,12 +97,12 @@ fn token_issue_test(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+                        TokenIssuanceV1 {
                             token_ticker: b"".to_vec(),
                             amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                             number_of_decimals: rng.gen_range(1..18),
                             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -145,7 +145,7 @@ fn token_issue_test(#[case] seed: Seed) {
                                 InputWitness::NoSignature(None),
                             )
                             .add_output(TxOutput::new(
-                                TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+                                TokenIssuanceV1 {
                                     token_ticker,
                                     amount_to_issue: Amount::from_atoms(
                                         rng.gen_range(1..u128::MAX),
@@ -154,7 +154,7 @@ fn token_issue_test(#[case] seed: Seed) {
                                     metadata_uri: random_string(&mut rng, 1..1024)
                                         .as_bytes()
                                         .to_vec(),
-                                })
+                                }
                                 .into(),
                                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                             ))
@@ -185,12 +185,12 @@ fn token_issue_test(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+                        TokenIssuanceV1 {
                             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                             amount_to_issue: Amount::from_atoms(0),
                             number_of_decimals: rng.gen_range(1..18),
                             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -220,12 +220,12 @@ fn token_issue_test(#[case] seed: Seed) {
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::new(
-                            TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+                            TokenIssuanceV1 {
                                 token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                                 amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                                 number_of_decimals: decimals_count_to_use,
                                 metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-                            })
+                            }
                             .into(),
                             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                         ))
@@ -260,14 +260,14 @@ fn token_issue_test(#[case] seed: Seed) {
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::new(
-                            TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+                            TokenIssuanceV1 {
                                 token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                                 amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                                 number_of_decimals: rng.gen_range(1..18),
                                 metadata_uri: random_string(&mut rng, uri_len_range_to_use)
                                     .as_bytes()
                                     .to_vec(),
-                            })
+                            }
                             .into(),
                             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                         ))
@@ -297,12 +297,12 @@ fn token_issue_test(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+                        TokenIssuanceV1 {
                             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                             amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                             number_of_decimals: rng.gen_range(1..18),
                             metadata_uri: "https://💖🚁🌭.🦠🚀🚖🚧".as_bytes().to_vec(),
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -322,12 +322,12 @@ fn token_issue_test(#[case] seed: Seed) {
         ));
 
         // Valid case
-        let output_value = TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+        let output_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
+        };
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -366,12 +366,12 @@ fn token_transfer_test(#[case] seed: Seed) {
         let genesis_outpoint_id: OutPointSourceId = tf.genesis().get_id().into();
 
         // Issue a new token
-        let output_value = TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+        let output_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: "https://some_site.some".as_bytes().to_vec(),
-        });
+        };
 
         let block_index = tf
             .make_block_builder()
@@ -545,12 +545,12 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
         let genesis_outpoint_id: OutPointSourceId = tf.genesis().get_id().into();
 
         // Issue a couple of tokens
-        let issuance_value = TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+        let issuance_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
+        };
 
         let result = tf
             .make_block_builder()
@@ -625,12 +625,12 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
         //       We need a better test that tests the threshold
 
         // Issuance data
-        let issuance_data = TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+        let issuance_data = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
+        };
         let block = tf
             .make_block_builder()
             // All coins in inputs added to outputs, fee = 0 coins
@@ -699,12 +699,12 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
 
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+        let output_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
+        };
         let block_index = tf
             .make_block_builder()
             .add_transaction(
@@ -804,12 +804,12 @@ fn burn_tokens(#[case] seed: Seed) {
 
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+        let output_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        })
+        }
         .into();
         let block_index = tf
             .make_block_builder()
@@ -1008,12 +1008,12 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let issuance_data = TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+        let issuance_data = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        })
+        }
         .into();
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
@@ -1303,12 +1303,12 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
 
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+        let output_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        })
+        }
         .into();
         let block_index = tf
             .make_block_builder()
@@ -1398,12 +1398,12 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
 
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+        let output_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        })
+        }
         .into();
         let block_index = tf
             .make_block_builder()
@@ -1500,12 +1500,12 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX - 1));
         // Issuance a few different tokens
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+        let output_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        })
+        }
         .into();
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
         let block_index = tf
@@ -1557,12 +1557,12 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+                        TokenIssuanceV1 {
                             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                             amount_to_issue: total_funds,
                             number_of_decimals: 1,
                             metadata_uri: b"https://some_site.meta".to_vec(),
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -1634,12 +1634,12 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let mut tf = TestFramework::default();
 
         // Issue a new token
-        let issuance_value = TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+        let issuance_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
+        };
         let genesis_id = tf.genesis().get_id();
         let genesis_outpoint_id = tf.genesis().get_id().into();
         let block_index = tf
@@ -1727,12 +1727,12 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
 
         // Check if it issuance
         let reward_output = TxOutput::new(
-            TokenData::new_boxed_token_issuance(TokenIssuanceV1 {
+            TokenIssuanceV1 {
                 token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                 amount_to_issue: total_funds,
                 number_of_decimals: rng.gen_range(1..18),
                 metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-            })
+            }
             .into(),
             OutputPurpose::Transfer(Destination::PublicKey(pub_key.clone())),
         );

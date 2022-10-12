@@ -56,7 +56,7 @@ fn burn_nft_invalid_amount(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                        NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -67,7 +67,7 @@ fn burn_nft_invalid_amount(#[case] seed: Seed) {
                                 media_uri: DataOrNoVec::from(None),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -164,7 +164,7 @@ fn burn_nft_valid_case(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                        NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -175,7 +175,7 @@ fn burn_nft_valid_case(#[case] seed: Seed) {
                                 media_uri: DataOrNoVec::from(None),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))

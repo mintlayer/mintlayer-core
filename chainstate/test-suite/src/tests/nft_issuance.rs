@@ -21,7 +21,7 @@ use chainstate::{
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
 use common::chain::{
     signature::inputsig::InputWitness,
-    tokens::{Metadata, NftIssuanceV1, TokenData},
+    tokens::{Metadata, NftIssuanceV1},
     Destination, OutputPurpose, TxInput, TxOutput,
 };
 use rstest::rstest;
@@ -53,7 +53,7 @@ fn nft_issuance_name_too_long(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                        NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 name: random_string(
@@ -68,7 +68,7 @@ fn nft_issuance_name_too_long(#[case] seed: Seed) {
                                 media_uri: DataOrNoVec::from(None),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -109,7 +109,7 @@ fn nft_issuance_empty_name(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                        NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 name: vec![],
@@ -120,7 +120,7 @@ fn nft_issuance_empty_name(#[case] seed: Seed) {
                                 media_uri: DataOrNoVec::from(None),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -172,7 +172,7 @@ fn nft_issuance_invalid_name(#[case] seed: Seed) {
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::new(
-                            TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                            NftIssuanceV1 {
                                 metadata: Metadata {
                                     creator: random_creator(),
                                     name,
@@ -184,7 +184,7 @@ fn nft_issuance_invalid_name(#[case] seed: Seed) {
                                     media_uri: DataOrNoVec::from(None),
                                     media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                                 },
-                            })
+                            }
                             .into(),
                             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                         ))
@@ -228,7 +228,7 @@ fn issue_test_ticker_too_long(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                        NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -243,7 +243,7 @@ fn issue_test_ticker_too_long(#[case] seed: Seed) {
                                 media_uri: DataOrNoVec::from(None),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -285,7 +285,7 @@ fn nft_issuance_empty_ticker(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                        NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -296,7 +296,7 @@ fn nft_issuance_empty_ticker(#[case] seed: Seed) {
                                 media_uri: DataOrNoVec::from(None),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -348,7 +348,7 @@ fn nft_issuance_invalid_ticker(#[case] seed: Seed) {
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::new(
-                            TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                            NftIssuanceV1 {
                                 metadata: Metadata {
                                     creator: random_creator(),
                                     name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -360,7 +360,7 @@ fn nft_issuance_invalid_ticker(#[case] seed: Seed) {
                                     media_uri: DataOrNoVec::from(None),
                                     media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                                 },
-                            })
+                            }
                             .into(),
                             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                         ))
@@ -404,7 +404,7 @@ fn issue_test_description_too_long(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                        NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -419,7 +419,7 @@ fn issue_test_description_too_long(#[case] seed: Seed) {
                                 media_uri: DataOrNoVec::from(None),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -461,7 +461,7 @@ fn nft_issuance_empty_description(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                        NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -472,7 +472,7 @@ fn nft_issuance_empty_description(#[case] seed: Seed) {
                                 media_uri: DataOrNoVec::from(None),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -524,7 +524,7 @@ fn nft_issuance_invalid_description(#[case] seed: Seed) {
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::new(
-                            TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                            NftIssuanceV1 {
                                 metadata: Metadata {
                                     creator: random_creator(),
                                     name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -535,7 +535,7 @@ fn nft_issuance_invalid_description(#[case] seed: Seed) {
                                     media_uri: DataOrNoVec::from(None),
                                     media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                                 },
-                            })
+                            }
                             .into(),
                             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                         ))
@@ -579,7 +579,7 @@ fn nft_issuance_icon_uri_too_long(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                        NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -593,7 +593,7 @@ fn nft_issuance_icon_uri_too_long(#[case] seed: Seed) {
                                 media_uri: DataOrNoVec::from(None),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -635,7 +635,7 @@ fn nft_issuance_icon_uri_empty(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                        NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -646,7 +646,7 @@ fn nft_issuance_icon_uri_empty(#[case] seed: Seed) {
                                 media_uri: DataOrNoVec::from(None),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -700,7 +700,7 @@ fn nft_issuance_icon_uri_invalid(#[case] seed: Seed) {
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::new(
-                            TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                            NftIssuanceV1 {
                                 metadata: Metadata {
                                     creator: random_creator(),
                                     name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -712,7 +712,7 @@ fn nft_issuance_icon_uri_invalid(#[case] seed: Seed) {
                                     media_uri: DataOrNoVec::from(None),
                                     media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                                 },
-                            })
+                            }
                             .into(),
                             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                         ))
@@ -757,7 +757,7 @@ fn nft_issuance_metadata_uri_too_long(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                        NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -771,7 +771,7 @@ fn nft_issuance_metadata_uri_too_long(#[case] seed: Seed) {
                                 media_uri: DataOrNoVec::from(None),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -814,7 +814,7 @@ fn nft_issuance_metadata_uri_empty(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                        NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -825,7 +825,7 @@ fn nft_issuance_metadata_uri_empty(#[case] seed: Seed) {
                                 media_uri: DataOrNoVec::from(None),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -879,7 +879,7 @@ fn nft_issuance_metadata_uri_invalid(#[case] seed: Seed) {
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::new(
-                            TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                            NftIssuanceV1 {
                                 metadata: Metadata {
                                     creator: random_creator(),
                                     name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -891,7 +891,7 @@ fn nft_issuance_metadata_uri_invalid(#[case] seed: Seed) {
                                     media_uri: DataOrNoVec::from(None),
                                     media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                                 },
-                            })
+                            }
                             .into(),
                             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                         ))
@@ -936,7 +936,7 @@ fn nft_issuance_media_uri_too_long(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                        NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -950,7 +950,7 @@ fn nft_issuance_media_uri_too_long(#[case] seed: Seed) {
                                 )),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -993,7 +993,7 @@ fn nft_issuance_media_uri_empty(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                        NftIssuanceV1 {
                             metadata: Metadata {
                                 creator: random_creator(),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -1004,7 +1004,7 @@ fn nft_issuance_media_uri_empty(#[case] seed: Seed) {
                                 media_uri: DataOrNoVec::from(Some(vec![])),
                                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                             },
-                        })
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
@@ -1058,7 +1058,7 @@ fn nft_issuance_media_uri_invalid(#[case] seed: Seed) {
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::new(
-                            TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+                            NftIssuanceV1 {
                                 metadata: Metadata {
                                     creator: random_creator(),
                                     name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -1070,7 +1070,7 @@ fn nft_issuance_media_uri_invalid(#[case] seed: Seed) {
                                     media_uri,
                                     media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
                                 },
-                            })
+                            }
                             .into(),
                             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                         ))
@@ -1107,7 +1107,7 @@ fn nft_issuance_valid_case(#[case] seed: Seed) {
         let valid_rfc3986_uri =
             b"https://something.com/?a:b.c_d-e~f!g/h?I#J[K]L@M$N&O/P'Q(R)S*T+U,V;W=Xyz".to_vec();
 
-        let output_value = TokenData::new_boxed_nft_issuance(NftIssuanceV1 {
+        let output_value = NftIssuanceV1 {
             metadata: Metadata {
                 creator: random_creator(),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -1118,7 +1118,7 @@ fn nft_issuance_valid_case(#[case] seed: Seed) {
                 media_uri: DataOrNoVec::from(Some(valid_rfc3986_uri)),
                 media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
             },
-        });
+        };
 
         let block_index = tf
             .make_block_builder()

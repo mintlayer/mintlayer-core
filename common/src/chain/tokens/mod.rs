@@ -124,14 +124,26 @@ pub enum TokenData {
     // },
 }
 
-impl TokenData {
-    // FIXME(nft_issuance): Maybe we can use better names
-
-    pub fn new_boxed_nft_issuance(issuance: NftIssuanceV1) -> Self {
-        Self::NftIssuanceV1(Box::new(issuance))
+impl From<NftIssuanceV1> for TokenData {
+    fn from(d: NftIssuanceV1) -> Self {
+        Self::NftIssuanceV1(Box::new(d))
     }
+}
 
-    pub fn new_boxed_token_issuance(issuance: TokenIssuanceV1) -> Self {
-        Self::TokenIssuanceV1(Box::new(issuance))
+impl From<TokenIssuanceV1> for TokenData {
+    fn from(d: TokenIssuanceV1) -> Self {
+        Self::TokenIssuanceV1(Box::new(d))
+    }
+}
+
+impl From<NftIssuanceV1> for OutputValue {
+    fn from(d: NftIssuanceV1) -> Self {
+        TokenData::NftIssuanceV1(Box::new(d)).into()
+    }
+}
+
+impl From<TokenIssuanceV1> for OutputValue {
+    fn from(d: TokenIssuanceV1) -> Self {
+        TokenData::TokenIssuanceV1(Box::new(d)).into()
     }
 }
