@@ -19,9 +19,11 @@ pub type TokenId = H256;
 pub type NftDataHash = Vec<u8>;
 use crate::primitives::{Amount, Id, H256};
 
+mod nft;
 mod rpc;
 mod tokens_utils;
 
+pub use nft::*;
 pub use rpc::*;
 pub use tokens_utils::*;
 
@@ -51,10 +53,10 @@ impl TokenAuxiliaryData {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum OutputValue {
     Coin(Amount),
-    Token(TokenData),
+    Token(Box<TokenData>),
 }
 
 impl OutputValue {
@@ -73,26 +75,46 @@ impl OutputValue {
     }
 }
 
+impl From<TokenData> for OutputValue {
+    fn from(d: TokenData) -> Self {
+        Self::Token(Box::new(d))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+pub struct TokenTransferV1 {
+    pub token_id: TokenId,
+    pub amount: Amount,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+pub struct TokenIssuanceV1 {
+    pub token_ticker: Vec<u8>,
+    pub amount_to_issue: Amount,
+    pub number_of_decimals: u8,
+    pub metadata_uri: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+pub struct TokenBurnV1 {
+    pub token_id: TokenId,
+    pub amount_to_burn: Amount,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum TokenData {
     /// TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.
     #[codec(index = 1)]
-    TokenTransferV1 { token_id: TokenId, amount: Amount },
+    TokenTransferV1(TokenTransferV1),
     /// New token creation
     #[codec(index = 2)]
-    TokenIssuanceV1 {
-        token_ticker: Vec<u8>,
-        amount_to_issue: Amount,
-        // Should be not more than 18 numbers
-        number_of_decimals: u8,
-        metadata_uri: Vec<u8>,
-    },
+    TokenIssuanceV1(Box<TokenIssuanceV1>),
     /// Burning a token or NFT
     #[codec(index = 3)]
-    TokenBurnV1 {
-        token_id: TokenId,
-        amount_to_burn: Amount,
-    },
+    TokenBurnV1(TokenBurnV1),
+    // A new NFT creation
+    #[codec(index = 4)]
+    NftIssuanceV1(Box<NftIssuanceV1>),
     // TODO: These types will be implemented in the future PRs
     // // Increase amount of tokens
     // #[codec(index = 4)]
@@ -100,10 +122,28 @@ pub enum TokenData {
     //     token_id: TokenId,
     //     amount_to_issue: Amount,
     // },
-    // // A new NFT creation
-    // #[codec(index = 5)]
-    // NftIssuanceV1 {
-    //     data_hash: NftDataHash,
-    //     metadata_uri: Vec<u8>,
-    // },
+}
+
+impl From<NftIssuanceV1> for TokenData {
+    fn from(d: NftIssuanceV1) -> Self {
+        Self::NftIssuanceV1(Box::new(d))
+    }
+}
+
+impl From<TokenIssuanceV1> for TokenData {
+    fn from(d: TokenIssuanceV1) -> Self {
+        Self::TokenIssuanceV1(Box::new(d))
+    }
+}
+
+impl From<NftIssuanceV1> for OutputValue {
+    fn from(d: NftIssuanceV1) -> Self {
+        TokenData::NftIssuanceV1(Box::new(d)).into()
+    }
+}
+
+impl From<TokenIssuanceV1> for OutputValue {
+    fn from(d: TokenIssuanceV1) -> Self {
+        TokenData::TokenIssuanceV1(Box::new(d)).into()
+    }
 }

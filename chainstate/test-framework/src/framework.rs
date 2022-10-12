@@ -17,6 +17,7 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::ChainstateError;
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::tokens::TokenData;
+use common::chain::tokens::TokenTransferV1;
 use common::chain::TxInput;
 use common::chain::TxOutput;
 use common::primitives::id::WithId;
@@ -176,37 +177,39 @@ fn create_utxo_data(
                     OutputPurpose::Transfer(anyonecanspend_address()),
                 )
             }
-            OutputValue::Token(asset) => match asset {
-                TokenData::TokenTransferV1 {
-                    token_id: _,
-                    amount: _,
-                } => TxOutput::new(
-                    OutputValue::Token(asset.clone()),
+            OutputValue::Token(token_data) => match &**token_data {
+                TokenData::TokenTransferV1(_transfer) => TxOutput::new(
+                    OutputValue::Token(token_data.clone()),
                     OutputPurpose::Transfer(anyonecanspend_address()),
                 ),
-                TokenData::TokenIssuanceV1 {
-                    token_ticker: _,
-                    amount_to_issue,
-                    number_of_decimals: _,
-                    metadata_uri: _,
-                } => TxOutput::new(
-                    OutputValue::Token(TokenData::TokenTransferV1 {
-                        token_id: match outsrc {
-                            OutPointSourceId::Transaction(prev_tx) => {
-                                chainstate.get_token_id_from_issuance_tx(&prev_tx).unwrap().unwrap()
-                            }
-                            OutPointSourceId::BlockReward(_) => return None,
-                        },
-                        amount: *amount_to_issue,
-                    }),
-                    OutputPurpose::Transfer(anyonecanspend_address()),
-                ),
-                TokenData::TokenBurnV1 {
-                    token_id: _,
-                    amount_to_burn: _,
-                } => return None,
+                TokenData::TokenIssuanceV1(issuance) => {
+                    new_token_transfer_output(chainstate, outsrc, issuance.amount_to_issue)?
+                }
+                TokenData::NftIssuanceV1(_issuance) => {
+                    new_token_transfer_output(chainstate, outsrc, Amount::from_atoms(1))?
+                }
+                TokenData::TokenBurnV1(_burn) => return None,
             },
         },
+    ))
+}
+
+fn new_token_transfer_output(
+    chainstate: &TestChainstate,
+    outsrc: OutPointSourceId,
+    amount: Amount,
+) -> Option<TxOutput> {
+    Some(TxOutput::new(
+        OutputValue::Token(Box::new(TokenData::TokenTransferV1(TokenTransferV1 {
+            token_id: match outsrc {
+                OutPointSourceId::Transaction(prev_tx) => {
+                    chainstate.get_token_id_from_issuance_tx(&prev_tx).unwrap().unwrap()
+                }
+                OutPointSourceId::BlockReward(_) => return None,
+            },
+            amount,
+        }))),
+        OutputPurpose::Transfer(anyonecanspend_address()),
     ))
 }
 

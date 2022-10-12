@@ -53,7 +53,7 @@ impl OutputPurpose {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct TxOutput {
     value: OutputValue,
     purpose: OutputPurpose,

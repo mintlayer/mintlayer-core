@@ -21,7 +21,7 @@ use crate::chain::{
 };
 
 /// Represents a block reward.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct BlockReward {
     reward_outputs: Vec<TxOutput>,
 }
