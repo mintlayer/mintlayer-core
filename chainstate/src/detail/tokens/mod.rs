@@ -23,7 +23,7 @@ use common::{
     },
     primitives::{Amount, Id, Idable},
 };
-use serialization::Encode;
+use serialization::{DecodeAll, Encode};
 use utils::ensure;
 
 mod check_utils;
@@ -82,24 +82,40 @@ pub fn check_nft_issuance_data(
         source_block_id,
     )?;
 
-    let icon_uri = issuance.metadata.icon_uri.encode();
+    let icon_uri = Vec::<u8>::decode_all(&mut issuance.metadata.icon_uri.encode().as_slice())
+        .map_err(|_| TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id))?;
     if !icon_uri.is_empty() {
+        ensure!(
+            icon_uri.len() <= chain_config.token_max_uri_len(),
+            TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id)
+        );
         ensure!(
             is_uri_valid(&icon_uri),
             TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id)
         );
     }
 
-    let additional_metadata_uri = issuance.metadata.additional_metadata_uri.encode();
+    let additional_metadata_uri =
+        Vec::<u8>::decode_all(&mut issuance.metadata.additional_metadata_uri.encode().as_slice())
+            .map_err(|_| TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id))?;
     if !additional_metadata_uri.is_empty() {
+        ensure!(
+            additional_metadata_uri.len() <= chain_config.token_max_uri_len(),
+            TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id)
+        );
         ensure!(
             is_uri_valid(&additional_metadata_uri),
             TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id)
         );
     }
 
-    let media_uri = issuance.metadata.media_uri.encode();
+    let media_uri = Vec::<u8>::decode_all(&mut issuance.metadata.media_uri.encode().as_slice())
+        .map_err(|_| TokensError::IssueErrorIncorrectMediaURI(tx_id, source_block_id))?;
     if !media_uri.is_empty() {
+        ensure!(
+            media_uri.len() <= chain_config.token_max_uri_len(),
+            TokensError::IssueErrorIncorrectMediaURI(tx_id, source_block_id)
+        );
         ensure!(
             is_uri_valid(&media_uri),
             TokensError::IssueErrorIncorrectMediaURI(tx_id, source_block_id)
