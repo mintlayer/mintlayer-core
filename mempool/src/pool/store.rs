@@ -282,6 +282,23 @@ impl MempoolStore {
         self.txs_by_descendant_score.retain(|_score, txs| !txs.is_empty());
     }
 
+    fn refresh_descendants(&mut self, entry: &TxMempoolEntry) {
+        let descendants = entry.unconfirmed_descendants(self);
+        for entries in self.txs_by_ancestor_score.values_mut() {
+            entries.retain(|id| !descendants.contains(id))
+        }
+        for descendant_id in descendants.0 {
+            let descendant =
+                self.txs_by_id.get(&descendant_id).expect("Inconsistent mempool state");
+            self.txs_by_ancestor_score
+                .entry(descendant.ancestor_score())
+                .or_default()
+                .insert(descendant_id);
+        }
+
+        self.txs_by_descendant_score.retain(|_score, txs| !txs.is_empty());
+    }
+
     fn update_descendant_state_for_drop(&mut self, entry: &TxMempoolEntry) {
         for descendant in entry.unconfirmed_descendants(self).0 {
             let descendant = self.txs_by_id.get_mut(&descendant).expect("descendant");
@@ -314,8 +331,24 @@ impl MempoolStore {
     fn drop_tx(&mut self, entry: &TxMempoolEntry) {
         self.update_for_drop(entry);
         self.remove_from_descendant_score_index(entry);
+        self.remove_from_ancestor_score_index(entry);
         self.remove_from_creation_time_index(entry);
         self.unspend_outpoints(entry)
+    }
+
+    fn remove_from_ancestor_score_index(&mut self, entry: &TxMempoolEntry) {
+        self.refresh_descendants(entry);
+        self.txs_by_ancestor_score.entry(entry.ancestor_score()).and_modify(|entries| {
+            entries.remove(&entry.tx_id());
+        });
+        if self
+            .txs_by_ancestor_score
+            .get(&entry.ancestor_score())
+            .expect("key must exist")
+            .is_empty()
+        {
+            self.txs_by_ancestor_score.remove(&entry.ancestor_score());
+        }
     }
 
     fn remove_from_descendant_score_index(&mut self, entry: &TxMempoolEntry) {
