@@ -848,6 +848,10 @@ where
         while !tx_accumulator.done() {
             if let Some(tx_id) = tx_iter.next() {
                 let next_tx = self.store.txs_by_id.get(tx_id).expect("tx to exist");
+                log::debug!(
+                    "collect_txs: next tx has ancestor score {:?}",
+                    next_tx.ancestor_score()
+                );
                 tx_accumulator.add_tx(next_tx.tx().clone());
             } else {
                 break;

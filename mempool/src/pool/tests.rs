@@ -2135,6 +2135,7 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     let size_limit = 1_000;
     let tx_accumulator = DefaultTxAccumulator::new(size_limit);
     let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
+    log::debug!("ancestor index: {:?}", mempool.store.txs_by_ancestor_score);
     let expected_num_txs_collected = 6;
     assert_eq!(collected_txs.len(), expected_num_txs_collected);
     let total_tx_size: usize = collected_txs.iter().map(|tx| tx.encoded_size()).sum();
