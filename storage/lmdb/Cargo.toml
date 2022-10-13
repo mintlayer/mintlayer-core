@@ -12,6 +12,7 @@ lmdb-rkv = "0.14"
 
 [dev-dependencies]
 storage-backend-test-suite = { path = "../backend-test-suite" }
+
 rand = "0.8"
 
 [[test]]

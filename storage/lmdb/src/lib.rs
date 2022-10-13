@@ -25,7 +25,7 @@ use storage_core::{
 };
 use utils::sync::Arc;
 
-/// Metadata about the list of databases (key-value maps)
+/// Identifiers of the list of databases (key-value maps)
 #[derive(Eq, PartialEq, Debug, Clone)]
 struct DbList(Vec<lmdb::Database>);
 
@@ -37,17 +37,20 @@ impl std::ops::Index<DbIndex> for DbList {
     }
 }
 
+/// LMDB iterator over entries with given key prefix
 pub struct PrefixIter<'tx> {
+    /// Underlying iterator
     iter: lmdb::Iter<'tx>,
+
+    /// Prefix to iterate over
     prefix: Data,
-    /// Cursor needs to be kept alive for the duration of the iterator lifetime
-    /// Problem explanation:
-    /// As it stands, the `RoCursor<'tx>::iter()` method doesn't relate the lifetime of `&self` to the iterator's,
-    /// where we can see a signature in the form
-    /// `fn iter_from<K>(&mut self, key: K) -> Iter<'txn>` but
-    /// `&mut self` should be `&'txn mut self`
-    /// otherwise, the iterator can live longer than the cursor,
-    /// leading to memory access violations.
+
+    /// Workaround to keep the cursor alive for the duration of the iterator lifetime
+    ///
+    /// The `lmdb::Iter` obejct refers to the cursor it's derived from but this fact is not properly
+    /// reflected in its lifetime constraints by the used LMDB library. The lifetime annotation
+    /// allows for the iterator to outlive the cursor, resulting in a use-after-free issue. Here,
+    /// we make sure to keep the cursor around for long enough.
     _cursor: lmdb::RoCursor<'tx>,
 }
 
