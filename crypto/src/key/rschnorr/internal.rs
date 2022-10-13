@@ -34,14 +34,16 @@ mod test {
         Vec::from_bytes(d.as_slice()).unwrap()
     }
 
+    use crate::key::rschnorr::MLRistrettoPrivateKey;
     use tari_crypto::tari_utilities::ByteArray;
     use tari_crypto::{
-        keys::{PublicKey, SecretKey},
+        keys::PublicKey,
         ristretto::{RistrettoPublicKey, RistrettoSchnorr, RistrettoSecretKey},
     };
 
     #[test]
     fn default() {
+        // TODO Port to schnorrkel or remove this test: the library does not provide default methods
         let sig = RistrettoSchnorr::default();
         assert_eq!(sig.get_signature(), &RistrettoSecretKey::default());
         assert_eq!(sig.get_public_nonce(), &RistrettoPublicKey::default());
@@ -51,6 +53,10 @@ mod test {
     #[test]
     #[allow(non_snake_case)]
     fn sign_and_verify_message() {
+        /* TODO Port to schnorrkel or remove this test. The library uses `merlin::Transcript`s so
+           it isn't straightforward to reimplement the following test.
+        */
+
         let mut rng = rand::thread_rng();
         let (k, P) = RistrettoPublicKey::random_keypair(&mut rng);
         let (r, R) = RistrettoPublicKey::random_keypair(&mut rng);
@@ -78,6 +84,10 @@ mod test {
     #[test]
     #[allow(non_snake_case)]
     fn test_signature_addition() {
+        /* TODO implement this test for schnorrkel signatures: currently we cannot access the
+           internal `R` and `s` values of `schnorrkel::Signature` and we cannot implement the
+           signature additions. This is probably better implemented in the upstream library.
+        */
         let mut rng = rand::thread_rng();
         // Alice and Bob generate some keys and nonces
         let (k1, P1) = RistrettoPublicKey::random_keypair(&mut rng);
@@ -109,8 +119,7 @@ mod test {
         let mut rng = rand::thread_rng();
         let m = hex::decode("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
             .unwrap();
-        let k = RistrettoSecretKey::random(&mut rng);
-        let r = RistrettoSecretKey::random(&mut rng);
-        assert!(RistrettoSchnorr::sign(k, r, &m).is_ok());
+        let (s, _) = MLRistrettoPrivateKey::new(&mut rng);
+        assert!(s.sign_message(&m).is_ok());
     }
 }
