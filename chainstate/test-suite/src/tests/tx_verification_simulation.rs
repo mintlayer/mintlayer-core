@@ -14,27 +14,25 @@
 // limitations under the License.
 
 use super::*;
-use chainstate_test_framework::{BlockBuilder, TestFramework, TxVerificationStrategy};
+use chainstate_test_framework::{TestFramework, TxVerificationStrategy};
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy(), 50)]
-fn simulation(#[case] seed: Seed, #[case] total_blocks: usize) {
+#[case(Seed::from_entropy(), 10, 50)]
+fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_block: usize) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::builder()
             .with_tx_verification_strategy(TxVerificationStrategy::Randomized(seed))
             .build();
 
         let mut rng = make_seedable_rng(seed);
-        for _ in 0..rng.gen_range(0..total_blocks) {
-            build_and_process_block(&mut rng, tf.make_block_builder());
+        for _ in 0..rng.gen_range(0..max_blocks) {
+            let mut block_builder = tf.make_block_builder();
+
+            for _ in 0..rng.gen_range(0..max_tx_per_block) {
+                block_builder = block_builder.add_test_transaction_from_best_block(&mut rng);
+            }
+            block_builder.build_and_process().unwrap().unwrap();
         }
     });
-}
-
-fn build_and_process_block(rng: &mut impl Rng, mut block_builder: BlockBuilder) {
-    for _ in 0..rng.gen_range(0..100) {
-        block_builder = block_builder.add_test_transaction(rng);
-    }
-    block_builder.build_and_process().unwrap().unwrap();
 }

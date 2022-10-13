@@ -1739,7 +1739,7 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
         let block = tf
             .make_block_builder()
             .with_reward(vec![reward_output])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         assert!(matches!(
@@ -1761,7 +1761,7 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
         let block = tf
             .make_block_builder()
             .with_reward(vec![reward_output])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         assert!(matches!(
@@ -1783,7 +1783,7 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
         let block = tf
             .make_block_builder()
             .with_reward(vec![reward_output])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         assert!(matches!(

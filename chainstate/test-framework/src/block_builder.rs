@@ -13,9 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::framework::create_new_outputs;
-use crate::framework::TestBlockInfo;
-use crate::TestFramework;
+use crate::utils::create_new_outputs;
+use crate::{TestBlockInfo, TestFramework};
 use chainstate::{BlockSource, ChainstateError};
 use chainstate_types::BlockIndex;
 use common::{
@@ -74,14 +73,19 @@ impl<'f> BlockBuilder<'f> {
         self
     }
 
-    /// Adds a transaction that uses the transactions from the previous block as inputs and
+    /// Adds a transaction that uses random utxos
+    //pub fn add_test_transaction(self, rng: &mut impl Rng) -> Self {
+    //    //self.add_test_transaction_with_parent(parent, rng)
+    //}
+
+    /// Adds a transaction that uses the transactions from the best block as inputs and
     /// produces new outputs.
-    pub fn add_test_transaction(self, rng: &mut impl Rng) -> Self {
+    pub fn add_test_transaction_from_best_block(self, rng: &mut impl Rng) -> Self {
         let parent = self.framework.best_block_id();
         self.add_test_transaction_with_parent(parent, rng)
     }
 
-    /// Same as `add_test_transaction`, but with a custom parent.
+    /// Same as `add_test_transaction_from_best_block`, but with a custom parent.
     pub fn add_test_transaction_with_parent(
         self,
         parent: Id<GenBlock>,

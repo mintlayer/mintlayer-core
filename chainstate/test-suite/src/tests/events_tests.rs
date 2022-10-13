@@ -47,7 +47,8 @@ fn simple_subscribe(#[case] seed: Seed) {
         let events = subscribe(&mut tf.chainstate, 1);
 
         // Produce and process a block.
-        let first_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
+        let first_block =
+            tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
         assert!(!tf.chainstate.subscribers().is_empty());
         tf.process_block(first_block.clone(), BlockSource::Local).unwrap();
         tf.chainstate.wait_for_all_events();
@@ -62,7 +63,8 @@ fn simple_subscribe(#[case] seed: Seed) {
         }
 
         // Process one more block.
-        let second_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
+        let second_block =
+            tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
         tf.process_block(second_block.clone(), BlockSource::Local).unwrap();
         tf.chainstate.wait_for_all_events();
 
@@ -89,7 +91,7 @@ fn several_subscribers(#[case] seed: Seed) {
         let subscribers = rng.gen_range(8..256);
         let events = subscribe(&mut tf.chainstate, subscribers);
 
-        let block = tf.make_block_builder().add_test_transaction(&mut rng).build();
+        let block = tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
 
         assert!(!tf.chainstate.subscribers().is_empty());
         tf.process_block(block.clone(), BlockSource::Local).unwrap();
@@ -119,7 +121,8 @@ fn several_subscribers_several_events(#[case] seed: Seed) {
         assert!(!tf.chainstate.subscribers().is_empty());
 
         for _ in 0..blocks {
-            let block = tf.make_block_builder().add_test_transaction(&mut rng).build();
+            let block =
+                tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
             let index = tf.process_block(block.clone(), BlockSource::Local).ok().flatten().unwrap();
             tf.chainstate.wait_for_all_events();
 
@@ -167,7 +170,8 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
         let events = subscribe(&mut tf.chainstate, 1);
         assert!(!tf.chainstate.subscribers().is_empty());
 
-        let first_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
+        let first_block =
+            tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
         // Produce a block with a bad timestamp.
         let timestamp = tf.genesis().timestamp().as_int_seconds()
             + tf.chainstate.get_chain_config().max_future_block_time_offset().as_secs();

@@ -73,7 +73,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                 coins.clone(),
                 OutputPurpose::Transfer(destination.clone()),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         let block_id = block.get_id();
@@ -94,7 +94,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                     OutputTimeLock::UntilHeight(BlockHeight::max()),
                 ),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         let block_id = block.get_id();
@@ -115,7 +115,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                     OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(u64::MAX)),
                 ),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         let block_id = block.get_id();
@@ -136,7 +136,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                     OutputTimeLock::ForSeconds(u64::MAX),
                 ),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         let block_id = block.get_id();
@@ -157,7 +157,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                     OutputTimeLock::ForBlockCount(u64::MAX),
                 ),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         let block_id = block.get_id();
@@ -184,7 +184,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                     OutputTimeLock::ForBlockCount(reward_lock_distance as u64 - 1),
                 ),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         let block_id = block.get_id();
@@ -206,7 +206,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                 coins.clone(),
                 OutputPurpose::StakeLock(destination.clone()),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         assert!(matches!(
@@ -232,7 +232,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                     OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
                 ),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         let block_id = block.get_id();
@@ -253,7 +253,8 @@ fn orphans_chains(#[case] seed: Seed) {
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
 
         // Prepare, but not process the block.
-        let missing_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
+        let missing_block =
+            tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
 
         // Create and process orphan blocks.
         const MAX_ORPHANS_COUNT_IN_TEST: usize = 100;
@@ -316,7 +317,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         }
 
         // Create a new block
-        let block = tf.make_block_builder().add_test_transaction(&mut rng).build();
+        let block = tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
 
         // Check that all tx not in the main chain
         for tx in block.transactions() {
@@ -718,7 +719,7 @@ fn consensus_type(#[case] seed: Seed) {
     // processing a block with PoWData will fail
     assert!(matches!(
         tf.make_block_builder()
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .with_consensus_data(ConsensusData::PoW(PoWData::new(Compact(0), 0)))
             .build_and_process()
             .unwrap_err(),
@@ -737,7 +738,7 @@ fn consensus_type(#[case] seed: Seed) {
     // with ConsensusData::None and see that adding it fails
     assert!(matches!(
         tf.make_block_builder()
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build_and_process()
             .unwrap_err(),
         ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
@@ -889,7 +890,7 @@ fn pow(#[case] seed: Seed) {
                 OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
             ),
         )])
-        .add_test_transaction(&mut rng)
+        .add_test_transaction_from_best_block(&mut rng)
         .build();
     make_invalid_pow_block(&mut random_invalid_block, u128::MAX, difficulty.into())
         .expect("generate invalid block");
@@ -968,7 +969,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
         let mut random_invalid_block = tf
             .make_block_builder()
             .with_reward(expected_block_reward.clone())
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
         make_invalid_pow_block(&mut random_invalid_block, u128::MAX, difficulty.into())
             .expect("generate invalid block");

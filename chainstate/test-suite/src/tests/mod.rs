@@ -64,7 +64,8 @@ fn generate_blocks_for_functional_tests(#[case] seed: Seed) {
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);
 
     for _ in 1..6 {
-        let mut mined_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
+        let mut mined_block =
+            tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
         let bits = difficulty.into();
         assert!(consensus::pow::mine(&mut mined_block, u128::MAX, bits)
             .expect("Unexpected conversion error"));

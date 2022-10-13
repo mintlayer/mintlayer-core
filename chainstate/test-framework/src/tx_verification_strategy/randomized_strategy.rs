@@ -123,7 +123,7 @@ impl RandomizedTransactionVerificationStrategy {
                 block_index,
                 BlockTransactableRef::BlockReward(block),
                 &block_index.block_height(),
-                &median_time_past,
+                median_time_past,
             )
             .log_err()?;
         debug_assert!(reward_fees.is_none());
@@ -153,7 +153,7 @@ impl RandomizedTransactionVerificationStrategy {
                     block_index,
                     BlockTransactableRef::Transaction(block, tx_num),
                     &block_index.block_height(),
-                    &median_time_past,
+                    median_time_past,
                 )?;
                 tx_num += 1;
             }
@@ -178,59 +178,12 @@ impl RandomizedTransactionVerificationStrategy {
             let switch = self.rng.borrow_mut().gen_range(0..10);
             if switch == 0 {
                 break;
-            } else if switch == 1 {
-                let (consumed_cache, fee, new_tx_index) = self.connect_level_3(
-                    &tx_verifier,
-                    block,
-                    block_index,
-                    median_time_past,
-                    tx_num,
-                )?;
-
-                total_fee = (total_fee + fee).ok_or_else(|| {
-                    ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
-                })?;
-
-                flush_to_storage(&mut tx_verifier, consumed_cache)
-                    .map_err(ConnectTransactionError::from)?;
-                tx_num = new_tx_index;
-            } else {
-                tx_verifier.connect_transactable(
-                    block_index,
-                    BlockTransactableRef::Transaction(block, tx_num),
-                    &block_index.block_height(),
-                    &median_time_past,
-                )?;
-                tx_num += 1;
-            }
-        }
-        let cache = tx_verifier.consume()?;
-        Ok((cache, total_fee, tx_num))
-    }
-
-    fn connect_level_3<'a, S>(
-        &self,
-        base_tx_verifier: &TransactionVerifier<TransactionVerifier<'a, S>>,
-        block: &WithId<Block>,
-        block_index: &'a BlockIndex,
-        median_time_past: &BlockTimestamp,
-        mut tx_num: usize,
-    ) -> Result<(TransactionVerifierDelta, Amount, usize), ConnectTransactionError>
-    where
-        S: TransactionVerifierStorageRef,
-    {
-        let mut tx_verifier = base_tx_verifier.derive_child();
-        let mut total_fee = Amount::ZERO;
-        while tx_num < block.transactions().len() {
-            let switch = self.rng.borrow_mut().gen_range(0..10);
-            if switch == 0 {
-                break;
             } else {
                 let fee = tx_verifier.connect_transactable(
                     block_index,
                     BlockTransactableRef::Transaction(block, tx_num),
                     &block_index.block_height(),
-                    &median_time_past,
+                    median_time_past,
                 )?;
 
                 total_fee = (total_fee + fee.expect("some").0).ok_or_else(|| {
@@ -284,39 +237,6 @@ impl RandomizedTransactionVerificationStrategy {
     fn disconnect_level_2<'a, S>(
         &self,
         base_tx_verifier: &TransactionVerifier<'a, S>,
-        block: &WithId<Block>,
-        mut tx_num: i32,
-    ) -> Result<(TransactionVerifierDelta, i32), ConnectTransactionError>
-    where
-        S: TransactionVerifierStorageRef,
-    {
-        let mut tx_verifier = base_tx_verifier.derive_child();
-        while tx_num >= 0 {
-            let switch = self.rng.borrow_mut().gen_range(0..10);
-            if switch == 0 {
-                break;
-            } else if switch == 1 {
-                let (consumed_cache, new_tx_index) =
-                    self.disconnect_level_3(&tx_verifier, block, tx_num)?;
-
-                flush_to_storage(&mut tx_verifier, consumed_cache)
-                    .map_err(ConnectTransactionError::from)?;
-                tx_num = new_tx_index;
-            } else {
-                tx_verifier.disconnect_transactable(BlockTransactableRef::Transaction(
-                    block,
-                    tx_num as usize,
-                ))?;
-                tx_num -= 1;
-            }
-        }
-        let cache = tx_verifier.consume()?;
-        Ok((cache, tx_num))
-    }
-
-    fn disconnect_level_3<'a, S>(
-        &self,
-        base_tx_verifier: &TransactionVerifier<TransactionVerifier<'a, S>>,
         block: &WithId<Block>,
         mut tx_num: i32,
     ) -> Result<(TransactionVerifierDelta, i32), ConnectTransactionError>

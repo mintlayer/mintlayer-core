@@ -18,8 +18,10 @@
 mod block_builder;
 mod framework;
 mod framework_builder;
+mod test_block_info;
 mod transaction_builder;
 mod tx_verification_strategy;
+mod utils;
 
 /// Storage backend used for testing (the in-memory backend)
 pub type TestStore = chainstate_storage::inmemory::Store;
@@ -28,8 +30,10 @@ pub type TestStore = chainstate_storage::inmemory::Store;
 pub type TestChainstate = Box<dyn chainstate::chainstate_interface::ChainstateInterface>;
 
 pub use {
+    crate::utils::{anyonecanspend_address, empty_witness},
     block_builder::BlockBuilder,
-    framework::{anyonecanspend_address, empty_witness, TestBlockInfo, TestFramework},
+    framework::TestFramework,
     framework_builder::{OrphanErrorHandler, TestFrameworkBuilder, TxVerificationStrategy},
+    test_block_info::TestBlockInfo,
     transaction_builder::TransactionBuilder,
 };
