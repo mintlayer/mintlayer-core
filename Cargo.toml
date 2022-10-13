@@ -30,6 +30,7 @@ members = [
   "storage/backend-test-suite",   # Tests for validating storage backend implementations.
   "storage/core",                 # Core backend-agnostic storage abstraction.
   "storage/inmemory",             # In-memory storage backend implementation.
+  "storage/lmdb",                 # LMDB-based persistent storage backend implementation.
   "subsystem",                    # Utilities for working with concurrent subsystems.
   "node",                         # Node executable.
   "wallet",                       # Wallet executable.

@@ -32,13 +32,18 @@ mod gen {
         num_dbs: usize,
         num_entries: impl Into<proptest::collection::SizeRange>,
     ) -> impl Strategy<Value = std::collections::BTreeMap<(DbIndex, Data), Data>> {
-        proptest::collection::btree_map((idx(num_dbs), any::<Data>()), any::<Data>(), num_entries)
+        proptest::collection::btree_map((idx(num_dbs), big_key()), any::<Data>(), num_entries)
     }
 
     // Generate key from a set of keys with given cardianlity. Lower cardinality encourages
     // generation of conflicting keys, causing value overwrites and deletions to be more likely.
     pub fn key(key_cardinality: u32) -> impl Strategy<Value = Data> {
         (0..key_cardinality).prop_map(|x| format!("{x:x}").into())
+    }
+
+    // Potentially big arbitrary key
+    pub fn big_key() -> impl Strategy<Value = Data> {
+        proptest::collection::vec(any::<u8>(), 1..512)
     }
 
     pub fn action(key_cardinality: u32) -> impl Strategy<Value = WriteAction> {
@@ -176,7 +181,7 @@ fn add_and_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
         (
             gen::entries(NUM_DBS, 0usize..20),
             gen::entries(NUM_DBS, 0usize..20),
-            proptest::collection::vec((gen::idx(NUM_DBS), gen::any::<Data>()), 0usize..10),
+            proptest::collection::vec((gen::idx(NUM_DBS), gen::big_key()), 0usize..10),
         ),
         |backend, (entries1, entries2, extra_keys)| {
             let store = backend.open(desc(NUM_DBS)).expect("db open to succeed");

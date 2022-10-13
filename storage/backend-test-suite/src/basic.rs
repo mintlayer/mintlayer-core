@@ -132,9 +132,9 @@ fn put_and_iterate_over_prefixes<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
     // Check for items that are supposed to be present
     let check = |range: std::ops::RangeInclusive<usize>, prefix: Data| {
         let dbtx = store.transaction_ro().unwrap();
-        let vals = dbtx.prefix_iter(IDX.0, prefix).unwrap().map(|(_key, val)| val);
-        let expected_vals = range.map(|x| Data::from(x.to_string()));
-        assert!(vals.eq(expected_vals));
+        let vals: Vec<_> = dbtx.prefix_iter(IDX.0, prefix.clone()).unwrap().map(|x| x.1).collect();
+        let expected: Vec<_> = range.map(|x| Data::from(x.to_string())).collect();
+        assert_eq!(vals, expected, "prefix={:?}", prefix);
         drop(dbtx);
     };
 
