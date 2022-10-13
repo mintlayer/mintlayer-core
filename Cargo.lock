@@ -987,6 +987,7 @@ dependencies = [
  "tari_crypto",
  "test-utils",
  "thiserror",
+ "zeroize",
 ]
 
 [[package]]
