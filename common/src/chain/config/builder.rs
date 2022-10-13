@@ -104,6 +104,10 @@ pub struct Builder {
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_ticker_len: usize,
+    token_max_name_len: usize,
+    token_max_description_len: usize,
+    token_min_hash_len: usize,
+    token_max_hash_len: usize,
     empty_consensus_reward_maturity_distance: BlockDistance,
 }
 
@@ -131,6 +135,10 @@ impl Builder {
             token_max_uri_len: super::TOKEN_MAX_URI_LEN,
             token_max_dec_count: super::TOKEN_MAX_DEC_COUNT,
             token_max_ticker_len: super::TOKEN_MAX_TICKER_LEN,
+            token_max_name_len: super::TOKEN_MAX_NAME_LEN,
+            token_max_description_len: super::TOKEN_MAX_DESCRIPTION_LEN,
+            token_min_hash_len: super::TOKEN_MIN_HASH_LEN,
+            token_max_hash_len: super::TOKEN_MAX_HASH_LEN,
             empty_consensus_reward_maturity_distance: BlockDistance::new(0),
         }
     }
@@ -165,6 +173,10 @@ impl Builder {
             token_max_uri_len,
             token_max_dec_count,
             token_max_ticker_len,
+            token_max_name_len,
+            token_max_description_len,
+            token_min_hash_len,
+            token_max_hash_len,
             empty_consensus_reward_maturity_distance,
         } = self;
 
@@ -208,6 +220,10 @@ impl Builder {
             token_max_dec_count,
             token_max_ticker_len,
             empty_consensus_reward_maturity_distance,
+            token_max_name_len,
+            token_max_description_len,
+            token_min_hash_len,
+            token_max_hash_len,
         }
     }
 }

@@ -15,7 +15,10 @@
 
 use super::{
     orphan_blocks::OrphanAddError,
-    transaction_verifier::error::{ConnectTransactionError, TokensError},
+    transaction_verifier::{
+        error::{ConnectTransactionError, TokensError},
+        storage::TransactionVerifierStorageError,
+    },
 };
 use chainstate_types::PropertyQueryError;
 use common::{
@@ -52,6 +55,8 @@ pub enum BlockError {
     BlockProofCalculationError(Id<Block>),
     #[error("Failed to compute consensus extra data: {0}")]
     ConsensusExtraDataError(#[from] ExtraConsensusDataError),
+    #[error("TransactionVerifier error: {0}")]
+    TransactionVerifierError(#[from] TransactionVerifierStorageError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -92,6 +97,8 @@ pub enum CheckBlockTransactionsError {
     DuplicateInputInTransaction(Id<Transaction>, Id<Block>),
     #[error("Duplicate input in block")]
     DuplicateInputInBlock(Id<Block>),
+    #[error("Number of signatures differs from number of inputs")]
+    InvalidWitnessCount,
     #[error("Empty inputs or outputs in transaction found in block")]
     EmptyInputsOutputsInTransactionInBlock(Id<Transaction>, Id<Block>),
     #[error("Tokens error: {0}")]

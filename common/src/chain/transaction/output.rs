@@ -62,7 +62,7 @@ impl OutputPurpose {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct TxOutput {
     value: OutputValue,
     purpose: OutputPurpose,
@@ -79,5 +79,13 @@ impl TxOutput {
 
     pub fn purpose(&self) -> &OutputPurpose {
         &self.purpose
+    }
+
+    pub fn has_timelock(&self) -> bool {
+        match &self.purpose {
+            OutputPurpose::Transfer(_) => false,
+            OutputPurpose::LockThenTransfer(_, _) => true,
+            OutputPurpose::StakePool(_) => false,
+        }
     }
 }

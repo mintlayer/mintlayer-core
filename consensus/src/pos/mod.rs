@@ -16,7 +16,7 @@
 pub mod error;
 pub mod kernel;
 
-use chainstate_types::{vrf_tools::verify_vrf_and_get_vrf_output, GenBlockIndex};
+use chainstate_types::{vrf_tools::verify_vrf_and_get_vrf_output, BlockIndexHandle, GenBlockIndex};
 use common::{
     chain::{
         block::{consensus_data::PoSData, BlockHeader},
@@ -33,7 +33,7 @@ use crate::{
         error::ConsensusPoSError,
         kernel::{get_kernel_block_index, get_kernel_output},
     },
-    validator::{BlockIndexHandle, TransactionIndexHandle},
+    validator::TransactionIndexHandle,
 };
 
 fn check_stake_kernel_hash(

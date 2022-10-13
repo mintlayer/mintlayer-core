@@ -18,24 +18,32 @@ use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
     chain::{
         block::{BlockHeader, BlockReward},
-        tokens::{OutputValue, RPCTokenInfo, TokenAuxiliaryData, TokenData, TokenId},
+        tokens::{
+            OutputValue, RPCFungibleTokenInfo, RPCNonFungibleTokenInfo, RPCTokenInfo,
+            TokenAuxiliaryData, TokenData, TokenId,
+        },
         Block, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
 
-use super::{chainstateref, orphan_blocks::OrphanBlocks, HEADER_LIMIT};
+use super::{
+    chainstateref, orphan_blocks::OrphanBlocks,
+    tx_verification_strategy::TransactionVerificationStrategy, HEADER_LIMIT,
+};
 
 pub fn locator_tip_distances() -> impl Iterator<Item = BlockDistance> {
     itertools::iterate(0, |&i| std::cmp::max(1, i * 2)).map(BlockDistance::new)
 }
 
-pub struct ChainstateQuery<'a, S, O> {
-    chainstate_ref: chainstateref::ChainstateRef<'a, S, O>,
+pub struct ChainstateQuery<'a, S, O, V> {
+    chainstate_ref: chainstateref::ChainstateRef<'a, S, O, V>,
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateQuery<'a, S, O> {
-    pub(crate) fn new(chainstate_ref: chainstateref::ChainstateRef<'a, S, O>) -> Self {
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    ChainstateQuery<'a, S, O, V>
+{
+    pub(crate) fn new(chainstate_ref: chainstateref::ChainstateRef<'a, S, O, V>) -> Self {
         Self { chainstate_ref }
     }
 
@@ -194,29 +202,27 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateQuery<'a, S, O> {
                 OutputValue::Token(token_data) => Some(token_data),
             })
             // Find issuance data and return RPCTokenInfo
-            .find_map(|token_data| match token_data {
-                TokenData::TokenIssuanceV1 {
-                    token_ticker,
-                    amount_to_issue,
-                    number_of_decimals,
-                    metadata_uri,
-                } => Some(RPCTokenInfo::new(
-                    token_id,
-                    token_aux_data.issuance_tx().get_id(),
-                    token_aux_data.issuance_block_id(),
-                    token_ticker.clone(),
-                    *amount_to_issue,
-                    *number_of_decimals,
-                    metadata_uri.clone(),
-                )),
-                TokenData::TokenTransferV1 {
-                    token_id: _,
-                    amount: _,
+            .find_map(|token_data| match &**token_data {
+                TokenData::TokenIssuanceV1(issuance) => {
+                    Some(RPCTokenInfo::new_fungible(RPCFungibleTokenInfo::new(
+                        token_id,
+                        token_aux_data.issuance_tx().get_id(),
+                        token_aux_data.issuance_block_id(),
+                        issuance.token_ticker.clone(),
+                        issuance.amount_to_issue,
+                        issuance.number_of_decimals,
+                        issuance.metadata_uri.clone(),
+                    )))
                 }
-                | TokenData::TokenBurnV1 {
-                    token_id: _,
-                    amount_to_burn: _,
-                } => None,
+                TokenData::NftIssuanceV1(nft) => {
+                    Some(RPCTokenInfo::new_nonfungible(RPCNonFungibleTokenInfo::new(
+                        token_id,
+                        token_aux_data.issuance_tx().get_id(),
+                        token_aux_data.issuance_block_id(),
+                        &nft.metadata,
+                    )))
+                }
+                TokenData::TokenTransferV1(_) | TokenData::TokenBurnV1(_) => None,
             }))
     }
 

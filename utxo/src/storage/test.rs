@@ -23,8 +23,8 @@ use crate::{
 };
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, signature::inputsig::InputWitness, OutPointSourceId,
-        Transaction, TxInput,
+        block::timestamp::BlockTimestamp, signature::inputsig::InputWitness,
+        signed_transaction::SignedTransaction, OutPointSourceId, Transaction, TxInput,
     },
     primitives::{BlockHeight, Id, Idable, H256},
 };
@@ -39,7 +39,7 @@ fn create_transactions(
     inputs: Vec<TxInput>,
     max_num_of_outputs: usize,
     num_of_txs: usize,
-) -> Vec<Transaction> {
+) -> Vec<SignedTransaction> {
     // distribute the inputs on the number of the transactions specified.
     let input_size = inputs.len() / num_of_txs;
 
@@ -55,10 +55,17 @@ fn create_transactions(
                 vec![]
             };
 
-            Transaction::new(0x00, inputs.to_vec(), outputs, 0)
-                .expect("should create a transaction successfully")
+            SignedTransaction::new(
+                Transaction::new(0x00, inputs.to_vec(), outputs, 0)
+                    .expect("should create a transaction successfully"),
+                (0..inputs.len())
+                    .into_iter()
+                    .map(|_| InputWitness::NoSignature(None))
+                    .collect::<Vec<_>>(),
+            )
         })
-        .collect_vec()
+        .collect::<Result<Vec<_>, _>>()
+        .expect("invalid witness count")
 }
 
 fn create_block(
@@ -155,7 +162,11 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
             let undos = block
                 .transactions()
                 .iter()
-                .map(|tx| cache.connect_transaction(tx, block_height).expect("should spend okay."))
+                .map(|tx| {
+                    cache
+                        .connect_transaction(tx.transaction(), block_height)
+                        .expect("should spend okay.")
+                })
                 .collect_vec();
             BlockUndo::new(Default::default(), undos)
         };
@@ -269,7 +280,7 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
             let id: Id<GenBlock> = Id::new(H256::random());
             let id = OutPointSourceId::BlockReward(id);
 
-            TxInput::new(id, i, InputWitness::NoSignature(None))
+            TxInput::new(id, i)
         })
         .collect();
 
@@ -281,7 +292,7 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
     let tx = block.transactions().get(0).unwrap();
 
     assert_eq!(
-        view.connect_transaction(tx, BlockHeight::new(2)).unwrap_err(),
+        view.connect_transaction(tx.transaction(), BlockHeight::new(2)).unwrap_err(),
         NoUtxoFound
     );
 }

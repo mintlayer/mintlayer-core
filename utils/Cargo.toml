@@ -8,6 +8,7 @@ license = "MIT"
 atomic-traits = "0.3"
 num-traits = "0.2"
 slave-pool = "0.2"
+logging = {path = '../logging'}
 
 [target.'cfg(loom)'.dependencies]
 loom = "0.5"

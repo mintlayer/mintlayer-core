@@ -31,6 +31,7 @@ mod internal;
 mod is_transaction_seal;
 #[cfg(any(test, feature = "mock"))]
 pub mod mock;
+pub mod schema;
 
 use std::collections::BTreeMap;
 
@@ -180,10 +181,10 @@ pub trait Transactional<'t> {
     type TransactionRw: TransactionRw + 't;
 
     /// Start a read-only transaction.
-    fn transaction_ro<'s: 't>(&'s self) -> Self::TransactionRo;
+    fn transaction_ro<'s: 't>(&'s self) -> crate::Result<Self::TransactionRo>;
 
     /// Start a read-write transaction.
-    fn transaction_rw<'s: 't>(&'s self) -> Self::TransactionRw;
+    fn transaction_rw<'s: 't>(&'s self) -> crate::Result<Self::TransactionRw>;
 }
 
 pub trait BlockchainStorage: BlockchainStorageWrite + for<'tx> Transactional<'tx> + Send {}

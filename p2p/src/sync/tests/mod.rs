@@ -18,7 +18,7 @@ use std::time::Duration;
 use libp2p::PeerId;
 use tokio::time::timeout;
 
-use chainstate::{make_chainstate, ChainstateConfig};
+use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
 
 use super::*;
 use crate::{
@@ -61,6 +61,7 @@ where
             chain_config,
             chainstate_config,
             storage,
+            DefaultTransactionVerificationStrategy::new(),
             None,
             Default::default(),
         )

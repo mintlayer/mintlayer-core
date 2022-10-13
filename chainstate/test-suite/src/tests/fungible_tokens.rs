@@ -13,50 +13,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::{BlockError, BlockSource, ChainstateError, TokensError};
-use chainstate::{CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError};
+use std::vec;
+
+use chainstate::{
+    BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
+    ConnectTransactionError, TokensError, TxIndexError,
+};
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
+use common::chain::tokens::{
+    Metadata, NftIssuanceV1, TokenBurnV1, TokenIssuanceV1, TokenTransferV1,
+};
 use common::primitives::{id, Id};
 use common::{
     chain::{
         signature::inputsig::InputWitness,
         tokens::{token_id, OutputValue, TokenData, TokenId},
-        Destination, OutputPurpose, TxInput, TxOutput,
+        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
-use crypto::random::distributions::uniform::SampleRange;
 use crypto::{hash::StreamHasher, random::Rng};
 use expect_test::expect;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
-
-fn random_string<R: SampleRange<usize>>(rng: &mut impl Rng, range_len: R) -> String {
-    use crypto::random::distributions::{Alphanumeric, DistString};
-    if range_len.is_empty() {
-        return String::new();
-    }
-    let len = rng.gen_range(range_len);
-    Alphanumeric.sample_string(rng, len)
-}
-
-fn gen_ticker_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec<u8> {
-    assert!(!c.is_ascii_alphanumeric());
-    let ticker_len = 1 + rng.gen::<usize>() % max_len;
-    let random_index_to_replace = rng.gen::<usize>() % ticker_len;
-    let token_ticker: Vec<u8> = (0..ticker_len)
-        .into_iter()
-        .map(|idx| {
-            if idx != random_index_to_replace {
-                rng.sample(&crypto::random::distributions::Alphanumeric)
-            } else {
-                c
-            }
-        })
-        .take(ticker_len)
-        .collect();
-    token_ticker
-}
+use serialization::extras::non_empty_vec::DataOrNoVec;
+use test_utils::{
+    gen_text_with_non_ascii,
+    random::{make_seedable_rng, Seed},
+    random_string,
+};
 
 #[rstest]
 #[trace]
@@ -64,7 +48,7 @@ fn gen_ticker_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec<u
 fn token_issue_test(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id: OutPointSourceId = tf.genesis().get_id().into();
         let mut rng = make_seedable_rng(seed);
 
         // Ticker is too long
@@ -72,20 +56,20 @@ fn token_issue_test(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenIssuanceV1 {
+                        TokenIssuanceV1 {
                             token_ticker: random_string(&mut rng, 10..u16::MAX as usize)
                                 .as_bytes()
                                 .to_vec(),
                             amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                             number_of_decimals: rng.gen_range(1..18),
                             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-                        }),
+                        }
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -108,18 +92,18 @@ fn token_issue_test(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenIssuanceV1 {
+                        TokenIssuanceV1 {
                             token_ticker: b"".to_vec(),
                             amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                             number_of_decimals: rng.gen_range(1..18),
                             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-                        }),
+                        }
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -145,7 +129,7 @@ fn token_issue_test(#[case] seed: Seed) {
                     continue;
                 }
 
-                let token_ticker = gen_ticker_with_non_ascii(
+                let token_ticker = gen_text_with_non_ascii(
                     c,
                     &mut rng,
                     tf.chainstate.get_chain_config().token_max_ticker_len(),
@@ -156,13 +140,12 @@ fn token_issue_test(#[case] seed: Seed) {
                     .make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
-                            .add_input(TxInput::new(
-                                outpoint_source_id.clone(),
-                                0,
+                            .add_input(
+                                TxInput::new(outpoint_source_id.clone(), 0),
                                 InputWitness::NoSignature(None),
-                            ))
+                            )
                             .add_output(TxOutput::new(
-                                OutputValue::Token(TokenData::TokenIssuanceV1 {
+                                TokenIssuanceV1 {
                                     token_ticker,
                                     amount_to_issue: Amount::from_atoms(
                                         rng.gen_range(1..u128::MAX),
@@ -171,7 +154,8 @@ fn token_issue_test(#[case] seed: Seed) {
                                     metadata_uri: random_string(&mut rng, 1..1024)
                                         .as_bytes()
                                         .to_vec(),
-                                }),
+                                }
+                                .into(),
                                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                             ))
                             .build(),
@@ -196,18 +180,18 @@ fn token_issue_test(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenIssuanceV1 {
+                        TokenIssuanceV1 {
                             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                             amount_to_issue: Amount::from_atoms(0),
                             number_of_decimals: rng.gen_range(1..18),
                             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-                        }),
+                        }
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -231,18 +215,18 @@ fn token_issue_test(#[case] seed: Seed) {
                 .make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
-                        .add_input(TxInput::new(
-                            outpoint_source_id.clone(),
-                            0,
+                        .add_input(
+                            TxInput::new(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
-                        ))
+                        )
                         .add_output(TxOutput::new(
-                            OutputValue::Token(TokenData::TokenIssuanceV1 {
+                            TokenIssuanceV1 {
                                 token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                                 amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                                 number_of_decimals: decimals_count_to_use,
                                 metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-                            }),
+                            }
+                            .into(),
                             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                         ))
                         .build(),
@@ -271,20 +255,20 @@ fn token_issue_test(#[case] seed: Seed) {
                 .make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
-                        .add_input(TxInput::new(
-                            outpoint_source_id.clone(),
-                            0,
+                        .add_input(
+                            TxInput::new(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
-                        ))
+                        )
                         .add_output(TxOutput::new(
-                            OutputValue::Token(TokenData::TokenIssuanceV1 {
+                            TokenIssuanceV1 {
                                 token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                                 amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                                 number_of_decimals: rng.gen_range(1..18),
                                 metadata_uri: random_string(&mut rng, uri_len_range_to_use)
                                     .as_bytes()
                                     .to_vec(),
-                            }),
+                            }
+                            .into(),
                             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                         ))
                         .build(),
@@ -308,18 +292,18 @@ fn token_issue_test(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenIssuanceV1 {
+                        TokenIssuanceV1 {
                             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                             amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                             number_of_decimals: rng.gen_range(1..18),
                             metadata_uri: "https://💖🚁🌭.🦠🚀🚖🚧".as_bytes().to_vec(),
-                        }),
+                        }
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -338,23 +322,22 @@ fn token_issue_test(#[case] seed: Seed) {
         ));
 
         // Valid case
-        let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let output_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
+        };
         let block_index = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        outpoint_source_id,
-                        0,
+                    .add_input(
+                        TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        output_value.clone(),
+                        output_value.clone().into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -364,7 +347,10 @@ fn token_issue_test(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        assert_eq!(block.transactions()[0].outputs()[0].value(), &output_value);
+        assert_eq!(
+            block.transactions()[0].transaction().outputs()[0].value(),
+            &output_value.into()
+        );
     });
 }
 
@@ -377,27 +363,26 @@ fn token_transfer_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         // To have possibility to send exceed tokens amount than we have, let's limit the max issuance tokens amount
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX - 1));
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id: OutPointSourceId = tf.genesis().get_id().into();
 
         // Issue a new token
-        let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let output_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: "https://some_site.some".as_bytes().to_vec(),
-        });
+        };
 
         let block_index = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        genesis_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        output_value.clone(),
+                        output_value.clone().into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -406,9 +391,13 @@ fn token_transfer_test(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        let token_id = token_id(&block.transactions()[0]).unwrap();
-        assert_eq!(block.transactions()[0].outputs()[0].value(), &output_value);
-        let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
+        let token_id = token_id(block.transactions()[0].transaction()).unwrap();
+        assert_eq!(
+            block.transactions()[0].transaction().outputs()[0].value(),
+            &output_value.clone().into()
+        );
+        let issuance_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
 
         // attempt double-spend
         let result = tf
@@ -416,13 +405,12 @@ fn token_transfer_test(#[case] seed: Seed) {
             .with_parent((*block_index.block_id()).into())
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        genesis_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        output_value,
+                        output_value.into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -440,16 +428,16 @@ fn token_transfer_test(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: Amount::from_atoms(total_funds.into_atoms() + 1),
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -468,16 +456,16 @@ fn token_transfer_test(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id: TokenId::random(),
                             amount: total_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -496,16 +484,16 @@ fn token_transfer_test(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: Amount::from_atoms(0),
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -526,16 +514,16 @@ fn token_transfer_test(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: total_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -554,31 +542,30 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id: OutPointSourceId = tf.genesis().get_id().into();
 
         // Issue a couple of tokens
-        let issuance_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let issuance_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
+        };
 
         let result = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        genesis_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        issuance_value.clone(),
+                        issuance_value.clone().into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        issuance_value.clone(),
+                        issuance_value.clone().into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -600,13 +587,12 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        genesis_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        issuance_value.clone(),
+                        issuance_value.clone().into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -617,8 +603,8 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
 
         let block = tf.block(*block_index.block_id());
         assert_eq!(
-            block.transactions()[0].outputs()[0].value(),
-            &issuance_value
+            block.transactions()[0].transaction().outputs()[0].value(),
+            &issuance_value.into()
         );
     })
 }
@@ -631,33 +617,31 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
-        let genesis_info = TestBlockInfo::from_genesis(&tf.genesis());
-        let coins_value = genesis_info.txns[0].1[0].value().clone();
+        let coins_value = tf.genesis().utxos()[0].value().clone();
         assert!(matches!(coins_value, OutputValue::Coin(_)));
-        let genesis_outpoint_id = genesis_info.txns[0].0.clone();
+        let genesis_outpoint_id = tf.genesis().get_id().into();
 
         // TODO: test this better. It seems that this test only uses the max genesis amount vs no amount to test the issuance fee.
         //       We need a better test that tests the threshold
 
         // Issuance data
-        let issuance_data = OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let issuance_data = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
+        };
         let block = tf
             .make_block_builder()
             // All coins in inputs added to outputs, fee = 0 coins
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        genesis_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        issuance_data.clone(),
+                        issuance_data.clone().into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
@@ -681,18 +665,17 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
         ));
 
         // Valid issuance
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = tf.genesis().get_id().into();
         let _ = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        genesis_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        issuance_data,
+                        issuance_data.into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -716,23 +699,22 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
 
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let output_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
+        };
         let block_index = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        genesis_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        output_value,
+                        output_value.into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -742,38 +724,40 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
-        let token_id = token_id(&block.transactions()[0]).unwrap();
+        let issuance_outpoint_id = block.transactions()[0].transaction().get_id().into();
+        let token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Split tokens in outputs
         let split_block = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     // One piece of tokens in the first output, other piece of tokens in the second output
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: (total_funds - quarter_funds).unwrap(),
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: quarter_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
             )
             .build();
-        let split_outpoint_id = TestBlockInfo::from_block(&split_block).txns[0].0.clone();
+        let split_outpoint_id: OutPointSourceId =
+            split_block.transactions()[0].transaction().get_id().into();
         tf.process_block(split_block, BlockSource::Local).unwrap().unwrap();
 
         // Collect these in one output
@@ -781,21 +765,20 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        split_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(split_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
-                    .add_input(TxInput::new(
-                        split_outpoint_id,
-                        1,
+                    )
+                    .add_input(
+                        TxInput::new(split_outpoint_id, 1),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: total_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -821,21 +804,21 @@ fn burn_tokens(#[case] seed: Seed) {
 
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let output_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
+        }
+        .into();
         let block_index = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        genesis_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         output_value,
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -847,24 +830,25 @@ fn burn_tokens(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
-        let token_id = token_id(&block.transactions()[0]).unwrap();
+        let issuance_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
+        let token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Try burn more than we have in input
         let result = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenBurnV1 {
+                        TokenData::TokenBurnV1(TokenBurnV1 {
                             token_id,
                             amount_to_burn: Amount::from_atoms(total_funds.into_atoms() + 1),
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -883,23 +867,24 @@ fn burn_tokens(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenBurnV1 {
+                        TokenData::TokenBurnV1(TokenBurnV1 {
                             token_id,
                             amount_to_burn: quarter_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: half_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -908,30 +893,32 @@ fn burn_tokens(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        let first_burn_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
+        let first_burn_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
 
         // Valid case: Burn 50% and 50% transfer
         let block_index = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        first_burn_outpoint_id,
-                        1,
+                    .add_input(
+                        TxInput::new(first_burn_outpoint_id, 1),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenBurnV1 {
+                        TokenData::TokenBurnV1(TokenBurnV1 {
                             token_id,
                             amount_to_burn: quarter_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: quarter_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -940,23 +927,24 @@ fn burn_tokens(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        let second_burn_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
+        let second_burn_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
 
         // Valid case: Try to burn the rest 50%
         let block_index = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        second_burn_outpoint_id.clone(),
-                        1,
+                    .add_input(
+                        TxInput::new(second_burn_outpoint_id.clone(), 1),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenBurnV1 {
+                        TokenData::TokenBurnV1(TokenBurnV1 {
                             token_id,
                             amount_to_burn: quarter_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -965,23 +953,23 @@ fn burn_tokens(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        let _ = TestBlockInfo::from_block(&block).txns[0].0.clone();
+        let _: OutPointSourceId = block.transactions()[0].transaction().get_id().into();
 
         // Try to transfer burned tokens
         let result = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        second_burn_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(second_burn_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: total_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -1020,23 +1008,23 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let issuance_data = OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let issuance_data = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
+        }
+        .into();
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
         let block_index = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        genesis_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         issuance_data,
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -1052,29 +1040,29 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .unwrap();
 
         let issuance_block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id = TestBlockInfo::from_block(&issuance_block).txns[0].0.clone();
-        let token_id = token_id(&issuance_block.transactions()[0]).unwrap();
+        let issuance_outpoint_id: OutPointSourceId =
+            issuance_block.transactions()[0].transaction().get_id().into();
+        let token_id = token_id(issuance_block.transactions()[0].transaction()).unwrap();
 
         // B1 - burn all tokens in mainchain
         let block_index = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id.clone(),
-                        1,
+                    )
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id.clone(), 1),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenBurnV1 {
+                        TokenData::TokenBurnV1(TokenBurnV1 {
                             token_id,
                             amount_to_burn: total_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
@@ -1087,23 +1075,24 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block_b1 = tf.block(*block_index.block_id());
-        let b1_outpoint_id = TestBlockInfo::from_block(&block_b1).txns[0].0.clone();
+        let b1_outpoint_id: OutPointSourceId =
+            block_b1.transactions()[0].transaction().get_id().into();
 
         // Try to transfer burnt tokens
         let result = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        b1_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(b1_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: total_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
@@ -1129,11 +1118,10 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        b1_outpoint_id,
-                        1,
+                    .add_input(
+                        TxInput::new(b1_outpoint_id, 1),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         output_value.clone(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -1144,17 +1132,17 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block_c1 = tf.block(*block_index.block_id());
-        let c1_outpoint_id = TestBlockInfo::from_block(&block_c1).txns[0].0.clone();
+        let c1_outpoint_id: OutPointSourceId =
+            block_c1.transactions()[0].transaction().get_id().into();
         // Let's add D1
         let block_index = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        c1_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(c1_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         output_value,
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -1165,7 +1153,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block_d1 = tf.block(*block_index.block_id());
-        let _ = TestBlockInfo::from_block(&block_d1).txns[0].0.clone();
+        let _: OutPointSourceId = block_d1.transactions()[0].transaction().get_id().into();
 
         // Second chain - B2
         let block_b2 = tf
@@ -1173,16 +1161,16 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .with_parent(issuance_block.get_id().into())
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: total_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
@@ -1192,7 +1180,8 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                     .build(),
             )
             .build();
-        let b2_outpoint_id = TestBlockInfo::from_block(&block_b2).txns[0].0.clone();
+        let b2_outpoint_id: OutPointSourceId =
+            block_b2.transactions()[0].transaction().get_id().into();
         assert!(
             tf.process_block(block_b2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
@@ -1204,21 +1193,20 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .with_parent(issuance_block.get_id().into())
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        b2_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(b2_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
-                    .add_input(TxInput::new(
-                        b2_outpoint_id,
-                        1,
+                    )
+                    .add_input(
+                        TxInput::new(b2_outpoint_id, 1),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenBurnV1 {
+                        TokenData::TokenBurnV1(TokenBurnV1 {
                             token_id,
                             amount_to_burn: total_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
@@ -1228,7 +1216,8 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                     .build(),
             )
             .build();
-        let c2_outpoint_id = TestBlockInfo::from_block(&block_c2).txns[0].0.clone();
+        let c2_outpoint_id: OutPointSourceId =
+            block_c2.transactions()[0].transaction().get_id().into();
         assert!(
             tf.process_block(block_c2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
@@ -1240,21 +1229,20 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .with_parent(issuance_block.get_id().into())
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        c2_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(c2_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
-                    .add_input(TxInput::new(
-                        c2_outpoint_id,
-                        1,
+                    )
+                    .add_input(
+                        TxInput::new(c2_outpoint_id, 1),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenBurnV1 {
+                        TokenData::TokenBurnV1(TokenBurnV1 {
                             token_id,
                             amount_to_burn: total_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
@@ -1264,7 +1252,8 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                     .build(),
             )
             .build();
-        let d2_outpoint_id = TestBlockInfo::from_block(&block_d2).txns[0].0.clone();
+        let d2_outpoint_id: OutPointSourceId =
+            block_d2.transactions()[0].transaction().get_id().into();
         assert!(
             tf.process_block(block_d2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
@@ -1275,16 +1264,14 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        d2_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(d2_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
-                    .add_input(TxInput::new(
-                        d2_outpoint_id,
-                        1,
+                    )
+                    .add_input(
+                        TxInput::new(d2_outpoint_id, 1),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         OutputValue::Coin(Amount::from_atoms(123453)),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -1296,7 +1283,9 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         assert!(matches!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
+                BlockError::StateUpdateFailed(ConnectTransactionError::TxIndexError(
+                    TxIndexError::MissingOutputOrSpent
+                ))
             ))
         ));
     })
@@ -1314,21 +1303,21 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
 
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let output_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
+        }
+        .into();
         let block_index = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        genesis_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         output_value,
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -1340,24 +1329,25 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
-        let token_id = token_id(&block.transactions()[0]).unwrap();
+        let issuance_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
+        let token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Try to transfer a bunch of outputs where each separately do not exceed input tokens value, but a sum of outputs larger than inputs.
         let result = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: (total_funds + Amount::from_atoms(1)).unwrap(),
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -1376,16 +1366,16 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: total_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -1408,21 +1398,21 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
 
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let output_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
+        }
+        .into();
         let block_index = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        genesis_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         output_value,
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -1434,31 +1424,33 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
-        let token_id = token_id(&block.transactions()[0]).unwrap();
+        let issuance_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
+        let token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Try to transfer a bunch of outputs where each separately do not exceed input tokens value, but a sum of outputs larger than inputs.
         let result = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: total_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: total_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -1477,16 +1469,16 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        issuance_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id,
                             amount: total_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -1508,22 +1500,22 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX - 1));
         // Issuance a few different tokens
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let output_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
+        }
+        .into();
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
         let block_index = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        genesis_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
                         output_value,
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -1539,38 +1531,39 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let first_issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
-        let first_token_id = token_id(&block.transactions()[0]).unwrap();
+        let first_issuance_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
+        let first_token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
         let block_index = tf
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        first_issuance_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(first_issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
-                    .add_input(TxInput::new(
-                        first_issuance_outpoint_id,
-                        1,
+                    )
+                    .add_input(
+                        TxInput::new(first_issuance_outpoint_id, 1),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id: first_token_id,
                             amount: total_funds,
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenIssuanceV1 {
+                        TokenIssuanceV1 {
                             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                             amount_to_issue: total_funds,
                             number_of_decimals: 1,
                             metadata_uri: b"https://some_site.meta".to_vec(),
-                        }),
+                        }
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
@@ -1584,8 +1577,9 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let second_issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
-        let _ = token_id(&block.transactions()[0]).unwrap();
+        let second_issuance_outpoint_id: OutPointSourceId =
+            block.transactions()[0].transaction().get_id().into();
+        let _ = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Try to spend sum of input tokens
 
@@ -1594,26 +1588,24 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        second_issuance_outpoint_id.clone(),
-                        0,
+                    .add_input(
+                        TxInput::new(second_issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
-                    ))
-                    .add_input(TxInput::new(
-                        second_issuance_outpoint_id.clone(),
-                        1,
+                    )
+                    .add_input(
+                        TxInput::new(second_issuance_outpoint_id.clone(), 1),
                         InputWitness::NoSignature(None),
-                    ))
-                    .add_input(TxInput::new(
-                        second_issuance_outpoint_id,
-                        2,
+                    )
+                    .add_input(
+                        TxInput::new(second_issuance_outpoint_id, 2),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        OutputValue::Token(TokenData::TokenTransferV1 {
+                        TokenData::TokenTransferV1(TokenTransferV1 {
                             token_id: first_token_id,
                             amount: Amount::from_atoms(total_funds.into_atoms() + 1),
-                        }),
+                        })
+                        .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
@@ -1642,26 +1634,25 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let mut tf = TestFramework::default();
 
         // Issue a new token
-        let issuance_value = OutputValue::Token(TokenData::TokenIssuanceV1 {
+        let issuance_value = TokenIssuanceV1 {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-        });
+        };
         let genesis_id = tf.genesis().get_id();
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = tf.genesis().get_id().into();
         let block_index = tf
             .make_block_builder()
             .with_parent(genesis_id.into())
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(TxInput::new(
-                        genesis_outpoint_id,
-                        0,
+                    .add_input(
+                        TxInput::new(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
-                    ))
+                    )
                     .add_output(TxOutput::new(
-                        issuance_value.clone(),
+                        issuance_value.clone().into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
@@ -1671,19 +1662,22 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
             .unwrap();
 
         let issuance_block = tf.block(*block_index.block_id());
-        let token_id = token_id(&issuance_block.transactions()[0]).unwrap();
+        let token_id = token_id(issuance_block.transactions()[0].transaction()).unwrap();
 
         // Check tokens available in storage
         let token_aux_data = tf.chainstate.get_token_aux_data(token_id).unwrap().unwrap();
         // Check id
         assert!(issuance_block.get_id() == token_aux_data.issuance_block_id());
         let issuance_tx = &issuance_block.transactions()[0];
-        assert!(issuance_tx.get_id() == token_aux_data.issuance_tx().get_id());
+        assert!(issuance_tx.transaction().get_id() == token_aux_data.issuance_tx().get_id());
         // Check issuance storage in the chain and in the storage
-        assert_eq!(issuance_tx.outputs()[0].value(), &issuance_value);
+        assert_eq!(
+            issuance_tx.transaction().outputs()[0].value(),
+            &issuance_value.clone().into()
+        );
         assert_eq!(
             token_aux_data.issuance_tx().outputs()[0].value(),
-            &issuance_value
+            &issuance_value.into()
         );
 
         // Cause reorg
@@ -1703,7 +1697,7 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         assert!(tf
             .chainstate
             .get_mainchain_tx_index(&common::chain::OutPointSourceId::Transaction(
-                issuance_tx.get_id()
+                issuance_tx.transaction().get_id()
             ))
             .unwrap()
             .is_none());
@@ -1711,7 +1705,7 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         // Check that tokens not in storage
         assert!(tf
             .chainstate
-            .get_token_id_from_issuance_tx(&issuance_tx.get_id())
+            .get_token_id_from_issuance_tx(&issuance_tx.transaction().get_id())
             .unwrap()
             .is_none());
 
@@ -1733,12 +1727,13 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
 
         // Check if it issuance
         let reward_output = TxOutput::new(
-            OutputValue::Token(TokenData::TokenIssuanceV1 {
+            TokenIssuanceV1 {
                 token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                 amount_to_issue: total_funds,
                 number_of_decimals: rng.gen_range(1..18),
                 metadata_uri: random_string(&mut rng, 1..1024).as_bytes().to_vec(),
-            }),
+            }
+            .into(),
             OutputPurpose::Transfer(Destination::PublicKey(pub_key.clone())),
         );
         let block = tf
@@ -1756,10 +1751,11 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
 
         // Check if it transfer
         let reward_output = TxOutput::new(
-            OutputValue::Token(TokenData::TokenTransferV1 {
+            TokenData::TokenTransferV1(TokenTransferV1 {
                 token_id: TokenId::random(),
                 amount: total_funds,
-            }),
+            })
+            .into(),
             OutputPurpose::Transfer(Destination::PublicKey(pub_key.clone())),
         );
         let block = tf
@@ -1777,10 +1773,11 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
 
         // Check if it burn
         let reward_output = TxOutput::new(
-            OutputValue::Token(TokenData::TokenBurnV1 {
+            TokenData::TokenBurnV1(TokenBurnV1 {
                 token_id: TokenId::random(),
                 amount_to_burn: total_funds,
-            }),
+            })
+            .into(),
             OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
         );
         let block = tf
@@ -1804,23 +1801,44 @@ fn chosen_hashes_for_token_data() {
     let mut hash_stream = id::DefaultHashAlgoStream::new();
 
     // Token issuance
-    let token_data = TokenData::TokenIssuanceV1 {
+    let token_issuance = TokenIssuanceV1 {
         token_ticker: b"SOME".to_vec(),
         amount_to_issue: Amount::from_atoms(123456789),
         number_of_decimals: 123,
         metadata_uri: "https://some_site.some".as_bytes().to_vec(),
     };
-    id::hash_encoded_to(&token_data, &mut hash_stream);
+    id::hash_encoded_to(&token_issuance, &mut hash_stream);
     expect![[r#"
-            0x7b0482a8a4ebe22005777f6380a8a10432758146c60e7f8b61a768d9152de3f0
+            0xa63a4ae4146ff43096baa2b8e648edca108abf34960e746def28443957ffe04e
         "#]]
-    .assert_debug_eq(&Id::<TokenData>::new(hash_stream.finalize().into()).get());
+    .assert_debug_eq(&Id::<TokenIssuanceV1>::new(hash_stream.finalize().into()).get());
+
+    // NFT issuance
+    let nft_issuance = NftIssuanceV1 {
+        metadata: Metadata {
+            creator: None,
+            name: b"SOME".to_vec(),
+            description: b"NFT".to_vec(),
+            ticker: b"Ticker".to_vec(),
+            icon_uri: DataOrNoVec::from(Some(vec![9, 8, 7, 6, 5, 4, 3, 2, 1])),
+            additional_metadata_uri: DataOrNoVec::from(Some(vec![
+                10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+            ])),
+            media_uri: DataOrNoVec::from(Some(vec![20, 21, 22, 23, 24, 25, 26, 27, 28, 29])),
+            media_hash: vec![30, 31, 32, 33, 34, 35, 36, 37, 38, 39],
+        },
+    };
+    id::hash_encoded_to(&nft_issuance, &mut hash_stream);
+    expect![[r#"
+            0xbe6ad7ed36c9f898fae21bf5f3164c090c979a5b4083643a60276028012db15a
+        "#]]
+    .assert_debug_eq(&Id::<NftIssuanceV1>::new(hash_stream.finalize().into()).get());
 
     // Token burn
-    let token_data = TokenData::TokenBurnV1 {
+    let token_data = TokenData::TokenBurnV1(TokenBurnV1 {
         token_id: TokenId::zero(),
         amount_to_burn: Amount::from_atoms(1234567890),
-    };
+    });
     id::hash_encoded_to(&token_data, &mut hash_stream);
     expect![[r#"
             0xf33c5e6a8bc8575ee5f5f747f2fdb1f7c77f6dc17e7bca5b13f500f672f68b3c
@@ -1828,13 +1846,68 @@ fn chosen_hashes_for_token_data() {
     .assert_debug_eq(&Id::<TokenData>::new(hash_stream.finalize().into()).get());
 
     // Token Transfer
-    let token_data = TokenData::TokenTransferV1 {
+    let token_data = TokenData::TokenTransferV1(TokenTransferV1 {
         token_id: TokenId::zero(),
         amount: Amount::from_atoms(1234567890),
-    };
+    });
     id::hash_encoded_to(&token_data, &mut hash_stream);
     expect![[r#"
             0x988fb6c034fd307d609c24c2b9534c7bf370c198bf5229f83343d22669e84d4f
         "#]]
     .assert_debug_eq(&Id::<TokenData>::new(hash_stream.finalize().into()).get());
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+
+        let tx_1 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                TokenIssuanceV1 {
+                    token_ticker: "XXXX".as_bytes().to_vec(),
+                    amount_to_issue: Amount::from_atoms(rng.gen_range(100_000..u128::MAX)),
+                    number_of_decimals: rng.gen_range(1..18),
+                    metadata_uri: "http://uri".as_bytes().to_vec(),
+                }
+                .into(),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .build();
+
+        let tx_2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::Transaction(tx_1.transaction().get_id()),
+                    0,
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                TokenData::TokenTransferV1(TokenTransferV1 {
+                    token_id: token_id(tx_1.transaction()).unwrap(),
+                    amount: Amount::from_atoms(rng.gen_range(1..100_000)),
+                })
+                .into(),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .build();
+
+        tf.make_block_builder()
+            .add_transaction(tx_1)
+            .add_transaction(tx_2)
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+    })
 }

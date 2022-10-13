@@ -78,7 +78,7 @@ impl Amount {
         Amount { val: v }
     }
 
-    pub fn into_atoms(&self) -> UnsignedIntType {
+    pub const fn into_atoms(&self) -> UnsignedIntType {
         self.val
     }
 

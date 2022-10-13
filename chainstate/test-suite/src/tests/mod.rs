@@ -32,9 +32,16 @@ use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 
 mod bootstrap;
+mod chainstate_storage_tests;
 mod double_spend_tests;
 mod events_tests;
 mod fungible_tokens;
+mod homomorphism;
+mod nft_burn;
+mod nft_issuance;
+mod nft_reorgs;
+mod nft_transfer;
+mod nft_utils;
 mod output_timelock;
 mod processing_tests;
 mod reorgs_tests;

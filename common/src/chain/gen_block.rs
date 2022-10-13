@@ -15,6 +15,8 @@
 
 //! Generalized block, or [GenBlock]
 
+use typename::TypeName;
+
 use super::{Block, Genesis};
 use crate::primitives::Id;
 
@@ -22,7 +24,7 @@ use crate::primitives::Id;
 ///
 /// Does not contain any data, only used as `Id<GenBlock>` to signify given Id can refer to either
 /// genesis or proper block.
-#[derive(Eq, PartialEq, Clone, Debug)]
+#[derive(Eq, PartialEq, Clone, Debug, TypeName)]
 pub enum GenBlock {}
 
 impl From<Id<Block>> for Id<GenBlock> {

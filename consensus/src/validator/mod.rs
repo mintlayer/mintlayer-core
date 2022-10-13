@@ -13,16 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use self::{
-    block_index_handle::BlockIndexHandle, error::ExtraConsensusDataError,
-    transaction_index_handle::TransactionIndexHandle,
-};
+pub use self::{error::ExtraConsensusDataError, transaction_index_handle::TransactionIndexHandle};
 
-mod block_index_handle;
-mod error;
 mod transaction_index_handle;
 
-use chainstate_types::{pos_randomness::PoSRandomness, BlockIndex, ConsensusExtraData};
+use chainstate_types::{
+    pos_randomness::PoSRandomness, preconnect_data::ConsensusExtraData, BlockIndex,
+    BlockIndexHandle,
+};
 use common::{
     chain::{
         block::{consensus_data::PoSData, BlockHeader, ConsensusData},
@@ -31,6 +29,8 @@ use common::{
     },
     primitives::Idable,
 };
+
+pub mod error;
 
 use crate::{
     error::ConsensusVerificationError,

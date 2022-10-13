@@ -15,6 +15,7 @@
 
 use super::*;
 use common::chain::tokens::OutputValue;
+use common::chain::transaction::signed_transaction::SignedTransaction;
 use common::chain::{Destination, OutputPurpose, TxOutput};
 use common::primitives::{Amount, H256};
 use crypto::key::{KeyKind, PrivateKey};
@@ -29,7 +30,7 @@ type TestStore = crate::inmemory::Store;
 fn test_storage_get_default_version_in_tx() {
     utils::concurrency::model(|| {
         let store = TestStore::new_empty().unwrap();
-        let vtx = store.transaction_ro().get_storage_version().unwrap();
+        let vtx = store.transaction_ro().unwrap().get_storage_version().unwrap();
         let vst = store.get_storage_version().unwrap();
         assert_eq!(vtx, 1, "Default storage version wrong");
         assert_eq!(vtx, vst, "Transaction and non-transaction inconsistency");
@@ -51,7 +52,7 @@ fn test_storage_manipulation() {
     let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
     let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
     let block0 = Block::new(
-        vec![tx0.clone()],
+        vec![SignedTransaction::new(tx0.clone(), vec![]).expect("invalid witness count")],
         Id::new(H256::default()),
         BlockTimestamp::from_int_seconds(12),
         ConsensusData::None,
@@ -59,7 +60,7 @@ fn test_storage_manipulation() {
     )
     .unwrap();
     let block1 = Block::new(
-        vec![tx1.clone()],
+        vec![SignedTransaction::new(tx1.clone(), vec![]).expect("invalid witness count")],
         Id::new(block0.get_id().get()),
         BlockTimestamp::from_int_seconds(34),
         ConsensusData::None,
@@ -156,7 +157,7 @@ fn get_set_transactions() {
         let thr1 = {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
-                let mut tx = store.transaction_rw();
+                let mut tx = store.transaction_rw().unwrap();
                 let v = tx.get_storage_version().unwrap();
                 tx.set_storage_version(v + 1).unwrap();
                 tx.commit().unwrap();
@@ -165,7 +166,7 @@ fn get_set_transactions() {
         let thr0 = {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
-                let tx = store.transaction_ro();
+                let tx = store.transaction_ro().unwrap();
                 let v1 = tx.get_storage_version().unwrap();
                 let v2 = tx.get_storage_version().unwrap();
                 assert!([2, 3].contains(&v1));
@@ -190,7 +191,7 @@ fn test_storage_transactions() {
         let thr0 = {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
-                let mut tx = store.transaction_rw();
+                let mut tx = store.transaction_rw().unwrap();
                 let v = tx.get_storage_version().unwrap();
                 tx.set_storage_version(v + 3).unwrap();
                 tx.commit().unwrap();
@@ -199,7 +200,7 @@ fn test_storage_transactions() {
         let thr1 = {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
-                let mut tx = store.transaction_rw();
+                let mut tx = store.transaction_rw().unwrap();
                 let v = tx.get_storage_version().unwrap();
                 tx.set_storage_version(v + 5).unwrap();
                 tx.commit().unwrap();
@@ -223,7 +224,7 @@ fn test_storage_transactions_with_result_check() {
         let thr0 = {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
-                let mut tx = store.transaction_rw();
+                let mut tx = store.transaction_rw().unwrap();
                 let v = tx.get_storage_version().unwrap();
                 assert!(tx.set_storage_version(v + 3).is_ok());
                 assert!(tx.commit().is_ok());
@@ -232,7 +233,7 @@ fn test_storage_transactions_with_result_check() {
         let thr1 = {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
-                let mut tx = store.transaction_rw();
+                let mut tx = store.transaction_rw().unwrap();
                 let v = tx.get_storage_version().unwrap();
                 assert!(tx.set_storage_version(v + 5).is_ok());
                 assert!(tx.commit().is_ok());

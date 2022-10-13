@@ -76,6 +76,10 @@ impl BlockUndo {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.reward_undo.is_none() && self.tx_undos.is_empty()
+    }
+
     pub fn tx_undos(&self) -> &[TxUndo] {
         &self.tx_undos
     }
@@ -99,6 +103,18 @@ impl BlockUndo {
 
     pub fn take_block_reward_undo(&mut self) -> Option<BlockRewardUndo> {
         self.reward_undo.take()
+    }
+
+    pub fn append(&mut self, other: BlockUndo) {
+        if let Some(reward_undo) = other.reward_undo {
+            if self.reward_undo.is_none() && !reward_undo.inner().is_empty() {
+                self.reward_undo = Some(Default::default());
+            }
+            reward_undo.0.into_iter().for_each(|u| {
+                self.reward_undo.as_mut().expect("must've been already initialized ").0.push(u);
+            })
+        }
+        other.tx_undos.into_iter().for_each(|u| self.push_tx_undo(u));
     }
 }
 

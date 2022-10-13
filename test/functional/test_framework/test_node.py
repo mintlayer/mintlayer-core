@@ -217,10 +217,12 @@ class TestNode():
         # add environment variable LIBC_FATAL_STDERR_=1 so that libc errors are written to stderr and not the terminal
         subp_env = dict(os.environ, LIBC_FATAL_STDERR_="1")
 
-        self.process = subprocess.Popen(self.args + extra_args, env=subp_env, stdout=stdout, stderr=stderr, cwd=cwd, **kwargs)
+        cmd = self.args + extra_args
+        self.log.debug("Starting node with command: {}".format(" ".join(self.args + extra_args)))
+        self.process = subprocess.Popen(cmd, env=subp_env, stdout=stdout, stderr=stderr, cwd=cwd, **kwargs)
 
         self.running = True
-        self.log.debug("bitcoind started, waiting for RPC to come up")
+        self.log.debug("mintlayer-core started, waiting for RPC to come up")
 
         if self.start_perf:
             self._start_perf()

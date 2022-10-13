@@ -56,7 +56,7 @@
 //!     let mut store = Storage::<_, Schema>::new(storage::inmemory::InMemory::new())?;
 //!
 //!     // All store operations happen inside of a transaction.
-//!     let mut tx = store.transaction_rw();
+//!     let mut tx = store.transaction_rw()?;
 //!
 //!     // Get the storage map, identified by the index type.
 //!     let mut map = tx.get_mut::<MyMap, _>();
@@ -72,18 +72,18 @@
 //!     tx.commit()?;
 //!
 //!     // Try writing a value but abort the transaction afterwards.
-//!     let mut tx = store.transaction_rw();
+//!     let mut tx = store.transaction_rw()?;
 //!     tx.get_mut::<MyMap, _>().put("baz", &42)?;
 //!     tx.abort();
 //!
 //!     // Transaction can return data. Values taken from the database have to be cloned
 //!     // in order for them to be available after the transaction terminates.
-//!     let tx = store.transaction_ro();
+//!     let tx = store.transaction_ro()?;
 //!     assert_eq!(tx.get::<MyMap, _>().get("baz")?, None);
 //!     tx.close();
 //!
 //!     // Check the value we first inserted is still there.
-//!     let tx = store.transaction_ro();
+//!     let tx = store.transaction_ro()?;
 //!     assert_eq!(tx.get::<MyMap, _>().get("foo")?.map(|x| x.decode()), Some(1337));
 //!     tx.close();
 //!

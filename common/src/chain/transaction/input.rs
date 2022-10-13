@@ -13,10 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::chain::{
-    transaction::signature::inputsig::InputWitness, transaction::Transaction, Block, GenBlock,
-    Genesis,
-};
+use crate::chain::{transaction::Transaction, Block, GenBlock, Genesis};
 use crate::primitives::{Id, H256};
 use serialization::{Decode, Encode};
 
@@ -127,31 +124,17 @@ impl OutPoint {
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct TxInput {
     outpoint: OutPoint,
-    witness: InputWitness,
 }
 
 impl TxInput {
-    pub fn new(
-        outpoint_source_id: OutPointSourceId,
-        output_index: u32,
-        witness: InputWitness,
-    ) -> Self {
+    pub fn new(outpoint_source_id: OutPointSourceId, output_index: u32) -> Self {
         TxInput {
             outpoint: OutPoint::new(outpoint_source_id, output_index),
-            witness,
         }
     }
 
     pub fn outpoint(&self) -> &OutPoint {
         &self.outpoint
-    }
-
-    pub fn witness(&self) -> &InputWitness {
-        &self.witness
-    }
-
-    pub fn update_witness(&mut self, witness: InputWitness) {
-        self.witness = witness
     }
 }
 

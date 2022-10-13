@@ -16,6 +16,7 @@
 //! Blockchain data encoding and decoding tools
 
 pub mod encoded;
+pub mod extras;
 
 // Re-export all the constituent parts
 pub use serialization_core::*;

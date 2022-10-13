@@ -55,26 +55,27 @@ pub fn get_output_token_id_and_amount(
 ) -> Result<Option<(CoinOrTokenId, Amount)>, TokensError> {
     Ok(match output_value {
         OutputValue::Coin(amount) => Some((CoinOrTokenId::Coin, *amount)),
-        OutputValue::Token(token_data) => match token_data {
-            TokenData::TokenTransferV1 { token_id, amount } => {
-                Some((CoinOrTokenId::TokenId(*token_id), *amount))
+        OutputValue::Token(token_data) => match &**token_data {
+            TokenData::TokenTransferV1(transfer) => {
+                Some((CoinOrTokenId::TokenId(transfer.token_id), transfer.amount))
             }
-            TokenData::TokenIssuanceV1 {
-                token_ticker: _,
-                amount_to_issue,
-                number_of_decimals: _,
-                metadata_uri: _,
-            } => match include_issuance {
+            TokenData::TokenIssuanceV1(issuance) => match include_issuance {
                 Some(tx) => {
                     let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
-                    Some((CoinOrTokenId::TokenId(token_id), *amount_to_issue))
+                    Some((CoinOrTokenId::TokenId(token_id), issuance.amount_to_issue))
                 }
                 None => None,
             },
-            TokenData::TokenBurnV1 {
-                token_id,
-                amount_to_burn,
-            } => Some((CoinOrTokenId::TokenId(*token_id), *amount_to_burn)),
+            TokenData::TokenBurnV1(burn) => {
+                Some((CoinOrTokenId::TokenId(burn.token_id), burn.amount_to_burn))
+            }
+            TokenData::NftIssuanceV1(_) => match include_issuance {
+                Some(tx) => {
+                    let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+                    Some((CoinOrTokenId::TokenId(token_id), Amount::from_atoms(1)))
+                }
+                None => None,
+            },
         },
     })
 }
@@ -87,29 +88,28 @@ pub fn get_input_token_id_and_amount<
 ) -> Result<(CoinOrTokenId, Amount), ConnectTransactionError> {
     Ok(match output_value {
         OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
-        OutputValue::Token(token_data) => match token_data {
-            TokenData::TokenTransferV1 { token_id, amount } => {
-                (CoinOrTokenId::TokenId(*token_id), *amount)
+        OutputValue::Token(token_data) => match &**token_data {
+            TokenData::TokenTransferV1(transfer) => {
+                (CoinOrTokenId::TokenId(transfer.token_id), transfer.amount)
             }
-            TokenData::TokenIssuanceV1 {
-                token_ticker: _,
-                amount_to_issue,
-                number_of_decimals: _,
-                metadata_uri: _,
-            } => issuance_token_id_getter()?
-                .map(|token_id| (CoinOrTokenId::TokenId(token_id), *amount_to_issue))
+            TokenData::TokenIssuanceV1(issuance) => issuance_token_id_getter()?
+                .map(|token_id| (CoinOrTokenId::TokenId(token_id), issuance.amount_to_issue))
                 .ok_or(ConnectTransactionError::TokensError(
                     TokensError::TokenIdCantBeCalculated,
                 ))?,
-            TokenData::TokenBurnV1 {
-                token_id: _,
-                amount_to_burn: _,
-            } => {
+            TokenData::TokenBurnV1(_) => {
                 // Tokens have burned and can't be transferred
                 return Err(ConnectTransactionError::TokensError(
                     TokensError::AttemptToTransferBurnedTokens,
                 ));
             }
+
+            TokenData::NftIssuanceV1(_) => issuance_token_id_getter()?
+                // TODO: Find more appropriate way to check NFTs when we add multi-token feature
+                .map(|token_id| (CoinOrTokenId::TokenId(token_id), Amount::from_atoms(1)))
+                .ok_or(ConnectTransactionError::TokensError(
+                    TokensError::TokenIdCantBeCalculated,
+                ))?,
         },
     })
 }

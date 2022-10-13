@@ -20,7 +20,7 @@ use crate::{
 use common::{
     chain::{
         block::{BlockReward, BlockRewardTransactable},
-        signature::Transactable,
+        signature::Signable,
         GenBlock, OutPoint, OutPointSourceId, Transaction,
     },
     primitives::{BlockHeight, Id, Idable},
@@ -30,7 +30,7 @@ use std::{
     fmt::{Debug, Formatter},
 };
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ConsumedUtxoCache {
     pub(crate) container: BTreeMap<OutPoint, UtxoEntry>,
     pub(crate) best_block: Id<GenBlock>,

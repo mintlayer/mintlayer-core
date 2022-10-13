@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crypto::random::{Rng, SeedableRng};
-use rand_chacha::ChaChaRng;
+use rand_chacha::{rand_core::CryptoRng, ChaChaRng};
 use std::{num::ParseIntError, str::FromStr};
 
 #[derive(Debug, Copy, Clone)]
@@ -40,6 +40,6 @@ impl FromStr for Seed {
 }
 
 #[must_use]
-pub fn make_seedable_rng(seed: Seed) -> impl Rng {
+pub fn make_seedable_rng(seed: Seed) -> impl Rng + CryptoRng {
     ChaChaRng::seed_from_u64(seed.0)
 }

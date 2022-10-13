@@ -17,6 +17,7 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         signature::inputsig::InputWitness,
+        signed_transaction::SignedTransaction,
         Transaction, TxInput, TxOutput,
     },
     primitives::{time, Id, H256},
@@ -34,7 +35,7 @@ use common::chain::GenBlock;
 /// The block builder that allows construction and processing of a block.
 pub struct BlockBuilder<'f> {
     framework: &'f mut TestFramework,
-    transactions: Vec<Transaction>,
+    transactions: Vec<SignedTransaction>,
     prev_block_hash: Id<GenBlock>,
     timestamp: BlockTimestamp,
     consensus_data: ConsensusData,
@@ -64,13 +65,13 @@ impl<'f> BlockBuilder<'f> {
     }
 
     /// Replaces the transactions.
-    pub fn with_transactions(mut self, transactions: Vec<Transaction>) -> Self {
+    pub fn with_transactions(mut self, transactions: Vec<SignedTransaction>) -> Self {
         self.transactions = transactions;
         self
     }
 
     /// Appends the given transaction to the transactions list.
-    pub fn add_transaction(mut self, transaction: Transaction) -> Self {
+    pub fn add_transaction(mut self, transaction: SignedTransaction) -> Self {
         self.transactions.push(transaction);
         self
     }
@@ -88,18 +89,24 @@ impl<'f> BlockBuilder<'f> {
         parent: Id<GenBlock>,
         rng: &mut impl Rng,
     ) -> Self {
-        let (inputs, outputs): (Vec<_>, Vec<_>) = self.make_test_inputs_outputs(
+        let (witnesses, inputs, outputs) = self.make_test_inputs_outputs(
             TestBlockInfo::from_id(&self.framework.chainstate, parent),
             rng,
         );
-        self.add_transaction(Transaction::new(0, inputs, outputs, 0).unwrap())
+        self.add_transaction(
+            SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
+                .expect("invalid witness count"),
+        )
     }
 
     /// Same as `add_test_transaction_with_parent`, but uses reference to a block.
     pub fn add_test_transaction_from_block(self, parent: &Block, rng: &mut impl Rng) -> Self {
-        let (inputs, outputs): (Vec<_>, Vec<_>) =
+        let (witnesses, inputs, outputs) =
             self.make_test_inputs_outputs(TestBlockInfo::from_block(parent), rng);
-        self.add_transaction(Transaction::new(0, inputs, outputs, 0).unwrap())
+        self.add_transaction(
+            SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
+                .expect("invalid witness count"),
+        )
     }
 
     /// Adds a transaction that tries to spend the already spent output from the specified block.
@@ -110,14 +117,14 @@ impl<'f> BlockBuilder<'f> {
         rng: &mut impl Rng,
     ) -> Self {
         let parent = TestBlockInfo::from_id(&self.framework.chainstate, parent);
-        let (mut inputs, outputs): (Vec<_>, Vec<_>) = self.make_test_inputs_outputs(parent, rng);
+        let (mut witnesses, mut inputs, outputs) = self.make_test_inputs_outputs(parent, rng);
         let spend_from = TestBlockInfo::from_id(&self.framework.chainstate, spend_from.into());
-        inputs.push(TxInput::new(
-            spend_from.txns[0].0.clone(),
-            0,
-            InputWitness::NoSignature(None),
-        ));
-        self.transactions.push(Transaction::new(0, inputs, outputs, 0).unwrap());
+        inputs.push(TxInput::new(spend_from.txns[0].0.clone(), 0));
+        witnesses.push(InputWitness::NoSignature(None));
+        self.transactions.push(
+            SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
+                .expect("invalid witness count"),
+        );
         self
     }
 
@@ -181,11 +188,15 @@ impl<'f> BlockBuilder<'f> {
         &self,
         parent: TestBlockInfo,
         rng: &mut impl Rng,
-    ) -> (Vec<TxInput>, Vec<TxOutput>) {
-        parent
+    ) -> (Vec<InputWitness>, Vec<TxInput>, Vec<TxOutput>) {
+        let res = parent
             .txns
             .into_iter()
             .flat_map(|(s, o)| create_new_outputs(&self.framework.chainstate, s, &o, rng))
-            .unzip()
+            .collect::<Vec<_>>();
+        let witnesses = res.iter().cloned().map(|e| e.0).collect::<Vec<_>>();
+        let inputs = res.iter().cloned().map(|e| e.1).collect::<Vec<_>>();
+        let outputs = res.iter().cloned().map(|e| e.2).collect::<Vec<_>>();
+        (witnesses, inputs, outputs)
     }
 }

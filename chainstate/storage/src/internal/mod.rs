@@ -31,6 +31,7 @@ use storage::schema;
 use utxo::{BlockUndo, Utxo, UtxosStorageRead, UtxosStorageWrite};
 
 use crate::{
+    schema::{self as db, Schema},
     BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
 
@@ -60,32 +61,6 @@ mod well_known {
     declare_entry!(UtxosBestBlockId: Id<GenBlock>);
 }
 
-storage::decl_schema! {
-    /// Database schema for blockchain storage
-    Schema {
-        /// Storage for individual values.
-        DBValue: Map<Vec<u8>, Vec<u8>>,
-        /// Storage for blocks.
-        DBBlock: Map<Id<Block>, Block>,
-        /// Store tag for blocks indexes.
-        DBBlockIndex: Map<Id<Block>, BlockIndex>,
-        /// Storage for transaction indices.
-        DBTxIndex: Map<OutPointSourceId, TxMainChainIndex>,
-        /// Storage for block IDs indexed by block height.
-        DBBlockByHeight: Map<BlockHeight, Id<GenBlock>>,
-        /// Store for Utxo Entries
-        DBUtxo: Map<OutPoint, Utxo>,
-        /// Store for BlockUndo
-        DBBlockUndo: Map<Id<Block>, BlockUndo>,
-        /// Store for EpochData
-        DBEpochData: Map<u64, EpochData>,
-        /// Store for token's info; created on issuance
-        DBTokensAuxData: Map<TokenId, TokenAuxiliaryData>,
-        /// Store of issuance tx id vs token id
-        DBIssuanceTxVsTokenId: Map<Id<Transaction>, TokenId>,
-    }
-}
-
 /// Store for blockchain data, parametrized over the backend B
 pub struct Store<B: storage::Backend>(storage::Storage<B, Schema>);
 
@@ -95,6 +70,11 @@ impl<B: storage::Backend> Store<B> {
         let mut storage = Self(storage::Storage::new(backend).map_err(crate::Error::from)?);
         storage.set_storage_version(1)?;
         Ok(storage)
+    }
+
+    /// Dump raw database contents
+    pub fn dump_raw(&self) -> crate::Result<storage::raw::StorageContents<Schema>> {
+        self.0.dump_raw().map_err(crate::Error::from)
     }
 }
 
@@ -118,12 +98,12 @@ impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
     type TransactionRo = StoreTxRo<'tx, B>;
     type TransactionRw = StoreTxRw<'tx, B>;
 
-    fn transaction_ro<'st: 'tx>(&'st self) -> Self::TransactionRo {
-        StoreTxRo(self.0.transaction_ro())
+    fn transaction_ro<'st: 'tx>(&'st self) -> crate::Result<Self::TransactionRo> {
+        self.0.transaction_ro().map_err(crate::Error::from).map(StoreTxRo)
     }
 
-    fn transaction_rw<'st: 'tx>(&'st self) -> Self::TransactionRw {
-        StoreTxRw(self.0.transaction_rw())
+    fn transaction_rw<'st: 'tx>(&'st self) -> crate::Result<Self::TransactionRw> {
+        self.0.transaction_rw().map_err(crate::Error::from).map(StoreTxRw)
     }
 }
 
@@ -148,7 +128,7 @@ macro_rules! delegate_to_transaction {
         ($($arg:ident: $aty:ty),* $(,)?)
     ) => {
         fn $f(&$($mut)? self $(, $arg: $aty)*) -> $ret {
-            let $($mut)? tx = self.$txfunc();
+            let $($mut)? tx = self.$txfunc()?;
             let val = tx.$f($($arg),*)?;
             $commit(tx).map(|_| val)
         }
@@ -261,7 +241,7 @@ macro_rules! impl_read_ops {
             }
 
             fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>> {
-                self.read::<DBBlockIndex, _, _>(id)
+                self.read::<db::DBBlockIndex, _, _>(id)
             }
 
             /// Get the hash of the best block
@@ -270,14 +250,14 @@ macro_rules! impl_read_ops {
             }
 
             fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>> {
-                self.read::<DBBlock, _, _>(id)
+                self.read::<db::DBBlock, _, _>(id)
             }
 
             fn get_block_reward(
                 &self,
                 block_index: &BlockIndex,
             ) -> crate::Result<Option<BlockReward>> {
-                match self.0.get::<DBBlock, _>().get(block_index.block_id()) {
+                match self.0.get::<db::DBBlock, _>().get(block_index.block_id()) {
                     Err(e) => Err(e.into()),
                     Ok(None) => Ok(None),
                     Ok(Some(block)) => {
@@ -296,7 +276,7 @@ macro_rules! impl_read_ops {
                 &self,
                 tx_id: &OutPointSourceId,
             ) -> crate::Result<Option<TxMainChainIndex>> {
-                self.read::<DBTxIndex, _, _>(tx_id)
+                self.read::<db::DBTxIndex, _, _>(tx_id)
             }
 
             fn get_mainchain_tx_by_position(
@@ -304,7 +284,7 @@ macro_rules! impl_read_ops {
                 tx_index: &TxMainChainPosition,
             ) -> crate::Result<Option<Transaction>> {
                 let block_id = tx_index.block_id();
-                match self.0.get::<DBBlock, _>().get(block_id) {
+                match self.0.get::<db::DBBlock, _>().get(block_id) {
                     Err(e) => Err(e.into()),
                     Ok(None) => Ok(None),
                     Ok(Some(block)) => {
@@ -323,31 +303,31 @@ macro_rules! impl_read_ops {
                 &self,
                 height: &BlockHeight,
             ) -> crate::Result<Option<Id<GenBlock>>> {
-                self.read::<DBBlockByHeight, _, _>(height)
+                self.read::<db::DBBlockByHeight, _, _>(height)
             }
 
             fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>> {
-                self.read::<DBEpochData, _, _>(&epoch_index)
+                self.read::<db::DBEpochData, _, _>(&epoch_index)
             }
 
             fn get_token_aux_data(
                 &self,
                 token_id: &TokenId,
             ) -> crate::Result<Option<TokenAuxiliaryData>> {
-                self.read::<DBTokensAuxData, _, _>(&token_id)
+                self.read::<db::DBTokensAuxData, _, _>(&token_id)
             }
 
             fn get_token_id(
                 &self,
                 issuance_tx_id: &Id<Transaction>,
             ) -> crate::Result<Option<TokenId>> {
-                self.read::<DBIssuanceTxVsTokenId, _, _>(&issuance_tx_id)
+                self.read::<db::DBIssuanceTxVsTokenId, _, _>(&issuance_tx_id)
             }
 
             fn get_block_tree_by_height(
                 &self,
             ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>> {
-                let map = self.0.get::<DBBlockIndex, _>();
+                let map = self.0.get::<db::DBBlockIndex, _>();
                 let items = map.prefix_iter(&())?.map(|(_id, bi)| bi.decode());
 
                 let mut result = BTreeMap::<BlockHeight, Vec<Id<Block>>>::new();
@@ -361,7 +341,7 @@ macro_rules! impl_read_ops {
 
         impl<'st, B: storage::Backend> UtxosStorageRead for $TxType<'st, B> {
             fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>> {
-                self.read::<DBUtxo, _, _>(outpoint)
+                self.read::<db::DBUtxo, _, _>(outpoint)
             }
 
             fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>> {
@@ -369,7 +349,7 @@ macro_rules! impl_read_ops {
             }
 
             fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>> {
-                self.read::<DBBlockUndo, _, _>(id)
+                self.read::<db::DBBlockUndo, _, _>(id)
             }
         }
 
@@ -387,7 +367,7 @@ macro_rules! impl_read_ops {
 
             // Read a value for a well-known entry
             fn read_value<E: well_known::Entry>(&self) -> crate::Result<Option<E::Value>> {
-                self.read::<DBValue, _, _>(E::KEY).map(|x| {
+                self.read::<db::DBValue, _, _>(E::KEY).map(|x| {
                     x.map(|x| {
                         E::Value::decode_all(&mut x.as_ref())
                             .expect("db values to be encoded correctly")
@@ -411,15 +391,15 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     }
 
     fn add_block(&mut self, block: &Block) -> crate::Result<()> {
-        self.write::<DBBlock, _, _, _>(block.get_id(), block)
+        self.write::<db::DBBlock, _, _, _>(block.get_id(), block)
     }
 
     fn del_block(&mut self, id: Id<Block>) -> crate::Result<()> {
-        self.0.get_mut::<DBBlock, _>().del(id).map_err(Into::into)
+        self.0.get_mut::<db::DBBlock, _>().del(id).map_err(Into::into)
     }
 
     fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()> {
-        self.write::<DBBlockIndex, _, _, _>(block_index.block_id(), block_index)
+        self.write::<db::DBBlockIndex, _, _, _>(block_index.block_id(), block_index)
     }
 
     fn set_mainchain_tx_index(
@@ -427,11 +407,11 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         tx_id: &OutPointSourceId,
         tx_index: &TxMainChainIndex,
     ) -> crate::Result<()> {
-        self.write::<DBTxIndex, _, _, _>(tx_id, tx_index)
+        self.write::<db::DBTxIndex, _, _, _>(tx_id, tx_index)
     }
 
     fn del_mainchain_tx_index(&mut self, tx_id: &OutPointSourceId) -> crate::Result<()> {
-        self.0.get_mut::<DBTxIndex, _>().del(tx_id).map_err(Into::into)
+        self.0.get_mut::<db::DBTxIndex, _>().del(tx_id).map_err(Into::into)
     }
 
     fn set_block_id_at_height(
@@ -439,30 +419,30 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         height: &BlockHeight,
         block_id: &Id<GenBlock>,
     ) -> crate::Result<()> {
-        self.write::<DBBlockByHeight, _, _, _>(height, block_id)
+        self.write::<db::DBBlockByHeight, _, _, _>(height, block_id)
     }
 
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()> {
-        self.0.get_mut::<DBBlockByHeight, _>().del(height).map_err(Into::into)
+        self.0.get_mut::<db::DBBlockByHeight, _>().del(height).map_err(Into::into)
     }
 
     fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()> {
-        self.write::<DBEpochData, _, _, _>(epoch_index, &epoch_data)
+        self.write::<db::DBEpochData, _, _, _>(epoch_index, &epoch_data)
     }
 
     fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()> {
-        self.0.get_mut::<DBEpochData, _>().del(&epoch_index).map_err(Into::into)
+        self.0.get_mut::<db::DBEpochData, _>().del(&epoch_index).map_err(Into::into)
     }
     fn set_token_aux_data(
         &mut self,
         token_id: &TokenId,
         data: &TokenAuxiliaryData,
     ) -> crate::Result<()> {
-        self.write::<DBTokensAuxData, _, _, _>(token_id, &data)
+        self.write::<db::DBTokensAuxData, _, _, _>(token_id, &data)
     }
 
     fn del_token_aux_data(&mut self, token_id: &TokenId) -> crate::Result<()> {
-        self.0.get_mut::<DBTokensAuxData, _>().del(&token_id).map_err(Into::into)
+        self.0.get_mut::<db::DBTokensAuxData, _>().del(&token_id).map_err(Into::into)
     }
 
     fn set_token_id(
@@ -470,12 +450,12 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         issuance_tx_id: &Id<Transaction>,
         token_id: &TokenId,
     ) -> crate::Result<()> {
-        self.write::<DBIssuanceTxVsTokenId, _, _, _>(issuance_tx_id, token_id)
+        self.write::<db::DBIssuanceTxVsTokenId, _, _, _>(issuance_tx_id, token_id)
     }
 
     fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()> {
         self.0
-            .get_mut::<DBIssuanceTxVsTokenId, _>()
+            .get_mut::<db::DBIssuanceTxVsTokenId, _>()
             .del(&issuance_tx_id)
             .map_err(Into::into)
     }
@@ -483,11 +463,11 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
 impl<'st, B: storage::Backend> UtxosStorageWrite for StoreTxRw<'st, B> {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()> {
-        self.write::<DBUtxo, _, _, _>(outpoint, entry)
+        self.write::<db::DBUtxo, _, _, _>(outpoint, entry)
     }
 
     fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()> {
-        self.0.get_mut::<DBUtxo, _>().del(outpoint).map_err(Into::into)
+        self.0.get_mut::<db::DBUtxo, _>().del(outpoint).map_err(Into::into)
     }
 
     fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()> {
@@ -495,11 +475,11 @@ impl<'st, B: storage::Backend> UtxosStorageWrite for StoreTxRw<'st, B> {
     }
 
     fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()> {
-        self.write::<DBBlockUndo, _, _, _>(id, undo)
+        self.write::<db::DBBlockUndo, _, _, _>(id, undo)
     }
 
     fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
-        self.0.get_mut::<DBBlockUndo, _>().del(id).map_err(Into::into)
+        self.0.get_mut::<db::DBBlockUndo, _>().del(id).map_err(Into::into)
     }
 }
 
@@ -517,7 +497,7 @@ impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
 
     // Write a value for a well-known entry
     fn write_value<E: well_known::Entry>(&mut self, val: &E::Value) -> crate::Result<()> {
-        self.write::<DBValue, _, _, _>(E::KEY, val.encode())
+        self.write::<db::DBValue, _, _, _>(E::KEY, val.encode())
     }
 }
 

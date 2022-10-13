@@ -60,7 +60,7 @@ impl DbDesc {
     }
 
     /// Iterate over map descriptions of this database
-    pub fn iter(&self) -> impl '_ + Iterator + ExactSizeIterator {
+    pub fn iter(&self) -> impl '_ + Iterator<Item = &MapDesc> + ExactSizeIterator {
         self.0.iter()
     }
 }

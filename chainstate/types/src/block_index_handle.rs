@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
+use crate::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{block::BlockReward, Block, GenBlock},
     primitives::{BlockHeight, Id},

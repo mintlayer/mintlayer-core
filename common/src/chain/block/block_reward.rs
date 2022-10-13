@@ -15,10 +15,13 @@
 
 use serialization::{Decode, Encode};
 
-use crate::chain::{signature::Transactable, TxInput, TxOutput};
+use crate::chain::{
+    signature::{inputsig::InputWitness, Signable, Transactable},
+    TxInput, TxOutput,
+};
 
 /// Represents a block reward.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct BlockReward {
     reward_outputs: Vec<TxOutput>,
 }
@@ -38,9 +41,10 @@ impl BlockReward {
 pub struct BlockRewardTransactable<'a> {
     pub(in crate::chain) inputs: Option<&'a [TxInput]>,
     pub(in crate::chain) outputs: Option<&'a [TxOutput]>,
+    pub(in crate::chain) witness: Option<&'a [InputWitness]>,
 }
 
-impl<'a> Transactable for BlockRewardTransactable<'a> {
+impl<'a> Signable for BlockRewardTransactable<'a> {
     fn inputs(&self) -> Option<&[TxInput]> {
         self.inputs
     }
@@ -59,5 +63,11 @@ impl<'a> Transactable for BlockRewardTransactable<'a> {
 
     fn flags(&self) -> Option<u32> {
         None
+    }
+}
+
+impl<'a> Transactable for BlockRewardTransactable<'a> {
+    fn signatures(&self) -> Option<&[InputWitness]> {
+        self.witness
     }
 }

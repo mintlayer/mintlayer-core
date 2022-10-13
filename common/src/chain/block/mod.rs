@@ -33,15 +33,13 @@ mod block_v1;
 use std::iter;
 
 use serialization::{DirectDecode, DirectEncode};
+use typename::TypeName;
 
 use crate::{
-    chain::{
-        block::{
-            block_size::BlockSize,
-            block_v1::{BlockBody, BlockV1},
-            timestamp::BlockTimestamp,
-        },
-        transaction::Transaction,
+    chain::block::{
+        block_size::BlockSize,
+        block_v1::{BlockBody, BlockV1},
+        timestamp::BlockTimestamp,
     },
     primitives::{
         id::{self, WithId},
@@ -50,20 +48,24 @@ use crate::{
     },
 };
 
+use super::signed_transaction::SignedTransaction;
+
 pub fn calculate_tx_merkle_root(body: &BlockBody) -> Result<H256, merkle::MerkleTreeFormError> {
-    const TX_HASHER: fn(&Transaction) -> H256 = |tx: &Transaction| tx.get_id().get();
+    const TX_HASHER: fn(&SignedTransaction) -> H256 =
+        |tx: &SignedTransaction| tx.transaction().get_id().get();
     calculate_generic_merkle_root(&TX_HASHER, body)
 }
 
 pub fn calculate_witness_merkle_root(
     body: &BlockBody,
 ) -> Result<H256, merkle::MerkleTreeFormError> {
-    const TX_HASHER: fn(&Transaction) -> H256 = |tx: &Transaction| tx.serialized_hash().get();
+    const TX_HASHER: fn(&SignedTransaction) -> H256 =
+        |tx: &SignedTransaction| tx.serialized_hash().get();
     calculate_generic_merkle_root(&TX_HASHER, body)
 }
 
 fn calculate_generic_merkle_root(
-    tx_hasher: &fn(&Transaction) -> H256,
+    tx_hasher: &fn(&SignedTransaction) -> H256,
     body: &BlockBody,
 ) -> Result<H256, merkle::MerkleTreeFormError> {
     let rewards_hash = id::hash_encoded(&body.reward);
@@ -92,7 +94,7 @@ impl From<MerkleTreeFormError> for BlockCreationError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode, TypeName)]
 #[must_use]
 pub enum Block {
     V1(BlockV1),
@@ -100,7 +102,7 @@ pub enum Block {
 
 impl Block {
     pub fn new(
-        transactions: Vec<Transaction>,
+        transactions: Vec<SignedTransaction>,
         prev_block_hash: Id<GenBlock>,
         timestamp: BlockTimestamp,
         consensus_data: ConsensusData,
@@ -129,7 +131,7 @@ impl Block {
 
     // this function is needed to avoid a circular dependency with storage
     pub fn new_with_no_consensus(
-        transactions: Vec<Transaction>,
+        transactions: Vec<SignedTransaction>,
         prev_block_hash: Id<GenBlock>,
         timestamp: BlockTimestamp,
     ) -> Result<Self, BlockCreationError> {
@@ -192,7 +194,7 @@ impl Block {
         }
     }
 
-    pub fn transactions(&self) -> &Vec<Transaction> {
+    pub fn transactions(&self) -> &Vec<SignedTransaction> {
         match self {
             Block::V1(blk) => blk.transactions(),
         }
@@ -362,7 +364,11 @@ mod tests {
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
-        let one_transaction = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
+        let one_transaction = SignedTransaction::new(
+            Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap(),
+            vec![],
+        )
+        .expect("invalid witness count");
         let body = BlockBody {
             reward: BlockReward::new(Vec::new()),
             transactions: vec![one_transaction],
@@ -376,13 +382,13 @@ mod tests {
 
     #[test]
     fn tx_with_witness_always_different_merkle_witness_root() {
-        let inputs = vec![TxInput::new(
-            OutPointSourceId::Transaction(H256::random().into()),
-            0,
-            InputWitness::NoSignature(Some(b"abc".to_vec())),
-        )];
+        let inputs = vec![TxInput::new(OutPointSourceId::Transaction(H256::random().into()), 0)];
 
-        let one_transaction = Transaction::new(0, inputs, Vec::new(), 0).unwrap();
+        let one_transaction = SignedTransaction::new(
+            Transaction::new(0, inputs, Vec::new(), 0).unwrap(),
+            vec![InputWitness::NoSignature(Some(b"abc".to_vec()))],
+        )
+        .expect("invalid witness count");
         let body = BlockBody {
             reward: BlockReward::new(Vec::new()),
             transactions: vec![one_transaction],

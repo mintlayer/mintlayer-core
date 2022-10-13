@@ -16,7 +16,7 @@
 //! Storage errors
 
 /// Recoverable database error
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, thiserror::Error)]
 pub enum Recoverable {
     /// Transaction has failed to execute and its effects have not taken place. This could be e.g.
     /// because of a conflicting transaction front-running this one.
@@ -28,13 +28,17 @@ pub enum Recoverable {
     #[error("The database has temporarily exhausted some resource")]
     TemporarilyUnavailable,
 
-    /// Other recoverable error
-    #[error("Unknown database error")]
-    Unknown,
+    /// Database file failed to initialise. For example, if the DB file format is wrong.
+    #[error("The database file failed to initialize")]
+    DbInit,
+
+    /// Recoverable I/O error
+    #[error("I/O error: {1}")]
+    Io(std::io::ErrorKind, String),
 }
 
 /// Fatal database error
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, thiserror::Error)]
 pub enum Fatal {
     #[error("Out of storage space")]
     OutOfSpace,
@@ -44,17 +48,17 @@ pub enum Fatal {
     InternalError,
     #[error("Database schema does not match database settings or contents")]
     SchemaMismatch,
-    #[error("Unknown fatal database error")]
-    Unknown,
+    #[error("Fatal I/O error: {1}")]
+    Io(std::io::ErrorKind, String),
 }
 
 /// Database error
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, thiserror::Error)]
 pub enum Error {
     #[error("{0}")]
-    Recoverable(Recoverable),
+    Recoverable(#[from] Recoverable),
     #[error("{0}")]
-    Fatal(Fatal),
+    Fatal(#[from] Fatal),
 }
 
 impl Error {

@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate_types::BlockIndexHandle;
 use itertools::Itertools;
 
 use common::{
     chain::{block::timestamp::BlockTimestamp, GenBlock},
     primitives::Id,
 };
-use consensus::BlockIndexHandle;
 
 use crate::detail::block_index_history_iter::BlockIndexHistoryIterator;
 
@@ -42,7 +42,10 @@ pub fn calculate_median_time_past<H: BlockIndexHandle>(
 
 #[cfg(test)]
 mod test {
-    use crate::{BlockSource, Chainstate, ChainstateConfig};
+    use crate::{
+        detail::tx_verification_strategy::DefaultTransactionVerificationStrategy, BlockSource,
+        Chainstate, ChainstateConfig,
+    };
     use common::time_getter::TimeGetter;
 
     use super::*;
@@ -101,6 +104,7 @@ mod test {
                 chain_config,
                 chainstate_config,
                 storage,
+                DefaultTransactionVerificationStrategy::new(),
                 None,
                 Default::default(),
             )
@@ -121,6 +125,7 @@ mod test {
             {
                 let current_height: u64 = chainstate
                     .query()
+                    .unwrap()
                     .get_best_block_index()
                     .unwrap()
                     .unwrap()
@@ -131,7 +136,7 @@ mod test {
 
             {
                 // median time for genesis block
-                let chainstate_ref = chainstate.make_db_tx_ro();
+                let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
                 let median = calculate_median_time_past(
                     &chainstate_ref,
                     &chainstate.chain_config.genesis_block_id(),
@@ -142,7 +147,7 @@ mod test {
             for n in 0..MEDIAN_TIME_SPAN {
                 // median time for block of height n
                 // up to the median span
-                let chainstate_ref = chainstate.make_db_tx_ro();
+                let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
                 let median =
                     calculate_median_time_past(&chainstate_ref, &blocks[n].get_id().into());
                 assert_eq!(median, blocks[n / 2].timestamp());
@@ -151,7 +156,7 @@ mod test {
             for n in MEDIAN_TIME_SPAN..block_count {
                 // median time for block of height n
                 // starting from the median span
-                let chainstate_ref = chainstate.make_db_tx_ro();
+                let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
                 let median =
                     calculate_median_time_past(&chainstate_ref, &blocks[n].get_id().into());
                 assert_eq!(median, blocks[n - MEDIAN_TIME_SPAN / 2].timestamp());
@@ -175,9 +180,15 @@ mod test {
 
             let storage = Store::new_empty().unwrap();
             let chainstate_config = ChainstateConfig::new();
-            let mut chainstate =
-                Chainstate::new(chain_config, chainstate_config, storage, None, time_getter)
-                    .unwrap();
+            let mut chainstate = Chainstate::new(
+                chain_config,
+                chainstate_config,
+                storage,
+                DefaultTransactionVerificationStrategy::new(),
+                None,
+                time_getter,
+            )
+            .unwrap();
 
             // we use unordered block times, and ensure that the median will be in the right spot
             let block1_time = current_time.load(Ordering::SeqCst) + 1;
@@ -201,6 +212,7 @@ mod test {
             {
                 let current_height: u64 = chainstate
                     .query()
+                    .unwrap()
                     .get_best_block_index()
                     .unwrap()
                     .unwrap()
@@ -211,7 +223,7 @@ mod test {
 
             {
                 // median time for genesis block
-                let chainstate_ref = chainstate.make_db_tx_ro();
+                let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
                 let median = calculate_median_time_past(
                     &chainstate_ref,
                     &chainstate.chain_config.genesis_block_id(),
@@ -221,35 +233,35 @@ mod test {
 
             {
                 // median time for block of height 1
-                let chainstate_ref = chainstate.make_db_tx_ro();
+                let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
                 let median = calculate_median_time_past(&chainstate_ref, &block1.get_id().into());
                 assert_eq!(median, BlockTimestamp::from_int_seconds(block1_time));
             }
 
             {
                 // median time for block of height 2
-                let chainstate_ref = chainstate.make_db_tx_ro();
+                let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
                 let median = calculate_median_time_past(&chainstate_ref, &block2.get_id().into());
                 assert_eq!(median, BlockTimestamp::from_int_seconds(block1_time));
             }
 
             {
                 // median time for block of height 3
-                let chainstate_ref = chainstate.make_db_tx_ro();
+                let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
                 let median = calculate_median_time_past(&chainstate_ref, &block3.get_id().into());
                 assert_eq!(median, BlockTimestamp::from_int_seconds(block3_time));
             }
 
             {
                 // median time for block of height 4
-                let chainstate_ref = chainstate.make_db_tx_ro();
+                let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
                 let median = calculate_median_time_past(&chainstate_ref, &block4.get_id().into());
                 assert_eq!(median, BlockTimestamp::from_int_seconds(block3_time));
             }
 
             {
                 // median time for block of height 5
-                let chainstate_ref = chainstate.make_db_tx_ro();
+                let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
                 let median = calculate_median_time_past(&chainstate_ref, &block5.get_id().into());
                 assert_eq!(median, BlockTimestamp::from_int_seconds(block5_time));
             }

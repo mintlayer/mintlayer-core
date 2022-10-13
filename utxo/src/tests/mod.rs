@@ -531,7 +531,7 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
         .into_iter()
         .map(|idx| {
             let id = OutPointSourceId::from(tx.get_id());
-            TxInput::new(id, idx as u32, InputWitness::NoSignature(None))
+            TxInput::new(id, idx as u32)
         })
         .collect_vec();
 
@@ -604,11 +604,7 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
     cache.add_utxo(&outpoint, utxo, false).unwrap();
 
     // spend the utxo in a transaction
-    let input = TxInput::new(
-        outpoint.tx_id(),
-        outpoint.output_index(),
-        InputWitness::NoSignature(None),
-    );
+    let input = TxInput::new(outpoint.tx_id(), outpoint.output_index());
     let tx = Transaction::new(0x00, vec![input], create_tx_outputs(&mut rng, 1), 0x01).unwrap();
     let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
@@ -636,11 +632,7 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
     let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
     cache.add_utxo(&outpoint, utxo, false).unwrap();
 
-    let inputs = vec![TxInput::new(
-        outpoint.tx_id(),
-        outpoint.output_index(),
-        InputWitness::NoSignature(None),
-    )];
+    let inputs = vec![TxInput::new(outpoint.tx_id(), outpoint.output_index())];
     let outputs = create_tx_outputs(&mut rng, 1);
 
     let (sk, _pk) = crypto::vrf::VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
@@ -650,7 +642,12 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
         vec![],
         Id::new(H256::random()),
         BlockTimestamp::from_int_seconds(1),
-        ConsensusData::PoS(PoSData::new(inputs, vrf_data, Compact(1))),
+        ConsensusData::PoS(PoSData::new(
+            inputs,
+            vec![InputWitness::NoSignature(None)],
+            vrf_data,
+            Compact(1),
+        )),
         BlockReward::new(outputs),
     )
     .unwrap();
@@ -731,11 +728,7 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
     let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
     cache.add_utxo(&outpoint, utxo, false).unwrap();
 
-    let inputs = vec![TxInput::new(
-        outpoint.tx_id(),
-        outpoint.output_index(),
-        InputWitness::NoSignature(None),
-    )];
+    let inputs = vec![TxInput::new(outpoint.tx_id(), outpoint.output_index())];
     let outputs = create_tx_outputs(&mut rng, 1);
 
     let (sk, _pk) = crypto::vrf::VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
@@ -745,7 +738,12 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
         vec![],
         Id::new(H256::random()),
         BlockTimestamp::from_int_seconds(1),
-        ConsensusData::PoS(PoSData::new(inputs, vrf_data, Compact(1))),
+        ConsensusData::PoS(PoSData::new(
+            inputs,
+            vec![InputWitness::NoSignature(None)],
+            vrf_data,
+            Compact(1),
+        )),
         BlockReward::new(outputs),
     )
     .unwrap();

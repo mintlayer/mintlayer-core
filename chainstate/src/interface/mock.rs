@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common::chain::block::BlockReward;
+use common::chain::OutPoint;
 use common::chain::OutPointSourceId;
 use common::chain::Transaction;
 use common::chain::TxInput;
@@ -37,6 +38,7 @@ use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::tokens::TokenAuxiliaryData;
 use common::chain::ChainConfig;
 use utils::eventhandler::EventHandler;
+use utxo::Utxo;
 
 use super::chainstate_interface::ChainstateInterface;
 
@@ -86,7 +88,7 @@ mockall::mock! {
             tx_id: &OutPointSourceId,
         ) -> Result<Option<TxMainChainIndex>, ChainstateError>;
         fn subscribers(&self) -> &Vec<EventHandler<ChainstateEvent>>;
-        fn calculate_median_time_past(&self, starting_block: &Id<GenBlock>) -> BlockTimestamp;
+        fn calculate_median_time_past(&self, starting_block: &Id<GenBlock>) -> Result<BlockTimestamp, ChainstateError>;
         fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool;
         fn orphans_count(&self) -> usize;
         fn get_ancestor(
@@ -119,5 +121,15 @@ mockall::mock! {
         ) -> Result<Vec<Option<Amount>>, ChainstateError>;
         fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
         fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
+        fn import_bootstrap_stream<'a>(
+            &'a mut self,
+            reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
+        ) -> Result<(), ChainstateError>;
+        fn export_bootstrap_stream<'a>(
+            &'a self,
+            writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
+            include_orphans: bool,
+        ) -> Result<(), ChainstateError>;
+        fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError>;
     }
 }

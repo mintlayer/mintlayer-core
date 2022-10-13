@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::chain::signed_transaction::SignedTransaction;
 use common::primitives::Idable;
 use common::{
     chain::{
@@ -40,11 +41,15 @@ fn signed_tx() {
         // The first transaction uses the `AnyoneCanSpend` output of the transaction from the
         // genesis block.
         let tx_1 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::BlockReward(tf.chainstate.get_chain_config().genesis_block_id()),
-                0,
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(
+                        tf.chainstate.get_chain_config().genesis_block_id(),
+                    ),
+                    0,
+                ),
                 InputWitness::NoSignature(None),
-            ))
+            )
             .add_output(TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(100)),
                 OutputPurpose::Transfer(Destination::PublicKey(public_key.clone())),
@@ -53,17 +58,21 @@ fn signed_tx() {
 
         // The second transaction has the signed input.
         let tx_2 = {
-            let mut tx = TransactionBuilder::new()
-                .add_input(TxInput::new(
-                    OutPointSourceId::Transaction(tx_1.get_id()),
-                    0,
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::new(
+                        OutPointSourceId::Transaction(tx_1.transaction().get_id()),
+                        0,
+                    ),
                     InputWitness::NoSignature(None),
-                ))
+                )
                 .add_output(TxOutput::new(
                     OutputValue::Coin(Amount::from_atoms(100)),
                     OutputPurpose::Transfer(Destination::PublicKey(public_key.clone())),
                 ))
-                .build();
+                .build()
+                .transaction()
+                .clone();
             let input_sign = StandardInputSignature::produce_signature_for_input(
                 &private_key,
                 SigHashType::try_from(SigHashType::ALL).unwrap(),
@@ -72,8 +81,8 @@ fn signed_tx() {
                 0,
             )
             .unwrap();
-            tx.update_witness(0, InputWitness::Standard(input_sign)).unwrap();
-            tx
+            SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)])
+                .expect("invalid witness count")
         };
 
         tf.make_block_builder()

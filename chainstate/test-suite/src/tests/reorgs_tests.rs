@@ -24,6 +24,7 @@ use chainstate::BlockSource;
 use chainstate::ChainstateError;
 use chainstate::ChainstateEvent;
 use chainstate::ConnectTransactionError;
+use chainstate::TxIndexError;
 use chainstate_test_framework::TestFramework;
 use common::chain::Block;
 use common::chain::GenBlock;
@@ -137,7 +138,7 @@ fn check_spend_tx_in_failed_block(tf: &mut TestFramework, events: &EventList, rn
     assert_eq!(
         tf.create_chain(&(*tf.index_at(12).block_id()).into(), 1, rng).unwrap_err(),
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            ConnectTransactionError::MissingOutputOrSpent
+            ConnectTransactionError::TxIndexError(TxIndexError::MissingOutputOrSpent)
         ))
     );
 }
@@ -174,7 +175,7 @@ fn check_spend_tx_in_other_fork(tf: &mut TestFramework, rng: &mut impl Rng) {
     assert_eq!(
         tf.create_chain(&block_id.into(), 10, rng).unwrap_err(),
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            ConnectTransactionError::MissingOutputOrSpent
+            ConnectTransactionError::TxIndexError(TxIndexError::MissingOutputOrSpent)
         ))
     );
 }
@@ -201,7 +202,7 @@ fn check_fork_that_double_spends(tf: &mut TestFramework, rng: &mut impl Rng) {
             .build_and_process()
             .unwrap_err(),
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            ConnectTransactionError::MissingOutputOrSpent
+            ConnectTransactionError::TxIndexError(TxIndexError::MissingOutputOrSpent)
         ))
     );
 }
@@ -403,7 +404,7 @@ fn check_block_status(
             Some(block_index) => {
                 let block = tf.chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
                 for tx in block.transactions() {
-                    check_spend_status(tf, tx, &spend_status);
+                    check_spend_status(tf, tx.transaction(), &spend_status);
                 }
             }
             None => {

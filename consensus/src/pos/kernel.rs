@@ -13,14 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::GenBlockIndex;
+use chainstate_types::{BlockIndexHandle, GenBlockIndex};
 use common::chain::{block::consensus_data::PoSData, TxOutput};
 use utils::ensure;
 
-use crate::{
-    pos::error::ConsensusPoSError,
-    validator::{BlockIndexHandle, TransactionIndexHandle},
-};
+use crate::{pos::error::ConsensusPoSError, validator::TransactionIndexHandle};
 
 pub fn get_kernel_block_index(
     pos_data: &PoSData,

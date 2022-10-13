@@ -12,7 +12,7 @@ common = { path = "../../common/" }
 storage = { path = "../../storage/" }
 crypto = { path = "../../crypto" }
 
-parity-scale-codec = "3.1"
 thiserror = "1.0"
+parity-scale-codec = "3.1"
 generic-array = "0.14"
 replace_with = "0.1"

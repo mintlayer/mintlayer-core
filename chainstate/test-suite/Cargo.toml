@@ -9,6 +9,7 @@ license = "MIT"
 [dependencies]
 chainstate-test-framework = { path = '../test-framework' }
 chainstate = { path = '../' }
+chainstate-storage = { path = '../storage' }
 chainstate-types = { path = '../types' }
 common = { path = '../../common' }
 test-utils = {path = '../../test-utils'}
@@ -17,6 +18,8 @@ serialization = { path = '../../serialization' }
 utils = { path = '../../utils' }
 consensus = { path = '../../consensus' }
 logging = { path = '../../logging' }
+utxo = { path = '../../utxo' }
+tx-verifier = { path = '../tx-verifier'}
 
 rstest = "0.15"
 hex = "0.4"

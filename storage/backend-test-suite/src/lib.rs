@@ -31,16 +31,19 @@ mod property;
 use prelude::*;
 
 /// Get all tests
-fn tests<B: Backend + ThreadSafe + Clone>(backend: B) -> Vec<libtest_mimic::Trial> {
+fn tests<B: 'static + Backend, F: BackendFn<B>>(backend_fn: F) -> Vec<libtest_mimic::Trial> {
+    let backend_fn = Arc::new(backend_fn);
     std::iter::empty()
-        .chain(basic::tests(backend.clone()))
-        .chain(concurrent::tests(backend.clone()))
-        .chain(property::tests(backend))
+        .chain(basic::tests(Arc::clone(&backend_fn)))
+        .chain(concurrent::tests(Arc::clone(&backend_fn)))
+        .chain(property::tests(backend_fn))
         .collect()
 }
 
 /// Main test suite entry point
-pub fn main<B: Backend + ThreadSafe + Clone>(backend: B) {
+#[must_use = "Test outcome ignored, add a call to .exit()"]
+pub fn main<B: 'static + Backend, F: BackendFn<B>>(backend_fn: F) -> libtest_mimic::Conclusion {
+    logging::init_logging::<&str>(None);
     let args = libtest_mimic::Arguments::from_args();
-    libtest_mimic::run(&args, tests(backend)).exit();
+    libtest_mimic::run(&args, tests(backend_fn))
 }

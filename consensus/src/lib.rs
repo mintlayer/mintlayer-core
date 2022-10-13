@@ -23,8 +23,8 @@ pub use crate::{
     pos::error::ConsensusPoSError,
     pow::ConsensusPoWError,
     validator::{
-        compute_extra_consensus_data, validate_consensus, BlockIndexHandle,
-        ExtraConsensusDataError, TransactionIndexHandle,
+        compute_extra_consensus_data, validate_consensus, ExtraConsensusDataError,
+        TransactionIndexHandle,
     },
 };
 

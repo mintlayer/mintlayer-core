@@ -81,6 +81,8 @@ pub enum TxValidationError {
     RollingFeeThresholdNotMet { minimum_fee: Amount, tx_fee: Amount },
     #[error("Overflow encountered while updating ancestor fee.")]
     AncestorFeeUpdateOverflow,
+    #[error("Fee overflow")]
+    FeeOverflow,
     #[error("Transaction is a descendant of expired transaction.")]
     DescendantOfExpiredTransaction,
     #[error("Chainstate error")]
