@@ -843,7 +843,7 @@ where
         &self,
         mut tx_accumulator: Box<dyn TransactionAccumulator>,
     ) -> Vec<SignedTransaction> {
-        let mut tx_iter = self.store.txs_by_descendant_score.values().flatten();
+        let mut tx_iter = self.store.txs_by_ancestor_score.values().flatten().rev();
         // TODO implement Iterator for MempoolStore so we don't need to use `expect` here
         while !tx_accumulator.done() {
             if let Some(tx_id) = tx_iter.next() {
