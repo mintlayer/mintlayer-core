@@ -641,10 +641,8 @@ dependencies = [
  "hex",
  "itertools",
  "logging",
- "serialization",
  "test-utils",
  "utils",
- "utxo",
 ]
 
 [[package]]
@@ -665,7 +663,6 @@ dependencies = [
  "rstest",
  "serialization",
  "test-utils",
- "tx-verifier",
  "utils",
  "utxo",
 ]
@@ -2394,7 +2391,6 @@ dependencies = [
  "chainstate-test-framework",
  "common",
  "crypto",
- "futures",
  "jsonrpsee",
  "logging",
  "mockall",
@@ -2452,27 +2448,11 @@ dependencies = [
 [[package]]
 name = "mintlayer-core"
 version = "0.1.0"
-dependencies = [
- "chainstate",
- "chainstate-storage",
- "chainstate-types",
- "common",
- "crypto",
- "logging",
- "mempool",
- "p2p",
- "rpc",
- "script",
- "serialization",
- "storage",
- "utxo",
-]
 
 [[package]]
 name = "mintlayer-test"
 version = "0.1.0"
 dependencies = [
- "common",
  "libtest-mimic",
  "node",
  "thiserror",
@@ -4671,7 +4651,6 @@ dependencies = [
  "common",
  "crypto",
  "fallible-iterator",
- "logging",
  "mockall",
  "replace_with",
  "thiserror",
@@ -4691,7 +4670,6 @@ name = "typename-derive"
 version = "0.1.0"
 dependencies = [
  "itertools",
- "proc-macro2",
  "quote",
  "syn",
 ]

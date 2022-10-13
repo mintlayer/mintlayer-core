@@ -8,7 +8,6 @@ license = "MIT"
 
 [dependencies]
 common = {path = '../../common'}
-logging = {path = '../../logging'}
 chainstate-storage = {path = '../storage'}
 chainstate-types = {path = '../types'}
 utils = {path = '../../utils'}

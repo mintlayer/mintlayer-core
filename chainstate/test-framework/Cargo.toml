@@ -12,9 +12,7 @@ chainstate-storage = { path = '../storage' }
 chainstate-types = { path = '../types' }
 common = { path = '../../common' }
 crypto = { path = '../../crypto' }
-serialization = { path = '../../serialization' }
 utils = { path = '../../utils' }
-utxo = { path = '../../utxo' }
 
 [dev-dependencies]
 hex = "0.4"
