@@ -39,6 +39,12 @@ impl FromStr for Seed {
     }
 }
 
+impl From<u64> for Seed {
+    fn from(v: u64) -> Self {
+        Seed::from_u64(v)
+    }
+}
+
 #[must_use]
 pub fn make_seedable_rng(seed: Seed) -> impl Rng + CryptoRng {
     ChaChaRng::seed_from_u64(seed.0)
