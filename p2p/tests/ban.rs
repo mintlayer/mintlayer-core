@@ -37,8 +37,6 @@ use p2p_test_utils::{
     TestBlockInfo,
 };
 
-// TODO: FIXME:
-#[ignore]
 // start two libp2p services, spawn a `SyncMessageHandler` for the first service,
 // publish an invalid block from the first service and verify that the `SyncManager`
 // of the first service receives a `AdjustPeerScore` event which bans the peer of
@@ -50,7 +48,7 @@ async fn invalid_pubsub_block() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
-    let (mut conn1, sync) = Libp2pService::start(
+    let (mut conn1, sync1) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         Arc::clone(&config),
         Default::default(),
@@ -60,7 +58,7 @@ async fn invalid_pubsub_block() {
 
     let mut sync1 = BlockSyncManager::<Libp2pService>::new(
         Arc::clone(&config),
-        sync,
+        sync1,
         handle.clone(),
         rx_sync,
         tx_swarm,
@@ -82,7 +80,12 @@ async fn invalid_pubsub_block() {
     let best_block = TestBlockInfo::from_genesis(config.genesis_block());
     let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&config), best_block, 3);
 
-    tokio::spawn(async move { sync1.run().await });
+    let peer = *conn2.peer_id();
+    tokio::spawn(async move {
+        sync1.register_peer(peer).await.unwrap();
+        sync1.process_header_response(peer, Vec::new()).await.unwrap();
+        sync1.run().await
+    });
 
     // spawn `sync2` into background and spam an orphan block on the network
     tokio::spawn(async move {
