@@ -60,6 +60,19 @@ default-members = [
 ]
 
 [dependencies]
+common = { path = "common"}
+storage = { path = "storage"}
+chainstate-storage = { path = "chainstate/storage"}
+crypto = { path = "crypto"}
+chainstate = { path = "chainstate"}
+chainstate-types = { path = "chainstate/types"}
+script = { path = "script"}
+logging = { path = "logging"}
+mempool = { path = "mempool"}
+p2p = { path = "p2p"}
+rpc = { path = "rpc"}
+serialization = { path = "serialization"}
+utxo = { path = "utxo"}
 
 [profile.release]
 debug-assertions = true

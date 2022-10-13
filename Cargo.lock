@@ -2448,6 +2448,21 @@ dependencies = [
 [[package]]
 name = "mintlayer-core"
 version = "0.1.0"
+dependencies = [
+ "chainstate",
+ "chainstate-storage",
+ "chainstate-types",
+ "common",
+ "crypto",
+ "logging",
+ "mempool",
+ "p2p",
+ "rpc",
+ "script",
+ "serialization",
+ "storage",
+ "utxo",
+]
 
 [[package]]
 name = "mintlayer-test"
