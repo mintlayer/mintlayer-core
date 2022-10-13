@@ -211,4 +211,7 @@ pub enum Message {
         request_id: MockRequestId,
         response: message::Response,
     },
+    Announcement {
+        announcement: message::Announcement,
+    },
 }

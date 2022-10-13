@@ -309,7 +309,8 @@ where
     }
 
     async fn subscribe(&mut self, _topics: &[PubSubTopic]) -> crate::Result<()> {
-        todo!();
+        // TODO: For now all subscriptions always active.
+        Ok(())
     }
 
     async fn report_validation_result(
@@ -318,7 +319,7 @@ where
         _message_id: S::SyncingMessageId,
         _result: ValidationResult,
     ) -> crate::Result<()> {
-        todo!();
+        Ok(())
     }
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent<S>> {

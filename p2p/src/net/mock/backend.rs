@@ -24,6 +24,7 @@
 use std::{collections::HashMap, io::ErrorKind, sync::Arc};
 
 use futures::FutureExt;
+use tap::TapFallible;
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
@@ -31,17 +32,22 @@ use tokio::{
 
 use common::chain::ChainConfig;
 use logging::log;
+use serialization::Decode;
 
 use crate::{
     error::{DialError, P2pError, PeerError},
     message,
-    net::mock::{
-        peer, request_manager,
-        transport::{MockListener, MockTransport},
-        types::{
-            Command, ConnectivityEvent, Message, MockEvent, MockPeerId, MockPeerInfo,
-            MockRequestId, PeerEvent, SyncingEvent,
+    net::{
+        mock::{
+            peer, request_manager,
+            transport::{MockListener, MockTransport},
+            types::{
+                Command, ConnectivityEvent, Message, MockEvent, MockPeerId, MockPeerInfo,
+                MockRequestId, PeerEvent, SyncingEvent,
+            },
         },
+        types::PubSubTopic,
+        Announcement,
     },
 };
 
@@ -273,6 +279,19 @@ where
         Ok(())
     }
 
+    async fn announce_data(&mut self, _topic: PubSubTopic, message: Vec<u8>) -> crate::Result<()> {
+        let announcement = message::Announcement::decode(&mut &message[..])?;
+        let announcement = Box::new(Message::Announcement { announcement });
+        for (id, peer) in &self.peers {
+            let _ = peer
+                .tx
+                .send(MockEvent::SendMessage(announcement.clone()))
+                .await
+                .tap_err(|e| log::error!("Failed to send announcement to peer {id}: {e:?}"));
+        }
+        Ok(())
+    }
+
     /// Handle incoming request
     async fn handle_incoming_request(
         &mut self,
@@ -312,6 +331,10 @@ where
             })
             .await
             .map_err(P2pError::from)
+    }
+
+    async fn handle_announcement(&mut self, _announcement: Announcement) -> crate::Result<()> {
+        todo!();
     }
 
     pub async fn run(&mut self) -> crate::Result<()> {
@@ -383,6 +406,9 @@ where
                             Message::Response { request_id, response} => {
                                 self.handle_incoming_response(peer_id, request_id, response).await?;
                             }
+                            Message::Announcement { announcement } => {
+                                self.handle_announcement(announcement).await?;
+                            }
                         }
                         PeerEvent::ConnectionClosed => {
                             self.peers.remove(&peer_id);
@@ -414,7 +440,8 @@ where
                         response.send(res).map_err(|_| P2pError::ChannelClosed)?;
                     }
                     Command::AnnounceData { topic, message, response } => {
-                        todo!()
+                        let res = self.announce_data(topic, message).await;
+                        response.send(res).map_err(|_| P2pError::ChannelClosed)?;
                     }
                 }
             }
