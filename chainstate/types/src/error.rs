@@ -63,4 +63,6 @@ pub enum GetAncestorError {
     },
     #[error("Previous block index not found {0}")]
     PrevBlockIndexNotFound(Id<GenBlock>),
+    #[error("Starting point in ancestor getter not found {0}")]
+    StartingPointNotFound(Id<GenBlock>),
 }

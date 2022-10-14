@@ -389,7 +389,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                     block_index_getter,
                     self.storage_ref,
                     self.chain_config,
-                    &block_index.clone().into(),
+                    (&block_index.clone().into_gen_block_index()).into(),
                     *height,
                 )
                 .map_err(|e| {

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use common::{
     chain::{ChainConfig, GenBlock, GenBlockId},
@@ -25,16 +25,41 @@ use crate::{
     PropertyQueryError,
 };
 
+pub enum AncestorGetterStartingPoint<'a> {
+    BlockIndex(&'a GenBlockIndex),
+    BlockId(&'a Id<GenBlock>),
+}
+
+impl<'a> From<&'a Id<GenBlock>> for AncestorGetterStartingPoint<'a> {
+    fn from(v: &'a Id<GenBlock>) -> Self {
+        AncestorGetterStartingPoint::BlockId(v)
+    }
+}
+
+impl<'a> From<&'a GenBlockIndex> for AncestorGetterStartingPoint<'a> {
+    fn from(v: &'a GenBlockIndex) -> Self {
+        AncestorGetterStartingPoint::BlockIndex(v)
+    }
+}
+
 pub fn block_index_ancestor_getter<S, G>(
     gen_block_index_getter: G,
     db_tx: &S,
     chain_config: &ChainConfig,
-    block_index: &GenBlockIndex,
+    starting_point: AncestorGetterStartingPoint,
     target_height: BlockHeight,
 ) -> Result<GenBlockIndex, GetAncestorError>
 where
     G: Fn(&S, &ChainConfig, &Id<GenBlock>) -> Result<Option<GenBlockIndex>, storage_result::Error>,
 {
+    let block_index = match starting_point {
+        AncestorGetterStartingPoint::BlockIndex(bi) => Cow::Borrowed(bi),
+        AncestorGetterStartingPoint::BlockId(id) => Cow::Owned(
+            gen_block_index_getter(db_tx, chain_config, id)?
+                .ok_or(GetAncestorError::StartingPointNotFound(*id))?,
+        ),
+    };
+
     if target_height > block_index.block_height() {
         return Err(GetAncestorError::InvalidAncestorHeight {
             block_height: block_index.block_height(),
@@ -43,7 +68,7 @@ where
     }
 
     let mut height_walk = block_index.block_height();
-    let mut block_index_walk = block_index.clone();
+    let mut block_index_walk = block_index.into_owned();
     loop {
         assert!(height_walk >= target_height, "Skipped too much");
         if height_walk == target_height {
