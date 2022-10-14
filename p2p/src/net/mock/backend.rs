@@ -333,7 +333,7 @@ where
             .map_err(P2pError::from)
     }
 
-    async fn handle_announcement(&mut self, _announcement: Announcement) -> crate::Result<()> {
+    fn handle_announcement(&mut self, _announcement: Announcement) -> crate::Result<()> {
         // TODO: Implement the block announcement (https://github.com/mintlayer/mintlayer-core/issues/488).
         todo!();
     }
@@ -408,7 +408,7 @@ where
                                 self.handle_incoming_response(peer_id, request_id, response).await?;
                             }
                             Message::Announcement { announcement } => {
-                                self.handle_announcement(announcement).await?;
+                                self.handle_announcement(announcement)?;
                             }
                         }
                         PeerEvent::ConnectionClosed => {
