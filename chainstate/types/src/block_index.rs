@@ -20,6 +20,8 @@ use common::primitives::{BlockHeight, Id, Idable};
 use common::Uint256;
 use serialization::{Decode, Encode};
 
+use crate::GenBlockIndex;
+
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct BlockIndex {
     block_id: Id<Block>,
@@ -83,5 +85,9 @@ impl BlockIndex {
 
     pub fn into_block_header(self) -> BlockHeader {
         self.block_header
+    }
+
+    pub fn into_gen_block_index(self) -> GenBlockIndex {
+        self.into()
     }
 }

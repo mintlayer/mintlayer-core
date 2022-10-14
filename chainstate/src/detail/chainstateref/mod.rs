@@ -257,7 +257,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
             gen_block_index_getter,
             &self.db_tx,
             self.chain_config,
-            block_index,
+            block_index.into(),
             target_height,
         )
     }

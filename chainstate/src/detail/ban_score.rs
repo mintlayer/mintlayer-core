@@ -140,6 +140,7 @@ impl BanScore for GetAncestorError {
                 ancestor_height: _,
             } => 100,
             GetAncestorError::PrevBlockIndexNotFound(_) => 0,
+            GetAncestorError::StartingPointNotFound(_) => 0,
         }
     }
 }
