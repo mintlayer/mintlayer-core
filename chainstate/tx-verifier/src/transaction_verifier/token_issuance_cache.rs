@@ -77,7 +77,7 @@ impl TokenIssuanceCache {
     ) -> Result<(), TokensError> {
         let was_token_issued = tx.outputs().iter().any(|output| is_tokens_issuance(output.value()));
         if was_token_issued {
-            self.write_issuance(&block_id.unwrap_or(H256::zero().into()), tx)?;
+            self.write_issuance(&block_id.unwrap_or_else(|| H256::zero().into()), tx)?;
         }
         Ok(())
     }
