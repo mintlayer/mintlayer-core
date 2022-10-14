@@ -505,7 +505,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
             .map_err(ConnectTransactionError::from)?;
 
         // save spent utxos for undo
-        self.get_or_create_block_undo(&block_id).push_tx_undo(tx_undo);
+        self.get_or_create_block_undo(block_id).push_tx_undo(tx_undo);
 
         // mark tx index as spent
         let spender = tx.transaction().get_id().into();
