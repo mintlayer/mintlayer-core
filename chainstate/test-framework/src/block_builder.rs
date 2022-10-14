@@ -13,10 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::utils::create_new_outputs;
+use std::collections::BTreeSet;
+
+use crate::utils::{create_new_outputs, create_several_utxo_data};
 use crate::{TestBlockInfo, TestFramework};
 use chainstate::{BlockSource, ChainstateError};
 use chainstate_types::BlockIndex;
+use common::chain::OutPoint;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
@@ -38,6 +41,7 @@ pub struct BlockBuilder<'f> {
     consensus_data: ConsensusData,
     reward: BlockReward,
     block_source: BlockSource,
+    used_utxo: BTreeSet<OutPoint>,
 }
 
 impl<'f> BlockBuilder<'f> {
@@ -49,6 +53,7 @@ impl<'f> BlockBuilder<'f> {
         let consensus_data = ConsensusData::None;
         let reward = BlockReward::new(Vec::new());
         let block_source = BlockSource::Local;
+        let used_utxo = BTreeSet::new();
 
         Self {
             framework,
@@ -58,6 +63,7 @@ impl<'f> BlockBuilder<'f> {
             consensus_data,
             reward,
             block_source,
+            used_utxo,
         }
     }
 
@@ -74,9 +80,34 @@ impl<'f> BlockBuilder<'f> {
     }
 
     /// Adds a transaction that uses random utxos
-    //pub fn add_test_transaction(self, rng: &mut impl Rng) -> Self {
-    //    //self.add_test_transaction_with_parent(parent, rng)
-    //}
+    pub fn add_test_transaction(mut self, rng: &mut impl Rng) -> Self {
+        let utxo_set = self.framework.storage.read_utxo_set().unwrap();
+
+        // TODO: get n utxos as inputs and create m new utxos
+        let index = rng.gen_range(0..utxo_set.len());
+        let (outpoint, utxo) = utxo_set.iter().nth(index).unwrap();
+        if !self.used_utxo.contains(outpoint) {
+            let new_utxo_data = create_several_utxo_data(
+                &self.framework.chainstate,
+                outpoint.tx_id(),
+                outpoint.output_index() as usize,
+                utxo.output(),
+                rng,
+            );
+
+            if let Some((witness, input, output)) = new_utxo_data {
+                self.used_utxo.insert(outpoint.clone());
+                return self.add_transaction(
+                    SignedTransaction::new(
+                        Transaction::new(0, vec![input], output, 0).unwrap(),
+                        vec![witness],
+                    )
+                    .expect("invalid witness count"),
+                );
+            }
+        }
+        self
+    }
 
     /// Adds a transaction that uses the transactions from the best block as inputs and
     /// produces new outputs.

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{BlockBuilder, TestBlockInfo, TestFrameworkBuilder};
+use crate::{BlockBuilder, TestBlockInfo, TestFrameworkBuilder, TestStore};
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
@@ -26,6 +26,7 @@ use std::sync::Arc;
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
 pub struct TestFramework {
     pub chainstate: super::TestChainstate,
+    pub storage: TestStore,
     pub block_indexes: Vec<BlockIndex>,
 }
 

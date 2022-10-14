@@ -34,6 +34,7 @@ pub struct RandomizedTransactionVerificationStrategy {
     rng: RefCell<Box<dyn RngCore + Send>>,
 }
 
+// FIXME config with probabilities?
 impl RandomizedTransactionVerificationStrategy {
     pub fn new(seed: Seed) -> Self {
         Self {
@@ -149,6 +150,7 @@ impl RandomizedTransactionVerificationStrategy {
                     .map_err(ConnectTransactionError::from)?;
                 tx_num = new_tx_index;
             } else {
+                println!("--- connect on level 1");
                 tx_verifier.connect_transactable(
                     block_index,
                     BlockTransactableRef::Transaction(block, tx_num),
@@ -179,6 +181,7 @@ impl RandomizedTransactionVerificationStrategy {
             if switch == 0 {
                 break;
             } else {
+                println!("--- --- connect on level 2");
                 let fee = tx_verifier.connect_transactable(
                     block_index,
                     BlockTransactableRef::Transaction(block, tx_num),

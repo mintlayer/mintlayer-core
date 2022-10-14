@@ -17,6 +17,7 @@ use crate::TestChainstate;
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::tokens::TokenData;
+use common::chain::tokens::TokenIssuanceV1;
 use common::chain::tokens::TokenTransferV1;
 use common::chain::OutPointSourceId;
 use common::chain::TxInput;
@@ -26,6 +27,7 @@ use common::{
     primitives::Amount,
 };
 use crypto::random::Rng;
+use test_utils::random_string;
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
     use crypto::random::SliceRandom;
@@ -52,7 +54,7 @@ pub fn create_new_outputs(
         .collect()
 }
 
-fn create_utxo_data(
+pub fn create_utxo_data(
     chainstate: &TestChainstate,
     outsrc: OutPointSourceId,
     index: usize,
@@ -80,10 +82,10 @@ fn create_utxo_data(
                     OutputPurpose::Transfer(anyonecanspend_address()),
                 ),
                 TokenData::TokenIssuanceV1(issuance) => {
-                    new_token_transfer_output(chainstate, outsrc, issuance.amount_to_issue)
+                    new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)
                 }
                 TokenData::NftIssuanceV1(_issuance) => {
-                    new_token_transfer_output(chainstate, outsrc, Amount::from_atoms(1))
+                    new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))
                 }
                 TokenData::TokenBurnV1(_burn) => return None,
             },
@@ -91,9 +93,96 @@ fn create_utxo_data(
     ))
 }
 
-fn new_token_transfer_output(
+pub fn create_several_utxo_data(
     chainstate: &TestChainstate,
     outsrc: OutPointSourceId,
+    index: usize,
+    output: &TxOutput,
+    rng: &mut impl Rng,
+) -> Option<(InputWitness, TxInput, Vec<TxOutput>)> {
+    let new_outputs = match output.value() {
+        OutputValue::Coin(output_value) => {
+            // in 10% cases issue a token instead of spending coins
+            let issue_token = rng.gen_range(0..5) == 0;
+            if issue_token {
+                //println!("--- --- --- issue a token");
+                vec![TxOutput::new(
+                    TokenIssuanceV1 {
+                        token_ticker: random_string(
+                            rng,
+                            1..chainstate.get_chain_config().token_max_ticker_len(),
+                        )
+                        .as_bytes()
+                        .to_vec(),
+                        amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
+                        number_of_decimals: rng.gen_range(1..18),
+                        metadata_uri: random_string(rng, 1..1024).as_bytes().to_vec(),
+                    }
+                    .into(),
+                    OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                )]
+            } else {
+                //println!("--- --- --- spending a coin");
+                let num_outputs = rng.gen_range(1..10);
+                (0..num_outputs)
+                    .into_iter()
+                    .map(|_| {
+                        let new_value = Amount::from_atoms(output_value.into_atoms() / num_outputs);
+                        debug_assert!(new_value >= Amount::from_atoms(1));
+                        TxOutput::new(
+                            OutputValue::Coin(new_value),
+                            OutputPurpose::Transfer(anyonecanspend_address()),
+                        )
+                    })
+                    .collect()
+            }
+        }
+        OutputValue::Token(token_data) => match &**token_data {
+            TokenData::TokenTransferV1(transfer) => {
+                // FIXME: or burn
+                //println!("--- --- --- transfer a transfered token");
+                let num_outputs = rng.gen_range(1..10);
+                (0..num_outputs)
+                    .into_iter()
+                    .map(|_| {
+                        let new_value =
+                            Amount::from_atoms(transfer.amount.into_atoms() / num_outputs);
+                        let new_transfer = TokenTransferV1 {
+                            token_id: transfer.token_id,
+                            amount: new_value,
+                        };
+                        debug_assert!(new_value >= Amount::from_atoms(1));
+                        TxOutput::new(
+                            OutputValue::Token(Box::new(TokenData::TokenTransferV1(new_transfer))),
+                            OutputPurpose::Transfer(anyonecanspend_address()),
+                        )
+                    })
+                    .collect()
+            }
+            TokenData::TokenIssuanceV1(issuance) => {
+                //println!("--- --- --- transfer issued token");
+                // FIXME: or burn
+                vec![new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)]
+            }
+            TokenData::NftIssuanceV1(_issuance) => {
+                // FIXME: or burn
+                //println!("--- --- --- trying to transfer nft");
+                vec![new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))]
+            }
+            TokenData::TokenBurnV1(_burn) => return None,
+        },
+    };
+
+    Some((
+        empty_witness(rng),
+        TxInput::new(outsrc, index as u32),
+        new_outputs,
+    ))
+}
+
+fn new_token_transfer_output(
+    chainstate: &TestChainstate,
+    outsrc: &OutPointSourceId,
     amount: Amount,
 ) -> TxOutput {
     TxOutput::new(
