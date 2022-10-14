@@ -32,6 +32,7 @@ use common::chain::signature::inputsig::InputWitness;
 use common::chain::transaction::{Destination, TxInput, TxOutput};
 use common::chain::OutPointSourceId;
 use common::chain::OutputPurpose;
+use common::primitives::H256;
 use common::{
     chain::{block::Block, Transaction},
     primitives::Id,
@@ -42,6 +43,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use test_utils::random::make_seedable_rng;
 use test_utils::random::Seed;
+use tokio::sync::mpsc;
 
 mod utils;
 
@@ -120,11 +122,11 @@ async fn add_single_tx() -> anyhow::Result<()> {
     mempool.add_transaction(tx).await?;
     assert!(mempool.contains_transaction(&tx_id));
     let all_txs = mempool.get_all();
-    assert_eq!(all_txs, vec![&tx_clone]);
+    assert_eq!(all_txs, vec![tx_clone]);
     mempool.store.remove_tx(&tx_id, MempoolRemovalReason::Block);
     assert!(!mempool.contains_transaction(&tx_id));
     let all_txs = mempool.get_all();
-    assert_eq!(all_txs, Vec::<&SignedTransaction>::new());
+    assert_eq!(all_txs, Vec::<SignedTransaction>::new());
     mempool.store.assert_valid();
     Ok(())
 }
@@ -169,7 +171,7 @@ async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let mut fees = Vec::new();
     for tx in mempool.get_all() {
-        fees.push(mempool.try_get_fee(tx).await?)
+        fees.push(mempool.try_get_fee(&tx).await?)
     }
     let mut fees_sorted = fees.clone();
     fees_sorted.sort();
@@ -213,11 +215,13 @@ async fn setup() -> Mempool<SystemUsageEstimator> {
     logging::init_logging::<&str>(None);
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&config)).await;
+    let (_sender, receiver) = mpsc::unbounded_channel();
     Mempool::new(
         config,
         chainstate_interface,
         Default::default(),
         SystemUsageEstimator {},
+        receiver,
     )
 }
 
@@ -227,11 +231,13 @@ async fn setup_with_chainstate(
     logging::init_logging::<&str>(None);
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let chainstate_handle = start_chainstate(chainstate).await;
+    let (_sender, receiver) = mpsc::unbounded_channel();
     Mempool::new(
         config,
         chainstate_handle,
         Default::default(),
         SystemUsageEstimator {},
+        receiver,
     )
 }
 
@@ -1229,11 +1235,13 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     let config = chainstate.get_chain_config();
     let chainstate_interface = start_chainstate(chainstate).await;
 
+    let (_sender, receiver) = mpsc::unbounded_channel();
     let mut mempool = Mempool::new(
         config,
         chainstate_interface,
         mock_clock,
         SystemUsageEstimator {},
+        receiver,
     );
 
     let parent_id = parent.transaction().get_id();
@@ -1346,7 +1354,14 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     // the trimming process
     log::debug!("parent_id: {}", parent_id.get());
     log::debug!("before adding parent");
-    let mut mempool = Mempool::new(config, chainstate_interface, mock_clock, mock_usage);
+    let (_sender, receiver) = mpsc::unbounded_channel();
+    let mut mempool = Mempool::new(
+        config,
+        chainstate_interface,
+        mock_clock,
+        mock_usage,
+        receiver,
+    );
     mempool.add_transaction(parent).await?;
     log::debug!("after adding parent");
 
@@ -1469,7 +1484,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         .chainstate_handle
         .call_mut(|this| this.process_block(block, BlockSource::Local))
         .await??;
-    mempool.new_tip_set();
+    mempool.new_tip_set(Id::new(H256::zero()), BlockHeight::new(1));
     // Because the rolling fee is only updated when we attempt to add a tx to the mempool
     // we need to submit a "dummy" tx to trigger these updates.
 
@@ -1946,11 +1961,13 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     let parent_id = parent.transaction().get_id();
 
     let chainstate = tf.chainstate();
+    let (_sender, receiver) = mpsc::unbounded_channel();
     let mut mempool = Mempool::new(
         chainstate.get_chain_config(),
         start_chainstate(chainstate).await,
         mock_clock,
         SystemUsageEstimator {},
+        receiver,
     );
     mempool.add_transaction(parent).await?;
 
@@ -2003,7 +2020,14 @@ async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
     let config = chainstate.get_chain_config();
     let chainstate_handle = start_chainstate(chainstate).await;
 
-    let mut mempool = Mempool::new(config, chainstate_handle, Default::default(), mock_usage);
+    let (_sender, receiver) = mpsc::unbounded_channel();
+    let mut mempool = Mempool::new(
+        config,
+        chainstate_handle,
+        Default::default(),
+        mock_usage,
+        receiver,
+    );
 
     let tx = TransactionBuilder::new()
         .add_input(

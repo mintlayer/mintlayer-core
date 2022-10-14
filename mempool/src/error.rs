@@ -29,6 +29,12 @@ pub enum Error {
     MempoolFull,
     #[error(transparent)]
     TxValidationError(#[from] TxValidationError),
+    #[error("Subsystem failure")]
+    SubsystemFailure,
+    #[error("Send error")]
+    SendError,
+    #[error("Receive error")]
+    RecvError,
 }
 
 #[derive(Debug, Error)]
