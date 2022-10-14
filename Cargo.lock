@@ -2280,10 +2280,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "lmdb-rkv"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "447a296f7aca299cfbb50f4e4f3d49451549af655fb7215d7f8c0c3d64bad42b"
+name = "lmdb-mintlayer"
+version = "0.15.0"
+source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.15.0#0cbb16fc2d4b0071f2b07a86c464d4f3d016710a"
 dependencies = [
  "bitflags",
  "byteorder 1.4.3",
@@ -2294,8 +2293,7 @@ dependencies = [
 [[package]]
 name = "lmdb-rkv-sys"
 version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61b9ce6b3be08acefa3003c57b7565377432a89ec24476bbe72e11d101f852fe"
+source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.15.0#0cbb16fc2d4b0071f2b07a86c464d4f3d016710a"
 dependencies = [
  "cc",
  "libc",
@@ -4214,7 +4212,7 @@ dependencies = [
 name = "storage-lmdb"
 version = "0.1.0"
 dependencies = [
- "lmdb-rkv",
+ "lmdb-mintlayer",
  "rand 0.8.5",
  "storage-backend-test-suite",
  "storage-core",

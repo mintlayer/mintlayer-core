@@ -38,33 +38,21 @@ impl std::ops::Index<DbIndex> for DbList {
 }
 
 /// LMDB iterator over entries with given key prefix
-pub struct PrefixIter<'tx> {
+pub struct PrefixIter<'tx, C> {
     /// Underlying iterator
-    iter: lmdb::Iter<'tx>,
+    iter: lmdb::Iter<'tx, C>,
 
     /// Prefix to iterate over
     prefix: Data,
-
-    /// Workaround to keep the cursor alive for the duration of the iterator lifetime
-    ///
-    /// The `lmdb::Iter` obejct refers to the cursor it's derived from but this fact is not properly
-    /// reflected in its lifetime constraints by the used LMDB library. The lifetime annotation
-    /// allows for the iterator to outlive the cursor, resulting in a use-after-free issue. Here,
-    /// we make sure to keep the cursor around for long enough.
-    _cursor: lmdb::RoCursor<'tx>,
 }
 
-impl<'tx> PrefixIter<'tx> {
-    fn new(cursor: lmdb::RoCursor<'tx>, iter: lmdb::Iter<'tx>, prefix: Data) -> Self {
-        PrefixIter {
-            _cursor: cursor,
-            iter,
-            prefix,
-        }
+impl<'tx, C> PrefixIter<'tx, C> {
+    fn new(iter: lmdb::Iter<'tx, C>, prefix: Data) -> Self {
+        PrefixIter { iter, prefix }
     }
 }
 
-impl Iterator for PrefixIter<'_> {
+impl<'tx, C: lmdb::Cursor<'tx>> Iterator for PrefixIter<'tx, C> {
     type Item = (Data, Data);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -83,20 +71,20 @@ type DbTxRo<'a> = DbTx<'a, lmdb::RoTransaction<'a>>;
 type DbTxRw<'a> = DbTx<'a, lmdb::RwTransaction<'a>>;
 
 impl<'s, 'i, Tx: lmdb::Transaction> backend::PrefixIter<'i> for DbTx<'s, Tx> {
-    type Iterator = PrefixIter<'i>;
+    type Iterator = PrefixIter<'i, lmdb::RoCursor<'i>>;
 
     fn prefix_iter<'t: 'i>(
         &'t self,
         idx: DbIndex,
         prefix: Data,
     ) -> storage_core::Result<Self::Iterator> {
-        let mut cursor = self.tx.open_ro_cursor(self.dbs[idx]).or_else(error::process_with_err)?;
+        let cursor = self.tx.open_ro_cursor(self.dbs[idx]).or_else(error::process_with_err)?;
         let iter = if prefix.is_empty() {
-            cursor.iter_start()
+            cursor.into_iter_start()
         } else {
-            cursor.iter_from(prefix.as_slice())
+            cursor.into_iter_from(prefix.as_slice())
         };
-        Ok(PrefixIter::new(cursor, iter, prefix))
+        Ok(PrefixIter::new(iter, prefix))
     }
 }
 
