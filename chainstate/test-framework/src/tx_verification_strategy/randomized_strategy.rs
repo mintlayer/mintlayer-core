@@ -136,7 +136,6 @@ impl RandomizedTransactionVerificationStrategy {
             .connect_transactable(
                 block_index,
                 BlockTransactableRef::BlockReward(block),
-                &block_index.block_height(),
                 median_time_past,
             )
             .log_err()?;
@@ -167,7 +166,6 @@ impl RandomizedTransactionVerificationStrategy {
                 tx_verifier.connect_transactable(
                     block_index,
                     BlockTransactableRef::Transaction(block, tx_num),
-                    &block_index.block_height(),
                     median_time_past,
                 )?;
                 tx_num += 1;
@@ -198,7 +196,6 @@ impl RandomizedTransactionVerificationStrategy {
                 let fee = tx_verifier.connect_transactable(
                     block_index,
                     BlockTransactableRef::Transaction(block, tx_num),
-                    &block_index.block_height(),
                     median_time_past,
                 )?;
 
