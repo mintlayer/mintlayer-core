@@ -354,7 +354,6 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         &self,
         block_index: &BlockIndex,
         tx: &T,
-        spend_height: &BlockHeight,
         spending_time: &BlockTimestamp,
     ) -> Result<(), ConnectTransactionError> {
         let inputs = match tx.inputs() {
@@ -386,7 +385,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                         db_tx.get_gen_block_index(id)
                     };
 
-                let block_index = block_index_ancestor_getter(
+                let source_block_index = block_index_ancestor_getter(
                     block_index_getter,
                     self.storage_ref,
                     self.chain_config,
@@ -399,7 +398,12 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                     )
                 })?;
 
-                self.check_timelock(&block_index, utxo.output(), spend_height, spending_time)?;
+                self.check_timelock(
+                    &source_block_index,
+                    utxo.output(),
+                    &block_index.block_height(),
+                    spending_time,
+                )?;
             }
         }
 
@@ -488,12 +492,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         self.token_issuance_cache.register(block_id, tx.transaction())?;
 
         // check timelocks of the outputs and make sure there's no premature spending
-        self.check_timelocks(
-            block_index,
-            tx,
-            &block_index.block_height(),
-            median_time_past,
-        )?;
+        self.check_timelocks(block_index, tx, median_time_past)?;
 
         // verify input signatures
         self.verify_signatures(tx)?;
