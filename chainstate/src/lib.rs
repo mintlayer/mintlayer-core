@@ -66,7 +66,7 @@ pub enum ChainstateError {
 
 impl subsystem::Subsystem for Box<dyn ChainstateInterface> {}
 
-type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface>>;
+pub type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface>>;
 
 pub fn make_chainstate<
     S: chainstate_storage::BlockchainStorage + 'static,
