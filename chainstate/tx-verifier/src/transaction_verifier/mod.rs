@@ -254,7 +254,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
             return Err(ConnectTransactionError::TokensError(
                 TokensError::InsufficientTokenFees(
                     tx.get_id(),
-                    block_id.unwrap_or(H256::zero().into()),
+                    block_id.unwrap_or_else(|| H256::zero().into()),
                 ),
             ));
         }
