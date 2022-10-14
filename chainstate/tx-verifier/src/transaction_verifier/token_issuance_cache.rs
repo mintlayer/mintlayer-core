@@ -20,7 +20,7 @@ use common::{
         tokens::{is_tokens_issuance, token_id, TokenAuxiliaryData, TokenId},
         Block, Transaction,
     },
-    primitives::{Id, Idable},
+    primitives::{Id, Idable, H256},
 };
 
 use super::{
@@ -70,10 +70,14 @@ impl TokenIssuanceCache {
 
     // Token registration saves the token id in the database with the transaction that issued it, and possibly some additional auxiliary data;
     // This helps in finding the relevant information of the token at any time in the future.
-    pub fn register(&mut self, block_id: &Id<Block>, tx: &Transaction) -> Result<(), TokensError> {
+    pub fn register(
+        &mut self,
+        block_id: Option<Id<Block>>,
+        tx: &Transaction,
+    ) -> Result<(), TokensError> {
         let was_token_issued = tx.outputs().iter().any(|output| is_tokens_issuance(output.value()));
         if was_token_issued {
-            self.write_issuance(block_id, tx)?;
+            self.write_issuance(&block_id.unwrap_or(H256::zero().into()), tx)?;
         }
         Ok(())
     }
