@@ -60,16 +60,16 @@ pub struct MempoolStore {
     // fullness reasons, it must be removed together with all of its descendants (as these descendants
     // would no longer be valid to mine). Entries with a lower descendant score will be evicted
     // first.
-    //
-    // TODO: currently, the descendant score is the sum fee of the transaction to gether with all
-    // of its descendants. If we wish to follow Bitcoin Core, we should use:
-    // max(feerate(tx, tx_with_descendants)),
-    // Where feerate is computed as fee(tx)/size(tx)
-    // Note that if we wish to follow Bitcoin Bore, "size" is not simply the encoded size, but
-    // rather a value that takes into account witdess and sigop data (see CTxMemPoolEntry::GetTxSize).
+    // The descendant score of an entry is defined as:
+    //  max(fee/size of entry's tx, fee/size with all descendants).
+    //  TODO if we wish to follow Bitcoin Bore, "size" is not simply the encoded size, but
+    // rather a value that takes into account witness and sigop data (see CTxMemPoolEntry::GetTxSize).
     pub(super) txs_by_descendant_score: BTreeMap<DescendantScore, BTreeSet<Id<Transaction>>>,
 
-    // Mempool entries sorted by ancestor score
+    // Mempool entries sorted by ancestor score.
+    // This is used to select the most economically attractive transactions for block production.
+    // The ancestor score of an entry is defined as
+    //  min(score/size of entry's tx, score/size with all ancestors).
     pub(super) txs_by_ancestor_score: BTreeMap<AncestorScore, BTreeSet<Id<Transaction>>>,
 
     // Entries that have remained in the mempool for a long time (see DEFAULT_MEMPOOL_EXPIRY) are
