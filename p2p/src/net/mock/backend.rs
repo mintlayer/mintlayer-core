@@ -334,6 +334,7 @@ where
     }
 
     async fn handle_announcement(&mut self, _announcement: Announcement) -> crate::Result<()> {
+        // TODO: Implement the block announcement (https://github.com/mintlayer/mintlayer-core/issues/488).
         todo!();
     }
 
