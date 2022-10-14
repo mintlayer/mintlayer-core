@@ -20,7 +20,7 @@ use tokio::sync::mpsc;
 use p2p::{
     error::{P2pError, PublishError},
     event::SwarmEvent,
-    message::Announcement,
+    message::{Announcement, HeaderListResponse, Request, Response},
     net::{
         self,
         libp2p::Libp2pService,
@@ -28,6 +28,7 @@ use p2p::{
             transport::{ChannelMockTransport, TcpMockTransport},
             MockService,
         },
+        types::SyncingEvent,
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
     sync::BlockSyncManager,
@@ -83,13 +84,28 @@ async fn invalid_pubsub_block() {
     let peer = *conn2.peer_id();
     tokio::spawn(async move {
         sync1.register_peer(peer).await.unwrap();
-        sync1.process_header_response(peer, Vec::new()).await.unwrap();
         sync1.run().await
     });
 
     // spawn `sync2` into background and spam an orphan block on the network
     tokio::spawn(async move {
         sync2.subscribe(&[net::types::PubSubTopic::Blocks]).await.unwrap();
+
+        let request_id = match sync2.poll_next().await.unwrap() {
+            SyncingEvent::Request {
+                peer_id: _,
+                request_id,
+                request: Request::HeaderListRequest(_),
+            } => request_id,
+            e => panic!("Unexpected event type: {e:?}"),
+        };
+        sync2
+            .send_response(
+                request_id,
+                Response::HeaderListResponse(HeaderListResponse::new(Vec::new())),
+            )
+            .await
+            .unwrap();
 
         loop {
             let res = sync2.make_announcement(Announcement::Block(blocks[2].clone())).await;
@@ -105,12 +121,12 @@ async fn invalid_pubsub_block() {
         }
     });
 
-    let event = rx_swarm.recv().await;
-    if let Some(SwarmEvent::AdjustPeerScore(peer_id, score, _)) = event {
-        assert_eq!(&peer_id, conn2.peer_id());
-        assert_eq!(score, 100);
-    } else {
-        panic!("invalid event received: {:?}", event);
+    match rx_swarm.recv().await {
+        Some(SwarmEvent::AdjustPeerScore(peer_id, score, _)) => {
+            assert_eq!(&peer_id, conn2.peer_id());
+            assert_eq!(score, 100);
+        }
+        e => panic!("invalid event received: {e:?}"),
     }
 }
 
