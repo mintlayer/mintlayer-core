@@ -54,7 +54,7 @@ where
     let chainstate_config = ChainstateConfig::new();
     let mut man = subsystem::Manager::new("TODO");
     let handle = man.add_subsystem(
-        "consensus",
+        "chainstate",
         make_chainstate(
             chain_config,
             chainstate_config,

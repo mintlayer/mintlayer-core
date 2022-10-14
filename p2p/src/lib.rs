@@ -145,7 +145,7 @@ where
     pub async fn new(
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
-        consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+        chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         _mempool_handle: subsystem::Handle<Box<dyn MempoolInterface>>,
     ) -> crate::Result<Self>
     where
@@ -192,7 +192,7 @@ where
             });
         }
         {
-            let consensus_handle = consensus_handle.clone();
+            let chainstate_handle = chainstate_handle.clone();
             let tx_swarm = tx_swarm.clone();
             let chain_config = Arc::clone(&chain_config);
 
@@ -200,7 +200,7 @@ where
                 sync::BlockSyncManager::<T>::new(
                     chain_config,
                     sync,
-                    consensus_handle,
+                    chainstate_handle,
                     rx_p2p_sync,
                     tx_swarm,
                 )
@@ -221,7 +221,7 @@ pub type P2pHandle<T> = subsystem::Handle<P2pInterface<T>>;
 pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
-    consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+    chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     mempool_handle: subsystem::Handle<Box<dyn MempoolInterface>>,
 ) -> crate::Result<P2pInterface<T>>
 where
@@ -234,6 +234,6 @@ where
     <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
 {
     Ok(P2pInterface {
-        p2p: P2P::new(chain_config, p2p_config, consensus_handle, mempool_handle).await?,
+        p2p: P2P::new(chain_config, p2p_config, chainstate_handle, mempool_handle).await?,
     })
 }
