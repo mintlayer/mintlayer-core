@@ -464,7 +464,6 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         &mut self,
         block_index: &BlockIndex,
         spend_ref: BlockTransactableRef,
-        spend_height: &BlockHeight,
         median_time_past: &BlockTimestamp,
     ) -> Result<Option<Fee>, ConnectTransactionError> {
         let tx_index_fetcher =
@@ -495,7 +494,12 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 self.token_issuance_cache.register(block.get_id(), tx.transaction())?;
 
                 // check timelocks of the outputs and make sure there's no premature spending
-                self.check_timelocks(block_index, tx, spend_height, median_time_past)?;
+                self.check_timelocks(
+                    block_index,
+                    tx,
+                    &block_index.block_height(),
+                    median_time_past,
+                )?;
 
                 // verify input signatures
                 self.verify_signatures(tx)?;
@@ -503,7 +507,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 // spend utxos
                 let tx_undo = self
                     .utxo_cache
-                    .connect_transaction(tx.transaction(), *spend_height)
+                    .connect_transaction(tx.transaction(), block_index.block_height())
                     .map_err(ConnectTransactionError::from)?;
 
                 // save spent utxos for undo
@@ -535,7 +539,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                     .connect_block_transactable(
                         &reward_transactable,
                         &block.get_id().into(),
-                        *spend_height,
+                        block_index.block_height(),
                     )
                     .map_err(ConnectTransactionError::from)?;
 
