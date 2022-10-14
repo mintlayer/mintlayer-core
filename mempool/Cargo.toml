@@ -17,7 +17,6 @@ rpc = { path = '../rpc' }
 
 anyhow = "1.0"
 async-trait = "0.1"
-futures = "0.3"
 jsonrpsee = {version = "0.15", features = ["macros"]}
 thiserror = "1.0"
 mockall = "0.11.0"
