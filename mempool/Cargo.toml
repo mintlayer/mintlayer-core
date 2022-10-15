@@ -21,16 +21,12 @@ jsonrpsee = {version = "0.15", features = ["macros"]}
 thiserror = "1.0"
 mockall = "0.11.0"
 parking_lot = "0.12"
-
-[dependencies.tokio]
-version = "1"
-default-features = false
-features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"]
+tokio = { version = "1", default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 
 [dev-dependencies]
-rstest = "0.15"
 chainstate-storage = { path = '../chainstate/storage' }
 chainstate-test-framework = { path = '../chainstate/test-framework' }
 crypto = { path = '../crypto' }
 test-utils = {path = '../test-utils'}
 
+rstest = "0.15"

@@ -15,9 +15,9 @@ crypto = { path = '../../crypto' }
 utils = { path = '../../utils' }
 
 [dev-dependencies]
-hex = "0.4"
-itertools = "0.10"
-
 consensus = { path = '../../consensus' }
 logging = { path = '../../logging' }
 test-utils = {path = '../../test-utils'}
+
+hex = "0.4"
+itertools = "0.10"

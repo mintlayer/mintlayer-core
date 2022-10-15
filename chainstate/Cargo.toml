@@ -28,9 +28,10 @@ thiserror = "1.0"
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
+test-utils = { path = "../test-utils" }
+
 mockall = "0.11"
 rstest = "0.15"
 serde_json = "1.0"
 static_assertions = "1.1"
 tokio = "1.19"
-test-utils = {path = "../test-utils"}
