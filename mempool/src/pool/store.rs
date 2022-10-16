@@ -85,6 +85,13 @@ pub struct MempoolStore {
     pub(super) spender_txs: BTreeMap<OutPoint, Id<Transaction>>,
 }
 
+// If a transaction is removed from the mempool for any reason other than inclusion in a block,
+// then all its in-mempool descendants must be removed as well, and thus there is no need to update
+// these descendants' ancestor data.
+// Currently there is no special logic pertaining to the variants other than `Block`, but in the future we may
+// want to add such logic. For example, Bitcoin Core has a `Conflict` variant for transactions removed from
+// the mempool because they conflict with transactions in a new incoming block, and the wallet
+// handles this variant differently from the others.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum MempoolRemovalReason {
     Block,
