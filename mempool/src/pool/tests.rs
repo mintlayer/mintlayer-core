@@ -120,7 +120,7 @@ async fn add_single_tx() -> anyhow::Result<()> {
     assert!(mempool.contains_transaction(&tx_id));
     let all_txs = mempool.get_all();
     assert_eq!(all_txs, vec![&tx_clone]);
-    mempool.drop_transaction(&tx_id);
+    mempool.store.remove_tx(&tx_id, MempoolRemovalReason::Block);
     assert!(!mempool.contains_transaction(&tx_id));
     let all_txs = mempool.get_all();
     assert_eq!(all_txs, Vec::<&SignedTransaction>::new());
@@ -517,7 +517,7 @@ async fn try_replace_irreplaceable() -> anyhow::Result<()> {
         ))
     ));
 
-    mempool.drop_transaction(&original_id);
+    mempool.store.remove_tx(&original_id, MempoolRemovalReason::Block);
     mempool.add_transaction(replacement).await?;
     mempool.store.assert_valid();
 
@@ -817,23 +817,74 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
 
     // Generation 1
     let tx1_parents = BTreeSet::default();
-    let entry1 = TxMempoolEntry::new(txs.get(0).unwrap().clone(), fee, tx1_parents, time::get());
+    let entry_1_ancestors = BTreeSet::default();
+    let entry1 = TxMempoolEntry::new(
+        txs.get(0).unwrap().clone(),
+        fee,
+        tx1_parents,
+        entry_1_ancestors,
+        time::get(),
+    )
+    .unwrap();
     let tx2_parents = BTreeSet::default();
-    let entry2 = TxMempoolEntry::new(txs.get(1).unwrap().clone(), fee, tx2_parents, time::get());
+    let entry_2_ancestors = BTreeSet::default();
+    let entry2 = TxMempoolEntry::new(
+        txs.get(1).unwrap().clone(),
+        fee,
+        tx2_parents,
+        entry_2_ancestors,
+        time::get(),
+    )
+    .unwrap();
 
     // Generation 2
     let tx3_parents = vec![entry1.tx_id(), entry2.tx_id()].into_iter().collect();
-    let entry3 = TxMempoolEntry::new(txs.get(2).unwrap().clone(), fee, tx3_parents, time::get());
+    let tx3_ancestors = vec![entry1.clone(), entry2.clone()].into_iter().collect();
+    let entry3 = TxMempoolEntry::new(
+        txs.get(2).unwrap().clone(),
+        fee,
+        tx3_parents,
+        tx3_ancestors,
+        time::get(),
+    )
+    .unwrap();
 
     // Generation 3
     let tx4_parents = vec![entry3.tx_id()].into_iter().collect();
+    let tx4_ancestors = vec![entry1.clone(), entry2.clone(), entry3.clone()].into_iter().collect();
     let tx5_parents = vec![entry3.tx_id()].into_iter().collect();
-    let entry4 = TxMempoolEntry::new(txs.get(3).unwrap().clone(), fee, tx4_parents, time::get());
-    let entry5 = TxMempoolEntry::new(txs.get(4).unwrap().clone(), fee, tx5_parents, time::get());
+    let tx5_ancestors = vec![entry1.clone(), entry2.clone(), entry3.clone()].into_iter().collect();
+    let entry4 = TxMempoolEntry::new(
+        txs.get(3).unwrap().clone(),
+        fee,
+        tx4_parents,
+        tx4_ancestors,
+        time::get(),
+    )
+    .unwrap();
+    let entry5 = TxMempoolEntry::new(
+        txs.get(4).unwrap().clone(),
+        fee,
+        tx5_parents,
+        tx5_ancestors,
+        time::get(),
+    )
+    .unwrap();
 
     // Generation 4
     let tx6_parents = vec![entry3.tx_id(), entry4.tx_id(), entry5.tx_id()].into_iter().collect();
-    let entry6 = TxMempoolEntry::new(txs.get(5).unwrap().clone(), fee, tx6_parents, time::get());
+    let tx6_ancestors =
+        vec![entry1.clone(), entry2.clone(), entry3.clone(), entry4.clone(), entry5.clone()]
+            .into_iter()
+            .collect();
+    let entry6 = TxMempoolEntry::new(
+        txs.get(5).unwrap().clone(),
+        fee,
+        tx6_parents,
+        tx6_ancestors,
+        time::get(),
+    )
+    .unwrap();
 
     let entries = vec![entry1, entry2, entry3, entry4, entry5, entry6];
     let ids = entries.clone().into_iter().map(|entry| entry.tx_id()).collect::<Vec<_>>();
@@ -1226,7 +1277,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
         BlockReward::new(vec![]),
     )
     .map_err(|_| anyhow::Error::msg("block creation error"))?;
-    mempool.drop_transaction(&parent_id);
+    mempool.store.remove_tx(&parent_id, MempoolRemovalReason::Block);
 
     mempool
         .chainstate_handle
@@ -1588,6 +1639,160 @@ async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test]
+async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
+    let tf = TestFramework::default();
+    let genesis = tf.genesis();
+    let mut rng = make_seedable_rng(seed);
+
+    let tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(10_000)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+        .add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(10_000)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+        .build();
+    let tx_id = tx.transaction().get_id();
+
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    mempool.add_transaction(tx).await?;
+
+    let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
+
+    let flags = 0;
+    let locktime = 0;
+
+    let tx_b_fee = Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2)));
+    let tx_a_fee = (tx_b_fee + Amount::from_atoms(1000)).unwrap();
+    let tx_c_fee = (tx_a_fee + Amount::from_atoms(1000)).unwrap();
+    let tx_a = tx_spend_input(
+        &mempool,
+        TxInput::new(outpoint_source_id.clone(), 0),
+        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+        tx_a_fee,
+        flags,
+        locktime,
+    )
+    .await?;
+    let tx_a_id = tx_a.transaction().get_id();
+    log::debug!("tx id is: {}", tx_id);
+    log::debug!("tx_a_id : {}", tx_a_id.get());
+    log::debug!("tx_a fee : {:?}", mempool.try_get_fee(&tx_a).await?);
+    mempool.add_transaction(tx_a).await?;
+
+    let tx_b = tx_spend_input(
+        &mempool,
+        TxInput::new(outpoint_source_id, 1),
+        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+        tx_b_fee,
+        flags,
+        locktime,
+    )
+    .await?;
+    let tx_b_id = tx_b.transaction().get_id();
+    log::debug!("tx_b_id : {}", tx_b_id.get());
+    log::debug!("tx_b fee : {:?}", mempool.try_get_fee(&tx_b).await?);
+    mempool.add_transaction(tx_b).await?;
+
+    let tx_c = tx_spend_input(
+        &mempool,
+        TxInput::new(OutPointSourceId::Transaction(tx_b_id), 0),
+        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+        tx_c_fee,
+        flags,
+        locktime,
+    )
+    .await?;
+    let tx_c_id = tx_c.transaction().get_id();
+    log::debug!("tx_c_id : {}", tx_c_id.get());
+    log::debug!("tx_c fee : {:?}", mempool.try_get_fee(&tx_c).await?);
+    mempool.add_transaction(tx_c).await?;
+
+    let entry_tx = mempool.store.txs_by_id.get(&tx_id).expect("tx");
+    log::debug!(
+        "at first, entry tx has score {:?}",
+        entry_tx.ancestor_score()
+    );
+    let entry_a = mempool.store.txs_by_id.get(&tx_a_id).expect("tx_a").clone();
+    log::debug!("AT FIRST, entry a has score {:?}", entry_a.ancestor_score());
+    let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
+    log::debug!("AT FIRST, entry b has score {:?}", entry_b.ancestor_score());
+    let entry_c = mempool.store.txs_by_id.get(&tx_c_id).expect("tx_c").clone();
+    log::debug!(
+        "AT FIRST, entry c looks like {:?} and has score {:?}",
+        entry_c,
+        entry_c.ancestor_score()
+    );
+    assert_eq!(
+        entry_a.fees_with_ancestors(),
+        (entry_a.fee() + entry_tx.fee()).unwrap()
+    );
+    assert_eq!(
+        entry_b.fees_with_ancestors(),
+        (entry_b.fee() + entry_tx.fee()).unwrap()
+    );
+    assert!(!mempool.store.txs_by_ancestor_score.contains_key(&tx_b_fee.into()));
+    log::debug!(
+        "BEFORE REMOVAL raw txs_by_ancestor_score {:?}",
+        mempool.store.txs_by_ancestor_score
+    );
+    check_txs_sorted_by_ancestor_score(&mempool);
+
+    mempool.store.remove_tx(&entry_tx.tx_id(), MempoolRemovalReason::Block);
+    log::debug!(
+        "AFTER REMOVAL raw txs_by_ancestor_score {:?}",
+        mempool.store.txs_by_ancestor_score
+    );
+    let entry_a = mempool.store.txs_by_id.get(&tx_a_id).expect("tx_a");
+    log::debug!(
+        "AFTER removing tx, entry a has score {:?}",
+        entry_a.ancestor_score()
+    );
+    let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
+    log::debug!(
+        "AFTER removing tx, entry b has score {:?}",
+        entry_b.ancestor_score()
+    );
+    let entry_c = mempool.store.txs_by_id.get(&tx_c_id).expect("tx_b");
+    log::debug!(
+        "AFTER removing tx, entry c looks like {:?} and has score {:?}",
+        entry_c,
+        entry_c.ancestor_score()
+    );
+
+    assert!(!mempool.store.txs_by_ancestor_score.contains_key(&tx_c_fee.into()));
+
+    check_txs_sorted_by_ancestor_score(&mempool);
+    mempool.store.assert_valid();
+
+    Ok(())
+}
+
+fn check_txs_sorted_by_ancestor_score(mempool: &Mempool<SystemUsageEstimator>) {
+    let txs_by_ancestor_score =
+        mempool.store.txs_by_descendant_score.values().flatten().collect::<Vec<_>>();
+    for i in 0..(txs_by_ancestor_score.len() - 1) {
+        log::debug!("i =  {}", i);
+        let tx_id = txs_by_ancestor_score.get(i).unwrap();
+        let next_tx_id = txs_by_ancestor_score.get(i + 1).unwrap();
+        let entry_score = mempool.store.txs_by_id.get(tx_id).unwrap().descendant_score();
+        let next_entry_score = mempool.store.txs_by_id.get(next_tx_id).unwrap().descendant_score();
+        log::debug!("entry_score: {:?}", entry_score);
+        log::debug!("next_entry_score: {:?}", next_entry_score);
+        assert!(entry_score <= next_entry_score)
+    }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
 async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::default();
     let genesis = tf.genesis();
@@ -1663,11 +1868,11 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.add_transaction(tx_c).await?;
 
     let entry_a = mempool.store.txs_by_id.get(&tx_a_id).expect("tx_a");
-    log::debug!("entry a has score {:?}", entry_a.fees_with_descendants());
+    log::debug!("entry a has score {:?}", entry_a.descendant_score());
     let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
-    log::debug!("entry b has score {:?}", entry_b.fees_with_descendants());
+    log::debug!("entry b has score {:?}", entry_b.descendant_score());
     let entry_c = mempool.store.txs_by_id.get(&tx_c_id).expect("tx_c").clone();
-    log::debug!("entry c has score {:?}", entry_c.fees_with_descendants());
+    log::debug!("entry c has score {:?}", entry_c.descendant_score());
     assert_eq!(entry_a.fee(), entry_a.fees_with_descendants());
     assert_eq!(
         entry_b.fees_with_descendants(),
@@ -1680,7 +1885,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     check_txs_sorted_by_descendant_sore(&mempool);
 
-    mempool.drop_transaction(&entry_c.tx_id());
+    mempool.store.remove_tx(&entry_c.tx_id(), MempoolRemovalReason::Block);
     assert!(!mempool.store.txs_by_descendant_score.contains_key(&tx_c_fee.into()));
     let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
     assert_eq!(entry_b.fees_with_descendants(), entry_b.fee());
@@ -1872,9 +2077,9 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
         mempool.add_transaction(tx).await?;
     }
 
-    mempool.drop_transaction(&parent_id);
+    mempool.store.remove_tx(&parent_id, MempoolRemovalReason::Block);
     for id in ids {
-        mempool.drop_transaction(&id)
+        mempool.store.remove_tx(&id, MempoolRemovalReason::Block)
     }
     assert!(mempool.store.txs_by_descendant_score.is_empty());
     assert!(mempool.store.txs_by_creation_time.is_empty());
@@ -1930,6 +2135,7 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     let size_limit = 1_000;
     let tx_accumulator = DefaultTxAccumulator::new(size_limit);
     let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
+    log::debug!("ancestor index: {:?}", mempool.store.txs_by_ancestor_score);
     let expected_num_txs_collected = 6;
     assert_eq!(collected_txs.len(), expected_num_txs_collected);
     let total_tx_size: usize = collected_txs.iter().map(|tx| tx.encoded_size()).sum();

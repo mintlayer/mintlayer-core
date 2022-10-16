@@ -44,6 +44,7 @@ use crate::error::TxValidationError;
 use crate::feerate::FeeRate;
 use crate::feerate::INCREMENTAL_RELAY_FEE_RATE;
 use crate::feerate::INCREMENTAL_RELAY_THRESHOLD;
+use store::MempoolRemovalReason;
 use store::MempoolStore;
 use store::TxMempoolEntry;
 
@@ -150,12 +151,6 @@ pub trait MempoolInterface: Send {
 
     // Returns `true` if the mempool contains a transaction with the given id, `false` otherwise.
     fn contains_transaction(&self, tx: &Id<Transaction>) -> bool;
-
-    // Drops a transaction from the mempool, updating its in-mempool parents and children. This
-    // operation removes the transaction from all indices, as well as updating the state (fee,
-    // count with descendants) of the transaction's ancestors. In addition, outpoints spent by this
-    // transaction are no longer marked as spent
-    fn drop_transaction(&mut self, tx: &Id<Transaction>);
 
     fn collect_txs(
         &self,
@@ -304,7 +299,6 @@ where
     pub(crate) fn get_update_min_fee_rate(&self) -> FeeRate {
         log::debug!("get_update_min_fee_rate");
         let rolling_fee_rate = *self.rolling_fee_rate.read();
-        log::debug!("after read");
         if !rolling_fee_rate.block_since_last_rolling_fee_bump
             || rolling_fee_rate.rolling_minimum_fee_rate == FeeRate::new(Amount::from_atoms(0))
         {
@@ -338,12 +332,10 @@ where
     }
 
     fn decay_rolling_fee_rate(&self) {
-        log::debug!("decay_rolling_fee_rate");
         let halflife = self.rolling_fee_halflife();
         let time = self.clock.get_time();
         let mut rolling_fee_rate = self.rolling_fee_rate.write();
         *rolling_fee_rate = (*rolling_fee_rate).decay_fee(halflife, time);
-        log::debug!("decay_rolling_fee_rate_end: {:?}", self.rolling_fee_rate);
     }
 
     async fn verify_inputs_available(
@@ -385,10 +377,18 @@ where
             .filter_map(|input| input.outpoint().tx_id().get_tx_id().cloned())
             .filter_map(|id| self.store.txs_by_id.contains_key(&id).then_some(id))
             .collect::<BTreeSet<_>>();
+        let ancestor_ids =
+            TxMempoolEntry::unconfirmed_ancestors_from_parents(parents.clone(), &self.store)?;
+        let ancestors = ancestor_ids
+            .0
+            .into_iter()
+            .map(|id| self.store.get_entry(&id).expect("ancestors to exist"))
+            .cloned()
+            .collect();
 
         let fee = self.try_get_fee(&tx).await?;
         let time = self.clock.get_time();
-        Ok(TxMempoolEntry::new(tx, fee, parents, time))
+        TxMempoolEntry::new(tx, fee, parents, ancestors, time)
     }
 
     fn get_update_minimum_mempool_fee(
@@ -739,7 +739,7 @@ where
             .collect();
 
         for tx_id in expired.iter().map(|entry| entry.tx_id()) {
-            self.store.drop_tx_and_descendants(tx_id)
+            self.store.drop_tx_and_descendants(tx_id, MempoolRemovalReason::Expiry)
         }
     }
 
@@ -760,14 +760,15 @@ where
             log::debug!(
                 "Mempool trim: Evicting tx {} which has a descendant score of {:?} and has size {}",
                 removed.tx_id(),
-                removed.fees_with_descendants(),
+                removed.descendant_score(),
                 removed.size()
             );
             removed_fees.push(FeeRate::from_total_tx_fee(
                 removed.fee(),
                 NonZeroUsize::new(removed.size()).expect("transaction cannot have zero size"),
             )?);
-            self.store.drop_tx_and_descendants(removed.tx_id());
+            self.store
+                .drop_tx_and_descendants(removed.tx_id(), MempoolRemovalReason::SizeLimit);
         }
         Ok(removed_fees)
     }
@@ -842,11 +843,15 @@ where
         &self,
         mut tx_accumulator: Box<dyn TransactionAccumulator>,
     ) -> Vec<SignedTransaction> {
-        let mut tx_iter = self.store.txs_by_descendant_score.values().flatten();
+        let mut tx_iter = self.store.txs_by_ancestor_score.values().flatten().rev();
         // TODO implement Iterator for MempoolStore so we don't need to use `expect` here
         while !tx_accumulator.done() {
             if let Some(tx_id) = tx_iter.next() {
                 let next_tx = self.store.txs_by_id.get(tx_id).expect("tx to exist");
+                log::debug!(
+                    "collect_txs: next tx has ancestor score {:?}",
+                    next_tx.ancestor_score()
+                );
                 tx_accumulator.add_tx(next_tx.tx().clone());
             } else {
                 break;
@@ -857,12 +862,6 @@ where
 
     fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
         self.store.txs_by_id.contains_key(tx_id)
-    }
-
-    // TODO Consider returning an error
-    fn drop_transaction(&mut self, tx_id: &Id<Transaction>) {
-        self.store.remove_tx(tx_id);
-        self.store.assert_valid();
     }
 }
 
