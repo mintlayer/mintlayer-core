@@ -18,6 +18,13 @@ use std::collections::BTreeMap;
 use crate::Utxo;
 use common::{chain::Transaction, primitives::Id};
 use serialization::{Decode, Encode};
+use thiserror::Error;
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum BlockUndoError {
+    #[error("Attempted to insert a transaction in undo that already exists: `{0}`")]
+    UndoAlreadyExists(Id<Transaction>),
+}
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct BlockRewardUndo(Vec<Utxo>);
@@ -90,9 +97,18 @@ impl BlockUndo {
         &self.tx_undos
     }
 
-    pub fn push_tx_undo(&mut self, tx_id: Id<Transaction>, tx_undo: TxUndo) {
-        // TODO(PR): this could overwrite current values, which isn't OK
-        self.tx_undos.insert(tx_id, tx_undo);
+    pub fn insert_tx_undo(
+        &mut self,
+        tx_id: Id<Transaction>,
+        tx_undo: TxUndo,
+    ) -> Result<(), BlockUndoError> {
+        match self.tx_undos.entry(tx_id) {
+            std::collections::btree_map::Entry::Vacant(e) => e.insert(tx_undo),
+            std::collections::btree_map::Entry::Occupied(_) => {
+                return Err(BlockUndoError::UndoAlreadyExists(tx_id))
+            }
+        };
+        Ok(())
     }
 
     pub fn take_tx_undo(&mut self, tx_id: &Id<Transaction>) -> Option<TxUndo> {
@@ -113,7 +129,7 @@ impl BlockUndo {
         self.reward_undo.take()
     }
 
-    pub fn append(&mut self, other: BlockUndo) {
+    pub fn append(&mut self, other: BlockUndo) -> Result<(), BlockUndoError> {
         if let Some(reward_undo) = other.reward_undo {
             if self.reward_undo.is_none() && !reward_undo.inner().is_empty() {
                 self.reward_undo = Some(Default::default());
@@ -122,8 +138,7 @@ impl BlockUndo {
                 self.reward_undo.as_mut().expect("must've been already initialized ").0.push(u);
             })
         }
-        // TODO(PR): this could overwrite current values, which isn't OK
-        other.tx_undos.into_iter().for_each(|(id, u)| self.push_tx_undo(id, u));
+        other.tx_undos.into_iter().map(|(id, u)| self.insert_tx_undo(id, u)).collect()
     }
 }
 

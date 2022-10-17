@@ -537,7 +537,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
 
         // save spent utxos for undo
         if let Some(id) = block_id {
-            self.get_or_create_block_undo(&id).push_tx_undo(tx_id, tx_undo);
+            self.get_or_create_block_undo(&id).insert_tx_undo(tx_id, tx_undo)?;
         }
 
         // mark tx index as spent
