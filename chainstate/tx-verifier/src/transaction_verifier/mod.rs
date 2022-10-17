@@ -468,17 +468,13 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
     fn take_tx_undo(
         &mut self,
         block_id: &Id<Block>,
-        tx_num: usize,
+        tx_id: &Id<Transaction>,
     ) -> Result<TxUndo, ConnectTransactionError> {
         let block_undo = self.fetch_block_undo(block_id)?;
-        debug_assert_eq!(
-            block_undo.tx_undos().len(),
-            tx_num + 1,
-            "only the last tx undo can be taken"
-        );
+
         block_undo
-            .pop_tx_undo()
-            .ok_or(ConnectTransactionError::MissingTxUndo(tx_num, *block_id))
+            .take_tx_undo(tx_id)
+            .ok_or(ConnectTransactionError::MissingTxUndo(*tx_id, *block_id))
     }
 
     fn take_block_reward_undo(
@@ -537,9 +533,11 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
             .connect_transaction(tx.transaction(), tx_source.expected_block_height())
             .map_err(ConnectTransactionError::from)?;
 
+        let tx_id = tx.transaction().get_id();
+
         // save spent utxos for undo
         if let Some(id) = block_id {
-            self.get_or_create_block_undo(&id).push_tx_undo(tx_undo);
+            self.get_or_create_block_undo(&id).push_tx_undo(tx_id, tx_undo);
         }
 
         // mark tx index as spent
@@ -642,7 +640,9 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                     ConnectTransactionError::TxNumWrongInBlockOnDisconnect(tx_num, block_id),
                 )?;
 
-                let tx_undo = self.take_tx_undo(&block_id, tx_num)?;
+                let tx_id = tx.transaction().get_id();
+
+                let tx_undo = self.take_tx_undo(&block_id, &tx_id)?;
                 self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
 
                 // pre-cache all inputs

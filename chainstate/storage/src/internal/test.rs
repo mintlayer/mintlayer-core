@@ -292,6 +292,11 @@ pub fn create_rand_block_undo(
         tx_undo.push(TxUndo::new(tx_utxos));
     }
 
+    let tx_undo = tx_undo
+        .into_iter()
+        .map(|u| (H256::random().into(), u))
+        .collect::<BTreeMap<_, _>>();
+
     BlockUndo::new(Some(reward_undo), tx_undo)
 }
 
