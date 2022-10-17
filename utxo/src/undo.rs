@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use crate::Utxo;
+use common::{chain::Transaction, primitives::Id};
 use serialization::{Decode, Encode};
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
@@ -65,11 +68,14 @@ impl TxUndo {
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct BlockUndo {
     reward_undo: Option<BlockRewardUndo>,
-    tx_undos: Vec<TxUndo>,
+    tx_undos: BTreeMap<Id<Transaction>, TxUndo>,
 }
 
 impl BlockUndo {
-    pub fn new(reward_undo: Option<BlockRewardUndo>, tx_undos: Vec<TxUndo>) -> Self {
+    pub fn new(
+        reward_undo: Option<BlockRewardUndo>,
+        tx_undos: BTreeMap<Id<Transaction>, TxUndo>,
+    ) -> Self {
         Self {
             tx_undos,
             reward_undo,
@@ -80,16 +86,18 @@ impl BlockUndo {
         self.reward_undo.is_none() && self.tx_undos.is_empty()
     }
 
-    pub fn tx_undos(&self) -> &[TxUndo] {
+    pub fn tx_undos(&self) -> &BTreeMap<Id<Transaction>, TxUndo> {
         &self.tx_undos
     }
 
-    pub fn push_tx_undo(&mut self, tx_undo: TxUndo) {
-        self.tx_undos.push(tx_undo);
+    pub fn push_tx_undo(&mut self, tx_id: Id<Transaction>, tx_undo: TxUndo) {
+        // TODO(PR): this could overwrite current values, which isn't OK
+        self.tx_undos.insert(tx_id, tx_undo);
     }
 
-    pub fn pop_tx_undo(&mut self) -> Option<TxUndo> {
-        self.tx_undos.pop()
+    pub fn take_tx_undo(&mut self, tx_id: &Id<Transaction>) -> Option<TxUndo> {
+        // TODO(PR): this should analyze dependencies before taking an undo
+        self.tx_undos.remove(tx_id)
     }
 
     pub fn block_reward_undo(&self) -> Option<&BlockRewardUndo> {
@@ -114,7 +122,8 @@ impl BlockUndo {
                 self.reward_undo.as_mut().expect("must've been already initialized ").0.push(u);
             })
         }
-        other.tx_undos.into_iter().for_each(|u| self.push_tx_undo(u));
+        // TODO(PR): this could overwrite current values, which isn't OK
+        other.tx_undos.into_iter().for_each(|(id, u)| self.push_tx_undo(id, u));
     }
 }
 
@@ -161,25 +170,29 @@ pub mod test {
         let (utxo0, _) = create_utxo(&mut rng, 0);
         let (utxo1, _) = create_utxo(&mut rng, 1);
         let tx_undo0 = TxUndo::new(vec![utxo0, utxo1]);
+        let tx_0_id: Id<Transaction> = common::primitives::H256::from_low_u64_be(0).into();
 
         let (utxo2, _) = create_utxo(&mut rng, 2);
         let (utxo3, _) = create_utxo(&mut rng, 3);
         let (utxo4, _) = create_utxo(&mut rng, 4);
         let tx_undo1 = TxUndo::new(vec![utxo2, utxo3, utxo4]);
+        let tx_1_id: Id<Transaction> = common::primitives::H256::from_low_u64_be(1).into();
 
         let (utxo5, _) = create_utxo(&mut rng, 5);
         let reward_undo = BlockRewardUndo::new(vec![utxo5]);
 
         let blockundo = BlockUndo::new(
             Some(reward_undo.clone()),
-            vec![tx_undo0.clone(), tx_undo1.clone()],
+            vec![(tx_0_id, tx_undo0.clone()), (tx_1_id, tx_undo1.clone())]
+                .into_iter()
+                .collect::<BTreeMap<_, _>>(),
         );
 
         // check `inner()`
         let inner = blockundo.tx_undos();
 
-        assert_eq!(&tx_undo0, &inner[0]);
-        assert_eq!(&tx_undo1, &inner[1]);
+        assert_eq!(&tx_undo0, inner.get(&tx_0_id).unwrap());
+        assert_eq!(&tx_undo1, inner.get(&tx_1_id).unwrap());
 
         assert_eq!(&reward_undo, blockundo.block_reward_undo().unwrap());
     }

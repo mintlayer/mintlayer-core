@@ -40,11 +40,23 @@ fn utxo_set_hierarchy() {
 
     let (outpoint1, utxo1) = create_utxo(1000);
     let block_1_id: Id<Block> = Id::new(H256::random());
-    let block_1_undo = BlockUndo::new(None, vec![TxUndo::new(vec![create_utxo(100).1])]);
+    let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
+    let block_1_undo = BlockUndo::new(
+        None,
+        [(tx_1_id, TxUndo::new(vec![create_utxo(100).1]))]
+            .into_iter()
+            .collect::<BTreeMap<_, _>>(),
+    );
 
     let (outpoint2, utxo2) = create_utxo(2000);
     let block_2_id: Id<Block> = Id::new(H256::random());
-    let block_2_undo = BlockUndo::new(None, vec![TxUndo::new(vec![create_utxo(100).1])]);
+    let tx_2_id: Id<Transaction> = H256::from_low_u64_be(2).into();
+    let block_2_undo = BlockUndo::new(
+        None,
+        [(tx_2_id, TxUndo::new(vec![create_utxo(100).1]))]
+            .into_iter()
+            .collect::<BTreeMap<_, _>>(),
+    );
 
     let mut store = mock::MockStore::new();
     store
@@ -453,17 +465,25 @@ fn block_undo_conflict_hierarchy() {
     let (_, utxo3) = create_utxo(3000);
     let (_, utxo4) = create_utxo(4000);
     let block_id: Id<Block> = Id::new(H256::random());
+    let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
     let block_undo_1 = BlockUndo::new(
         Some(BlockRewardUndo::new(vec![utxo1.clone()])),
-        vec![TxUndo::new(vec![utxo2.clone()])],
+        [(tx_1_id, TxUndo::new(vec![utxo2.clone()]))]
+            .into_iter()
+            .collect::<BTreeMap<_, _>>(),
     );
+    let tx_2_id: Id<Transaction> = H256::from_low_u64_be(2).into();
     let block_undo_2 = BlockUndo::new(
         Some(BlockRewardUndo::new(vec![utxo3.clone()])),
-        vec![TxUndo::new(vec![utxo4.clone()])],
+        [(tx_2_id, TxUndo::new(vec![utxo4.clone()]))]
+            .into_iter()
+            .collect::<BTreeMap<_, _>>(),
     );
     let expected_block_undo = BlockUndo::new(
         Some(BlockRewardUndo::new(vec![utxo1, utxo3])),
-        vec![TxUndo::new(vec![utxo2]), TxUndo::new(vec![utxo4])],
+        [(tx_1_id, TxUndo::new(vec![utxo2])), (tx_2_id, TxUndo::new(vec![utxo4]))]
+            .into_iter()
+            .collect::<BTreeMap<_, _>>(),
     );
 
     let mut store = mock::MockStore::new();
