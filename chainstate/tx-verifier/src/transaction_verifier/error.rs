@@ -24,6 +24,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use thiserror::Error;
+use utxo::BlockUndoError;
 
 use super::storage::TransactionVerifierStorageError;
 
@@ -77,6 +78,8 @@ pub enum ConnectTransactionError {
     TxIndexError(#[from] TxIndexError),
     #[error("Error from TransactionVerifierStorage: {0}")]
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
+    #[error("BlockUndo error: {0}")]
+    BlockUndoError(#[from] BlockUndoError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
