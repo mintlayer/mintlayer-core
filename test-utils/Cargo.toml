@@ -8,4 +8,5 @@ license = "MIT"
 
 [dependencies]
 crypto = {path = '../crypto'}
+
 rand_chacha = "0.3.1"
