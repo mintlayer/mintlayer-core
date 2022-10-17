@@ -549,7 +549,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         Ok(fee)
     }
 
-    pub fn connect_block_reward(
+    fn connect_block_reward(
         &mut self,
         block_index: &BlockIndex,
         reward_transactable: BlockRewardTransactable,
