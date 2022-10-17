@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::tests::nft_utils::random_creator;
 use chainstate::{BlockError, BlockSource, ChainstateError, ConnectTransactionError, TokensError};
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
 use common::{
@@ -29,6 +28,7 @@ use common::{
 use rstest::rstest;
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
+    nft_utils::random_creator,
     random::{make_seedable_rng, Seed},
     random_string,
 };

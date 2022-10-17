@@ -77,6 +77,8 @@ impl<B: storage::Backend> Store<B> {
         self.0.dump_raw().map_err(crate::Error::from)
     }
 
+    /// Collect and return all utxos from the storage
+    #[allow(clippy::let_and_return)]
     pub fn read_utxo_set(&self) -> crate::Result<BTreeMap<OutPoint, Utxo>> {
         let db = self.transaction_ro()?;
         let map = db.0.get::<db::DBUtxo, _>();

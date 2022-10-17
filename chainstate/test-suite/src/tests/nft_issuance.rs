@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::tests::nft_utils::random_creator;
 use chainstate::{
     is_rfc3986_valid_symbol, BlockError, ChainstateError, CheckBlockError,
     CheckBlockTransactionsError, TokensError,
@@ -34,6 +33,7 @@ use rstest::rstest;
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
     gen_text_with_non_ascii,
+    nft_utils::random_creator,
     random::{make_seedable_rng, Seed},
     random_string,
 };

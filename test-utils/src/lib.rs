@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod nft_utils;
 pub mod random;
 
 use crypto::random::distributions::uniform::SampleRange;

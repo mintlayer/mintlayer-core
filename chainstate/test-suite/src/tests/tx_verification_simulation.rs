@@ -27,7 +27,6 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
             .build();
 
         for _ in 0..rng.gen_range(10..max_blocks) {
-            println!("***************************************** Building a block");
             let mut block_builder = tf.make_block_builder();
 
             for _ in 0..rng.gen_range(10..max_tx_per_block) {

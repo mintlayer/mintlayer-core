@@ -30,11 +30,22 @@ use tx_verifier::transaction_verifier::{
 };
 use utils::tap_error_log::LogError;
 
+///
+/// This strategy operates on transactions with 2 verifiers.
+/// It can represented as a finite state machine that for every transaction randomly changes state as follows:
+///
+///                  _______flush______
+///                 |                  |
+///                 V                  |
+/// TransactionVerifier ---derive--> TransactionVerifier
+///  |              ^                 |              ^
+///  |              |                 |              |
+///  |__process tx__|                 |__process tx__|
+///
 pub struct RandomizedTransactionVerificationStrategy {
     rng: RefCell<Box<dyn RngCore + Send>>,
 }
 
-// FIXME config with probabilities?
 impl RandomizedTransactionVerificationStrategy {
     pub fn new(seed: Seed) -> Self {
         Self {
@@ -63,7 +74,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
             calculate_median_time_past(block_index_handle, &block.prev_block_id());
 
         let (mut tx_verifier, total_fees) = self
-            .connect_level_1(
+            .connect_with_base(
                 tx_verifier_maker,
                 storage_backend,
                 chain_config,
@@ -95,7 +106,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>,
     {
         let mut tx_verifier =
-            self.disconnect_level_1(tx_verifier_maker, storage_backend, chain_config, block)?;
+            self.disconnect_with_base(tx_verifier_maker, storage_backend, chain_config, block)?;
 
         tx_verifier.set_best_block(block.prev_block_id());
 
@@ -104,7 +115,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
 }
 
 impl RandomizedTransactionVerificationStrategy {
-    fn connect_level_1<'a, S, M>(
+    fn connect_with_base<'a, S, M>(
         &self,
         tx_verifier_maker: M,
         storage_backend: &'a S,
@@ -134,7 +145,8 @@ impl RandomizedTransactionVerificationStrategy {
         while tx_num < block.transactions().len() {
             let switch = self.rng.borrow_mut().gen_range(0..5);
             if switch == 0 {
-                let (consumed_cache, fee, new_tx_index) = self.connect_level_2(
+                // derive a new cache in 20% cases
+                let (consumed_cache, fee, new_tx_index) = self.connect_with_derived(
                     &tx_verifier,
                     block,
                     block_index,
@@ -150,7 +162,7 @@ impl RandomizedTransactionVerificationStrategy {
                     .map_err(ConnectTransactionError::from)?;
                 tx_num = new_tx_index;
             } else {
-                println!("--- connect on level 1");
+                // connect transactable using current verifier
                 tx_verifier.connect_transactable(
                     block_index,
                     BlockTransactableRef::Transaction(block, tx_num),
@@ -163,7 +175,7 @@ impl RandomizedTransactionVerificationStrategy {
         Ok((tx_verifier, total_fee))
     }
 
-    fn connect_level_2<'a, S>(
+    fn connect_with_derived<'a, S>(
         &self,
         base_tx_verifier: &TransactionVerifier<'a, S>,
         block: &WithId<Block>,
@@ -179,9 +191,10 @@ impl RandomizedTransactionVerificationStrategy {
         while tx_num < block.transactions().len() {
             let switch = self.rng.borrow_mut().gen_range(0..10);
             if switch == 0 {
+                // break the loop in 20% cases, which effectively would flush current state to the parent
                 break;
             } else {
-                println!("--- --- connect on level 2");
+                // connect transactable using current verifier
                 let fee = tx_verifier.connect_transactable(
                     block_index,
                     BlockTransactableRef::Transaction(block, tx_num),
@@ -199,7 +212,7 @@ impl RandomizedTransactionVerificationStrategy {
         Ok((cache, total_fee, tx_num))
     }
 
-    fn disconnect_level_1<'a, S, M>(
+    fn disconnect_with_base<'a, S, M>(
         &self,
         tx_verifier_maker: M,
         storage_backend: &'a S,
@@ -215,13 +228,15 @@ impl RandomizedTransactionVerificationStrategy {
         while tx_num >= 0 {
             let switch = self.rng.borrow_mut().gen_range(0..5);
             if switch == 0 {
+                // derive a new cache in 20% cases
                 let (consumed_cache, new_tx_index) =
-                    self.disconnect_level_2(&tx_verifier, block, tx_num)?;
+                    self.disconnect_with_derived(&tx_verifier, block, tx_num)?;
 
                 flush_to_storage(&mut tx_verifier, consumed_cache)
                     .map_err(ConnectTransactionError::from)?;
                 tx_num = new_tx_index;
             } else {
+                // disconnect transactable using current verifier
                 tx_verifier.disconnect_transactable(BlockTransactableRef::Transaction(
                     block,
                     tx_num as usize,
@@ -237,7 +252,7 @@ impl RandomizedTransactionVerificationStrategy {
         Ok(tx_verifier)
     }
 
-    fn disconnect_level_2<'a, S>(
+    fn disconnect_with_derived<'a, S>(
         &self,
         base_tx_verifier: &TransactionVerifier<'a, S>,
         block: &WithId<Block>,
@@ -250,8 +265,10 @@ impl RandomizedTransactionVerificationStrategy {
         while tx_num >= 0 {
             let switch = self.rng.borrow_mut().gen_range(0..10);
             if switch == 0 {
+                // break the loop in 20% cases, which effectively would flush current state to the parent
                 break;
             } else {
+                // disconnect transactable using current verifier
                 tx_verifier.disconnect_transactable(BlockTransactableRef::Transaction(
                     block,
                     tx_num as usize,

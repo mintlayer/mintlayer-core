@@ -15,7 +15,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::utils::{create_new_outputs, create_several_utxo_data};
+use crate::utils::{create_multiple_utxo_data, create_new_outputs};
 use crate::{TestBlockInfo, TestFramework};
 use chainstate::{BlockSource, ChainstateError};
 use chainstate_types::BlockIndex;
@@ -87,7 +87,7 @@ impl<'f> BlockBuilder<'f> {
         let index = rng.gen_range(0..utxo_set.len());
         let (outpoint, utxo) = utxo_set.iter().nth(index).unwrap();
         if !self.used_utxo.contains(outpoint) {
-            let new_utxo_data = create_several_utxo_data(
+            let new_utxo_data = create_multiple_utxo_data(
                 &self.framework.chainstate,
                 outpoint.tx_id(),
                 outpoint.output_index() as usize,

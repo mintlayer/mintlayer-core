@@ -41,7 +41,6 @@ mod nft_burn;
 mod nft_issuance;
 mod nft_reorgs;
 mod nft_transfer;
-mod nft_utils;
 mod output_timelock;
 mod processing_tests;
 mod reorgs_tests;

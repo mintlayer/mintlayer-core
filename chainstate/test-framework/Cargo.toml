@@ -16,6 +16,8 @@ test-utils = {path = '../../test-utils'}
 tx-verifier = { path = '../tx-verifier'}
 utils = { path = '../../utils' }
 
+itertools = "0.10"
+
 [dev-dependencies]
 consensus = { path = '../../consensus' }
 logging = { path = '../../logging' }
