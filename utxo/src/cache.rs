@@ -194,10 +194,11 @@ impl<'a> UtxosCache<'a> {
     ) -> Result<TxUndo, Error> {
         let tx_undo: Result<Vec<Utxo>, Error> =
             tx.inputs().iter().map(|tx_in| self.spend_utxo(tx_in.outpoint())).collect();
+        let tx_undo = tx_undo?;
 
         self.add_utxos_from_tx(tx, UtxoSource::Blockchain(height), false)?;
 
-        tx_undo.map(TxUndo::new)
+        Ok(TxUndo::new(tx_undo))
     }
 
     // Marks outputs of a transaction as spent and inputs as unspent
