@@ -19,7 +19,7 @@ use assert_cmd::Command;
 use directories::UserDirs;
 use tempfile::TempDir;
 
-use node::{NodeConfig, RunOptions};
+use node::{NodeConfig, RunOptions, StorageBackend};
 
 const BIN_NAME: &str = env!("CARGO_BIN_EXE_node");
 const CONFIG_NAME: &str = "config.toml";
@@ -50,7 +50,7 @@ fn create_default_config() {
     assert!(config_path.is_file());
 
     let options = default_run_options();
-    let config = NodeConfig::read(&config_path, &options).unwrap();
+    let config = NodeConfig::read(&config_path, &None, &options).unwrap();
 
     assert_eq!(config.datadir, data_dir.path());
 
@@ -89,6 +89,7 @@ fn read_config_override_values() {
     let http_rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
     let ws_rpc_addr = SocketAddr::from_str("127.0.0.1:5433").unwrap();
     let enable_mdns = false;
+    let backend_type = Some(StorageBackend::InMemory);
 
     let options = RunOptions {
         max_db_commit_attempts: Some(max_db_commit_attempts),
@@ -103,8 +104,9 @@ fn read_config_override_values() {
         http_rpc_enabled: Some(true),
         ws_rpc_addr: Some(ws_rpc_addr),
         ws_rpc_enabled: Some(false),
+        storage_backend: backend_type.clone(),
     };
-    let config = NodeConfig::read(&config_path, &options).unwrap();
+    let config = NodeConfig::read(&config_path, &Some(data_dir.path().into()), &options).unwrap();
 
     assert_eq!(config.datadir, data_dir.path());
 
@@ -123,6 +125,8 @@ fn read_config_override_values() {
 
     assert_eq!(config.rpc.ws_bind_address, Some(ws_rpc_addr));
     assert!(!config.rpc.ws_enabled.unwrap());
+
+    assert_eq!(Some(config.storage.backend), backend_type);
 }
 
 // Check that the `--conf` option has the precedence over the default data directory value.
@@ -142,7 +146,7 @@ fn custom_config_path() {
     assert!(config_path.is_file());
 
     let options = default_run_options();
-    let config = NodeConfig::read(&config_path, &options).unwrap();
+    let config = NodeConfig::read(&config_path, &None, &options).unwrap();
 
     assert_eq!(config.datadir, data_dir);
 }
@@ -165,7 +169,7 @@ fn custom_config_path_and_data_dir() {
     assert!(config_path.is_file());
 
     let options = default_run_options();
-    let config = NodeConfig::read(&config_path, &options).unwrap();
+    let config = NodeConfig::read(&config_path, &None, &options).unwrap();
 
     assert_eq!(config.datadir, data_dir.path());
 }
@@ -184,5 +188,6 @@ fn default_run_options() -> RunOptions {
         http_rpc_enabled: None,
         ws_rpc_addr: None,
         ws_rpc_enabled: None,
+        storage_backend: None,
     }
 }

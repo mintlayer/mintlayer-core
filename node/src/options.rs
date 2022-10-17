@@ -21,7 +21,7 @@ use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 use directories::UserDirs;
 
-use crate::regtest_options::RegtestOptions;
+use crate::{regtest_options::RegtestOptions, storage_config::StorageBackend};
 
 const DATA_DIR_NAME: &str = ".mintlayer";
 const CONFIG_NAME: &str = "config.toml";
@@ -35,8 +35,8 @@ pub struct Options {
     pub log_path: Option<PathBuf>,
 
     /// The path to the data directory.
-    #[clap(short, long = "datadir", default_value_os_t = default_data_dir())]
-    pub data_dir: PathBuf,
+    #[clap(short, long = "datadir")]
+    pub data_dir: Option<PathBuf>,
 
     /// The path to the config file.
     #[clap(short, long = "conf")]
@@ -60,6 +60,10 @@ pub enum Command {
 
 #[derive(Args, Debug)]
 pub struct RunOptions {
+    /// Storage backend to use
+    #[clap(long)]
+    pub storage_backend: Option<StorageBackend>,
+
     /// The number of maximum attempts to process a block.
     #[clap(long)]
     pub max_db_commit_attempts: Option<usize>,
@@ -114,10 +118,10 @@ impl Options {
     ///
     /// The data directory is created as a side-effect of the invocation.
     pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Result<Self> {
-        let options: Options = clap::Parser::parse_from(args);
+        let options: Options = clap::Parser::try_parse_from(args)?;
 
         // We want to check earlier if directories can be created.
-        fs::create_dir_all(&options.data_dir).with_context(|| {
+        fs::create_dir_all(&options.data_dir()).with_context(|| {
             format!(
                 "Failed to create the '{:?}' data directory",
                 options.data_dir
@@ -133,9 +137,14 @@ impl Options {
         Ok(options)
     }
 
+    /// Returns the data directory
+    pub fn data_dir(&self) -> PathBuf {
+        self.data_dir.clone().unwrap_or_else(|| default_data_dir())
+    }
+
     /// Returns a path to the config file.
     pub fn config_path(&self) -> PathBuf {
-        self.config_path.clone().unwrap_or_else(|| self.data_dir.join(CONFIG_NAME))
+        self.config_path.clone().unwrap_or_else(|| self.data_dir().join(CONFIG_NAME))
     }
 }
 

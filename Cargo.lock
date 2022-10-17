@@ -2732,8 +2732,12 @@ dependencies = [
  "paste",
  "rpc",
  "serde",
+ "storage",
+ "storage-inmemory",
+ "storage-lmdb",
  "subsystem",
  "tempfile",
+ "thiserror",
  "tokio",
  "toml",
 ]

@@ -29,7 +29,7 @@ use chainstate::ChainstateConfig;
 use p2p::config::{MdnsConfig, P2pConfig};
 use rpc::RpcConfig;
 
-use crate::RunOptions;
+use crate::{storage_config::StorageConfig, RunOptions};
 
 /// The node configuration.
 #[derive(Serialize, Deserialize, Debug)]
@@ -38,6 +38,10 @@ pub struct NodeConfig {
     ///
     /// By default the config file is created inside of the data directory.
     pub datadir: PathBuf,
+
+    // Storage configuration.
+    #[serde(default)]
+    pub storage: StorageConfig,
 
     // Subsystems configurations.
     pub chainstate: ChainstateConfig,
@@ -48,11 +52,13 @@ pub struct NodeConfig {
 impl NodeConfig {
     /// Creates a new `Config` instance with the given data directory path.
     pub fn new(datadir: PathBuf) -> Result<Self> {
+        let storage = StorageConfig::new();
         let chainstate = ChainstateConfig::new();
         let p2p = P2pConfig::new();
         let rpc = RpcConfig::new()?;
         Ok(Self {
             datadir,
+            storage,
             chainstate,
             p2p,
             rpc,
@@ -60,27 +66,41 @@ impl NodeConfig {
     }
 
     /// Reads a configuration from the specified path and overrides the provided parameters.
-    pub fn read(config_path: &Path, options: &RunOptions) -> Result<Self> {
+    pub fn read(
+        config_path: &Path,
+        datadir_path_opt: &Option<PathBuf>,
+        options: &RunOptions,
+    ) -> Result<Self> {
         let config = fs::read_to_string(config_path)
             .with_context(|| format!("Failed to read '{config_path:?}' config"))?;
         let NodeConfig {
             datadir,
+            storage,
             chainstate,
             p2p,
             rpc,
         } = toml::from_str(&config).context("Failed to parse config")?;
 
+        let datadir = datadir_path_opt.clone().unwrap_or(datadir);
+        let storage = storage_config(storage, options);
         let chainstate = chainstate_config(chainstate, options);
         let p2p = p2p_config(p2p, options);
         let rpc = rpc_config(rpc, options);
 
         Ok(Self {
             datadir,
+            storage,
             chainstate,
             p2p,
             rpc,
         })
     }
+}
+
+fn storage_config(config: StorageConfig, options: &RunOptions) -> StorageConfig {
+    let StorageConfig { backend } = config;
+    let backend = options.storage_backend.clone().unwrap_or(backend);
+    StorageConfig { backend }
 }
 
 fn chainstate_config(config: ChainstateConfig, options: &RunOptions) -> ChainstateConfig {

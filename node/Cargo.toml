@@ -16,6 +16,9 @@ logging = { path = "../logging/" }
 mempool = { path = "../mempool/" }
 p2p = { path = "../p2p/" }
 rpc = { path = "../rpc/" }
+storage = { path = "../storage" }
+storage-lmdb = { path = "../storage/lmdb" }
+storage-inmemory = { path = "../storage/inmemory" }
 subsystem = { path = "../subsystem/" }
 
 # External dependencies
@@ -27,6 +30,7 @@ serde = { version = "1", features = ["derive"] }
 toml = "0.5"
 directories = "4.0"
 paste = "1.0"
+thiserror = "1.0"
 
 [dev-dependencies]
 assert_cmd = "2"
