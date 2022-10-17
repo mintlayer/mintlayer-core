@@ -249,7 +249,7 @@ where
             _ => return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)),
         }
 
-        for (a, b) in itertools::zip(&headers, &headers[1..]) {
+        for (a, b) in headers.iter().zip(&headers[1..]) {
             ensure!(
                 b.prev_block_id() == &a.get_id(),
                 P2pError::ProtocolError(ProtocolError::InvalidMessage),
