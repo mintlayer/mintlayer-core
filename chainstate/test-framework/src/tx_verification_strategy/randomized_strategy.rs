@@ -34,6 +34,7 @@ use utils::tap_error_log::LogError;
 /// This strategy operates on transactions with 2 verifiers.
 /// It can represented as a finite state machine that for every transaction randomly changes state as follows:
 ///
+/// ```text
 ///                  _______flush______
 ///                 |                  |
 ///                 V                  |
@@ -41,6 +42,7 @@ use utils::tap_error_log::LogError;
 ///  |              ^                 |              ^
 ///  |              |                 |              |
 ///  |__process tx__|                 |__process tx__|
+/// ```
 ///
 pub struct RandomizedTransactionVerificationStrategy {
     rng: RefCell<Box<dyn RngCore + Send>>,
