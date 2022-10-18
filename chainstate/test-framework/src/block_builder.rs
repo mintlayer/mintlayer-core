@@ -83,7 +83,7 @@ impl<'f> BlockBuilder<'f> {
     pub fn add_test_transaction(mut self, rng: &mut impl Rng) -> Self {
         let utxo_set = self.framework.storage.read_utxo_set().unwrap();
 
-        // TODO: get n utxos as inputs and create m new utxos
+        // TODO: get n utxos as inputs and create m new outputs
         let index = rng.gen_range(0..utxo_set.len());
         let (outpoint, utxo) = utxo_set.iter().nth(index).unwrap();
         if !self.used_utxo.contains(outpoint) {

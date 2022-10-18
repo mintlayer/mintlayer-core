@@ -7,13 +7,13 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chainstate = { path = '..'}
+chainstate = { path = '..' }
 chainstate-storage = { path = '../storage' }
 chainstate-types = { path = '../types' }
 common = { path = '../../common' }
 crypto = { path = '../../crypto' }
-test-utils = {path = '../../test-utils'}
-tx-verifier = { path = '../tx-verifier'}
+test-utils = {path = '../../test-utils' }
+tx-verifier = { path = '../tx-verifier' }
 utils = { path = '../../utils' }
 
 itertools = "0.10"
@@ -21,7 +21,5 @@ itertools = "0.10"
 [dev-dependencies]
 consensus = { path = '../../consensus' }
 logging = { path = '../../logging' }
-test-utils = {path = '../../test-utils'}
 
 hex = "0.4"
-itertools = "0.10"
