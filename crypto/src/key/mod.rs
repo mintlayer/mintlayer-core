@@ -114,12 +114,9 @@ impl PublicKey {
     }
 
     pub fn verify_message(&self, signature: &Signature, msg: &[u8]) -> bool {
-        match &self.pub_key {
-            PublicKeyHolder::RistrettoSchnorr(ref k) => match signature {
-                RistrettoSchnorr(s) => k.verify_message(s, msg),
-                #[allow(unreachable_patterns)]
-                _ => panic!("Wrong key/signature combination"),
-            },
+        let PublicKeyHolder::RistrettoSchnorr(k) = &self.pub_key;
+        match signature {
+            RistrettoSchnorr(s) => k.verify_message(s, msg),
         }
     }
 
@@ -135,7 +132,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn sign_and_verify2() {
+    fn sign_and_verify() {
         let (sk, pk) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         assert_eq!(sk.kind(), KeyKind::RistrettoSchnorr);
         let msg_size = 1 + rand::random::<usize>() % 10000;

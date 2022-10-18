@@ -16,8 +16,6 @@
 mod internal;
 
 use crate::random::{CryptoRng, Rng};
-pub use internal::add_sigs;
-pub use internal::RistrettoSchnorrSignature;
 use serialization::{Decode, Encode};
 use zeroize::Zeroize;
 
@@ -123,7 +121,6 @@ impl MLRistrettoPrivateKey {
         &self,
         msg: &[u8],
     ) -> Result<schnorrkel::Signature, RistrettoSignatureError> {
-        // TODO CRYPTOGRAPHY REVIEW
         let ctx = schnorrkel::signing_context(SIGNATURE_CONTEXT);
         let pub_key = self.key_data.to_public();
         let transcript = ctx.bytes(msg);
@@ -195,7 +192,6 @@ impl MLRistrettoPublicKey {
     }
 
     pub(crate) fn verify_message(&self, signature: &schnorrkel::Signature, msg: &[u8]) -> bool {
-        // TODO CRYPTOGRAPHY REVIEW
         let ctx = schnorrkel::signing_context(SIGNATURE_CONTEXT);
         self.pubkey_data.verify(ctx.bytes(msg), signature).is_ok()
     }
@@ -245,7 +241,7 @@ mod test {
     }
 
     #[test]
-    fn serialize2() {
+    fn serialize() {
         let mut rng = make_true_rng();
         let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
         let sk_encoded = sk.encode();
