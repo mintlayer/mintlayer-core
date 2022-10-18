@@ -576,7 +576,7 @@ where
 {
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(Default::default());
-    let (conn, _, _) = T::start(addr1, Arc::clone(&config), Arc::clone(&p2p_config)).await.unwrap();
+    let (conn, _) = T::start(addr1, Arc::clone(&config), Arc::clone(&p2p_config)).await.unwrap();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
 

@@ -33,7 +33,7 @@ where
     let addr = A::make_address();
     let peer_id = P::random();
 
-    let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
+    let (mut mgr, _conn, _sync, _swarm) = make_sync_manager::<T>(addr).await;
     register_peer(&mut mgr, peer_id).await;
 
     assert_eq!(mgr.peers.len(), 1);
@@ -72,7 +72,7 @@ where
     let peer_id1 = P::random();
     let peer_id2 = P::random();
 
-    let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
+    let (mut mgr, _conn, _sync, _swarm) = make_sync_manager::<T>(addr).await;
 
     // send Connected event to SyncManager
     register_peer(&mut mgr, peer_id1).await;

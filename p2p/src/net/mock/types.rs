@@ -26,7 +26,11 @@ use serialization::{Decode, Encode};
 
 use crate::{
     error, message,
-    net::{self, mock::transport::MockTransport, types::Protocol},
+    net::{
+        self,
+        mock::transport::MockTransport,
+        types::{Protocol, PubSubTopic},
+    },
 };
 
 pub enum Command<T: MockTransport> {
@@ -47,11 +51,15 @@ pub enum Command<T: MockTransport> {
         message: message::Request,
         response: oneshot::Sender<crate::Result<MockRequestId>>,
     },
-
     /// Send response to remote peer
     SendResponse {
         request_id: MockRequestId,
         message: message::Response,
+        response: oneshot::Sender<crate::Result<()>>,
+    },
+    AnnounceData {
+        topic: PubSubTopic,
+        message: Vec<u8>,
         response: oneshot::Sender<crate::Result<()>>,
     },
 }
@@ -202,5 +210,8 @@ pub enum Message {
     Response {
         request_id: MockRequestId,
         response: message::Response,
+    },
+    Announcement {
+        announcement: message::Announcement,
     },
 }

@@ -13,19 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    config::P2pConfig,
-    error::{ConversionError, P2pError},
-    net::{ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService},
-};
-use chainstate::chainstate_interface;
-use common::chain::ChainConfig;
-use logging::log;
-use mempool::pool::MempoolInterface;
-use std::{fmt::Debug, str::FromStr, sync::Arc};
-use tap::TapFallible;
-use tokio::sync::{mpsc, oneshot};
-
 pub mod config;
 pub mod constants;
 pub mod error;
@@ -33,9 +20,24 @@ pub mod event;
 pub mod message;
 pub mod net;
 pub mod peer_manager;
-pub mod pubsub;
 pub mod rpc;
 pub mod sync;
+
+use std::{fmt::Debug, str::FromStr, sync::Arc};
+
+use tap::TapFallible;
+use tokio::sync::{mpsc, oneshot};
+
+use chainstate::chainstate_interface;
+use common::chain::ChainConfig;
+use logging::log;
+use mempool::pool::MempoolInterface;
+
+use crate::{
+    config::P2pConfig,
+    error::{ConversionError, P2pError},
+    net::{ConnectivityService, NetworkingService, SyncingMessagingService},
+};
 
 /// Result type with P2P errors
 pub type Result<T> = core::result::Result<T, P2pError>;
@@ -136,7 +138,6 @@ where
     T: 'static + NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PubSubHandle: PubSubService<T>,
 {
     /// Start the P2P subsystem
     ///
@@ -144,7 +145,7 @@ where
     pub async fn new(
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
-        consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+        chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         _mempool_handle: subsystem::Handle<Box<dyn MempoolInterface>>,
     ) -> crate::Result<Self>
     where
@@ -152,7 +153,7 @@ where
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
     {
         let p2p_config = Arc::new(p2p_config);
-        let (conn, pubsub, sync) = T::start(
+        let (conn, sync) = T::start(
             p2p_config.bind_address.parse::<T::Address>().map_err(|_| {
                 P2pError::ConversionError(ConversionError::InvalidAddress(
                     p2p_config.bind_address.clone(),
@@ -174,7 +175,6 @@ where
         let (tx_swarm, rx_swarm) = mpsc::unbounded_channel();
         let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
         let (_tx_sync, _rx_sync) = mpsc::unbounded_channel();
-        let (tx_pubsub, rx_pubsub) = mpsc::unbounded_channel();
 
         {
             let chain_config = Arc::clone(&chain_config);
@@ -192,7 +192,7 @@ where
             });
         }
         {
-            let consensus_handle = consensus_handle.clone();
+            let chainstate_handle = chainstate_handle.clone();
             let tx_swarm = tx_swarm.clone();
             let chain_config = Arc::clone(&chain_config);
 
@@ -200,32 +200,13 @@ where
                 sync::BlockSyncManager::<T>::new(
                     chain_config,
                     sync,
-                    consensus_handle,
+                    chainstate_handle,
                     rx_p2p_sync,
                     tx_swarm,
-                    tx_pubsub,
                 )
                 .run()
                 .await
                 .tap_err(|err| log::error!("SyncManager failed: {err}"))
-            });
-        }
-
-        {
-            let tx_swarm = tx_swarm.clone();
-
-            tokio::spawn(async move {
-                pubsub::PubSubMessageHandler::<T>::new(
-                    chain_config,
-                    pubsub,
-                    consensus_handle,
-                    tx_swarm,
-                    rx_pubsub,
-                    &[net::types::PubSubTopic::Blocks],
-                )
-                .run()
-                .await
-                .tap_err(|err| log::error!("PubSubMessageHandler failed: {err}"))
             });
         }
 
@@ -240,20 +221,19 @@ pub type P2pHandle<T> = subsystem::Handle<P2pInterface<T>>;
 pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
-    consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+    chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     mempool_handle: subsystem::Handle<Box<dyn MempoolInterface>>,
 ) -> crate::Result<P2pInterface<T>>
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PubSubHandle: PubSubService<T>,
     <T as NetworkingService>::Address: FromStr,
     <<T as NetworkingService>::Address as FromStr>::Err: Debug,
     <T as NetworkingService>::PeerId: FromStr,
     <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
 {
     Ok(P2pInterface {
-        p2p: P2P::new(chain_config, p2p_config, consensus_handle, mempool_handle).await?,
+        p2p: P2P::new(chain_config, p2p_config, chainstate_handle, mempool_handle).await?,
     })
 }

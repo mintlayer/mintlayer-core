@@ -21,26 +21,9 @@ use libp2p::gossipsub::IdentTopic as Topic;
 use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 use serialization::Encode;
 
-impl PartialEq for types::PubSubEvent {
-    fn eq(&self, other: &Self) -> bool {
-        let types::PubSubEvent::Announcement {
-            peer_id: p1,
-            message_id: m1,
-            announcement: msg1,
-        } = self;
-        let types::PubSubEvent::Announcement {
-            peer_id: p2,
-            message_id: m2,
-            announcement: msg2,
-        } = other;
-
-        (p1 == p2) && (m1 == m2) && (msg1 == msg2)
-    }
-}
-
 #[tokio::test]
 async fn test_invalid_message() {
-    let (mut backend1, _cmd1, _conn1, _gossip, _sync1) = make_libp2p(
+    let (mut backend1, _cmd1, _conn1, _sync1) = make_libp2p(
         common::chain::config::create_mainnet(),
         Default::default(),
         MakeP2pAddress::make_address(),
@@ -48,7 +31,7 @@ async fn test_invalid_message() {
     )
     .await;
 
-    let (mut backend2, _cmd2, _conn2, _gossip2, _sync2) = make_libp2p(
+    let (mut backend2, _cmd2, _conn2, _sync2) = make_libp2p(
         common::chain::config::create_mainnet(),
         Default::default(),
         MakeP2pAddress::make_address(),
@@ -101,7 +84,7 @@ async fn test_invalid_message() {
 #[tokio::test]
 async fn test_gossipsub_not_supported() {
     let config = common::chain::config::create_mainnet();
-    let (mut backend1, _cmd, _conn_rx, _gossip_rx, _sync_rx) = make_libp2p(
+    let (mut backend1, _cmd, _conn_rx, _sync_rx) = make_libp2p(
         config.clone(),
         Default::default(),
         MakeP2pAddress::make_address(),

@@ -14,13 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    error, message,
-    net::{
-        self,
-        libp2p::behaviour::sync_codec::message_types::{SyncRequest, SyncResponse},
-    },
-};
 use libp2p::{
     gossipsub::{IdentTopic as Topic, MessageAcceptance, MessageId, TopicHash},
     identify::IdentifyInfo,
@@ -28,6 +21,14 @@ use libp2p::{
     Multiaddr, PeerId,
 };
 use tokio::sync::oneshot;
+
+use crate::{
+    error, message,
+    net::{
+        self,
+        libp2p::behaviour::sync_codec::message_types::{SyncRequest, SyncResponse},
+    },
+};
 
 #[derive(Debug)]
 pub struct IdentifyInfoWrapper(Box<IdentifyInfo>);
@@ -163,15 +164,6 @@ pub enum ConnectivityEvent {
     },
 }
 
-#[derive(Debug, Clone)]
-pub enum PubSubEvent {
-    Announcement {
-        peer_id: PeerId,
-        message_id: MessageId,
-        announcement: message::Announcement,
-    },
-}
-
 #[derive(Debug)]
 pub enum SyncingEvent {
     Request {
@@ -188,6 +180,11 @@ pub enum SyncingEvent {
         peer_id: PeerId,
         request_id: RequestId,
         error: net::types::RequestResponseError,
+    },
+    Announcement {
+        peer_id: PeerId,
+        message_id: MessageId,
+        announcement: Box<message::Announcement>,
     },
 }
 
@@ -232,6 +229,5 @@ impl From<net::types::ValidationResult> for MessageAcceptance {
 pub enum Libp2pBehaviourEvent {
     Connectivity(ConnectivityEvent),
     Syncing(SyncingEvent),
-    PubSub(PubSubEvent),
     Control(ControlEvent),
 }

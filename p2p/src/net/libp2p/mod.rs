@@ -15,32 +15,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    config,
-    error::{DialError, P2pError},
-    net::{libp2p::backend::Libp2pBackend, NetworkingService},
-};
+pub mod behaviour;
+pub mod constants;
+pub mod service;
+
+mod backend;
+mod tests;
+mod types;
+
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use libp2p::{
     core::{upgrade, PeerId},
     gossipsub::MessageId,
     identity, mplex,
     noise::{self, AuthenticKeypair},
-    request_response::*,
+    request_response::RequestId,
     swarm::SwarmBuilder,
     tcp::{GenTcpConfig, TokioTcpTransport},
     Multiaddr, Transport,
 };
-use logging::log;
-use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
-mod backend;
-pub mod behaviour;
-mod constants;
-pub mod service;
-mod tests;
-mod types;
+use logging::log;
+
+use crate::{
+    config,
+    error::{DialError, P2pError},
+    net::{libp2p::backend::Libp2pBackend, NetworkingService},
+};
 
 #[derive(Debug)]
 pub struct Libp2pService;
@@ -65,20 +69,15 @@ impl NetworkingService for Libp2pService {
     type Address = Multiaddr;
     type PeerId = PeerId;
     type SyncingPeerRequestId = RequestId;
-    type PubSubMessageId = MessageId;
+    type SyncingMessageId = MessageId;
     type ConnectivityHandle = service::connectivity::Libp2pConnectivityHandle<Self>;
-    type PubSubHandle = service::pubsub::Libp2pPubSubHandle<Self>;
     type SyncingMessagingHandle = service::syncing::Libp2pSyncHandle<Self>;
 
     async fn start(
         bind_addr: Self::Address,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
-    ) -> crate::Result<(
-        Self::ConnectivityHandle,
-        Self::PubSubHandle,
-        Self::SyncingMessagingHandle,
-    )> {
+    ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
         let (peer_id, id_keys, noise_keys) = make_libp2p_keys();
         let transport = TokioTcpTransport::new(GenTcpConfig::new().nodelay(true))
             .upgrade(upgrade::Version::V1)
@@ -105,7 +104,6 @@ impl NetworkingService for Libp2pService {
         .build();
 
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
-        let (gossip_tx, gossip_rx) = mpsc::unbounded_channel();
         let (conn_tx, conn_rx) = mpsc::unbounded_channel();
         let (sync_tx, sync_rx) = mpsc::unbounded_channel();
 
@@ -113,7 +111,7 @@ impl NetworkingService for Libp2pService {
         tokio::spawn(async move {
             log::debug!("spawning libp2p backend to background");
 
-            Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx).run().await
+            Libp2pBackend::new(swarm, cmd_rx, conn_tx, sync_tx).run().await
         });
 
         // send listen command to the libp2p backend and if it succeeds,
@@ -128,7 +126,6 @@ impl NetworkingService for Libp2pService {
 
         Ok((
             Self::ConnectivityHandle::new(peer_id, cmd_tx.clone(), conn_rx),
-            Self::PubSubHandle::new(cmd_tx.clone(), gossip_rx),
             Self::SyncingMessagingHandle::new(cmd_tx, sync_rx),
         ))
     }

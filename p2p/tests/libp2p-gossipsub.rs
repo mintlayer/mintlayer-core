@@ -29,8 +29,8 @@ use p2p::{
     net::{
         self,
         libp2p::Libp2pService,
-        types::{PubSubEvent, PubSubTopic},
-        NetworkingService, PubSubService,
+        types::{PubSubTopic, SyncingEvent},
+        NetworkingService, SyncingMessagingService,
     },
 };
 use p2p_test_utils::{connect_services, MakeP2pAddress, MakeTestAddress};
@@ -40,14 +40,14 @@ use serialization::Encode;
 #[tokio::test]
 async fn test_libp2p_gossipsub() {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut pubsub1, _) = Libp2pService::start(
+    let (mut conn1, mut sync1) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         Arc::clone(&config),
         Default::default(),
     )
     .await
     .unwrap();
-    let (mut conn2, mut pubsub2, _) = Libp2pService::start(
+    let (mut conn2, mut sync2) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         Arc::clone(&config),
         Default::default(),
@@ -57,13 +57,13 @@ async fn test_libp2p_gossipsub() {
 
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
 
-    pubsub1.subscribe(&[net::types::PubSubTopic::Blocks]).await.unwrap();
-    pubsub2.subscribe(&[net::types::PubSubTopic::Blocks]).await.unwrap();
+    sync1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
+    sync2.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
 
     // spam the message on the pubsubsub until it succeeds (= until we have a peer)
     loop {
-        let res = pubsub1
-            .publish(Announcement::Block(
+        let res = sync1
+            .make_announcement(Announcement::Block(
                 Block::new(
                     vec![],
                     Id::new(H256([0x01; 32])),
@@ -86,15 +86,17 @@ async fn test_libp2p_gossipsub() {
     }
 
     // poll an event from the network for server2
-    let res2: Result<PubSubEvent<Libp2pService>, _> = pubsub2.poll_next().await;
-    let PubSubEvent::Announcement {
-        peer_id: _,
-        message_id: _,
-        announcement: Announcement::Block(block),
-    } = res2.unwrap();
+    let block = match sync2.poll_next().await.unwrap() {
+        SyncingEvent::Announcement {
+            peer_id: _,
+            message_id: _,
+            announcement: Announcement::Block(block),
+        } => block,
+        _ => panic!("Unexpected event"),
+    };
     assert_eq!(block.timestamp().as_int_seconds(), 1337u64);
-    pubsub2
-        .publish(Announcement::Block(
+    sync2
+        .make_announcement(Announcement::Block(
             Block::new(
                 vec![],
                 Id::new(H256([0x02; 32])),
@@ -107,12 +109,14 @@ async fn test_libp2p_gossipsub() {
         .await
         .unwrap();
 
-    let res1: Result<PubSubEvent<Libp2pService>, _> = pubsub1.poll_next().await;
-    let PubSubEvent::Announcement {
-        peer_id: _,
-        message_id: _,
-        announcement: Announcement::Block(block),
-    } = res1.unwrap();
+    let block = match sync1.poll_next().await.unwrap() {
+        SyncingEvent::Announcement {
+            peer_id: _,
+            message_id: _,
+            announcement: Announcement::Block(block),
+        } => block,
+        _ => panic!("Unexpected event"),
+    };
     assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));
 }
 
@@ -121,7 +125,7 @@ async fn test_libp2p_gossipsub() {
 #[tokio::test]
 async fn test_libp2p_gossipsub_3_peers() {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut pubsub1, _) = Libp2pService::start(
+    let (mut conn1, mut sync1) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         Arc::clone(&config),
         Default::default(),
@@ -154,15 +158,15 @@ async fn test_libp2p_gossipsub_3_peers() {
     connect_services::<Libp2pService>(&mut peer1.0, &mut peer2.0).await;
     connect_services::<Libp2pService>(&mut peer2.0, &mut peer3.0).await;
 
-    pubsub1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
+    sync1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
     peer1.1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
     peer2.1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
     peer3.1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
 
     // spam the message on the pubsubsub until it succeeds (= until we have a peer)
     loop {
-        let res = pubsub1
-            .publish(Announcement::Block(
+        let res = sync1
+            .make_announcement(Announcement::Block(
                 Block::new(
                     vec![],
                     Id::new(H256([0x03; 32])),
@@ -185,8 +189,8 @@ async fn test_libp2p_gossipsub_3_peers() {
     }
 
     // verify that all peers received the message even though they weren't directy connected
-    let res: Result<PubSubEvent<Libp2pService>, _> = peer1.1.poll_next().await;
-    let (peer_id, message_id) = if let Ok(PubSubEvent::Announcement {
+    let res = peer1.1.poll_next().await;
+    let (peer_id, message_id) = if let Ok(SyncingEvent::Announcement {
         peer_id,
         message_id,
         ..
@@ -222,8 +226,8 @@ async fn test_libp2p_gossipsub_3_peers() {
     );
 
     // verify that the peer2 gets the message
-    let res: Result<PubSubEvent<Libp2pService>, _> = peer2.1.poll_next().await;
-    let (peer_id, message_id) = if let Ok(PubSubEvent::Announcement {
+    let res = peer2.1.poll_next().await;
+    let (peer_id, message_id) = if let Ok(SyncingEvent::Announcement {
         peer_id,
         message_id,
         ..
@@ -251,17 +255,17 @@ async fn test_libp2p_gossipsub_3_peers() {
         Ok(())
     );
 
-    let res: Result<PubSubEvent<Libp2pService>, _> = peer3.1.poll_next().await;
+    let res = peer3.1.poll_next().await;
     assert!(std::matches!(
         res.unwrap(),
-        PubSubEvent::Announcement { .. }
+        SyncingEvent::Announcement { .. }
     ));
 }
 
 #[tokio::test]
 async fn test_libp2p_gossipsub_too_big_message() {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut pubsub1, _) = Libp2pService::start(
+    let (mut conn1, mut sync1) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         Arc::clone(&config),
         Default::default(),
@@ -269,7 +273,7 @@ async fn test_libp2p_gossipsub_too_big_message() {
     .await
     .unwrap();
 
-    let (mut conn2, mut pubsub2, _) = Libp2pService::start(
+    let (mut conn2, mut sync2) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         Arc::clone(&config),
         Default::default(),
@@ -279,8 +283,8 @@ async fn test_libp2p_gossipsub_too_big_message() {
 
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
 
-    pubsub1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
-    pubsub2.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
+    sync1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
+    sync2.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
 
     let txs = (0..200_000)
         .map(|_| {
@@ -303,7 +307,7 @@ async fn test_libp2p_gossipsub_too_big_message() {
     const MAXIMUM_SIZE: usize = 2 * 1024 * 1024;
 
     assert_eq!(
-        pubsub1.publish(message).await,
+        sync1.make_announcement(message).await,
         Err(P2pError::PublishError(PublishError::MessageTooLarge(
             Some(encoded_size),
             Some(MAXIMUM_SIZE)

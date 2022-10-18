@@ -37,8 +37,8 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) = make_sync_manager::<T>(addr1).await;
-    let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) = make_sync_manager::<T>(addr2).await;
+    let (mut mgr1, mut conn1, _sync1, _swarm1) = make_sync_manager::<T>(addr1).await;
+    let (mut mgr2, mut conn2, _sync2, _swarm2) = make_sync_manager::<T>(addr2).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<T>(&mut conn1, &mut conn2).await;
@@ -99,8 +99,8 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) = make_sync_manager::<T>(addr1).await;
-    let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) = make_sync_manager::<T>(addr2).await;
+    let (mut mgr1, mut conn1, _sync1, _swarm1) = make_sync_manager::<T>(addr1).await;
+    let (mut mgr2, mut conn2, _sync2, _swarm2) = make_sync_manager::<T>(addr2).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<T>(&mut conn1, &mut conn2).await;
@@ -189,8 +189,8 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) = make_sync_manager::<T>(addr1).await;
-    let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) = make_sync_manager::<T>(addr2).await;
+    let (mut mgr1, mut conn1, _sync1, _swarm1) = make_sync_manager::<T>(addr1).await;
+    let (mut mgr2, mut conn2, _sync2, _swarm2) = make_sync_manager::<T>(addr2).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<T>(&mut conn1, &mut conn2).await;
@@ -268,8 +268,8 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let (mut mgr1, mut conn1, _sync1, _pubsub1, mut swarm_rx) = make_sync_manager::<T>(addr1).await;
-    let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) = make_sync_manager::<T>(addr2).await;
+    let (mut mgr1, mut conn1, _sync1, mut swarm_rx) = make_sync_manager::<T>(addr1).await;
+    let (mut mgr2, mut conn2, _sync2, _swarm2) = make_sync_manager::<T>(addr2).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<T>(&mut conn1, &mut conn2).await;

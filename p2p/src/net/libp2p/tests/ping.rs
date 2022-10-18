@@ -25,7 +25,7 @@ use std::time::Duration;
 
 #[tokio::test]
 async fn test_remote_doesnt_respond() {
-    let (mut backend1, _cmd, _conn_rx, _gossip_rx, _sync_rx) = make_libp2p_with_ping(
+    let (mut backend1, _cmd, _conn_rx, _sync_rx) = make_libp2p_with_ping(
         common::chain::config::create_mainnet(),
         Arc::new(Default::default()),
         MakeP2pAddress::make_address(),
@@ -69,7 +69,7 @@ async fn test_remote_doesnt_respond() {
 #[tokio::test]
 async fn test_ping_not_supported() {
     let config = common::chain::config::create_mainnet();
-    let (mut backend1, _cmd, _conn_rx, _gossip_rx, _) = make_libp2p_with_ping(
+    let (mut backend1, _cmd, _conn_rx, _) = make_libp2p_with_ping(
         config.clone(),
         Arc::new(Default::default()),
         MakeP2pAddress::make_address(),

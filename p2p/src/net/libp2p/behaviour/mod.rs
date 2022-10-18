@@ -19,31 +19,6 @@ pub mod connection_manager;
 pub mod discovery;
 pub mod sync_codec;
 
-use crate::{
-    config,
-    error::{P2pError, ProtocolError},
-    message,
-    net::{
-        self,
-        libp2p::{
-            constants::*,
-            types::{self, ConnectivityEvent, Libp2pBehaviourEvent, PubSubEvent},
-        },
-    },
-};
-use common::chain::config::ChainConfig;
-use connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent};
-use libp2p::{
-    gossipsub::{self, Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
-    identify, identity, ping,
-    request_response::*,
-    swarm::{
-        ConnectionHandler, IntoConnectionHandler, NetworkBehaviour as Libp2pNetworkBehaviour,
-        NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
-    },
-};
-use logging::log;
-use serialization::Decode;
 use std::{
     collections::{HashMap, VecDeque},
     iter,
@@ -51,9 +26,45 @@ use std::{
     sync::Arc,
     task::{Context, Poll, Waker},
 };
-use sync_codec::{
-    message_types::{SyncRequest, SyncResponse},
-    SyncMessagingCodec, SyncingProtocol,
+
+use libp2p::{
+    gossipsub::{self, Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
+    identify, identity, ping,
+    request_response::{
+        InboundFailure, OutboundFailure, ProtocolSupport, RequestId, RequestResponse,
+        RequestResponseConfig, RequestResponseEvent, RequestResponseMessage, ResponseChannel,
+    },
+    swarm::{
+        ConnectionHandler, IntoConnectionHandler, NetworkBehaviour as Libp2pNetworkBehaviour,
+        NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
+    },
+};
+
+use common::chain::config::ChainConfig;
+use logging::log;
+use serialization::Decode;
+
+use crate::{
+    config,
+    error::{P2pError, ProtocolError},
+    message,
+    net::{
+        self,
+        libp2p::{
+            behaviour::{
+                connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent},
+                sync_codec::{
+                    message_types::{SyncRequest, SyncResponse},
+                    SyncMessagingCodec, SyncingProtocol,
+                },
+            },
+            constants::{
+                GOSSIPSUB_HEARTBEAT, GOSSIPSUB_MAX_TRANSMIT_SIZE, PING_INTERVAL, PING_MAX_RETRIES,
+                PING_TIMEOUT, REQ_RESP_TIMEOUT,
+            },
+            types::{self, ConnectivityEvent, Libp2pBehaviourEvent, SyncingEvent},
+        },
+    },
 };
 
 /// `Libp2pBehaviour` defines the protocols that communicate with peers, such as different streams
@@ -285,10 +296,10 @@ impl NetworkBehaviourEventProcess<gossipsub::GossipsubEvent> for Libp2pBehaviour
                     }
                 };
 
-                self.add_event(Libp2pBehaviourEvent::PubSub(PubSubEvent::Announcement {
+                self.add_event(Libp2pBehaviourEvent::Syncing(SyncingEvent::Announcement {
                     peer_id: propagation_source,
                     message_id,
-                    announcement,
+                    announcement: Box::new(announcement),
                 }));
             }
         }
