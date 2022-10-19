@@ -33,6 +33,7 @@ use crate::BlockProductionError;
 
 pub enum BlockMakerControlCommand {
     StopBecauseNewTip(Id<Block>, BlockHeight),
+    JustStop,
 }
 
 /// Slave to the PerpetualBlockBuilder. Every new block tip gets one BlockMaker, and keeps running
@@ -173,6 +174,7 @@ impl BlockMaker {
                         break;
                     }
                 }
+                BlockMakerControlCommand::JustStop => break,
             }
         }
         Ok(())

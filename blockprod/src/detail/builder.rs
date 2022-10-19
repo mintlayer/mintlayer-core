@@ -18,7 +18,7 @@ use std::sync::Arc;
 use chainstate::ChainstateHandle;
 use common::{
     chain::{Block, ChainConfig},
-    primitives::{BlockHeight, Id, H256},
+    primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
 use futures::FutureExt;
@@ -82,6 +82,13 @@ impl PerpetualBlockBuilder {
         Ok(())
     }
 
+    pub fn stop_all_block_makers(&self) -> Result<(), BlockProductionError> {
+        self.block_maker_tx.send(BlockMakerControlCommand::JustStop).expect(
+            "The channel can never be disconnected since there's a receiver always alive in self",
+        );
+        Ok(())
+    }
+
     pub async fn trigger_new_block_production(
         &self,
         current_tip_id: Id<Block>,
@@ -131,7 +138,7 @@ impl PerpetualBlockBuilder {
                 event = self.builder_rx.recv().fuse() => match event.ok_or(BlockProductionError::BlockBuilderChannelClosed)? {
                     BlockBuilderControlCommand::Stop => {
                         self.enabled = false;
-                        self.stop_building(H256::zero().into(), BlockHeight::zero())?;
+                        self.stop_all_block_makers()?;
                     },
                     BlockBuilderControlCommand::Start => {
                         self.enabled = true;
