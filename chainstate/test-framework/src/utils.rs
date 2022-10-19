@@ -99,26 +99,42 @@ pub fn create_multiple_utxo_data(
     let num_outputs = rng.gen_range(1..10);
     let new_outputs = match output.value() {
         OutputValue::Coin(output_value) => {
-            let issue_token = rng.gen_range(0..10);
-            if issue_token == 0 {
-                // issue nft with 10% chance
+            let switch = rng.gen_range(0..3);
+            if switch == 0 {
+                // issue nft
                 let min_tx_fee = chainstate.get_chain_config().token_min_issuance_fee();
                 if *output_value >= min_tx_fee {
-                    vec![TxOutput::new(
-                        random_nft_issuance(chainstate.get_chain_config(), rng).into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    )]
+                    // Coin output is created intentionally besides issuance output in order to not waste utxo
+                    // (e.g. single genesis output on issuance)
+                    vec![
+                        TxOutput::new(
+                            random_nft_issuance(chainstate.get_chain_config(), rng).into(),
+                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        ),
+                        TxOutput::new(
+                            OutputValue::Coin((*output_value - min_tx_fee).unwrap()),
+                            OutputPurpose::Transfer(anyonecanspend_address()),
+                        ),
+                    ]
                 } else {
                     return None;
                 }
-            } else if issue_token == 1 {
-                // issue token with 10% chance
+            } else if switch == 1 {
+                // issue token
                 let min_tx_fee = chainstate.get_chain_config().token_min_issuance_fee();
                 if *output_value >= min_tx_fee {
-                    vec![TxOutput::new(
-                        random_token_issuance(chainstate.get_chain_config(), rng).into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    )]
+                    // Coin output is created intentionally besides issuance output in order to not waste utxo
+                    // (e.g. single genesis output on issuance)
+                    vec![
+                        TxOutput::new(
+                            random_token_issuance(chainstate.get_chain_config(), rng).into(),
+                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        ),
+                        TxOutput::new(
+                            OutputValue::Coin((*output_value - min_tx_fee).unwrap()),
+                            OutputPurpose::Transfer(anyonecanspend_address()),
+                        ),
+                    ]
                 } else {
                     return None;
                 }
@@ -139,9 +155,8 @@ pub fn create_multiple_utxo_data(
         }
         OutputValue::Token(token_data) => match &**token_data {
             TokenData::TokenTransferV1(transfer) => {
-                let burn_token = rng.gen_range(0..2) == 0;
-                if burn_token {
-                    // burn transferred tokens with 33% chance
+                if rng.gen::<bool>() {
+                    // burn transferred tokens
                     let amount_to_burn = if transfer.amount.into_atoms() > 1 {
                         Amount::from_atoms(rng.gen_range(1..transfer.amount.into_atoms()))
                     } else {
@@ -184,8 +199,7 @@ pub fn create_multiple_utxo_data(
                 }
             }
             TokenData::TokenIssuanceV1(issuance) => {
-                let burn_token = rng.gen_range(0..5) == 0;
-                if burn_token {
+                if rng.gen::<bool>() {
                     vec![new_token_burn_output(
                         chainstate,
                         &outsrc,
@@ -196,8 +210,7 @@ pub fn create_multiple_utxo_data(
                 }
             }
             TokenData::NftIssuanceV1(_issuance) => {
-                let burn_token = rng.gen_range(0..5) == 0;
-                if burn_token {
+                if rng.gen::<bool>() {
                     vec![new_token_burn_output(chainstate, &outsrc, Amount::from_atoms(1))]
                 } else {
                     vec![new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))]

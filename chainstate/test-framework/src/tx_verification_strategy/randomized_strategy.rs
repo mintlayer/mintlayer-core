@@ -145,9 +145,8 @@ impl RandomizedTransactionVerificationStrategy {
         let mut total_fee = Amount::ZERO;
         let mut tx_num = 0usize;
         while tx_num < block.transactions().len() {
-            let switch = self.rng.borrow_mut().gen_range(0..5);
-            if switch == 0 {
-                // derive a new cache in 20% cases
+            if self.rng.borrow_mut().gen::<bool>() {
+                // derive a new cache
                 let (consumed_cache, fee, new_tx_index) = self.connect_with_derived(
                     &tx_verifier,
                     block,
@@ -191,9 +190,8 @@ impl RandomizedTransactionVerificationStrategy {
         let mut tx_verifier = base_tx_verifier.derive_child();
         let mut total_fee = Amount::ZERO;
         while tx_num < block.transactions().len() {
-            let switch = self.rng.borrow_mut().gen_range(0..10);
-            if switch == 0 {
-                // break the loop in 20% cases, which effectively would flush current state to the parent
+            if self.rng.borrow_mut().gen::<bool>() {
+                // break the loop, which effectively would flush current state to the parent
                 break;
             } else {
                 // connect transactable using current verifier
@@ -228,9 +226,8 @@ impl RandomizedTransactionVerificationStrategy {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config);
         let mut tx_num = i32::try_from(block.transactions().len()).unwrap() - 1;
         while tx_num >= 0 {
-            let switch = self.rng.borrow_mut().gen_range(0..5);
-            if switch == 0 {
-                // derive a new cache in 20% cases
+            if self.rng.borrow_mut().gen::<bool>() {
+                // derive a new cache
                 let (consumed_cache, new_tx_index) =
                     self.disconnect_with_derived(&tx_verifier, block, tx_num)?;
 
@@ -265,9 +262,8 @@ impl RandomizedTransactionVerificationStrategy {
     {
         let mut tx_verifier = base_tx_verifier.derive_child();
         while tx_num >= 0 {
-            let switch = self.rng.borrow_mut().gen_range(0..10);
-            if switch == 0 {
-                // break the loop in 20% cases, which effectively would flush current state to the parent
+            if self.rng.borrow_mut().gen::<bool>() {
+                // break the loop, which effectively would flush current state to the parent
                 break;
             } else {
                 // disconnect transactable using current verifier
