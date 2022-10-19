@@ -15,7 +15,10 @@
 
 use crate::{
     utxo_entry::{IsDirty, IsFresh, UtxoEntry},
-    {BlockRewardUndo, Error, FlushableUtxoView, TxUndo, Utxo, UtxoSource, UtxosView},
+    {
+        BlockRewardUndo, Error, FlushableUtxoView, TxUndo, TxUndoWithSources, Utxo, UtxoSource,
+        UtxosView,
+    },
 };
 use common::{
     chain::{
@@ -191,14 +194,21 @@ impl<'a> UtxosCache<'a> {
         &mut self,
         tx: &Transaction,
         height: BlockHeight,
-    ) -> Result<TxUndo, Error> {
-        let tx_undo: Result<Vec<Utxo>, Error> =
-            tx.inputs().iter().map(|tx_in| self.spend_utxo(tx_in.outpoint())).collect();
-        let tx_undo = tx_undo?;
+    ) -> Result<TxUndoWithSources, Error> {
+        let (sources, utxos) = tx
+            .inputs()
+            .iter()
+            .map(|tx_in| {
+                let utxo = self.spend_utxo(tx_in.outpoint())?;
+                Ok((tx_in.outpoint().tx_id(), utxo))
+            })
+            .collect::<Result<Vec<_>, Error>>()?
+            .into_iter()
+            .unzip();
 
         self.add_utxos_from_tx(tx, UtxoSource::Blockchain(height), false)?;
 
-        Ok(TxUndo::new(tx_undo))
+        Ok(TxUndoWithSources::new(utxos, sources))
     }
 
     // Marks outputs of a transaction as spent and inputs as unspent

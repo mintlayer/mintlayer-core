@@ -24,6 +24,7 @@ use common::chain::{
     TxMainChainPosition,
 };
 use mockall::predicate::eq;
+use utxo::TxUndoWithSources;
 
 // TODO: ConsumedUtxoCache is not checked in these tests, think how to expose it from utxo crate
 
@@ -43,20 +44,24 @@ fn utxo_set_hierarchy() {
     let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
     let block_1_undo = BlockUndo::new(
         None,
-        [(tx_1_id, TxUndo::new(vec![create_utxo(100).1]))]
-            .into_iter()
-            .collect::<BTreeMap<_, _>>(),
-    );
+        BTreeMap::from([(
+            tx_1_id,
+            TxUndoWithSources::new(vec![create_utxo(100).1], vec![]),
+        )]),
+    )
+    .unwrap();
 
     let (outpoint2, utxo2) = create_utxo(2000);
     let block_2_id: Id<Block> = Id::new(H256::random());
     let tx_2_id: Id<Transaction> = H256::from_low_u64_be(2).into();
     let block_2_undo = BlockUndo::new(
         None,
-        [(tx_2_id, TxUndo::new(vec![create_utxo(100).1]))]
-            .into_iter()
-            .collect::<BTreeMap<_, _>>(),
-    );
+        BTreeMap::from([(
+            tx_2_id,
+            TxUndoWithSources::new(vec![create_utxo(100).1], vec![]),
+        )]),
+    )
+    .unwrap();
 
     let mut store = mock::MockStore::new();
     store
@@ -468,23 +473,23 @@ fn block_undo_conflict_hierarchy() {
     let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
     let block_undo_1 = BlockUndo::new(
         Some(BlockRewardUndo::new(vec![utxo1.clone()])),
-        [(tx_1_id, TxUndo::new(vec![utxo2.clone()]))]
-            .into_iter()
-            .collect::<BTreeMap<_, _>>(),
-    );
+        BTreeMap::from([(tx_1_id, TxUndoWithSources::new(vec![utxo2.clone()], vec![]))]),
+    )
+    .unwrap();
     let tx_2_id: Id<Transaction> = H256::from_low_u64_be(2).into();
     let block_undo_2 = BlockUndo::new(
         Some(BlockRewardUndo::new(vec![utxo3.clone()])),
-        [(tx_2_id, TxUndo::new(vec![utxo4.clone()]))]
-            .into_iter()
-            .collect::<BTreeMap<_, _>>(),
-    );
+        BTreeMap::from([(tx_2_id, TxUndoWithSources::new(vec![utxo4.clone()], vec![]))]),
+    )
+    .unwrap();
     let expected_block_undo = BlockUndo::new(
         Some(BlockRewardUndo::new(vec![utxo1, utxo3])),
-        [(tx_1_id, TxUndo::new(vec![utxo2])), (tx_2_id, TxUndo::new(vec![utxo4]))]
-            .into_iter()
-            .collect::<BTreeMap<_, _>>(),
-    );
+        BTreeMap::from([
+            (tx_1_id, TxUndoWithSources::new(vec![utxo2], vec![])),
+            (tx_2_id, TxUndoWithSources::new(vec![utxo4], vec![])),
+        ]),
+    )
+    .unwrap();
 
     let mut store = mock::MockStore::new();
     store

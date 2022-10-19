@@ -159,7 +159,8 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         let block_height = BlockHeight::new(1);
         // spend the block
         let block_undo = {
-            let undos = block
+            let mut block_undo: BlockUndo = Default::default();
+            block
                 .transactions()
                 .iter()
                 .map(|tx| {
@@ -170,8 +171,11 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
                             .expect("should spend okay."),
                     )
                 })
-                .collect::<BTreeMap<_, _>>();
-            BlockUndo::new(Default::default(), undos)
+                .collect::<BTreeMap<_, _>>()
+                .into_iter()
+                .try_for_each(|(id, undo)| block_undo.insert_tx_undo(id, undo))
+                .unwrap();
+            block_undo
         };
 
         // check that the block_undo contains the same utxos recorded as "spent",

@@ -22,7 +22,7 @@ use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
-use utxo::{BlockRewardUndo, BlockUndo, TxUndo};
+use utxo::{BlockRewardUndo, BlockUndo, TxUndoWithSources};
 
 type TestStore = crate::inmemory::Store;
 
@@ -289,7 +289,7 @@ pub fn create_rand_block_undo(
             .map(|(i, _)| create_rand_utxo(rng, i as u64))
             .collect();
 
-        tx_undo.push(TxUndo::new(tx_utxos));
+        tx_undo.push(TxUndoWithSources::new(tx_utxos, vec![]));
     }
 
     let tx_undo = tx_undo
@@ -297,7 +297,7 @@ pub fn create_rand_block_undo(
         .map(|u| (H256::random().into(), u))
         .collect::<BTreeMap<_, _>>();
 
-    BlockUndo::new(Some(reward_undo), tx_undo)
+    BlockUndo::new(Some(reward_undo), tx_undo).unwrap()
 }
 
 #[cfg(not(loom))]

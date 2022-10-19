@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::test_helper::create_tx_outputs;
-use crate::{FlushableUtxoView, TxUndo, UtxoSource, UtxosCache, UtxosView};
+use crate::{FlushableUtxoView, TxUndoWithSources, UtxoSource, UtxosCache, UtxosView};
 use common::{
     chain::{block::BlockReward, OutPoint, OutPointSourceId, Transaction, TxInput},
     primitives::{BlockHeight, Id, Idable, H256},
@@ -33,7 +33,7 @@ struct ResultWithUndo {
 
 struct UndoInfo {
     prev_outpoint: OutPoint,
-    tx_undo: TxUndo,
+    tx_undo: TxUndoWithSources,
 }
 
 // This test creates an arbitrary long chain of caches.
@@ -178,7 +178,7 @@ fn populate_cache_with_undo(
                 cache
                     .add_utxo(
                         &undo_info.prev_outpoint,
-                        undo_info.tx_undo.inner()[0].clone(),
+                        undo_info.tx_undo.utxos()[0].clone(),
                         cache.has_utxo(&undo_info.prev_outpoint),
                     )
                     .unwrap();

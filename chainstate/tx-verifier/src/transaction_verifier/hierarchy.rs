@@ -178,7 +178,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageMut
                 });
             }
             std::collections::btree_map::Entry::Occupied(mut e) => {
-                e.get_mut().undo.append(new_undo.clone())?;
+                e.get_mut().undo.combine(new_undo.clone())?;
             }
         };
         Ok(())
