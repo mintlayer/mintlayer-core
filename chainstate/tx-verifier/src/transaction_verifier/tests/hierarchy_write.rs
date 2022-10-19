@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use crate::transaction_verifier::{
     storage::TransactionVerifierStorageError,
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
@@ -43,9 +45,8 @@ fn utxo_set_hierarchy() {
     let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
     let block_1_undo = BlockUndo::new(
         None,
-        [(tx_1_id, TxUndo::new(vec![create_utxo(100).1]))]
-            .into_iter()
-            .collect::<BTreeMap<_, _>>(),
+        BTreeMap::from([(tx_1_id, TxUndo::new(vec![create_utxo(100).1]))]),
+        BTreeSet::new(),
     );
 
     let (outpoint2, utxo2) = create_utxo(2000);
@@ -53,9 +54,8 @@ fn utxo_set_hierarchy() {
     let tx_2_id: Id<Transaction> = H256::from_low_u64_be(2).into();
     let block_2_undo = BlockUndo::new(
         None,
-        [(tx_2_id, TxUndo::new(vec![create_utxo(100).1]))]
-            .into_iter()
-            .collect::<BTreeMap<_, _>>(),
+        BTreeMap::from([(tx_2_id, TxUndo::new(vec![create_utxo(100).1]))]),
+        BTreeSet::new(),
     );
 
     let mut store = mock::MockStore::new();
@@ -468,22 +468,19 @@ fn block_undo_conflict_hierarchy() {
     let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
     let block_undo_1 = BlockUndo::new(
         Some(BlockRewardUndo::new(vec![utxo1.clone()])),
-        [(tx_1_id, TxUndo::new(vec![utxo2.clone()]))]
-            .into_iter()
-            .collect::<BTreeMap<_, _>>(),
+        BTreeMap::from([(tx_1_id, TxUndo::new(vec![utxo2.clone()]))]),
+        BTreeSet::new(),
     );
     let tx_2_id: Id<Transaction> = H256::from_low_u64_be(2).into();
     let block_undo_2 = BlockUndo::new(
         Some(BlockRewardUndo::new(vec![utxo3.clone()])),
-        [(tx_2_id, TxUndo::new(vec![utxo4.clone()]))]
-            .into_iter()
-            .collect::<BTreeMap<_, _>>(),
+        BTreeMap::from([(tx_2_id, TxUndo::new(vec![utxo4.clone()]))]),
+        BTreeSet::new(),
     );
     let expected_block_undo = BlockUndo::new(
         Some(BlockRewardUndo::new(vec![utxo1, utxo3])),
-        [(tx_1_id, TxUndo::new(vec![utxo2])), (tx_2_id, TxUndo::new(vec![utxo4]))]
-            .into_iter()
-            .collect::<BTreeMap<_, _>>(),
+        BTreeMap::from([(tx_1_id, TxUndo::new(vec![utxo2])), (tx_2_id, TxUndo::new(vec![utxo4]))]),
+        BTreeSet::new(),
     );
 
     let mut store = mock::MockStore::new();

@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use super::*;
 use common::chain::tokens::OutputValue;
 use common::chain::transaction::signed_transaction::SignedTransaction;
@@ -297,7 +299,7 @@ pub fn create_rand_block_undo(
         .map(|u| (H256::random().into(), u))
         .collect::<BTreeMap<_, _>>();
 
-    BlockUndo::new(Some(reward_undo), tx_undo)
+    BlockUndo::new(Some(reward_undo), tx_undo, BTreeSet::new())
 }
 
 #[cfg(not(loom))]
