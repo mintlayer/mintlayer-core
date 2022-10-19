@@ -13,4 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub trait BlockProductionInterface: Send {}
+use crate::BlockProductionError;
+
+pub trait BlockProductionInterface: Send {
+    /// When called, the block builder will start creating blocks at the next tip in chainstate
+    fn start(&self) -> Result<(), BlockProductionError>;
+
+    /// When called, the block builder will cancel all current attempts to create blocks
+    /// and won't attempt to do it again for new tips in chainstate or mempool
+    /// Call start() to enable again
+    fn stop(&self) -> Result<(), BlockProductionError>;
+}

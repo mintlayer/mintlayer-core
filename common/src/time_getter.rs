@@ -19,6 +19,7 @@ use std::{sync::Arc, time::Duration};
 pub type TimeGetterFn = dyn Fn() -> Duration + Send + Sync;
 
 /// A function wrapper that contains the function that will be used to get the current time in chainstate
+#[derive(Clone)]
 pub struct TimeGetter {
     f: Arc<TimeGetterFn>,
 }

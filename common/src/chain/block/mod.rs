@@ -83,8 +83,9 @@ fn calculate_generic_merkle_root(
     Ok(t.root())
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum BlockCreationError {
+    #[error("Merkle tree calculation error: {0}")]
     MerkleTreeError(MerkleTreeFormError),
 }
 

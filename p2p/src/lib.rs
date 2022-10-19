@@ -125,7 +125,7 @@ where
 }
 
 struct P2P<T: NetworkingService> {
-    // TODO: add abstration for channels
+    // TODO: add abstraction for channels
     /// TX channel for sending swarm control events
     pub tx_swarm: mpsc::UnboundedSender<event::SwarmEvent<T>>,
 

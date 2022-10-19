@@ -37,6 +37,7 @@ use common::primitives::Idable;
 use logging::log;
 
 use utils::ensure;
+use utils::eventhandler::EventsController;
 use utils::newtype;
 
 use crate::error::Error;
@@ -44,6 +45,7 @@ use crate::error::TxValidationError;
 use crate::feerate::FeeRate;
 use crate::feerate::INCREMENTAL_RELAY_FEE_RATE;
 use crate::feerate::INCREMENTAL_RELAY_THRESHOLD;
+use crate::MempoolEvent;
 use store::MempoolRemovalReason;
 use store::MempoolStore;
 use store::TxMempoolEntry;
@@ -157,6 +159,8 @@ pub trait MempoolInterface: Send {
         tx_accumulator: Box<dyn TransactionAccumulator>,
     ) -> Vec<SignedTransaction>;
 
+    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
+
     // Add/remove transactions to/from the mempool according to a new tip
     #[cfg(test)]
     fn new_tip_set(&mut self);
@@ -241,6 +245,7 @@ pub struct Mempool<M: GetMemoryUsage + 'static + Send + std::marker::Sync> {
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     clock: TimeGetter,
     memory_usage_estimator: M,
+    events_controller: EventsController<MempoolEvent>,
 }
 
 impl<M> std::fmt::Debug for Mempool<M>
@@ -272,6 +277,7 @@ where
             rolling_fee_rate: parking_lot::RwLock::new(RollingFeeRate::new(clock.get_time())),
             clock,
             memory_usage_estimator,
+            events_controller: Default::default(),
         }
     }
 
@@ -862,6 +868,10 @@ where
 
     fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
         self.store.txs_by_id.contains_key(tx_id)
+    }
+
+    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
+        self.events_controller.subscribe_to_events(handler)
     }
 }
 

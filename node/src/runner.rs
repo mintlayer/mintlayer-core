@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Node initialisation routine.
+//! Node initialization routine.
 
 use std::{fs, path::Path, str::FromStr, sync::Arc, time::Duration};
 
@@ -100,7 +100,8 @@ pub async fn initialize(
             chainstate.clone(),
             mempool.clone(),
             Default::default(),
-        )?,
+        )
+        .await?,
     );
 
     // RPC subsystem

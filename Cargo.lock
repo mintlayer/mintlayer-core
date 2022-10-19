@@ -452,9 +452,15 @@ version = "0.1.0"
 dependencies = [
  "chainstate",
  "common",
+ "crossbeam-channel",
+ "futures",
+ "logging",
  "mempool",
  "subsystem",
  "thiserror",
+ "tokio",
+ "utils",
+ "void",
 ]
 
 [[package]]
