@@ -125,7 +125,7 @@ impl BlockUndo {
                 OutPointSourceId::BlockReward(_) => None,
             })
             .for_each(|source_tx_id| {
-                self.dependencies.insert((tx_id.into(), source_tx_id));
+                self.dependencies.insert((tx_id, source_tx_id));
             });
 
         Ok(())
@@ -137,10 +137,10 @@ impl BlockUndo {
             self.dependencies.iter().filter(|(_child, parent)| parent == tx_id).count();
         if dependencies_count == 0 {
             // If not this tx can be taken and returned.
-            // But first remove itself as a dependency of others.
+            // But first, remove itself as a dependency of others.
             self.dependencies
                 .iter()
-                .filter_map(|v| if v.0 == *tx_id { Some(v.clone()) } else { None })
+                .filter_map(|v| if v.0 == *tx_id { Some(*v) } else { None })
                 .collect::<Vec<_>>()
                 .iter()
                 .for_each(|p| {
