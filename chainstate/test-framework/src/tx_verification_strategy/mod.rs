@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::tokens::TokenCreator;
-use crypto::key::{KeyKind, PrivateKey};
+pub mod disposable_strategy;
+pub mod randomized_strategy;
 
-pub fn random_creator() -> TokenCreator {
-    let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    TokenCreator::from(public_key)
-}
+pub use {
+    disposable_strategy::DisposableTransactionVerificationStrategy,
+    randomized_strategy::RandomizedTransactionVerificationStrategy,
+};

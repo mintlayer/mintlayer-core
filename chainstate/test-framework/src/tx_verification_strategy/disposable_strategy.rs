@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::TransactionVerificationStrategy;
-use crate::{calculate_median_time_past, BlockError};
+use chainstate::{calculate_median_time_past, BlockError, TransactionVerificationStrategy};
 use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
     chain::{Block, ChainConfig},
@@ -126,7 +125,6 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
     {
         let mut base_tx_verifier = tx_verifier_maker(storage_backend, chain_config);
 
-        // TODO: add a test that checks the order in which txs are disconnected
         block
             .transactions()
             .iter()

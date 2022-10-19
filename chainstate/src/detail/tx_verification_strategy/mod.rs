@@ -14,12 +14,8 @@
 // limitations under the License.
 
 pub mod default_strategy;
-pub mod disposable_strategy;
 
-pub use {
-    default_strategy::DefaultTransactionVerificationStrategy,
-    disposable_strategy::DisposableTransactionVerificationStrategy,
-};
+pub use default_strategy::DefaultTransactionVerificationStrategy;
 
 use crate::BlockError;
 use chainstate_types::{BlockIndex, BlockIndexHandle};

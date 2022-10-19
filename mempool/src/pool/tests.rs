@@ -932,7 +932,7 @@ async fn test_bip125_max_replacements(
 
     for _ in 0..(num_potential_replacements - 1) {
         tx_builder = tx_builder.add_output(TxOutput::new(
-            OutputValue::Coin(Amount::from_atoms(999_999_999_000)),
+            OutputValue::Coin(Amount::from_atoms(999_999_999_000_000_000)),
             OutputPurpose::Transfer(anyonecanspend_address()),
         ));
     }
@@ -963,7 +963,7 @@ async fn test_bip125_max_replacements(
     }
     let mempool_size_before_replacement = mempool.store.txs_by_id.len();
 
-    let replacement_fee = Amount::from_atoms(1_000_000_000) * fee;
+    let replacement_fee = Amount::from_atoms(1_000_000_000_000_000) * fee;
     let replacement_tx = tx_spend_input(
         &mempool,
         input,

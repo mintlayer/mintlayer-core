@@ -13,24 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
+use crate::utils::{create_multiple_utxo_data, create_new_outputs};
+use crate::{TestBlockInfo, TestFramework};
+use chainstate::{BlockSource, ChainstateError};
+use chainstate_types::BlockIndex;
+use common::chain::OutPoint;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         signature::inputsig::InputWitness,
         signed_transaction::SignedTransaction,
-        Transaction, TxInput, TxOutput,
+        Block, GenBlock, Transaction, TxInput, TxOutput,
     },
     primitives::{time, Id, H256},
 };
 use crypto::random::Rng;
-
-use crate::framework::create_new_outputs;
-use crate::framework::TestBlockInfo;
-use crate::TestFramework;
-use chainstate::{BlockSource, ChainstateError};
-use chainstate_types::BlockIndex;
-use common::chain::Block;
-use common::chain::GenBlock;
+use itertools::Itertools;
 
 /// The block builder that allows construction and processing of a block.
 pub struct BlockBuilder<'f> {
@@ -41,6 +41,7 @@ pub struct BlockBuilder<'f> {
     consensus_data: ConsensusData,
     reward: BlockReward,
     block_source: BlockSource,
+    used_utxo: BTreeSet<OutPoint>,
 }
 
 impl<'f> BlockBuilder<'f> {
@@ -52,6 +53,7 @@ impl<'f> BlockBuilder<'f> {
         let consensus_data = ConsensusData::None;
         let reward = BlockReward::new(Vec::new());
         let block_source = BlockSource::Local;
+        let used_utxo = BTreeSet::new();
 
         Self {
             framework,
@@ -61,6 +63,7 @@ impl<'f> BlockBuilder<'f> {
             consensus_data,
             reward,
             block_source,
+            used_utxo,
         }
     }
 
@@ -76,14 +79,44 @@ impl<'f> BlockBuilder<'f> {
         self
     }
 
-    /// Adds a transaction that uses the transactions from the previous block as inputs and
+    /// Adds a transaction that uses random utxos
+    pub fn add_test_transaction(mut self, rng: &mut impl Rng) -> Self {
+        let utxo_set = self.framework.storage.read_utxo_set().unwrap();
+
+        // TODO: get n utxos as inputs and create m new outputs
+        let index = rng.gen_range(0..utxo_set.len());
+        let (outpoint, utxo) = utxo_set.iter().nth(index).unwrap();
+        if !self.used_utxo.contains(outpoint) {
+            let new_utxo_data = create_multiple_utxo_data(
+                &self.framework.chainstate,
+                outpoint.tx_id(),
+                outpoint.output_index() as usize,
+                utxo.output(),
+                rng,
+            );
+
+            if let Some((witness, input, output)) = new_utxo_data {
+                self.used_utxo.insert(outpoint.clone());
+                return self.add_transaction(
+                    SignedTransaction::new(
+                        Transaction::new(0, vec![input], output, 0).unwrap(),
+                        vec![witness],
+                    )
+                    .expect("invalid witness count"),
+                );
+            }
+        }
+        self
+    }
+
+    /// Adds a transaction that uses the transactions from the best block as inputs and
     /// produces new outputs.
-    pub fn add_test_transaction(self, rng: &mut impl Rng) -> Self {
+    pub fn add_test_transaction_from_best_block(self, rng: &mut impl Rng) -> Self {
         let parent = self.framework.best_block_id();
         self.add_test_transaction_with_parent(parent, rng)
     }
 
-    /// Same as `add_test_transaction`, but with a custom parent.
+    /// Same as `add_test_transaction_from_best_block`, but with a custom parent.
     pub fn add_test_transaction_with_parent(
         self,
         parent: Id<GenBlock>,
@@ -189,14 +222,12 @@ impl<'f> BlockBuilder<'f> {
         parent: TestBlockInfo,
         rng: &mut impl Rng,
     ) -> (Vec<InputWitness>, Vec<TxInput>, Vec<TxOutput>) {
-        let res = parent
+        parent
             .txns
             .into_iter()
             .flat_map(|(s, o)| create_new_outputs(&self.framework.chainstate, s, &o, rng))
-            .collect::<Vec<_>>();
-        let witnesses = res.iter().cloned().map(|e| e.0).collect::<Vec<_>>();
-        let inputs = res.iter().cloned().map(|e| e.1).collect::<Vec<_>>();
-        let outputs = res.iter().cloned().map(|e| e.2).collect::<Vec<_>>();
-        (witnesses, inputs, outputs)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .multiunzip()
     }
 }

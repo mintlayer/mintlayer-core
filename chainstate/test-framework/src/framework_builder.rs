@@ -15,11 +15,7 @@
 
 use std::sync::Arc;
 
-use chainstate::{
-    BlockError, ChainstateConfig, DefaultTransactionVerificationStrategy,
-    DisposableTransactionVerificationStrategy,
-};
-use chainstate_storage::inmemory::Store;
+use chainstate::{BlockError, ChainstateConfig, DefaultTransactionVerificationStrategy};
 use common::{
     chain::{
         config::{Builder as ChainConfigBuilder, ChainType},
@@ -27,12 +23,19 @@ use common::{
     },
     time_getter::TimeGetter,
 };
+use test_utils::random::Seed;
 
-use crate::TestFramework;
+use crate::{
+    tx_verification_strategy::{
+        DisposableTransactionVerificationStrategy, RandomizedTransactionVerificationStrategy,
+    },
+    TestFramework, TestStore,
+};
 
 pub enum TxVerificationStrategy {
     Default,
     Disposable,
+    Randomized(Seed),
 }
 
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
@@ -40,7 +43,7 @@ pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 pub struct TestFrameworkBuilder {
     chain_config: ChainConfig,
     chainstate_config: ChainstateConfig,
-    chainstate_storage: Store,
+    chainstate_storage: TestStore,
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     time_getter: TimeGetter,
     tx_verification_strategy: TxVerificationStrategy,
@@ -54,7 +57,7 @@ impl TestFrameworkBuilder {
             .genesis_unittest(Destination::AnyoneCanSpend)
             .build();
         let chainstate_config = ChainstateConfig::default();
-        let chainstate_storage = Store::new_empty().unwrap();
+        let chainstate_storage = TestStore::new_empty().unwrap();
         let time_getter = TimeGetter::default();
         let tx_verification_strategy = TxVerificationStrategy::Default;
 
@@ -68,7 +71,7 @@ impl TestFrameworkBuilder {
         }
     }
 
-    pub fn with_storage(mut self, s: Store) -> Self {
+    pub fn with_storage(mut self, s: TestStore) -> Self {
         self.chainstate_storage = s;
         self
     }
@@ -103,7 +106,7 @@ impl TestFrameworkBuilder {
             TxVerificationStrategy::Default => chainstate::make_chainstate(
                 Arc::new(self.chain_config),
                 self.chainstate_config,
-                self.chainstate_storage,
+                self.chainstate_storage.clone(),
                 DefaultTransactionVerificationStrategy::new(),
                 self.custom_orphan_error_hook,
                 self.time_getter,
@@ -111,8 +114,16 @@ impl TestFrameworkBuilder {
             TxVerificationStrategy::Disposable => chainstate::make_chainstate(
                 Arc::new(self.chain_config),
                 self.chainstate_config,
-                self.chainstate_storage,
+                self.chainstate_storage.clone(),
                 DisposableTransactionVerificationStrategy::new(),
+                self.custom_orphan_error_hook,
+                self.time_getter,
+            ),
+            TxVerificationStrategy::Randomized(seed) => chainstate::make_chainstate(
+                Arc::new(self.chain_config),
+                self.chainstate_config,
+                self.chainstate_storage.clone(),
+                RandomizedTransactionVerificationStrategy::new(seed),
                 self.custom_orphan_error_hook,
                 self.time_getter,
             ),
@@ -121,6 +132,7 @@ impl TestFrameworkBuilder {
 
         TestFramework {
             chainstate,
+            storage: self.chainstate_storage,
             block_indexes: Vec::new(),
         }
     }

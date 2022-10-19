@@ -14,9 +14,8 @@
 // limitations under the License.
 
 use super::*;
-use chainstate_storage::inmemory::Store;
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+    anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
     TxVerificationStrategy,
 };
 use common::{
@@ -38,13 +37,13 @@ fn coins_homomorphism(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
-        let storage1 = Store::new_empty().unwrap();
+        let storage1 = TestStore::new_empty().unwrap();
         let mut tf = TestFramework::builder()
             .with_storage(storage1.clone())
             .with_tx_verification_strategy(TxVerificationStrategy::Default)
             .build();
 
-        let storage2 = Store::new_empty().unwrap();
+        let storage2 = TestStore::new_empty().unwrap();
         let mut tf2 = TestFramework::builder()
             .with_storage(storage2.clone())
             .with_tx_verification_strategy(TxVerificationStrategy::Disposable)
@@ -119,13 +118,13 @@ fn tokens_homomorphism(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
-        let storage1 = Store::new_empty().unwrap();
+        let storage1 = TestStore::new_empty().unwrap();
         let mut tf = TestFramework::builder()
             .with_storage(storage1.clone())
             .with_tx_verification_strategy(TxVerificationStrategy::Default)
             .build();
 
-        let storage2 = Store::new_empty().unwrap();
+        let storage2 = TestStore::new_empty().unwrap();
         let mut tf2 = TestFramework::builder()
             .with_storage(storage2.clone())
             .with_tx_verification_strategy(TxVerificationStrategy::Disposable)
