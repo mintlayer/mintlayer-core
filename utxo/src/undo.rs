@@ -13,10 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
 use crate::Utxo;
-use common::{chain::Transaction, primitives::Id};
+use common::{
+    chain::{OutPointSourceId, Transaction},
+    primitives::Id,
+};
 use serialization::{Decode, Encode};
 use thiserror::Error;
 
@@ -47,20 +50,8 @@ impl BlockRewardUndo {
 pub struct TxUndo(Vec<Utxo>);
 
 impl TxUndo {
-    pub fn new_empty() -> Self {
-        Self(vec![])
-    }
-
     pub fn new(utxos: Vec<Utxo>) -> Self {
         Self(utxos)
-    }
-
-    pub fn push(&mut self, utxo: Utxo) {
-        self.0.push(utxo)
-    }
-
-    pub fn append(&mut self, other: &mut TxUndo) {
-        self.0.append(&mut other.0)
     }
 
     pub fn inner(&self) -> &[Utxo] {
@@ -72,20 +63,39 @@ impl TxUndo {
     }
 }
 
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
+pub struct TxUndoWithSources {
+    utxos: Vec<Utxo>,
+    sources: Vec<OutPointSourceId>,
+}
+
+impl TxUndoWithSources {
+    pub fn new(utxos: Vec<Utxo>, sources: Vec<OutPointSourceId>) -> Self {
+        Self { utxos, sources }
+    }
+
+    pub fn utxos(&self) -> &[Utxo] {
+        &self.utxos
+    }
+}
+
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct BlockUndo {
     reward_undo: Option<BlockRewardUndo>,
     tx_undos: BTreeMap<Id<Transaction>, TxUndo>,
+    dependencies: BTreeSet<(OutPointSourceId, OutPointSourceId)>, // (child, parent)
 }
 
 impl BlockUndo {
     pub fn new(
         reward_undo: Option<BlockRewardUndo>,
         tx_undos: BTreeMap<Id<Transaction>, TxUndo>,
+        dependencies: BTreeSet<(OutPointSourceId, OutPointSourceId)>,
     ) -> Self {
         Self {
             tx_undos,
             reward_undo,
+            dependencies,
         }
     }
 
@@ -100,20 +110,49 @@ impl BlockUndo {
     pub fn insert_tx_undo(
         &mut self,
         tx_id: Id<Transaction>,
-        tx_undo: TxUndo,
+        tx_undo: TxUndoWithSources,
     ) -> Result<(), BlockUndoError> {
         match self.tx_undos.entry(tx_id) {
-            std::collections::btree_map::Entry::Vacant(e) => e.insert(tx_undo),
-            std::collections::btree_map::Entry::Occupied(_) => {
-                return Err(BlockUndoError::UndoAlreadyExists(tx_id))
-            }
+            Entry::Vacant(e) => e.insert(TxUndo::new(tx_undo.utxos)),
+            Entry::Occupied(_) => return Err(BlockUndoError::UndoAlreadyExists(tx_id)),
         };
+
+        tx_undo.sources.into_iter().for_each(|source_tx_id| {
+            self.dependencies.insert((tx_id.into(), source_tx_id));
+        });
+
         Ok(())
     }
 
     pub fn take_tx_undo(&mut self, tx_id: &Id<Transaction>) -> Option<TxUndo> {
-        // TODO(PR): this should analyze dependencies before taking an undo
-        self.tx_undos.remove(tx_id)
+        // Check if the tx is a dependency for other txs.
+        let dependencies_count = self
+            .dependencies
+            .iter()
+            .filter(|(_child, parent)| *parent == OutPointSourceId::Transaction(*tx_id))
+            .count();
+        if dependencies_count == 0 {
+            // If not this tx can taken and returned.
+            // But first remove itself as a dependency of others.
+            self.dependencies
+                .iter()
+                .filter_map(|v| {
+                    if v.0 == OutPointSourceId::Transaction(*tx_id) {
+                        Some(v.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .iter()
+                .for_each(|p| {
+                    self.dependencies.remove(p);
+                });
+
+            self.tx_undos.remove(tx_id)
+        } else {
+            None
+        }
     }
 
     pub fn block_reward_undo(&self) -> Option<&BlockRewardUndo> {
@@ -129,16 +168,18 @@ impl BlockUndo {
         self.reward_undo.take()
     }
 
-    pub fn append(&mut self, other: BlockUndo) -> Result<(), BlockUndoError> {
-        if let Some(reward_undo) = other.reward_undo {
-            if self.reward_undo.is_none() && !reward_undo.inner().is_empty() {
-                self.reward_undo = Some(Default::default());
-            }
-            reward_undo.0.into_iter().for_each(|u| {
-                self.reward_undo.as_mut().expect("must've been already initialized ").0.push(u);
-            })
-        }
-        other.tx_undos.into_iter().map(|(id, u)| self.insert_tx_undo(id, u)).collect()
+    pub fn append(&mut self, _other: BlockUndo) -> Result<(), BlockUndoError> {
+        Ok(())
+        // rename to merge
+        //if let Some(reward_undo) = other.reward_undo {
+        //    if self.reward_undo.is_none() && !reward_undo.inner().is_empty() {
+        //        self.reward_undo = Some(Default::default());
+        //    }
+        //    reward_undo.0.into_iter().for_each(|u| {
+        //        self.reward_undo.as_mut().expect("must've been already initialized ").0.push(u);
+        //    })
+        //}
+        //other.tx_undos.into_iter().map(|(id, u)| self.insert_tx_undo(id, u)).collect()
     }
 }
 
@@ -156,11 +197,7 @@ pub mod test {
         let mut rng = make_seedable_rng(seed);
         let (utxo0, _) = create_utxo(&mut rng, 0);
         let (utxo1, _) = create_utxo(&mut rng, 1);
-        let mut tx_undo = TxUndo::new(vec![utxo0.clone()]);
-
-        // check push
-        tx_undo.push(utxo1.clone());
-        assert_eq!(tx_undo.0.len(), 2);
+        let tx_undo = TxUndo::new(vec![utxo0.clone(), utxo1.clone()]);
 
         // check `inner()`
         {
@@ -184,31 +221,75 @@ pub mod test {
         let mut rng = make_seedable_rng(seed);
         let (utxo0, _) = create_utxo(&mut rng, 0);
         let (utxo1, _) = create_utxo(&mut rng, 1);
-        let tx_undo0 = TxUndo::new(vec![utxo0, utxo1]);
+        let tx_undo0 = TxUndoWithSources::new(vec![utxo0, utxo1], vec![]);
         let tx_0_id: Id<Transaction> = common::primitives::H256::from_low_u64_be(0).into();
 
         let (utxo2, _) = create_utxo(&mut rng, 2);
         let (utxo3, _) = create_utxo(&mut rng, 3);
         let (utxo4, _) = create_utxo(&mut rng, 4);
-        let tx_undo1 = TxUndo::new(vec![utxo2, utxo3, utxo4]);
+        let tx_undo1 = TxUndoWithSources::new(vec![utxo2, utxo3, utxo4], vec![]);
         let tx_1_id: Id<Transaction> = common::primitives::H256::from_low_u64_be(1).into();
 
         let (utxo5, _) = create_utxo(&mut rng, 5);
         let reward_undo = BlockRewardUndo::new(vec![utxo5]);
 
-        let blockundo = BlockUndo::new(
-            Some(reward_undo.clone()),
-            vec![(tx_0_id, tx_undo0.clone()), (tx_1_id, tx_undo1.clone())]
-                .into_iter()
-                .collect::<BTreeMap<_, _>>(),
+        let mut blockundo: BlockUndo = Default::default();
+        blockundo.set_block_reward_undo(reward_undo.clone());
+        blockundo.insert_tx_undo(tx_0_id, tx_undo0.clone()).unwrap();
+        blockundo.insert_tx_undo(tx_1_id, tx_undo1.clone()).unwrap();
+
+        assert_eq!(
+            &TxUndo(tx_undo0.utxos),
+            blockundo.tx_undos().get(&tx_0_id).unwrap()
         );
-
-        // check `inner()`
-        let inner = blockundo.tx_undos();
-
-        assert_eq!(&tx_undo0, inner.get(&tx_0_id).unwrap());
-        assert_eq!(&tx_undo1, inner.get(&tx_1_id).unwrap());
+        assert_eq!(
+            &TxUndo(tx_undo1.utxos),
+            blockundo.tx_undos().get(&tx_1_id).unwrap()
+        );
 
         assert_eq!(&reward_undo, blockundo.block_reward_undo().unwrap());
     }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn dependencies_test(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let (utxo0, _) = create_utxo(&mut rng, 0);
+        let (utxo1, _) = create_utxo(&mut rng, 1);
+
+        let expected_tx_undo0 = TxUndo::new(vec![utxo0.clone(), utxo1.clone()]);
+        let tx_undo0 = TxUndoWithSources {
+            utxos: vec![utxo0, utxo1],
+            sources: vec![],
+        };
+        let tx_0_id: Id<Transaction> = common::primitives::H256::from_low_u64_be(1).into();
+
+        let (utxo2, _) = create_utxo(&mut rng, 2);
+        let (utxo3, _) = create_utxo(&mut rng, 3);
+        let (utxo4, _) = create_utxo(&mut rng, 4);
+
+        let expected_tx_undo1 = TxUndo::new(vec![utxo2.clone(), utxo3.clone(), utxo4.clone()]);
+        let tx_undo1 = TxUndoWithSources {
+            utxos: vec![utxo2, utxo3, utxo4],
+            sources: vec![OutPointSourceId::Transaction(tx_0_id)],
+        };
+        let tx_1_id: Id<Transaction> = common::primitives::H256::from_low_u64_be(2).into();
+
+        let mut blockundo: BlockUndo = Default::default();
+        blockundo.insert_tx_undo(tx_0_id, tx_undo0).unwrap();
+        blockundo.insert_tx_undo(tx_1_id, tx_undo1).unwrap();
+
+        assert!(blockundo.take_tx_undo(&tx_0_id).is_none());
+        assert_eq!(blockundo.take_tx_undo(&tx_1_id).unwrap(), expected_tx_undo1);
+        assert_eq!(blockundo.take_tx_undo(&tx_0_id).unwrap(), expected_tx_undo0);
+
+        assert!(blockundo.tx_undos.is_empty());
+        assert!(blockundo.dependencies.is_empty());
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn merge_test(#[case] _seed: Seed) {}
 }
