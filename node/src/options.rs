@@ -21,7 +21,7 @@ use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 use directories::UserDirs;
 
-use crate::{regtest_options::RegtestOptions, storage_config::StorageBackend};
+use crate::regtest_options::RegtestOptions;
 
 const DATA_DIR_NAME: &str = ".mintlayer";
 const CONFIG_NAME: &str = "config.toml";
@@ -62,7 +62,7 @@ pub enum Command {
 pub struct RunOptions {
     /// Storage backend to use
     #[clap(long)]
-    pub storage_backend: Option<StorageBackend>,
+    pub storage_backend: Option<chainstate::StorageBackend>,
 
     /// The number of maximum attempts to process a block.
     #[clap(long)]
@@ -139,7 +139,7 @@ impl Options {
 
     /// Returns the data directory
     pub fn data_dir(&self) -> PathBuf {
-        self.data_dir.clone().unwrap_or_else(|| default_data_dir())
+        self.data_dir.clone().unwrap_or_else(default_data_dir)
     }
 
     /// Returns a path to the config file.

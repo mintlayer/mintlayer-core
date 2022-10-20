@@ -25,11 +25,11 @@ use std::{
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use chainstate::ChainstateConfig;
+use chainstate::{ChainstateAndStorageConfig, ChainstateConfig};
 use p2p::config::{MdnsConfig, P2pConfig};
 use rpc::RpcConfig;
 
-use crate::{storage_config::StorageConfig, RunOptions};
+use crate::RunOptions;
 
 /// The node configuration.
 #[derive(Serialize, Deserialize, Debug)]
@@ -39,12 +39,8 @@ pub struct NodeConfig {
     /// By default the config file is created inside of the data directory.
     pub datadir: PathBuf,
 
-    // Storage configuration.
-    #[serde(default)]
-    pub storage: StorageConfig,
-
     // Subsystems configurations.
-    pub chainstate: ChainstateConfig,
+    pub chainstate: ChainstateAndStorageConfig,
     pub p2p: P2pConfig,
     pub rpc: RpcConfig,
 }
@@ -52,13 +48,11 @@ pub struct NodeConfig {
 impl NodeConfig {
     /// Creates a new `Config` instance with the given data directory path.
     pub fn new(datadir: PathBuf) -> Result<Self> {
-        let storage = StorageConfig::new();
-        let chainstate = ChainstateConfig::new();
+        let chainstate = ChainstateAndStorageConfig::new();
         let p2p = P2pConfig::new();
         let rpc = RpcConfig::new()?;
         Ok(Self {
             datadir,
-            storage,
             chainstate,
             p2p,
             rpc,
@@ -75,21 +69,18 @@ impl NodeConfig {
             .with_context(|| format!("Failed to read '{config_path:?}' config"))?;
         let NodeConfig {
             datadir,
-            storage,
             chainstate,
             p2p,
             rpc,
         } = toml::from_str(&config).context("Failed to parse config")?;
 
         let datadir = datadir_path_opt.clone().unwrap_or(datadir);
-        let storage = storage_config(storage, options);
         let chainstate = chainstate_config(chainstate, options);
         let p2p = p2p_config(p2p, options);
         let rpc = rpc_config(rpc, options);
 
         Ok(Self {
             datadir,
-            storage,
             chainstate,
             p2p,
             rpc,
@@ -97,26 +88,33 @@ impl NodeConfig {
     }
 }
 
-fn storage_config(config: StorageConfig, options: &RunOptions) -> StorageConfig {
-    let StorageConfig { backend } = config;
-    let backend = options.storage_backend.clone().unwrap_or(backend);
-    StorageConfig { backend }
-}
+fn chainstate_config(
+    config: ChainstateAndStorageConfig,
+    options: &RunOptions,
+) -> ChainstateAndStorageConfig {
+    let ChainstateAndStorageConfig {
+        storage_backend,
+        chainstate_config,
+    } = config;
 
-fn chainstate_config(config: ChainstateConfig, options: &RunOptions) -> ChainstateConfig {
     let ChainstateConfig {
         max_db_commit_attempts,
         max_orphan_blocks,
         min_max_bootstrap_import_buffer_sizes,
-    } = config;
+    } = chainstate_config;
 
+    let storage_backend = options.storage_backend.clone().unwrap_or(storage_backend);
     let max_db_commit_attempts = options.max_db_commit_attempts.unwrap_or(max_db_commit_attempts);
     let max_orphan_blocks = options.max_orphan_blocks.unwrap_or(max_orphan_blocks);
 
-    ChainstateConfig {
+    let chainstate_config = ChainstateConfig {
         max_db_commit_attempts,
         max_orphan_blocks,
         min_max_bootstrap_import_buffer_sizes,
+    };
+    ChainstateAndStorageConfig {
+        storage_backend,
+        chainstate_config,
     }
 }
 

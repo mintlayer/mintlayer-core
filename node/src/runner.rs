@@ -20,10 +20,7 @@ use std::{fs, path::Path, str::FromStr, sync::Arc, time::Duration};
 use anyhow::{anyhow, Context, Result};
 use paste::paste;
 
-use chainstate::{
-    chainstate_interface::ChainstateInterface, rpc::ChainstateRpcServer,
-    DefaultTransactionVerificationStrategy,
-};
+use chainstate::{make_chainstate_and_storage, rpc::ChainstateRpcServer};
 use common::{
     chain::config::{
         Builder as ChainConfigBuilder, ChainConfig, ChainType, EmissionScheduleTabular,
@@ -40,26 +37,7 @@ use crate::{
     config::NodeConfig,
     options::{Command, Options, RunOptions},
     regtest_options::ChainConfigOptions,
-    storage_config::StorageBackend,
 };
-
-/// Set up storage and initialize chainstate
-fn make_chainstate<B: 'static + storage::Backend>(
-    storage_backend: B,
-    chain_config: &Arc<ChainConfig>,
-    chainstate_config: chainstate::ChainstateConfig,
-) -> Result<Box<dyn ChainstateInterface>> {
-    let storage = chainstate_storage::Store::new(storage_backend)?;
-    let chainstate = chainstate::make_chainstate(
-        Arc::clone(chain_config),
-        chainstate_config,
-        storage,
-        DefaultTransactionVerificationStrategy::new(),
-        None,
-        Default::default(),
-    )?;
-    Ok(chainstate)
-}
 
 /// Initialize the node, giving caller the opportunity to add more subsystems before start.
 pub async fn initialize(
@@ -74,16 +52,11 @@ pub async fn initialize(
     manager.install_signal_handlers();
 
     // Chainstate subsystem
-    let chainstate = match node_config.storage.backend {
-        StorageBackend::Lmdb => {
-            let storage_backend = storage_lmdb::Lmdb::new(node_config.datadir);
-            make_chainstate(storage_backend, &chain_config, node_config.chainstate)?
-        }
-        StorageBackend::InMemory => {
-            let storage_backend = storage_inmemory::InMemory::new();
-            make_chainstate(storage_backend, &chain_config, node_config.chainstate)?
-        }
-    };
+    let chainstate = make_chainstate_and_storage(
+        &node_config.datadir,
+        Arc::clone(&chain_config),
+        node_config.chainstate,
+    )?;
     let chainstate = manager.add_subsystem("chainstate", chainstate);
 
     // Mempool subsystem

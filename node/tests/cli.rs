@@ -19,7 +19,8 @@ use assert_cmd::Command;
 use directories::UserDirs;
 use tempfile::TempDir;
 
-use node::{NodeConfig, RunOptions, StorageBackend};
+use chainstate::StorageBackend;
+use node::{NodeConfig, RunOptions};
 
 const BIN_NAME: &str = env!("CARGO_BIN_EXE_node");
 const CONFIG_NAME: &str = "config.toml";
@@ -54,8 +55,11 @@ fn create_default_config() {
 
     assert_eq!(config.datadir, data_dir.path());
 
-    assert_eq!(config.chainstate.max_db_commit_attempts, 10);
-    assert_eq!(config.chainstate.max_orphan_blocks, 512);
+    assert_eq!(
+        config.chainstate.chainstate_config.max_db_commit_attempts,
+        10
+    );
+    assert_eq!(config.chainstate.chainstate_config.max_orphan_blocks, 512);
 
     assert_eq!(config.p2p.bind_address, "/ip6/::1/tcp/3031");
     assert_eq!(config.p2p.ban_threshold, 100);
@@ -106,15 +110,19 @@ fn read_config_override_values() {
         ws_rpc_enabled: Some(false),
         storage_backend: backend_type.clone(),
     };
-    let config = NodeConfig::read(&config_path, &Some(data_dir.path().into()), &options).unwrap();
+    let datadir_opt = Some(data_dir.path().into());
+    let config = NodeConfig::read(&config_path, &datadir_opt, &options).unwrap();
 
     assert_eq!(config.datadir, data_dir.path());
 
     assert_eq!(
-        config.chainstate.max_db_commit_attempts,
+        config.chainstate.chainstate_config.max_db_commit_attempts,
         max_db_commit_attempts
     );
-    assert_eq!(config.chainstate.max_orphan_blocks, max_orphan_blocks);
+    assert_eq!(
+        config.chainstate.chainstate_config.max_orphan_blocks,
+        max_orphan_blocks
+    );
 
     assert_eq!(config.p2p.bind_address, p2p_addr);
     assert_eq!(config.p2p.ban_threshold, p2p_ban_threshold);
@@ -126,7 +134,7 @@ fn read_config_override_values() {
     assert_eq!(config.rpc.ws_bind_address, Some(ws_rpc_addr));
     assert!(!config.rpc.ws_enabled.unwrap());
 
-    assert_eq!(Some(config.storage.backend), backend_type);
+    assert_eq!(Some(config.chainstate.storage_backend), backend_type);
 }
 
 // Check that the `--conf` option has the precedence over the default data directory value.

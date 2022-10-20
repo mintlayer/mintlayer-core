@@ -15,6 +15,9 @@ crypto = {path = '../crypto'}
 logging = {path = '../logging'}
 rpc = {path = '../rpc'}
 serialization = {path = "../serialization"}
+storage = {path = "../storage"}
+storage-inmemory = {path = "../storage/inmemory"}
+storage-lmdb = {path = "../storage/lmdb"}
 subsystem = {path = '../subsystem'}
 utxo = {path = '../utxo'}
 utils = {path = '../utils'}

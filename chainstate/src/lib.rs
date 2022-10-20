@@ -23,7 +23,7 @@ pub use interface::chainstate_interface_impl_delegation;
 pub mod rpc;
 
 pub use crate::{
-    config::ChainstateConfig,
+    config::{ChainstateAndStorageConfig, ChainstateConfig, StorageBackend},
     detail::{
         ban_score, calculate_median_time_past, is_rfc3986_valid_symbol, BlockError, BlockSource,
         CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError, Locator,
@@ -89,4 +89,45 @@ pub fn make_chainstate<
     )?;
     let cons_interface = ChainstateInterfaceImpl::new(cons);
     Ok(Box::new(cons_interface))
+}
+
+fn make_chainstate_and_storage_impl<B: 'static + storage::Backend>(
+    storage_backend: B,
+    chain_config: Arc<ChainConfig>,
+    chainstate_config: ChainstateConfig,
+) -> Result<Box<dyn ChainstateInterface>, ChainstateError> {
+    let storage = chainstate_storage::Store::new(storage_backend)
+        .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.to_string()))?;
+    let chainstate = make_chainstate(
+        chain_config,
+        chainstate_config,
+        storage,
+        DefaultTransactionVerificationStrategy::new(),
+        None,
+        Default::default(),
+    )?;
+    Ok(chainstate)
+}
+
+pub fn make_chainstate_and_storage(
+    datadir: &std::path::Path,
+    chain_config: Arc<ChainConfig>,
+    chainstate_and_storage_config: ChainstateAndStorageConfig,
+) -> Result<Box<dyn ChainstateInterface>, ChainstateError> {
+    let ChainstateAndStorageConfig {
+        storage_backend,
+        chainstate_config,
+    } = chainstate_and_storage_config;
+
+    let chainstate = match storage_backend {
+        StorageBackend::Lmdb => {
+            let storage = storage_lmdb::Lmdb::new(datadir.join("chainstate-lmdb"));
+            make_chainstate_and_storage_impl(storage, chain_config, chainstate_config)?
+        }
+        StorageBackend::InMemory => {
+            let storage = storage_inmemory::InMemory::new();
+            make_chainstate_and_storage_impl(storage, chain_config, chainstate_config)?
+        }
+    };
+    Ok(chainstate)
 }

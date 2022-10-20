@@ -20,14 +20,12 @@ mod options;
 mod regtest_options;
 mod rpc;
 mod runner;
-mod storage_config;
 
 pub type Error = anyhow::Error;
 
 pub use config::NodeConfig;
 pub use options::{Command, Options, RunOptions};
 pub use runner::{initialize, run};
-pub use storage_config::StorageBackend;
 
 pub fn init_logging(opts: &Options) {
     logging::init_logging(opts.log_path.as_ref())
