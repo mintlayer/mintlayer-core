@@ -34,7 +34,6 @@ use serialization::Encode;
 
 use common::chain::transaction::Transaction;
 use common::chain::transaction::TxInput;
-use common::chain::OutPoint;
 use common::primitives::amount::Amount;
 use common::primitives::Id;
 use common::primitives::Idable;
@@ -126,11 +125,6 @@ pub trait MempoolInterface: Send {
         &mut self,
         handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
     ) -> Result<(), Error>;
-}
-
-pub trait ChainState: Debug {
-    fn contains_outpoint(&self, outpoint: &OutPoint) -> bool;
-    fn get_outpoint_value(&self, outpoint: &OutPoint) -> Result<Amount, anyhow::Error>;
 }
 
 #[async_trait::async_trait]
