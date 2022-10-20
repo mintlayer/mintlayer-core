@@ -170,6 +170,7 @@ mod tests {
     use jsonrpsee::core::client::ClientT;
     use jsonrpsee::http_client::HttpClientBuilder;
     use jsonrpsee::rpc_params;
+    use jsonrpsee::ws_client::WsClientBuilder;
 
     #[rpc(server, namespace = "some_subsystem")]
     pub trait SubsystemRpc {
@@ -193,12 +194,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rpc_server() -> anyhow::Result<()> {
+    async fn rpc_server_http() -> anyhow::Result<()> {
         let rpc_config = RpcConfig {
             http_bind_address: Some("127.0.0.1:3030".parse().unwrap()),
             http_enabled: Some(true),
             ws_bind_address: Some("127.0.0.1:3031".parse().unwrap()),
-            ws_enabled: Some(true),
+            ws_enabled: Some(false),
         };
         let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
 
@@ -213,6 +214,79 @@ mod tests {
 
         let response: Result<u64> = client.request("some_subsystem_add", rpc_params!(2, 5)).await;
         assert_eq!(response.unwrap(), 7);
+
+        subsystem::Subsystem::shutdown(rpc).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn rpc_server_websocket() -> anyhow::Result<()> {
+        let rpc_config = RpcConfig {
+            http_bind_address: Some("127.0.0.1:3030".parse().unwrap()),
+            http_enabled: Some(false),
+            ws_bind_address: Some("127.0.0.1:3031".parse().unwrap()),
+            ws_enabled: Some(true),
+        };
+        let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
+
+        let url = format!("ws://{}", rpc.websocket_address().unwrap());
+        let client = WsClientBuilder::default().build(url).await?;
+        let response: Result<String> =
+            client.request("example_server_protocol_version", rpc_params!()).await;
+        assert_eq!(response.unwrap(), "version1");
+
+        let response: Result<String> = client.request("some_subsystem_name", rpc_params!()).await;
+        assert_eq!(response.unwrap(), "sub1");
+
+        let response: Result<u64> = client.request("some_subsystem_add", rpc_params!(2, 5)).await;
+        assert_eq!(response.unwrap(), 7);
+
+        subsystem::Subsystem::shutdown(rpc).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn rpc_server_http_and_websocket() -> anyhow::Result<()> {
+        let rpc_config = RpcConfig {
+            http_bind_address: Some("127.0.0.1:3030".parse().unwrap()),
+            http_enabled: Some(true),
+            ws_bind_address: Some("127.0.0.1:3031".parse().unwrap()),
+            ws_enabled: Some(true),
+        };
+
+        let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
+
+        {
+            let url = format!("http://{}", rpc.http_address().unwrap());
+            let client = HttpClientBuilder::default().build(url)?;
+            let response: Result<String> =
+                client.request("example_server_protocol_version", rpc_params!()).await;
+            assert_eq!(response.unwrap(), "version1");
+
+            let response: Result<String> =
+                client.request("some_subsystem_name", rpc_params!()).await;
+            assert_eq!(response.unwrap(), "sub1");
+
+            let response: Result<u64> =
+                client.request("some_subsystem_add", rpc_params!(2, 5)).await;
+            assert_eq!(response.unwrap(), 7);
+        }
+
+        {
+            let url = format!("ws://{}", rpc.websocket_address().unwrap());
+            let client = WsClientBuilder::default().build(url).await?;
+            let response: Result<String> =
+                client.request("example_server_protocol_version", rpc_params!()).await;
+            assert_eq!(response.unwrap(), "version1");
+
+            let response: Result<String> =
+                client.request("some_subsystem_name", rpc_params!()).await;
+            assert_eq!(response.unwrap(), "sub1");
+
+            let response: Result<u64> =
+                client.request("some_subsystem_add", rpc_params!(2, 5)).await;
+            assert_eq!(response.unwrap(), 7);
+        }
 
         subsystem::Subsystem::shutdown(rpc).await;
         Ok(())
