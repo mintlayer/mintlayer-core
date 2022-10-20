@@ -56,8 +56,9 @@ impl TransactionAccumulator for DefaultTxAccumulator {
     fn add_tx(&mut self, tx: SignedTransaction, tx_fee: Amount) -> Result<(), TxAccumulatorError> {
         if self.total_size + tx.encoded_size() <= self.target_size {
             self.total_size += tx.encoded_size();
-            self.total_fee = (self.total_fee + tx_fee)
-                .ok_or_else(|| TxAccumulatorError::FeeAccumulationError(self.total_fee, tx_fee))?;
+            self.total_fee = (self.total_fee + tx_fee).ok_or(
+                TxAccumulatorError::FeeAccumulationError(self.total_fee, tx_fee),
+            )?;
             self.txs.push(tx);
         } else {
             self.done = true
