@@ -74,7 +74,7 @@ use rstest::rstest;
 use std::collections::BTreeMap;
 use test_utils::random::{make_seedable_rng, Seed};
 
-/// Checks `add_utxo` method behaviour.
+/// Checks `add_utxo` method behavior.
 /// # Arguments
 /// `cache_presence` - initial state of the cache
 /// `cache_flags` - The flags of the existing utxo entry for testing
@@ -108,7 +108,7 @@ fn check_add_utxo(
     }
 }
 
-/// Checks `spend_utxo` method behaviour.
+/// Checks `spend_utxo` method behavior.
 /// # Arguments
 /// `parent_presence` - initial state of the parent cache.
 /// `cache_presence` - initial state of the cache.
@@ -166,7 +166,7 @@ fn check_spend_utxo(
     test_helper::check_flags(ret_value, result_flags, true);
 }
 
-/// Checks `batch_write` method behaviour.
+/// Checks `batch_write` method behavior.
 /// # Arguments
 /// `parent_presence` - initial state of the parent cache.
 /// `parent_flags` - The flags of a utxo entry in the parent. None if the parent is empty.
@@ -235,7 +235,7 @@ fn check_write_utxo(
     }
 }
 
-/// Checks the `get_mut_utxo` method behaviour.
+/// Checks the `get_mut_utxo` method behavior.
 fn check_get_mut_utxo(
     rng: &mut impl Rng,
     parent_presence: Presence,
@@ -537,7 +537,7 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
     // let's test `connect_transaction`
     let tx_undo = cache
         .connect_transaction(&new_tx, BlockHeight::new(2))
-        .expect("should return txundo");
+        .expect("should return tx undo");
 
     // check that these utxos came from the tx's output
     tx_undo.inner().iter().for_each(|x| {

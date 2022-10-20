@@ -76,7 +76,7 @@ fn test_storage_manipulation() {
     assert_eq!(store.set_storage_version(2), Ok(()));
     assert_eq!(store.get_storage_version(), Ok(2));
 
-    // Storte is now empty, the block is not there
+    // Store is now empty, the block is not there
     assert_eq!(store.get_block(block0.get_id()), Ok(None));
 
     // Insert the first block and check it is there
@@ -153,7 +153,7 @@ fn get_set_transactions() {
         let mut store = TestStore::new_empty().unwrap();
         assert_eq!(store.set_storage_version(2), Ok(()));
 
-        // Concurrently bump version and run a transactiomn that reads the version twice.
+        // Concurrently bump version and run a transaction that reads the version twice.
         let thr1 = {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {

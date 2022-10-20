@@ -1342,7 +1342,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let num_inputs = 1;
 
-    // Use a higher than default fee because we don't want this transction to be evicted during
+    // Use a higher than default fee because we don't want this transaction to be evicted during
     // the trimming process
     log::debug!("parent_id: {}", parent_id.get());
     log::debug!("before adding parent");
@@ -1534,7 +1534,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         mempool.get_minimum_rolling_fee()
     );
 
-    // Add another dummmy until rolling feerate drops to zero
+    // Add another dummy until rolling feerate drops to zero
     mock_time.store(
         mock_time.load(Ordering::SeqCst) + halflife.as_secs(),
         Ordering::SeqCst,
