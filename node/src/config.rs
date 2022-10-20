@@ -124,9 +124,15 @@ fn p2p_config(config: P2pConfig, options: &RunOptions) -> P2pConfig {
 }
 
 fn rpc_config(config: RpcConfig, options: &RunOptions) -> RpcConfig {
-    let RpcConfig { bind_address } = config;
+    let RpcConfig {
+        http_bind_address,
+        ws_bind_address,
+    } = config;
 
-    let bind_address = options.rpc_addr.unwrap_or(bind_address);
+    let http_bind_address = options.rpc_addr.unwrap_or(http_bind_address);
 
-    RpcConfig { bind_address }
+    RpcConfig {
+        http_bind_address,
+        ws_bind_address,
+    }
 }

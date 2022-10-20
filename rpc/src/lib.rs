@@ -16,6 +16,7 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
+use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 
 use logging::log;
 
@@ -44,20 +45,27 @@ impl RpcInfoServer for RpcInfo {
 
 /// The RPC subsystem builder. Used to populate the RPC server with method handlers.
 pub struct Builder {
-    address: SocketAddr,
+    // TODO(PR): make either optional
+    http_bind_address: SocketAddr,
+    ws_bind_address: SocketAddr,
     methods: Methods,
 }
 
 impl Builder {
     /// New builder with no methods
-    pub fn new_empty(address: SocketAddr) -> Self {
+    pub fn new_empty(http_bind_address: SocketAddr, ws_bind_address: SocketAddr) -> Self {
         let methods = Methods::new();
-        Self { address, methods }
+        Self {
+            http_bind_address,
+            ws_bind_address,
+            methods,
+        }
     }
 
     /// New builder pre-populated with RPC info methods
     pub fn new(rpc_config: RpcConfig) -> Self {
-        Self::new_empty(rpc_config.bind_address).register(RpcInfo.into_rpc())
+        Self::new_empty(rpc_config.http_bind_address, rpc_config.ws_bind_address)
+            .register(RpcInfo.into_rpc())
     }
 
     /// Add methods handlers to the RPC server
@@ -68,35 +76,56 @@ impl Builder {
 
     /// Build the RPC server and get the RPC object
     pub async fn build(self) -> anyhow::Result<Rpc> {
-        Rpc::new(&self.address, self.methods).await
+        Rpc::new(&self.http_bind_address, &self.ws_bind_address, self.methods).await
     }
 }
 
 /// The RPC subsystem
 pub struct Rpc {
-    address: SocketAddr,
-    handle: HttpServerHandle,
+    http: (SocketAddr, HttpServerHandle),
+    websocket: (SocketAddr, WsServerHandle),
 }
 
 impl Rpc {
-    async fn new(addr: &SocketAddr, methods: Methods) -> anyhow::Result<Self> {
-        let server = HttpServerBuilder::default().build(addr).await?;
-        let address = server.local_addr()?;
-        let handle = server.start(methods)?;
-        Ok(Self { address, handle })
+    async fn new(
+        http_bind_addr: &SocketAddr,
+        ws_bind_addr: &SocketAddr,
+        methods: Methods,
+    ) -> anyhow::Result<Self> {
+        let http_server = HttpServerBuilder::default().build(http_bind_addr).await?;
+        let http_address = http_server.local_addr()?;
+        let http_handle = http_server.start(methods.clone())?;
+
+        let ws_server = WsServerBuilder::default().build(ws_bind_addr).await?;
+        let ws_address = ws_server.local_addr()?;
+        let ws_handle = ws_server.start(methods)?;
+
+        Ok(Self {
+            http: (http_address, http_handle),
+            websocket: (ws_address, ws_handle),
+        })
     }
 
-    pub fn address(&self) -> &SocketAddr {
-        &self.address
+    pub fn http_address(&self) -> &SocketAddr {
+        &self.http.0
+    }
+
+    pub fn websocket_address(&self) -> &SocketAddr {
+        &self.websocket.0
     }
 }
 
 #[async_trait::async_trait]
 impl subsystem::Subsystem for Rpc {
     async fn shutdown(self) {
-        match self.handle.stop() {
-            Ok(stop) => stop.await.unwrap_or_else(|e| log::error!("RPC join error: {}", e)),
-            Err(e) => log::error!("RPC stop handle acquisition failed: {}", e),
+        match self.http.1.stop() {
+            Ok(stop) => stop.await.unwrap_or_else(|e| log::error!("Http RPC join error: {}", e)),
+            Err(e) => log::error!("Http RPC stop handle acquisition failed: {}", e),
+        }
+
+        match self.websocket.1.stop() {
+            Ok(stop) => stop.await,
+            Err(e) => log::error!("Websocket RPC stop handle acquisition failed: {}", e),
         }
     }
 }
@@ -132,11 +161,12 @@ mod tests {
     #[tokio::test]
     async fn rpc_server() -> anyhow::Result<()> {
         let rpc_config = RpcConfig {
-            bind_address: "127.0.0.1:3030".parse().unwrap(),
+            http_bind_address: "127.0.0.1:3030".parse().unwrap(),
+            ws_bind_address: "127.0.0.1:3031".parse().unwrap(),
         };
         let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
 
-        let url = format!("http://{}", rpc.address());
+        let url = format!("http://{}", rpc.http_address());
         let client = HttpClientBuilder::default().build(url)?;
         let response: Result<String> =
             client.request("example_server_protocol_version", rpc_params!()).await;

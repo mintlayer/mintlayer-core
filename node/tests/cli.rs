@@ -62,7 +62,7 @@ fn create_default_config() {
     assert_eq!(config.p2p.outbound_connection_timeout, 10);
 
     assert_eq!(
-        config.rpc.bind_address,
+        config.rpc.http_bind_address,
         SocketAddr::from_str("127.0.0.1:3030").unwrap()
     );
 }
@@ -114,7 +114,7 @@ fn read_config_override_values() {
     assert_eq!(config.p2p.ban_threshold, p2p_ban_threshold);
     assert_eq!(config.p2p.outbound_connection_timeout, p2p_timeout);
 
-    assert_eq!(config.rpc.bind_address, rpc_addr);
+    assert_eq!(config.rpc.http_bind_address, rpc_addr);
 }
 
 // Check that the `--conf` option has the precedence over the default data directory value.

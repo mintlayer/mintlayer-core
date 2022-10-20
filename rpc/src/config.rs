@@ -21,15 +21,19 @@ use serde::{Deserialize, Serialize};
 /// The rpc subsystem configuration.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RpcConfig {
-    /// Address to bind RPC to.
-    pub bind_address: SocketAddr,
+    /// Address to bind http RPC to.
+    pub http_bind_address: SocketAddr,
+
+    /// Address to bind websocket RPC to.
+    pub ws_bind_address: SocketAddr,
 }
 
 impl RpcConfig {
     /// Creates a new rpc configuration instance.
     pub fn new() -> Result<Self> {
         Ok(Self {
-            bind_address: SocketAddr::from_str("127.0.0.1:3030")?,
+            http_bind_address: SocketAddr::from_str("127.0.0.1:3030")?,
+            ws_bind_address: SocketAddr::from_str("127.0.0.1:3031")?,
         })
     }
 }
