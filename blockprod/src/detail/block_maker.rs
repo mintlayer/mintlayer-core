@@ -98,7 +98,7 @@ impl BlockMaker {
         // TODO: this isn't efficient. We have to create the header first, then see if it obeys consensus rules, then construct the full block
         let current_time = self.time_getter.get_time();
         let block = Block::new(
-            accumulator.txs().clone(),
+            accumulator.transactions().clone(),
             current_tip_id.into(),
             BlockTimestamp::from_duration_since_epoch(current_time),
             common::chain::block::ConsensusData::None,

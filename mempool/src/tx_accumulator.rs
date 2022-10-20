@@ -28,8 +28,8 @@ pub trait TransactionAccumulator: Send {
     /// Meaning: If this call returns an error, the callee should guarantee that &self never changed
     fn add_tx(&mut self, tx: SignedTransaction, tx_fee: Amount) -> Result<(), TxAccumulatorError>;
     fn done(&self) -> bool;
-    fn txs(&self) -> &Vec<SignedTransaction>;
-    fn total_fee(&self) -> Amount;
+    fn transactions(&self) -> &Vec<SignedTransaction>;
+    fn total_fees(&self) -> Amount;
 }
 
 pub struct DefaultTxAccumulator {
@@ -37,7 +37,7 @@ pub struct DefaultTxAccumulator {
     total_size: usize,
     target_size: usize,
     done: bool,
-    total_fee: Amount,
+    total_fees: Amount,
 }
 
 impl DefaultTxAccumulator {
@@ -47,7 +47,7 @@ impl DefaultTxAccumulator {
             total_size: 0,
             target_size,
             done: false,
-            total_fee: Amount::ZERO,
+            total_fees: Amount::ZERO,
         }
     }
 }
@@ -56,8 +56,8 @@ impl TransactionAccumulator for DefaultTxAccumulator {
     fn add_tx(&mut self, tx: SignedTransaction, tx_fee: Amount) -> Result<(), TxAccumulatorError> {
         if self.total_size + tx.encoded_size() <= self.target_size {
             self.total_size += tx.encoded_size();
-            self.total_fee = (self.total_fee + tx_fee).ok_or(
-                TxAccumulatorError::FeeAccumulationError(self.total_fee, tx_fee),
+            self.total_fees = (self.total_fees + tx_fee).ok_or(
+                TxAccumulatorError::FeeAccumulationError(self.total_fees, tx_fee),
             )?;
             self.txs.push(tx);
         } else {
@@ -70,11 +70,11 @@ impl TransactionAccumulator for DefaultTxAccumulator {
         self.done
     }
 
-    fn txs(&self) -> &Vec<SignedTransaction> {
+    fn transactions(&self) -> &Vec<SignedTransaction> {
         &self.txs
     }
 
-    fn total_fee(&self) -> Amount {
-        self.total_fee
+    fn total_fees(&self) -> Amount {
+        self.total_fees
     }
 }

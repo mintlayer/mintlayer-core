@@ -2101,7 +2101,7 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     let size_limit: usize = 1_000;
     let tx_accumulator = DefaultTxAccumulator::new(size_limit);
     let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
-    let collected_txs = returned_accumulator.txs();
+    let collected_txs = returned_accumulator.transactions();
     let expected_num_txs_collected: usize = 0;
     assert_eq!(collected_txs.len(), expected_num_txs_collected);
 
@@ -2137,7 +2137,7 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     let size_limit = 1_000;
     let tx_accumulator = DefaultTxAccumulator::new(size_limit);
     let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
-    let collected_txs = returned_accumulator.txs();
+    let collected_txs = returned_accumulator.transactions();
     log::debug!("ancestor index: {:?}", mempool.store.txs_by_ancestor_score);
     let expected_num_txs_collected = 6;
     assert_eq!(collected_txs.len(), expected_num_txs_collected);
@@ -2146,12 +2146,12 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let tx_accumulator = DefaultTxAccumulator::new(0);
     let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
-    let collected_txs = returned_accumulator.txs();
+    let collected_txs = returned_accumulator.transactions();
     assert_eq!(collected_txs.len(), 0);
 
     let tx_accumulator = DefaultTxAccumulator::new(1);
     let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
-    let collected_txs = returned_accumulator.txs();
+    let collected_txs = returned_accumulator.transactions();
     assert_eq!(collected_txs.len(), 0);
     Ok(())
 }
