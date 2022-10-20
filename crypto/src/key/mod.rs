@@ -18,6 +18,7 @@ pub mod signature;
 
 use serialization::{Decode, Encode};
 
+use crate::key::Signature::RistrettoSchnorr;
 use crate::random::make_true_rng;
 pub use signature::Signature;
 
@@ -75,7 +76,7 @@ impl PrivateKey {
                     PrivateKey {
                         key: PrivateKeyHolder::RistrettoSchnorr(k.0),
                     },
-                    crate::key::PublicKey {
+                    PublicKey {
                         pub_key: PublicKeyHolder::RistrettoSchnorr(k.1),
                     },
                 )
@@ -94,17 +95,17 @@ impl PrivateKey {
     }
 
     pub fn sign_message(&self, msg: &[u8]) -> Result<Signature, SignatureError> {
-        let mut rng = make_true_rng();
-        let PrivateKeyHolder::RistrettoSchnorr(k) = &self.key;
-        let sig = k.sign_message(&mut rng, msg)?;
-        Ok(Signature::RistrettoSchnorr(sig))
+        let signature = match &self.key {
+            PrivateKeyHolder::RistrettoSchnorr(ref k) => RistrettoSchnorr(k.sign_message(msg)?),
+        };
+        Ok(signature)
     }
 }
 
 impl PublicKey {
     pub fn from_private_key(private_key: &PrivateKey) -> Self {
         match private_key.get_internal_key() {
-            PrivateKeyHolder::RistrettoSchnorr(ref k) => crate::key::PublicKey {
+            PrivateKeyHolder::RistrettoSchnorr(ref k) => PublicKey {
                 pub_key: PublicKeyHolder::RistrettoSchnorr(
                     rschnorr::MLRistrettoPublicKey::from_private_key(k),
                 ),
@@ -113,8 +114,6 @@ impl PublicKey {
     }
 
     pub fn verify_message(&self, signature: &Signature, msg: &[u8]) -> bool {
-        use crate::key::Signature::RistrettoSchnorr;
-
         let PublicKeyHolder::RistrettoSchnorr(k) = &self.pub_key;
         match signature {
             RistrettoSchnorr(s) => k.verify_message(s, msg),
