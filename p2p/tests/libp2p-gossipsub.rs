@@ -38,7 +38,7 @@ use serialization::Encode;
 
 // verify that libp2p gossipsub works
 #[tokio::test]
-async fn test_libp2p_gossipsub() {
+async fn libp2p_gossipsub() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut conn1, mut sync1) = Libp2pService::start(
         MakeP2pAddress::make_address(),
@@ -123,7 +123,7 @@ async fn test_libp2p_gossipsub() {
 // test libp2p gossipsub with multiple peers and verify that as our libp2p requires message
 // validation, peers don't automatically forward the messages
 #[tokio::test]
-async fn test_libp2p_gossipsub_3_peers() {
+async fn libp2p_gossipsub_3_peers() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut conn1, mut sync1) = Libp2pService::start(
         MakeP2pAddress::make_address(),
@@ -263,7 +263,7 @@ async fn test_libp2p_gossipsub_3_peers() {
 }
 
 #[tokio::test]
-async fn test_libp2p_gossipsub_too_big_message() {
+async fn libp2p_gossipsub_too_big_message() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut conn1, mut sync1) = Libp2pService::start(
         MakeP2pAddress::make_address(),
