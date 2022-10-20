@@ -19,7 +19,6 @@ use chainstate::ChainstateHandle;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward},
-        signed_transaction::SignedTransaction,
         Block, ChainConfig,
     },
     primitives::{BlockHeight, Id, Idable},
@@ -94,12 +93,12 @@ impl BlockMaker {
     pub fn make_block(
         &self,
         current_tip_id: Id<Block>,
-        transactions: Vec<SignedTransaction>,
+        accumulator: &dyn TransactionAccumulator,
     ) -> Result<Block, BlockProductionError> {
         // TODO: this isn't efficient. We have to create the header first, then see if it obeys consensus rules, then construct the full block
         let current_time = self.time_getter.get_time();
         let block = Block::new(
-            transactions,
+            accumulator.txs().clone(),
             current_tip_id.into(),
             BlockTimestamp::from_duration_since_epoch(current_time),
             common::chain::block::ConsensusData::None,
@@ -146,10 +145,9 @@ impl BlockMaker {
     /// 2. A new tip is now on chainstate, indicating that there's no point in continuing to mine/stake at that tip
     pub async fn run(&mut self) -> Result<(), BlockProductionError> {
         let accumulator = self.collect_transactions().await?;
-        let transactions = accumulator.txs();
 
         loop {
-            let block = self.make_block(self.current_tip_id, transactions.clone())?;
+            let block = self.make_block(self.current_tip_id, &*accumulator)?;
 
             match self.attempt_submit_new_block(block).await? {
                 BlockSubmitResult::Failed => (),
