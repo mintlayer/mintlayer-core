@@ -63,7 +63,7 @@ class TestNode():
     - one or more P2P connections to the node
 
 
-    To make things easier for the test writer, any unrecognised messages will
+    To make things easier for the test writer, any unrecognized messages will
     be dispatched to the RPC connection."""
 
     def __init__(self, i, datadir, *, chain, rpchost, timewait, timeout_factor, bitcoind, bitcoin_cli, coverage_dir, cwd, extra_conf=None, extra_args=None, use_cli=False, start_perf=False, use_valgrind=False, version=None, descriptors=False):
@@ -108,7 +108,7 @@ class TestNode():
             self.binary,
             "--datadir={}".format(datadir_path),
             "regtest",
-            "--rpc-addr={}".format(rpc_addr),
+            "--http-rpc-addr={}".format(rpc_addr),
             "--p2p-addr={}".format(p2p_addr),
             #"-X",
             #"-datadir=" + self.datadir,

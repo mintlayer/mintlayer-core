@@ -104,7 +104,8 @@ pub async fn initialize(
     );
 
     // RPC subsystem
-    if node_config.rpc.http_enabled || node_config.rpc.ws_enabled {
+    if node_config.rpc.http_enabled.unwrap_or(true) || node_config.rpc.ws_enabled.unwrap_or(true) {
+        // TODO: get rid of the unwrap_or() after fixing the issue in #446
         let _rpc = manager.add_subsystem(
             "rpc",
             rpc::Builder::new(node_config.rpc)
