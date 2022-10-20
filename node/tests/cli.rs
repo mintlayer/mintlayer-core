@@ -86,7 +86,8 @@ fn read_config_override_values() {
     let p2p_addr = "address";
     let p2p_ban_threshold = 3;
     let p2p_timeout = 10000;
-    let rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
+    let http_rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
+    let ws_rpc_addr = SocketAddr::from_str("127.0.0.1:5433").unwrap();
     let enable_mdns = false;
 
     let options = RunOptions {
@@ -98,7 +99,10 @@ fn read_config_override_values() {
         p2p_enable_mdns: Some(enable_mdns),
         p2p_mdns_query_interval: None,
         p2p_enable_ipv6_mdns_discovery: None,
-        rpc_addr: Some(rpc_addr),
+        http_rpc_addr: Some(http_rpc_addr),
+        http_rpc_enabled: Some(true),
+        ws_rpc_addr: Some(ws_rpc_addr),
+        ws_rpc_enabled: Some(false),
     };
     let config = NodeConfig::read(&config_path, &options).unwrap();
 
@@ -114,7 +118,11 @@ fn read_config_override_values() {
     assert_eq!(config.p2p.ban_threshold, p2p_ban_threshold);
     assert_eq!(config.p2p.outbound_connection_timeout, p2p_timeout);
 
-    assert_eq!(config.rpc.http_bind_address, rpc_addr);
+    assert_eq!(config.rpc.http_bind_address, http_rpc_addr);
+    assert!(config.rpc.http_enabled);
+
+    assert_eq!(config.rpc.ws_bind_address, ws_rpc_addr);
+    assert!(!config.rpc.ws_enabled);
 }
 
 // Check that the `--conf` option has the precedence over the default data directory value.
@@ -172,6 +180,9 @@ fn default_run_options() -> RunOptions {
         p2p_enable_mdns: None,
         p2p_mdns_query_interval: None,
         p2p_enable_ipv6_mdns_discovery: None,
-        rpc_addr: None,
+        http_rpc_addr: None,
+        http_rpc_enabled: None,
+        ws_rpc_addr: None,
+        ws_rpc_enabled: None,
     }
 }

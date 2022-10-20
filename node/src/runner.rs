@@ -104,16 +104,18 @@ pub async fn initialize(
     );
 
     // RPC subsystem
-    let _rpc = manager.add_subsystem(
-        "rpc",
-        rpc::Builder::new(node_config.rpc)
-            .register(chainstate.clone().into_rpc())
-            .register(mempool.into_rpc())
-            .register(NodeRpc::new(manager.make_shutdown_trigger()).into_rpc())
-            .register(p2p.clone().into_rpc())
-            .build()
-            .await?,
-    );
+    if node_config.rpc.http_enabled || node_config.rpc.ws_enabled {
+        let _rpc = manager.add_subsystem(
+            "rpc",
+            rpc::Builder::new(node_config.rpc)
+                .register(chainstate.clone().into_rpc())
+                .register(mempool.into_rpc())
+                .register(NodeRpc::new(manager.make_shutdown_trigger()).into_rpc())
+                .register(p2p.clone().into_rpc())
+                .build()
+                .await?,
+        );
+    }
 
     Ok(manager)
 }

@@ -92,9 +92,21 @@ pub struct RunOptions {
     #[clap(long)]
     pub p2p_outbound_connection_timeout: Option<u64>,
 
-    /// Address to bind RPC to.
+    /// Address to bind http RPC to.
     #[clap(long, value_name = "ADDR")]
-    pub rpc_addr: Option<SocketAddr>,
+    pub http_rpc_addr: Option<SocketAddr>,
+
+    /// Enable/Disable http RPC.
+    #[clap(long)]
+    pub http_rpc_enabled: Option<bool>,
+
+    /// Address to bind websocket RPC to.
+    #[clap(long, value_name = "ADDR")]
+    pub ws_rpc_addr: Option<SocketAddr>,
+
+    /// Enable/Disable websocket RPC.
+    #[clap(long)]
+    pub ws_rpc_enabled: Option<bool>,
 }
 
 impl Options {

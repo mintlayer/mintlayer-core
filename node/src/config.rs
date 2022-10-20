@@ -126,13 +126,20 @@ fn p2p_config(config: P2pConfig, options: &RunOptions) -> P2pConfig {
 fn rpc_config(config: RpcConfig, options: &RunOptions) -> RpcConfig {
     let RpcConfig {
         http_bind_address,
+        http_enabled,
         ws_bind_address,
+        ws_enabled,
     } = config;
 
-    let http_bind_address = options.rpc_addr.unwrap_or(http_bind_address);
+    let http_bind_address = options.http_rpc_addr.unwrap_or(http_bind_address);
+    let http_enabled = options.http_rpc_enabled.unwrap_or(http_enabled);
+    let ws_bind_address = options.ws_rpc_addr.unwrap_or(ws_bind_address);
+    let ws_enabled = options.ws_rpc_enabled.unwrap_or(ws_enabled);
 
     RpcConfig {
         http_bind_address,
+        http_enabled,
         ws_bind_address,
+        ws_enabled,
     }
 }

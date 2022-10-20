@@ -24,8 +24,14 @@ pub struct RpcConfig {
     /// Address to bind http RPC to.
     pub http_bind_address: SocketAddr,
 
+    /// Whether http RPC is enabled
+    pub http_enabled: bool,
+
     /// Address to bind websocket RPC to.
     pub ws_bind_address: SocketAddr,
+
+    /// Whether websocket RPC is enabled
+    pub ws_enabled: bool,
 }
 
 impl RpcConfig {
@@ -33,7 +39,9 @@ impl RpcConfig {
     pub fn new() -> Result<Self> {
         Ok(Self {
             http_bind_address: SocketAddr::from_str("127.0.0.1:3030")?,
+            http_enabled: true,
             ws_bind_address: SocketAddr::from_str("127.0.0.1:3031")?,
+            ws_enabled: true,
         })
     }
 }
