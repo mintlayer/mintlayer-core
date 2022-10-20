@@ -22,13 +22,13 @@ pub enum TxAccumulatorError {
     FeeAccumulationError(Amount, Amount),
 }
 
-pub trait TransactionAccumulator {
+pub trait TransactionAccumulator: Send {
     /// Add a transaction to the accumulator and its fee
     /// This method should not mutate self unless it's successful
     /// Meaning: If this call returns an error, the callee should guarantee that &self never changed
     fn add_tx(&mut self, tx: SignedTransaction, tx_fee: Amount) -> Result<(), TxAccumulatorError>;
     fn done(&self) -> bool;
-    fn txs(&self) -> Vec<SignedTransaction>;
+    fn txs(&self) -> &Vec<SignedTransaction>;
     fn total_fee(&self) -> Amount;
 }
 
@@ -70,8 +70,8 @@ impl TransactionAccumulator for DefaultTxAccumulator {
         self.done
     }
 
-    fn txs(&self) -> Vec<SignedTransaction> {
-        self.txs.clone()
+    fn txs(&self) -> &Vec<SignedTransaction> {
+        &self.txs
     }
 
     fn total_fee(&self) -> Amount {

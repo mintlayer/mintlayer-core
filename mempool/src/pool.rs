@@ -115,7 +115,7 @@ pub trait MempoolInterface: Send {
     fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator>,
-    ) -> Vec<SignedTransaction>;
+    ) -> Box<dyn TransactionAccumulator>;
 
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
 
@@ -806,7 +806,7 @@ where
     fn collect_txs(
         &self,
         mut tx_accumulator: Box<dyn TransactionAccumulator>,
-    ) -> Vec<SignedTransaction> {
+    ) -> Box<dyn TransactionAccumulator> {
         let mut tx_iter = self.store.txs_by_ancestor_score.values().flatten().rev();
         // TODO implement Iterator for MempoolStore so we don't need to use `expect` here
         while !tx_accumulator.done() {
@@ -829,7 +829,7 @@ where
                 break;
             }
         }
-        tx_accumulator.txs()
+        tx_accumulator
     }
 
     fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {

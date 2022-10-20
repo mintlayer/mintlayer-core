@@ -26,7 +26,10 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::{tx_accumulator::DefaultTxAccumulator, MempoolHandle};
+use mempool::{
+    tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
+    MempoolHandle,
+};
 use utils::tap_error_log::LogError;
 
 use crate::BlockProductionError;
@@ -77,15 +80,15 @@ impl BlockMaker {
 
     pub async fn collect_transactions(
         &self,
-    ) -> Result<Vec<SignedTransaction>, BlockProductionError> {
+    ) -> Result<Box<dyn TransactionAccumulator>, BlockProductionError> {
         let max_block_size = self.chain_config.max_block_size_from_txs();
-        let transactions = self
+        let returned_accumulator = self
             .mempool_handle
             .call(move |mempool| {
                 mempool.collect_txs(Box::new(DefaultTxAccumulator::new(max_block_size)))
             })
             .await?;
-        Ok(transactions)
+        Ok(returned_accumulator)
     }
 
     pub fn make_block(
@@ -142,7 +145,8 @@ impl BlockMaker {
     /// 1. A new block is successfully created and is submitted to chainstate
     /// 2. A new tip is now on chainstate, indicating that there's no point in continuing to mine/stake at that tip
     pub async fn run(&mut self) -> Result<(), BlockProductionError> {
-        let transactions = self.collect_transactions().await?;
+        let accumulator = self.collect_transactions().await?;
+        let transactions = accumulator.txs().clone();
 
         loop {
             let block = self.make_block(self.current_tip_id, transactions.clone())?;
