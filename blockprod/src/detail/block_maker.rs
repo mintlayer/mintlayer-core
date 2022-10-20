@@ -26,7 +26,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::{pool::DefaultTxAccumulator, MempoolHandle};
+use mempool::{tx_accumulator::DefaultTxAccumulator, MempoolHandle};
 use utils::tap_error_log::LogError;
 
 use crate::BlockProductionError;

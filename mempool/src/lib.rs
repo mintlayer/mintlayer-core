@@ -32,6 +32,7 @@ pub mod error;
 mod feerate;
 pub mod pool;
 pub mod rpc;
+pub mod tx_accumulator;
 
 #[derive(Debug, Clone)]
 pub enum MempoolEvent {

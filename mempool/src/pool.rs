@@ -45,6 +45,7 @@ use crate::error::TxValidationError;
 use crate::feerate::FeeRate;
 use crate::feerate::INCREMENTAL_RELAY_FEE_RATE;
 use crate::feerate::INCREMENTAL_RELAY_THRESHOLD;
+use crate::tx_accumulator::TransactionAccumulator;
 use crate::MempoolEvent;
 use store::MempoolRemovalReason;
 use store::MempoolStore;
@@ -101,49 +102,6 @@ where
 fn get_relay_fee(tx: &SignedTransaction) -> Amount {
     // TODO we should never reach the expect, but should this be an error anyway?
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
-}
-
-pub trait TransactionAccumulator {
-    fn add_tx(&mut self, tx: SignedTransaction);
-    fn done(&self) -> bool;
-    fn txs(&self) -> Vec<SignedTransaction>;
-}
-
-pub struct DefaultTxAccumulator {
-    txs: Vec<SignedTransaction>,
-    total_size: usize,
-    target_size: usize,
-    done: bool,
-}
-
-impl DefaultTxAccumulator {
-    pub fn new(target_size: usize) -> Self {
-        Self {
-            txs: Vec::new(),
-            total_size: 0,
-            target_size,
-            done: false,
-        }
-    }
-}
-
-impl TransactionAccumulator for DefaultTxAccumulator {
-    fn add_tx(&mut self, tx: SignedTransaction) {
-        if self.total_size + tx.encoded_size() <= self.target_size {
-            self.total_size += tx.encoded_size();
-            self.txs.push(tx);
-        } else {
-            self.done = true
-        };
-    }
-
-    fn done(&self) -> bool {
-        self.done
-    }
-
-    fn txs(&self) -> Vec<SignedTransaction> {
-        self.txs.clone()
-    }
 }
 
 #[async_trait::async_trait]
@@ -858,7 +816,15 @@ where
                     "collect_txs: next tx has ancestor score {:?}",
                     next_tx.ancestor_score()
                 );
-                tx_accumulator.add_tx(next_tx.tx().clone());
+
+                match tx_accumulator.add_tx(next_tx.tx().clone(), next_tx.fee()) {
+                    Ok(_) => (),
+                    Err(err) => log::error!(
+                        "CRITICAL: Failed to add transaction {} from mempool. Error: {}",
+                        next_tx.tx().transaction().get_id(),
+                        err
+                    ),
+                }
             } else {
                 break;
             }

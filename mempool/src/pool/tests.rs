@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use super::*;
+use crate::tx_accumulator::DefaultTxAccumulator;
 use chainstate::chainstate_interface;
 use chainstate::make_chainstate;
 use chainstate::BlockSource;
