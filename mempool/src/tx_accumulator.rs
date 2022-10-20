@@ -26,6 +26,7 @@ pub trait TransactionAccumulator: Send {
     /// Add a transaction to the accumulator and its fee
     /// This method should not mutate self unless it's successful
     /// Meaning: If this call returns an error, the callee should guarantee that &self never changed
+    // TODO: Add a test for this property, at least for DefaultTxAccumulator
     fn add_tx(&mut self, tx: SignedTransaction, tx_fee: Amount) -> Result<(), TxAccumulatorError>;
     fn done(&self) -> bool;
     fn transactions(&self) -> &Vec<SignedTransaction>;
