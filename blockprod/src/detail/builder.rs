@@ -38,9 +38,10 @@ pub struct PerpetualBlockBuilder {
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
     builder_rx: mpsc::UnboundedReceiver<BlockBuilderControlCommand>,
-    block_maker_tx: crossbeam_channel::Sender<BlockMakerControlCommand>,
+    block_makers_tx: crossbeam_channel::Sender<BlockMakerControlCommand>,
     block_maker_rx: crossbeam_channel::Receiver<BlockMakerControlCommand>,
     enabled: bool,
+    _block_makers_destroyer: BlockMakersDestroyer,
 }
 
 pub enum BlockBuilderControlCommand {
@@ -57,16 +58,17 @@ impl PerpetualBlockBuilder {
         builder_rx: mpsc::UnboundedReceiver<BlockBuilderControlCommand>,
         enabled: bool,
     ) -> Self {
-        let (block_maker_tx, block_maker_rx) = crossbeam_channel::unbounded();
+        let (block_makers_tx, block_maker_rx) = crossbeam_channel::unbounded();
         Self {
             chain_config,
             chainstate_handle,
             mempool_handle,
             time_getter,
             builder_rx,
-            block_maker_tx,
+            block_makers_tx: block_makers_tx.clone(),
             block_maker_rx,
             enabled,
+            _block_makers_destroyer: BlockMakersDestroyer(block_makers_tx),
         }
     }
 
@@ -75,7 +77,7 @@ impl PerpetualBlockBuilder {
         new_tip_id: Id<Block>,
         new_tip_height: BlockHeight,
     ) -> Result<(), BlockProductionError> {
-        self.block_maker_tx.send(BlockMakerControlCommand::StopBecauseNewTip(
+        self.block_makers_tx.send(BlockMakerControlCommand::StopBecauseNewTip(
             new_tip_id,
             new_tip_height,
         )).expect("The channel can never be disconnected since there's a receiver always alive in self");
@@ -83,7 +85,7 @@ impl PerpetualBlockBuilder {
     }
 
     pub fn stop_all_block_makers(&self) -> Result<(), BlockProductionError> {
-        self.block_maker_tx.send(BlockMakerControlCommand::JustStop).expect(
+        self.block_makers_tx.send(BlockMakerControlCommand::JustStop).expect(
             "The channel can never be disconnected since there's a receiver always alive in self",
         );
         Ok(())
@@ -202,5 +204,17 @@ impl PerpetualBlockBuilder {
             .expect("Block production subscription to mempool events failed");
 
         Ok(rx)
+    }
+}
+
+/// On destruction, this struct sends a message to all block makers to stop to aid a graceful exit
+struct BlockMakersDestroyer(crossbeam_channel::Sender<BlockMakerControlCommand>);
+
+impl Drop for BlockMakersDestroyer {
+    fn drop(&mut self) {
+        match self.0.send(BlockMakerControlCommand::JustStop) {
+            Ok(_) => (),
+            Err(err) => log::error!("Failed to stop all block makers: {}", err),
+        }
     }
 }
