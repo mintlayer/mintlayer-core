@@ -146,7 +146,7 @@ impl BlockMaker {
     /// 2. A new tip is now on chainstate, indicating that there's no point in continuing to mine/stake at that tip
     pub async fn run(&mut self) -> Result<(), BlockProductionError> {
         let accumulator = self.collect_transactions().await?;
-        let transactions = accumulator.txs().clone();
+        let transactions = accumulator.txs();
 
         loop {
             let block = self.make_block(self.current_tip_id, transactions.clone())?;
