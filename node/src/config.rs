@@ -126,11 +126,11 @@ fn p2p_config(config: P2pConfig, options: &RunOptions) -> P2pConfig {
 }
 
 fn rpc_config(config: RpcConfig, options: &RunOptions) -> RpcConfig {
-    let default_http_rpc_addr = SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
     const DEFAULT_HTTP_RPC_ENABLED: bool = true;
-    let default_ws_rpc_addr = SocketAddr::from_str("127.0.0.1:3031").expect("Can't fail");
-    // TODO: Disabled by default because it causes port bind issues in functional tests
+    // TODO: Disabled by default because it causes port bind issues in functional tests; to be fixed after #446 is resolved
     const DEFAULT_WS_RPC_ENABLED: bool = false;
+    let default_http_rpc_addr = SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
+    let default_ws_rpc_addr = SocketAddr::from_str("127.0.0.1:3031").expect("Can't fail");
 
     let RpcConfig {
         http_bind_address,
@@ -141,13 +141,16 @@ fn rpc_config(config: RpcConfig, options: &RunOptions) -> RpcConfig {
 
     let http_bind_address = options
         .http_rpc_addr
-        .unwrap_or(http_bind_address.unwrap_or(default_http_rpc_addr));
+        .unwrap_or_else(|| http_bind_address.unwrap_or(default_http_rpc_addr));
     let http_enabled = options
         .http_rpc_enabled
-        .unwrap_or(http_enabled.unwrap_or(DEFAULT_HTTP_RPC_ENABLED));
-    let ws_bind_address =
-        options.ws_rpc_addr.unwrap_or(ws_bind_address.unwrap_or(default_ws_rpc_addr));
-    let ws_enabled = options.ws_rpc_enabled.unwrap_or(ws_enabled.unwrap_or(DEFAULT_WS_RPC_ENABLED));
+        .unwrap_or_else(|| http_enabled.unwrap_or(DEFAULT_HTTP_RPC_ENABLED));
+    let ws_bind_address = options
+        .ws_rpc_addr
+        .unwrap_or_else(|| ws_bind_address.unwrap_or(default_ws_rpc_addr));
+    let ws_enabled = options
+        .ws_rpc_enabled
+        .unwrap_or_else(|| ws_enabled.unwrap_or(DEFAULT_WS_RPC_ENABLED));
 
     RpcConfig {
         http_bind_address: Some(http_bind_address),
