@@ -248,9 +248,9 @@ mod tests {
     #[tokio::test]
     async fn rpc_server_http_and_websocket() -> anyhow::Result<()> {
         let rpc_config = RpcConfig {
-            http_bind_address: Some("127.0.0.1:3030".parse().unwrap()),
+            http_bind_address: Some("127.0.0.1:3032".parse().unwrap()),
             http_enabled: Some(true),
-            ws_bind_address: Some("127.0.0.1:3031".parse().unwrap()),
+            ws_bind_address: Some("127.0.0.1:3033".parse().unwrap()),
             ws_enabled: Some(true),
         };
 
