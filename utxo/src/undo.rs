@@ -18,7 +18,7 @@ use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 use crate::Utxo;
 use common::{
     chain::{OutPointSourceId, Transaction},
-    primitives::Id,
+    primitives::{Id, H256},
 };
 use serialization::{Decode, Encode};
 use thiserror::Error;
@@ -83,20 +83,28 @@ impl TxUndoWithSources {
 pub struct BlockUndo {
     reward_undo: Option<BlockRewardUndo>,
     tx_undos: BTreeMap<Id<Transaction>, TxUndo>,
-    dependencies: BTreeSet<(Id<Transaction>, Id<Transaction>)>, // (child, parent)
+
+    // These collections track the dependencies of tx to one another.
+    // Only txs that aren't a dependency for others can be taken out.
+    // Collections are a mirrored representation of one another. 2 instances are maintained
+    // in order to gain log(N) runtime complexity.
+    child_parent_dependencies: BTreeSet<(Id<Transaction>, Id<Transaction>)>,
+    parent_child_dependencies: BTreeSet<(Id<Transaction>, Id<Transaction>)>,
 }
 
 impl BlockUndo {
     pub fn new(
         reward_undo: Option<BlockRewardUndo>,
-        tx_undos: BTreeMap<Id<Transaction>, TxUndo>,
-        dependencies: BTreeSet<(Id<Transaction>, Id<Transaction>)>,
-    ) -> Self {
-        Self {
-            tx_undos,
+        tx_undos: BTreeMap<Id<Transaction>, TxUndoWithSources>,
+    ) -> Result<Self, BlockUndoError> {
+        let mut block_undo = BlockUndo {
             reward_undo,
-            dependencies,
-        }
+            ..Default::default()
+        };
+        tx_undos
+            .into_iter()
+            .try_for_each(|(tx_id, tx_undo)| block_undo.insert_tx_undo(tx_id, tx_undo))?;
+        Ok(block_undo)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -125,27 +133,32 @@ impl BlockUndo {
                 OutPointSourceId::BlockReward(_) => None,
             })
             .for_each(|source_tx_id| {
-                self.dependencies.insert((tx_id, source_tx_id));
+                self.child_parent_dependencies.insert((tx_id, source_tx_id));
+                self.parent_child_dependencies.insert((source_tx_id, tx_id));
             });
 
         Ok(())
     }
 
     pub fn take_tx_undo(&mut self, tx_id: &Id<Transaction>) -> Option<TxUndo> {
+        let range_start = (*tx_id, Id::<Transaction>::from(H256::zero()));
+        let range_end = (*tx_id, Id::<Transaction>::from(H256::repeat_byte(0xFF)));
+
         // Check if the tx is a dependency for other txs.
         let dependencies_count =
-            self.dependencies.iter().filter(|(_child, parent)| parent == tx_id).count();
+            self.parent_child_dependencies.range(range_start..=range_end).count();
         if dependencies_count == 0 {
             // If not this tx can be taken and returned.
             // But first, remove itself as a dependency of others.
-            self.dependencies
-                .iter()
-                .filter_map(|v| if v.0 == *tx_id { Some(*v) } else { None })
-                .collect::<Vec<_>>()
-                .iter()
-                .for_each(|p| {
-                    self.dependencies.remove(p);
-                });
+            let to_remove = self
+                .child_parent_dependencies
+                .range(range_start..=range_end)
+                .copied()
+                .collect::<Vec<_>>();
+            to_remove.iter().for_each(|(id1, id2)| {
+                self.child_parent_dependencies.remove(&(*id1, *id2));
+                self.parent_child_dependencies.remove(&(*id2, *id1));
+            });
 
             self.tx_undos.remove(tx_id)
         } else {
@@ -190,8 +203,14 @@ impl BlockUndo {
             })?;
 
         // combine dependencies
-        other.dependencies.into_iter().try_for_each(|v| {
-            if !self.dependencies.insert(v) {
+        other.child_parent_dependencies.into_iter().try_for_each(|v| {
+            if !self.child_parent_dependencies.insert(v) {
+                return Err(BlockUndoError::UndoAlreadyExists(v.0));
+            }
+            Ok(())
+        })?;
+        other.parent_child_dependencies.into_iter().try_for_each(|v| {
+            if !self.parent_child_dependencies.insert(v) {
                 return Err(BlockUndoError::UndoAlreadyExists(v.0));
             }
             Ok(())
@@ -302,7 +321,8 @@ pub mod test {
         assert_eq!(blockundo.take_tx_undo(&tx_0_id).unwrap(), expected_tx_undo0);
 
         assert!(blockundo.tx_undos.is_empty());
-        assert!(blockundo.dependencies.is_empty());
+        assert!(blockundo.child_parent_dependencies.is_empty());
+        assert!(blockundo.parent_child_dependencies.is_empty());
     }
 
     #[rstest]
@@ -315,30 +335,48 @@ pub mod test {
         let (reward_utxo2, _) = create_utxo(&mut rng, 2);
 
         let (utxo1, _) = create_utxo(&mut rng, 3);
-        let utxo1_id: Id<Transaction> = Id::new(H256::random());
+        let tx_id_1: Id<Transaction> = Id::new(H256::random());
         let (utxo2, _) = create_utxo(&mut rng, 4);
-        let utxo2_id: Id<Transaction> = Id::new(H256::random());
+        let tx_id_2: Id<Transaction> = Id::new(H256::random());
 
-        let dep_id_1: Id<Transaction> = Id::new(H256::random());
-        let dep_id_2: Id<Transaction> = Id::new(H256::random());
+        let dep_tx_id_1 = Id::<Transaction>::new(H256::random());
+        let source_id_1 = OutPointSourceId::Transaction(dep_tx_id_1);
+        let dep_tx_id_2 = Id::<Transaction>::new(H256::random());
+        let source_id_2 = OutPointSourceId::Transaction(dep_tx_id_2);
 
         let mut block_undo_1 = BlockUndo::new(
             Some(BlockRewardUndo::new(vec![reward_utxo1.clone()])),
-            BTreeMap::from([(utxo1_id, TxUndo(vec![utxo1.clone()]))]),
-            BTreeSet::from([(dep_id_2, dep_id_1)]),
-        );
+            BTreeMap::from([(
+                tx_id_1,
+                TxUndoWithSources::new(vec![utxo1.clone()], vec![source_id_1]),
+            )]),
+        )
+        .unwrap();
 
         let block_undo_2 = BlockUndo::new(
             Some(BlockRewardUndo::new(vec![reward_utxo2.clone()])),
-            BTreeMap::from([(utxo2_id, TxUndo(vec![utxo2.clone()]))]),
-            BTreeSet::from([(dep_id_1, dep_id_2)]),
-        );
+            BTreeMap::from([(
+                tx_id_2,
+                TxUndoWithSources::new(vec![utxo2.clone()], vec![source_id_2]),
+            )]),
+        )
+        .unwrap();
 
-        let expected_block_undo = BlockUndo::new(
-            Some(BlockRewardUndo::new(vec![reward_utxo1, reward_utxo2])),
-            BTreeMap::from([(utxo2_id, TxUndo(vec![utxo2])), (utxo1_id, TxUndo(vec![utxo1]))]),
-            BTreeSet::from([(dep_id_2, dep_id_1), (dep_id_1, dep_id_2)]),
-        );
+        let expected_block_undo = BlockUndo {
+            reward_undo: Some(BlockRewardUndo::new(vec![reward_utxo1, reward_utxo2])),
+            tx_undos: BTreeMap::from([
+                (tx_id_1, TxUndo(vec![utxo1])),
+                (tx_id_2, TxUndo(vec![utxo2])),
+            ]),
+            parent_child_dependencies: BTreeSet::from([
+                (dep_tx_id_1, tx_id_1),
+                (dep_tx_id_2, tx_id_2),
+            ]),
+            child_parent_dependencies: BTreeSet::from([
+                (tx_id_1, dep_tx_id_1),
+                (tx_id_2, dep_tx_id_2),
+            ]),
+        };
 
         block_undo_1.combine(block_undo_2).unwrap();
         assert_eq!(block_undo_1, expected_block_undo);
