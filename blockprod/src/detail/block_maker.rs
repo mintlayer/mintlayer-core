@@ -38,7 +38,7 @@ pub enum BlockMakerControlCommand {
     JustStop,
 }
 
-/// Slave to the PerpetualBlockBuilder. Every new block tip gets one BlockMaker, and keeps running
+/// Slave to the [PerpetualBlockBuilder]. Every new block tip gets one BlockMaker, and keeps running
 /// until either it's successful in submitting a block, or there's a new tip in chainstate, deeming
 /// the effort pointless
 pub struct BlockMaker {
@@ -51,6 +51,7 @@ pub struct BlockMaker {
     block_maker_rx: crossbeam_channel::Receiver<BlockMakerControlCommand>,
 }
 
+#[must_use]
 enum BlockSubmitResult {
     Failed,
     Success,
@@ -146,6 +147,7 @@ impl BlockMaker {
     pub async fn run(&mut self) -> Result<(), BlockProductionError> {
         let accumulator = self.collect_transactions().await?;
 
+        // TODO: do we want to introduce a separate executor for this loop to avoid starving other tasks?
         loop {
             let block = self.make_block(self.current_tip_id, &*accumulator)?;
 
