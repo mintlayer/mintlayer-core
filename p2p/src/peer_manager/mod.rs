@@ -216,7 +216,7 @@ where
 
     /// Validate inbound peer connection
     ///
-    /// As inbound connections are received, they are prevalidated before passed
+    /// As inbound connections are received, they are pre-validated before passed
     /// on to the generic connection validator as these connections haven't gone
     /// through the same validation as outbound connections.
     ///
@@ -373,7 +373,7 @@ where
     ///
     /// Currently only subsystem/channel-related errors are considered fatal.
     /// Other errors are logged as warnings and `Ok(())` is returned as they should
-    /// not distrub the operation of `PeerManager`.
+    /// not disturb the operation of `PeerManager`.
     ///
     /// If an error has ban score greater than zero, the peer score is updated and connection
     /// to that peer is possibly closed if their scored crossed the ban threshold.

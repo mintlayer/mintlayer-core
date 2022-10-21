@@ -450,11 +450,20 @@ dependencies = [
 name = "blockprod"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chainstate",
  "common",
+ "crossbeam-channel",
+ "futures",
+ "jsonrpsee",
+ "logging",
  "mempool",
+ "rpc",
  "subsystem",
  "thiserror",
+ "tokio",
+ "utils",
+ "void",
 ]
 
 [[package]]

@@ -457,7 +457,7 @@ where
             Ok(_) => Ok(()),
             Err(P2pError::ChannelClosed) => Err(P2pError::ChannelClosed),
             Err(P2pError::ProtocolError(err)) => {
-                log::error!("Peer {peer_id} commited a protocol error: {err}");
+                log::error!("Peer {peer_id} committed a protocol error: {err}");
 
                 let (tx, rx) = oneshot::channel();
                 self.tx_swarm
@@ -623,11 +623,9 @@ where
             Arc::new(
                 move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
                     chainstate::ChainstateEvent::NewTip(block_id, _) => {
-                        futures::executor::block_on(async {
-                            if let Err(e) = tx.send(block_id) {
-                                log::error!("PubSubMessageHandler closed: {e:?}")
-                            }
-                        });
+                        if let Err(e) = tx.send(block_id) {
+                            log::error!("PubSubMessageHandler closed: {e:?}")
+                        }
                     }
                 },
             );

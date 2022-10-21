@@ -18,7 +18,8 @@
 use std::sync::Arc;
 
 use chainstate::chainstate_interface::ChainstateInterface;
-use common::chain::ChainConfig;
+use common::chain::{Block, ChainConfig};
+use common::primitives::{BlockHeight, Id};
 use common::time_getter::TimeGetter;
 use pool::MempoolInterface;
 
@@ -31,6 +32,12 @@ pub mod error;
 mod feerate;
 pub mod pool;
 pub mod rpc;
+pub mod tx_accumulator;
+
+#[derive(Debug, Clone)]
+pub enum MempoolEvent {
+    NewTip(Id<Block>, BlockHeight),
+}
 
 impl subsystem::Subsystem for Box<dyn MempoolInterface> {}
 

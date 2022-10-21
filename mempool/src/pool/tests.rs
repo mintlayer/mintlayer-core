@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use super::*;
+use crate::tx_accumulator::DefaultTxAccumulator;
 use chainstate::chainstate_interface;
 use chainstate::make_chainstate;
 use chainstate::BlockSource;
@@ -1341,7 +1342,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let num_inputs = 1;
 
-    // Use a higher than default fee because we don't want this transction to be evicted during
+    // Use a higher than default fee because we don't want this transaction to be evicted during
     // the trimming process
     log::debug!("parent_id: {}", parent_id.get());
     log::debug!("before adding parent");
@@ -1533,7 +1534,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         mempool.get_minimum_rolling_fee()
     );
 
-    // Add another dummmy until rolling feerate drops to zero
+    // Add another dummy until rolling feerate drops to zero
     mock_time.store(
         mock_time.load(Ordering::SeqCst) + halflife.as_secs(),
         Ordering::SeqCst,
@@ -2099,7 +2100,8 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let size_limit: usize = 1_000;
     let tx_accumulator = DefaultTxAccumulator::new(size_limit);
-    let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
+    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
+    let collected_txs = returned_accumulator.transactions();
     let expected_num_txs_collected: usize = 0;
     assert_eq!(collected_txs.len(), expected_num_txs_collected);
 
@@ -2134,7 +2136,8 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let size_limit = 1_000;
     let tx_accumulator = DefaultTxAccumulator::new(size_limit);
-    let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
+    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
+    let collected_txs = returned_accumulator.transactions();
     log::debug!("ancestor index: {:?}", mempool.store.txs_by_ancestor_score);
     let expected_num_txs_collected = 6;
     assert_eq!(collected_txs.len(), expected_num_txs_collected);
@@ -2142,11 +2145,13 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     assert!(total_tx_size <= size_limit);
 
     let tx_accumulator = DefaultTxAccumulator::new(0);
-    let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
+    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
+    let collected_txs = returned_accumulator.transactions();
     assert_eq!(collected_txs.len(), 0);
 
     let tx_accumulator = DefaultTxAccumulator::new(1);
-    let collected_txs = mempool.collect_txs(Box::new(tx_accumulator));
+    let returned_accumulator = mempool.collect_txs(Box::new(tx_accumulator));
+    let collected_txs = returned_accumulator.transactions();
     assert_eq!(collected_txs.len(), 0);
     Ok(())
 }

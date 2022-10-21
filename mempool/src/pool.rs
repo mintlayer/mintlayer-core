@@ -37,6 +37,7 @@ use common::primitives::Idable;
 use logging::log;
 
 use utils::ensure;
+use utils::eventhandler::EventsController;
 use utils::newtype;
 
 use crate::error::Error;
@@ -44,6 +45,8 @@ use crate::error::TxValidationError;
 use crate::feerate::FeeRate;
 use crate::feerate::INCREMENTAL_RELAY_FEE_RATE;
 use crate::feerate::INCREMENTAL_RELAY_THRESHOLD;
+use crate::tx_accumulator::TransactionAccumulator;
+use crate::MempoolEvent;
 use store::MempoolRemovalReason;
 use store::MempoolStore;
 use store::TxMempoolEntry;
@@ -101,49 +104,6 @@ fn get_relay_fee(tx: &SignedTransaction) -> Amount {
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
 }
 
-pub trait TransactionAccumulator {
-    fn add_tx(&mut self, tx: SignedTransaction);
-    fn done(&self) -> bool;
-    fn txs(&self) -> Vec<SignedTransaction>;
-}
-
-pub struct DefaultTxAccumulator {
-    txs: Vec<SignedTransaction>,
-    total_size: usize,
-    target_size: usize,
-    done: bool,
-}
-
-impl DefaultTxAccumulator {
-    pub fn new(target_size: usize) -> Self {
-        Self {
-            txs: Vec::new(),
-            total_size: 0,
-            target_size,
-            done: false,
-        }
-    }
-}
-
-impl TransactionAccumulator for DefaultTxAccumulator {
-    fn add_tx(&mut self, tx: SignedTransaction) {
-        if self.total_size + tx.encoded_size() <= self.target_size {
-            self.total_size += tx.encoded_size();
-            self.txs.push(tx);
-        } else {
-            self.done = true
-        };
-    }
-
-    fn done(&self) -> bool {
-        self.done
-    }
-
-    fn txs(&self) -> Vec<SignedTransaction> {
-        self.txs.clone()
-    }
-}
-
 #[async_trait::async_trait]
 pub trait MempoolInterface: Send {
     async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error>;
@@ -155,7 +115,9 @@ pub trait MempoolInterface: Send {
     fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator>,
-    ) -> Vec<SignedTransaction>;
+    ) -> Box<dyn TransactionAccumulator>;
+
+    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
 
     // Add/remove transactions to/from the mempool according to a new tip
     #[cfg(test)]
@@ -241,6 +203,7 @@ pub struct Mempool<M: GetMemoryUsage + 'static + Send + std::marker::Sync> {
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     clock: TimeGetter,
     memory_usage_estimator: M,
+    events_controller: EventsController<MempoolEvent>,
 }
 
 impl<M> std::fmt::Debug for Mempool<M>
@@ -272,6 +235,7 @@ where
             rolling_fee_rate: parking_lot::RwLock::new(RollingFeeRate::new(clock.get_time())),
             clock,
             memory_usage_estimator,
+            events_controller: Default::default(),
         }
     }
 
@@ -842,7 +806,7 @@ where
     fn collect_txs(
         &self,
         mut tx_accumulator: Box<dyn TransactionAccumulator>,
-    ) -> Vec<SignedTransaction> {
+    ) -> Box<dyn TransactionAccumulator> {
         let mut tx_iter = self.store.txs_by_ancestor_score.values().flatten().rev();
         // TODO implement Iterator for MempoolStore so we don't need to use `expect` here
         while !tx_accumulator.done() {
@@ -852,16 +816,28 @@ where
                     "collect_txs: next tx has ancestor score {:?}",
                     next_tx.ancestor_score()
                 );
-                tx_accumulator.add_tx(next_tx.tx().clone());
+
+                match tx_accumulator.add_tx(next_tx.tx().clone(), next_tx.fee()) {
+                    Ok(_) => (),
+                    Err(err) => log::error!(
+                        "CRITICAL: Failed to add transaction {} from mempool. Error: {}",
+                        next_tx.tx().transaction().get_id(),
+                        err
+                    ),
+                }
             } else {
                 break;
             }
         }
-        tx_accumulator.txs()
+        tx_accumulator
     }
 
     fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
         self.store.txs_by_id.contains_key(tx_id)
+    }
+
+    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
+        self.events_controller.subscribe_to_events(handler)
     }
 }
 

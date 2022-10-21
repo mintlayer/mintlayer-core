@@ -13,14 +13,60 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::interface::BlockProductionInterface;
+mod block_maker;
+pub mod builder;
 
-pub struct BlockProduction {}
+use std::sync::Arc;
+
+use chainstate::ChainstateHandle;
+use common::{chain::ChainConfig, time_getter::TimeGetter};
+use mempool::MempoolHandle;
+use tokio::sync::mpsc;
+
+use crate::{interface::BlockProductionInterface, BlockProductionError};
+
+use self::builder::BlockBuilderControlCommand;
+
+#[allow(dead_code)]
+pub struct BlockProduction {
+    chain_config: Arc<ChainConfig>,
+    chainstate_handle: ChainstateHandle,
+    mempool_handle: MempoolHandle,
+    time_getter: TimeGetter,
+    builder_tx: mpsc::UnboundedSender<BlockBuilderControlCommand>,
+}
 
 impl BlockProduction {
-    pub const fn new() -> Self {
-        Self {}
+    pub fn new(
+        chain_config: Arc<ChainConfig>,
+        chainstate_handle: ChainstateHandle,
+        mempool_handle: MempoolHandle,
+        time_getter: TimeGetter,
+        builder_tx: mpsc::UnboundedSender<BlockBuilderControlCommand>,
+    ) -> Result<Self, BlockProductionError> {
+        let block_production = Self {
+            chain_config,
+            chainstate_handle,
+            mempool_handle,
+            time_getter,
+            builder_tx,
+        };
+        Ok(block_production)
     }
 }
 
-impl BlockProductionInterface for BlockProduction {}
+impl BlockProductionInterface for BlockProduction {
+    fn stop(&self) -> Result<(), BlockProductionError> {
+        self.builder_tx
+            .send(BlockBuilderControlCommand::Stop)
+            .map_err(|_| BlockProductionError::BlockBuilderChannelClosed)?;
+        Ok(())
+    }
+
+    fn start(&self) -> Result<(), BlockProductionError> {
+        self.builder_tx
+            .send(BlockBuilderControlCommand::Start)
+            .map_err(|_| BlockProductionError::BlockBuilderChannelClosed)?;
+        Ok(())
+    }
+}

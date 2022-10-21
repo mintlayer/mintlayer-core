@@ -100,7 +100,8 @@ pub async fn initialize(
             chainstate.clone(),
             mempool.clone(),
             Default::default(),
-        )?,
+        )
+        .await?,
     );
 
     // RPC subsystem
