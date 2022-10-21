@@ -403,10 +403,15 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
             //       timelock txs be rejected if they spend outputs from the same block.
             if utxo.output().has_timelock() {
                 let height = match utxo.source() {
-                    utxo::UtxoSource::Blockchain(h) => h,
-                    utxo::UtxoSource::Mempool => {
-                        unreachable!("Mempool utxos can never be reached from storage")
-                    }
+                    utxo::UtxoSource::Blockchain(h) => *h,
+                    utxo::UtxoSource::Mempool => match tx_source {
+                        TransactionSource::Chain { new_block_index: _ } => {
+                            unreachable!("Mempool utxos can never be reached from storage while connecting local transactions")
+                        }
+                        TransactionSource::Mempool { current_best } => {
+                            current_best.block_height().next_height()
+                        }
+                    },
                 };
 
                 let block_index_getter =
@@ -424,11 +429,11 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                     self.storage_ref,
                     self.chain_config,
                     (&starting_point.clone().into_gen_block_index()).into(),
-                    *height,
+                    height,
                 )
                 .map_err(|e| {
                     ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(
-                        e, *height,
+                        e, height,
                     )
                 })?;
 
