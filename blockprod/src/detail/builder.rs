@@ -159,14 +159,12 @@ impl PerpetualBlockBuilder {
         let subscribe_func = Arc::new(move |chainstate_event: chainstate::ChainstateEvent| {
             match chainstate_event {
                 chainstate::ChainstateEvent::NewTip(block_id, block_height) => {
-                    futures::executor::block_on(async {
-                        if let Err(e) = tx.send((block_id, block_height)) {
-                            log::error!(
+                    if let Err(e) = tx.send((block_id, block_height)) {
+                        log::error!(
                                     "Block production failed to receive event from chainstate - channel closed: {:?}",
                                     e
                                 )
-                        }
-                    });
+                    }
                 }
             }
         });
@@ -187,14 +185,12 @@ impl PerpetualBlockBuilder {
 
         let subscribe_func = Arc::new(move |mempool_event: MempoolEvent| match mempool_event {
             MempoolEvent::NewTip(block_id, block_height) => {
-                futures::executor::block_on(async {
-                    if let Err(e) = tx.send((block_id, block_height)) {
-                        log::error!(
+                if let Err(e) = tx.send((block_id, block_height)) {
+                    log::error!(
                             "Block production failed to receive event from mempool - channel closed: {:?}",
                             e
                         )
-                    }
-                });
+                }
             }
         });
 
