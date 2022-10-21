@@ -16,6 +16,7 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
+use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 
 use logging::log;
 
@@ -44,20 +45,42 @@ impl RpcInfoServer for RpcInfo {
 
 /// The RPC subsystem builder. Used to populate the RPC server with method handlers.
 pub struct Builder {
-    address: SocketAddr,
+    http_bind_address: Option<SocketAddr>,
+    ws_bind_address: Option<SocketAddr>,
     methods: Methods,
 }
 
 impl Builder {
-    /// New builder with no methods
-    pub fn new_empty(address: SocketAddr) -> Self {
+    /// New builder with no methods. None Option disables http or websocket.
+    pub fn new_empty(
+        http_bind_address: Option<SocketAddr>,
+        ws_bind_address: Option<SocketAddr>,
+    ) -> Self {
         let methods = Methods::new();
-        Self { address, methods }
+        Self {
+            http_bind_address,
+            ws_bind_address,
+            methods,
+        }
     }
 
     /// New builder pre-populated with RPC info methods
     pub fn new(rpc_config: RpcConfig) -> Self {
-        Self::new_empty(rpc_config.bind_address).register(RpcInfo.into_rpc())
+        // TODO: this is a mess because of the configuration file mapping from files to options. See #446
+        let http_bind_address = if rpc_config.http_enabled.unwrap_or(true) {
+            rpc_config.http_bind_address
+        } else {
+            None
+        };
+
+        // TODO: this is a mess because of the configuration file mapping from files to options. See #446
+        let ws_bind_address = if rpc_config.ws_enabled.unwrap_or(true) {
+            rpc_config.ws_bind_address
+        } else {
+            None
+        };
+
+        Self::new_empty(http_bind_address, ws_bind_address).register(RpcInfo.into_rpc())
     }
 
     /// Add methods handlers to the RPC server
@@ -68,35 +91,75 @@ impl Builder {
 
     /// Build the RPC server and get the RPC object
     pub async fn build(self) -> anyhow::Result<Rpc> {
-        Rpc::new(&self.address, self.methods).await
+        Rpc::new(
+            self.http_bind_address.as_ref(),
+            self.ws_bind_address.as_ref(),
+            self.methods,
+        )
+        .await
     }
 }
 
 /// The RPC subsystem
 pub struct Rpc {
-    address: SocketAddr,
-    handle: HttpServerHandle,
+    http: Option<(SocketAddr, HttpServerHandle)>,
+    websocket: Option<(SocketAddr, WsServerHandle)>,
 }
 
 impl Rpc {
-    async fn new(addr: &SocketAddr, methods: Methods) -> anyhow::Result<Self> {
-        let server = HttpServerBuilder::default().build(addr).await?;
-        let address = server.local_addr()?;
-        let handle = server.start(methods)?;
-        Ok(Self { address, handle })
+    async fn new(
+        http_bind_addr: Option<&SocketAddr>,
+        ws_bind_addr: Option<&SocketAddr>,
+        methods: Methods,
+    ) -> anyhow::Result<Self> {
+        let http = match http_bind_addr {
+            Some(bind_addr) => {
+                let http_server = HttpServerBuilder::default().build(bind_addr).await?;
+                let http_address = http_server.local_addr()?;
+                let http_handle = http_server.start(methods.clone())?;
+                Some((http_address, http_handle))
+            }
+            None => None,
+        };
+
+        let websocket = match ws_bind_addr {
+            Some(bind_addr) => {
+                let ws_server = WsServerBuilder::default().build(bind_addr).await?;
+                let ws_address = ws_server.local_addr()?;
+                let ws_handle = ws_server.start(methods)?;
+                Some((ws_address, ws_handle))
+            }
+            None => None,
+        };
+
+        Ok(Self { http, websocket })
     }
 
-    pub fn address(&self) -> &SocketAddr {
-        &self.address
+    pub fn http_address(&self) -> Option<&SocketAddr> {
+        self.http.as_ref().map(|v| &v.0)
+    }
+
+    pub fn websocket_address(&self) -> Option<&SocketAddr> {
+        self.websocket.as_ref().map(|v| &v.0)
     }
 }
 
 #[async_trait::async_trait]
 impl subsystem::Subsystem for Rpc {
     async fn shutdown(self) {
-        match self.handle.stop() {
-            Ok(stop) => stop.await.unwrap_or_else(|e| log::error!("RPC join error: {}", e)),
-            Err(e) => log::error!("RPC stop handle acquisition failed: {}", e),
+        if let Some(obj) = self.http {
+            match obj.1.stop() {
+                Ok(stop) => {
+                    stop.await.unwrap_or_else(|e| log::error!("Http RPC join error: {}", e))
+                }
+                Err(e) => log::error!("Http RPC stop handle acquisition failed: {}", e),
+            }
+        }
+        if let Some(obj) = self.websocket {
+            match obj.1.stop() {
+                Ok(stop) => stop.await,
+                Err(e) => log::error!("Websocket RPC stop handle acquisition failed: {}", e),
+            }
         }
     }
 }
@@ -107,6 +170,7 @@ mod tests {
     use jsonrpsee::core::client::ClientT;
     use jsonrpsee::http_client::HttpClientBuilder;
     use jsonrpsee::rpc_params;
+    use jsonrpsee::ws_client::WsClientBuilder;
 
     #[rpc(server, namespace = "some_subsystem")]
     pub trait SubsystemRpc {
@@ -130,13 +194,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rpc_server() -> anyhow::Result<()> {
+    async fn rpc_server_http() -> anyhow::Result<()> {
         let rpc_config = RpcConfig {
-            bind_address: "127.0.0.1:3030".parse().unwrap(),
+            http_bind_address: Some("127.0.0.1:3030".parse().unwrap()),
+            http_enabled: Some(true),
+            ws_bind_address: Some("127.0.0.1:3031".parse().unwrap()),
+            ws_enabled: Some(false),
         };
         let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
 
-        let url = format!("http://{}", rpc.address());
+        let url = format!("http://{}", rpc.http_address().unwrap());
         let client = HttpClientBuilder::default().build(url)?;
         let response: Result<String> =
             client.request("example_server_protocol_version", rpc_params!()).await;
@@ -147,6 +214,79 @@ mod tests {
 
         let response: Result<u64> = client.request("some_subsystem_add", rpc_params!(2, 5)).await;
         assert_eq!(response.unwrap(), 7);
+
+        subsystem::Subsystem::shutdown(rpc).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn rpc_server_websocket() -> anyhow::Result<()> {
+        let rpc_config = RpcConfig {
+            http_bind_address: Some("127.0.0.1:3030".parse().unwrap()),
+            http_enabled: Some(false),
+            ws_bind_address: Some("127.0.0.1:3031".parse().unwrap()),
+            ws_enabled: Some(true),
+        };
+        let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
+
+        let url = format!("ws://{}", rpc.websocket_address().unwrap());
+        let client = WsClientBuilder::default().build(url).await?;
+        let response: Result<String> =
+            client.request("example_server_protocol_version", rpc_params!()).await;
+        assert_eq!(response.unwrap(), "version1");
+
+        let response: Result<String> = client.request("some_subsystem_name", rpc_params!()).await;
+        assert_eq!(response.unwrap(), "sub1");
+
+        let response: Result<u64> = client.request("some_subsystem_add", rpc_params!(2, 5)).await;
+        assert_eq!(response.unwrap(), 7);
+
+        subsystem::Subsystem::shutdown(rpc).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn rpc_server_http_and_websocket() -> anyhow::Result<()> {
+        let rpc_config = RpcConfig {
+            http_bind_address: Some("127.0.0.1:3032".parse().unwrap()),
+            http_enabled: Some(true),
+            ws_bind_address: Some("127.0.0.1:3033".parse().unwrap()),
+            ws_enabled: Some(true),
+        };
+
+        let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
+
+        {
+            let url = format!("http://{}", rpc.http_address().unwrap());
+            let client = HttpClientBuilder::default().build(url)?;
+            let response: Result<String> =
+                client.request("example_server_protocol_version", rpc_params!()).await;
+            assert_eq!(response.unwrap(), "version1");
+
+            let response: Result<String> =
+                client.request("some_subsystem_name", rpc_params!()).await;
+            assert_eq!(response.unwrap(), "sub1");
+
+            let response: Result<u64> =
+                client.request("some_subsystem_add", rpc_params!(2, 5)).await;
+            assert_eq!(response.unwrap(), 7);
+        }
+
+        {
+            let url = format!("ws://{}", rpc.websocket_address().unwrap());
+            let client = WsClientBuilder::default().build(url).await?;
+            let response: Result<String> =
+                client.request("example_server_protocol_version", rpc_params!()).await;
+            assert_eq!(response.unwrap(), "version1");
+
+            let response: Result<String> =
+                client.request("some_subsystem_name", rpc_params!()).await;
+            assert_eq!(response.unwrap(), "sub1");
+
+            let response: Result<u64> =
+                client.request("some_subsystem_add", rpc_params!(2, 5)).await;
+            assert_eq!(response.unwrap(), 7);
+        }
 
         subsystem::Subsystem::shutdown(rpc).await;
         Ok(())

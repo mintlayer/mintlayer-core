@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Node initialisation routine.
+//! Node initialization routine.
 
 use std::{fs, path::Path, str::FromStr, sync::Arc, time::Duration};
 
@@ -104,16 +104,19 @@ pub async fn initialize(
     );
 
     // RPC subsystem
-    let _rpc = manager.add_subsystem(
-        "rpc",
-        rpc::Builder::new(node_config.rpc)
-            .register(chainstate.clone().into_rpc())
-            .register(mempool.into_rpc())
-            .register(NodeRpc::new(manager.make_shutdown_trigger()).into_rpc())
-            .register(p2p.clone().into_rpc())
-            .build()
-            .await?,
-    );
+    if node_config.rpc.http_enabled.unwrap_or(true) || node_config.rpc.ws_enabled.unwrap_or(true) {
+        // TODO: get rid of the unwrap_or() after fixing the issue in #446
+        let _rpc = manager.add_subsystem(
+            "rpc",
+            rpc::Builder::new(node_config.rpc)
+                .register(chainstate.clone().into_rpc())
+                .register(mempool.into_rpc())
+                .register(NodeRpc::new(manager.make_shutdown_trigger()).into_rpc())
+                .register(p2p.clone().into_rpc())
+                .build()
+                .await?,
+        );
+    }
 
     Ok(manager)
 }
