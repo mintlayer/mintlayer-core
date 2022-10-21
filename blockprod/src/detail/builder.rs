@@ -152,7 +152,7 @@ impl PerpetualBlockBuilder {
 
     /// Subscribe to events from chainstate
     async fn subscribe_to_chainstate_events(
-        &mut self,
+        &self,
     ) -> Result<mpsc::UnboundedReceiver<(Id<Block>, BlockHeight)>, BlockProductionError> {
         let (tx, rx) = mpsc::unbounded_channel();
 
@@ -179,7 +179,7 @@ impl PerpetualBlockBuilder {
 
     /// Subscribe to events from the mempool
     async fn subscribe_to_mempool_events(
-        &mut self,
+        &self,
     ) -> Result<mpsc::UnboundedReceiver<(Id<Block>, BlockHeight)>, BlockProductionError> {
         let (tx, rx) = mpsc::unbounded_channel();
 
