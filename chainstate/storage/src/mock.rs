@@ -23,7 +23,7 @@ use common::{
     chain::{
         block::BlockReward,
         transaction::{OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition},
-        Block, GenBlock, OutPoint,
+        Block, GenBlock, Genesis, OutPoint,
     },
     primitives::{BlockHeight, Id},
 };
@@ -36,6 +36,7 @@ mockall::mock! {
     impl crate::BlockchainStorageRead for Store {
         fn get_storage_version(&self) -> crate::Result<u32>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
+        fn get_genesis_block_id(&self) -> crate::Result<Option<Id<Genesis>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
@@ -74,6 +75,7 @@ mockall::mock! {
     impl crate::BlockchainStorageWrite for Store {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
+        fn set_genesis_block_id(&mut self, id: &Id<Genesis>) -> crate::Result<()>;
         fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
@@ -126,6 +128,7 @@ mockall::mock! {
     impl crate::BlockchainStorageRead for StoreTxRo {
         fn get_storage_version(&self) -> crate::Result<u32>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
+        fn get_genesis_block_id(&self) -> crate::Result<Option<Id<Genesis>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
@@ -172,6 +175,7 @@ mockall::mock! {
     impl crate::BlockchainStorageRead for StoreTxRw {
         fn get_storage_version(&self) -> crate::Result<u32>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
+        fn get_genesis_block_id(&self) -> crate::Result<Option<Id<Genesis>>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
@@ -207,6 +211,7 @@ mockall::mock! {
     impl crate::BlockchainStorageWrite for StoreTxRw {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
+        fn set_genesis_block_id(&mut self, id: &Id<Genesis>) -> crate::Result<()>;
         fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;

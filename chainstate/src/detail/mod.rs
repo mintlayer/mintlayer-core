@@ -164,11 +164,24 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             time_getter,
         );
 
-        if best_block_id.is_none() {
+        if best_block_id.is_some() {
             chainstate
                 .process_genesis()
                 .map_err(crate::ChainstateError::ProcessBlockError)
                 .log_err()?;
+        } else {
+            // Chain has already been initialized in the storage, check genesis matches with
+            // the chain config.
+            let stored_genesis_id = chainstate
+                .chainstate_storage
+                .get_genesis_block_id()
+                .map_err(|e| crate::ChainstateError::FailedToReadProperty(e.into()))
+                .log_err()?;
+            if stored_genesis_id != Some(chainstate.chain_config().genesis_block().get_id()) {
+                return Err(crate::ChainstateError::FailedToInitializeChainstate(
+                    "Chain genesis check failed".into(),
+                ));
+            }
         }
         Ok(chainstate)
     }

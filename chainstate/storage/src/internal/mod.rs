@@ -21,7 +21,7 @@ use common::{
         block::BlockReward,
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
-        Block, GenBlock, OutPoint, OutPointSourceId,
+        Block, GenBlock, Genesis, OutPoint, OutPointSourceId,
     },
     primitives::{BlockHeight, Id, Idable},
 };
@@ -36,7 +36,7 @@ use crate::{
 };
 
 mod well_known {
-    use super::{Codec, GenBlock, Id};
+    use super::{Codec, GenBlock, Genesis, Id};
 
     /// Pre-defined database keys
     pub trait Entry {
@@ -58,6 +58,7 @@ mod well_known {
 
     declare_entry!(StoreVersion: u32);
     declare_entry!(BestBlockId: Id<GenBlock>);
+    declare_entry!(GenesisBlockId: Id<Genesis>);
     declare_entry!(UtxosBestBlockId: Id<GenBlock>);
 }
 
@@ -151,6 +152,7 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
     delegate_to_transaction! {
         fn get_storage_version(&self) -> crate::Result<u32>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
+        fn get_genesis_block_id(&self) -> crate::Result<Option<Id<Genesis>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
@@ -192,6 +194,7 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
+        fn set_genesis_block_id(&mut self, id: &Id<Genesis>) -> crate::Result<()>;
         fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
@@ -250,9 +253,12 @@ macro_rules! impl_read_ops {
                 self.read::<db::DBBlockIndex, _, _>(id)
             }
 
-            /// Get the hash of the best block
             fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>> {
                 self.read_value::<well_known::BestBlockId>()
+            }
+
+            fn get_genesis_block_id(&self) -> crate::Result<Option<Id<Genesis>>> {
+                self.read_value::<well_known::GenesisBlockId>()
             }
 
             fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>> {
@@ -390,6 +396,10 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()> {
         self.write_value::<well_known::BestBlockId>(id)
+    }
+
+    fn set_genesis_block_id(&mut self, id: &Id<Genesis>) -> crate::Result<()> {
+        self.write_value::<well_known::GenesisBlockId>(id)
     }
 
     fn add_block(&mut self, block: &Block) -> crate::Result<()> {

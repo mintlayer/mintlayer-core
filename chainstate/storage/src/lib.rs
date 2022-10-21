@@ -29,7 +29,7 @@ use chainstate_types::BlockIndex;
 use common::chain::block::BlockReward;
 use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
-use common::chain::{Block, GenBlock, OutPointSourceId};
+use common::chain::{Block, GenBlock, Genesis, OutPointSourceId};
 use common::primitives::{BlockHeight, Id};
 use utxo::{UtxosStorageRead, UtxosStorageWrite};
 
@@ -48,6 +48,9 @@ pub trait BlockchainStorageRead: UtxosStorageRead {
 
     /// Get the hash of the best block
     fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
+
+    /// Get ID of the genesis block of the chain this storage is associated with
+    fn get_genesis_block_id(&self) -> crate::Result<Option<Id<Genesis>>>;
 
     fn get_block_index(&self, block_id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
 
@@ -88,6 +91,9 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead + UtxosStorageWrite {
 
     /// Set the hash of the best block
     fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
+
+    /// Set the hash of the best block
+    fn set_genesis_block_id(&mut self, id: &Id<Genesis>) -> crate::Result<()>;
 
     // Set the block index
     fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
