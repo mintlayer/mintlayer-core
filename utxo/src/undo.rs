@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+use std::{
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    ops::RangeInclusive,
+};
 
 use crate::Utxo;
 use common::{
@@ -140,21 +143,35 @@ impl BlockUndo {
         Ok(())
     }
 
-    pub fn take_tx_undo(&mut self, tx_id: &Id<Transaction>) -> Option<TxUndo> {
+    fn tx_children_range(
+        tx_id: &Id<Transaction>,
+    ) -> RangeInclusive<(Id<Transaction>, Id<Transaction>)> {
         let range_start = (*tx_id, Id::<Transaction>::from(H256::zero()));
         let range_end = (*tx_id, Id::<Transaction>::from(H256::repeat_byte(0xFF)));
 
+        range_start..=range_end
+    }
+
+    fn has_children_of(&self, tx_id: &Id<Transaction>) -> bool {
         // Check if the tx is a dependency for other txs.
         let dependencies_count =
-            self.parent_child_dependencies.range(range_start..=range_end).count();
-        if dependencies_count == 0 {
+            self.parent_child_dependencies.range(Self::tx_children_range(tx_id)).count();
+        dependencies_count != 0
+    }
+
+    fn get_parents_of(&self, tx_id: &Id<Transaction>) -> Vec<(Id<Transaction>, Id<Transaction>)> {
+        self.child_parent_dependencies
+            .range(Self::tx_children_range(tx_id))
+            .copied()
+            .collect()
+    }
+
+    pub fn take_tx_undo(&mut self, tx_id: &Id<Transaction>) -> Option<TxUndo> {
+        if !self.has_children_of(tx_id) {
             // If not this tx can be taken and returned.
             // But first, remove itself as a dependency of others.
-            let to_remove = self
-                .child_parent_dependencies
-                .range(range_start..=range_end)
-                .copied()
-                .collect::<Vec<_>>();
+            let to_remove = self.get_parents_of(tx_id);
+
             to_remove.iter().for_each(|(id1, id2)| {
                 self.child_parent_dependencies.remove(&(*id1, *id2));
                 self.parent_child_dependencies.remove(&(*id2, *id1));
