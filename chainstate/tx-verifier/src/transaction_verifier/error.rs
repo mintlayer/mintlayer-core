@@ -24,6 +24,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use thiserror::Error;
+use utxo::BlockUndoError;
 
 use super::storage::TransactionVerifierStorageError;
 
@@ -42,7 +43,7 @@ pub enum ConnectTransactionError {
     #[error(
         "While disconnecting a block, undo transaction number `{0}` doesn't exist for block `{1}`"
     )]
-    MissingTxUndo(usize, Id<Block>),
+    MissingTxUndo(Id<Transaction>, Id<Block>),
     #[error("While disconnecting a block, block undo info doesn't exist for block `{0}`")]
     MissingBlockUndo(Id<Block>),
     #[error("While disconnecting a block, block reward undo info doesn't exist for block `{0}`")]
@@ -77,6 +78,8 @@ pub enum ConnectTransactionError {
     TxIndexError(#[from] TxIndexError),
     #[error("Error from TransactionVerifierStorage: {0}")]
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
+    #[error("BlockUndo error: {0}")]
+    BlockUndoError(#[from] BlockUndoError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

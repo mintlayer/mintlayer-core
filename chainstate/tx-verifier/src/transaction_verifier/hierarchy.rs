@@ -170,15 +170,17 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageMut
         id: Id<Block>,
         new_undo: &BlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.utxo_block_undo
-            .entry(id)
-            .and_modify(|cached_undo| {
-                cached_undo.undo.append(new_undo.clone());
-            })
-            .or_insert(BlockUndoEntry {
-                undo: new_undo.clone(),
-                is_fresh: true,
-            });
+        match self.utxo_block_undo.entry(id) {
+            std::collections::btree_map::Entry::Vacant(e) => {
+                e.insert(BlockUndoEntry {
+                    undo: new_undo.clone(),
+                    is_fresh: true,
+                });
+            }
+            std::collections::btree_map::Entry::Occupied(mut e) => {
+                e.get_mut().undo.combine(new_undo.clone())?;
+            }
+        };
         Ok(())
     }
 

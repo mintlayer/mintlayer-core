@@ -38,12 +38,13 @@ use chainstate_types::{block_index_ancestor_getter, BlockIndex, GenBlockIndex};
 use common::{
     amount_sum,
     chain::{
-        block::timestamp::BlockTimestamp,
+        block::{timestamp::BlockTimestamp, BlockRewardTransactable},
         signature::{verify_signature, Signable, Transactable},
+        signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
-    primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable, H256},
 };
 use utxo::{
     BlockRewardUndo, BlockUndo, ConsumedUtxoCache, TxUndo, Utxo, UtxosCache, UtxosDB, UtxosView,
@@ -81,6 +82,32 @@ pub enum CachedOperation<T> {
 pub enum BlockTransactableRef<'a> {
     Transaction(&'a WithId<Block>, usize),
     BlockReward(&'a WithId<Block>),
+}
+
+pub enum TransactionSource {
+    Chain { new_block_index: BlockIndex },
+    Mempool { current_best: BlockIndex },
+}
+
+impl TransactionSource {
+    /// The block height of the transaction to be connected
+    /// For the mempool, it's the height of the next-to-be block
+    /// For the chain, it's for the block being connected
+    pub fn expected_block_height(&self) -> BlockHeight {
+        match self {
+            TransactionSource::Chain { new_block_index } => new_block_index.block_height(),
+            TransactionSource::Mempool {
+                current_best: best_block_index,
+            } => best_block_index.block_height().next_height(),
+        }
+    }
+
+    pub fn chain_block_index(&self) -> Option<&BlockIndex> {
+        match self {
+            TransactionSource::Chain { new_block_index } => Some(new_block_index),
+            TransactionSource::Mempool { current_best: _ } => None,
+        }
+    }
 }
 
 /// The change that a block has caused to the blockchain state
@@ -207,7 +234,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
 
     fn check_transferred_amounts_and_get_fee(
         &self,
-        block_id: Id<Block>,
+        block_id: Option<Id<Block>>,
         tx: &Transaction,
     ) -> Result<Fee, ConnectTransactionError> {
         let inputs_total_map = self.calculate_total_inputs(tx.inputs())?;
@@ -225,7 +252,10 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         let issuance_count = get_tokens_issuance_count(tx.outputs());
         if issuance_count > 0 && total_fee < Fee(self.chain_config.token_min_issuance_fee()) {
             return Err(ConnectTransactionError::TokensError(
-                TokensError::InsufficientTokenFees(tx.get_id(), block_id),
+                TokensError::InsufficientTokenFees(
+                    tx.get_id(),
+                    block_id.unwrap_or_else(|| H256::zero().into()),
+                ),
             ));
         }
         Ok(total_fee)
@@ -351,9 +381,8 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
 
     fn check_timelocks<T: Transactable>(
         &self,
-        block_index: &BlockIndex,
+        tx_source: &TransactionSource,
         tx: &T,
-        spend_height: &BlockHeight,
         spending_time: &BlockTimestamp,
     ) -> Result<(), ConnectTransactionError> {
         let inputs = match tx.inputs() {
@@ -374,10 +403,15 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
             //       timelock txs be rejected if they spend outputs from the same block.
             if utxo.output().has_timelock() {
                 let height = match utxo.source() {
-                    utxo::UtxoSource::Blockchain(h) => h,
-                    utxo::UtxoSource::Mempool => {
-                        unreachable!("Mempool utxos can never be reached from storage")
-                    }
+                    utxo::UtxoSource::Blockchain(h) => *h,
+                    utxo::UtxoSource::Mempool => match tx_source {
+                        TransactionSource::Chain { new_block_index: _ } => {
+                            unreachable!("Mempool utxos can never be reached from storage while connecting local transactions")
+                        }
+                        TransactionSource::Mempool { current_best } => {
+                            current_best.block_height().next_height()
+                        }
+                    },
                 };
 
                 let block_index_getter =
@@ -385,20 +419,30 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                         db_tx.get_gen_block_index(id)
                     };
 
-                let block_index = block_index_ancestor_getter(
+                let starting_point = match tx_source {
+                    TransactionSource::Chain { new_block_index } => new_block_index,
+                    TransactionSource::Mempool { current_best } => current_best,
+                };
+
+                let source_block_index = block_index_ancestor_getter(
                     block_index_getter,
                     self.storage_ref,
                     self.chain_config,
-                    &block_index.clone().into(),
-                    *height,
+                    (&starting_point.clone().into_gen_block_index()).into(),
+                    height,
                 )
                 .map_err(|e| {
                     ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(
-                        e, *height,
+                        e, height,
                     )
                 })?;
 
-                self.check_timelock(&block_index, utxo.output(), spend_height, spending_time)?;
+                self.check_timelock(
+                    &source_block_index,
+                    utxo.output(),
+                    &tx_source.expected_block_height(),
+                    spending_time,
+                )?;
             }
         }
 
@@ -429,17 +473,13 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
     fn take_tx_undo(
         &mut self,
         block_id: &Id<Block>,
-        tx_num: usize,
+        tx_id: &Id<Transaction>,
     ) -> Result<TxUndo, ConnectTransactionError> {
         let block_undo = self.fetch_block_undo(block_id)?;
-        debug_assert_eq!(
-            block_undo.tx_undos().len(),
-            tx_num + 1,
-            "only the last tx undo can be taken"
-        );
+
         block_undo
-            .pop_tx_undo()
-            .ok_or(ConnectTransactionError::MissingTxUndo(tx_num, *block_id))
+            .take_tx_undo(tx_id)
+            .ok_or(ConnectTransactionError::MissingTxUndo(*tx_id, *block_id))
     }
 
     fn take_block_reward_undo(
@@ -460,16 +500,107 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
             .undo
     }
 
-    pub fn connect_transactable(
+    pub fn connect_transaction(
         &mut self,
-        block_index: &BlockIndex,
-        spend_ref: BlockTransactableRef,
-        spend_height: &BlockHeight,
+        tx_source: &TransactionSource,
+        tx: &SignedTransaction,
         median_time_past: &BlockTimestamp,
     ) -> Result<Option<Fee>, ConnectTransactionError> {
         let tx_index_fetcher =
             |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
 
+        let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
+
+        // pre-cache all inputs
+        self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
+
+        // pre-cache token ids to check ensure it's not in the db when issuing
+        self.token_issuance_cache.precache_token_issuance(
+            |id| self.storage_ref.get_token_aux_data(id),
+            tx.transaction(),
+        )?;
+
+        // check for attempted money printing
+        let fee = Some(self.check_transferred_amounts_and_get_fee(block_id, tx.transaction())?);
+
+        // Register tokens if tx has issuance data
+        self.token_issuance_cache.register(block_id, tx.transaction())?;
+
+        // check timelocks of the outputs and make sure there's no premature spending
+        self.check_timelocks(tx_source, tx, median_time_past)?;
+
+        // verify input signatures
+        self.verify_signatures(tx)?;
+
+        // spend utxos
+        let tx_undo = self
+            .utxo_cache
+            .connect_transaction(tx.transaction(), tx_source.expected_block_height())
+            .map_err(ConnectTransactionError::from)?;
+
+        let tx_id = tx.transaction().get_id();
+
+        // save spent utxos for undo
+        if let Some(id) = block_id {
+            self.get_or_create_block_undo(&id).insert_tx_undo(tx_id, tx_undo)?;
+        }
+
+        // mark tx index as spent
+        let spender = tx.transaction().get_id().into();
+        self.tx_index_cache.spend_tx_index_inputs(tx.inputs(), spender)?;
+
+        Ok(fee)
+    }
+
+    fn connect_block_reward(
+        &mut self,
+        block_index: &BlockIndex,
+        reward_transactable: BlockRewardTransactable,
+    ) -> Result<(), ConnectTransactionError> {
+        let tx_index_fetcher =
+            |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
+
+        // TODO: test spending block rewards from chains outside the mainchain
+        if let Some(inputs) = reward_transactable.inputs() {
+            // pre-cache all inputs
+            self.tx_index_cache.precache_inputs(inputs, tx_index_fetcher)?;
+
+            // verify input signatures
+            self.verify_signatures(&reward_transactable)?;
+        }
+
+        let block_id = *block_index.block_id();
+
+        // spend inputs of the block reward
+        // if block reward has no inputs then only outputs will be added to the utxo set
+        let reward_undo = self
+            .utxo_cache
+            .connect_block_transactable(
+                &reward_transactable,
+                &block_id.into(),
+                block_index.block_height(),
+            )
+            .map_err(ConnectTransactionError::from)?;
+
+        if let Some(reward_undo) = reward_undo {
+            // save spent utxos for undo
+            self.get_or_create_block_undo(&block_id).set_block_reward_undo(reward_undo);
+        }
+
+        if let Some(inputs) = reward_transactable.inputs() {
+            // mark tx index as spend
+            self.tx_index_cache.spend_tx_index_inputs(inputs, block_id.into())?;
+        }
+
+        Ok(())
+    }
+
+    pub fn connect_transactable(
+        &mut self,
+        block_index: &BlockIndex,
+        spend_ref: BlockTransactableRef,
+        median_time_past: &BlockTimestamp,
+    ) -> Result<Option<Fee>, ConnectTransactionError> {
         let fee = match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
                 let block_id = block.get_id();
@@ -477,80 +608,18 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                     ConnectTransactionError::TxNumWrongInBlockOnConnect(tx_num, block_id),
                 )?;
 
-                // pre-cache all inputs
-                self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
-
-                // pre-cache token ids to check ensure it's not in the db when issuing
-                self.token_issuance_cache.precache_token_issuance(
-                    |id| self.storage_ref.get_token_aux_data(id),
-                    tx.transaction(),
-                )?;
-
-                // check for attempted money printing
-                let fee = Some(
-                    self.check_transferred_amounts_and_get_fee(block.get_id(), tx.transaction())?,
-                );
-
-                // Register tokens if tx has issuance data
-                self.token_issuance_cache.register(block.get_id(), tx.transaction())?;
-
-                // check timelocks of the outputs and make sure there's no premature spending
-                self.check_timelocks(block_index, tx, spend_height, median_time_past)?;
-
-                // verify input signatures
-                self.verify_signatures(tx)?;
-
-                // spend utxos
-                let tx_undo = self
-                    .utxo_cache
-                    .connect_transaction(tx.transaction(), *spend_height)
-                    .map_err(ConnectTransactionError::from)?;
-
-                // save spent utxos for undo
-                self.get_or_create_block_undo(&block_id).push_tx_undo(tx_undo);
-
-                // mark tx index as spent
-                let spender = tx.transaction().get_id().into();
-                self.tx_index_cache.spend_tx_index_inputs(tx.inputs(), spender)?;
-
-                fee
+                self.connect_transaction(
+                    &TransactionSource::Chain {
+                        // TODO: get rid of this clone
+                        new_block_index: block_index.clone(),
+                    },
+                    tx,
+                    median_time_past,
+                )?
             }
             BlockTransactableRef::BlockReward(block) => {
-                let reward_transactable = block.block_reward_transactable();
-                // TODO: test spending block rewards from chains outside the mainchain
-                if let Some(inputs) = reward_transactable.inputs() {
-                    // pre-cache all inputs
-                    self.tx_index_cache.precache_inputs(inputs, tx_index_fetcher)?;
-
-                    // verify input signatures
-                    self.verify_signatures(&reward_transactable)?;
-                }
-
-                let fee = None;
-
-                // spend inputs of the block reward
-                // if block reward has no inputs then only outputs will be added to the utxo set
-                let reward_undo = self
-                    .utxo_cache
-                    .connect_block_transactable(
-                        &reward_transactable,
-                        &block.get_id().into(),
-                        *spend_height,
-                    )
-                    .map_err(ConnectTransactionError::from)?;
-
-                if let Some(reward_undo) = reward_undo {
-                    // save spent utxos for undo
-                    self.get_or_create_block_undo(&block.get_id())
-                        .set_block_reward_undo(reward_undo);
-                }
-
-                if let Some(inputs) = reward_transactable.inputs() {
-                    // mark tx index as spend
-                    self.tx_index_cache.spend_tx_index_inputs(inputs, block.get_id().into())?;
-                }
-
-                fee
+                self.connect_block_reward(block_index, block.block_reward_transactable())?;
+                None
             }
         };
         // add tx index to the cache
@@ -576,7 +645,9 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                     ConnectTransactionError::TxNumWrongInBlockOnDisconnect(tx_num, block_id),
                 )?;
 
-                let tx_undo = self.take_tx_undo(&block_id, tx_num)?;
+                let tx_id = tx.transaction().get_id();
+
+                let tx_undo = self.take_tx_undo(&block_id, &tx_id)?;
                 self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
 
                 // pre-cache all inputs

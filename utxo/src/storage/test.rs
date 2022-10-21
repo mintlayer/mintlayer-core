@@ -159,22 +159,29 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         let block_height = BlockHeight::new(1);
         // spend the block
         let block_undo = {
-            let undos = block
+            let mut block_undo: BlockUndo = Default::default();
+            block
                 .transactions()
                 .iter()
                 .map(|tx| {
-                    cache
-                        .connect_transaction(tx.transaction(), block_height)
-                        .expect("should spend okay.")
+                    (
+                        tx.transaction().get_id(),
+                        cache
+                            .connect_transaction(tx.transaction(), block_height)
+                            .expect("should spend okay."),
+                    )
                 })
-                .collect_vec();
-            BlockUndo::new(Default::default(), undos)
+                .collect::<BTreeMap<_, _>>()
+                .into_iter()
+                .try_for_each(|(id, undo)| block_undo.insert_tx_undo(id, undo))
+                .unwrap();
+            block_undo
         };
 
         // check that the block_undo contains the same utxos recorded as "spent",
         // using the `spent_utxos`
         {
-            block_undo.tx_undos().iter().enumerate().for_each(|(b_idx, tx_undo)| {
+            block_undo.tx_undos().iter().enumerate().for_each(|(b_idx, (_tx_id, tx_undo))| {
                 tx_undo.inner().iter().enumerate().for_each(|(t_idx, utxo)| {
                     assert_eq!(Some(utxo), spent_utxos.get(b_idx + t_idx));
                 })
@@ -232,9 +239,9 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         let mut cache = db.derive_cache();
 
         // get the block tx inputs, and add them to the view.
-        block.transactions().iter().enumerate().for_each(|(idx, tx)| {
+        block.transactions().iter().enumerate().for_each(|(_idx, tx)| {
             // use the undo to get the utxos
-            let undo = block_undo.tx_undos().get(idx).unwrap();
+            let undo = block_undo.tx_undos().get(&tx.transaction().get_id()).unwrap();
             let undos = undo.inner();
 
             // add the undo utxos back to the view.

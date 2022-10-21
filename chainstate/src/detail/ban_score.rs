@@ -90,6 +90,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _) => 100,
             ConnectTransactionError::BlockIndexCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::TransactionVerifierError(err) => err.ban_score(),
+            ConnectTransactionError::BlockUndoError(_) => 100,
         }
     }
 }
@@ -104,6 +105,7 @@ impl BanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::TokensError(err) => err.ban_score(),
             TransactionVerifierStorageError::UtxoError(err) => err.ban_score(),
             TransactionVerifierStorageError::TxIndexError(err) => err.ban_score(),
+            TransactionVerifierStorageError::BlockUndoError(_) => 100,
         }
     }
 }
@@ -140,6 +142,7 @@ impl BanScore for GetAncestorError {
                 ancestor_height: _,
             } => 100,
             GetAncestorError::PrevBlockIndexNotFound(_) => 0,
+            GetAncestorError::StartingPointNotFound(_) => 0,
         }
     }
 }

@@ -54,7 +54,7 @@ use crate::{
     utxo_entry::{IsDirty, IsFresh, UtxoEntry},
     ConsumedUtxoCache,
     Error::{self, *},
-    FlushableUtxoView, Utxo, UtxoSource, UtxosCache, UtxosView,
+    FlushableUtxoView, TxUndo, Utxo, UtxoSource, UtxosCache, UtxosView,
 };
 use common::{
     chain::{
@@ -540,7 +540,7 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
         .expect("should return tx undo");
 
     // check that these utxos came from the tx's output
-    tx_undo.inner().iter().for_each(|x| {
+    tx_undo.utxos().iter().for_each(|x| {
         assert!(tx.outputs().contains(x.output()));
     });
 
@@ -605,10 +605,12 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
     let tx = Transaction::new(0x00, vec![input], create_tx_outputs(&mut rng, 1), 0x01).unwrap();
     let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
-    assert!(undo1.inner().len() == 1);
+    assert!(undo1.utxos().len() == 1);
 
     //undo spending
-    cache.disconnect_transaction(&tx, undo1.clone()).unwrap();
+    cache
+        .disconnect_transaction(&tx, TxUndo::new(undo1.utxos().to_owned()))
+        .unwrap();
     assert!(cache.has_utxo_in_cache(&outpoint));
 
     //spend the transaction again

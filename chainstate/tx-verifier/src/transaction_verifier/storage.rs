@@ -22,7 +22,7 @@ use common::{
     primitives::Id,
 };
 use thiserror::Error;
-use utxo::{BlockUndo, FlushableUtxoView, UtxosStorageRead};
+use utxo::{BlockUndo, BlockUndoError, FlushableUtxoView, UtxosStorageRead};
 
 use super::error::{TokensError, TxIndexError};
 
@@ -42,6 +42,8 @@ pub enum TransactionVerifierStorageError {
     UtxoError(#[from] utxo::Error),
     #[error("Tx index error: {0}")]
     TxIndexError(#[from] TxIndexError),
+    #[error("BlockUndo error: {0}")]
+    BlockUndoError(#[from] BlockUndoError),
 }
 
 pub trait TransactionVerifierStorageRef: UtxosStorageRead {

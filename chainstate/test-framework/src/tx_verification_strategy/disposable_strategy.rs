@@ -68,7 +68,6 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
             .connect_transactable(
                 block_index,
                 BlockTransactableRef::BlockReward(block),
-                &block_index.block_height(),
                 &median_time_past,
             )
             .log_err()?;
@@ -84,7 +83,6 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                     .connect_transactable(
                         block_index,
                         BlockTransactableRef::Transaction(block, tx_num),
-                        &block_index.block_height(),
                         &median_time_past,
                     )
                     .map_err(BlockError::StateUpdateFailed)

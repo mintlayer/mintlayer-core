@@ -26,7 +26,7 @@ use common::{
     primitives::H256,
 };
 use mockall::predicate::eq;
-use utxo::UtxosStorageRead;
+use utxo::{TxUndoWithSources, UtxosStorageRead};
 
 // Create the following hierarchy:
 //
@@ -41,17 +41,38 @@ fn hierarchy_test_utxo() {
     let (outpoint0, utxo0) = create_utxo(100);
     let block_undo_id_0: Id<Block> = Id::new(H256::random());
     let (_, utxo0_undo) = create_utxo(100);
-    let block_undo_0 = BlockUndo::new(None, vec![TxUndo::new(vec![utxo0_undo])]);
+    let block_undo_0 = BlockUndo::new(
+        None,
+        BTreeMap::from([(
+            H256::random().into(),
+            TxUndoWithSources::new(vec![utxo0_undo], vec![]),
+        )]),
+    )
+    .unwrap();
 
     let (outpoint1, utxo1) = create_utxo(1000);
     let block_undo_id_1: Id<Block> = Id::new(H256::random());
     let (_, utxo1_undo) = create_utxo(100);
-    let block_undo_1 = BlockUndo::new(None, vec![TxUndo::new(vec![utxo1_undo])]);
+    let block_undo_1 = BlockUndo::new(
+        None,
+        BTreeMap::from([(
+            H256::random().into(),
+            TxUndoWithSources::new(vec![utxo1_undo], vec![]),
+        )]),
+    )
+    .unwrap();
 
     let (outpoint2, utxo2) = create_utxo(2000);
     let block_undo_id_2: Id<Block> = Id::new(H256::random());
-    let (_, utxo1_undo) = create_utxo(100);
-    let block_undo_2 = BlockUndo::new(None, vec![TxUndo::new(vec![utxo1_undo])]);
+    let (_, utxo2_undo) = create_utxo(100);
+    let block_undo_2 = BlockUndo::new(
+        None,
+        BTreeMap::from([(
+            H256::random().into(),
+            TxUndoWithSources::new(vec![utxo2_undo], vec![]),
+        )]),
+    )
+    .unwrap();
 
     let mut store = mock::MockStore::new();
     store
