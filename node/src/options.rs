@@ -62,7 +62,7 @@ pub enum Command {
 pub struct RunOptions {
     /// Storage backend to use
     #[clap(long)]
-    pub storage_backend: Option<chainstate::StorageBackend>,
+    pub storage_backend: Option<chainstate_launcher::StorageBackend>,
 
     /// The number of maximum attempts to process a block.
     #[clap(long)]
