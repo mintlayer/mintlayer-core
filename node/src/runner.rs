@@ -20,7 +20,7 @@ use std::{fs, path::Path, str::FromStr, sync::Arc, time::Duration};
 use anyhow::{anyhow, Context, Result};
 use paste::paste;
 
-use chainstate::{make_chainstate_and_storage, rpc::ChainstateRpcServer};
+use chainstate::rpc::ChainstateRpcServer;
 use common::{
     chain::config::{
         Builder as ChainConfigBuilder, ChainConfig, ChainType, EmissionScheduleTabular,
@@ -52,7 +52,7 @@ pub async fn initialize(
     manager.install_signal_handlers();
 
     // Chainstate subsystem
-    let chainstate = make_chainstate_and_storage(
+    let chainstate = chainstate_launcher::make_chainstate(
         &node_config.datadir,
         Arc::clone(&chain_config),
         node_config.chainstate,

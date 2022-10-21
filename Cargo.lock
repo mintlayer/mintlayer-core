@@ -605,9 +605,6 @@ dependencies = [
  "serde_json",
  "serialization",
  "static_assertions",
- "storage",
- "storage-inmemory",
- "storage-lmdb",
  "subsystem",
  "test-utils",
  "thiserror",
@@ -615,6 +612,19 @@ dependencies = [
  "tx-verifier",
  "utils",
  "utxo",
+]
+
+[[package]]
+name = "chainstate-launcher"
+version = "0.1.0"
+dependencies = [
+ "chainstate",
+ "chainstate-storage",
+ "common",
+ "serde",
+ "storage",
+ "storage-inmemory",
+ "storage-lmdb",
 ]
 
 [[package]]
@@ -2724,6 +2734,7 @@ dependencies = [
  "assert_cmd",
  "blockprod",
  "chainstate",
+ "chainstate-launcher",
  "clap 3.2.22",
  "common",
  "directories",

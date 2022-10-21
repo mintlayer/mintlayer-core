@@ -19,7 +19,7 @@ use assert_cmd::Command;
 use directories::UserDirs;
 use tempfile::TempDir;
 
-use chainstate::StorageBackend;
+use chainstate_launcher::StorageBackend;
 use node::{NodeConfig, RunOptions};
 
 const BIN_NAME: &str = env!("CARGO_BIN_EXE_node");

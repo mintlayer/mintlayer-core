@@ -25,7 +25,8 @@ use std::{
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use chainstate::{ChainstateAndStorageConfig, ChainstateConfig};
+use chainstate::ChainstateConfig;
+use chainstate_launcher::ChainstateLauncherConfig;
 use p2p::config::{MdnsConfig, P2pConfig};
 use rpc::RpcConfig;
 
@@ -40,7 +41,7 @@ pub struct NodeConfig {
     pub datadir: PathBuf,
 
     // Subsystems configurations.
-    pub chainstate: ChainstateAndStorageConfig,
+    pub chainstate: ChainstateLauncherConfig,
     pub p2p: P2pConfig,
     pub rpc: RpcConfig,
 }
@@ -48,7 +49,7 @@ pub struct NodeConfig {
 impl NodeConfig {
     /// Creates a new `Config` instance with the given data directory path.
     pub fn new(datadir: PathBuf) -> Result<Self> {
-        let chainstate = ChainstateAndStorageConfig::new();
+        let chainstate = ChainstateLauncherConfig::new();
         let p2p = P2pConfig::new();
         let rpc = RpcConfig::new()?;
         Ok(Self {
@@ -89,10 +90,10 @@ impl NodeConfig {
 }
 
 fn chainstate_config(
-    config: ChainstateAndStorageConfig,
+    config: ChainstateLauncherConfig,
     options: &RunOptions,
-) -> ChainstateAndStorageConfig {
-    let ChainstateAndStorageConfig {
+) -> ChainstateLauncherConfig {
+    let ChainstateLauncherConfig {
         storage_backend,
         chainstate_config,
     } = config;
@@ -112,7 +113,7 @@ fn chainstate_config(
         max_orphan_blocks,
         min_max_bootstrap_import_buffer_sizes,
     };
-    ChainstateAndStorageConfig {
+    ChainstateLauncherConfig {
         storage_backend,
         chainstate_config,
     }
