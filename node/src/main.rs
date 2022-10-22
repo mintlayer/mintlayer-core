@@ -17,7 +17,7 @@
 
 async fn run() -> anyhow::Result<()> {
     let opts = node::Options::from_args(std::env::args_os())?;
-    logging::init_logging(opts.log_path.as_ref());
+    logging::init_logging::<&std::path::Path>(None);
     logging::log::trace!("Command line options: {opts:?}");
     node::run(opts).await
 }

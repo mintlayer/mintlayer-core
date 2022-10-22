@@ -30,10 +30,6 @@ const CONFIG_NAME: &str = "config.toml";
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
 pub struct Options {
-    /// Where to write logs
-    #[clap(long, value_name = "PATH")]
-    pub log_path: Option<PathBuf>,
-
     /// The path to the data directory.
     #[clap(short, long = "datadir")]
     pub data_dir: Option<PathBuf>,

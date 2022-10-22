@@ -27,6 +27,6 @@ pub use config::NodeConfig;
 pub use options::{Command, Options, RunOptions};
 pub use runner::{initialize, run};
 
-pub fn init_logging(opts: &Options) {
-    logging::init_logging(opts.log_path.as_ref())
+pub fn init_logging(_opts: &Options) {
+    logging::init_logging::<&std::path::Path>(None)
 }
