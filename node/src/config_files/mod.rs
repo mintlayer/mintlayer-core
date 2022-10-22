@@ -27,13 +27,16 @@ use serde::{Deserialize, Serialize};
 
 use chainstate::ChainstateConfig;
 use chainstate_launcher::ChainstateLauncherConfigFile;
-use rpc::RpcConfigFile;
 
 use crate::RunOptions;
 
-use self::p2p::{MdnsConfigFile, P2pConfigFile};
+use self::{
+    p2p::{MdnsConfigFile, P2pConfigFile},
+    rpc::RpcConfigFile,
+};
 
 mod p2p;
+mod rpc;
 
 /// The node configuration.
 #[derive(Serialize, Deserialize, Debug)]

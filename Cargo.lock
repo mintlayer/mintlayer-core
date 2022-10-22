@@ -3634,7 +3634,6 @@ dependencies = [
  "async-trait",
  "jsonrpsee",
  "logging",
- "serde",
  "subsystem",
  "tokio",
 ]

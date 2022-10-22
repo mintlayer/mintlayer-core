@@ -16,10 +16,12 @@
 use std::{net::SocketAddr, str::FromStr};
 
 use anyhow::Result;
+use rpc::RpcConfig;
+use serde::{Deserialize, Serialize};
 
 /// The rpc subsystem configuration.
-#[derive(Debug)]
-pub struct RpcConfig {
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RpcConfigFile {
     /// Address to bind http RPC to.
     pub http_bind_address: Option<SocketAddr>,
 
@@ -33,7 +35,7 @@ pub struct RpcConfig {
     pub ws_enabled: Option<bool>,
 }
 
-impl RpcConfig {
+impl RpcConfigFile {
     /// Creates a new rpc configuration instance.
     pub fn new() -> Result<Self> {
         Ok(Self {
@@ -42,5 +44,14 @@ impl RpcConfig {
             ws_bind_address: Some(SocketAddr::from_str("127.0.0.1:3031")?),
             ws_enabled: Some(true),
         })
+    }
+
+    pub fn into_rpc_config(self) -> RpcConfig {
+        RpcConfig {
+            http_bind_address: self.http_bind_address,
+            http_enabled: self.http_enabled,
+            ws_bind_address: self.ws_bind_address,
+            ws_enabled: self.ws_enabled,
+        }
     }
 }

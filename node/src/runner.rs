@@ -100,7 +100,7 @@ pub async fn initialize(
         // TODO: get rid of the unwrap_or() after fixing the issue in #446
         let _rpc = manager.add_subsystem(
             "rpc",
-            rpc::Builder::new(node_config.rpc)
+            rpc::Builder::new(node_config.rpc.into_rpc_config())
                 .register(crate::rpc::init(manager.make_shutdown_trigger()))
                 .register(chainstate.clone().into_rpc())
                 .register(mempool.into_rpc())
