@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 
 /// The chainstate subsystem configuration.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ChainstateFileConfig {
+pub struct ChainstateConfigFile {
     /// The number of maximum attempts to process a block.
     pub max_db_commit_attempts: usize,
     /// The maximum capacity of the orphan blocks pool.
@@ -30,7 +30,7 @@ pub struct ChainstateFileConfig {
     pub min_max_bootstrap_import_buffer_sizes: Option<(usize, usize)>,
 }
 
-impl ChainstateFileConfig {
+impl ChainstateConfigFile {
     /// Creates a new chainstate configuration instance.
     pub fn new() -> Self {
         Self::default()
@@ -58,7 +58,7 @@ impl ChainstateFileConfig {
     }
 }
 
-impl Default for ChainstateFileConfig {
+impl Default for ChainstateConfigFile {
     fn default() -> Self {
         Self {
             max_db_commit_attempts: 10,

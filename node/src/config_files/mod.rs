@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use crate::RunOptions;
 
 use self::{
-    chainstate::ChainstateFileConfig,
+    chainstate::ChainstateConfigFile,
     chainstate_launcher::ChainstateLauncherConfigFile,
     p2p::{MdnsConfigFile, P2pConfigFile},
     rpc::RpcConfigFile,
@@ -39,7 +39,7 @@ mod chainstate_launcher;
 mod p2p;
 mod rpc;
 
-pub use self::chainstate_launcher::StorageBackendFileConfig;
+pub use self::chainstate_launcher::StorageBackendConfigFile;
 
 /// The node configuration.
 #[derive(Serialize, Deserialize, Debug)]
@@ -107,7 +107,7 @@ fn chainstate_config(
         chainstate_config,
     } = config;
 
-    let ChainstateFileConfig {
+    let ChainstateConfigFile {
         max_db_commit_attempts,
         max_orphan_blocks,
         min_max_bootstrap_import_buffer_sizes,
@@ -117,7 +117,7 @@ fn chainstate_config(
     let max_db_commit_attempts = options.max_db_commit_attempts.unwrap_or(max_db_commit_attempts);
     let max_orphan_blocks = options.max_orphan_blocks.unwrap_or(max_orphan_blocks);
 
-    let chainstate_config = ChainstateFileConfig {
+    let chainstate_config = ChainstateConfigFile {
         max_db_commit_attempts,
         max_orphan_blocks,
         min_max_bootstrap_import_buffer_sizes,

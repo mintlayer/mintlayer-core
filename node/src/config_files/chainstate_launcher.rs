@@ -18,27 +18,27 @@
 use chainstate_launcher::{ChainstateLauncherConfig, StorageBackendConfig};
 use serde::{Deserialize, Serialize};
 
-use super::chainstate::ChainstateFileConfig;
+use super::chainstate::ChainstateConfigFile;
 
 /// Storage type to use
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum StorageBackendFileConfig {
+pub enum StorageBackendConfigFile {
     #[serde(rename = "lmdb")]
     Lmdb,
     #[serde(rename = "inmemory", alias = "in-memory")]
     InMemory,
 }
 
-impl StorageBackendFileConfig {
+impl StorageBackendConfigFile {
     pub fn into_storage_backend_config(self) -> StorageBackendConfig {
         match self {
-            StorageBackendFileConfig::Lmdb => StorageBackendConfig::Lmdb,
-            StorageBackendFileConfig::InMemory => StorageBackendConfig::InMemory,
+            StorageBackendConfigFile::Lmdb => StorageBackendConfig::Lmdb,
+            StorageBackendConfigFile::InMemory => StorageBackendConfig::InMemory,
         }
     }
 }
 
-impl std::str::FromStr for StorageBackendFileConfig {
+impl std::str::FromStr for StorageBackendConfigFile {
     type Err = serde::de::value::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -47,7 +47,7 @@ impl std::str::FromStr for StorageBackendFileConfig {
     }
 }
 
-impl Default for StorageBackendFileConfig {
+impl Default for StorageBackendConfigFile {
     fn default() -> Self {
         Self::Lmdb
     }
@@ -58,11 +58,11 @@ impl Default for StorageBackendFileConfig {
 pub struct ChainstateLauncherConfigFile {
     /// Storage backend to use
     #[serde(default)]
-    pub storage_backend: StorageBackendFileConfig,
+    pub storage_backend: StorageBackendConfigFile,
 
     /// Chainstate configuration
     #[serde(flatten)]
-    pub chainstate_config: ChainstateFileConfig,
+    pub chainstate_config: ChainstateConfigFile,
 }
 
 impl ChainstateLauncherConfigFile {
@@ -84,10 +84,10 @@ mod test {
 
     #[test]
     fn backend_from_str() {
-        assert_eq!("lmdb".parse(), Ok(StorageBackendFileConfig::Lmdb));
-        assert_eq!("in-memory".parse(), Ok(StorageBackendFileConfig::InMemory));
-        assert_eq!("inmemory".parse(), Ok(StorageBackendFileConfig::InMemory));
-        assert!("meh".parse::<StorageBackendFileConfig>().is_err());
-        assert!("".parse::<StorageBackendFileConfig>().is_err());
+        assert_eq!("lmdb".parse(), Ok(StorageBackendConfigFile::Lmdb));
+        assert_eq!("in-memory".parse(), Ok(StorageBackendConfigFile::InMemory));
+        assert_eq!("inmemory".parse(), Ok(StorageBackendConfigFile::InMemory));
+        assert!("meh".parse::<StorageBackendConfigFile>().is_err());
+        assert!("".parse::<StorageBackendConfigFile>().is_err());
     }
 }
