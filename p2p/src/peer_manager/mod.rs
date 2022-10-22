@@ -40,6 +40,7 @@ use logging::log;
 use utils::ensure;
 
 use crate::{
+    config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event,
     net::{
@@ -47,7 +48,6 @@ use crate::{
         types::{Protocol, ProtocolType},
         ConnectivityService, NetworkingService,
     },
-    P2pConfigFile,
 };
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
@@ -64,7 +64,7 @@ where
     chain_config: Arc<ChainConfig>,
 
     /// P2P configuration.
-    _p2p_config: Arc<P2pConfigFile>,
+    _p2p_config: Arc<P2pConfig>,
 
     /// Handle for sending/receiving connectivity events
     peer_connectivity_handle: T::ConnectivityHandle,
@@ -91,7 +91,7 @@ where
 {
     pub fn new(
         chain_config: Arc<ChainConfig>,
-        p2p_config: Arc<P2pConfigFile>,
+        p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
         rx_swarm: mpsc::UnboundedReceiver<event::SwarmEvent<T>>,
         tx_sync: mpsc::UnboundedSender<event::SyncControlEvent<T>>,

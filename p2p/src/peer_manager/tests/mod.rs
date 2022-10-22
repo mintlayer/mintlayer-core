@@ -29,7 +29,7 @@ use crate::{
         ConnectivityService, NetworkingService,
     },
     peer_manager::PeerManager,
-    P2pConfigFile,
+    P2pConfig,
 };
 
 async fn make_peer_manager<T>(
@@ -52,7 +52,7 @@ where
         }
     });
 
-    let p2p_config = Arc::new(P2pConfigFile::new());
+    let p2p_config = Arc::new(P2pConfig::new());
     PeerManager::<T>::new(Arc::clone(&config), p2p_config, conn, rx, tx_sync)
 }
 

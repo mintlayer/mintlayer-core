@@ -111,7 +111,7 @@ pub type Libp2pNetworkBehaviourAction = NetworkBehaviourAction<
 impl Libp2pBehaviour {
     pub async fn new(
         config: Arc<ChainConfig>,
-        p2p_config: Arc<config::P2pConfigFile>,
+        p2p_config: Arc<config::P2pConfig>,
         id_keys: identity::Keypair,
     ) -> Self {
         let gossipsub_config = GossipsubConfigBuilder::default()

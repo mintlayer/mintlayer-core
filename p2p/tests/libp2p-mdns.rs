@@ -32,7 +32,7 @@ async fn test_libp2p_peer_discovery() {
     let (mut serv, _) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         Arc::clone(&config),
-        Arc::new(config::P2pConfigFile {
+        Arc::new(config::P2pConfig {
             mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
             ..Default::default()
         }),
@@ -43,7 +43,7 @@ async fn test_libp2p_peer_discovery() {
     let (mut serv2, _) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         Arc::clone(&config),
-        Arc::new(config::P2pConfigFile {
+        Arc::new(config::P2pConfig {
             mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
             ..Default::default()
         }),

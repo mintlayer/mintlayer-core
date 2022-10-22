@@ -76,7 +76,7 @@ impl NetworkingService for Libp2pService {
     async fn start(
         bind_addr: Self::Address,
         chain_config: Arc<common::chain::ChainConfig>,
-        p2p_config: Arc<config::P2pConfigFile>,
+        p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
         let (peer_id, id_keys, noise_keys) = make_libp2p_keys();
         let transport = TokioTcpTransport::new(GenTcpConfig::new().nodelay(true))
@@ -115,7 +115,7 @@ impl NetworkingService for Libp2pService {
         });
 
         // send listen command to the libp2p backend and if it succeeds,
-        // create a multiaddress for local peer and return the Libp2pService object
+        // create a multi-address for local peer and return the Libp2pService object
         let (tx, rx) = oneshot::channel();
         cmd_tx.send(types::Command::Listen {
             addr: bind_addr.clone(),

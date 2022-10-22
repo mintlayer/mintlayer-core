@@ -104,7 +104,7 @@ async fn test_connect_accept() {
     assert!(res1.is_ok());
 }
 
-// try to connect to a remote peer with a multiaddress that's missing the peerid
+// try to connect to a remote peer with a multi-address that's missing the peerid
 // and verify that the connection fails
 #[tokio::test]
 async fn test_connect_peer_id_missing() {
@@ -295,7 +295,7 @@ async fn test_connect_with_timeout() {
     let (mut service, _) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         config,
-        Arc::new(config::P2pConfigFile {
+        Arc::new(config::P2pConfig {
             outbound_connection_timeout: 2,
             ..Default::default()
         }),

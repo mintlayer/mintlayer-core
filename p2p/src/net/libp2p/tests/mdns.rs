@@ -29,7 +29,7 @@ use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 async fn test_discovered_and_expired() {
     let (mut backend1, _, _conn_rx, _) = make_libp2p(
         common::chain::config::create_mainnet(),
-        Arc::new(config::P2pConfigFile {
+        Arc::new(config::P2pConfig {
             mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
             ..Default::default()
         }),
@@ -40,7 +40,7 @@ async fn test_discovered_and_expired() {
 
     let (mut backend2, _, _, _) = make_libp2p(
         common::chain::config::create_mainnet(),
-        Arc::new(config::P2pConfigFile {
+        Arc::new(config::P2pConfig {
             mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
             ..Default::default()
         }),

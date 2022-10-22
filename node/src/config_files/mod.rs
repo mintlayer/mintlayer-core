@@ -27,10 +27,13 @@ use serde::{Deserialize, Serialize};
 
 use chainstate::ChainstateConfig;
 use chainstate_launcher::ChainstateLauncherConfigFile;
-use p2p::config::{MdnsConfig, P2pConfigFile};
 use rpc::RpcConfigFile;
 
 use crate::RunOptions;
+
+use self::p2p::{MdnsConfigFile, P2pConfigFile};
+
+mod p2p;
 
 /// The node configuration.
 #[derive(Serialize, Deserialize, Debug)]
@@ -136,7 +139,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         bind_address,
         ban_threshold,
         outbound_connection_timeout,
-        mdns_config: MdnsConfig::from_options(
+        mdns_config: MdnsConfigFile::from_options(
             options.p2p_enable_mdns.unwrap_or(false),
             options.p2p_mdns_query_interval,
             options.p2p_enable_ipv6_mdns_discovery,

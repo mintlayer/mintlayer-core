@@ -120,7 +120,7 @@ where
     async fn start(
         addr: Self::Address,
         _config: Arc<common::chain::ChainConfig>,
-        p2p_config: Arc<config::P2pConfigFile>,
+        p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
@@ -363,7 +363,7 @@ mod tests {
         T: MockTransport + Debug,
     {
         let config = Arc::new(common::chain::config::create_mainnet());
-        let p2p_config: Arc<config::P2pConfigFile> = Arc::new(Default::default());
+        let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
         let (mut conn1, _) = MockService::<T>::start(
             A::make_address(),
@@ -424,7 +424,7 @@ mod tests {
         T: MockTransport,
     {
         let config = Arc::new(common::chain::config::create_mainnet());
-        let p2p_config: Arc<config::P2pConfigFile> = Arc::new(Default::default());
+        let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
         let (mut conn1, _) = MockService::<T>::start(
             A::make_address(),
@@ -485,7 +485,7 @@ mod tests {
         T: MockTransport,
     {
         let config = Arc::new(common::chain::config::create_mainnet());
-        let p2p_config: Arc<config::P2pConfigFile> = Arc::new(Default::default());
+        let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
         let (mut conn1, _) = MockService::<T>::start(
             A::make_address(),

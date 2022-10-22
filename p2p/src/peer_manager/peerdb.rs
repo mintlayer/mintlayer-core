@@ -24,7 +24,7 @@
 //! whereas idle peers are the peers that are known to `PeerDb` but are not part of our swarm.
 //! Idle peers are discovered through various peer discovery mechanisms and they are used by
 //! [`crate::swarm::PeerManager::heartbeat()`] to establish new outbound connections if the actual
-//! number of active connectios is less than the desired number of connections.
+//! number of active connection is less than the desired number of connections.
 //!
 //! TODO: reserved peers
 
@@ -81,7 +81,7 @@ pub enum Peer<T: NetworkingService> {
 // (data of banned, discovered, and at-least-once used should be stored)
 pub struct PeerDb<T: NetworkingService> {
     /// P2P configuration
-    p2p_config: Arc<config::P2pConfigFile>,
+    p2p_config: Arc<config::P2pConfig>,
 
     /// Set of peers known to `PeerDb`
     peers: HashMap<T::PeerId, Peer<T>>,
@@ -97,7 +97,7 @@ pub struct PeerDb<T: NetworkingService> {
 }
 
 impl<T: NetworkingService> PeerDb<T> {
-    pub fn new(p2p_config: Arc<config::P2pConfigFile>) -> Self {
+    pub fn new(p2p_config: Arc<config::P2pConfig>) -> Self {
         Self {
             peers: Default::default(),
             available: Default::default(),
