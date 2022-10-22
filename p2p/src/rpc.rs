@@ -46,32 +46,32 @@ trait P2pRpc {
 #[async_trait::async_trait]
 impl P2pRpcServer for super::P2pHandle {
     async fn connect(&self, addr: String) -> rpc::Result<()> {
-        let res = self.call_mut(|this| this.connect(addr)).await;
+        let res = self.call_async_mut(|this| Box::pin(this.connect(addr))).await;
         handle_error(res)
     }
 
     async fn disconnect(&self, peer_id: String) -> rpc::Result<()> {
-        let res = self.call_mut(|this| this.disconnect(peer_id)).await;
+        let res = self.call_async_mut(|this| Box::pin(this.disconnect(peer_id))).await;
         handle_error(res)
     }
 
     async fn get_peer_count(&self) -> rpc::Result<usize> {
-        let res = self.call(|this| this.get_peer_count()).await;
+        let res = self.call_async(|this| Box::pin(this.get_peer_count())).await;
         handle_error(res)
     }
 
     async fn get_bind_address(&self) -> rpc::Result<String> {
-        let res = self.call(|this| this.get_bind_address()).await;
+        let res = self.call_async(|this| Box::pin(this.get_bind_address())).await;
         handle_error(res)
     }
 
     async fn get_peer_id(&self) -> rpc::Result<String> {
-        let res = self.call(|this| this.get_peer_id()).await;
+        let res = self.call_async(|this| Box::pin(this.get_peer_id())).await;
         handle_error(res)
     }
 
     async fn get_connected_peers(&self) -> rpc::Result<Vec<String>> {
-        let res = self.call(|this| this.get_connected_peers()).await;
+        let res = self.call_async(|this| Box::pin(this.get_connected_peers())).await;
         handle_error(res)
     }
 }

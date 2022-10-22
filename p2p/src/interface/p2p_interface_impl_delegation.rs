@@ -17,30 +17,31 @@ use std::ops::{Deref, DerefMut};
 
 use super::p2p_interface::P2pInterface;
 
-impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> + Send> P2pInterface
-    for T
+#[async_trait::async_trait]
+impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> + Send + Sync>
+    P2pInterface for T
 {
-    fn connect(&mut self, addr: String) -> crate::Result<()> {
-        self.deref_mut().connect(addr)
+    async fn connect(&mut self, addr: String) -> crate::Result<()> {
+        self.deref_mut().connect(addr).await
     }
 
-    fn disconnect(&self, peer_id: String) -> crate::Result<()> {
-        self.deref().disconnect(peer_id)
+    async fn disconnect(&self, peer_id: String) -> crate::Result<()> {
+        self.deref().disconnect(peer_id).await
     }
 
-    fn get_peer_count(&self) -> crate::Result<usize> {
-        self.deref().get_peer_count()
+    async fn get_peer_count(&self) -> crate::Result<usize> {
+        self.deref().get_peer_count().await
     }
 
-    fn get_bind_address(&self) -> crate::Result<String> {
-        self.deref().get_bind_address()
+    async fn get_bind_address(&self) -> crate::Result<String> {
+        self.deref().get_bind_address().await
     }
 
-    fn get_peer_id(&self) -> crate::Result<String> {
-        self.deref().get_peer_id()
+    async fn get_peer_id(&self) -> crate::Result<String> {
+        self.deref().get_peer_id().await
     }
 
-    fn get_connected_peers(&self) -> crate::Result<Vec<String>> {
-        self.deref().get_connected_peers()
+    async fn get_connected_peers(&self) -> crate::Result<Vec<String>> {
+        self.deref().get_connected_peers().await
     }
 }

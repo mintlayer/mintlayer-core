@@ -26,11 +26,12 @@ use crate::{
 
 use super::p2p_interface::P2pInterface;
 
+#[async_trait::async_trait]
 impl<T> P2pInterface for P2p<T>
 where
     T: NetworkingService,
 {
-    fn connect(&mut self, addr: String) -> crate::Result<()>
+    async fn connect(&mut self, addr: String) -> crate::Result<()>
     where
         <T as NetworkingService>::Address: FromStr,
         <T as NetworkingService>::PeerId: FromStr,
@@ -44,10 +45,10 @@ where
                 tx,
             ))
             .map_err(|_| P2pError::ChannelClosed)?;
-        rx.blocking_recv().map_err(P2pError::from)?
+        rx.await.map_err(P2pError::from)?
     }
 
-    fn disconnect(&self, peer_id: String) -> crate::Result<()>
+    async fn disconnect(&self, peer_id: String) -> crate::Result<()>
     where
         <T as NetworkingService>::PeerId: FromStr,
     {
@@ -59,36 +60,36 @@ where
         self.tx_swarm
             .send(event::SwarmEvent::Disconnect(peer_id, tx))
             .map_err(|_| P2pError::ChannelClosed)?;
-        rx.blocking_recv().map_err(P2pError::from)?
+        rx.await.map_err(P2pError::from)?
     }
 
-    fn get_peer_count(&self) -> crate::Result<usize> {
+    async fn get_peer_count(&self) -> crate::Result<usize> {
         let (tx, rx) = oneshot::channel();
         self.tx_swarm
             .send(event::SwarmEvent::GetPeerCount(tx))
             .map_err(P2pError::from)?;
-        rx.blocking_recv().map_err(P2pError::from)
+        rx.await.map_err(P2pError::from)
     }
 
-    fn get_bind_address(&self) -> crate::Result<String> {
+    async fn get_bind_address(&self) -> crate::Result<String> {
         let (tx, rx) = oneshot::channel();
         self.tx_swarm
             .send(event::SwarmEvent::GetBindAddress(tx))
             .map_err(P2pError::from)?;
-        rx.blocking_recv().map_err(P2pError::from)
+        rx.await.map_err(P2pError::from)
     }
 
-    fn get_peer_id(&self) -> crate::Result<String> {
+    async fn get_peer_id(&self) -> crate::Result<String> {
         let (tx, rx) = oneshot::channel();
         self.tx_swarm.send(event::SwarmEvent::GetPeerId(tx)).map_err(P2pError::from)?;
-        rx.blocking_recv().map_err(P2pError::from)
+        rx.await.map_err(P2pError::from)
     }
 
-    fn get_connected_peers(&self) -> crate::Result<Vec<String>> {
+    async fn get_connected_peers(&self) -> crate::Result<Vec<String>> {
         let (tx, rx) = oneshot::channel();
         self.tx_swarm
             .send(event::SwarmEvent::GetConnectedPeers(tx))
             .map_err(P2pError::from)?;
-        rx.blocking_recv().map_err(P2pError::from)
+        rx.await.map_err(P2pError::from)
     }
 }

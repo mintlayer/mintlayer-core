@@ -13,16 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub trait P2pInterface: Send {
-    fn connect(&mut self, addr: String) -> crate::Result<()>;
+#[async_trait::async_trait]
+pub trait P2pInterface: Send + Sync {
+    async fn connect(&mut self, addr: String) -> crate::Result<()>;
 
-    fn disconnect(&self, peer_id: String) -> crate::Result<()>;
+    async fn disconnect(&self, peer_id: String) -> crate::Result<()>;
 
-    fn get_peer_count(&self) -> crate::Result<usize>;
+    async fn get_peer_count(&self) -> crate::Result<usize>;
 
-    fn get_bind_address(&self) -> crate::Result<String>;
+    async fn get_bind_address(&self) -> crate::Result<String>;
 
-    fn get_peer_id(&self) -> crate::Result<String>;
+    async fn get_peer_id(&self) -> crate::Result<String>;
 
-    fn get_connected_peers(&self) -> crate::Result<Vec<String>>;
+    async fn get_connected_peers(&self) -> crate::Result<Vec<String>>;
 }
