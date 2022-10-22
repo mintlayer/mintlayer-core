@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{error::P2pError, net::NetworkingService};
-use std::{fmt::Debug, str::FromStr};
+use crate::error::P2pError;
 use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, namespace = "p2p")]
@@ -45,41 +44,34 @@ trait P2pRpc {
 }
 
 #[async_trait::async_trait]
-impl<T> P2pRpcServer for super::P2pHandle<T>
-where
-    T: NetworkingService + 'static,
-    <T as NetworkingService>::Address: FromStr,
-    <<T as NetworkingService>::Address as FromStr>::Err: Debug + Send,
-    <T as NetworkingService>::PeerId: FromStr,
-    <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
-{
+impl P2pRpcServer for super::P2pHandle {
     async fn connect(&self, addr: String) -> rpc::Result<()> {
-        let res = self.call_async_mut(|this| Box::pin(this.connect(addr))).await;
+        let res = self.call_mut(|this| this.connect(addr)).await;
         handle_error(res)
     }
 
     async fn disconnect(&self, peer_id: String) -> rpc::Result<()> {
-        let res = self.call_async_mut(|this| Box::pin(this.disconnect(peer_id))).await;
+        let res = self.call_mut(|this| this.disconnect(peer_id)).await;
         handle_error(res)
     }
 
     async fn get_peer_count(&self) -> rpc::Result<usize> {
-        let res = self.call_async(|this| Box::pin(this.get_peer_count())).await;
+        let res = self.call(|this| this.get_peer_count()).await;
         handle_error(res)
     }
 
     async fn get_bind_address(&self) -> rpc::Result<String> {
-        let res = self.call_async(|this| Box::pin(this.get_bind_address())).await;
+        let res = self.call(|this| this.get_bind_address()).await;
         handle_error(res)
     }
 
     async fn get_peer_id(&self) -> rpc::Result<String> {
-        let res = self.call_async(|this| Box::pin(this.get_peer_id())).await;
+        let res = self.call(|this| this.get_peer_id()).await;
         handle_error(res)
     }
 
     async fn get_connected_peers(&self) -> rpc::Result<Vec<String>> {
-        let res = self.call_async(|this| Box::pin(this.get_connected_peers())).await;
+        let res = self.call(|this| this.get_connected_peers()).await;
         handle_error(res)
     }
 }
