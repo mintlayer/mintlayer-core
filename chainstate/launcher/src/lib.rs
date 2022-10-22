@@ -25,7 +25,7 @@ pub use chainstate::{
     DefaultTransactionVerificationStrategy,
 };
 pub use common::chain::ChainConfig;
-pub use config::{ChainstateLauncherConfig, StorageBackend};
+pub use config::{ChainstateLauncherConfigFile, StorageBackend};
 
 /// Subdirectory under `datadir` where LMDB chainstate database is placed
 pub const SUBDIRECTORY_LMDB: &str = "chainstate-lmdb";
@@ -52,9 +52,9 @@ fn make_chainstate_and_storage_impl<B: 'static + storage::Backend>(
 pub fn make_chainstate(
     datadir: &std::path::Path,
     chain_config: Arc<ChainConfig>,
-    config: ChainstateLauncherConfig,
+    config: ChainstateLauncherConfigFile,
 ) -> Result<Box<dyn ChainstateInterface>, Error> {
-    let ChainstateLauncherConfig {
+    let ChainstateLauncherConfigFile {
         storage_backend,
         chainstate_config,
     } = config;

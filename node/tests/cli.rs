@@ -20,7 +20,7 @@ use directories::UserDirs;
 use tempfile::TempDir;
 
 use chainstate_launcher::StorageBackend;
-use node::{NodeConfig, RunOptions};
+use node::{NodeConfigFile, RunOptions};
 
 const BIN_NAME: &str = env!("CARGO_BIN_EXE_node");
 const CONFIG_NAME: &str = "config.toml";
@@ -51,7 +51,7 @@ fn create_default_config() {
     assert!(config_path.is_file());
 
     let options = default_run_options();
-    let config = NodeConfig::read(&config_path, &None, &options).unwrap();
+    let config = NodeConfigFile::read(&config_path, &None, &options).unwrap();
 
     assert_eq!(config.datadir, data_dir.path());
 
@@ -111,7 +111,7 @@ fn read_config_override_values() {
         storage_backend: backend_type.clone(),
     };
     let datadir_opt = Some(data_dir.path().into());
-    let config = NodeConfig::read(&config_path, &datadir_opt, &options).unwrap();
+    let config = NodeConfigFile::read(&config_path, &datadir_opt, &options).unwrap();
 
     assert_eq!(config.datadir, data_dir.path());
 
@@ -154,7 +154,7 @@ fn custom_config_path() {
     assert!(config_path.is_file());
 
     let options = default_run_options();
-    let config = NodeConfig::read(&config_path, &None, &options).unwrap();
+    let config = NodeConfigFile::read(&config_path, &None, &options).unwrap();
 
     assert_eq!(config.datadir, data_dir);
 }
@@ -177,7 +177,7 @@ fn custom_config_path_and_data_dir() {
     assert!(config_path.is_file());
 
     let options = default_run_options();
-    let config = NodeConfig::read(&config_path, &None, &options).unwrap();
+    let config = NodeConfigFile::read(&config_path, &None, &options).unwrap();
 
     assert_eq!(config.datadir, data_dir.path());
 }

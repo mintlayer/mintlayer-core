@@ -45,7 +45,7 @@ impl Default for StorageBackend {
 
 /// Storage configuration
 #[derive(Serialize, Deserialize, Debug, Default)]
-pub struct ChainstateLauncherConfig {
+pub struct ChainstateLauncherConfigFile {
     /// Storage backend to use
     #[serde(default)]
     pub storage_backend: StorageBackend,
@@ -55,7 +55,7 @@ pub struct ChainstateLauncherConfig {
     pub chainstate_config: ChainstateConfig,
 }
 
-impl ChainstateLauncherConfig {
+impl ChainstateLauncherConfigFile {
     pub fn new() -> Self {
         Self::default()
     }

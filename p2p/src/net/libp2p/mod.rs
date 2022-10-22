@@ -76,7 +76,7 @@ impl NetworkingService for Libp2pService {
     async fn start(
         bind_addr: Self::Address,
         chain_config: Arc<common::chain::ChainConfig>,
-        p2p_config: Arc<config::P2pConfig>,
+        p2p_config: Arc<config::P2pConfigFile>,
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
         let (peer_id, id_keys, noise_keys) = make_libp2p_keys();
         let transport = TokioTcpTransport::new(GenTcpConfig::new().nodelay(true))

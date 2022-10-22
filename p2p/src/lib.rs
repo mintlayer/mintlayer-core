@@ -36,7 +36,7 @@ use logging::log;
 use mempool::pool::MempoolInterface;
 
 use crate::{
-    config::P2pConfig,
+    config::P2pConfigFile,
     error::{ConversionError, P2pError},
     net::{ConnectivityService, NetworkingService, SyncingMessagingService},
 };
@@ -64,7 +64,7 @@ where
     /// This function starts the networking backend and individual manager objects.
     pub async fn new(
         chain_config: Arc<ChainConfig>,
-        p2p_config: Arc<P2pConfig>,
+        p2p_config: Arc<P2pConfigFile>,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         _mempool_handle: subsystem::Handle<Box<dyn MempoolInterface>>,
     ) -> crate::Result<Self>
@@ -140,7 +140,7 @@ pub type P2pHandle = subsystem::Handle<Box<dyn P2pInterface>>;
 
 pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
-    p2p_config: Arc<P2pConfig>,
+    p2p_config: Arc<P2pConfigFile>,
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     mempool_handle: subsystem::Handle<Box<dyn MempoolInterface>>,
 ) -> crate::Result<Box<dyn P2pInterface>>

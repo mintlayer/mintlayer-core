@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 
 /// The rpc subsystem configuration.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct RpcConfig {
+pub struct RpcConfigFile {
     /// Address to bind http RPC to.
     pub http_bind_address: Option<SocketAddr>,
 
@@ -34,7 +34,7 @@ pub struct RpcConfig {
     pub ws_enabled: Option<bool>,
 }
 
-impl RpcConfig {
+impl RpcConfigFile {
     /// Creates a new rpc configuration instance.
     pub fn new() -> Result<Self> {
         Ok(Self {

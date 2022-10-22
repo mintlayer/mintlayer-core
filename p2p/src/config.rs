@@ -65,7 +65,7 @@ impl MdnsConfig {
 
 /// The p2p subsystem configuration.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct P2pConfig {
+pub struct P2pConfigFile {
     /// Address to bind P2P to.
     pub bind_address: String,
     /// The score threshold after which a peer is banned.
@@ -76,14 +76,14 @@ pub struct P2pConfig {
     pub mdns_config: MdnsConfig,
 }
 
-impl P2pConfig {
+impl P2pConfigFile {
     /// Creates a new p2p configuration instance.
     pub fn new() -> Self {
         Default::default()
     }
 }
 
-impl Default for P2pConfig {
+impl Default for P2pConfigFile {
     fn default() -> Self {
         Self {
             bind_address: "/ip6/::1/tcp/3031".into(),

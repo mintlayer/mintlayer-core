@@ -295,7 +295,7 @@ async fn test_connect_with_timeout() {
     let (mut service, _) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         config,
-        Arc::new(config::P2pConfig {
+        Arc::new(config::P2pConfigFile {
             outbound_connection_timeout: 2,
             ..Default::default()
         }),

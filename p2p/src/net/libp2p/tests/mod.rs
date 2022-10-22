@@ -67,7 +67,7 @@ mod swarm;
 #[allow(dead_code)]
 pub async fn make_libp2p(
     config: common::chain::ChainConfig,
-    p2p_config: Arc<config::P2pConfig>,
+    p2p_config: Arc<config::P2pConfigFile>,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
 ) -> (
@@ -164,7 +164,7 @@ pub async fn make_libp2p(
 #[allow(dead_code)]
 pub async fn make_libp2p_with_ping(
     config: common::chain::ChainConfig,
-    p2p_config: Arc<config::P2pConfig>,
+    p2p_config: Arc<config::P2pConfigFile>,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
     ping: libp2p_ping::Behaviour,

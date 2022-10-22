@@ -81,7 +81,7 @@ pub enum Peer<T: NetworkingService> {
 // (data of banned, discovered, and at-least-once used should be stored)
 pub struct PeerDb<T: NetworkingService> {
     /// P2P configuration
-    p2p_config: Arc<config::P2pConfig>,
+    p2p_config: Arc<config::P2pConfigFile>,
 
     /// Set of peers known to `PeerDb`
     peers: HashMap<T::PeerId, Peer<T>>,
@@ -97,7 +97,7 @@ pub struct PeerDb<T: NetworkingService> {
 }
 
 impl<T: NetworkingService> PeerDb<T> {
-    pub fn new(p2p_config: Arc<config::P2pConfig>) -> Self {
+    pub fn new(p2p_config: Arc<config::P2pConfigFile>) -> Self {
         Self {
             peers: Default::default(),
             available: Default::default(),

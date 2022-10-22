@@ -20,7 +20,7 @@ use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 
 use logging::log;
 
-pub use config::RpcConfig;
+pub use config::RpcConfigFile;
 pub use jsonrpsee::core::server::rpc_module::Methods;
 pub use jsonrpsee::core::Error;
 pub use jsonrpsee::proc_macros::rpc;
@@ -65,7 +65,7 @@ impl Builder {
     }
 
     /// New builder pre-populated with RPC info methods
-    pub fn new(rpc_config: RpcConfig) -> Self {
+    pub fn new(rpc_config: RpcConfigFile) -> Self {
         // TODO: this is a mess because of the configuration file mapping from files to options. See #446
         let http_bind_address = if rpc_config.http_enabled.unwrap_or(true) {
             rpc_config.http_bind_address
@@ -195,7 +195,7 @@ mod tests {
 
     #[tokio::test]
     async fn rpc_server_http() -> anyhow::Result<()> {
-        let rpc_config = RpcConfig {
+        let rpc_config = RpcConfigFile {
             http_bind_address: Some("127.0.0.1:3030".parse().unwrap()),
             http_enabled: Some(true),
             ws_bind_address: Some("127.0.0.1:3031".parse().unwrap()),
@@ -221,7 +221,7 @@ mod tests {
 
     #[tokio::test]
     async fn rpc_server_websocket() -> anyhow::Result<()> {
-        let rpc_config = RpcConfig {
+        let rpc_config = RpcConfigFile {
             http_bind_address: Some("127.0.0.1:3030".parse().unwrap()),
             http_enabled: Some(false),
             ws_bind_address: Some("127.0.0.1:3031".parse().unwrap()),
@@ -247,7 +247,7 @@ mod tests {
 
     #[tokio::test]
     async fn rpc_server_http_and_websocket() -> anyhow::Result<()> {
-        let rpc_config = RpcConfig {
+        let rpc_config = RpcConfigFile {
             http_bind_address: Some("127.0.0.1:3032".parse().unwrap()),
             http_enabled: Some(true),
             ws_bind_address: Some("127.0.0.1:3033".parse().unwrap()),

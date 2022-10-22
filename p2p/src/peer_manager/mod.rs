@@ -47,7 +47,7 @@ use crate::{
         types::{Protocol, ProtocolType},
         ConnectivityService, NetworkingService,
     },
-    P2pConfig,
+    P2pConfigFile,
 };
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
@@ -64,7 +64,7 @@ where
     chain_config: Arc<ChainConfig>,
 
     /// P2P configuration.
-    _p2p_config: Arc<P2pConfig>,
+    _p2p_config: Arc<P2pConfigFile>,
 
     /// Handle for sending/receiving connectivity events
     peer_connectivity_handle: T::ConnectivityHandle,
@@ -91,7 +91,7 @@ where
 {
     pub fn new(
         chain_config: Arc<ChainConfig>,
-        p2p_config: Arc<P2pConfig>,
+        p2p_config: Arc<P2pConfigFile>,
         handle: T::ConnectivityHandle,
         rx_swarm: mpsc::UnboundedReceiver<event::SwarmEvent<T>>,
         tx_sync: mpsc::UnboundedSender<event::SyncControlEvent<T>>,

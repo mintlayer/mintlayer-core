@@ -15,7 +15,7 @@
 
 //! Top-level node runner as a library
 
-mod config;
+mod config_files;
 mod options;
 mod regtest_options;
 mod rpc;
@@ -23,7 +23,7 @@ mod runner;
 
 pub type Error = anyhow::Error;
 
-pub use config::NodeConfig;
+pub use config_files::NodeConfigFile;
 pub use options::{Command, Options, RunOptions};
 pub use runner::{initialize, run};
 

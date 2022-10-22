@@ -49,7 +49,7 @@ pub struct DiscoveryManager {
 }
 
 impl DiscoveryManager {
-    pub async fn new(p2p_config: Arc<config::P2pConfig>) -> Self {
+    pub async fn new(p2p_config: Arc<config::P2pConfigFile>) -> Self {
         Self {
             mdns: mdns::Mdns::new(&p2p_config.mdns_config).await,
         }

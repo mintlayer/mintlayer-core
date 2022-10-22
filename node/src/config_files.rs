@@ -26,32 +26,32 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use chainstate::ChainstateConfig;
-use chainstate_launcher::ChainstateLauncherConfig;
-use p2p::config::{MdnsConfig, P2pConfig};
-use rpc::RpcConfig;
+use chainstate_launcher::ChainstateLauncherConfigFile;
+use p2p::config::{MdnsConfig, P2pConfigFile};
+use rpc::RpcConfigFile;
 
 use crate::RunOptions;
 
 /// The node configuration.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct NodeConfig {
+pub struct NodeConfigFile {
     /// The path to the data directory.
     ///
     /// By default the config file is created inside of the data directory.
     pub datadir: PathBuf,
 
     // Subsystems configurations.
-    pub chainstate: ChainstateLauncherConfig,
-    pub p2p: P2pConfig,
-    pub rpc: RpcConfig,
+    pub chainstate: ChainstateLauncherConfigFile,
+    pub p2p: P2pConfigFile,
+    pub rpc: RpcConfigFile,
 }
 
-impl NodeConfig {
+impl NodeConfigFile {
     /// Creates a new `Config` instance with the given data directory path.
     pub fn new(datadir: PathBuf) -> Result<Self> {
-        let chainstate = ChainstateLauncherConfig::new();
-        let p2p = P2pConfig::new();
-        let rpc = RpcConfig::new()?;
+        let chainstate = ChainstateLauncherConfigFile::new();
+        let p2p = P2pConfigFile::new();
+        let rpc = RpcConfigFile::new()?;
         Ok(Self {
             datadir,
             chainstate,
@@ -68,7 +68,7 @@ impl NodeConfig {
     ) -> Result<Self> {
         let config = fs::read_to_string(config_path)
             .with_context(|| format!("Failed to read '{config_path:?}' config"))?;
-        let NodeConfig {
+        let NodeConfigFile {
             datadir,
             chainstate,
             p2p,
@@ -90,10 +90,10 @@ impl NodeConfig {
 }
 
 fn chainstate_config(
-    config: ChainstateLauncherConfig,
+    config: ChainstateLauncherConfigFile,
     options: &RunOptions,
-) -> ChainstateLauncherConfig {
-    let ChainstateLauncherConfig {
+) -> ChainstateLauncherConfigFile {
+    let ChainstateLauncherConfigFile {
         storage_backend,
         chainstate_config,
     } = config;
@@ -113,14 +113,14 @@ fn chainstate_config(
         max_orphan_blocks,
         min_max_bootstrap_import_buffer_sizes,
     };
-    ChainstateLauncherConfig {
+    ChainstateLauncherConfigFile {
         storage_backend,
         chainstate_config,
     }
 }
 
-fn p2p_config(config: P2pConfig, options: &RunOptions) -> P2pConfig {
-    let P2pConfig {
+fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
+    let P2pConfigFile {
         bind_address,
         ban_threshold,
         outbound_connection_timeout,
@@ -132,7 +132,7 @@ fn p2p_config(config: P2pConfig, options: &RunOptions) -> P2pConfig {
     let outbound_connection_timeout =
         options.p2p_outbound_connection_timeout.unwrap_or(outbound_connection_timeout);
 
-    P2pConfig {
+    P2pConfigFile {
         bind_address,
         ban_threshold,
         outbound_connection_timeout,
@@ -144,14 +144,14 @@ fn p2p_config(config: P2pConfig, options: &RunOptions) -> P2pConfig {
     }
 }
 
-fn rpc_config(config: RpcConfig, options: &RunOptions) -> RpcConfig {
+fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
     const DEFAULT_HTTP_RPC_ENABLED: bool = true;
     // TODO: Disabled by default because it causes port bind issues in functional tests; to be fixed after #446 is resolved
     const DEFAULT_WS_RPC_ENABLED: bool = false;
     let default_http_rpc_addr = SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
     let default_ws_rpc_addr = SocketAddr::from_str("127.0.0.1:3031").expect("Can't fail");
 
-    let RpcConfig {
+    let RpcConfigFile {
         http_bind_address,
         http_enabled,
         ws_bind_address,
@@ -171,7 +171,7 @@ fn rpc_config(config: RpcConfig, options: &RunOptions) -> RpcConfig {
         .ws_rpc_enabled
         .unwrap_or_else(|| ws_enabled.unwrap_or(DEFAULT_WS_RPC_ENABLED));
 
-    RpcConfig {
+    RpcConfigFile {
         http_bind_address: Some(http_bind_address),
         http_enabled: Some(http_enabled),
         ws_bind_address: Some(ws_bind_address),
