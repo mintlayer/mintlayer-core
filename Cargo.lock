@@ -630,7 +630,6 @@ dependencies = [
  "chainstate",
  "chainstate-storage",
  "common",
- "serde",
  "storage",
  "storage-inmemory",
  "storage-lmdb",

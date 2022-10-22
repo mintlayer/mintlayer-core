@@ -19,8 +19,7 @@ use assert_cmd::Command;
 use directories::UserDirs;
 use tempfile::TempDir;
 
-use chainstate_launcher::StorageBackend;
-use node::{NodeConfigFile, RunOptions};
+use node::{NodeConfigFile, RunOptions, StorageBackendFileConfig};
 
 const BIN_NAME: &str = env!("CARGO_BIN_EXE_node");
 const CONFIG_NAME: &str = "config.toml";
@@ -93,7 +92,7 @@ fn read_config_override_values() {
     let http_rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
     let ws_rpc_addr = SocketAddr::from_str("127.0.0.1:5433").unwrap();
     let enable_mdns = false;
-    let backend_type = Some(StorageBackend::InMemory);
+    let backend_type = Some(StorageBackendFileConfig::InMemory);
 
     let options = RunOptions {
         max_db_commit_attempts: Some(max_db_commit_attempts),
