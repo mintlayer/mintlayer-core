@@ -18,7 +18,6 @@ pub mod storage_backend;
 use ::chainstate::ChainstateConfig;
 use serde::{Deserialize, Serialize};
 
-// TODO(PR): make all configs these Option<>
 /// The chainstate subsystem configuration.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct ChainstateConfigFile {
