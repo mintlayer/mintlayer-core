@@ -13,10 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serde::{Deserialize, Serialize};
-
 /// The chainstate subsystem configuration.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct ChainstateConfig {
     /// The number of maximum attempts to process a block.
     pub max_db_commit_attempts: usize,

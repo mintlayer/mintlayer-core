@@ -610,7 +610,6 @@ dependencies = [
  "mockall",
  "rpc",
  "rstest",
- "serde",
  "serde_json",
  "serialization",
  "static_assertions",
