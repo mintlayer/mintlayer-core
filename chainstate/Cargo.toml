@@ -4,8 +4,6 @@ license = "MIT"
 name = "chainstate"
 version = "0.1.0"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 chainstate-storage = {path = './storage'}
 chainstate-types = {path = './types'}

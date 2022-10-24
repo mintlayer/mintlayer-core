@@ -60,18 +60,23 @@ fn process<T>(err: Error, default: storage_core::Result<T>) -> storage_core::Res
             let err = if same_err { last_err } else { err };
 
             // Classify recoverable vs. fatal I/O errors
-            Err(match err.kind() {
-                ErrorKind::BrokenPipe
-                | ErrorKind::AlreadyExists
-                | ErrorKind::PermissionDenied
-                | ErrorKind::NotFound => Recoverable::Io(err.kind(), err.to_string()).into(),
-                _ => Fatal::Io(err.kind(), err.to_string()).into(),
-            })
+            Err(process_io_error(err))
         }
 
         // Make this an error for the time of being.
         // TODO: Would be nice to handle memory map resizes automatically somehow but it looks hard.
         Error::MapResized => Err(Fatal::InternalError.into()),
+    }
+}
+
+/// Map IoError into a storage error
+pub fn process_io_error(err: IoError) -> storage_core::Error {
+    match err.kind() {
+        ErrorKind::BrokenPipe
+        | ErrorKind::AlreadyExists
+        | ErrorKind::PermissionDenied
+        | ErrorKind::NotFound => Recoverable::Io(err.kind(), err.to_string()).into(),
+        _ => Fatal::Io(err.kind(), err.to_string()).into(),
     }
 }
 

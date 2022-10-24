@@ -1,0 +1,16 @@
+[package]
+name = "chainstate-launcher"
+license = "MIT"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+chainstate = { path = ".." }
+chainstate-storage = { path = "../storage" }
+common = { path = "../../common" }
+storage = { path = "../../storage" }
+storage-inmemory = { path = "../../storage/inmemory" }
+storage-lmdb = { path = "../../storage/lmdb" }
+
+serde = { version = "1", features = ["derive"] }

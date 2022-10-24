@@ -624,6 +624,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "chainstate-launcher"
+version = "0.1.0"
+dependencies = [
+ "chainstate",
+ "chainstate-storage",
+ "common",
+ "serde",
+ "storage",
+ "storage-inmemory",
+ "storage-lmdb",
+]
+
+[[package]]
 name = "chainstate-storage"
 version = "0.1.0"
 dependencies = [
@@ -2730,7 +2743,7 @@ dependencies = [
  "assert_cmd",
  "blockprod",
  "chainstate",
- "chainstate-storage",
+ "chainstate-launcher",
  "clap 3.2.22",
  "common",
  "directories",

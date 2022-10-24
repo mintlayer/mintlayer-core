@@ -38,7 +38,6 @@ fn main() {
             // Each test case gets its own subdirectory to avid clashes
             let seq_no = counter.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
             let test_dir = test_dir.join(format!("case_{:08x}", seq_no));
-            fs::create_dir(test_dir.as_path()).expect("test case dir creation to succeed");
             Lmdb::new(test_dir)
         }
     };

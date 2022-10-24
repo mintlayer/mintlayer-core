@@ -176,6 +176,9 @@ impl backend::Backend for Lmdb {
     type Impl = LmdbImpl;
 
     fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
+        // Attempt to create the storage directory
+        std::fs::create_dir_all(&self.path).map_err(error::process_io_error)?;
+
         // Set up LMDB environment
         let mut env = lmdb::Environment::new();
         env.set_max_dbs(desc.len() as u32);

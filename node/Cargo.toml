@@ -8,10 +8,10 @@ license = "MIT"
 
 [dependencies]
 # Local dependencies
-chainstate-storage = { path = "../chainstate/storage/" }
 blockprod = { path = "../blockprod/" }
 common = { path = "../common/" }
-chainstate = { path = "../chainstate/" }
+chainstate = { path = "../chainstate" }
+chainstate-launcher = { path = "../chainstate/launcher" }
 logging = { path = "../logging/" }
 mempool = { path = "../mempool/" }
 p2p = { path = "../p2p/" }

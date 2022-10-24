@@ -26,6 +26,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use chainstate::ChainstateConfig;
+use chainstate_launcher::ChainstateLauncherConfig;
 use p2p::config::{MdnsConfig, P2pConfig};
 use rpc::RpcConfig;
 
@@ -40,7 +41,7 @@ pub struct NodeConfig {
     pub datadir: PathBuf,
 
     // Subsystems configurations.
-    pub chainstate: ChainstateConfig,
+    pub chainstate: ChainstateLauncherConfig,
     pub p2p: P2pConfig,
     pub rpc: RpcConfig,
 }
@@ -48,7 +49,7 @@ pub struct NodeConfig {
 impl NodeConfig {
     /// Creates a new `Config` instance with the given data directory path.
     pub fn new(datadir: PathBuf) -> Result<Self> {
-        let chainstate = ChainstateConfig::new();
+        let chainstate = ChainstateLauncherConfig::new();
         let p2p = P2pConfig::new();
         let rpc = RpcConfig::new()?;
         Ok(Self {
@@ -60,7 +61,11 @@ impl NodeConfig {
     }
 
     /// Reads a configuration from the specified path and overrides the provided parameters.
-    pub fn read(config_path: &Path, options: &RunOptions) -> Result<Self> {
+    pub fn read(
+        config_path: &Path,
+        datadir_path_opt: &Option<PathBuf>,
+        options: &RunOptions,
+    ) -> Result<Self> {
         let config = fs::read_to_string(config_path)
             .with_context(|| format!("Failed to read '{config_path:?}' config"))?;
         let NodeConfig {
@@ -70,6 +75,7 @@ impl NodeConfig {
             rpc,
         } = toml::from_str(&config).context("Failed to parse config")?;
 
+        let datadir = datadir_path_opt.clone().unwrap_or(datadir);
         let chainstate = chainstate_config(chainstate, options);
         let p2p = p2p_config(p2p, options);
         let rpc = rpc_config(rpc, options);
@@ -83,20 +89,33 @@ impl NodeConfig {
     }
 }
 
-fn chainstate_config(config: ChainstateConfig, options: &RunOptions) -> ChainstateConfig {
+fn chainstate_config(
+    config: ChainstateLauncherConfig,
+    options: &RunOptions,
+) -> ChainstateLauncherConfig {
+    let ChainstateLauncherConfig {
+        storage_backend,
+        chainstate_config,
+    } = config;
+
     let ChainstateConfig {
         max_db_commit_attempts,
         max_orphan_blocks,
         min_max_bootstrap_import_buffer_sizes,
-    } = config;
+    } = chainstate_config;
 
+    let storage_backend = options.storage_backend.clone().unwrap_or(storage_backend);
     let max_db_commit_attempts = options.max_db_commit_attempts.unwrap_or(max_db_commit_attempts);
     let max_orphan_blocks = options.max_orphan_blocks.unwrap_or(max_orphan_blocks);
 
-    ChainstateConfig {
+    let chainstate_config = ChainstateConfig {
         max_db_commit_attempts,
         max_orphan_blocks,
         min_max_bootstrap_import_buffer_sizes,
+    };
+    ChainstateLauncherConfig {
+        storage_backend,
+        chainstate_config,
     }
 }
 
