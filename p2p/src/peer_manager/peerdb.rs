@@ -400,7 +400,7 @@ impl<T: NetworkingService> PeerDb<T> {
             },
         };
 
-        if final_score >= self.p2p_config.ban_threshold {
+        if final_score >= *self.p2p_config.ban_threshold {
             self.ban_peer(peer_id);
             return true;
         }

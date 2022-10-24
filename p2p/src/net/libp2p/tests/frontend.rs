@@ -296,7 +296,7 @@ async fn test_connect_with_timeout() {
         MakeP2pAddress::make_address(),
         config,
         Arc::new(config::P2pConfig {
-            outbound_connection_timeout: 2,
+            outbound_connection_timeout: 2.into(),
             ..Default::default()
         }),
     )

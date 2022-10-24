@@ -84,7 +84,7 @@ impl NetworkingService for Libp2pService {
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(mplex::MplexConfig::new())
             .outbound_timeout(std::time::Duration::from_secs(
-                p2p_config.outbound_connection_timeout,
+                *p2p_config.outbound_connection_timeout,
             ))
             .boxed();
 

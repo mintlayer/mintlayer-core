@@ -18,6 +18,7 @@ pub mod storage_backend;
 use ::chainstate::ChainstateConfig;
 use serde::{Deserialize, Serialize};
 
+// TODO(PR): make all configs these Option<>
 /// The chainstate subsystem configuration.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct ChainstateConfigFile {
@@ -34,19 +35,6 @@ impl ChainstateConfigFile {
     /// Creates a new chainstate configuration instance.
     pub fn new() -> Self {
         Self::default()
-    }
-
-    pub fn with_max_orphan_blocks(mut self, max_orphan_blocks: usize) -> Self {
-        self.max_orphan_blocks = max_orphan_blocks;
-        self
-    }
-
-    pub fn with_bootstrap_buffer_sizes(
-        mut self,
-        min_max_bootstrap_import_buffer_sizes: (usize, usize),
-    ) -> Self {
-        self.min_max_bootstrap_import_buffer_sizes = min_max_bootstrap_import_buffer_sizes;
-        self
     }
 }
 

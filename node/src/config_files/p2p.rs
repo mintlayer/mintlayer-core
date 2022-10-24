@@ -62,15 +62,17 @@ impl MdnsConfigFile {
             MdnsConfigFile::Disabled
         }
     }
+}
 
-    pub fn into_mdns_config(self) -> MdnsConfig {
-        match self {
+impl From<MdnsConfigFile> for MdnsConfig {
+    fn from(c: MdnsConfigFile) -> Self {
+        match c {
             MdnsConfigFile::Enabled {
                 query_interval,
                 enable_ipv6_mdns_discovery,
             } => MdnsConfig::Enabled {
-                query_interval,
-                enable_ipv6_mdns_discovery,
+                query_interval: query_interval.into(),
+                enable_ipv6_mdns_discovery: enable_ipv6_mdns_discovery.into(),
             },
             MdnsConfigFile::Disabled => MdnsConfig::Disabled,
         }
@@ -95,13 +97,16 @@ impl P2pConfigFile {
     pub fn new() -> Self {
         Default::default()
     }
+}
 
-    pub fn into_p2p_config(self) -> P2pConfig {
+impl From<P2pConfigFile> for P2pConfig {
+    fn from(c: P2pConfigFile) -> Self {
+        let mdns_config: MdnsConfig = c.mdns_config.into();
         P2pConfig {
-            bind_address: self.bind_address,
-            ban_threshold: self.ban_threshold,
-            outbound_connection_timeout: self.outbound_connection_timeout,
-            mdns_config: self.mdns_config.into_mdns_config(),
+            bind_address: c.bind_address.into(),
+            ban_threshold: c.ban_threshold.into(),
+            outbound_connection_timeout: c.outbound_connection_timeout.into(),
+            mdns_config: mdns_config.into(),
         }
     }
 }

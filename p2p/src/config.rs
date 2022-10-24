@@ -13,17 +13,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use utils::make_config_setting;
+
 pub const MDNS_DEFAULT_QUERY_INTERVAL: u64 = 0;
 pub const MDNS_DEFAULT_IPV6_STATE: bool = false;
 
+make_config_setting!(P2pBindAddress, String, "/ip6/::1/tcp/3031".into());
+make_config_setting!(BanThreshold, u32, 100);
+make_config_setting!(OutboundConnectionTimeout, u64, 10);
+make_config_setting!(MdnsConfigSetting, MdnsConfig, MdnsConfig::Disabled);
+make_config_setting!(MdnsQueryInterval, u64, MDNS_DEFAULT_QUERY_INTERVAL);
+make_config_setting!(MdnsEnableIpV6Discovery, bool, MDNS_DEFAULT_IPV6_STATE);
+
 /// Multicast DNS configuration.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum MdnsConfig {
     Enabled {
         /// Interval (in milliseconds) at which to poll the network for new peers.
-        query_interval: u64,
+        query_interval: MdnsQueryInterval,
         /// Use IPv6 for multicast DNS
-        enable_ipv6_mdns_discovery: bool,
+        enable_ipv6_mdns_discovery: MdnsEnableIpV6Discovery,
     },
     Disabled,
 }
@@ -32,78 +41,17 @@ impl MdnsConfig {
     pub fn new() -> Self {
         MdnsConfig::Disabled
     }
-
-    pub fn from_options(
-        enable_mdns: bool,
-        query_interval: Option<u64>,
-        enable_ipv6_mdns_discovery: Option<bool>,
-    ) -> Self {
-        if enable_mdns {
-            MdnsConfig::Enabled {
-                query_interval: query_interval.unwrap_or(MDNS_DEFAULT_QUERY_INTERVAL),
-                enable_ipv6_mdns_discovery: enable_ipv6_mdns_discovery
-                    .unwrap_or(MDNS_DEFAULT_IPV6_STATE),
-            }
-        } else {
-            // TODO: make the check for these automatic
-            assert!(
-                query_interval.is_none(),
-                "mDNS is disabled but query interval is specified"
-            );
-            assert!(
-                enable_ipv6_mdns_discovery.is_none(),
-                "mDNS is disabled but transport over IPv6 is enabled"
-            );
-
-            MdnsConfig::Disabled
-        }
-    }
 }
 
 /// The p2p subsystem configuration.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct P2pConfig {
     /// Address to bind P2P to.
-    pub bind_address: String,
+    pub bind_address: P2pBindAddress,
     /// The score threshold after which a peer is banned.
-    pub ban_threshold: u32,
+    pub ban_threshold: BanThreshold,
     /// The outbound connection timeout value in seconds.
-    pub outbound_connection_timeout: u64,
+    pub outbound_connection_timeout: OutboundConnectionTimeout,
     /// Multicast DNS configuration.
-    pub mdns_config: MdnsConfig,
-}
-
-impl P2pConfig {
-    /// Creates a new p2p configuration instance.
-    pub fn new() -> Self {
-        Default::default()
-    }
-}
-
-impl Default for P2pConfig {
-    fn default() -> Self {
-        Self {
-            bind_address: "/ip6/::1/tcp/3031".into(),
-            ban_threshold: 100,
-            outbound_connection_timeout: 10,
-            mdns_config: MdnsConfig::Disabled,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    #[should_panic]
-    fn mdsn_disabled_but_query_interval_specified() {
-        MdnsConfig::from_options(false, Some(200), None);
-    }
-
-    #[test]
-    #[should_panic]
-    fn mdsn_disabled_but_ipv6_enabled() {
-        MdnsConfig::from_options(false, None, Some(true));
-    }
+    pub mdns_config: MdnsConfigSetting,
 }
