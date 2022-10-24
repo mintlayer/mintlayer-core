@@ -19,7 +19,7 @@ use ::chainstate::ChainstateConfig;
 use serde::{Deserialize, Serialize};
 
 /// The chainstate subsystem configuration.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct ChainstateConfigFile {
     /// The number of maximum attempts to process a block.
     pub max_db_commit_attempts: usize,
@@ -27,7 +27,7 @@ pub struct ChainstateConfigFile {
     pub max_orphan_blocks: usize,
     /// When importing bootstrap file, this controls the buffer sizes (min, max)
     /// (see bootstrap import function for more information)
-    pub min_max_bootstrap_import_buffer_sizes: Option<(usize, usize)>,
+    pub min_max_bootstrap_import_buffer_sizes: (usize, usize),
 }
 
 impl ChainstateConfigFile {
@@ -45,25 +45,17 @@ impl ChainstateConfigFile {
         mut self,
         min_max_bootstrap_import_buffer_sizes: (usize, usize),
     ) -> Self {
-        self.min_max_bootstrap_import_buffer_sizes = Some(min_max_bootstrap_import_buffer_sizes);
+        self.min_max_bootstrap_import_buffer_sizes = min_max_bootstrap_import_buffer_sizes;
         self
-    }
-
-    pub fn into_chainstate_config(self) -> ChainstateConfig {
-        ChainstateConfig {
-            max_db_commit_attempts: self.max_db_commit_attempts,
-            max_orphan_blocks: self.max_orphan_blocks,
-            min_max_bootstrap_import_buffer_sizes: self.min_max_bootstrap_import_buffer_sizes,
-        }
     }
 }
 
-impl Default for ChainstateConfigFile {
-    fn default() -> Self {
-        Self {
-            max_db_commit_attempts: 10,
-            max_orphan_blocks: 512,
-            min_max_bootstrap_import_buffer_sizes: None,
+impl From<ChainstateConfigFile> for ChainstateConfig {
+    fn from(c: ChainstateConfigFile) -> Self {
+        ChainstateConfig {
+            max_db_commit_attempts: c.max_db_commit_attempts.into(),
+            max_orphan_blocks: c.max_orphan_blocks.into(),
+            min_max_bootstrap_import_buffer_sizes: c.min_max_bootstrap_import_buffer_sizes.into(),
         }
     }
 }

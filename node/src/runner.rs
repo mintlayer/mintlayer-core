@@ -55,7 +55,7 @@ pub async fn initialize(
     let chainstate = chainstate_launcher::make_chainstate(
         &node_config.datadir,
         Arc::clone(&chain_config),
-        node_config.chainstate.into_chainstate_launcher_config(),
+        node_config.chainstate.into(),
     )?;
     let chainstate = manager.add_subsystem("chainstate", chainstate);
 

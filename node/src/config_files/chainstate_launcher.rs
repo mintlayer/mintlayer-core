@@ -29,9 +29,9 @@ pub enum StorageBackendConfigFile {
     InMemory,
 }
 
-impl StorageBackendConfigFile {
-    pub fn into_storage_backend_config(self) -> StorageBackendConfig {
-        match self {
+impl From<StorageBackendConfigFile> for StorageBackendConfig {
+    fn from(c: StorageBackendConfigFile) -> Self {
+        match c {
             StorageBackendConfigFile::Lmdb => StorageBackendConfig::Lmdb,
             StorageBackendConfigFile::InMemory => StorageBackendConfig::InMemory,
         }
@@ -69,11 +69,13 @@ impl ChainstateLauncherConfigFile {
     pub fn new() -> Self {
         Self::default()
     }
+}
 
-    pub fn into_chainstate_launcher_config(self) -> ChainstateLauncherConfig {
+impl From<ChainstateLauncherConfigFile> for ChainstateLauncherConfig {
+    fn from(c: ChainstateLauncherConfigFile) -> Self {
         ChainstateLauncherConfig {
-            storage_backend: self.storage_backend.into_storage_backend_config(),
-            chainstate_config: self.chainstate_config.into_chainstate_config(),
+            storage_backend: c.storage_backend.into(),
+            chainstate_config: c.chainstate_config.into(),
         }
     }
 }

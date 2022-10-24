@@ -15,8 +15,8 @@
 
 #[macro_export]
 macro_rules! make_config_setting {
-    ($name:ident, $tp: ident, $default_value:expr) => {
-        #[derive(Debug)]
+    ($name:ident, $tp: ty, $default_value:expr) => {
+        #[derive(Debug, Clone)]
         pub struct $name {
             value: $tp,
         }
@@ -24,6 +24,12 @@ macro_rules! make_config_setting {
         impl From<$tp> for $name {
             fn from(v: $tp) -> Self {
                 Self { value: v }
+            }
+        }
+
+        impl From<$name> for $tp {
+            fn from(v: $name) -> Self {
+                v.value
             }
         }
 

@@ -27,9 +27,6 @@ use super::{
     tx_verification_strategy::TransactionVerificationStrategy,
 };
 
-const DEFAULT_MIN_IMPORT_BUFFER_SIZE: usize = 1 << 22; // 4 MB
-const DEFAULT_MAX_IMPORT_BUFFER_SIZE: usize = 1 << 26; // 64 MB
-
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum BootstrapError {
     #[error("File error: {0}")]
@@ -61,10 +58,7 @@ where
     // max: The largest buffer size, after which reading the file is stopped
     // NOTE: both sizes MUST be larger than the largest block in the blockchain + 4 bytes for magic bytes
     let (min_buffer_size, max_buffer_size) =
-        chainstate_config.min_max_bootstrap_import_buffer_sizes.unwrap_or((
-            DEFAULT_MIN_IMPORT_BUFFER_SIZE,
-            DEFAULT_MAX_IMPORT_BUFFER_SIZE,
-        ));
+        *chainstate_config.min_max_bootstrap_import_buffer_sizes;
 
     // It's more reasonable to use a VeqDeque, but it's incompatible with the windows() method which is needed to search for magic bytes
     // There's a performance hit behind this, but we don't care. Anyone is free to optimize this.
