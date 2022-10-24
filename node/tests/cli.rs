@@ -56,9 +56,9 @@ fn create_default_config() {
 
     assert_eq!(
         config.chainstate.chainstate_config.max_db_commit_attempts,
-        10
+        None
     );
-    assert_eq!(config.chainstate.chainstate_config.max_orphan_blocks, 512);
+    assert_eq!(config.chainstate.chainstate_config.max_orphan_blocks, None);
 
     assert_eq!(config.p2p.bind_address, "/ip6/::1/tcp/3031");
     assert_eq!(config.p2p.ban_threshold, 100);
@@ -92,7 +92,7 @@ fn read_config_override_values() {
     let http_rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
     let ws_rpc_addr = SocketAddr::from_str("127.0.0.1:5433").unwrap();
     let enable_mdns = false;
-    let backend_type = Some(StorageBackendConfigFile::InMemory);
+    let backend_type = StorageBackendConfigFile::InMemory;
 
     let options = RunOptions {
         max_db_commit_attempts: Some(max_db_commit_attempts),
@@ -107,7 +107,7 @@ fn read_config_override_values() {
         http_rpc_enabled: Some(true),
         ws_rpc_addr: Some(ws_rpc_addr),
         ws_rpc_enabled: Some(false),
-        storage_backend: backend_type.clone(),
+        storage_backend: Some(backend_type.clone()),
     };
     let datadir_opt = Some(data_dir.path().into());
     let config = NodeConfigFile::read(&config_path, &datadir_opt, &options).unwrap();
@@ -116,11 +116,11 @@ fn read_config_override_values() {
 
     assert_eq!(
         config.chainstate.chainstate_config.max_db_commit_attempts,
-        max_db_commit_attempts
+        Some(max_db_commit_attempts)
     );
     assert_eq!(
         config.chainstate.chainstate_config.max_orphan_blocks,
-        max_orphan_blocks
+        Some(max_orphan_blocks)
     );
 
     assert_eq!(config.p2p.bind_address, p2p_addr);
@@ -133,7 +133,7 @@ fn read_config_override_values() {
     assert_eq!(config.rpc.ws_bind_address, Some(ws_rpc_addr));
     assert!(!config.rpc.ws_enabled.unwrap());
 
-    assert_eq!(Some(config.chainstate.storage_backend), backend_type);
+    assert_eq!(config.chainstate.storage_backend, backend_type);
 }
 
 // Check that the `--conf` option has the precedence over the default data directory value.

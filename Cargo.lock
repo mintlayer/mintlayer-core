@@ -632,6 +632,7 @@ dependencies = [
  "storage",
  "storage-inmemory",
  "storage-lmdb",
+ "utils",
 ]
 
 [[package]]

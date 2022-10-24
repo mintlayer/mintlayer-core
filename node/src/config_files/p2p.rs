@@ -79,6 +79,7 @@ impl From<MdnsConfigFile> for MdnsConfig {
     }
 }
 
+// TODO(PR) make all members option
 /// The p2p subsystem configuration.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct P2pConfigFile {

@@ -23,12 +23,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct ChainstateConfigFile {
     /// The number of maximum attempts to process a block.
-    pub max_db_commit_attempts: usize,
+    pub max_db_commit_attempts: Option<usize>,
     /// The maximum capacity of the orphan blocks pool.
-    pub max_orphan_blocks: usize,
+    pub max_orphan_blocks: Option<usize>,
     /// When importing bootstrap file, this controls the buffer sizes (min, max)
     /// (see bootstrap import function for more information)
-    pub min_max_bootstrap_import_buffer_sizes: (usize, usize),
+    pub min_max_bootstrap_import_buffer_sizes: Option<(usize, usize)>,
 }
 
 impl ChainstateConfigFile {

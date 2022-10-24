@@ -114,8 +114,8 @@ fn chainstate_config(
     } = chainstate_config;
 
     let storage_backend = options.storage_backend.clone().unwrap_or(storage_backend);
-    let max_db_commit_attempts = options.max_db_commit_attempts.unwrap_or(max_db_commit_attempts);
-    let max_orphan_blocks = options.max_orphan_blocks.unwrap_or(max_orphan_blocks);
+    let max_db_commit_attempts = options.max_db_commit_attempts.or(max_db_commit_attempts);
+    let max_orphan_blocks = options.max_orphan_blocks.or(max_orphan_blocks);
 
     let chainstate_config = ChainstateConfigFile {
         max_db_commit_attempts,

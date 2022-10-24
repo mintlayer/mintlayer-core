@@ -12,3 +12,4 @@ common = { path = "../../common" }
 storage = { path = "../../storage" }
 storage-inmemory = { path = "../../storage/inmemory" }
 storage-lmdb = { path = "../../storage/lmdb" }
+utils = { path = '../../utils' }
