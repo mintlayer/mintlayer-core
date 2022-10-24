@@ -33,33 +33,44 @@ pub enum MdnsConfigFile {
 }
 
 impl MdnsConfigFile {
-    pub fn new() -> Self {
-        MdnsConfigFile::Disabled
-    }
-
     pub fn from_options(
-        enable_mdns: bool,
+        enable_mdns: Option<bool>,
         query_interval: Option<u64>,
         enable_ipv6_mdns_discovery: Option<bool>,
-    ) -> Self {
-        if enable_mdns {
-            MdnsConfigFile::Enabled {
-                query_interval: query_interval.unwrap_or(MDNS_DEFAULT_QUERY_INTERVAL),
-                enable_ipv6_mdns_discovery: enable_ipv6_mdns_discovery
-                    .unwrap_or(MDNS_DEFAULT_IPV6_STATE),
-            }
-        } else {
-            // TODO: make the check for these automatic
-            assert!(
-                query_interval.is_none(),
-                "mDNS is disabled but query interval is specified"
-            );
-            assert!(
-                enable_ipv6_mdns_discovery.is_none(),
-                "mDNS is disabled but transport over IPv6 is enabled"
-            );
+    ) -> Option<Self> {
+        match enable_mdns {
+            Some(enable_mdns) => {
+                if enable_mdns {
+                    Some(MdnsConfigFile::Enabled {
+                        query_interval: query_interval.unwrap_or(MDNS_DEFAULT_QUERY_INTERVAL),
+                        enable_ipv6_mdns_discovery: enable_ipv6_mdns_discovery
+                            .unwrap_or(MDNS_DEFAULT_IPV6_STATE),
+                    })
+                } else {
+                    assert!(
+                        query_interval.is_none(),
+                        "mDNS is disabled but query interval is specified"
+                    );
+                    assert!(
+                        enable_ipv6_mdns_discovery.is_none(),
+                        "mDNS is disabled but transport over IPv6 is enabled"
+                    );
 
-            MdnsConfigFile::Disabled
+                    Some(MdnsConfigFile::Disabled)
+                }
+            }
+            None => {
+                assert!(
+                    query_interval.is_none(),
+                    "mDNS enable state not specified but query interval is specified"
+                );
+                assert!(
+                    enable_ipv6_mdns_discovery.is_none(),
+                    "mDNS enable state not specified but transport over IPv6 is enabled"
+                );
+
+                None
+            }
         }
     }
 }
@@ -80,7 +91,7 @@ impl From<MdnsConfigFile> for MdnsConfig {
 }
 
 /// The p2p subsystem configuration.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct P2pConfigFile {
     /// Address to bind P2P to.
     pub bind_address: Option<String>,
@@ -89,28 +100,17 @@ pub struct P2pConfigFile {
     /// The outbound connection timeout value in seconds.
     pub outbound_connection_timeout: Option<u64>,
     /// Multicast DNS configuration.
-    pub mdns_config: MdnsConfigFile, // TODO(PR) see how to make this Option
+    pub mdns_config: Option<MdnsConfigFile>,
 }
 
 impl From<P2pConfigFile> for P2pConfig {
     fn from(c: P2pConfigFile) -> Self {
-        let mdns_config: MdnsConfig = c.mdns_config.into();
+        let mdns_config: Option<MdnsConfig> = c.mdns_config.map(|v| v.into());
         P2pConfig {
             bind_address: c.bind_address.into(),
             ban_threshold: c.ban_threshold.into(),
             outbound_connection_timeout: c.outbound_connection_timeout.into(),
             mdns_config: mdns_config.into(),
-        }
-    }
-}
-
-impl Default for P2pConfigFile {
-    fn default() -> Self {
-        Self {
-            bind_address: Default::default(),
-            ban_threshold: Default::default(),
-            outbound_connection_timeout: Default::default(),
-            mdns_config: MdnsConfigFile::Disabled,
         }
     }
 }
@@ -122,12 +122,12 @@ mod tests {
     #[test]
     #[should_panic]
     fn mdsn_disabled_but_query_interval_specified() {
-        MdnsConfigFile::from_options(false, Some(200), None);
+        MdnsConfigFile::from_options(Some(false), Some(200), None);
     }
 
     #[test]
     #[should_panic]
     fn mdsn_disabled_but_ipv6_enabled() {
-        MdnsConfigFile::from_options(false, None, Some(true));
+        MdnsConfigFile::from_options(Some(false), None, Some(true));
     }
 }

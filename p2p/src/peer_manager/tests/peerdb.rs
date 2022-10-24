@@ -140,8 +140,10 @@ fn adjust_peer_score_normal_threshold() {
 
 #[test]
 fn adjust_peer_score_higher_threshold() {
-    let mut config = config::P2pConfig::default();
-    config.ban_threshold = 200.into();
+    let config = config::P2pConfig {
+        ban_threshold: 200.into(),
+        ..Default::default()
+    };
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config));
 
     let id = add_active_peer(&mut peerdb);
@@ -151,8 +153,10 @@ fn adjust_peer_score_higher_threshold() {
 
 #[test]
 fn adjust_peer_score_lower_threshold() {
-    let mut config = config::P2pConfig::default();
-    config.ban_threshold = 20.into();
+    let config = config::P2pConfig {
+        ban_threshold: 20.into(),
+        ..Default::default()
+    };
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config));
 
     let id = add_active_peer(&mut peerdb);

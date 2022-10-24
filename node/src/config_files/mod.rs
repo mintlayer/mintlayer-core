@@ -141,15 +141,17 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let outbound_connection_timeout =
         options.p2p_outbound_connection_timeout.or(outbound_connection_timeout);
 
+    let mdns_config = MdnsConfigFile::from_options(
+        options.p2p_enable_mdns,
+        options.p2p_mdns_query_interval,
+        options.p2p_enable_ipv6_mdns_discovery,
+    );
+
     P2pConfigFile {
         bind_address,
         ban_threshold,
         outbound_connection_timeout,
-        mdns_config: MdnsConfigFile::from_options(
-            options.p2p_enable_mdns.unwrap_or(false),
-            options.p2p_mdns_query_interval,
-            options.p2p_enable_ipv6_mdns_discovery,
-        ),
+        mdns_config,
     }
 }
 
