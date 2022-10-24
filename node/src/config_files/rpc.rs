@@ -19,7 +19,7 @@ use rpc::RpcConfig;
 use serde::{Deserialize, Serialize};
 
 /// The rpc subsystem configuration.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct RpcConfigFile {
     /// Address to bind http RPC to.
     pub http_bind_address: Option<SocketAddr>,
@@ -41,17 +41,6 @@ impl From<RpcConfigFile> for RpcConfig {
             http_enabled: c.http_enabled.into(),
             ws_bind_address: c.ws_bind_address.into(),
             ws_enabled: c.ws_enabled.into(),
-        }
-    }
-}
-
-impl Default for RpcConfigFile {
-    fn default() -> Self {
-        Self {
-            http_bind_address: None,
-            http_enabled: None,
-            ws_bind_address: None,
-            ws_enabled: None,
         }
     }
 }
