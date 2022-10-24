@@ -15,7 +15,6 @@
 
 use std::{net::SocketAddr, str::FromStr};
 
-use anyhow::Result;
 use utils::make_config_setting;
 
 make_config_setting!(
@@ -35,7 +34,7 @@ make_config_setting!(
 make_config_setting!(WebsocketRpcEnabled, bool, true);
 
 /// The rpc subsystem configuration.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct RpcConfig {
     /// Address to bind http RPC to.
     pub http_bind_address: HttpBindAddress,
@@ -48,17 +47,4 @@ pub struct RpcConfig {
 
     /// Whether websocket RPC is enabled
     pub ws_enabled: WebsocketRpcEnabled,
-}
-
-impl RpcConfig {
-    /// Creates a new rpc configuration instance.
-    pub fn new() -> Result<Self> {
-        Ok(Self {
-            // http_bind_address: Some(SocketAddr::from_str("127.0.0.1:3030")?),
-            http_bind_address: Default::default(),
-            http_enabled: Default::default(),
-            ws_bind_address: Default::default(),
-            ws_enabled: Default::default(),
-        })
-    }
 }
