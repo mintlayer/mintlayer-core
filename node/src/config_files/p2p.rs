@@ -92,13 +92,6 @@ pub struct P2pConfigFile {
     pub mdns_config: MdnsConfigFile,
 }
 
-impl P2pConfigFile {
-    /// Creates a new p2p configuration instance.
-    pub fn new() -> Self {
-        Default::default()
-    }
-}
-
 impl From<P2pConfigFile> for P2pConfig {
     fn from(c: P2pConfigFile) -> Self {
         let mdns_config: MdnsConfig = c.mdns_config.into();

@@ -59,7 +59,7 @@ impl NodeConfigFile {
     /// Creates a new `Config` instance with the given data directory path.
     pub fn new(datadir: PathBuf) -> Result<Self> {
         let chainstate = ChainstateLauncherConfigFile::new();
-        let p2p = P2pConfigFile::new();
+        let p2p = P2pConfigFile::default();
         let rpc = RpcConfigFile::default();
         Ok(Self {
             datadir,
