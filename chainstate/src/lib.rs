@@ -26,8 +26,9 @@ pub use crate::{
     config::ChainstateConfig,
     detail::{
         ban_score, calculate_median_time_past, is_rfc3986_valid_symbol, BlockError, BlockSource,
-        CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError, Locator,
-        OrphanCheckError, TokensError, TransactionVerifierStorageError, TxIndexError, HEADER_LIMIT,
+        CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError, InitializationError,
+        Locator, OrphanCheckError, TokensError, TransactionVerifierStorageError, TxIndexError,
+        HEADER_LIMIT,
     },
 };
 
@@ -54,8 +55,8 @@ pub enum ChainstateEvent {
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum ChainstateError {
-    #[error("Initialization error")]
-    FailedToInitializeChainstate(String),
+    #[error("Initialization error: {0}")]
+    FailedToInitializeChainstate(#[from] InitializationError),
     #[error("Block processing failed: `{0}`")]
     ProcessBlockError(#[from] BlockError),
     #[error("Property read error: `{0}`")]

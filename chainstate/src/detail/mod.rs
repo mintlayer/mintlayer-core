@@ -29,7 +29,9 @@ pub use self::error::*;
 pub use self::median_time::calculate_median_time_past;
 pub use self::tokens::is_rfc3986_valid_symbol;
 pub use chainstate_types::Locator;
-pub use error::{BlockError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError};
+pub use error::{
+    BlockError, CheckBlockError, CheckBlockTransactionsError, InitializationError, OrphanCheckError,
+};
 // TODO: ConnectTransactionError used in unit tests to check block processing results. We have to find more appropriate place for this error.
 pub use transaction_verifier::{
     error::{ConnectTransactionError, TokensError, TxIndexError},
@@ -147,12 +149,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         let best_block_id = chainstate_storage
             .get_best_block_id()
-            .map_err(|e| {
-                ChainstateError::FailedToInitializeChainstate(format!(
-                    "Database read error: {:?}",
-                    e
-                ))
-            })
+            .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))
             .log_err()?;
 
         let mut chainstate = Self::new_no_genesis(
@@ -169,7 +166,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 .process_genesis()
                 .map_err(crate::ChainstateError::ProcessBlockError)
                 .log_err()?;
+        } else {
+            chainstate.check_genesis().map_err(crate::ChainstateError::from)?;
         }
+
         Ok(chainstate)
     }
 
@@ -192,6 +192,32 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             events_controller: EventsController::new(),
             time_getter,
         }
+    }
+
+    fn check_genesis(&self) -> Result<(), InitializationError> {
+        let dbtx = self.make_db_tx_ro()?;
+
+        let config_geneis_id = self.chain_config().genesis_block_id();
+        if config_geneis_id == dbtx.get_best_block_id()? {
+            // Best block is genesis, everything fine
+            return Ok(());
+        }
+
+        // Look up the parent of block 1 to figure out the geneis ID according to storage
+        let block1_id = dbtx
+            .get_block_id_by_height(&BlockHeight::new(1))?
+            .ok_or(InitializationError::Block1Missing)?;
+        let block1 = dbtx
+            .get_block(Id::new(block1_id.get()))?
+            .ok_or(InitializationError::Block1Missing)?;
+        let stored_genesis_id = block1.prev_block_id();
+
+        // Check storage genesis ID matches chain config genesis ID
+        utils::ensure!(
+            config_geneis_id == stored_genesis_id,
+            InitializationError::GenesisMismatch(config_geneis_id, stored_genesis_id),
+        );
+        Ok(())
     }
 
     fn broadcast_new_tip_event(&self, new_block_index: &Option<BlockIndex>) {

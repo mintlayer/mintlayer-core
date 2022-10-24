@@ -101,7 +101,7 @@ impl TestFrameworkBuilder {
         self
     }
 
-    pub fn build(self) -> TestFramework {
+    pub fn try_build(self) -> Result<TestFramework, chainstate::ChainstateError> {
         let chainstate = match self.tx_verification_strategy {
             TxVerificationStrategy::Default => chainstate::make_chainstate(
                 Arc::new(self.chain_config),
@@ -127,13 +127,16 @@ impl TestFrameworkBuilder {
                 self.custom_orphan_error_hook,
                 self.time_getter,
             ),
-        }
-        .unwrap();
+        }?;
 
-        TestFramework {
+        Ok(TestFramework {
             chainstate,
             storage: self.chainstate_storage,
             block_indexes: Vec::new(),
-        }
+        })
+    }
+
+    pub fn build(self) -> TestFramework {
+        self.try_build().unwrap()
     }
 }

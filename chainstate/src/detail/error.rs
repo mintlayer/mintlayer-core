@@ -122,6 +122,18 @@ pub enum BlockSizeError {
     SizeOfSmartContracts(usize, usize),
 }
 
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum InitializationError {
+    #[error("Block storage error: `{0}`")]
+    StorageError(#[from] chainstate_storage::Error),
+    #[error("{0}")]
+    PropertyQuery(#[from] PropertyQueryError),
+    #[error("Not at genesis but block at height 1 not available")]
+    Block1Missing,
+    #[error("Genesis mismatch: {0} according to configuration, {1} inferred from storage")]
+    GenesisMismatch(Id<GenBlock>, Id<GenBlock>),
+}
+
 impl From<OrphanAddError> for Result<(), OrphanCheckError> {
     fn from(err: OrphanAddError) -> Self {
         match err {

@@ -37,6 +37,7 @@ mod double_spend_tests;
 mod events_tests;
 mod fungible_tokens;
 mod homomorphism;
+mod initialization;
 mod nft_burn;
 mod nft_issuance;
 mod nft_reorgs;
