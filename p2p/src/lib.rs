@@ -17,6 +17,7 @@ pub mod config;
 pub mod constants;
 pub mod error;
 pub mod event;
+pub mod interface;
 pub mod message;
 pub mod net;
 pub mod peer_manager;
@@ -25,8 +26,9 @@ pub mod sync;
 
 use std::{fmt::Debug, str::FromStr, sync::Arc};
 
+use interface::p2p_interface::P2pInterface;
 use tap::TapFallible;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 
 use chainstate::chainstate_interface;
 use common::chain::ChainConfig;
@@ -42,89 +44,7 @@ use crate::{
 /// Result type with P2P errors
 pub type Result<T> = core::result::Result<T, P2pError>;
 
-pub struct P2pInterface<T: NetworkingService> {
-    p2p: P2P<T>,
-}
-
-impl<T> P2pInterface<T>
-where
-    T: NetworkingService,
-{
-    pub async fn connect(&mut self, addr: String) -> crate::Result<()>
-    where
-        <T as NetworkingService>::Address: FromStr,
-        <<T as NetworkingService>::Address as FromStr>::Err: Debug,
-        <T as NetworkingService>::PeerId: FromStr,
-        <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
-    {
-        let (tx, rx) = oneshot::channel();
-        self.p2p
-            .tx_swarm
-            .send(event::SwarmEvent::Connect(
-                addr.parse::<T::Address>().map_err(|_| {
-                    P2pError::ConversionError(ConversionError::InvalidAddress(addr))
-                })?,
-                tx,
-            ))
-            .map_err(|_| P2pError::ChannelClosed)?;
-        rx.await.map_err(P2pError::from)?
-    }
-
-    async fn disconnect(&self, peer_id: String) -> crate::Result<()>
-    where
-        <T as NetworkingService>::PeerId: FromStr,
-        <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
-    {
-        let (tx, rx) = oneshot::channel();
-        let peer_id = peer_id
-            .parse::<T::PeerId>()
-            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidPeerId(peer_id)))?;
-
-        self.p2p
-            .tx_swarm
-            .send(event::SwarmEvent::Disconnect(peer_id, tx))
-            .map_err(|_| P2pError::ChannelClosed)?;
-        rx.await.map_err(P2pError::from)?
-    }
-
-    pub async fn get_peer_count(&self) -> crate::Result<usize> {
-        let (tx, rx) = oneshot::channel();
-        self.p2p
-            .tx_swarm
-            .send(event::SwarmEvent::GetPeerCount(tx))
-            .map_err(P2pError::from)?;
-        rx.await.map_err(P2pError::from)
-    }
-
-    pub async fn get_bind_address(&self) -> crate::Result<String> {
-        let (tx, rx) = oneshot::channel();
-        self.p2p
-            .tx_swarm
-            .send(event::SwarmEvent::GetBindAddress(tx))
-            .map_err(P2pError::from)?;
-        rx.await.map_err(P2pError::from)
-    }
-
-    pub async fn get_peer_id(&self) -> crate::Result<String> {
-        let (tx, rx) = oneshot::channel();
-        self.p2p
-            .tx_swarm
-            .send(event::SwarmEvent::GetPeerId(tx))
-            .map_err(P2pError::from)?;
-        rx.await.map_err(P2pError::from)
-    }
-
-    pub async fn get_connected_peers(&self) -> crate::Result<Vec<String>> {
-        let (tx, rx) = oneshot::channel();
-        self.p2p
-            .tx_swarm
-            .send(event::SwarmEvent::GetConnectedPeers(tx))
-            .map_err(P2pError::from)?;
-        rx.await.map_err(P2pError::from)
-    }
-}
-
-struct P2P<T: NetworkingService> {
+struct P2p<T: NetworkingService> {
     // TODO: add abstraction for channels
     /// TX channel for sending swarm control events
     pub tx_swarm: mpsc::UnboundedSender<event::SwarmEvent<T>>,
@@ -133,7 +53,7 @@ struct P2P<T: NetworkingService> {
     pub _tx_sync: mpsc::UnboundedSender<event::SyncEvent>,
 }
 
-impl<T> P2P<T>
+impl<T> P2p<T>
 where
     T: 'static + NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -214,16 +134,16 @@ where
     }
 }
 
-impl<T: NetworkingService + 'static> subsystem::Subsystem for P2pInterface<T> {}
+impl subsystem::Subsystem for Box<dyn P2pInterface> {}
 
-pub type P2pHandle<T> = subsystem::Handle<P2pInterface<T>>;
+pub type P2pHandle = subsystem::Handle<Box<dyn P2pInterface>>;
 
 pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     mempool_handle: subsystem::Handle<Box<dyn MempoolInterface>>,
-) -> crate::Result<P2pInterface<T>>
+) -> crate::Result<Box<dyn P2pInterface>>
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -233,7 +153,6 @@ where
     <T as NetworkingService>::PeerId: FromStr,
     <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
 {
-    Ok(P2pInterface {
-        p2p: P2P::new(chain_config, p2p_config, chainstate_handle, mempool_handle).await?,
-    })
+    let p2p = P2p::<T>::new(chain_config, p2p_config, chainstate_handle, mempool_handle).await?;
+    Ok(Box::new(p2p))
 }

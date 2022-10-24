@@ -16,6 +16,7 @@
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
+    str::FromStr,
 };
 
 use tokio::sync::oneshot;
@@ -131,6 +132,14 @@ impl std::fmt::Display for MockRequestId {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Encode, Decode)]
 pub struct MockPeerId(u64);
+
+impl FromStr for MockPeerId {
+    type Err = <u64 as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        u64::from_str(s).map(Self)
+    }
+}
 
 impl MockPeerId {
     pub fn random() -> Self {

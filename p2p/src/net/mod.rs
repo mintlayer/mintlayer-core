@@ -20,6 +20,7 @@ pub mod types;
 use std::{
     fmt::{Debug, Display},
     hash::Hash,
+    str::FromStr,
     sync::Arc,
 };
 
@@ -41,15 +42,15 @@ pub trait NetworkingService {
     ///
     /// For an implementation built on libp2p, the address format is:
     ///     `/ip4/0.0.0.0/tcp/8888/p2p/<peer ID>`
-    type Address: Clone + Debug + Eq + Hash + Send + Sync + ToString;
+    type Address: Clone + Debug + Eq + Hash + Send + Sync + ToString + FromStr;
 
     /// Unique ID assigned to a peer on the network
-    type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString;
+    type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString + FromStr;
 
     /// Unique ID assigned to each received request from a peer
     type SyncingPeerRequestId: Debug + Eq + Hash + Send + Sync;
 
-    /// Handle for sending/receiving connecitivity-related events
+    /// Handle for sending/receiving connectivity-related events
     type ConnectivityHandle: Send;
 
     /// Handle for sending/receiving request-response messages
@@ -84,7 +85,7 @@ where
 {
     /// Connect to a remote node
     ///
-    /// This function doens't block on the connection but returns immediately
+    /// This function doesn't block on the connection but returns immediately
     /// after dialing the remote peer. The connection success/failure event
     /// is returned through the [`ConnectivityService::poll_next()`] function.
     ///
