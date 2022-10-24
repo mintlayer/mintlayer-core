@@ -30,7 +30,7 @@ make_config_setting!(
 );
 
 /// The chainstate subsystem configuration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ChainstateConfig {
     /// The number of maximum attempts to process a block.
     pub max_db_commit_attempts: MaxDbCommitAttempts,
@@ -58,15 +58,5 @@ impl ChainstateConfig {
     ) -> Self {
         self.min_max_bootstrap_import_buffer_sizes = min_max_bootstrap_import_buffer_sizes.into();
         self
-    }
-}
-
-impl Default for ChainstateConfig {
-    fn default() -> Self {
-        Self {
-            max_db_commit_attempts: Default::default(),
-            max_orphan_blocks: Default::default(),
-            min_max_bootstrap_import_buffer_sizes: Default::default(),
-        }
     }
 }
