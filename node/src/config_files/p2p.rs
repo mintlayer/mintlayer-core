@@ -79,18 +79,17 @@ impl From<MdnsConfigFile> for MdnsConfig {
     }
 }
 
-// TODO(PR) make all members option
 /// The p2p subsystem configuration.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct P2pConfigFile {
     /// Address to bind P2P to.
-    pub bind_address: String,
+    pub bind_address: Option<String>,
     /// The score threshold after which a peer is banned.
-    pub ban_threshold: u32,
+    pub ban_threshold: Option<u32>,
     /// The outbound connection timeout value in seconds.
-    pub outbound_connection_timeout: u64,
+    pub outbound_connection_timeout: Option<u64>,
     /// Multicast DNS configuration.
-    pub mdns_config: MdnsConfigFile,
+    pub mdns_config: MdnsConfigFile, // TODO(PR) see how to make this Option
 }
 
 impl From<P2pConfigFile> for P2pConfig {
@@ -108,9 +107,9 @@ impl From<P2pConfigFile> for P2pConfig {
 impl Default for P2pConfigFile {
     fn default() -> Self {
         Self {
-            bind_address: "/ip6/::1/tcp/3031".into(),
-            ban_threshold: 100,
-            outbound_connection_timeout: 10,
+            bind_address: Default::default(),
+            ban_threshold: Default::default(),
+            outbound_connection_timeout: Default::default(),
             mdns_config: MdnsConfigFile::Disabled,
         }
     }

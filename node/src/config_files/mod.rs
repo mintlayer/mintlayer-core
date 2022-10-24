@@ -136,10 +136,10 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         mdns_config: _,
     } = config;
 
-    let bind_address = options.p2p_addr.clone().unwrap_or(bind_address);
-    let ban_threshold = options.p2p_ban_threshold.unwrap_or(ban_threshold);
+    let bind_address = options.p2p_addr.clone().or(bind_address);
+    let ban_threshold = options.p2p_ban_threshold.or(ban_threshold);
     let outbound_connection_timeout =
-        options.p2p_outbound_connection_timeout.unwrap_or(outbound_connection_timeout);
+        options.p2p_outbound_connection_timeout.or(outbound_connection_timeout);
 
     P2pConfigFile {
         bind_address,

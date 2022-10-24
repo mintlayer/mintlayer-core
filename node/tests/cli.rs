@@ -60,9 +60,9 @@ fn create_default_config() {
     );
     assert_eq!(config.chainstate.chainstate_config.max_orphan_blocks, None);
 
-    assert_eq!(config.p2p.bind_address, "/ip6/::1/tcp/3031");
-    assert_eq!(config.p2p.ban_threshold, 100);
-    assert_eq!(config.p2p.outbound_connection_timeout, 10);
+    assert_eq!(config.p2p.bind_address, None);
+    assert_eq!(config.p2p.ban_threshold, None);
+    assert_eq!(config.p2p.outbound_connection_timeout, None);
 
     assert_eq!(
         config.rpc.http_bind_address,
@@ -123,9 +123,9 @@ fn read_config_override_values() {
         Some(max_orphan_blocks)
     );
 
-    assert_eq!(config.p2p.bind_address, p2p_addr);
-    assert_eq!(config.p2p.ban_threshold, p2p_ban_threshold);
-    assert_eq!(config.p2p.outbound_connection_timeout, p2p_timeout);
+    assert_eq!(config.p2p.bind_address, Some(p2p_addr.into()));
+    assert_eq!(config.p2p.ban_threshold, Some(p2p_ban_threshold));
+    assert_eq!(config.p2p.outbound_connection_timeout, Some(p2p_timeout));
 
     assert_eq!(config.rpc.http_bind_address, Some(http_rpc_addr));
     assert!(config.rpc.http_enabled.unwrap());
