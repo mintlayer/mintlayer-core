@@ -30,13 +30,6 @@ pub struct ChainstateConfigFile {
     pub min_max_bootstrap_import_buffer_sizes: Option<(usize, usize)>,
 }
 
-impl ChainstateConfigFile {
-    /// Creates a new chainstate configuration instance.
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
 impl From<ChainstateConfigFile> for ChainstateConfig {
     fn from(c: ChainstateConfigFile) -> Self {
         ChainstateConfig {
