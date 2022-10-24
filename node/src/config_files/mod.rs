@@ -60,7 +60,7 @@ impl NodeConfigFile {
     pub fn new(datadir: PathBuf) -> Result<Self> {
         let chainstate = ChainstateLauncherConfigFile::new();
         let p2p = P2pConfigFile::new();
-        let rpc = RpcConfigFile::new()?;
+        let rpc = RpcConfigFile::default();
         Ok(Self {
             datadir,
             chainstate,

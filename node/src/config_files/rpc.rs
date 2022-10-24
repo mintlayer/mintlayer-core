@@ -13,9 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{net::SocketAddr, str::FromStr};
+use std::net::SocketAddr;
 
-use anyhow::Result;
 use rpc::RpcConfig;
 use serde::{Deserialize, Serialize};
 
@@ -35,23 +34,24 @@ pub struct RpcConfigFile {
     pub ws_enabled: Option<bool>,
 }
 
-impl RpcConfigFile {
-    /// Creates a new rpc configuration instance.
-    pub fn new() -> Result<Self> {
-        Ok(Self {
-            http_bind_address: Some(SocketAddr::from_str("127.0.0.1:3030")?),
-            http_enabled: Some(true),
-            ws_bind_address: Some(SocketAddr::from_str("127.0.0.1:3031")?),
-            ws_enabled: Some(true),
-        })
-    }
-
-    pub fn into_rpc_config(self) -> RpcConfig {
+impl From<RpcConfigFile> for RpcConfig {
+    fn from(c: RpcConfigFile) -> Self {
         RpcConfig {
-            http_bind_address: self.http_bind_address,
-            http_enabled: self.http_enabled,
-            ws_bind_address: self.ws_bind_address,
-            ws_enabled: self.ws_enabled,
+            http_bind_address: c.http_bind_address.into(),
+            http_enabled: c.http_enabled.into(),
+            ws_bind_address: c.ws_bind_address.into(),
+            ws_enabled: c.ws_enabled.into(),
+        }
+    }
+}
+
+impl Default for RpcConfigFile {
+    fn default() -> Self {
+        Self {
+            http_bind_address: None,
+            http_enabled: None,
+            ws_bind_address: None,
+            ws_enabled: None,
         }
     }
 }

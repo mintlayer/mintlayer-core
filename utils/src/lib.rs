@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod blockuntilzero;
+pub mod config_setting;
 pub mod counttracker;
 pub mod ensure;
 pub mod eventhandler;

@@ -10,6 +10,7 @@ license = "MIT"
 # Local dependencies
 subsystem = { path = "../subsystem" }
 logging = { path = "../logging" }
+utils = { path = "../utils/" }
 
 # External dependencies
 anyhow = "1.0"
