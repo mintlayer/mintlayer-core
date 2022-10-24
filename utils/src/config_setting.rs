@@ -15,7 +15,7 @@
 
 #[macro_export]
 macro_rules! make_config_setting {
-    ($name:ident, $tp: ty, $default_value:expr) => {
+    ($name: ident, $tp: ty, $default_value: expr) => {
         #[derive(Debug, Clone)]
         pub struct $name {
             value: $tp,
