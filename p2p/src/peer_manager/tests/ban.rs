@@ -114,7 +114,7 @@ where
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
 
-    // try to restablish connection, it timeouts because it's rejected in the backend
+    // try to reestablish connection, it timeouts because it's rejected in the backend
     let addr = swarm2.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
     tokio::spawn(async move { swarm1.peer_connectivity_handle.connect(addr).await });
 
