@@ -25,9 +25,7 @@ use std::{
 
 use async_trait::async_trait;
 
-use common::primitives;
-
-use crate::{config, error, message, message::Announcement};
+use crate::{config, message, message::Announcement};
 
 /// [NetworkingService] provides the low-level network interface
 /// that each network service provider must implement

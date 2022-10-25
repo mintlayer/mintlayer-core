@@ -15,6 +15,8 @@
 
 use std::{fmt::Debug, sync::Arc};
 
+use tokio::{pin, select, time::Duration};
+
 use common::{
     chain::block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
     primitives::{Id, H256},
@@ -24,6 +26,7 @@ use p2p::{
     error::{P2pError, PublishError},
     message::Announcement,
     net::{
+        libp2p::Libp2pService,
         mock::{
             transport::{ChannelMockTransport, TcpMockTransport},
             MockService,
@@ -32,7 +35,9 @@ use p2p::{
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
 };
-use p2p_test_utils::{connect_services, MakeChannelAddress, MakeTcpAddress, MakeTestAddress};
+use p2p_test_utils::{
+    connect_services, MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress,
+};
 
 async fn block_announcement<A, S>()
 where
@@ -117,6 +122,11 @@ where
 }
 
 #[tokio::test]
+async fn block_announcement_libp2p() {
+    block_announcement::<MakeP2pAddress, Libp2pService>().await;
+}
+
+#[tokio::test]
 async fn block_announcement_tcp() {
     block_announcement::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -124,4 +134,59 @@ async fn block_announcement_tcp() {
 #[tokio::test]
 async fn block_announcement_channels() {
     block_announcement::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+}
+
+async fn block_announcement_no_subscription<A, S>()
+where
+    A: MakeTestAddress<Address = S::Address>,
+    S: NetworkingService + Debug,
+    S::SyncingMessagingHandle: SyncingMessagingService<S>,
+    S::ConnectivityHandle: ConnectivityService<S>,
+{
+    let config = Arc::new(common::chain::config::create_mainnet());
+    let (mut conn1, mut sync1) =
+        S::start(A::make_address(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
+    let (mut conn2, _sync2) = S::start(A::make_address(), Arc::clone(&config), Default::default())
+        .await
+        .unwrap();
+
+    connect_services::<S>(&mut conn1, &mut conn2).await;
+
+    let timeout = tokio::time::sleep(Duration::from_secs(1));
+    pin!(timeout);
+    loop {
+        select! {
+            res = sync1.make_announcement(Announcement::Block(
+                Block::new(
+                    vec![],
+                    Id::new(H256([0x01; 32])),
+                    BlockTimestamp::from_int_seconds(1337u64),
+                    ConsensusData::None,
+                    BlockReward::new(Vec::new()),
+                )
+                .unwrap(),
+            )) => {
+                assert_eq!(Err(P2pError::PublishError(PublishError::InsufficientPeers)), res);
+            }
+            _ = &mut timeout => break,
+        }
+    }
+}
+
+#[tokio::test]
+async fn block_announcement_no_subscription_libp2p() {
+    block_announcement_no_subscription::<MakeP2pAddress, Libp2pService>().await;
+}
+
+#[tokio::test]
+async fn block_announcement_no_subscription_tcp() {
+    block_announcement_no_subscription::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+async fn block_announcement_no_subscription_channels() {
+    block_announcement_no_subscription::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+        .await;
 }

@@ -21,7 +21,11 @@
 //! and advertise via the `Hello` message. Until the peer ID has been received, the
 //! peers are distinguished by their socket addresses.
 
-use std::{collections::HashMap, io::ErrorKind, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap},
+    io::ErrorKind,
+    sync::Arc,
+};
 
 use futures::FutureExt;
 use tap::TapFallible;
@@ -35,7 +39,7 @@ use logging::log;
 use serialization::Decode;
 
 use crate::{
-    error::{DialError, P2pError, PeerError},
+    error::{DialError, P2pError, PeerError, PublishError},
     message,
     net::{
         mock::{
@@ -54,6 +58,7 @@ use crate::{
 #[derive(Debug)]
 struct PeerContext {
     _peer_id: MockPeerId,
+    subscriptions: BTreeSet<PubSubTopic>,
     tx: mpsc::Sender<MockEvent>,
 }
 
@@ -279,17 +284,38 @@ where
         Ok(())
     }
 
-    async fn announce_data(&mut self, _topic: PubSubTopic, message: Vec<u8>) -> crate::Result<()> {
+    async fn subscribe(&mut self, topics: BTreeSet<PubSubTopic>) {
+        let subscription = Box::new(Message::Subscribe { topics });
+        for (id, peer) in &self.peers {
+            let _ = peer
+                .tx
+                .send(MockEvent::SendMessage(subscription.clone()))
+                .await
+                .tap_err(|e| log::error!("Failed to send announcement to peer {id}: {e:?}"));
+        }
+    }
+
+    async fn announce_data(&mut self, topic: PubSubTopic, message: Vec<u8>) -> crate::Result<()> {
         let announcement = message::Announcement::decode(&mut &message[..])?;
         let announcement = Box::new(Message::Announcement { announcement });
+        let mut active_peers = 0;
         for (id, peer) in &self.peers {
+            if !peer.subscriptions.contains(&topic) {
+                continue;
+            }
+            active_peers += 1;
             let _ = peer
                 .tx
                 .send(MockEvent::SendMessage(announcement.clone()))
                 .await
                 .tap_err(|e| log::error!("Failed to send announcement to peer {id}: {e:?}"));
         }
-        Ok(())
+
+        if active_peers > 0 {
+            Ok(())
+        } else {
+            Err(P2pError::PublishError(PublishError::InsufficientPeers))
+        }
     }
 
     /// Handle incoming request
@@ -333,9 +359,25 @@ where
             .map_err(P2pError::from)
     }
 
-    fn handle_announcement(&mut self, _announcement: Announcement) -> crate::Result<()> {
-        // TODO: Implement the block announcement (https://github.com/mintlayer/mintlayer-core/issues/488).
-        todo!();
+    fn subscribe_peer(&mut self, peer_id: MockPeerId, topics: BTreeSet<PubSubTopic>) {
+        match self.peers.get_mut(&peer_id) {
+            Some(peer) => peer.subscriptions = topics.into_iter().collect(),
+            None => log::warn!("Unable to subscribe non-existent peer: {peer_id:?}"),
+        }
+    }
+
+    async fn handle_announcement(
+        &mut self,
+        peer_id: MockPeerId,
+        announcement: Announcement,
+    ) -> crate::Result<()> {
+        self.sync_tx
+            .send(SyncingEvent::Announcement {
+                peer_id,
+                announcement: Box::new(announcement),
+            })
+            .await
+            .map_err(P2pError::from)
     }
 
     pub async fn run(&mut self) -> crate::Result<()> {
@@ -393,6 +435,7 @@ where
 
                             self.peers.insert(received_id, PeerContext {
                                 _peer_id: received_id,
+                                subscriptions: BTreeSet::new(),
                                 tx,
                             });
                             let _ = self.request_mgr.register_peer(received_id);
@@ -407,8 +450,11 @@ where
                             Message::Response { request_id, response} => {
                                 self.handle_incoming_response(peer_id, request_id, response).await?;
                             }
+                            Message::Subscribe { topics } => {
+                                self.subscribe_peer(peer_id, topics);
+                            }
                             Message::Announcement { announcement } => {
-                                self.handle_announcement(announcement)?;
+                                self.handle_announcement(peer_id, announcement).await?;
                             }
                         }
                         PeerEvent::ConnectionClosed => {
@@ -439,6 +485,9 @@ where
                     Command::SendResponse { request_id, message, response } => {
                         let res = self.send_response(request_id, message).await;
                         response.send(res).map_err(|_| P2pError::ChannelClosed)?;
+                    }
+                    Command::Subscribe { topics } => {
+                        self.subscribe(topics).await;
                     }
                     Command::AnnounceData { topic, message, response } => {
                         let res = self.announce_data(topic, message).await;
