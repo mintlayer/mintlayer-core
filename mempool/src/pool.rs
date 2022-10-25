@@ -904,47 +904,52 @@ where
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
     pub(crate) async fn run(mut self) -> Result<(), Error> {
-        let mut event_receiver = self.subscribe_to_chainstate_events().await?;
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    Some((block_id, block_height)) = event_receiver.recv() =>{
-                        self.new_tip_set(block_id, block_height)
-                    },
-                    Some(method_call) = self.receiver.recv() => match method_call {
-                        MempoolMethodCall::AddTransaction {tx, rtx} => {
-                            if let Err(e) = rtx.send(self.add_transaction(tx).await) {
-                                logging::log::error!("AddTransaction: Error sending response: {:?}", e);
-                            }
+        let event_receiver = self.subscribe_to_chainstate_events().await?;
+        tokio::spawn(async move { self.mempool_event_loop(event_receiver).await });
+        Ok(())
+    }
 
-                        },
-                        MempoolMethodCall::GetAll {rtx} => {
-                            if let Err(e) = rtx.send(self.get_all()) {
-                                logging::log::error!("GetAll: Error sending response: {:?}", e);
-                            }
-                        },
-                        MempoolMethodCall::CollectTxs {tx_accumulator, rtx} => {
-                            if let Err(e) = rtx.send(self.collect_txs(tx_accumulator)) {
-                                logging::log::error!("CollectTxs: Error sending response: {:?}", e.transactions());
-                            }
-                        },
-                        MempoolMethodCall::ContainsTransaction {tx_id, rtx} => {
-                            if let Err(e) = rtx.send(self.contains_transaction(&tx_id)) {
-                                logging::log::error!("ContainsTransaction: Error sending response: {:?}", e);
-                            }
-                        },
-                        MempoolMethodCall::SubscribeToEvents {handler, rtx} => {
-                            self.subscribe_to_events(handler);
-                            if let Err(e) = rtx.send(()) {
-                                logging::log::error!("SubscribeToEvents: Error sending response: {:?}", e);
-                            }
+    pub(crate) async fn mempool_event_loop(
+        mut self,
+        mut chainstate_event_receiver: mpsc::UnboundedReceiver<(Id<Block>, BlockHeight)>,
+    ) {
+        loop {
+            tokio::select! {
+                Some((block_id, block_height)) = chainstate_event_receiver.recv() =>{
+                    self.new_tip_set(block_id, block_height)
+                },
+                Some(method_call) = self.receiver.recv() => match method_call {
+                    MempoolMethodCall::AddTransaction {tx, rtx} => {
+                        if let Err(e) = rtx.send(self.add_transaction(tx).await) {
+                            logging::log::error!("AddTransaction: Error sending response: {:?}", e);
+                        }
+
+                    },
+                    MempoolMethodCall::GetAll {rtx} => {
+                        if let Err(e) = rtx.send(self.get_all()) {
+                            logging::log::error!("GetAll: Error sending response: {:?}", e);
+                        }
+                    },
+                    MempoolMethodCall::CollectTxs {tx_accumulator, rtx} => {
+                        if let Err(e) = rtx.send(self.collect_txs(tx_accumulator)) {
+                            logging::log::error!("CollectTxs: Error sending response: {:?}", e.transactions());
+                        }
+                    },
+                    MempoolMethodCall::ContainsTransaction {tx_id, rtx} => {
+                        if let Err(e) = rtx.send(self.contains_transaction(&tx_id)) {
+                            logging::log::error!("ContainsTransaction: Error sending response: {:?}", e);
+                        }
+                    },
+                    MempoolMethodCall::SubscribeToEvents {handler, rtx} => {
+                        self.subscribe_to_events(handler);
+                        if let Err(e) = rtx.send(()) {
+                            logging::log::error!("SubscribeToEvents: Error sending response: {:?}", e);
                         }
                     }
-
                 }
+
             }
-        });
-        Ok(())
+        }
     }
 
     pub(crate) async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
