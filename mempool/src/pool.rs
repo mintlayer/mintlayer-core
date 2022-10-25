@@ -918,36 +918,44 @@ where
                 Some((block_id, block_height)) = chainstate_event_receiver.recv() =>{
                     self.new_tip_set(block_id, block_height)
                 },
-                Some(method_call) = self.receiver.recv() => match method_call {
-                    MempoolMethodCall::AddTransaction {tx, rtx} => {
-                        if let Err(e) = rtx.send(self.add_transaction(tx).await) {
-                            logging::log::error!("AddTransaction: Error sending response: {:?}", e);
-                        }
+                Some(method_call) = self.receiver.recv() => self.handle_mempool_method_call(method_call).await
+            }
+        }
+    }
 
-                    },
-                    MempoolMethodCall::GetAll {rtx} => {
-                        if let Err(e) = rtx.send(self.get_all()) {
-                            logging::log::error!("GetAll: Error sending response: {:?}", e);
-                        }
-                    },
-                    MempoolMethodCall::CollectTxs {tx_accumulator, rtx} => {
-                        if let Err(e) = rtx.send(self.collect_txs(tx_accumulator)) {
-                            logging::log::error!("CollectTxs: Error sending response: {:?}", e.transactions());
-                        }
-                    },
-                    MempoolMethodCall::ContainsTransaction {tx_id, rtx} => {
-                        if let Err(e) = rtx.send(self.contains_transaction(&tx_id)) {
-                            logging::log::error!("ContainsTransaction: Error sending response: {:?}", e);
-                        }
-                    },
-                    MempoolMethodCall::SubscribeToEvents {handler, rtx} => {
-                        self.subscribe_to_events(handler);
-                        if let Err(e) = rtx.send(()) {
-                            logging::log::error!("SubscribeToEvents: Error sending response: {:?}", e);
-                        }
-                    }
+    pub(crate) async fn handle_mempool_method_call(&mut self, method_call: MempoolMethodCall) {
+        match method_call {
+            MempoolMethodCall::AddTransaction { tx, rtx } => {
+                if let Err(e) = rtx.send(self.add_transaction(tx).await) {
+                    logging::log::error!("AddTransaction: Error sending response: {:?}", e);
                 }
-
+            }
+            MempoolMethodCall::GetAll { rtx } => {
+                if let Err(e) = rtx.send(self.get_all()) {
+                    logging::log::error!("GetAll: Error sending response: {:?}", e);
+                }
+            }
+            MempoolMethodCall::CollectTxs {
+                tx_accumulator,
+                rtx,
+            } => {
+                if let Err(e) = rtx.send(self.collect_txs(tx_accumulator)) {
+                    logging::log::error!(
+                        "CollectTxs: Error sending response: {:?}",
+                        e.transactions()
+                    );
+                }
+            }
+            MempoolMethodCall::ContainsTransaction { tx_id, rtx } => {
+                if let Err(e) = rtx.send(self.contains_transaction(&tx_id)) {
+                    logging::log::error!("ContainsTransaction: Error sending response: {:?}", e);
+                }
+            }
+            MempoolMethodCall::SubscribeToEvents { handler, rtx } => {
+                self.subscribe_to_events(handler);
+                if let Err(e) = rtx.send(()) {
+                    logging::log::error!("SubscribeToEvents: Error sending response: {:?}", e);
+                }
             }
         }
     }
