@@ -49,7 +49,7 @@ use crypto::random::SliceRandom;
 #[trace]
 #[case(Seed::from_entropy())]
 fn spend_output_in_the_same_block(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
+    ::utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
@@ -82,7 +82,7 @@ fn spend_output_in_the_same_block(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
+    ::utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
@@ -123,7 +123,7 @@ fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn double_spend_tx_in_the_same_block(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
+    ::utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
@@ -170,7 +170,7 @@ fn double_spend_tx_in_the_same_block(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn double_spend_tx_in_another_block(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
+    ::utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
@@ -210,7 +210,7 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn overspend_single_output(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
+    ::utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
@@ -241,7 +241,7 @@ fn overspend_single_output(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn overspend_multiple_outputs(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
+    ::utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
 
@@ -294,7 +294,7 @@ fn overspend_multiple_outputs(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn duplicate_input_in_the_same_tx(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
+    ::utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
@@ -347,7 +347,7 @@ fn duplicate_input_in_the_same_tx(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn same_input_diff_sig_in_the_same_tx(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
+    ::utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
@@ -405,7 +405,7 @@ fn same_input_diff_sig_in_the_same_tx(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn duplicate_tx_in_the_same_block(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
+    ::utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);
@@ -435,7 +435,7 @@ fn duplicate_tx_in_the_same_block(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn duplicate_odd_tx_in_the_same_block(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
+    ::utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
         let mut rng = make_seedable_rng(seed);

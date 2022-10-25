@@ -26,11 +26,9 @@ use self::{
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{CoinOrTokenId, ConsumedTokenIssuanceCache},
     tx_index_cache::TxIndexCache,
-    utils::get_output_token_id_and_amount,
 };
 use ::utils::ensure;
 use cached_operation::CachedInputsOperation;
-use fallible_iterator::FallibleIterator;
 
 use std::collections::{btree_map::Entry, BTreeMap};
 
@@ -55,11 +53,13 @@ mod token_issuance_cache;
 use self::token_issuance_cache::TokenIssuanceCache;
 
 mod utils;
-use self::utils::{check_transferred_amount, get_input_token_id_and_amount};
+use self::utils::{
+    calculate_total_outputs, check_transferred_amount, get_input_token_id_and_amount, get_total_fee,
+};
 
 // TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee`
 //       that essentially belongs to this type, but return Amount
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fee(pub Amount);
 
 pub struct Subsidy(pub Amount);
@@ -159,19 +159,6 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         }
     }
 
-    fn calculate_total_outputs(
-        outputs: &[TxOutput],
-        include_issuance: Option<&Transaction>,
-    ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
-        let iter = outputs
-            .iter()
-            .map(|output| get_output_token_id_and_amount(output.value(), include_issuance));
-        let iter = fallible_iterator::convert(iter).filter_map(Ok).map_err(Into::into);
-
-        let result = AmountsMap::from_fallible_iter(iter)?;
-        Ok(result.take())
-    }
-
     fn amount_from_outpoint(
         &self,
         tx_id: OutPointSourceId,
@@ -219,29 +206,15 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         Ok(amounts_map.take())
     }
 
-    fn get_total_fee(
-        inputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
-        outputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
-    ) -> Result<Fee, ConnectTransactionError> {
-        // TODO: fees should support tokens as well in the future
-        let outputs_total =
-            *outputs_total_map.get(&CoinOrTokenId::Coin).unwrap_or(&Amount::from_atoms(0));
-        let inputs_total =
-            *inputs_total_map.get(&CoinOrTokenId::Coin).unwrap_or(&Amount::from_atoms(0));
-        (inputs_total - outputs_total).map(Fee).ok_or(
-            ConnectTransactionError::TxFeeTotalCalcFailed(inputs_total, outputs_total),
-        )
-    }
-
     fn check_transferred_amounts_and_get_fee(
         &self,
         tx: &Transaction,
     ) -> Result<Fee, ConnectTransactionError> {
         let inputs_total_map = self.calculate_total_inputs(tx.inputs())?;
-        let outputs_total_map = Self::calculate_total_outputs(tx.outputs(), None)?;
+        let outputs_total_map = calculate_total_outputs(tx.outputs(), None)?;
 
         check_transferred_amount(&inputs_total_map, &outputs_total_map)?;
-        let total_fee = Self::get_total_fee(&inputs_total_map, &outputs_total_map)?;
+        let total_fee = get_total_fee(&inputs_total_map, &outputs_total_map)?;
 
         Ok(total_fee)
     }
@@ -310,7 +283,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                         TokensError::TokensInBlockReward,
                     ));
                 }
-                Ok(Self::calculate_total_outputs(outputs, None)?
+                Ok(calculate_total_outputs(outputs, None)?
                     .get(&CoinOrTokenId::Coin)
                     .cloned()
                     .unwrap_or(Amount::from_atoms(0)))
@@ -417,10 +390,6 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 .utxo(outpoint)
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
-            // TODO: See if we can check timelocks for the current block without needing the block index.
-            //       The problem is that it won't be possible to use tx_verifier without the block index history
-            //       if this is not restricted with the 'if' condition. But the side effect is that all
-            //       timelock txs be rejected if they spend outputs from the same block.
             if utxo.output().has_timelock() {
                 let height = match utxo.source() {
                     utxo::UtxoSource::Blockchain(h) => *h,

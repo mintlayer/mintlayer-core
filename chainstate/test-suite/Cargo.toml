@@ -15,6 +15,7 @@ common = { path = '../../common' }
 test-utils = {path = '../../test-utils'}
 crypto = { path = '../../crypto' }
 serialization = { path = '../../serialization' }
+tx-verifier = { path = '../tx-verifier' }
 utils = { path = '../../utils' }
 consensus = { path = '../../consensus' }
 logging = { path = '../../logging' }
