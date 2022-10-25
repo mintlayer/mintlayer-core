@@ -313,7 +313,7 @@ where
     async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()> {
         self.cmd_tx
             .send(types::Command::Subscribe {
-                topics: topics.into_iter().cloned().collect(),
+                topics: topics.iter().collect(),
             })
             .await
             .map_err(P2pError::from)
