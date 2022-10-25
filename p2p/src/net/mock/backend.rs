@@ -295,6 +295,10 @@ where
         }
     }
 
+    /// Sends the announcement to all peers.
+    ///
+    /// Returns the `InsufficientPeers` error if there are no peers that subscribed to the related
+    /// topic.
     async fn announce_data(&mut self, topic: PubSubTopic, message: Vec<u8>) -> crate::Result<()> {
         let announcement = message::Announcement::decode(&mut &message[..])?;
         let announcement = Box::new(Message::Announcement { announcement });
