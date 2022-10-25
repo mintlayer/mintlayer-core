@@ -620,6 +620,47 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         Ok(fee)
     }
 
+    pub fn can_disconnect_transaction(
+        &mut self,
+        block_id: &Id<Block>,
+        tx_id: &Id<Transaction>,
+    ) -> bool {
+        match self.fetch_block_undo(block_id) {
+            Ok(block_undo) => !block_undo.has_children_of(tx_id),
+            Err(_) => false,
+        }
+    }
+
+    pub fn disconnect_transaction(
+        &mut self,
+        block_id: &Id<Block>,
+        tx: &SignedTransaction,
+    ) -> Result<(), ConnectTransactionError> {
+        let tx_id = tx.transaction().get_id();
+        let tx_index_fetcher =
+            |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
+
+        let tx_undo = self.take_tx_undo(&block_id, &tx_id)?;
+        self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
+
+        // pre-cache all inputs
+        self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
+
+        // pre-cache token ids before removing them
+        self.token_issuance_cache.precache_token_issuance(
+            |id| self.storage_ref.get_token_aux_data(id),
+            tx.transaction(),
+        )?;
+
+        // unspend inputs
+        self.tx_index_cache.unspend_tx_index_inputs(tx.inputs())?;
+
+        // Remove issued tokens
+        self.token_issuance_cache.unregister(tx.transaction())?;
+
+        Ok(())
+    }
+
     pub fn disconnect_transactable(
         &mut self,
         spend_ref: BlockTransactableRef,
@@ -627,37 +668,18 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         // Delete TxMainChainIndex for the current tx
         self.tx_index_cache.remove_tx_index(spend_ref)?;
 
-        let tx_index_fetcher =
-            |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
-
         match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
                 let block_id = block.get_id();
                 let tx = block.transactions().get(tx_num).ok_or(
                     ConnectTransactionError::TxNumWrongInBlockOnDisconnect(tx_num, block_id),
                 )?;
-
-                let tx_id = tx.transaction().get_id();
-
-                let tx_undo = self.take_tx_undo(&block_id, &tx_id)?;
-                self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
-
-                // pre-cache all inputs
-                self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
-
-                // pre-cache token ids before removing them
-                self.token_issuance_cache.precache_token_issuance(
-                    |id| self.storage_ref.get_token_aux_data(id),
-                    tx.transaction(),
-                )?;
-
-                // unspend inputs
-                self.tx_index_cache.unspend_tx_index_inputs(tx.inputs())?;
-
-                // Remove issued tokens
-                self.token_issuance_cache.unregister(tx.transaction())?;
+                self.disconnect_transaction(&block_id, tx)?;
             }
             BlockTransactableRef::BlockReward(block) => {
+                let tx_index_fetcher =
+                    |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
+
                 let reward_transactable = block.block_reward_transactable();
 
                 let reward_undo = self.take_block_reward_undo(&block.get_id())?;

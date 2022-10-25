@@ -152,7 +152,7 @@ impl BlockUndo {
         range_start..=range_end
     }
 
-    fn has_children_of(&self, tx_id: &Id<Transaction>) -> bool {
+    pub fn has_children_of(&self, tx_id: &Id<Transaction>) -> bool {
         // Check if the tx is a dependency for other txs.
         let dependencies_count =
             self.parent_child_dependencies.range(Self::tx_children_range(tx_id)).count();
