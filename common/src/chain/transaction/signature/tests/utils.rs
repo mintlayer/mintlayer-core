@@ -14,9 +14,11 @@
 // limitations under the License.
 
 use itertools::Itertools;
-use rand::Rng;
 
-use crypto::key::{PrivateKey, PublicKey};
+use crypto::{
+    key::{PrivateKey, PublicKey},
+    random::Rng,
+};
 use script::Script;
 
 use crate::{
@@ -72,15 +74,14 @@ impl MutableTransaction {
 }
 
 pub fn generate_unsigned_tx(
+    rng: &mut impl Rng,
     destination: &Destination,
     inputs_count: usize,
     outputs_count: usize,
 ) -> Result<Transaction, TransactionCreationError> {
-    let mut rng = rand::thread_rng();
-
     let inputs = std::iter::from_fn(|| {
         Some(TxInput::new(
-            Id::<Transaction>::new(H256::random()).into(),
+            Id::<Transaction>::new(H256::random_using(rng)).into(),
             rng.gen(),
         ))
     })
@@ -118,13 +119,14 @@ pub fn sign_whole_tx(
 }
 
 pub fn generate_and_sign_tx(
+    rng: &mut impl Rng,
     destination: &Destination,
     inputs: usize,
     outputs: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
 ) -> Result<SignedTransaction, TransactionCreationError> {
-    let tx = generate_unsigned_tx(destination, inputs, outputs).unwrap();
+    let tx = generate_unsigned_tx(rng, destination, inputs, outputs).unwrap();
     let signed_tx = sign_whole_tx(tx, private_key, sighash_type, destination).unwrap();
     assert_eq!(verify_signed_tx(&signed_tx, destination), Ok(()));
     Ok(signed_tx)
@@ -172,13 +174,16 @@ pub fn sig_hash_types() -> impl Iterator<Item = SigHashType> + Clone {
 }
 
 /// Returns an iterator over all possible destinations.
-pub fn destinations(public_key: PublicKey) -> impl Iterator<Item = Destination> {
+pub fn destinations(
+    rng: &mut impl Rng,
+    public_key: PublicKey,
+) -> impl Iterator<Item = Destination> {
     // TODO: find a way to write this such that it loops over all possible arms instead of doing this manually
     [
         Destination::Address(PublicKeyHash::from(&public_key)),
         Destination::PublicKey(public_key),
         Destination::AnyoneCanSpend,
-        Destination::ScriptHash(Id::<Script>::from(H256::random())),
+        Destination::ScriptHash(Id::<Script>::from(H256::random_using(rng))),
     ]
     .into_iter()
 }

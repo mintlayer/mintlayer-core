@@ -294,7 +294,7 @@ pub fn create_rand_block_undo(
 
     let tx_undo = tx_undo
         .into_iter()
-        .map(|u| (H256::random().into(), u))
+        .map(|u| (H256::random_using(rng).into(), u))
         .collect::<BTreeMap<_, _>>();
 
     BlockUndo::new(Some(reward_undo), tx_undo).unwrap()
@@ -308,7 +308,7 @@ fn undo_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let block_undo0 = create_rand_block_undo(&mut rng, 10, 5);
     // create id:
-    let id0: Id<Block> = Id::new(H256::random());
+    let id0: Id<Block> = Id::new(H256::random_using(&mut rng));
 
     // set up the store
     let mut store = TestStore::new_empty().unwrap();
@@ -327,7 +327,7 @@ fn undo_test(#[case] seed: Seed) {
 
     let block_undo1 = create_rand_block_undo(&mut rng, 5, 10);
     // create id:
-    let id1: Id<Block> = Id::new(H256::random());
+    let id1: Id<Block> = Id::new(H256::random_using(&mut rng));
 
     assert_eq!(store.get_undo_data(id1), Ok(None));
     assert_eq!(store.set_undo_data(id1, &block_undo1), Ok(()));

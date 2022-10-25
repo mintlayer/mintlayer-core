@@ -608,14 +608,20 @@ impl Uint256 {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
     use serialization::DecodeAll;
 
     use super::*;
     use crate::uint::BitArray;
+    use test_utils::random::Seed;
 
-    #[test]
-    pub fn uint256_serialization() {
-        let h256val = H256::random();
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    pub fn uint256_serialization(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let h256val = H256::random_using(&mut rng);
         let uint256val: Uint256 = h256val.into();
         let encoded_h256 = h256val.encode();
         let encoded_uint256val = uint256val.encode();

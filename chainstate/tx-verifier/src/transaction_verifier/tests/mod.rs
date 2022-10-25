@@ -22,10 +22,16 @@ use common::{
     chain::{Destination, OutPoint, OutputPurpose},
     primitives::{amount::UnsignedIntType, H256},
 };
-use crypto::key::{KeyKind, PrivateKey};
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    random::Rng,
+};
 
-fn create_utxo(value: UnsignedIntType) -> (OutPoint, Utxo) {
-    let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::random())), 0);
+fn create_utxo(rng: &mut impl Rng, value: UnsignedIntType) -> (OutPoint, Utxo) {
+    let outpoint = OutPoint::new(
+        OutPointSourceId::Transaction(Id::new(H256::random_using(rng))),
+        0,
+    );
     let (_, pub_key1) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let output1 = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(value)),

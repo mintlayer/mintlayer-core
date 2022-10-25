@@ -476,12 +476,6 @@ macro_rules! impl_rand_for_fixed_hash {
                 *self = crypto::random::distributions::Standard.sample(rng);
             }
 
-            /// Assign `self` to a cryptographically random value.
-            pub fn randomize(&mut self) {
-                let mut rng = crypto::random::rngs::OsRng;
-                self.randomize_using(&mut rng);
-            }
-
             /// Create a new hash with cryptographically random content using the
             /// given random number generator.
             pub fn random_using<R>(rng: &mut R) -> Self
@@ -491,13 +485,6 @@ macro_rules! impl_rand_for_fixed_hash {
                 let mut ret = Self::zero();
                 ret.randomize_using(rng);
                 ret
-            }
-
-            /// Create a new hash with cryptographically random content.
-            pub fn random() -> Self {
-                let mut hash = Self::zero();
-                hash.randomize();
-                hash
             }
         }
     };

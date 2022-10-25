@@ -462,7 +462,7 @@ fn token_transfer_test(#[case] seed: Seed) {
                     )
                     .add_output(TxOutput::new(
                         TokenData::TokenTransferV1(TokenTransferV1 {
-                            token_id: TokenId::random(),
+                            token_id: TokenId::random_using(&mut rng),
                             amount: total_funds,
                         })
                         .into(),
@@ -1752,7 +1752,7 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
         // Check if it transfer
         let reward_output = TxOutput::new(
             TokenData::TokenTransferV1(TokenTransferV1 {
-                token_id: TokenId::random(),
+                token_id: TokenId::random_using(&mut rng),
                 amount: total_funds,
             })
             .into(),
@@ -1774,7 +1774,7 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
         // Check if it burn
         let reward_output = TxOutput::new(
             TokenData::TokenBurnV1(TokenBurnV1 {
-                token_id: TokenId::random(),
+                token_id: TokenId::random_using(&mut rng),
                 amount_to_burn: total_funds,
             })
             .into(),

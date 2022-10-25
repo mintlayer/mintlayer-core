@@ -26,6 +26,8 @@ use common::{
     primitives::H256,
 };
 use mockall::predicate::eq;
+use rstest::rstest;
+use test_utils::random::Seed;
 use utxo::{TxUndoWithSources, UtxosStorageRead};
 
 // Create the following hierarchy:
@@ -34,41 +36,45 @@ use utxo::{TxUndoWithSources, UtxosStorageRead};
 // utxo2 & block_undo2    utxo1 & block_undo1    utxo0 & block_undo0
 //
 // Check that data can be accessed through derived entities
-#[test]
-fn hierarchy_test_utxo() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn hierarchy_test_utxo(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let (outpoint0, utxo0) = create_utxo(100);
-    let block_undo_id_0: Id<Block> = Id::new(H256::random());
-    let (_, utxo0_undo) = create_utxo(100);
+    let (outpoint0, utxo0) = create_utxo(&mut rng, 100);
+    let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let (_, utxo0_undo) = create_utxo(&mut rng, 100);
     let block_undo_0 = BlockUndo::new(
         None,
         BTreeMap::from([(
-            H256::random().into(),
+            H256::random_using(&mut rng).into(),
             TxUndoWithSources::new(vec![utxo0_undo], vec![]),
         )]),
     )
     .unwrap();
 
-    let (outpoint1, utxo1) = create_utxo(1000);
-    let block_undo_id_1: Id<Block> = Id::new(H256::random());
-    let (_, utxo1_undo) = create_utxo(100);
+    let (outpoint1, utxo1) = create_utxo(&mut rng, 1000);
+    let block_undo_id_1: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let (_, utxo1_undo) = create_utxo(&mut rng, 100);
     let block_undo_1 = BlockUndo::new(
         None,
         BTreeMap::from([(
-            H256::random().into(),
+            H256::random_using(&mut rng).into(),
             TxUndoWithSources::new(vec![utxo1_undo], vec![]),
         )]),
     )
     .unwrap();
 
-    let (outpoint2, utxo2) = create_utxo(2000);
-    let block_undo_id_2: Id<Block> = Id::new(H256::random());
-    let (_, utxo2_undo) = create_utxo(100);
+    let (outpoint2, utxo2) = create_utxo(&mut rng, 2000);
+    let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let (_, utxo2_undo) = create_utxo(&mut rng, 100);
     let block_undo_2 = BlockUndo::new(
         None,
         BTreeMap::from([(
-            H256::random().into(),
+            H256::random_using(&mut rng).into(),
             TxUndoWithSources::new(vec![utxo2_undo], vec![]),
         )]),
     )
@@ -176,19 +182,23 @@ fn hierarchy_test_utxo() {
 // tx_index2              tx_index1              tx_index0
 //
 // Check that data can be accessed through derived entities
-#[test]
-fn hierarchy_test_tx_index() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn hierarchy_test_tx_index(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = ConfigBuilder::test_chain().build();
 
     let outpoint0 = OutPointSourceId::Transaction(Id::new(H256::zero()));
     let pos0 = TxMainChainPosition::new(H256::zero().into(), 1).into();
     let tx_index_0 = TxMainChainIndex::new(pos0, 1).unwrap();
 
-    let outpoint1 = OutPointSourceId::Transaction(Id::new(H256::random()));
+    let outpoint1 = OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng)));
     let pos1 = TxMainChainPosition::new(H256::from_low_u64_be(1).into(), 1).into();
     let tx_index_1 = TxMainChainIndex::new(pos1, 1).unwrap();
 
-    let outpoint2 = OutPointSourceId::Transaction(Id::new(H256::random()));
+    let outpoint2 = OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng)));
     let pos2 = TxMainChainPosition::new(H256::from_low_u64_be(2).into(), 1).into();
     let tx_index_2 = TxMainChainIndex::new(pos2, 2).unwrap();
 
@@ -255,26 +265,30 @@ fn hierarchy_test_tx_index() {
 // token2 & tx_id2        token1 & tx_id1        token0 & tx_id0
 //
 // Check that data can be accessed through derived entities
-#[test]
-fn hierarchy_test_tokens() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn hierarchy_test_tokens(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let token_id_0 = H256::random();
+    let token_id_0 = H256::random_using(&mut rng);
     let token_data_0 = TokenAuxiliaryData::new(
         Transaction::new(0, vec![], vec![], 0).unwrap(),
-        Id::new(H256::random()),
+        Id::new(H256::random_using(&mut rng)),
     );
 
-    let token_id_1 = H256::random();
+    let token_id_1 = H256::random_using(&mut rng);
     let token_data_1 = TokenAuxiliaryData::new(
         Transaction::new(1, vec![], vec![], 1).unwrap(),
-        Id::new(H256::random()),
+        Id::new(H256::random_using(&mut rng)),
     );
 
-    let token_id_2 = H256::random();
+    let token_id_2 = H256::random_using(&mut rng);
     let token_data_2 = TokenAuxiliaryData::new(
         Transaction::new(2, vec![], vec![], 2).unwrap(),
-        Id::new(H256::random()),
+        Id::new(H256::random_using(&mut rng)),
     );
 
     let mut store = mock::MockStore::new();
@@ -392,11 +406,15 @@ fn hierarchy_test_tokens() {
     );
 }
 
-#[test]
-fn hierarchy_test_block_index() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn hierarchy_test_block_index(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let block_id: Id<Block> = Id::new(H256::random());
+    let block_id: Id<Block> = Id::new(H256::random_using(&mut rng));
     let block_index = GenBlockIndex::Genesis(Arc::clone(chain_config.genesis_block()));
     let mut store = mock::MockStore::new();
     store

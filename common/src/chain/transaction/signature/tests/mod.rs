@@ -16,8 +16,7 @@
 use std::vec;
 
 use itertools::Itertools;
-
-use crypto::key::{KeyKind, PrivateKey};
+use rstest::rstest;
 
 use self::utils::*;
 use super::{
@@ -33,6 +32,9 @@ use crate::{
     },
     primitives::{Amount, Id, H256},
 };
+use crypto::key::{KeyKind, PrivateKey};
+use crypto::random::Rng;
+use test_utils::random::Seed;
 
 mod mixed_sighash_types;
 mod sign_and_mutate;
@@ -40,13 +42,18 @@ mod sign_and_verify;
 
 pub mod utils;
 
-#[test]
-fn sign_and_verify_different_sighash_types() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn sign_and_verify_different_sighash_types(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
 
     for sighash_type in sig_hash_types() {
-        let tx = generate_and_sign_tx(&destination, 3, 3, &private_key, sighash_type).unwrap();
+        let tx =
+            generate_and_sign_tx(&mut rng, &destination, 3, 3, &private_key, sighash_type).unwrap();
         assert_eq!(
             verify_signed_tx(&tx, &destination),
             Ok(()),
@@ -56,12 +63,18 @@ fn sign_and_verify_different_sighash_types() {
 }
 
 // Trying to verify a transaction without signature should produce the corresponding error.
-#[test]
-fn verify_no_signature() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn verify_no_signature(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
 
-    for destination in destinations(public_key).filter(|d| d != &Destination::AnyoneCanSpend) {
-        let tx = generate_unsigned_tx(&destination, 3, 3).unwrap();
+    for destination in
+        destinations(&mut rng, public_key).filter(|d| d != &Destination::AnyoneCanSpend)
+    {
+        let tx = generate_unsigned_tx(&mut rng, &destination, 3, 3).unwrap();
         let witnesses = (0..tx.inputs().len())
             .into_iter()
             .map(|_| InputWitness::NoSignature(Some(vec![1, 2, 3, 4, 5, 6, 7, 8, 9])))
@@ -76,8 +89,12 @@ fn verify_no_signature() {
 }
 
 // Try to verify empty and wrong (arbitrary bytes) signatures.
-#[test]
-fn verify_invalid_signature() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn verify_invalid_signature(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
     let empty_signature = vec![];
@@ -86,7 +103,7 @@ fn verify_invalid_signature() {
     for (sighash_type, raw_signature) in
         sig_hash_types().cartesian_product([empty_signature, invalid_signature])
     {
-        let tx = generate_unsigned_tx(&destination, 3, 3).unwrap();
+        let tx = generate_unsigned_tx(&mut rng, &destination, 3, 3).unwrap();
         let witnesses = (0..tx.inputs().len())
             .into_iter()
             .map(|_| {
@@ -106,15 +123,20 @@ fn verify_invalid_signature() {
     }
 }
 
-#[test]
-fn verify_signature_invalid_signature_index() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn verify_signature_invalid_signature_index(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     const INVALID_SIGNATURE_INDEX: usize = 1234567890;
 
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
 
     for sighash_type in sig_hash_types() {
-        let tx = generate_and_sign_tx(&destination, 3, 3, &private_key, sighash_type).unwrap();
+        let tx =
+            generate_and_sign_tx(&mut rng, &destination, 3, 3, &private_key, sighash_type).unwrap();
         assert_eq!(
             verify_signature(&destination, &tx, INVALID_SIGNATURE_INDEX),
             Err(TransactionSigError::InvalidSignatureIndex(
@@ -126,8 +148,12 @@ fn verify_signature_invalid_signature_index() {
     }
 }
 
-#[test]
-fn verify_signature_wrong_destination() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn verify_signature_wrong_destination(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint = Destination::PublicKey(public_key);
 
@@ -135,7 +161,8 @@ fn verify_signature_wrong_destination() {
     let different_outpoint = Destination::PublicKey(public_key_2);
 
     for sighash_type in sig_hash_types() {
-        let tx = generate_and_sign_tx(&outpoint, 3, 3, &private_key, sighash_type).unwrap();
+        let tx =
+            generate_and_sign_tx(&mut rng, &outpoint, 3, 3, &private_key, sighash_type).unwrap();
         assert_eq!(
             verify_signature(&different_outpoint, &tx, 0),
             Err(TransactionSigError::SignatureVerificationFailed),
@@ -145,98 +172,124 @@ fn verify_signature_wrong_destination() {
 }
 
 // ALL applies to all inputs and outputs, so changing or adding anything makes it invalid.
-#[test]
-fn mutate_all() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn mutate_all(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-    let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
+    let original_tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &outpoint_dest);
 
-    check_insert_input(&original_tx, &outpoint_dest, true);
-    check_mutate_input(&original_tx, &outpoint_dest, true);
+    check_insert_input(&mut rng, &original_tx, &outpoint_dest, true);
+    check_mutate_input(&mut rng, &original_tx, &outpoint_dest, true);
     check_insert_output(&original_tx, &outpoint_dest, true);
     check_mutate_output(&original_tx, &outpoint_dest, true);
 }
 
 // ALL|ANYONECANPAY applies to one input and all outputs, so adding input is ok, but anything else isn't.
-#[test]
-fn mutate_all_anyonecanpay() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn mutate_all_anyonecanpay(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-    let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
+    let original_tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &outpoint_dest);
 
-    check_insert_input(&original_tx, &outpoint_dest, false);
-    check_mutate_input(&original_tx, &outpoint_dest, true);
+    check_insert_input(&mut rng, &original_tx, &outpoint_dest, false);
+    check_mutate_input(&mut rng, &original_tx, &outpoint_dest, true);
     check_insert_output(&original_tx, &outpoint_dest, true);
     check_mutate_output(&original_tx, &outpoint_dest, true);
 }
 
 // NONE is applied to all inputs and none of the outputs, so the latter can be changed in any way.
-#[test]
-fn mutate_none() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn mutate_none(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-    let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
+    let original_tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &outpoint_dest);
 
-    check_insert_input(&original_tx, &outpoint_dest, true);
-    check_mutate_input(&original_tx, &outpoint_dest, true);
+    check_insert_input(&mut rng, &original_tx, &outpoint_dest, true);
+    check_mutate_input(&mut rng, &original_tx, &outpoint_dest, true);
     check_insert_output(&original_tx, &outpoint_dest, false);
     check_mutate_output(&original_tx, &outpoint_dest, false);
 }
 
 // NONE|ANYONECANPAY is applied to only one input, so changing everything else is OK.
-#[test]
-fn mutate_none_anyonecanpay() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn mutate_none_anyonecanpay(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-    let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
+    let original_tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &outpoint_dest);
 
-    check_insert_input(&original_tx, &outpoint_dest, false);
-    check_mutate_input(&original_tx, &outpoint_dest, true);
+    check_insert_input(&mut rng, &original_tx, &outpoint_dest, false);
+    check_mutate_input(&mut rng, &original_tx, &outpoint_dest, true);
     check_insert_output(&original_tx, &outpoint_dest, false);
     check_mutate_output(&original_tx, &outpoint_dest, false);
 }
 
 // SINGLE is applied to all inputs and one output, so only adding an output is OK.
-#[test]
-fn mutate_single() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn mutate_single(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-    let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
+    let original_tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &outpoint_dest);
 
-    check_insert_input(&original_tx, &outpoint_dest, true);
-    check_mutate_input(&original_tx, &outpoint_dest, true);
+    check_insert_input(&mut rng, &original_tx, &outpoint_dest, true);
+    check_mutate_input(&mut rng, &original_tx, &outpoint_dest, true);
     check_insert_output(&original_tx, &outpoint_dest, false);
     check_mutate_output(&original_tx, &outpoint_dest, true);
 }
 
 // SINGLE|ANYONECANPAY is applied to one input and one output so adding inputs and outputs is OK.
-#[test]
-fn mutate_single_anyonecanpay() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn mutate_single_anyonecanpay(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-    let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
+    let original_tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &outpoint_dest);
 
-    check_insert_input(&original_tx, &outpoint_dest, false);
-    check_mutate_input(&original_tx, &outpoint_dest, true);
+    check_insert_input(&mut rng, &original_tx, &outpoint_dest, false);
+    check_mutate_input(&mut rng, &original_tx, &outpoint_dest, true);
     check_insert_output(&original_tx, &outpoint_dest, false);
     check_mutate_output(&original_tx, &outpoint_dest, true);
 }
 
 fn sign_mutate_then_verify(
+    rng: &mut impl Rng,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     destination: &Destination,
 ) -> SignedTransaction {
     // Create and sign tx, and then modify and verify it.
-    let original_tx = generate_and_sign_tx(destination, 3, 3, private_key, sighash_type).unwrap();
+    let original_tx =
+        generate_and_sign_tx(rng, destination, 3, 3, private_key, sighash_type).unwrap();
     assert_eq!(verify_signed_tx(&original_tx, destination), Ok(()));
 
     check_change_flags(&original_tx, destination);
@@ -270,12 +323,14 @@ fn check_change_locktime(original_tx: &SignedTransaction, outpoint_dest: &Destin
 }
 
 fn check_insert_input(
+    rng: &mut impl Rng,
     original_tx: &SignedTransaction,
     destination: &Destination,
     should_fail: bool,
 ) {
     let mut tx_updater = MutableTransaction::from(original_tx);
-    let outpoint_source_id = OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random()));
+    let outpoint_source_id =
+        OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random_using(rng)));
     tx_updater.inputs.push(TxInput::new(outpoint_source_id, 1));
     tx_updater.witness.push(InputWitness::NoSignature(Some(vec![1, 2, 3])));
     let tx = tx_updater.generate_tx().unwrap();
@@ -355,6 +410,7 @@ fn check_mutate_output(
 }
 
 fn check_mutate_input(
+    rng: &mut impl Rng,
     original_tx: &SignedTransaction,
     destination: &Destination,
     should_fail: bool,
@@ -362,7 +418,7 @@ fn check_mutate_input(
     // Should failed due to change in output value
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.inputs[0] = TxInput::new(
-        OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random())),
+        OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random_using(rng))),
         9999,
     );
     let tx = tx_updater.generate_tx().unwrap();

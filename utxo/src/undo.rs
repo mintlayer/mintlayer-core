@@ -352,13 +352,13 @@ pub mod test {
         let (reward_utxo2, _) = create_utxo(&mut rng, 2);
 
         let (utxo1, _) = create_utxo(&mut rng, 3);
-        let tx_id_1: Id<Transaction> = Id::new(H256::random());
+        let tx_id_1: Id<Transaction> = Id::new(H256::random_using(&mut rng));
         let (utxo2, _) = create_utxo(&mut rng, 4);
-        let tx_id_2: Id<Transaction> = Id::new(H256::random());
+        let tx_id_2: Id<Transaction> = Id::new(H256::random_using(&mut rng));
 
-        let dep_tx_id_1 = Id::<Transaction>::new(H256::random());
+        let dep_tx_id_1 = Id::<Transaction>::new(H256::random_using(&mut rng));
         let source_id_1 = OutPointSourceId::Transaction(dep_tx_id_1);
-        let dep_tx_id_2 = Id::<Transaction>::new(H256::random());
+        let dep_tx_id_2 = Id::<Transaction>::new(H256::random_using(&mut rng));
         let source_id_2 = OutPointSourceId::Transaction(dep_tx_id_2);
 
         let mut block_undo_1 = BlockUndo::new(

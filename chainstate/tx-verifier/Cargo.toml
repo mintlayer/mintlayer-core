@@ -19,4 +19,7 @@ fallible-iterator = "0.2.0"
 replace_with = "0.1"
 
 [dev-dependencies]
+test-utils = { path = "../../test-utils" }
+
+rstest = "0.15"
 mockall = "0.11"

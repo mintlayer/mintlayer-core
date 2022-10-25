@@ -182,7 +182,9 @@ mod tests {
     use super::*;
     use crypto::hash::StreamHasher;
     use hex::FromHex;
+    use rstest::rstest;
     use std::str::FromStr;
+    use test_utils::random::Seed;
 
     #[derive(Eq, PartialEq, Debug, TypeName)]
     struct TestType1;
@@ -196,12 +198,16 @@ mod tests {
         }
     }
 
-    #[test]
-    fn typename() {
-        let h1: Id<TestType1> = H256::random().into();
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn typename(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let h1: Id<TestType1> = H256::random_using(&mut rng).into();
         assert!(format!("{h1:?}").starts_with("Id<TestType1>{"));
 
-        let h2: Id<TestType2> = H256::random().into();
+        let h2: Id<TestType2> = H256::random_using(&mut rng).into();
         assert!(format!("{h2:?}").starts_with("Id<TestType2>{"));
     }
 

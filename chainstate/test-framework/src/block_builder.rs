@@ -168,8 +168,8 @@ impl<'f> BlockBuilder<'f> {
     }
 
     /// Overrides the previous block hash by a random value making the resulting block an orphan.
-    pub fn make_orphan(mut self) -> Self {
-        self.prev_block_hash = Id::new(H256::random());
+    pub fn make_orphan(mut self, rng: &mut impl Rng) -> Self {
+        self.prev_block_hash = Id::new(H256::random_using(rng));
         self
     }
 

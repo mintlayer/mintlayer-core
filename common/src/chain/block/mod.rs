@@ -260,7 +260,9 @@ mod tests {
 
     use super::*;
     use crypto::random::{make_pseudo_rng, Rng};
+    use rstest::rstest;
     use serialization::Encode;
+    use test_utils::random::Seed;
 
     fn check_block_tag(block: &Block) {
         let encoded_block = block.encode();
@@ -381,9 +383,15 @@ mod tests {
         check_block_tag(&block);
     }
 
-    #[test]
-    fn tx_with_witness_always_different_merkle_witness_root() {
-        let inputs = vec![TxInput::new(OutPointSourceId::Transaction(H256::random().into()), 0)];
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn tx_with_witness_always_different_merkle_witness_root(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let inputs = vec![TxInput::new(
+            OutPointSourceId::Transaction(H256::random_using(&mut rng).into()),
+            0,
+        )];
 
         let one_transaction = SignedTransaction::new(
             Transaction::new(0, inputs, Vec::new(), 0).unwrap(),
