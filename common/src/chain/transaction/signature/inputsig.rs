@@ -177,15 +177,21 @@ mod test {
     use super::*;
     use crypto::key::{KeyKind, PrivateKey};
     use itertools::Itertools;
+    use rstest::rstest;
+    use test_utils::random::Seed;
 
     const INPUT_NUM: usize = 0;
 
-    #[test]
-    fn produce_signature_address_missmatch() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn produce_signature_address_missmatch(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
         let (private_key, _) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let destination = Destination::Address(PublicKeyHash::from(&public_key));
-        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+        let tx = generate_unsigned_tx(&mut rng, &destination, 1, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             assert_eq!(
@@ -202,12 +208,16 @@ mod test {
         }
     }
 
-    #[test]
-    fn produce_signature_key_missmatch() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn produce_signature_key_missmatch(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
         let (private_key, _) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let destination = Destination::PublicKey(public_key);
-        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+        let tx = generate_unsigned_tx(&mut rng, &destination, 1, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             assert_eq!(
@@ -224,8 +234,12 @@ mod test {
         }
     }
 
-    #[test]
-    fn produce_and_verify() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn produce_and_verify(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoints = [
             Destination::Address(PublicKeyHash::from(&public_key)),
@@ -234,7 +248,7 @@ mod test {
 
         for (sighash_type, destination) in sig_hash_types().cartesian_product(outpoints.into_iter())
         {
-            let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+            let tx = generate_unsigned_tx(&mut rng, &destination, 1, 2).unwrap();
             let witness = StandardInputSignature::produce_signature_for_input(
                 &private_key,
                 sighash_type,

@@ -20,6 +20,7 @@ use common::{
     },
     primitives::Amount,
 };
+use rstest::rstest;
 
 /// The transaction builder.
 pub struct TransactionBuilder {
@@ -94,17 +95,24 @@ impl TransactionBuilder {
     }
 }
 
-#[test]
-fn build_transaction() {
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+fn build_transaction(#[case] seed: test_utils::random::Seed) {
     use common::chain::signature::inputsig::InputWitness;
     use common::chain::OutPointSourceId;
     use common::primitives::Id;
     use common::primitives::H256;
 
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let flags = 1;
     let lock_time = 2;
     let witness = InputWitness::NoSignature(None);
-    let input = TxInput::new(OutPointSourceId::Transaction(Id::new(H256::random())), 0);
+    let input = TxInput::new(
+        OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng))),
+        0,
+    );
 
     let tx = TransactionBuilder::new()
         .with_flags(flags)

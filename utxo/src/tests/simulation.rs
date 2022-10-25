@@ -35,7 +35,7 @@ fn cache_simulation_test(
     let mut rng = make_seedable_rng(seed);
     let mut result: Vec<OutPoint> = Vec::new();
     let test_view = empty_test_utxos_view();
-    let mut base = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+    let mut base = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
     let new_cache = simulation_step(
         &mut rng,

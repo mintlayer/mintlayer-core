@@ -505,11 +505,15 @@ mod unit_test {
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 
-    #[test]
-    fn set_best_block() {
-        let expected_best_block_id: Id<GenBlock> = H256::random().into();
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn set_best_block(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let expected_best_block_id: Id<GenBlock> = H256::random_using(&mut rng).into();
         let test_view = empty_test_utxos_view();
-        let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+        let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
         cache.set_best_block(expected_best_block_id);
         assert_eq!(expected_best_block_id, cache.best_block_hash());
     }
@@ -520,7 +524,7 @@ mod unit_test {
     fn uncache_absent(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let test_view = empty_test_utxos_view();
-        let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+        let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
         // when the outpoint does not exist.
         let (_, outp) = insert_single_entry(&mut rng, &mut cache, Presence::Absent, None, None);
@@ -534,7 +538,7 @@ mod unit_test {
     fn uncache_not_fresh_not_dirty(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let test_view = empty_test_utxos_view();
-        let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+        let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
         // when the entry is not dirty and not fresh
         let (_, outp) = insert_single_entry(
@@ -554,7 +558,7 @@ mod unit_test {
     fn uncache_dirty_not_fresh(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let test_view = empty_test_utxos_view();
-        let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+        let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
         // when the entry is dirty, entry cannot be removed.
         let (_, outp) = insert_single_entry(
@@ -573,7 +577,7 @@ mod unit_test {
     fn uncache_fresh_and_dirty(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let test_view = empty_test_utxos_view();
-        let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+        let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
         // when the entry is both fresh and dirty, entry cannot be removed.
         let (_, outp) = insert_single_entry(
@@ -592,7 +596,7 @@ mod unit_test {
     fn fetch_an_entry(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let test_view = empty_test_utxos_view();
-        let mut cache1 = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+        let mut cache1 = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
         let (_, outpoint) = insert_single_entry(
             &mut rng,
             &mut cache1,

@@ -98,7 +98,7 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
                     )
                     .add_output(TxOutput::new(
                         TokenData::TokenTransferV1(TokenTransferV1 {
-                            token_id: TokenId::random(),
+                            token_id: TokenId::random_using(&mut rng),
                             amount: Amount::from_atoms(1),
                         })
                         .into(),

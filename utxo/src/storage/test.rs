@@ -83,7 +83,7 @@ fn create_block(
 /// populate the db with random values, for testing.
 /// returns a tuple of the best block id and the outpoints (for spending)
 fn initialize_db(rng: &mut impl Rng, tx_outputs_size: u32) -> (UtxosDBInMemoryImpl, Vec<OutPoint>) {
-    let best_block_id: Id<GenBlock> = Id::new(H256::random());
+    let best_block_id: Id<GenBlock> = Id::new(H256::random_using(rng));
     let mut db_interface = UtxosDBInMemoryImpl::new(best_block_id, Default::default());
 
     // let's populate the db with outputs.
@@ -94,7 +94,7 @@ fn initialize_db(rng: &mut impl Rng, tx_outputs_size: u32) -> (UtxosDBInMemoryIm
         .into_iter()
         .enumerate()
         .map(|(idx, output)| {
-            let (outpoint, utxo) = convert_to_utxo(output, 0, idx);
+            let (outpoint, utxo) = convert_to_utxo(rng, output, 0, idx);
             // immediately add to the db
             assert!(db_interface.set_utxo(&outpoint, utxo).is_ok());
 
@@ -284,7 +284,7 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
     let tx_inputs: Vec<TxInput> = (0..rng.gen_range(num_of_txs..20))
         .into_iter()
         .map(|i| {
-            let id: Id<GenBlock> = Id::new(H256::random());
+            let id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
             let id = OutPointSourceId::BlockReward(id);
 
             TxInput::new(id, i)
@@ -310,7 +310,7 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
 fn test_batch_write(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let utxos = create_utxo_entries(&mut rng, 10);
-    let new_best_block_hash = Id::new(H256::random());
+    let new_best_block_hash = Id::new(H256::random_using(&mut rng));
 
     let mut db_interface = UtxosDBInMemoryImpl::new(new_best_block_hash, Default::default());
     let mut utxo_db = UtxosDBMut::new(&mut db_interface);
@@ -345,7 +345,8 @@ fn test_batch_write(#[case] seed: Seed) {
 fn try_flush_non_dirty_utxo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let mut db_interface = UtxosDBInMemoryImpl::new(Id::new(H256::random()), Default::default());
+    let mut db_interface =
+        UtxosDBInMemoryImpl::new(Id::new(H256::random_using(&mut rng)), Default::default());
     let mut utxo_db = UtxosDBMut::new(&mut db_interface);
 
     let (utxo, outpoint) = create_utxo(&mut rng, 1);
@@ -355,7 +356,7 @@ fn try_flush_non_dirty_utxo(#[case] seed: Seed) {
 
     let cache = ConsumedUtxoCache {
         container: map,
-        best_block: Id::new(H256::random()),
+        best_block: Id::new(H256::random_using(&mut rng)),
     };
 
     utxo_db.batch_write(cache).unwrap();
@@ -363,19 +364,27 @@ fn try_flush_non_dirty_utxo(#[case] seed: Seed) {
     assert!(!utxo_db.has_utxo(&outpoint));
 }
 
-#[test]
-fn try_flush_spent_utxo() {
-    let mut db_interface = UtxosDBInMemoryImpl::new(Id::new(H256::random()), Default::default());
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_flush_spent_utxo(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let mut db_interface =
+        UtxosDBInMemoryImpl::new(Id::new(H256::random_using(&mut rng)), Default::default());
     let mut utxo_db = UtxosDBMut::new(&mut db_interface);
 
-    let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::random())), 0);
+    let outpoint = OutPoint::new(
+        OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng))),
+        0,
+    );
     let mut map = BTreeMap::new();
     let entry = UtxoEntry::new(None, IsFresh::No, IsDirty::Yes);
     map.insert(outpoint.clone(), entry);
 
     let cache = ConsumedUtxoCache {
         container: map,
-        best_block: Id::new(H256::random()),
+        best_block: Id::new(H256::random_using(&mut rng)),
     };
 
     utxo_db.batch_write(cache).unwrap();

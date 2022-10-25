@@ -24,6 +24,8 @@ use common::chain::{
     TxMainChainPosition,
 };
 use mockall::predicate::eq;
+use rstest::rstest;
+use test_utils::random::Seed;
 use utxo::TxUndoWithSources;
 
 // TODO: ConsumedUtxoCache is not checked in these tests, think how to expose it from utxo crate
@@ -35,30 +37,34 @@ use utxo::TxUndoWithSources;
 //
 // Check that data from TransactionVerifiers are flushed from one TransactionVerifier to another
 // and then to the store
-#[test]
-fn utxo_set_hierarchy() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn utxo_set_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let (outpoint1, utxo1) = create_utxo(1000);
-    let block_1_id: Id<Block> = Id::new(H256::random());
+    let (outpoint1, utxo1) = create_utxo(&mut rng, 1000);
+    let block_1_id: Id<Block> = Id::new(H256::random_using(&mut rng));
     let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
     let block_1_undo = BlockUndo::new(
         None,
         BTreeMap::from([(
             tx_1_id,
-            TxUndoWithSources::new(vec![create_utxo(100).1], vec![]),
+            TxUndoWithSources::new(vec![create_utxo(&mut rng, 100).1], vec![]),
         )]),
     )
     .unwrap();
 
-    let (outpoint2, utxo2) = create_utxo(2000);
-    let block_2_id: Id<Block> = Id::new(H256::random());
+    let (outpoint2, utxo2) = create_utxo(&mut rng, 2000);
+    let block_2_id: Id<Block> = Id::new(H256::random_using(&mut rng));
     let tx_2_id: Id<Transaction> = H256::from_low_u64_be(2).into();
     let block_2_undo = BlockUndo::new(
         None,
         BTreeMap::from([(
             tx_2_id,
-            TxUndoWithSources::new(vec![create_utxo(100).1], vec![]),
+            TxUndoWithSources::new(vec![create_utxo(&mut rng, 100).1], vec![]),
         )]),
     )
     .unwrap();
@@ -116,15 +122,19 @@ fn utxo_set_hierarchy() {
 //
 // Check that data from TransactionVerifiers are flushed from one TransactionVerifier to another
 // and then to the store
-#[test]
-fn tx_index_set_hierarchy() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn tx_index_set_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let outpoint1 = OutPointSourceId::Transaction(Id::new(H256::random()));
+    let outpoint1 = OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng)));
     let pos1 = TxMainChainPosition::new(H256::from_low_u64_be(1).into(), 1).into();
     let tx_index_1 = TxMainChainIndex::new(pos1, 1).unwrap();
 
-    let outpoint2 = OutPointSourceId::Transaction(Id::new(H256::random()));
+    let outpoint2 = OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng)));
     let pos2 = TxMainChainPosition::new(H256::from_low_u64_be(2).into(), 1).into();
     let tx_index_2 = TxMainChainIndex::new(pos2, 2).unwrap();
 
@@ -173,20 +183,24 @@ fn tx_index_set_hierarchy() {
 //
 // Check that data from TransactionVerifiers are flushed from one TransactionVerifier to another
 // and then to the store
-#[test]
-fn tokens_set_hierarchy() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn tokens_set_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let token_id_1 = H256::random();
+    let token_id_1 = H256::random_using(&mut rng);
     let token_data_1 = TokenAuxiliaryData::new(
         Transaction::new(1, vec![], vec![], 1).unwrap(),
-        Id::new(H256::random()),
+        Id::new(H256::random_using(&mut rng)),
     );
 
-    let token_id_2 = H256::random();
+    let token_id_2 = H256::random_using(&mut rng);
     let token_data_2 = TokenAuxiliaryData::new(
         Transaction::new(2, vec![], vec![], 2).unwrap(),
-        Id::new(H256::random()),
+        Id::new(H256::random_using(&mut rng)),
     );
 
     let mut store = mock::MockStore::new();
@@ -250,16 +264,20 @@ fn tokens_set_hierarchy() {
 //
 // Spend utxo2 in TransactionVerifier2 and utxo1 in TransactionVerifier1.
 // Flush and check that the data was deleted from the store
-#[test]
-fn utxo_del_hierarchy() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn utxo_del_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let (outpoint1, utxo1) = create_utxo(1000);
-    let block_1_id: Id<Block> = Id::new(H256::random());
+    let (outpoint1, utxo1) = create_utxo(&mut rng, 1000);
+    let block_1_id: Id<Block> = Id::new(H256::random_using(&mut rng));
     let block_1_undo: BlockUndo = Default::default();
 
-    let (outpoint2, utxo2) = create_utxo(2000);
-    let block_2_id: Id<Block> = Id::new(H256::random());
+    let (outpoint2, utxo2) = create_utxo(&mut rng, 2000);
+    let block_2_id: Id<Block> = Id::new(H256::random_using(&mut rng));
     let block_2_undo: BlockUndo = Default::default();
 
     let mut store = mock::MockStore::new();
@@ -318,12 +336,16 @@ fn utxo_del_hierarchy() {
 //
 // Erase tx_index2 in TransactionVerifier2 and tx_index1 in TransactionVerifier1.
 // Flush and check that the data was deleted from the store
-#[test]
-fn tx_index_del_hierarchy() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn tx_index_del_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let outpoint1 = OutPointSourceId::Transaction(Id::new(H256::random()));
-    let outpoint2 = OutPointSourceId::Transaction(Id::new(H256::random()));
+    let outpoint1 = OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng)));
+    let outpoint2 = OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng)));
 
     let mut store = mock::MockStore::new();
     store
@@ -366,13 +388,17 @@ fn tx_index_del_hierarchy() {
 //
 // Erase token2 & tx_id2 in TransactionVerifier2 and token2 & tx_id2 in TransactionVerifier1.
 // Flush and check that the data was deleted from the store
-#[test]
-fn tokens_del_hierarchy() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn tokens_del_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let token_id_1 = H256::random();
+    let token_id_1 = H256::random_using(&mut rng);
     let tx_id_1 = Transaction::new(1, vec![], vec![], 1).unwrap().get_id();
-    let token_id_2 = H256::random();
+    let token_id_2 = H256::random_using(&mut rng);
     let tx_id_2 = Transaction::new(2, vec![], vec![], 2).unwrap().get_id();
 
     let mut store = mock::MockStore::new();
@@ -422,12 +448,16 @@ fn tokens_del_hierarchy() {
 //
 // The data in TransactionVerifiers conflicts
 // Check that data is flushed from one TransactionVerifier to another with an error
-#[test]
-fn utxo_conflict_hierarchy() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn utxo_conflict_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let (outpoint1, utxo1) = create_utxo(1000);
-    let (_, utxo2) = create_utxo(2000);
+    let (outpoint1, utxo1) = create_utxo(&mut rng, 1000);
+    let (_, utxo2) = create_utxo(&mut rng, 2000);
 
     let mut store = mock::MockStore::new();
     store
@@ -461,15 +491,19 @@ fn utxo_conflict_hierarchy() {
 //
 // The data in TransactionVerifiers conflicts
 // Check that data from one TransactionVerifier to another was merged during flush
-#[test]
-fn block_undo_conflict_hierarchy() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn block_undo_conflict_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let (_, utxo1) = create_utxo(1000);
-    let (_, utxo2) = create_utxo(2000);
-    let (_, utxo3) = create_utxo(3000);
-    let (_, utxo4) = create_utxo(4000);
-    let block_id: Id<Block> = Id::new(H256::random());
+    let (_, utxo1) = create_utxo(&mut rng, 1000);
+    let (_, utxo2) = create_utxo(&mut rng, 2000);
+    let (_, utxo3) = create_utxo(&mut rng, 3000);
+    let (_, utxo4) = create_utxo(&mut rng, 4000);
+    let block_id: Id<Block> = Id::new(H256::random_using(&mut rng));
     let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
     let block_undo_1 = BlockUndo::new(
         Some(BlockRewardUndo::new(vec![utxo1.clone()])),
@@ -537,11 +571,15 @@ fn block_undo_conflict_hierarchy() {
 //
 // The data in TransactionVerifiers conflicts
 // Check that tx_index1 was overwritten by tx_index2
-#[test]
-fn tx_index_conflict_hierarchy() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn tx_index_conflict_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let outpoint1 = OutPointSourceId::Transaction(Id::new(H256::random()));
+    let outpoint1 = OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng)));
     let pos1 = TxMainChainPosition::new(H256::from_low_u64_be(1).into(), 1).into();
     let tx_index_1 = TxMainChainIndex::new(pos1, 1).unwrap();
 
@@ -588,19 +626,23 @@ fn tx_index_conflict_hierarchy() {
 //
 // The data in TransactionVerifiers conflicts
 // Check that data is flushed from one TransactionVerifier to another with an error
-#[test]
-fn tokens_conflict_hierarchy() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn tokens_conflict_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let token_id_1 = H256::random();
+    let token_id_1 = H256::random_using(&mut rng);
     let token_data_1 = TokenAuxiliaryData::new(
         Transaction::new(1, vec![], vec![], 1).unwrap(),
-        Id::new(H256::random()),
+        Id::new(H256::random_using(&mut rng)),
     );
 
     let token_data_2 = TokenAuxiliaryData::new(
         Transaction::new(2, vec![], vec![], 2).unwrap(),
-        Id::new(H256::random()),
+        Id::new(H256::random_using(&mut rng)),
     );
 
     let mut store = mock::MockStore::new();

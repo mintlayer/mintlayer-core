@@ -70,16 +70,22 @@ fn insert_or_increase(
 #[cfg(test)]
 mod tests {
     use common::chain::tokens::TokenId;
+    use rstest::rstest;
+    use test_utils::random::Seed;
 
     use super::*;
 
-    #[test]
-    fn basic() {
-        utils::concurrency::model(|| {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn basic(#[case] seed: Seed) {
+        utils::concurrency::model(move || {
+            let mut rng = test_utils::random::make_seedable_rng(seed);
+
             let t1 = CoinOrTokenId::Coin;
-            let t2 = CoinOrTokenId::TokenId(TokenId::random());
-            let t3 = CoinOrTokenId::TokenId(TokenId::random());
-            let t4 = CoinOrTokenId::TokenId(TokenId::random());
+            let t2 = CoinOrTokenId::TokenId(TokenId::random_using(&mut rng));
+            let t3 = CoinOrTokenId::TokenId(TokenId::random_using(&mut rng));
+            let t4 = CoinOrTokenId::TokenId(TokenId::random_using(&mut rng));
 
             let data = fallible_iterator::convert(
                 vec![
@@ -109,13 +115,17 @@ mod tests {
         })
     }
 
-    #[test]
-    fn with_error() {
-        utils::concurrency::model(|| {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn with_error(#[case] seed: Seed) {
+        utils::concurrency::model(move || {
+            let mut rng = test_utils::random::make_seedable_rng(seed);
+
             let t1 = CoinOrTokenId::Coin;
-            let t2 = CoinOrTokenId::TokenId(TokenId::random());
-            let t3 = CoinOrTokenId::TokenId(TokenId::random());
-            let t4 = CoinOrTokenId::TokenId(TokenId::random());
+            let t2 = CoinOrTokenId::TokenId(TokenId::random_using(&mut rng));
+            let t3 = CoinOrTokenId::TokenId(TokenId::random_using(&mut rng));
+            let t4 = CoinOrTokenId::TokenId(TokenId::random_using(&mut rng));
 
             let data = fallible_iterator::convert(
                 vec![

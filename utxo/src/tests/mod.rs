@@ -90,7 +90,7 @@ fn check_add_utxo(
     op_result: Result<(), Error>,
 ) {
     let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+    let mut cache = UtxosCache::new_for_test(H256::random_using(rng).into(), &*test_view);
     let (_, outpoint) =
         test_helper::insert_single_entry(rng, &mut cache, cache_presence, cache_flags, None);
 
@@ -124,7 +124,7 @@ fn check_spend_utxo(
 ) {
     // initialize the parent cache.
     let test_view = empty_test_utxos_view();
-    let mut parent = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+    let mut parent = UtxosCache::new_for_test(H256::random_using(rng).into(), &*test_view);
     let (_, parent_outpoint) = test_helper::insert_single_entry(
         rng,
         &mut parent,
@@ -136,7 +136,7 @@ fn check_spend_utxo(
 
     // initialize the child cache
     let mut child = match parent_presence {
-        Absent => UtxosCache::new_for_test(H256::random().into(), &*test_view),
+        Absent => UtxosCache::new_for_test(H256::random_using(rng).into(), &*test_view),
         _ => UtxosCache::from_borrowed_parent(&parent),
     };
 
@@ -185,7 +185,7 @@ fn check_write_utxo(
 ) {
     //initialize the parent cache
     let test_view = empty_test_utxos_view();
-    let mut parent = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+    let mut parent = UtxosCache::new_for_test(H256::random_using(rng).into(), &*test_view);
     let (_, outpoint) =
         test_helper::insert_single_entry(rng, &mut parent, parent_presence, parent_flags, None);
     let key = &outpoint;
@@ -214,7 +214,7 @@ fn check_write_utxo(
     // perform batch write
     let single_entry_cache = ConsumedUtxoCache {
         container: single_entry_map,
-        best_block: Id::new(H256::random()),
+        best_block: Id::new(H256::random_using(rng)),
     };
     let res = parent.batch_write(single_entry_cache);
     let entry = parent.utxos.get(key);
@@ -245,7 +245,7 @@ fn check_get_mut_utxo(
     result_flags: Option<(IsFresh, IsDirty)>,
 ) {
     let test_view = empty_test_utxos_view();
-    let mut parent = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+    let mut parent = UtxosCache::new_for_test(H256::random_using(rng).into(), &*test_view);
     let (parent_utxo, parent_outpoint) = test_helper::insert_single_entry(
         rng,
         &mut parent,
@@ -256,7 +256,7 @@ fn check_get_mut_utxo(
     );
 
     let mut child = match parent_presence {
-        Absent => UtxosCache::new_for_test(H256::random().into(), &*test_view),
+        Absent => UtxosCache::new_for_test(H256::random_using(rng).into(), &*test_view),
         _ => UtxosCache::from_borrowed_parent(&parent),
     };
     let (child_utxo, child_outpoint) = test_helper::insert_single_entry(
@@ -357,7 +357,7 @@ fn add_utxo_test(#[case] seed: Seed) {
 fn spend_utxo_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     // just a dummy id for the compiler
-    let id = OutPointSourceId::Transaction(Id::new(H256::random()));
+    let id = OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng)));
     /*
                               PARENT     CACHE
                               PRESENCE   PRESENCE  CACHE Flags          RESULT                       RESULT Flags
@@ -453,7 +453,7 @@ fn access_utxo_test(#[case] seed: Seed) {
 fn derive_cache_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
     let (utxo, outpoint_1) = test_helper::create_utxo(&mut rng, 10);
     assert!(cache.add_utxo(&outpoint_1, utxo, false).is_ok());
@@ -479,7 +479,7 @@ fn derive_cache_test(#[case] seed: Seed) {
 fn blockchain_or_mempool_utxo_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
     let (utxo, outpoint_1) = test_helper::create_utxo(&mut rng, 10);
     assert!(cache.add_utxo(&outpoint_1, utxo, false).is_ok());
@@ -497,7 +497,7 @@ fn blockchain_or_mempool_utxo_test(#[case] seed: Seed) {
 fn multiple_update_utxos_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
     // let's test `add_utxos`
     let tx = Transaction::new(
@@ -550,11 +550,15 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
     });
 }
 
-#[test]
-fn check_best_block_after_flush() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_best_block_after_flush(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let test_view = empty_test_utxos_view();
-    let mut cache1 = UtxosCache::new_for_test(H256::random().into(), &*test_view);
-    let cache2 = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+    let mut cache1 = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+    let cache2 = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
     assert_ne!(cache1.best_block_hash(), cache2.best_block_hash());
     let expected_hash = cache2.best_block_hash();
     assert!(flush_to_base(cache2, &mut cache1).is_ok());
@@ -567,11 +571,11 @@ fn check_best_block_after_flush() {
 fn check_add_utxos_from_block_reward(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
     let block_reward = BlockReward::new(test_helper::create_tx_outputs(&mut rng, 10));
 
-    let block_id = Id::new(H256::random());
+    let block_id = Id::new(H256::random_using(&mut rng));
     assert!(cache
         .add_utxos_from_block_reward(
             &block_reward,
@@ -594,7 +598,7 @@ fn check_add_utxos_from_block_reward(#[case] seed: Seed) {
 fn check_tx_spend_undo_spend(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
     // add 1 utxo to the utxo set
     let (utxo, outpoint) = test_helper::create_utxo(&mut rng, 1);
@@ -625,7 +629,7 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
 fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
     // add 1 utxo to the utxo set
     let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
@@ -636,7 +640,7 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
 
     let block = Block::new(
         vec![],
-        Id::new(H256::random()),
+        Id::new(H256::random_using(&mut rng)),
         BlockTimestamp::from_int_seconds(1),
         ConsensusData::PoS(PoSData::new(
             inputs,
@@ -677,11 +681,11 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
 fn check_pow_reward_spend_undo_spend(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
     let block = Block::new(
         vec![],
-        Id::new(H256::random()),
+        Id::new(H256::random_using(&mut rng)),
         BlockTimestamp::from_int_seconds(1),
         ConsensusData::PoW(PoWData::new(Compact(1), 1)),
         BlockReward::new(create_tx_outputs(&mut rng, 1)),
@@ -717,7 +721,7 @@ fn check_pow_reward_spend_undo_spend(#[case] seed: Seed) {
 fn check_missing_reward_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
     // add 1 utxo to the utxo set
     let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
@@ -728,7 +732,7 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
 
     let block = Block::new(
         vec![],
-        Id::new(H256::random()),
+        Id::new(H256::random_using(&mut rng)),
         BlockTimestamp::from_int_seconds(1),
         ConsensusData::PoS(PoSData::new(
             inputs,

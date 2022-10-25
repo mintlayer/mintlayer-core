@@ -51,7 +51,7 @@ fn cache_simulation_with_undo(
     let mut rng = make_seedable_rng(seed);
     let mut result: ResultWithUndo = Default::default();
     let test_view = super::empty_test_utxos_view();
-    let mut base = UtxosCache::new_for_test(H256::random().into(), &*test_view);
+    let mut base = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
     let new_cache = simulation_step(
         &mut rng,
@@ -119,7 +119,7 @@ fn populate_cache_with_undo(
             if i % 20 < 10 {
                 let reward = BlockReward::new(create_tx_outputs(rng, 1));
                 let block_height = BlockHeight::new(rng.gen_range(0..iterations_count as u64));
-                let block_id = Id::new(H256::random());
+                let block_id = Id::new(H256::random_using(rng));
                 cache
                     .add_utxos_from_block_reward(
                         &reward,

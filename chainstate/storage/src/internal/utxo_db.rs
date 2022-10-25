@@ -27,7 +27,7 @@ mod test {
     use test_utils::random::{make_seedable_rng, Seed};
     use utxo::{Utxo, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
 
-    fn create_utxo(block_height: u64, output_value: u128) -> (Utxo, OutPoint) {
+    fn create_utxo(rng: &mut impl Rng, block_height: u64, output_value: u128) -> (Utxo, OutPoint) {
         // just a random value generated, and also a random `is_block_reward` value.
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let output = TxOutput::new(
@@ -37,7 +37,7 @@ mod test {
         let utxo = Utxo::new_for_blockchain(output, true, BlockHeight::new(block_height));
 
         // create the id based on the `is_block_reward` value.
-        let id = OutPointSourceId::BlockReward(Id::new(H256::random()));
+        let id = OutPointSourceId::BlockReward(Id::new(H256::random_using(rng)));
 
         let outpoint = OutPoint::new(id, 0);
 
@@ -52,19 +52,20 @@ mod test {
         let mut rng = make_seedable_rng(seed);
         let mut store = crate::inmemory::Store::new_empty().expect("should create a store");
         store
-            .set_best_block_for_utxos(&H256::random().into())
+            .set_best_block_for_utxos(&H256::random_using(&mut rng).into())
             .expect("Setting best block cannot fail");
         let mut db_interface = UtxosDBMut::new(&mut store);
 
         // utxo checking
-        let (utxo, outpoint) = create_utxo(1, rng.gen_range(0..u128::MAX));
+        let val = rng.gen_range(0..u128::MAX);
+        let (utxo, outpoint) = create_utxo(&mut rng, 1, val);
         assert!(db_interface.set_utxo(&outpoint, utxo.clone()).is_ok());
         assert_eq!(db_interface.get_utxo(&outpoint), Ok(Some(utxo)));
         assert!(db_interface.del_utxo(&outpoint).is_ok());
         assert_eq!(db_interface.get_utxo(&outpoint), Ok(None));
 
         // test block id
-        let block_id: Id<Block> = Id::new(H256::random());
+        let block_id: Id<Block> = Id::new(H256::random_using(&mut rng));
         assert!(db_interface.set_best_block_for_utxos(&block_id.into()).is_ok());
 
         let block_id = Id::new(

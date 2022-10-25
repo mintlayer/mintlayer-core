@@ -140,6 +140,9 @@ impl TxInput {
 
 #[cfg(test)]
 mod test {
+    use rstest::rstest;
+    use test_utils::random::Seed;
+
     use super::*;
 
     // The hash value doesn't matter because we first compare the enum arm
@@ -213,10 +216,14 @@ mod test {
         compare_test(&hash_br, &hash_tx);
     }
 
-    #[test]
-    fn ord_and_equality_random() {
-        let hash_br = H256::random();
-        let hash_tx = H256::random();
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn ord_and_equality_random(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let hash_br = H256::random_using(&mut rng);
+        let hash_tx = H256::random_using(&mut rng);
 
         compare_test(&hash_br, &hash_tx);
     }
