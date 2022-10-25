@@ -166,7 +166,7 @@ impl RollingFeeRate {
 }
 
 impl RollingFeeRate {
-    pub(crate) fn new(creation_time: Time) -> Self {
+    fn new(creation_time: Time) -> Self {
         Self {
             block_since_last_rolling_fee_bump: false,
             rolling_minimum_fee_rate: FeeRate::new(Amount::from_atoms(0)),
@@ -202,7 +202,7 @@ impl<M> Mempool<M>
 where
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
-    pub(crate) fn new(
+    pub fn new(
         chain_config: Arc<ChainConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         clock: TimeGetter,
@@ -224,7 +224,7 @@ where
         }
     }
 
-    pub(crate) async fn subscribe_to_chainstate_events(
+    pub async fn subscribe_to_chainstate_events(
         &mut self,
     ) -> crate::Result<mpsc::UnboundedReceiver<(Id<Block>, BlockHeight)>> {
         let (tx, rx) = mpsc::unbounded_channel();
@@ -251,7 +251,7 @@ where
         Ok(rx)
     }
 
-    pub(crate) fn new_tip_set(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
+    pub fn new_tip_set(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
         log::info!(
             "new tip with block_id {:?} and block_height {:?}",
             block_id,
@@ -278,13 +278,13 @@ where
         self.memory_usage_estimator.get_memory_usage()
     }
 
-    pub(crate) fn update_min_fee_rate(&self, rate: FeeRate) {
+    fn update_min_fee_rate(&self, rate: FeeRate) {
         let mut rolling_fee_rate = self.rolling_fee_rate.write();
         (*rolling_fee_rate).rolling_minimum_fee_rate = rate;
         rolling_fee_rate.block_since_last_rolling_fee_bump = false;
     }
 
-    pub(crate) fn get_update_min_fee_rate(&self) -> FeeRate {
+    fn get_update_min_fee_rate(&self) -> FeeRate {
         log::debug!("get_update_min_fee_rate");
         let rolling_fee_rate = *self.rolling_fee_rate.read();
         if !rolling_fee_rate.block_since_last_rolling_fee_bump
@@ -803,7 +803,7 @@ pub struct MempoolInterfaceHandle {
 }
 
 impl MempoolInterfaceHandle {
-    pub(crate) fn new(sender: mpsc::UnboundedSender<MempoolMethodCall>) -> Self {
+    pub fn new(sender: mpsc::UnboundedSender<MempoolMethodCall>) -> Self {
         Self { sender }
     }
 }
