@@ -66,7 +66,7 @@ pub async fn initialize(
             Arc::clone(&chain_config),
             chainstate.clone(),
             Default::default(),
-            mempool::pool::SystemUsageEstimator {},
+            mempool::SystemUsageEstimator {},
         )
         .await?,
     );

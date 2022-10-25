@@ -21,18 +21,21 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use common::chain::{Block, ChainConfig};
 use common::primitives::{BlockHeight, Id};
 use common::time_getter::TimeGetter;
-use interface::MempoolInterface;
+pub use interface::MempoolInterface;
 
 use crate::config::GetMemoryUsage;
 use crate::error::Error as MempoolError;
 use crate::pool::Mempool;
 use crate::pool::MempoolInterfaceHandle;
 
+pub use crate::pool::SystemClock;
+pub use crate::pool::SystemUsageEstimator;
+
 mod config;
 pub mod error;
 mod feerate;
 mod interface;
-pub mod pool;
+mod pool;
 pub mod rpc;
 pub mod tx_accumulator;
 
