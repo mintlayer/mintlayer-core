@@ -13,31 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
-use common::{
-    chain::{signature::inputsig::InputWitness, Destination, OutPointSourceId, TxInput, TxOutput},
-    primitives::Amount,
-};
-
-use crate::pool::TryGetFee;
-use crate::{
-    error::Error,
-    pool::{store::MempoolRemovalReason, tests::DUMMY_WITNESS_MSG},
-};
-use crate::{
-    error::TxValidationError,
-    pool::tests::{
-        get_relay_fee_from_tx_size, setup_with_chainstate, tx_spend_input, TX_SPEND_INPUT_SIZE,
-    },
-};
-use common::chain::tokens::OutputValue;
-use common::chain::OutputPurpose;
-
-use common::primitives::Idable;
-use logging::log;
-use rstest::rstest;
-use test_utils::random::make_seedable_rng;
-use test_utils::random::Seed;
+use super::*;
 
 async fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Result<(), Error> {
     log::debug!(
