@@ -71,7 +71,7 @@ where
     let mut buffer_queue = Vec::<u8>::new();
 
     loop {
-        if buffer_queue.len() < min_buffer_size {
+        if buffer_queue.len() < min_buffer_size + expected_magic_bytes.len() {
             fill_buffer(&mut buffer_queue, file_reader, max_buffer_size)?;
         }
 
