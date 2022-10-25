@@ -21,7 +21,7 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use common::chain::{Block, ChainConfig};
 use common::primitives::{BlockHeight, Id};
 use common::time_getter::TimeGetter;
-use pool::MempoolInterface;
+use interface::MempoolInterface;
 
 use crate::config::GetMemoryUsage;
 use crate::error::Error as MempoolError;
@@ -31,6 +31,7 @@ use crate::pool::MempoolInterfaceHandle;
 mod config;
 pub mod error;
 mod feerate;
+mod interface;
 pub mod pool;
 pub mod rpc;
 pub mod tx_accumulator;

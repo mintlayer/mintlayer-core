@@ -56,6 +56,8 @@ use store::MempoolRemovalReason;
 use store::MempoolStore;
 use store::TxMempoolEntry;
 
+pub use crate::interface::MempoolInterface;
+
 use crate::config::*;
 
 mod store;
@@ -107,25 +109,6 @@ where
 fn get_relay_fee(tx: &SignedTransaction) -> Amount {
     // TODO we should never reach the expect, but should this be an error anyway?
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
-}
-
-#[async_trait::async_trait]
-pub trait MempoolInterface: Send {
-    async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error>;
-    async fn get_all(&self) -> Result<Vec<SignedTransaction>, Error>;
-
-    // Returns `true` if the mempool contains a transaction with the given id, `false` otherwise.
-    async fn contains_transaction(&self, tx: &Id<Transaction>) -> Result<bool, Error>;
-
-    async fn collect_txs(
-        &self,
-        tx_accumulator: Box<dyn TransactionAccumulator + Send>,
-    ) -> Result<Box<dyn TransactionAccumulator>, Error>;
-
-    async fn subscribe_to_events(
-        &mut self,
-        handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
-    ) -> Result<(), Error>;
 }
 
 #[async_trait::async_trait]
