@@ -25,8 +25,8 @@ pub use interface::MempoolInterface;
 
 use crate::config::GetMemoryUsage;
 use crate::error::Error as MempoolError;
+use crate::handle::MempoolInterfaceHandle;
 use crate::pool::Mempool;
-use crate::pool::MempoolInterfaceHandle;
 
 pub use crate::pool::SystemClock;
 pub use crate::pool::SystemUsageEstimator;
@@ -34,6 +34,7 @@ pub use crate::pool::SystemUsageEstimator;
 mod config;
 pub mod error;
 mod feerate;
+mod handle;
 mod interface;
 mod pool;
 pub mod rpc;
