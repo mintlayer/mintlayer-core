@@ -798,7 +798,7 @@ impl GetMemoryUsage for SystemUsageEstimator {
     }
 }
 
-pub(crate) struct MempoolInterfaceHandle {
+pub struct MempoolInterfaceHandle {
     sender: mpsc::UnboundedSender<MempoolMethodCall>,
 }
 
@@ -808,7 +808,7 @@ impl MempoolInterfaceHandle {
     }
 }
 
-pub(crate) enum MempoolMethodCall {
+pub enum MempoolMethodCall {
     AddTransaction {
         tx: SignedTransaction,
         rtx: oneshot::Sender<Result<(), Error>>,
@@ -887,7 +887,7 @@ impl<M> Mempool<M>
 where
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
-    pub(crate) async fn run(mut self) -> Result<(), Error> {
+    pub async fn run(mut self) -> Result<(), Error> {
         tokio::spawn(async move {
             let event_receiver =
                 self.subscribe_to_chainstate_events().await.log_err().expect("chainstate dead");
@@ -896,7 +896,7 @@ where
         Ok(())
     }
 
-    pub(crate) async fn mempool_event_loop(
+    pub async fn mempool_event_loop(
         mut self,
         mut chainstate_event_receiver: mpsc::UnboundedReceiver<(Id<Block>, BlockHeight)>,
     ) {
@@ -910,7 +910,7 @@ where
         }
     }
 
-    pub(crate) async fn handle_mempool_method_call(&mut self, method_call: MempoolMethodCall) {
+    pub async fn handle_mempool_method_call(&mut self, method_call: MempoolMethodCall) {
         match method_call {
             MempoolMethodCall::AddTransaction { tx, rtx } => {
                 if let Err(e) = rtx.send(self.add_transaction(tx).await) {
@@ -947,7 +947,7 @@ where
         }
     }
 
-    pub(crate) async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
+    pub async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
         let conflicts = self.validate_transaction(&tx).await?;
         self.store.drop_conflicts(conflicts);
         self.finalize_tx(tx).await?;
@@ -955,7 +955,7 @@ where
         Ok(())
     }
 
-    pub(crate) fn get_all(&self) -> Vec<SignedTransaction> {
+    pub fn get_all(&self) -> Vec<SignedTransaction> {
         self.store
             .txs_by_descendant_score
             .values()
@@ -965,7 +965,7 @@ where
             .collect()
     }
 
-    pub(crate) fn collect_txs(
+    pub fn collect_txs(
         &self,
         mut tx_accumulator: Box<dyn TransactionAccumulator>,
     ) -> Box<dyn TransactionAccumulator> {
@@ -994,7 +994,7 @@ where
         tx_accumulator
     }
 
-    pub(crate) fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
+    pub fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
         self.store.txs_by_id.contains_key(tx_id)
     }
 
