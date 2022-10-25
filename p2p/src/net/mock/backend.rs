@@ -287,11 +287,10 @@ where
     async fn subscribe(&mut self, topics: BTreeSet<PubSubTopic>) {
         let subscription = Box::new(Message::Subscribe { topics });
         for (id, peer) in &self.peers {
-            let _ = peer
-                .tx
-                .send(MockEvent::SendMessage(subscription.clone()))
-                .await
-                .tap_err(|e| log::error!("Failed to send announcement to peer {id}: {e:?}"));
+            let _ =
+                peer.tx.send(MockEvent::SendMessage(subscription.clone())).await.tap_err(|e| {
+                    log::error!("Failed to send subscribe request to peer {id}: {e:?}")
+                });
         }
     }
 
