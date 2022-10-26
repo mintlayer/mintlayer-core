@@ -15,6 +15,7 @@
 
 use utils::make_config_setting;
 
+// TODO: does this constant make sense to be zero? Find the justification for it.
 pub const MDNS_DEFAULT_QUERY_INTERVAL: u64 = 0;
 pub const MDNS_DEFAULT_IPV6_STATE: bool = false;
 
