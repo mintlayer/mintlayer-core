@@ -27,8 +27,7 @@ use std::{
     sync::Arc,
 };
 
-use futures::FutureExt;
-use tap::TapFallible;
+use futures::{future::join_all, FutureExt, TryFutureExt};
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
@@ -286,12 +285,12 @@ where
 
     async fn subscribe(&mut self, topics: BTreeSet<PubSubTopic>) {
         let subscription = Box::new(Message::Subscribe { topics });
-        for (id, peer) in &self.peers {
-            let _ =
-                peer.tx.send(MockEvent::SendMessage(subscription.clone())).await.tap_err(|e| {
-                    log::error!("Failed to send subscribe request to peer {id}: {e:?}")
-                });
-        }
+        join_all(self.peers.iter().map(|(id, p)| {
+            p.tx.send(MockEvent::SendMessage(subscription.clone())).inspect_err(move |e| {
+                log::error!("Failed to send announcement to {id:?} peer: {e:?}")
+            })
+        }))
+        .await;
     }
 
     /// Sends the announcement to all peers.
@@ -301,22 +300,24 @@ where
     async fn announce_data(&mut self, topic: PubSubTopic, message: Vec<u8>) -> crate::Result<()> {
         let announcement = message::Announcement::decode(&mut &message[..])?;
         let announcement = Box::new(Message::Announcement { announcement });
-        let mut active_peers = 0;
-        for (id, peer) in &self.peers {
-            if !peer.subscriptions.contains(&topic) {
-                continue;
-            }
-            active_peers += 1;
-            let _ = peer
-                .tx
-                .send(MockEvent::SendMessage(announcement.clone()))
-                .await
-                .tap_err(|e| log::error!("Failed to send announcement to peer {id}: {e:?}"));
-        }
+        // TODO: Shuffle peers.
+        let announcements = join_all(
+            self.peers.iter().filter(|(_, peer)| peer.subscriptions.contains(&topic)).map(
+                |(id, peer)| {
+                    peer.tx.send(MockEvent::SendMessage(announcement.clone())).inspect_err(
+                        move |e| log::error!("Failed to send announcement to peer {id}: {e:?}"),
+                    )
+                },
+            ),
+        )
+        .await;
 
-        if active_peers > 0 {
+        // TODO: We don't really need to return an error here. It is only needed temporary in order to mimic the libp2p behavior.
+        let sufficient_peers = !announcements.is_empty();
+        if sufficient_peers {
             Ok(())
         } else {
+            // TODO: This should be removed, because we don't care
             Err(P2pError::PublishError(PublishError::InsufficientPeers))
         }
     }
