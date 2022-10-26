@@ -43,6 +43,7 @@ use logging::log;
 use utils::ensure;
 use utils::eventhandler::EventsController;
 use utils::newtype;
+use utils::tap_error_log::LogError;
 
 use crate::error::Error;
 use crate::error::TxValidationError;
@@ -904,8 +905,11 @@ where
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
     pub(crate) async fn run(mut self) -> Result<(), Error> {
-        let event_receiver = self.subscribe_to_chainstate_events().await?;
-        tokio::spawn(async move { self.mempool_event_loop(event_receiver).await });
+        tokio::spawn(async move {
+            let event_receiver =
+                self.subscribe_to_chainstate_events().await.log_err().expect("chainstate dead");
+            self.mempool_event_loop(event_receiver).await
+        });
         Ok(())
     }
 
