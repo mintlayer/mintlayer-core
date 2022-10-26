@@ -66,14 +66,12 @@ impl Builder {
 
     /// New builder pre-populated with RPC info methods
     pub fn new(rpc_config: RpcConfig) -> Self {
-        // TODO: this is a mess because of the configuration file mapping from files to options. See #446
         let http_bind_address = if *rpc_config.http_enabled {
             Some(*rpc_config.http_bind_address)
         } else {
             None
         };
 
-        // TODO: this is a mess because of the configuration file mapping from files to options. See #446
         let ws_bind_address = if *rpc_config.ws_enabled {
             Some(*rpc_config.ws_bind_address)
         } else {
