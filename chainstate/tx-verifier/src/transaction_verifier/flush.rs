@@ -97,5 +97,14 @@ pub fn flush_to_storage(
         }
     }
 
+    // flush undo for txs from mempool
+    if let Some(txs_undo) = consumed.mempool_txs_undo {
+        if txs_undo.is_fresh {
+            storage.set_mempool_undo_data(&txs_undo.undo)?;
+        } else {
+            storage.del_mempool_undo_data()?;
+        }
+    }
+
     Ok(())
 }

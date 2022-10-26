@@ -190,4 +190,15 @@ impl TransactionVerifierStorageMut for InMemoryStorageWrapper {
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), TransactionVerifierStorageError> {
         self.storage.del_undo_data(id).map_err(TransactionVerifierStorageError::from)
     }
+
+    fn set_mempool_undo_data(
+        &mut self,
+        _undo: &utxo::BlockUndo,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        panic!("Mempool info should not be written to storage")
+    }
+
+    fn del_mempool_undo_data(&mut self) -> Result<(), TransactionVerifierStorageError> {
+        panic!("Mempool info should not be written to storage")
+    }
 }

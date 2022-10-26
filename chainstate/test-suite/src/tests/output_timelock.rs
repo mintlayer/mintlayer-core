@@ -30,7 +30,7 @@ use common::{
         tokens::OutputValue,
         OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
-    primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable},
 };
 
 use super::utils::add_block_with_locked_output;

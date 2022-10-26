@@ -124,6 +124,7 @@ pub struct TransactionVerifierDelta {
     tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
     utxo_cache: ConsumedUtxoCache,
     utxo_block_undo: BTreeMap<Id<Block>, BlockUndoEntry>,
+    mempool_txs_undo: Option<BlockUndoEntry>,
     token_issuance_cache: ConsumedTokenIssuanceCache,
 }
 
@@ -794,11 +795,11 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
     }
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {
-        //FIXME: mempool_txs_undo
         Ok(TransactionVerifierDelta {
             tx_index_cache: self.tx_index_cache.consume(),
             utxo_cache: self.utxo_cache.consume(),
             utxo_block_undo: self.utxo_block_undo,
+            mempool_txs_undo: self.mempool_txs_undo,
             token_issuance_cache: self.token_issuance_cache.consume(),
         })
     }

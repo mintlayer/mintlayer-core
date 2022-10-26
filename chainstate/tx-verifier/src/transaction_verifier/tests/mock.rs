@@ -89,6 +89,9 @@ mockall::mock! {
 
         fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), TransactionVerifierStorageError>;
         fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), TransactionVerifierStorageError>;
+
+        fn set_mempool_undo_data(&mut self, undo: &BlockUndo, ) -> Result<(), TransactionVerifierStorageError>;
+        fn del_mempool_undo_data(&mut self) -> Result<(), TransactionVerifierStorageError>;
     }
 
     impl UtxosStorageRead for Store {

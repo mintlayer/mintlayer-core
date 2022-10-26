@@ -334,9 +334,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
         assert!(matches!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::TxIndexError(
-                    chainstate::TxIndexError::MissingOutputOrSpent
-                ))
+                BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
             ))
         ));
     })

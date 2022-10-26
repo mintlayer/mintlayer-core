@@ -74,10 +74,11 @@ fn output_lock_until_height() {
 
         let block_height_that_unlocks = 10;
 
+        let current_time = tf.current_time();
         let locked_output = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::UntilHeight(BlockHeight::new(block_height_that_unlocks)),
-            BlockTimestamp::from_duration_since_epoch(time::get()),
+            BlockTimestamp::from_duration_since_epoch(current_time),
         );
 
         let spend_locked_tx = TransactionBuilder::new()
@@ -98,7 +99,7 @@ fn output_lock_until_height() {
                         current_best: best_block_index,
                     },
                     &spend_locked_tx,
-                    &BlockTimestamp::from_duration_since_epoch(time::get()),
+                    &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
                 ),
                 Err(ConnectTransactionError::TimeLockViolation)
             );
@@ -121,7 +122,7 @@ fn output_lock_until_height() {
                     current_best: best_block_index,
                 },
                 &spend_locked_tx,
-                &BlockTimestamp::from_duration_since_epoch(time::get()),
+                &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
             )
             .unwrap();
     });
@@ -137,10 +138,11 @@ fn output_lock_for_block_count() {
         let block_height_with_locked_output = 1;
 
         // create the first block, with a locked output
+        let current_time = tf.current_time();
         let locked_output = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::ForBlockCount(block_count_that_unlocks),
-            BlockTimestamp::from_duration_since_epoch(time::get()),
+            BlockTimestamp::from_duration_since_epoch(current_time),
         );
 
         let spend_locked_tx = TransactionBuilder::new()
@@ -161,7 +163,7 @@ fn output_lock_for_block_count() {
                         current_best: best_block_index,
                     },
                     &spend_locked_tx,
-                    &BlockTimestamp::from_duration_since_epoch(time::get()),
+                    &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
                 ),
                 Err(ConnectTransactionError::TimeLockViolation)
             );
@@ -187,7 +189,7 @@ fn output_lock_for_block_count() {
                     current_best: best_block_index,
                 },
                 &spend_locked_tx,
-                &BlockTimestamp::from_duration_since_epoch(time::get()),
+                &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
             )
             .unwrap();
     });
@@ -277,7 +279,7 @@ fn output_lock_until_time() {
                     current_best: best_block_index,
                 },
                 &spend_locked_tx,
-                &BlockTimestamp::from_duration_since_epoch(time::get()),
+                &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
             )
             .unwrap();
     });

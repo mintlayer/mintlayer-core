@@ -205,6 +205,29 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageMut
         }
         Ok(())
     }
+
+    fn set_mempool_undo_data(
+        &mut self,
+        new_undo: &BlockUndo,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        match &mut self.mempool_txs_undo {
+            Some(txs_undo) => {
+                txs_undo.undo.combine(new_undo.clone())?;
+            }
+            None => {
+                self.mempool_txs_undo = Some(BlockUndoEntry {
+                    undo: new_undo.clone(),
+                    is_fresh: true,
+                });
+            }
+        };
+        Ok(())
+    }
+
+    fn del_mempool_undo_data(&mut self) -> Result<(), TransactionVerifierStorageError> {
+        self.mempool_txs_undo = None;
+        Ok(())
+    }
 }
 
 impl<'a, S: TransactionVerifierStorageRef> FlushableUtxoView for TransactionVerifier<'a, S> {
