@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
+
+use tokio::{pin, select, time::Duration};
 
 use common::{
     chain::{
@@ -23,44 +25,48 @@ use common::{
     },
     primitives::{Id, H256},
 };
+use serialization::Encode;
+
 use p2p::{
     error::{P2pError, PublishError},
     message::Announcement,
     net::{
-        self,
         libp2p::Libp2pService,
-        types::{PubSubTopic, SyncingEvent},
-        NetworkingService, SyncingMessagingService,
+        mock::{
+            transport::{ChannelMockTransport, TcpMockTransport},
+            MockService,
+        },
+        types::{PubSubTopic, SyncingEvent, ValidationResult},
+        ConnectivityService, NetworkingService, SyncingMessagingService,
     },
 };
-use p2p_test_utils::{connect_services, MakeP2pAddress, MakeTestAddress};
-use serialization::Encode;
+use p2p_test_utils::{
+    connect_services, MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress,
+};
 
-// verify that libp2p gossipsub works
-#[tokio::test]
-async fn test_libp2p_gossipsub() {
+async fn block_announcement<A, S>()
+where
+    A: MakeTestAddress<Address = S::Address>,
+    S: NetworkingService + Debug,
+    S::SyncingMessagingHandle: SyncingMessagingService<S>,
+    S::ConnectivityHandle: ConnectivityService<S>,
+{
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut sync1) = Libp2pService::start(
-        MakeP2pAddress::make_address(),
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
-    let (mut conn2, mut sync2) = Libp2pService::start(
-        MakeP2pAddress::make_address(),
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
+    let (mut conn1, mut sync1) =
+        S::start(A::make_address(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
+    let (mut conn2, mut sync2) =
+        S::start(A::make_address(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
 
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    connect_services::<S>(&mut conn1, &mut conn2).await;
 
     sync1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
     sync2.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
 
-    // spam the message on the pubsubsub until it succeeds (= until we have a peer)
+    // Spam the message until until we have a peer.
     loop {
         let res = sync1
             .make_announcement(Announcement::Block(
@@ -85,7 +91,7 @@ async fn test_libp2p_gossipsub() {
         }
     }
 
-    // poll an event from the network for server2
+    // Poll an event from the network for server2.
     let block = match sync2.poll_next().await.unwrap() {
         SyncingEvent::Announcement {
             peer_id: _,
@@ -120,28 +126,96 @@ async fn test_libp2p_gossipsub() {
     assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));
 }
 
-// test libp2p gossipsub with multiple peers and verify that as our libp2p requires message
-// validation, peers don't automatically forward the messages
 #[tokio::test]
-async fn test_libp2p_gossipsub_3_peers() {
+async fn block_announcement_libp2p() {
+    block_announcement::<MakeP2pAddress, Libp2pService>().await;
+}
+
+#[tokio::test]
+async fn block_announcement_tcp() {
+    block_announcement::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+async fn block_announcement_channels() {
+    block_announcement::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+}
+
+async fn block_announcement_no_subscription<A, S>()
+where
+    A: MakeTestAddress<Address = S::Address>,
+    S: NetworkingService + Debug,
+    S::SyncingMessagingHandle: SyncingMessagingService<S>,
+    S::ConnectivityHandle: ConnectivityService<S>,
+{
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut sync1) = Libp2pService::start(
-        MakeP2pAddress::make_address(),
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
+    let (mut conn1, mut sync1) =
+        S::start(A::make_address(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
+    let (mut conn2, _sync2) = S::start(A::make_address(), Arc::clone(&config), Default::default())
+        .await
+        .unwrap();
+
+    connect_services::<S>(&mut conn1, &mut conn2).await;
+
+    let timeout = tokio::time::sleep(Duration::from_secs(1));
+    pin!(timeout);
+    loop {
+        select! {
+            res = sync1.make_announcement(Announcement::Block(
+                Block::new(
+                    vec![],
+                    Id::new(H256([0x01; 32])),
+                    BlockTimestamp::from_int_seconds(1337u64),
+                    ConsensusData::None,
+                    BlockReward::new(Vec::new()),
+                )
+                .unwrap(),
+            )) => {
+                assert_eq!(Err(P2pError::PublishError(PublishError::InsufficientPeers)), res);
+            }
+            _ = &mut timeout => break,
+        }
+    }
+}
+
+#[tokio::test]
+async fn block_announcement_no_subscription_libp2p() {
+    block_announcement_no_subscription::<MakeP2pAddress, Libp2pService>().await;
+}
+
+#[tokio::test]
+async fn block_announcement_no_subscription_tcp() {
+    block_announcement_no_subscription::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+async fn block_announcement_no_subscription_channels() {
+    block_announcement_no_subscription::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+        .await;
+}
+
+// Test announcements with multiple peers and verify that the message validation is done and peers
+// don't automatically forward the messages.
+async fn block_announcement_3_peers<A, S>()
+where
+    A: MakeTestAddress<Address = S::Address>,
+    S: NetworkingService + Debug,
+    S::SyncingMessagingHandle: SyncingMessagingService<S>,
+    S::ConnectivityHandle: ConnectivityService<S>,
+{
+    let config = Arc::new(common::chain::config::create_mainnet());
+    let (mut conn1, mut sync1) =
+        S::start(A::make_address(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
 
     let (mut peer1, mut peer2, mut peer3) = {
         let mut peers = futures::future::join_all((0..3).map(|_| async {
-            let res = Libp2pService::start(
-                MakeP2pAddress::make_address(),
-                Arc::clone(&config),
-                Default::default(),
-            )
-            .await
-            .unwrap();
+            let res = S::start(A::make_address(), Arc::clone(&config), Default::default())
+                .await
+                .unwrap();
             (res.0, res.1)
         }))
         .await;
@@ -153,17 +227,17 @@ async fn test_libp2p_gossipsub_3_peers() {
         )
     };
 
-    // connect peers into a partial mesh
-    connect_services::<Libp2pService>(&mut conn1, &mut peer1.0).await;
-    connect_services::<Libp2pService>(&mut peer1.0, &mut peer2.0).await;
-    connect_services::<Libp2pService>(&mut peer2.0, &mut peer3.0).await;
+    // Connect peers into a partial mesh.
+    connect_services::<S>(&mut conn1, &mut peer1.0).await;
+    connect_services::<S>(&mut peer1.0, &mut peer2.0).await;
+    connect_services::<S>(&mut peer2.0, &mut peer3.0).await;
 
     sync1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
     peer1.1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
     peer2.1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
     peer3.1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
 
-    // spam the message on the pubsubsub until it succeeds (= until we have a peer)
+    // Spam the message until we have a peer.
     loop {
         let res = sync1
             .make_announcement(Announcement::Block(
@@ -188,7 +262,7 @@ async fn test_libp2p_gossipsub_3_peers() {
         }
     }
 
-    // verify that all peers received the message even though they weren't directy connected
+    // Verify that all peers received the message even though they weren't directly connected.
     let res = peer1.1.poll_next().await;
     let (peer_id, message_id) = if let Ok(SyncingEvent::Announcement {
         peer_id,
@@ -220,7 +294,7 @@ async fn test_libp2p_gossipsub_3_peers() {
     assert_eq!(
         peer1
             .1
-            .report_validation_result(peer_id, message_id, net::types::ValidationResult::Accept)
+            .report_validation_result(peer_id, message_id, ValidationResult::Accept)
             .await,
         Ok(())
     );
@@ -250,7 +324,7 @@ async fn test_libp2p_gossipsub_3_peers() {
     assert_eq!(
         peer2
             .1
-            .report_validation_result(peer_id, message_id, net::types::ValidationResult::Accept)
+            .report_validation_result(peer_id, message_id, ValidationResult::Accept)
             .await,
         Ok(())
     );
@@ -263,25 +337,43 @@ async fn test_libp2p_gossipsub_3_peers() {
 }
 
 #[tokio::test]
-async fn test_libp2p_gossipsub_too_big_message() {
+async fn block_announcement_3_peers_libp2p() {
+    block_announcement_3_peers::<MakeP2pAddress, Libp2pService>().await;
+}
+
+// TODO: Implement announcements resending in partially connected networks.
+#[ignore]
+#[tokio::test]
+async fn block_announcement_3_peers_tcp() {
+    block_announcement_3_peers::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+}
+
+// TODO: Implement announcements resending in partially connected networks.
+#[tokio::test]
+#[ignore]
+async fn block_announcement_3_peers_channels() {
+    block_announcement_3_peers::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+}
+
+async fn block_announcement_too_big_message<A, S>()
+where
+    A: MakeTestAddress<Address = S::Address>,
+    S: NetworkingService + Debug,
+    S::SyncingMessagingHandle: SyncingMessagingService<S>,
+    S::ConnectivityHandle: ConnectivityService<S>,
+{
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut sync1) = Libp2pService::start(
-        MakeP2pAddress::make_address(),
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
+    let (mut conn1, mut sync1) =
+        S::start(A::make_address(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
 
-    let (mut conn2, mut sync2) = Libp2pService::start(
-        MakeP2pAddress::make_address(),
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
+    let (mut conn2, mut sync2) =
+        S::start(A::make_address(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
 
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    connect_services::<S>(&mut conn1, &mut conn2).await;
 
     sync1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
     sync2.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
@@ -313,4 +405,24 @@ async fn test_libp2p_gossipsub_too_big_message() {
             Some(MAXIMUM_SIZE)
         )))
     );
+}
+
+#[tokio::test]
+async fn block_announcement_too_big_message_libp2p() {
+    block_announcement_too_big_message::<MakeP2pAddress, Libp2pService>().await;
+}
+
+// TODO: Add limits for the announcements.
+#[ignore]
+#[tokio::test]
+async fn block_announcement_too_big_message_tcp() {
+    block_announcement_too_big_message::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+}
+
+// TODO: Add limits for the announcements.
+#[ignore]
+#[tokio::test]
+async fn block_announcement_too_big_message_channels() {
+    block_announcement_too_big_message::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+        .await;
 }

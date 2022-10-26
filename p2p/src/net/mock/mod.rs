@@ -32,9 +32,11 @@ use crate::{
     error::P2pError,
     message,
     net::{
-        self,
-        mock::transport::{MockListener, MockTransport},
-        types::{ConnectivityEvent, PubSubTopic, SyncingEvent, ValidationResult},
+        mock::{
+            transport::{MockListener, MockTransport},
+            types::{MockMessageId, MockPeerId, MockPeerInfo, MockRequestId},
+        },
+        types::{ConnectivityEvent, PeerInfo, PubSubTopic, SyncingEvent, ValidationResult},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
 };
@@ -42,15 +44,12 @@ use crate::{
 #[derive(Debug)]
 pub struct MockService<T: MockTransport>(PhantomData<T>);
 
-#[derive(Debug, Copy, Clone)]
-pub struct MockMessageId(u64);
-
 pub struct MockConnectivityHandle<S: NetworkingService, T: MockTransport> {
     /// The local address of a network service provider.
     local_addr: S::Address,
 
     /// The peer ID of a local node.
-    peer_id: types::MockPeerId,
+    peer_id: MockPeerId,
 
     /// TX channel for sending commands to mock backend
     cmd_tx: mpsc::Sender<types::Command<T>>,
@@ -88,14 +87,14 @@ where
     _marker: PhantomData<fn() -> S>,
 }
 
-impl<T> TryInto<net::types::PeerInfo<T>> for types::MockPeerInfo
+impl<T> TryInto<PeerInfo<T>> for MockPeerInfo
 where
-    T: NetworkingService<PeerId = types::MockPeerId>,
+    T: NetworkingService<PeerId = MockPeerId>,
 {
     type Error = P2pError;
 
-    fn try_into(self) -> Result<net::types::PeerInfo<T>, Self::Error> {
-        Ok(net::types::PeerInfo {
+    fn try_into(self) -> Result<PeerInfo<T>, Self::Error> {
+        Ok(PeerInfo {
             peer_id: self.peer_id,
             magic_bytes: self.network,
             version: self.version,
@@ -111,8 +110,8 @@ where
     T: MockTransport,
 {
     type Address = T::Address;
-    type PeerId = types::MockPeerId;
-    type SyncingPeerRequestId = types::MockRequestId;
+    type PeerId = MockPeerId;
+    type SyncingPeerRequestId = MockRequestId;
     type SyncingMessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self, T>;
     type SyncingMessagingHandle = MockSyncingMessagingHandle<Self, T>;
@@ -145,7 +144,7 @@ where
             }
         });
 
-        let peer_id = types::MockPeerId::from_socket_address::<T>(&local_addr);
+        let peer_id = MockPeerId::from_socket_address::<T>(&local_addr);
         Ok((
             Self::ConnectivityHandle {
                 local_addr,
@@ -166,8 +165,8 @@ where
 #[async_trait]
 impl<S, T> ConnectivityService<S> for MockConnectivityHandle<S, T>
 where
-    S: NetworkingService<Address = T::Address, PeerId = types::MockPeerId> + Send,
-    types::MockPeerInfo: TryInto<net::types::PeerInfo<S>, Error = P2pError>,
+    S: NetworkingService<Address = T::Address, PeerId = MockPeerId> + Send,
+    MockPeerInfo: TryInto<PeerInfo<S>, Error = P2pError>,
     T: MockTransport,
 {
     async fn connect(&mut self, address: S::Address) -> crate::Result<()> {
@@ -250,8 +249,11 @@ where
 #[async_trait]
 impl<S, T> SyncingMessagingService<S> for MockSyncingMessagingHandle<S, T>
 where
-    S: NetworkingService<PeerId = types::MockPeerId, SyncingPeerRequestId = types::MockRequestId>
-        + Send,
+    S: NetworkingService<
+            PeerId = MockPeerId,
+            SyncingPeerRequestId = MockRequestId,
+            SyncingMessageId = MockMessageId,
+        > + Send,
     T: MockTransport,
 {
     async fn send_request(
@@ -297,7 +299,7 @@ where
             message::Announcement::Block(_) => PubSubTopic::Blocks,
         };
 
-        let (response, rx) = oneshot::channel();
+        let (response, receiver) = oneshot::channel();
         self.cmd_tx
             .send(types::Command::AnnounceData {
                 topic,
@@ -305,12 +307,16 @@ where
                 response,
             })
             .await?;
-        rx.await?
+        receiver.await?
     }
 
-    async fn subscribe(&mut self, _topics: &[PubSubTopic]) -> crate::Result<()> {
-        // TODO: For now all subscriptions always active.
-        Ok(())
+    async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()> {
+        self.cmd_tx
+            .send(types::Command::Subscribe {
+                topics: topics.iter().cloned().collect(),
+            })
+            .await
+            .map_err(P2pError::from)
     }
 
     async fn report_validation_result(
@@ -328,7 +334,7 @@ where
                 peer_id,
                 request_id,
                 request,
-            } => Ok(net::types::SyncingEvent::Request {
+            } => Ok(SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request,
@@ -337,10 +343,18 @@ where
                 peer_id,
                 request_id,
                 response,
-            } => Ok(net::types::SyncingEvent::Response {
+            } => Ok(SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response,
+            }),
+            types::SyncingEvent::Announcement {
+                peer_id,
+                announcement,
+            } => Ok(SyncingEvent::Announcement {
+                peer_id,
+                message_id: MockMessageId,
+                announcement: *announcement,
             }),
         }
     }
@@ -350,6 +364,7 @@ where
 mod tests {
     use super::*;
     use crate::net::{
+        self,
         mock::transport::{ChannelMockTransport, TcpMockTransport},
         types::{Protocol, ProtocolType},
     };

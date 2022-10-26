@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use std::{
-    collections::hash_map::DefaultHasher,
+    collections::{hash_map::DefaultHasher, BTreeSet},
     hash::{Hash, Hasher},
     str::FromStr,
 };
@@ -58,6 +58,9 @@ pub enum Command<T: MockTransport> {
         message: message::Response,
         response: oneshot::Sender<crate::Result<()>>,
     },
+    Subscribe {
+        topics: BTreeSet<PubSubTopic>,
+    },
     AnnounceData {
         topic: PubSubTopic,
         message: Vec<u8>,
@@ -71,11 +74,14 @@ pub enum SyncingEvent {
         request_id: MockRequestId,
         request: message::Request,
     },
-
     Response {
         peer_id: MockPeerId,
         request_id: MockRequestId,
         response: message::Response,
+    },
+    Announcement {
+        peer_id: MockPeerId,
+        announcement: Box<message::Announcement>,
     },
 }
 
@@ -160,6 +166,11 @@ impl std::fmt::Display for MockPeerId {
     }
 }
 
+// This type is only needed to satisfy the `NetworkingService` trait requirements. It should be
+// removed along with the libp2p backend.
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub struct MockMessageId;
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct MockPeerInfo {
     pub peer_id: MockPeerId,
@@ -219,6 +230,9 @@ pub enum Message {
     Response {
         request_id: MockRequestId,
         response: message::Response,
+    },
+    Subscribe {
+        topics: BTreeSet<PubSubTopic>,
     },
     Announcement {
         announcement: message::Announcement,

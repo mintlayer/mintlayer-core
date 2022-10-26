@@ -17,9 +17,12 @@ pub mod protocol;
 
 pub use protocol::{Protocol, ProtocolType};
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, fmt::Display};
 
-use super::*;
+use common::primitives::semver::SemVer;
+use serialization::{Decode, Encode};
+
+use crate::{message, NetworkingService, P2pError};
 
 /// Discovered peer address information
 #[derive(Debug, PartialEq, Eq)]
@@ -50,7 +53,7 @@ pub struct PeerInfo<T: NetworkingService> {
     pub magic_bytes: [u8; 4],
 
     /// Peer software version
-    pub version: primitives::semver::SemVer,
+    pub version: SemVer,
 
     /// User agent of the peer
     pub agent: Option<String>,
@@ -107,7 +110,7 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         address: T::Address,
 
         /// Error that occurred
-        error: error::P2pError,
+        error: P2pError,
     },
 
     /// Remote closed connection
@@ -134,7 +137,7 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         peer_id: T::PeerId,
 
         /// Error code of the violation
-        error: error::P2pError,
+        error: P2pError,
     },
 }
 
@@ -187,7 +190,7 @@ pub enum SyncingEvent<T: NetworkingService> {
 }
 
 /// Publish-subscribe topics
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
 pub enum PubSubTopic {
     /// Transactions
     Transactions,
