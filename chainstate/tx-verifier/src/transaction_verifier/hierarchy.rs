@@ -83,6 +83,13 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
             None => self.storage_ref.get_token_aux_data(token_id),
         }
     }
+
+    fn get_mempool_undo_data(&self) -> Result<Option<BlockUndo>, TransactionVerifierStorageError> {
+        match &self.mempool_txs_undo {
+            Some(u) => Ok(Some(u.undo.clone())),
+            None => self.storage_ref.get_mempool_undo_data(),
+        }
+    }
 }
 
 impl<'a, S: TransactionVerifierStorageRef> UtxosStorageRead for TransactionVerifier<'a, S> {

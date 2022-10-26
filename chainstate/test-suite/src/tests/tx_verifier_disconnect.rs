@@ -26,7 +26,9 @@ use common::{
     },
     primitives::{Amount, Idable},
 };
-use tx_verifier::transaction_verifier::{TransactionSource, TransactionVerifier};
+use tx_verifier::transaction_verifier::{
+    TransactionSourceForConnect, TransactionSourceForDisconnect, TransactionVerifier,
+};
 
 fn setup() -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();
@@ -62,14 +64,18 @@ fn disconnect_tx_mainchain(#[case] seed: Seed, #[case] max_height: usize) {
 
             // check if can be disconnected
             assert_eq!(
-                verifier.can_disconnect_transaction(&block_id, &tx_id),
+                verifier.can_disconnect_transaction(
+                    &TransactionSourceForDisconnect::Chain(block_id),
+                    &tx_id
+                ),
                 Ok(false)
             );
 
             // try to disconnect anyway
             let mut tmp_verifier = verifier.derive_child();
             assert_eq!(
-                tmp_verifier.disconnect_transaction(&block_id, &tx),
+                tmp_verifier
+                    .disconnect_transaction(&TransactionSourceForDisconnect::Chain(block_id), &tx),
                 Err(chainstate::ConnectTransactionError::UtxoError(
                     utxo::Error::NoUtxoFound
                 ))
@@ -86,10 +92,15 @@ fn disconnect_tx_mainchain(#[case] seed: Seed, #[case] max_height: usize) {
         let tx_id = tx.transaction().get_id();
 
         assert_eq!(
-            verifier.can_disconnect_transaction(&block_id, &tx_id),
+            verifier.can_disconnect_transaction(
+                &&TransactionSourceForDisconnect::Chain(block_id),
+                &tx_id
+            ),
             Ok(true)
         );
-        verifier.disconnect_transaction(&block_id, &tx).unwrap();
+        verifier
+            .disconnect_transaction(&TransactionSourceForDisconnect::Chain(block_id), &tx)
+            .unwrap();
     });
 }
 
@@ -123,10 +134,9 @@ fn disconnect_tx_mempool(#[case] seed: Seed) {
             .build_and_process()
             .unwrap()
             .unwrap();
-        let best_block_id = *best_block.block_id();
 
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);
-        let tx_source = TransactionSource::Mempool {
+        let tx_source = TransactionSourceForConnect::Mempool {
             current_best: best_block,
         };
 
@@ -163,18 +173,34 @@ fn disconnect_tx_mempool(#[case] seed: Seed) {
             .unwrap();
 
         assert!(!verifier
-            .can_disconnect_transaction(&best_block_id, &tx1.transaction().get_id())
+            .can_disconnect_transaction(
+                &TransactionSourceForDisconnect::Mempool,
+                &tx1.transaction().get_id()
+            )
             .unwrap());
         assert!(verifier
-            .can_disconnect_transaction(&best_block_id, &tx2.transaction().get_id())
+            .can_disconnect_transaction(
+                &TransactionSourceForDisconnect::Mempool,
+                &tx2.transaction().get_id()
+            )
             .unwrap());
 
         {
-            let child_verifier = verifier.derive_child();
-            //assert_eq!(child_verifier.disconnect_transaction(&best_block_id, &tx2), Err(chainstate::ConnectTransactionError::MissingTxUndo()));
+            let mut child_verifier = verifier.derive_child();
+            assert_eq!(
+                child_verifier
+                    .disconnect_transaction(&TransactionSourceForDisconnect::Mempool, &tx1),
+                Err(chainstate::ConnectTransactionError::MissingTxUndo(
+                    tx1.transaction().get_id()
+                ))
+            );
         }
 
-        verifier.disconnect_transaction(&best_block_id, &tx2).unwrap();
-        verifier.disconnect_transaction(&best_block_id, &tx1).unwrap();
+        verifier
+            .disconnect_transaction(&TransactionSourceForDisconnect::Mempool, &tx2)
+            .unwrap();
+        verifier
+            .disconnect_transaction(&TransactionSourceForDisconnect::Mempool, &tx1)
+            .unwrap();
     });
 }

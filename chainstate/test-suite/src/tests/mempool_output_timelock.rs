@@ -34,7 +34,7 @@ use common::{
     },
     primitives::{time, BlockHeight},
 };
-use tx_verifier::transaction_verifier::{TransactionSource, TransactionVerifier};
+use tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifier};
 
 fn setup() -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();
@@ -94,7 +94,7 @@ fn output_lock_until_height() {
             };
             assert_eq!(
                 verifier.connect_transaction(
-                    &TransactionSource::Mempool {
+                    &TransactionSourceForConnect::Mempool {
                         current_best: best_block_index,
                     },
                     &spend_locked_tx,
@@ -117,7 +117,7 @@ fn output_lock_until_height() {
         };
         verifier
             .connect_transaction(
-                &TransactionSource::Mempool {
+                &TransactionSourceForConnect::Mempool {
                     current_best: best_block_index,
                 },
                 &spend_locked_tx,
@@ -157,7 +157,7 @@ fn output_lock_for_block_count() {
             };
             assert_eq!(
                 verifier.connect_transaction(
-                    &TransactionSource::Mempool {
+                    &TransactionSourceForConnect::Mempool {
                         current_best: best_block_index,
                     },
                     &spend_locked_tx,
@@ -183,7 +183,7 @@ fn output_lock_for_block_count() {
         };
         verifier
             .connect_transaction(
-                &TransactionSource::Mempool {
+                &TransactionSourceForConnect::Mempool {
                     current_best: best_block_index,
                 },
                 &spend_locked_tx,
@@ -246,7 +246,7 @@ fn output_lock_until_time() {
             };
             assert_eq!(
                 verifier.connect_transaction(
-                    &TransactionSource::Mempool {
+                    &TransactionSourceForConnect::Mempool {
                         current_best: best_block_index,
                     },
                     &spend_locked_tx,
@@ -273,7 +273,7 @@ fn output_lock_until_time() {
         };
         verifier
             .connect_transaction(
-                &TransactionSource::Mempool {
+                &TransactionSourceForConnect::Mempool {
                     current_best: best_block_index,
                 },
                 &spend_locked_tx,
@@ -337,7 +337,7 @@ fn output_lock_for_seconds() {
             };
             assert_eq!(
                 verifier.connect_transaction(
-                    &TransactionSource::Mempool {
+                    &TransactionSourceForConnect::Mempool {
                         current_best: best_block_index,
                     },
                     &spend_locked_tx,
@@ -369,7 +369,7 @@ fn output_lock_for_seconds() {
         };
         verifier
             .connect_transaction(
-                &TransactionSource::Mempool {
+                &TransactionSourceForConnect::Mempool {
                     current_best: best_block_index,
                 },
                 &spend_locked_tx,

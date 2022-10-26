@@ -69,6 +69,12 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
             .get_token_aux_data(token_id)
             .map_err(TransactionVerifierStorageError::from)
     }
+
+    fn get_mempool_undo_data(
+        &self,
+    ) -> Result<Option<utxo::BlockUndo>, TransactionVerifierStorageError> {
+        Ok(None)
+    }
 }
 
 // TODO: this function is a duplicate of one in chainstate-types; the cause for this is that BlockchainStorageRead causes a circular dependencies

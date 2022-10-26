@@ -82,6 +82,12 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
             .get_token_aux_data(token_id)
             .map_err(TransactionVerifierStorageError::from)
     }
+
+    fn get_mempool_undo_data(
+        &self,
+    ) -> Result<Option<utxo::BlockUndo>, TransactionVerifierStorageError> {
+        Ok(None)
+    }
 }
 
 impl UtxosStorageRead for InMemoryStorageWrapper {

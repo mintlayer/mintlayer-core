@@ -40,14 +40,14 @@ pub enum ConnectTransactionError {
     InvariantBrokenAlreadyUnspent,
     #[error("Output is not found in the cache or database")]
     MissingOutputOrSpent,
-    #[error(
-        "While disconnecting a block, undo transaction number `{0}` doesn't exist for block `{1}`"
-    )]
-    MissingTxUndo(Id<Transaction>, Id<Block>),
+    #[error("While disconnecting a block, undo info for transaction `{0}` doesn't exist ")]
+    MissingTxUndo(Id<Transaction>),
     #[error("While disconnecting a block, block undo info doesn't exist for block `{0}`")]
     MissingBlockUndo(Id<Block>),
     #[error("While disconnecting a block, block reward undo info doesn't exist for block `{0}`")]
     MissingBlockRewardUndo(Id<GenBlock>),
+    #[error("While disconnecting a mempool tx, undo info is missing")]
+    MissingMempoolTxsUndo,
     #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     AttemptToPrintMoney(Amount, Amount),
     #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]

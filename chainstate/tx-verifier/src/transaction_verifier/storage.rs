@@ -32,7 +32,7 @@ pub enum TransactionVerifierStorageError {
     GenBlockIndexRetrievalFailed(Id<GenBlock>),
     #[error("Failed to persist state: {0}")]
     StatePersistenceError(#[from] storage_result::Error),
-    #[error("Failed to persist state: {0}")]
+    #[error("Failed to get ancestor: {0}")]
     GetAncestorError(#[from] chainstate_types::GetAncestorError),
     #[error("Duplicate undo info for block: {0}")]
     DuplicateBlockUndo(Id<Block>),
@@ -71,6 +71,8 @@ pub trait TransactionVerifierStorageRef: UtxosStorageRead {
         &self,
         token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError>;
+
+    fn get_mempool_undo_data(&self) -> Result<Option<BlockUndo>, TransactionVerifierStorageError>;
 }
 
 pub trait TransactionVerifierStorageMut: TransactionVerifierStorageRef + FlushableUtxoView {

@@ -49,6 +49,8 @@ mockall::mock! {
             &self,
             token_id: &TokenId,
         ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError>;
+
+        fn get_mempool_undo_data(&self) -> Result<Option<BlockUndo>, TransactionVerifierStorageError>;
     }
 
     impl TransactionVerifierStorageMut for Store {
