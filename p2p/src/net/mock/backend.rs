@@ -312,7 +312,8 @@ where
         )
         .await;
 
-        // TODO: We don't really need to return an error here. It is only needed temporary in order to mimic the libp2p behavior.
+        // TODO: We don't really need to return an error here. It is only needed temporarily in
+        // order to mimic the libp2p behavior.
         let sufficient_peers = !announcements.is_empty();
         if sufficient_peers {
             Ok(())
