@@ -32,8 +32,10 @@ pub struct TestFramework {
     pub chainstate: super::TestChainstate,
     pub storage: TestStore,
     pub block_indexes: Vec<BlockIndex>,
-    pub time_getter: TimeGetter, // A clone of the TimeGetter supplied to the chainstate
-    pub time_value: Option<Arc<AtomicU64>>, // current time since epoch; if None, it means a custom TimeGetter was supplied and this is useless
+    // A clone of the TimeGetter supplied to the chainstate
+    pub time_getter: TimeGetter,
+    // current time since epoch; if None, it means a custom TimeGetter was supplied and this is useless
+    pub time_value: Option<Arc<AtomicU64>>,
 }
 
 impl TestFramework {
