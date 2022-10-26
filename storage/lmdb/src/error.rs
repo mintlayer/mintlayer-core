@@ -33,14 +33,18 @@ fn process<T>(err: Error, default: storage_core::Result<T>) -> storage_core::Res
         Error::BadTxn => Err(Recoverable::TransactionFailed.into()),
 
         // We have exhausted some resource which may become available again later
-        Error::ReadersFull | Error::TxnFull | Error::MapFull | Error::TlsFull => {
+        Error::ReadersFull | Error::TxnFull | Error::TlsFull => {
             Err(Recoverable::TemporarilyUnavailable.into())
         }
 
         // These signify an implementation flaw
-        Error::BadDbi | Error::Panic | Error::CursorFull | Error::PageFull | Error::BadRslot => {
-            Err(Fatal::InternalError.into())
-        }
+        err @ (Error::BadDbi
+        | Error::Panic
+        | Error::CursorFull
+        | Error::PageFull
+        | Error::BadRslot
+        | Error::MapFull
+        | Error::MapResized) => Err(Fatal::InternalError(err.to_string()).into()),
 
         // These signify the database flags are not in sync with the schema
         Error::DbsFull | Error::BadValSize | Error::Incompatible => {
@@ -62,10 +66,6 @@ fn process<T>(err: Error, default: storage_core::Result<T>) -> storage_core::Res
             // Classify recoverable vs. fatal I/O errors
             Err(process_io_error(err))
         }
-
-        // Make this an error for the time of being.
-        // TODO: Would be nice to handle memory map resizes automatically somehow but it looks hard.
-        Error::MapResized => Err(Fatal::InternalError.into()),
     }
 }
 
@@ -92,5 +92,8 @@ pub fn process_with_none<T>(err: Error) -> storage_core::Result<Option<T>> {
 
 /// Process an error with operations where "successful" error codes are not expected
 pub fn process_with_err<T>(err: Error) -> storage_core::Result<T> {
-    process(err, Err(storage_core::error::Fatal::InternalError.into()))
+    process(
+        err,
+        Err(storage_core::error::Fatal::InternalError(err.to_string()).into()),
+    )
 }
