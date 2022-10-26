@@ -16,18 +16,15 @@
 use p2p::config::{MdnsConfig, P2pConfig};
 use serde::{Deserialize, Serialize};
 
-pub const MDNS_DEFAULT_QUERY_INTERVAL: u64 = 0;
-pub const MDNS_DEFAULT_IPV6_STATE: bool = false;
-
 /// Multicast DNS configuration.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "state")]
 pub enum MdnsConfigFile {
     Enabled {
         /// Interval (in milliseconds) at which to poll the network for new peers.
-        query_interval: u64,
+        query_interval: Option<u64>,
         /// Use IPv6 for multicast DNS
-        enable_ipv6_mdns_discovery: bool,
+        enable_ipv6_mdns_discovery: Option<bool>,
     },
     Disabled,
 }
@@ -42,9 +39,8 @@ impl MdnsConfigFile {
             Some(enable_mdns) => {
                 if enable_mdns {
                     Some(MdnsConfigFile::Enabled {
-                        query_interval: query_interval.unwrap_or(MDNS_DEFAULT_QUERY_INTERVAL),
-                        enable_ipv6_mdns_discovery: enable_ipv6_mdns_discovery
-                            .unwrap_or(MDNS_DEFAULT_IPV6_STATE),
+                        query_interval,
+                        enable_ipv6_mdns_discovery,
                     })
                 } else {
                     assert!(
