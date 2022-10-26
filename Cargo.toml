@@ -17,7 +17,6 @@ members = [
   "crypto",                       # Cryptographic primitives and their interfaces.
   "consensus",                    # Consensus related logic.
   "chainstate",                   # Code on chainstate of blocks and transactions.
-  "chainstate/launcher",          # Tools to set up chainstate and storage together.
   "chainstate/test-suite",        # Tests for the chainstate, separated to make use of the chainstate test framework.
   "script",                       # Bitcoin script and its interfaces.
   "logging",                      # Logging engine and its interfaces.
