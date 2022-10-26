@@ -295,9 +295,9 @@ mod tests {
         utils::concurrency::model(|| {
             let chain_config = Arc::new(create_unit_test_config());
             let chainstate_config = ChainstateConfig {
-                max_db_commit_attempts: 10,
-                max_orphan_blocks: 0,
-                min_max_bootstrap_import_buffer_sizes: None,
+                max_db_commit_attempts: 10.into(),
+                max_orphan_blocks: 0.into(),
+                min_max_bootstrap_import_buffer_sizes: Default::default(),
             };
             let chainstate_storage = Store::new_empty().unwrap();
 

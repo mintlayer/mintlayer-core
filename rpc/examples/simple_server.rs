@@ -20,7 +20,7 @@
 //
 // And then, from another terminal window:
 //
-// create a file `add_request.json` cointaining:
+// create a file `add_request.json` containing:
 //
 // {"jsonrpc": "2.0", "id": 2, "method": "some_subsystem_add", "params": {"a": 4, "b": 42}}
 //
@@ -77,8 +77,8 @@ async fn main() -> anyhow::Result<()> {
 
     let mut app = subsystem::Manager::new("rpc-example");
     app.install_signal_handlers();
-    let some_subsystem = app.add_subsystem("some_subsys", SomeSubsystem(0));
-    let rpc_config = rpc::RpcConfig::new()?;
+    let some_subsystem = app.add_subsystem("some_subsystem", SomeSubsystem(0));
+    let rpc_config = rpc::RpcConfig::default();
     let _rpc_subsystem = app.add_subsystem(
         "rpc",
         rpc::Builder::new(rpc_config)

@@ -610,7 +610,6 @@ dependencies = [
  "mockall",
  "rpc",
  "rstest",
- "serde",
  "serde_json",
  "serialization",
  "static_assertions",
@@ -630,10 +629,10 @@ dependencies = [
  "chainstate",
  "chainstate-storage",
  "common",
- "serde",
  "storage",
  "storage-inmemory",
  "storage-lmdb",
+ "utils",
 ]
 
 [[package]]
@@ -2941,7 +2940,6 @@ dependencies = [
  "parity-scale-codec",
  "portpicker",
  "rpc",
- "serde",
  "serialization",
  "sscanf",
  "subsystem",
@@ -3635,9 +3633,9 @@ dependencies = [
  "async-trait",
  "jsonrpsee",
  "logging",
- "serde",
  "subsystem",
  "tokio",
+ "utils",
 ]
 
 [[package]]

@@ -24,7 +24,7 @@
 //! whereas idle peers are the peers that are known to `PeerDb` but are not part of our swarm.
 //! Idle peers are discovered through various peer discovery mechanisms and they are used by
 //! [`crate::swarm::PeerManager::heartbeat()`] to establish new outbound connections if the actual
-//! number of active connectios is less than the desired number of connections.
+//! number of active connection is less than the desired number of connections.
 //!
 //! TODO: reserved peers
 
@@ -400,7 +400,7 @@ impl<T: NetworkingService> PeerDb<T> {
             },
         };
 
-        if final_score >= self.p2p_config.ban_threshold {
+        if final_score >= *self.p2p_config.ban_threshold {
             self.ban_peer(peer_id);
             return true;
         }

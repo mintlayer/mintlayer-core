@@ -17,15 +17,15 @@
 
 async fn run() -> anyhow::Result<()> {
     let opts = node::Options::from_args(std::env::args_os())?;
-    logging::init_logging(opts.log_path.as_ref());
-    logging::log::trace!("Command line options: {opts:?}");
+    logging::init_logging::<&std::path::Path>(None);
+    logging::log::info!("Command line options: {opts:?}");
     node::run(opts).await
 }
 
 #[tokio::main]
 async fn main() {
     run().await.unwrap_or_else(|err| {
-        eprintln!("ERROR: {:?}", err);
+        eprintln!("Mintlayer node launch failed: {:?}", err);
         std::process::exit(1)
     })
 }

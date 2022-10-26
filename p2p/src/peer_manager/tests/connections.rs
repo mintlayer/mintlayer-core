@@ -521,7 +521,7 @@ where
     swarm1.peer_connectivity_handle.connect(addr2).await.expect("dial to succeed");
 
     match timeout(
-        Duration::from_secs(swarm1._p2p_config.outbound_connection_timeout),
+        Duration::from_secs(*swarm1._p2p_config.outbound_connection_timeout),
         swarm1.peer_connectivity_handle.poll_next(),
     )
     .await
@@ -601,7 +601,7 @@ where
     tx.send(SwarmEvent::Connect(addr2, rtx)).unwrap();
 
     match timeout(
-        Duration::from_secs(p2p_config.outbound_connection_timeout),
+        Duration::from_secs(*p2p_config.outbound_connection_timeout),
         rrx,
     )
     .await

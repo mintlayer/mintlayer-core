@@ -52,7 +52,7 @@ where
         }
     });
 
-    let p2p_config = Arc::new(P2pConfig::new());
+    let p2p_config = Arc::new(P2pConfig::default());
     PeerManager::<T>::new(Arc::clone(&config), p2p_config, conn, rx, tx_sync)
 }
 

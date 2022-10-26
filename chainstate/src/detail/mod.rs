@@ -181,7 +181,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
     ) -> Self {
-        let orphan_blocks = OrphanBlocksPool::new(chainstate_config.max_orphan_blocks);
+        let orphan_blocks = OrphanBlocksPool::new(*chainstate_config.max_orphan_blocks);
         Self {
             chain_config,
             chainstate_config,
@@ -229,10 +229,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block_source: BlockSource,
         attempt_number: usize,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        if attempt_number >= self.chainstate_config.max_db_commit_attempts {
+        if attempt_number >= *self.chainstate_config.max_db_commit_attempts {
             Err(BlockError::DatabaseCommitError(
                 block.get_id(),
-                self.chainstate_config.max_db_commit_attempts,
+                *self.chainstate_config.max_db_commit_attempts,
                 db_error,
             ))
         } else {

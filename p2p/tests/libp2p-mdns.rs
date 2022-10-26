@@ -33,7 +33,11 @@ async fn test_libp2p_peer_discovery() {
         MakeP2pAddress::make_address(),
         Arc::clone(&config),
         Arc::new(config::P2pConfig {
-            mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
+            mdns_config: config::MdnsConfig::Enabled {
+                query_interval: 200.into(),
+                enable_ipv6_mdns_discovery: Default::default(),
+            }
+            .into(),
             ..Default::default()
         }),
     )
@@ -44,7 +48,11 @@ async fn test_libp2p_peer_discovery() {
         MakeP2pAddress::make_address(),
         Arc::clone(&config),
         Arc::new(config::P2pConfig {
-            mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
+            mdns_config: config::MdnsConfig::Enabled {
+                query_interval: 200.into(),
+                enable_ipv6_mdns_discovery: Default::default(),
+            }
+            .into(),
             ..Default::default()
         }),
     )

@@ -84,7 +84,7 @@ impl NetworkingService for Libp2pService {
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(mplex::MplexConfig::new())
             .outbound_timeout(std::time::Duration::from_secs(
-                p2p_config.outbound_connection_timeout,
+                *p2p_config.outbound_connection_timeout,
             ))
             .boxed();
 
@@ -115,7 +115,7 @@ impl NetworkingService for Libp2pService {
         });
 
         // send listen command to the libp2p backend and if it succeeds,
-        // create a multiaddress for local peer and return the Libp2pService object
+        // create a multi-address for local peer and return the Libp2pService object
         let (tx, rx) = oneshot::channel();
         cmd_tx.send(types::Command::Listen {
             addr: bind_addr.clone(),

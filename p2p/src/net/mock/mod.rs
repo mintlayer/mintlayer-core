@@ -137,7 +137,7 @@ where
                 cmd_rx,
                 conn_tx,
                 sync_tx,
-                std::time::Duration::from_secs(p2p_config.outbound_connection_timeout),
+                std::time::Duration::from_secs(*p2p_config.outbound_connection_timeout),
             );
 
             if let Err(err) = backend.run().await {

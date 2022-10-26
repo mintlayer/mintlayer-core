@@ -13,38 +13,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{net::SocketAddr, str::FromStr};
+use std::net::SocketAddr;
 
-use utils::make_config_setting;
-
-make_config_setting!(
-    HttpBindAddress,
-    SocketAddr,
-    SocketAddr::from_str("127.0.0.1:3030").expect("Address must be correct")
-);
-
-make_config_setting!(HttpRpcEnabled, bool, true);
-
-make_config_setting!(
-    WebsocketBindAddress,
-    SocketAddr,
-    SocketAddr::from_str("127.0.0.1:3031").expect("Address must be correct")
-);
-
-make_config_setting!(WebsocketRpcEnabled, bool, true);
+use rpc::RpcConfig;
+use serde::{Deserialize, Serialize};
 
 /// The rpc subsystem configuration.
-#[derive(Debug, Default)]
-pub struct RpcConfig {
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct RpcConfigFile {
     /// Address to bind http RPC to.
-    pub http_bind_address: HttpBindAddress,
+    pub http_bind_address: Option<SocketAddr>,
 
     /// Whether http RPC is enabled
-    pub http_enabled: HttpRpcEnabled,
+    pub http_enabled: Option<bool>,
 
     /// Address to bind websocket RPC to.
-    pub ws_bind_address: WebsocketBindAddress,
+    pub ws_bind_address: Option<SocketAddr>,
 
     /// Whether websocket RPC is enabled
-    pub ws_enabled: WebsocketRpcEnabled,
+    pub ws_enabled: Option<bool>,
+}
+
+impl From<RpcConfigFile> for RpcConfig {
+    fn from(c: RpcConfigFile) -> Self {
+        RpcConfig {
+            http_bind_address: c.http_bind_address.into(),
+            http_enabled: c.http_enabled.into(),
+            ws_bind_address: c.ws_bind_address.into(),
+            ws_enabled: c.ws_enabled.into(),
+        }
+    }
 }

@@ -58,7 +58,7 @@ impl OrphanBlocksPool {
         // remove from the vector
         self.orphan_ids.retain(|id| *id != *block_id);
 
-        // remove from the prevs
+        // remove from the orphan_by_prev_id
         match self.orphan_by_prev_id.entry(prev_block_id) {
             Entry::Vacant(_) => panic!("Orphan pool parent map inconsistent"),
             Entry::Occupied(mut entry) => {

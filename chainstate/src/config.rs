@@ -13,18 +13,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serde::{Deserialize, Serialize};
+use utils::make_config_setting;
+
+const DEFAULT_MIN_IMPORT_BUFFER_SIZE: usize = 1 << 22; // 4 MB
+const DEFAULT_MAX_IMPORT_BUFFER_SIZE: usize = 1 << 26; // 64 MB
+
+make_config_setting!(MaxDbCommitAttempts, usize, 10);
+make_config_setting!(MaxOrphanBlocks, usize, 512);
+make_config_setting!(
+    MinMaxBootstrapImportBufferSizes,
+    (usize, usize),
+    (
+        DEFAULT_MIN_IMPORT_BUFFER_SIZE,
+        DEFAULT_MAX_IMPORT_BUFFER_SIZE,
+    )
+);
 
 /// The chainstate subsystem configuration.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ChainstateConfig {
     /// The number of maximum attempts to process a block.
-    pub max_db_commit_attempts: usize,
+    pub max_db_commit_attempts: MaxDbCommitAttempts,
     /// The maximum capacity of the orphan blocks pool.
-    pub max_orphan_blocks: usize,
+    pub max_orphan_blocks: MaxOrphanBlocks,
     /// When importing bootstrap file, this controls the buffer sizes (min, max)
     /// (see bootstrap import function for more information)
-    pub min_max_bootstrap_import_buffer_sizes: Option<(usize, usize)>,
+    pub min_max_bootstrap_import_buffer_sizes: MinMaxBootstrapImportBufferSizes,
 }
 
 impl ChainstateConfig {
@@ -34,7 +48,7 @@ impl ChainstateConfig {
     }
 
     pub fn with_max_orphan_blocks(mut self, max_orphan_blocks: usize) -> Self {
-        self.max_orphan_blocks = max_orphan_blocks;
+        self.max_orphan_blocks = max_orphan_blocks.into();
         self
     }
 
@@ -42,17 +56,7 @@ impl ChainstateConfig {
         mut self,
         min_max_bootstrap_import_buffer_sizes: (usize, usize),
     ) -> Self {
-        self.min_max_bootstrap_import_buffer_sizes = Some(min_max_bootstrap_import_buffer_sizes);
+        self.min_max_bootstrap_import_buffer_sizes = min_max_bootstrap_import_buffer_sizes.into();
         self
-    }
-}
-
-impl Default for ChainstateConfig {
-    fn default() -> Self {
-        Self {
-            max_db_commit_attempts: 10,
-            max_orphan_blocks: 512,
-            min_max_bootstrap_import_buffer_sizes: None,
-        }
     }
 }

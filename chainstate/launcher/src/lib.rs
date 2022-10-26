@@ -25,7 +25,7 @@ pub use chainstate::{
     DefaultTransactionVerificationStrategy,
 };
 pub use common::chain::ChainConfig;
-pub use config::{ChainstateLauncherConfig, StorageBackend};
+pub use config::{ChainstateLauncherConfig, StorageBackendConfig};
 
 /// Subdirectory under `datadir` where LMDB chainstate database is placed
 pub const SUBDIRECTORY_LMDB: &str = "chainstate-lmdb";
@@ -62,11 +62,11 @@ pub fn make_chainstate(
     // There is some code duplication because `make_chainstate_and_storage_impl` is called with
     // a different set of generic parameters in each case.
     match storage_backend {
-        StorageBackend::Lmdb => {
+        StorageBackendConfig::Lmdb => {
             let storage = storage_lmdb::Lmdb::new(datadir.join(SUBDIRECTORY_LMDB));
             make_chainstate_and_storage_impl(storage, chain_config, chainstate_config)
         }
-        StorageBackend::InMemory => {
+        StorageBackendConfig::InMemory => {
             let storage = storage_inmemory::InMemory::new();
             make_chainstate_and_storage_impl(storage, chain_config, chainstate_config)
         }

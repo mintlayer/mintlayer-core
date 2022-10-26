@@ -45,8 +45,8 @@ impl Mdns {
             } => {
                 match mdns::Mdns::new(mdns::MdnsConfig {
                     ttl: Default::default(),
-                    query_interval: std::time::Duration::from_millis(*query_interval),
-                    enable_ipv6: *enable_ipv6_mdns_discovery,
+                    query_interval: std::time::Duration::from_millis(**query_interval),
+                    enable_ipv6: **enable_ipv6_mdns_discovery,
                 })
                 .await
                 {
@@ -105,7 +105,7 @@ mod tests {
 
     #[tokio::test]
     async fn mdns_disabled() {
-        let mdns = Mdns::new(&config::MdnsConfig::new()).await;
+        let mdns = Mdns::new(&config::MdnsConfig::default()).await;
         assert!(std::matches!(mdns, Mdns::Disabled));
     }
 
@@ -158,8 +158,8 @@ mod tests {
 
         let tester1 = MdnsTester {
             mdns: Mdns::new(&config::MdnsConfig::Enabled {
-                query_interval: 200,
-                enable_ipv6_mdns_discovery: false,
+                query_interval: 200.into(),
+                enable_ipv6_mdns_discovery: false.into(),
             })
             .await,
             poll_params: TestParams {
@@ -169,8 +169,8 @@ mod tests {
         };
         let tester2 = MdnsTester {
             mdns: Mdns::new(&config::MdnsConfig::Enabled {
-                query_interval: 200,
-                enable_ipv6_mdns_discovery: false,
+                query_interval: 200.into(),
+                enable_ipv6_mdns_discovery: false.into(),
             })
             .await,
             poll_params: TestParams {

@@ -700,7 +700,7 @@ fn consensus_type(#[case] seed: Seed) {
         ),
     ];
 
-    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid netupgrades");
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     // Internally this calls Consensus::new, which processes the genesis block
     // This should succeed because config::Builder by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
@@ -730,7 +730,7 @@ fn consensus_type(#[case] seed: Seed) {
         ))
     ));
 
-    // Create 4 more blocks with Consensus Nonw
+    // Create 4 more blocks with Consensus Now
     tf.create_chain(&tf.genesis().get_id().into(), 4, &mut rng)
         .expect("chain creation");
 
@@ -863,7 +863,7 @@ fn pow(#[case] seed: Seed) {
         ),
     ];
 
-    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid netupgrades");
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     // Internally this calls Consensus::new, which processes the genesis block
     // This should succeed because TestChainConfig by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
@@ -934,7 +934,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
         ),
     ];
 
-    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid netupgrades");
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     // Internally this calls Consensus::new, which processes the genesis block
     // This should succeed because TestChainConfig by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with

@@ -30,7 +30,11 @@ async fn test_discovered_and_expired() {
     let (mut backend1, _, _conn_rx, _) = make_libp2p(
         common::chain::config::create_mainnet(),
         Arc::new(config::P2pConfig {
-            mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
+            mdns_config: config::MdnsConfig::Enabled {
+                query_interval: 200.into(),
+                enable_ipv6_mdns_discovery: Default::default(),
+            }
+            .into(),
             ..Default::default()
         }),
         MakeP2pAddress::make_address(),
@@ -41,7 +45,11 @@ async fn test_discovered_and_expired() {
     let (mut backend2, _, _, _) = make_libp2p(
         common::chain::config::create_mainnet(),
         Arc::new(config::P2pConfig {
-            mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
+            mdns_config: config::MdnsConfig::Enabled {
+                query_interval: 200.into(),
+                enable_ipv6_mdns_discovery: Default::default(),
+            }
+            .into(),
             ..Default::default()
         }),
         MakeP2pAddress::make_address(),

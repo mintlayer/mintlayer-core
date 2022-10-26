@@ -21,7 +21,7 @@ use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 use directories::UserDirs;
 
-use crate::regtest_options::RegtestOptions;
+use crate::{config_files::StorageBackendConfigFile, regtest_options::RegtestOptions};
 
 const DATA_DIR_NAME: &str = ".mintlayer";
 const CONFIG_NAME: &str = "config.toml";
@@ -30,10 +30,6 @@ const CONFIG_NAME: &str = "config.toml";
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
 pub struct Options {
-    /// Where to write logs
-    #[clap(long, value_name = "PATH")]
-    pub log_path: Option<PathBuf>,
-
     /// The path to the data directory.
     #[clap(short, long = "datadir")]
     pub data_dir: Option<PathBuf>,
@@ -62,7 +58,7 @@ pub enum Command {
 pub struct RunOptions {
     /// Storage backend to use
     #[clap(long)]
-    pub storage_backend: Option<chainstate_launcher::StorageBackend>,
+    pub storage_backend: Option<StorageBackendConfigFile>,
 
     /// The number of maximum attempts to process a block.
     #[clap(long)]

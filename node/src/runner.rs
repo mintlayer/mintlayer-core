@@ -34,7 +34,7 @@ use mempool::rpc::MempoolRpcServer;
 use p2p::rpc::P2pRpcServer;
 
 use crate::{
-    config::NodeConfig,
+    config_files::NodeConfigFile,
     options::{Command, Options, RunOptions},
     regtest_options::ChainConfigOptions,
 };
@@ -42,7 +42,7 @@ use crate::{
 /// Initialize the node, giving caller the opportunity to add more subsystems before start.
 pub async fn initialize(
     chain_config: ChainConfig,
-    node_config: NodeConfig,
+    node_config: NodeConfigFile,
 ) -> Result<subsystem::Manager> {
     let chain_config = Arc::new(chain_config);
 
@@ -55,7 +55,7 @@ pub async fn initialize(
     let chainstate = chainstate_launcher::make_chainstate(
         &node_config.datadir,
         Arc::clone(&chain_config),
-        node_config.chainstate,
+        node_config.chainstate.into(),
     )?;
     let chainstate = manager.add_subsystem("chainstate", chainstate);
 
@@ -75,7 +75,7 @@ pub async fn initialize(
         "p2p",
         p2p::make_p2p::<p2p::net::libp2p::Libp2pService>(
             Arc::clone(&chain_config),
-            Arc::new(node_config.p2p),
+            Arc::new(node_config.p2p.into()),
             chainstate.clone(),
             mempool.clone(),
         )
@@ -100,7 +100,7 @@ pub async fn initialize(
         // TODO: get rid of the unwrap_or() after fixing the issue in #446
         let _rpc = manager.add_subsystem(
             "rpc",
-            rpc::Builder::new(node_config.rpc)
+            rpc::Builder::new(node_config.rpc.into())
                 .register(crate::rpc::init(manager.make_shutdown_trigger()))
                 .register(chainstate.clone().into_rpc())
                 .register(mempool.into_rpc())
@@ -118,7 +118,7 @@ pub async fn run(options: Options) -> Result<()> {
     match options.command {
         Command::CreateConfig => {
             let path = options.config_path();
-            let config = NodeConfig::new(options.data_dir())?;
+            let config = NodeConfigFile::new(options.data_dir())?;
             let config = toml::to_string(&config).context("Failed to serialize config")?;
             log::trace!("Saving config to {path:?}\n: {config:#?}");
             fs::write(&path, config)
@@ -164,7 +164,7 @@ async fn start(
     run_options: &RunOptions,
     chain_config: ChainConfig,
 ) -> Result<()> {
-    let node_config = NodeConfig::read(config_path, datadir_path_opt, run_options)
+    let node_config = NodeConfigFile::read(config_path, datadir_path_opt, run_options)
         .context("Failed to initialize config")?;
     log::info!("Starting with the following config:\n {node_config:#?}");
     let manager = initialize(chain_config, node_config).await?;

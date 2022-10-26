@@ -170,14 +170,14 @@ fn build_test_framework() {
                 .build(),
         )
         .with_chainstate_config(ChainstateConfig {
-            max_db_commit_attempts,
+            max_db_commit_attempts: max_db_commit_attempts.into(),
             ..Default::default()
         })
         .with_time_getter(TimeGetter::default())
         .build();
 
     assert_eq!(
-        tf.chainstate.get_chainstate_config().max_db_commit_attempts,
+        *tf.chainstate.get_chainstate_config().max_db_commit_attempts,
         max_db_commit_attempts
     );
     assert_eq!(tf.chainstate.get_chain_config().chain_type(), &chain_type);

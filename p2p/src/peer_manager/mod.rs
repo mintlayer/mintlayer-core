@@ -40,6 +40,7 @@ use logging::log;
 use utils::ensure;
 
 use crate::{
+    config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event,
     net::{
@@ -47,7 +48,6 @@ use crate::{
         types::{Protocol, ProtocolType},
         ConnectivityService, NetworkingService,
     },
-    P2pConfig,
 };
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
