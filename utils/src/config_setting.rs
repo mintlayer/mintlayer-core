@@ -33,6 +33,7 @@ macro_rules! make_config_setting {
             }
         }
 
+        /// This is used to covert from "no value supplied from user in program options" to "default value"
         impl From<Option<$tp>> for $name {
             fn from(v: Option<$tp>) -> Self {
                 Self {
@@ -63,4 +64,23 @@ macro_rules! make_config_setting {
             }
         }
     };
+}
+
+mod tests {
+    make_config_setting!(MySetting, String, "DefaultValue".into());
+
+    #[test]
+    fn basic_defaults_and_loading() {
+        let setting = MySetting::default();
+        assert_eq!(*setting, "DefaultValue");
+
+        let setting = MySetting::from(None);
+        assert_eq!(*setting, "DefaultValue");
+
+        let setting = MySetting::from(Some("MyValue".to_string()));
+        assert_eq!(*setting, "MyValue");
+
+        let setting = MySetting::from("MyOtherValue".to_string());
+        assert_eq!(*setting, "MyOtherValue");
+    }
 }
