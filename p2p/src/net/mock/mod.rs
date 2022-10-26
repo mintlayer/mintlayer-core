@@ -34,7 +34,7 @@ use crate::{
     net::{
         mock::{
             transport::{MockListener, MockTransport},
-            types::{MockPeerId, MockPeerInfo, MockRequestId},
+            types::{MockMessageId, MockPeerId, MockPeerInfo, MockRequestId},
         },
         types::{ConnectivityEvent, PeerInfo, PubSubTopic, SyncingEvent, ValidationResult},
         ConnectivityService, NetworkingService, SyncingMessagingService,
@@ -112,7 +112,7 @@ where
     type Address = T::Address;
     type PeerId = MockPeerId;
     type SyncingPeerRequestId = MockRequestId;
-    type SyncingMessageId = ();
+    type SyncingMessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self, T>;
     type SyncingMessagingHandle = MockSyncingMessagingHandle<Self, T>;
 
@@ -252,7 +252,7 @@ where
     S: NetworkingService<
             PeerId = MockPeerId,
             SyncingPeerRequestId = MockRequestId,
-            SyncingMessageId = (),
+            SyncingMessageId = MockMessageId,
         > + Send,
     T: MockTransport,
 {
@@ -353,7 +353,7 @@ where
                 announcement,
             } => Ok(SyncingEvent::Announcement {
                 peer_id,
-                message_id: (),
+                message_id: MockMessageId,
                 announcement: *announcement,
             }),
         }

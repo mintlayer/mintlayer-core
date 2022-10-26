@@ -157,6 +157,9 @@ impl std::fmt::Display for MockPeerId {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub struct MockMessageId;
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct MockPeerInfo {
     pub peer_id: MockPeerId,
