@@ -37,8 +37,8 @@ pub enum MdnsConfig {
     Disabled,
 }
 
-impl MdnsConfig {
-    pub fn new() -> Self {
+impl Default for MdnsConfig {
+    fn default() -> Self {
         MdnsConfig::Disabled
     }
 }

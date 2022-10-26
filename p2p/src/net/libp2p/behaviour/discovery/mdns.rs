@@ -105,7 +105,7 @@ mod tests {
 
     #[tokio::test]
     async fn mdns_disabled() {
-        let mdns = Mdns::new(&config::MdnsConfig::new()).await;
+        let mdns = Mdns::new(&config::MdnsConfig::default()).await;
         assert!(std::matches!(mdns, Mdns::Disabled));
     }
 
