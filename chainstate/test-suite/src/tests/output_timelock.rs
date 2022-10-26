@@ -30,7 +30,7 @@ use common::{
         tokens::OutputValue,
         OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
-    primitives::{time, Amount, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 
 use chainstate::BlockError;
@@ -48,10 +48,11 @@ fn output_lock_until_height() {
         let block_height_that_unlocks = 10;
 
         // create the first block, with a locked output
+        let current_time = tf.current_time();
         let locked_output = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::UntilHeight(BlockHeight::new(block_height_that_unlocks)),
-            BlockTimestamp::from_duration_since_epoch(time::get()),
+            BlockTimestamp::from_duration_since_epoch(current_time),
         );
 
         // attempt to create the next block, and attempt to spend the locked output
@@ -201,10 +202,11 @@ fn output_lock_for_block_count() {
         let block_height_with_locked_output = 1;
 
         // create the first block, with a locked output
+        let current_time = tf.current_time();
         let locked_output = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::ForBlockCount(block_count_that_unlocks),
-            BlockTimestamp::from_duration_since_epoch(time::get()),
+            BlockTimestamp::from_duration_since_epoch(current_time),
         );
 
         // attempt to create the next block, and attempt to spend the locked output
@@ -346,10 +348,11 @@ fn output_lock_for_block_count_attempted_overflow() {
         let block_count_that_unlocks = u64::MAX;
 
         // create the first block, with a locked output
+        let current_time = tf.current_time();
         let locked_output = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::ForBlockCount(block_count_that_unlocks),
-            BlockTimestamp::from_duration_since_epoch(time::get()),
+            BlockTimestamp::from_duration_since_epoch(current_time),
         );
 
         // attempt to create the next block, and attempt to spend the locked output
@@ -666,10 +669,11 @@ fn output_lock_for_seconds_attempted_overflow() {
         let mut tf = TestFramework::default();
 
         // create the first block, with a locked output
+        let current_time = tf.current_time();
         let locked_output = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::ForSeconds(u64::MAX),
-            BlockTimestamp::from_duration_since_epoch(time::get()),
+            BlockTimestamp::from_duration_since_epoch(current_time),
         );
 
         // attempt to create the next block, and attempt to spend the locked output

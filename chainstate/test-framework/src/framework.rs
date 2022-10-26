@@ -19,15 +19,21 @@ use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
     chain::{Block, GenBlock, Genesis},
     primitives::{id::WithId, BlockHeight, Id, Idable},
+    time_getter::TimeGetter,
 };
 use crypto::random::Rng;
-use std::sync::Arc;
+use std::{
+    sync::{atomic::AtomicU64, Arc},
+    time::Duration,
+};
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
 pub struct TestFramework {
     pub chainstate: super::TestChainstate,
     pub storage: TestStore,
     pub block_indexes: Vec<BlockIndex>,
+    pub time_getter: TimeGetter, // A clone of the TimeGetter supplied to the chainstate
+    pub time_value: Option<Arc<AtomicU64>>, // current time since epoch; if None, it means a custom TimeGetter was supplied and this is useless
 }
 
 impl TestFramework {
@@ -43,6 +49,33 @@ impl TestFramework {
     /// Returns a block builder instance that can be used for a block construction and processing.
     pub fn make_block_builder(&mut self) -> BlockBuilder {
         BlockBuilder::new(self)
+    }
+
+    /// Get the current time using the time getter that was supplied to the test-framework
+    pub fn current_time(&self) -> Duration {
+        self.time_getter.get_time()
+    }
+
+    /// The default TimeGetter of the test framework allows setting a custom time;
+    /// this function increases the time value
+    pub fn progress_time_seconds_since_epoch(&mut self, secs: u64) {
+        match &self.time_value {
+            Some(v) => v.fetch_add(secs, std::sync::atomic::Ordering::SeqCst),
+            None => {
+                panic!("Cannot progress time in TestFramework when custom time getter is supplied")
+            }
+        };
+    }
+
+    /// The default TimeGetter of the test framework allows setting a custom time;
+    /// this function sets the time value to whatever provided
+    pub fn set_time_seconds_since_epoch(&mut self, val: u64) {
+        match &self.time_value {
+            Some(v) => v.store(val, std::sync::atomic::Ordering::SeqCst),
+            None => {
+                panic!("Cannot progress time in TestFramework when custom time getter is supplied")
+            }
+        };
     }
 
     /// Processes the given block.
