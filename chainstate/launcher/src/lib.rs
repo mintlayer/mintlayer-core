@@ -36,7 +36,7 @@ fn make_chainstate_and_storage_impl<B: 'static + storage::Backend>(
     chainstate_config: ChainstateConfig,
 ) -> Result<Box<dyn ChainstateInterface>, Error> {
     let storage = chainstate_storage::Store::new(storage_backend)
-        .map_err(|e| Error::FailedToInitializeChainstate(e.to_string()))?;
+        .map_err(|e| Error::FailedToInitializeChainstate(e.into()))?;
     let chainstate = chainstate::make_chainstate(
         chain_config,
         chainstate_config,

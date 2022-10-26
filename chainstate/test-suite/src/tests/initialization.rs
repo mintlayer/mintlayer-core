@@ -130,5 +130,5 @@ fn genesis_check_err_height_1() {
 #[trace]
 #[case(Seed::from_entropy())]
 fn genesis_check_err_nonempty_chain(#[case] seed: Seed) {
-    genesis_check_err(make_seedable_rng(seed).gen_range(1..100));
+    genesis_check_err(make_seedable_rng(seed).gen_range(2..100));
 }
