@@ -27,7 +27,7 @@ use common::{
         signed_transaction::SignedTransaction,
         Block, GenBlock, Transaction, TxInput, TxOutput,
     },
-    primitives::{time, Id, H256},
+    primitives::{Id, H256},
 };
 use crypto::random::Rng;
 use itertools::Itertools;
@@ -49,7 +49,7 @@ impl<'f> BlockBuilder<'f> {
     pub fn new(framework: &'f mut TestFramework) -> Self {
         let transactions = Vec::new();
         let prev_block_hash = framework.chainstate.get_best_block_id().unwrap();
-        let timestamp = BlockTimestamp::from_duration_since_epoch(time::get());
+        let timestamp = BlockTimestamp::from_duration_since_epoch(framework.time_getter.get_time());
         let consensus_data = ConsensusData::None;
         let reward = BlockReward::new(Vec::new());
         let block_source = BlockSource::Local;

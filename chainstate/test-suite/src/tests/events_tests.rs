@@ -178,7 +178,8 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
             tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
         // Produce a block with a bad timestamp.
         let timestamp = tf.genesis().timestamp().as_int_seconds()
-            + tf.chainstate.get_chain_config().max_future_block_time_offset().as_secs();
+            + tf.chainstate.get_chain_config().max_future_block_time_offset().as_secs()
+            + 1;
         let second_block = tf
             .make_block_builder()
             .with_parent(first_block.get_id().into())
@@ -200,11 +201,11 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
         tf.process_block(first_block, BlockSource::Local).unwrap();
         tf.chainstate.wait_for_all_events();
         assert_eq!(events.lock().unwrap().len(), 1);
-        let guard = errors.lock().unwrap();
-        assert_eq!(guard.len(), 1);
+        let errors_guard = errors.lock().unwrap();
+        assert_eq!(errors_guard.len(), 1);
         assert_eq!(
-            guard[0],
-            BlockError::CheckBlockFailed(CheckBlockError::BlockTimeOrderInvalid)
+            errors_guard[0],
+            BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture)
         );
     });
 }
