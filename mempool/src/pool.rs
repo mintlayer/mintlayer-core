@@ -19,6 +19,11 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
 
+use common::chain::Block;
+use common::primitives::BlockHeight;
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
+
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::chain::signed_transaction::SignedTransaction;
 use common::chain::tokens::OutputValue;
@@ -29,7 +34,6 @@ use serialization::Encode;
 
 use common::chain::transaction::Transaction;
 use common::chain::transaction::TxInput;
-use common::chain::OutPoint;
 use common::primitives::amount::Amount;
 use common::primitives::Id;
 use common::primitives::Idable;
@@ -39,6 +43,7 @@ use logging::log;
 use utils::ensure;
 use utils::eventhandler::EventsController;
 use utils::newtype;
+use utils::tap_error_log::LogError;
 
 use crate::error::Error;
 use crate::error::TxValidationError;
@@ -107,26 +112,20 @@ fn get_relay_fee(tx: &SignedTransaction) -> Amount {
 #[async_trait::async_trait]
 pub trait MempoolInterface: Send {
     async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error>;
-    fn get_all(&self) -> Vec<&SignedTransaction>;
+    async fn get_all(&self) -> Result<Vec<SignedTransaction>, Error>;
 
     // Returns `true` if the mempool contains a transaction with the given id, `false` otherwise.
-    fn contains_transaction(&self, tx: &Id<Transaction>) -> bool;
+    async fn contains_transaction(&self, tx: &Id<Transaction>) -> Result<bool, Error>;
 
-    fn collect_txs(
+    async fn collect_txs(
         &self,
-        tx_accumulator: Box<dyn TransactionAccumulator>,
-    ) -> Box<dyn TransactionAccumulator>;
+        tx_accumulator: Box<dyn TransactionAccumulator + Send>,
+    ) -> Result<Box<dyn TransactionAccumulator>, Error>;
 
-    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
-
-    // Add/remove transactions to/from the mempool according to a new tip
-    #[cfg(test)]
-    fn new_tip_set(&mut self);
-}
-
-pub trait ChainState: Debug {
-    fn contains_outpoint(&self, outpoint: &OutPoint) -> bool;
-    fn get_outpoint_value(&self, outpoint: &OutPoint) -> Result<Amount, anyhow::Error>;
+    async fn subscribe_to_events(
+        &mut self,
+        handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
+    ) -> Result<(), Error>;
 }
 
 #[async_trait::async_trait]
@@ -204,6 +203,7 @@ pub struct Mempool<M: GetMemoryUsage + 'static + Send + std::marker::Sync> {
     clock: TimeGetter,
     memory_usage_estimator: M,
     events_controller: EventsController<MempoolEvent>,
+    receiver: mpsc::UnboundedReceiver<MempoolMethodCall>,
 }
 
 impl<M> std::fmt::Debug for Mempool<M>
@@ -224,6 +224,7 @@ where
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         clock: TimeGetter,
         memory_usage_estimator: M,
+        receiver: tokio::sync::mpsc::UnboundedReceiver<MempoolMethodCall>,
     ) -> Self {
         Self {
             chain_config,
@@ -236,8 +237,48 @@ where
             clock,
             memory_usage_estimator,
             events_controller: Default::default(),
+            receiver,
         }
     }
+
+    pub(crate) async fn subscribe_to_chainstate_events(
+        &mut self,
+    ) -> crate::Result<mpsc::UnboundedReceiver<(Id<Block>, BlockHeight)>> {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let subscribe_func =
+            Arc::new(
+                move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
+                    chainstate::ChainstateEvent::NewTip(block_id, block_height) => {
+                        log::info!(
+                            "Received a new tip with block id {:?} and block height {:?}",
+                            block_id,
+                            block_height
+                        );
+                        if let Err(e) = tx.send((block_id, block_height)) {
+                            log::error!("Mempool Event Handler closed: {:?}", e)
+                        }
+                    }
+                },
+            );
+
+        self.chainstate_handle
+            .call_mut(|this| this.subscribe_to_events(subscribe_func))
+            .await
+            .map_err(|_| crate::error::Error::SubsystemFailure)?;
+        Ok(rx)
+    }
+
+    pub(crate) fn new_tip_set(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
+        log::info!(
+            "new tip with block_id {:?} and block_height {:?}",
+            block_id,
+            block_height
+        );
+        // TODO(Roy) handle the new tip
+        let mut rolling_fee_rate = self.rolling_fee_rate.write();
+        (*rolling_fee_rate).block_since_last_rolling_fee_bump = true;
+    }
+    //
 
     fn rolling_fee_halflife(&self) -> Time {
         let mem_usage = self.get_memory_usage();
@@ -774,19 +815,156 @@ impl GetMemoryUsage for SystemUsageEstimator {
     }
 }
 
+pub(crate) struct MempoolInterfaceHandle {
+    sender: mpsc::UnboundedSender<MempoolMethodCall>,
+}
+
+impl MempoolInterfaceHandle {
+    pub(crate) fn new(sender: mpsc::UnboundedSender<MempoolMethodCall>) -> Self {
+        Self { sender }
+    }
+}
+
+pub(crate) enum MempoolMethodCall {
+    AddTransaction {
+        tx: SignedTransaction,
+        rtx: oneshot::Sender<Result<(), Error>>,
+    },
+    GetAll {
+        rtx: oneshot::Sender<Vec<SignedTransaction>>,
+    },
+    CollectTxs {
+        tx_accumulator: Box<dyn TransactionAccumulator + Send>,
+        rtx: oneshot::Sender<Box<dyn TransactionAccumulator>>,
+    },
+    ContainsTransaction {
+        tx_id: Id<Transaction>,
+        rtx: oneshot::Sender<bool>,
+    },
+    SubscribeToEvents {
+        handler: Arc<dyn Fn(MempoolEvent) + Sync + Send>,
+        rtx: oneshot::Sender<()>,
+    },
+}
+
 #[async_trait::async_trait]
-impl<M> MempoolInterface for Mempool<M>
+impl MempoolInterface for MempoolInterfaceHandle {
+    async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
+        let (rtx, rrx) = tokio::sync::oneshot::channel();
+        self.sender
+            .send(MempoolMethodCall::AddTransaction { tx, rtx })
+            .map_err(|_| Error::SendError)?;
+        rrx.await.map_err(|_| Error::RecvError)?
+    }
+
+    async fn get_all(&self) -> Result<Vec<SignedTransaction>, Error> {
+        let (rtx, rrx) = tokio::sync::oneshot::channel();
+        self.sender
+            .send(MempoolMethodCall::GetAll { rtx })
+            .map_err(|_| Error::SendError)?;
+        rrx.await.map_err(|_| Error::RecvError)
+    }
+
+    // Returns `true` if the mempool contains a transaction with the given id, `false` otherwise.
+    async fn contains_transaction(&self, tx_id: &Id<Transaction>) -> Result<bool, Error> {
+        let (rtx, rrx) = tokio::sync::oneshot::channel();
+        self.sender
+            .send(MempoolMethodCall::ContainsTransaction { tx_id: *tx_id, rtx })
+            .map_err(|_| Error::SendError)?;
+        rrx.await.map_err(|_| Error::RecvError)
+    }
+
+    async fn collect_txs(
+        &self,
+        tx_accumulator: Box<dyn TransactionAccumulator + Send>,
+    ) -> Result<Box<dyn TransactionAccumulator>, Error> {
+        let (rtx, rrx) = tokio::sync::oneshot::channel();
+        self.sender
+            .send(MempoolMethodCall::CollectTxs {
+                tx_accumulator,
+                rtx,
+            })
+            .map_err(|_| Error::SendError)?;
+        rrx.await.map_err(|_| Error::RecvError)
+    }
+
+    async fn subscribe_to_events(
+        &mut self,
+        handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
+    ) -> Result<(), Error> {
+        let (rtx, rrx) = tokio::sync::oneshot::channel();
+        self.sender
+            .send(MempoolMethodCall::SubscribeToEvents { handler, rtx })
+            .map_err(|_| Error::SendError)?;
+        rrx.await.map_err(|_| Error::RecvError)
+    }
+}
+
+impl<M> Mempool<M>
 where
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
-    #[cfg(test)]
-    fn new_tip_set(&mut self) {
-        let mut rolling_fee_rate = self.rolling_fee_rate.write();
-        (*rolling_fee_rate).block_since_last_rolling_fee_bump = true;
+    pub(crate) async fn run(mut self) -> Result<(), Error> {
+        tokio::spawn(async move {
+            let event_receiver =
+                self.subscribe_to_chainstate_events().await.log_err().expect("chainstate dead");
+            self.mempool_event_loop(event_receiver).await
+        });
+        Ok(())
     }
-    //
 
-    async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
+    pub(crate) async fn mempool_event_loop(
+        mut self,
+        mut chainstate_event_receiver: mpsc::UnboundedReceiver<(Id<Block>, BlockHeight)>,
+    ) {
+        loop {
+            tokio::select! {
+                Some((block_id, block_height)) = chainstate_event_receiver.recv() =>{
+                    self.new_tip_set(block_id, block_height)
+                },
+                Some(method_call) = self.receiver.recv() => self.handle_mempool_method_call(method_call).await
+            }
+        }
+    }
+
+    pub(crate) async fn handle_mempool_method_call(&mut self, method_call: MempoolMethodCall) {
+        match method_call {
+            MempoolMethodCall::AddTransaction { tx, rtx } => {
+                if let Err(e) = rtx.send(self.add_transaction(tx).await) {
+                    logging::log::error!("AddTransaction: Error sending response: {:?}", e);
+                }
+            }
+            MempoolMethodCall::GetAll { rtx } => {
+                if let Err(e) = rtx.send(self.get_all()) {
+                    logging::log::error!("GetAll: Error sending response: {:?}", e);
+                }
+            }
+            MempoolMethodCall::CollectTxs {
+                tx_accumulator,
+                rtx,
+            } => {
+                if let Err(e) = rtx.send(self.collect_txs(tx_accumulator)) {
+                    logging::log::error!(
+                        "CollectTxs: Error sending response: {:?}",
+                        e.transactions()
+                    );
+                }
+            }
+            MempoolMethodCall::ContainsTransaction { tx_id, rtx } => {
+                if let Err(e) = rtx.send(self.contains_transaction(&tx_id)) {
+                    logging::log::error!("ContainsTransaction: Error sending response: {:?}", e);
+                }
+            }
+            MempoolMethodCall::SubscribeToEvents { handler, rtx } => {
+                self.subscribe_to_events(handler);
+                if let Err(e) = rtx.send(()) {
+                    logging::log::error!("SubscribeToEvents: Error sending response: {:?}", e);
+                }
+            }
+        }
+    }
+
+    pub(crate) async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
         let conflicts = self.validate_transaction(&tx).await?;
         self.store.drop_conflicts(conflicts);
         self.finalize_tx(tx).await?;
@@ -794,16 +972,17 @@ where
         Ok(())
     }
 
-    fn get_all(&self) -> Vec<&SignedTransaction> {
+    pub(crate) fn get_all(&self) -> Vec<SignedTransaction> {
         self.store
             .txs_by_descendant_score
             .values()
             .flatten()
             .map(|id| self.store.get_entry(id).expect("entry").tx())
+            .cloned()
             .collect()
     }
 
-    fn collect_txs(
+    pub(crate) fn collect_txs(
         &self,
         mut tx_accumulator: Box<dyn TransactionAccumulator>,
     ) -> Box<dyn TransactionAccumulator> {
@@ -832,7 +1011,7 @@ where
         tx_accumulator
     }
 
-    fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
+    pub(crate) fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
         self.store.txs_by_id.contains_key(tx_id)
     }
 

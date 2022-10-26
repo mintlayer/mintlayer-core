@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::chain::OutPoint;
 use common::primitives::H256;
 
 use super::*;

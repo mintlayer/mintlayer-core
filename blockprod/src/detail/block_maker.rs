@@ -84,10 +84,11 @@ impl BlockMaker {
         let max_block_size = self.chain_config.max_block_size_from_txs();
         let returned_accumulator = self
             .mempool_handle
-            .call(move |mempool| {
+            .call_async(move |mempool| {
                 mempool.collect_txs(Box::new(DefaultTxAccumulator::new(max_block_size)))
             })
-            .await?;
+            .await?
+            .map_err(|_| BlockProductionError::MempoolChannelClosed)?;
         Ok(returned_accumulator)
     }
 

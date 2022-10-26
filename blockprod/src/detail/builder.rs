@@ -195,8 +195,9 @@ impl PerpetualBlockBuilder {
         });
 
         self.mempool_handle
-            .call_mut(|this| this.subscribe_to_events(subscribe_func))
+            .call_async_mut(|this| this.subscribe_to_events(subscribe_func))
             .await
+            .map_err(|_| BlockProductionError::MempoolChannelClosed)?
             .expect("Block production subscription to mempool events failed");
 
         Ok(rx)
