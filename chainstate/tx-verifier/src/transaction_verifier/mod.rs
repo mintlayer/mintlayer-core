@@ -624,10 +624,27 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         &mut self,
         block_id: &Id<Block>,
         tx_id: &Id<Transaction>,
-    ) -> bool {
-        match self.fetch_block_undo(block_id) {
-            Ok(block_undo) => !block_undo.has_children_of(tx_id),
-            Err(_) => false,
+    ) -> Result<bool, ConnectTransactionError> {
+        let current_block_height = self
+            .storage_ref
+            .get_gen_block_index(&(*block_id).into())?
+            .ok_or(ConnectTransactionError::BlockIndexCouldNotBeLoaded(
+                (*block_id).into(),
+            ))?
+            .block_height();
+
+        let best_block_height = self
+            .storage_ref
+            .get_gen_block_index(&self.best_block)?
+            .ok_or(ConnectTransactionError::BlockIndexCouldNotBeLoaded(
+                self.best_block,
+            ))?
+            .block_height();
+
+        if current_block_height < best_block_height {
+            Ok(false)
+        } else {
+            Ok(!self.fetch_block_undo(block_id)?.has_children_of(tx_id))
         }
     }
 

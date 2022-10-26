@@ -187,7 +187,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageMut
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), TransactionVerifierStorageError> {
         // delete undo from current cache
         if self.utxo_block_undo.remove(&id).is_none() {
-            //if current cache has not such data - insert empty undo to be flushed to the parent
+            // if current cache doesn't have such data - insert empty undo to be flushed to the parent
             self.utxo_block_undo.insert(
                 id,
                 BlockUndoEntry {
