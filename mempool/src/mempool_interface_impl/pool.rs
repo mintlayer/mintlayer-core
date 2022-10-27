@@ -782,14 +782,6 @@ where
 }
 
 #[derive(Clone)]
-pub struct SystemClock;
-impl GetTime for SystemClock {
-    fn get_time(&self) -> Duration {
-        common::primitives::time::get()
-    }
-}
-
-#[derive(Clone)]
 pub struct SystemUsageEstimator;
 impl GetMemoryUsage for SystemUsageEstimator {
     fn get_memory_usage(&self) -> MemoryUsage {

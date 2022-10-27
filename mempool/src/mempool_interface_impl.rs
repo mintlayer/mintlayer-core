@@ -31,7 +31,6 @@ use tokio::sync::oneshot;
 use utils::eventhandler::EventHandler;
 
 use pool::Mempool;
-pub use pool::SystemClock;
 pub use pool::SystemUsageEstimator;
 
 mod pool;
