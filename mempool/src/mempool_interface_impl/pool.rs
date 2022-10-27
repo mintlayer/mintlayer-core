@@ -32,7 +32,6 @@ use parking_lot::RwLock;
 use serialization::Encode;
 
 use common::chain::transaction::Transaction;
-use common::chain::transaction::TxInput;
 use common::primitives::amount::Amount;
 use common::primitives::Id;
 use common::primitives::Idable;
@@ -52,6 +51,7 @@ use crate::feerate::INCREMENTAL_RELAY_THRESHOLD;
 use crate::mempool_interface_impl::MempoolMethodCall;
 use crate::tx_accumulator::TransactionAccumulator;
 use crate::MempoolEvent;
+use spends_unconfirmed::SpendsUnconfirmed;
 use store::MempoolRemovalReason;
 use store::MempoolStore;
 use store::TxMempoolEntry;
@@ -60,6 +60,7 @@ pub use crate::interface::MempoolInterface;
 
 use crate::config::*;
 
+mod spends_unconfirmed;
 mod store;
 
 #[async_trait::async_trait]
@@ -759,25 +760,6 @@ where
                 .drop_tx_and_descendants(removed.tx_id(), MempoolRemovalReason::SizeLimit);
         }
         Ok(removed_fees)
-    }
-}
-
-trait SpendsUnconfirmed<M>
-where
-    M: GetMemoryUsage + Send + std::marker::Sync,
-{
-    fn spends_unconfirmed(&self, mempool: &Mempool<M>) -> bool;
-}
-
-impl<M> SpendsUnconfirmed<M> for TxInput
-where
-    M: GetMemoryUsage + Send + std::marker::Sync,
-{
-    fn spends_unconfirmed(&self, mempool: &Mempool<M>) -> bool {
-        let outpoint_id = self.outpoint().tx_id().get_tx_id().cloned();
-        outpoint_id.is_some()
-            && mempool
-                .contains_transaction(self.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
     }
 }
 
