@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use crate::error::Error;
 use crate::get_memory_usage::GetMemoryUsage;
+use crate::mempool_interface_impl::mempool_method_call::MempoolMethodCall;
 use crate::tx_accumulator::TransactionAccumulator;
 use crate::MempoolEvent;
 use crate::MempoolInterface;
@@ -27,12 +28,11 @@ use common::chain::Transaction;
 use common::primitives::Id;
 use common::time_getter::TimeGetter;
 use tokio::sync::mpsc;
-use tokio::sync::oneshot;
-use utils::eventhandler::EventHandler;
 
 use pool::Mempool;
 pub use pool::SystemUsageEstimator;
 
+mod mempool_method_call;
 mod pool;
 
 pub struct MempoolInterfaceImpl {
@@ -60,30 +60,6 @@ impl MempoolInterfaceImpl {
 
         Ok(Self { sender })
     }
-}
-
-pub type MempoolEventHandler = EventHandler<MempoolEvent>;
-
-pub enum MempoolMethodCall {
-    AddTransaction {
-        tx: SignedTransaction,
-        rtx: oneshot::Sender<Result<(), Error>>,
-    },
-    GetAll {
-        rtx: oneshot::Sender<Vec<SignedTransaction>>,
-    },
-    CollectTxs {
-        tx_accumulator: Box<dyn TransactionAccumulator + Send>,
-        rtx: oneshot::Sender<Box<dyn TransactionAccumulator>>,
-    },
-    ContainsTransaction {
-        tx_id: Id<Transaction>,
-        rtx: oneshot::Sender<bool>,
-    },
-    SubscribeToEvents {
-        handler: MempoolEventHandler,
-        rtx: oneshot::Sender<()>,
-    },
 }
 
 #[async_trait::async_trait]

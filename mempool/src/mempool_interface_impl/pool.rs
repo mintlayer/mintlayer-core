@@ -47,7 +47,7 @@ use crate::error::Error;
 use crate::error::TxValidationError;
 use crate::get_memory_usage::GetMemoryUsage;
 use crate::get_memory_usage::MemoryUsage;
-use crate::mempool_interface_impl::MempoolMethodCall;
+use crate::mempool_interface_impl::mempool_method_call::MempoolMethodCall;
 use crate::tx_accumulator::TransactionAccumulator;
 use crate::MempoolEvent;
 use feerate::FeeRate;
