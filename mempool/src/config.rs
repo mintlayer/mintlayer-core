@@ -24,9 +24,6 @@ pub trait GetMemoryUsage {
 }
 
 pub(crate) type Time = Duration;
-pub trait GetTime {
-    fn get_time(&self) -> Time;
-}
 
 pub(crate) const ROLLING_FEE_BASE_HALFLIFE: Time = Duration::new(60 * 60 * 12, 1);
 // TODO this willbe defined elsewhere (some of limits.rs file)
