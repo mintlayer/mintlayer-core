@@ -27,7 +27,6 @@ use crate::config::GetMemoryUsage;
 use crate::error::Error as MempoolError;
 use crate::mempool_interface_impl::MempoolInterfaceImpl;
 
-pub use crate::mempool_interface_impl::SystemClock;
 pub use crate::mempool_interface_impl::SystemUsageEstimator;
 
 mod config;

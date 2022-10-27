@@ -30,7 +30,7 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use utils::eventhandler::EventHandler;
 
-pub use pool::Mempool;
+use pool::Mempool;
 pub use pool::SystemClock;
 pub use pool::SystemUsageEstimator;
 
@@ -63,6 +63,8 @@ impl MempoolInterfaceImpl {
     }
 }
 
+pub type MempoolEventHandler = EventHandler<MempoolEvent>;
+
 pub enum MempoolMethodCall {
     AddTransaction {
         tx: SignedTransaction,
@@ -80,7 +82,7 @@ pub enum MempoolMethodCall {
         rtx: oneshot::Sender<bool>,
     },
     SubscribeToEvents {
-        handler: Arc<dyn Fn(MempoolEvent) + Sync + Send>,
+        handler: MempoolEventHandler,
         rtx: oneshot::Sender<()>,
     },
 }
