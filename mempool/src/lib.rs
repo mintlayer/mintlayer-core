@@ -25,7 +25,7 @@ pub use interface::MempoolInterface;
 
 use crate::config::GetMemoryUsage;
 use crate::error::Error as MempoolError;
-use crate::handle::MempoolInterfaceHandle;
+use crate::handle::MempoolInterfaceImpl;
 use crate::pool::Mempool;
 
 pub use crate::pool::SystemClock;
@@ -72,5 +72,5 @@ where
     .run()
     .await?;
 
-    Ok(Box::new(MempoolInterfaceHandle::new(sender)))
+    Ok(Box::new(MempoolInterfaceImpl::new(sender)))
 }

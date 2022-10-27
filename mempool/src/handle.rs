@@ -25,11 +25,11 @@ use common::primitives::Id;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
-pub struct MempoolInterfaceHandle {
+pub struct MempoolInterfaceImpl {
     sender: mpsc::UnboundedSender<MempoolMethodCall>,
 }
 
-impl MempoolInterfaceHandle {
+impl MempoolInterfaceImpl {
     pub fn new(sender: mpsc::UnboundedSender<MempoolMethodCall>) -> Self {
         Self { sender }
     }
@@ -58,7 +58,7 @@ pub enum MempoolMethodCall {
 }
 
 #[async_trait::async_trait]
-impl MempoolInterface for MempoolInterfaceHandle {
+impl MempoolInterface for MempoolInterfaceImpl {
     async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
         let (rtx, rrx) = tokio::sync::oneshot::channel();
         self.sender
