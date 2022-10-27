@@ -26,17 +26,15 @@ pub use interface::MempoolInterface;
 use crate::config::GetMemoryUsage;
 use crate::error::Error as MempoolError;
 use crate::mempool_interface_impl::MempoolInterfaceImpl;
-use crate::pool::Mempool;
 
-pub use crate::pool::SystemClock;
-pub use crate::pool::SystemUsageEstimator;
+pub use crate::mempool_interface_impl::SystemClock;
+pub use crate::mempool_interface_impl::SystemUsageEstimator;
 
 mod config;
 pub mod error;
 mod feerate;
 mod interface;
 mod mempool_interface_impl;
-mod pool;
 pub mod rpc;
 pub mod tx_accumulator;
 
@@ -60,17 +58,13 @@ pub async fn make_mempool<M>(
 where
     M: GetMemoryUsage + 'static + Send + std::marker::Sync,
 {
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-
-    Mempool::new(
-        chain_config,
-        chainstate_handle,
-        time_getter,
-        memory_usage_estimator,
-        receiver,
-    )
-    .run()
-    .await?;
-
-    Ok(Box::new(MempoolInterfaceImpl::new(sender)))
+    Ok(Box::new(
+        MempoolInterfaceImpl::new(
+            chain_config,
+            chainstate_handle,
+            time_getter,
+            memory_usage_estimator,
+        )
+        .await?,
+    ))
 }

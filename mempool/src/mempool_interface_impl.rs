@@ -15,24 +15,51 @@
 
 use std::sync::Arc;
 
+use crate::config::GetMemoryUsage;
 use crate::error::Error;
 use crate::tx_accumulator::TransactionAccumulator;
 use crate::MempoolEvent;
 use crate::MempoolInterface;
+use chainstate::chainstate_interface::ChainstateInterface;
 use common::chain::signed_transaction::SignedTransaction;
+use common::chain::ChainConfig;
 use common::chain::Transaction;
 use common::primitives::Id;
+use common::time_getter::TimeGetter;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use utils::eventhandler::EventHandler;
+
+pub use pool::Mempool;
+pub use pool::SystemClock;
+pub use pool::SystemUsageEstimator;
+
+mod pool;
 
 pub struct MempoolInterfaceImpl {
     sender: mpsc::UnboundedSender<MempoolMethodCall>,
 }
 
 impl MempoolInterfaceImpl {
-    pub fn new(sender: mpsc::UnboundedSender<MempoolMethodCall>) -> Self {
-        Self { sender }
+    pub async fn new<M: GetMemoryUsage + Sync + Send + 'static>(
+        chain_config: Arc<ChainConfig>,
+        chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+        time_getter: TimeGetter,
+        memory_usage_estimator: M,
+    ) -> Result<Self, crate::error::Error> {
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+
+        Mempool::new(
+            chain_config,
+            chainstate_handle,
+            time_getter,
+            memory_usage_estimator,
+            receiver,
+        )
+        .run()
+        .await?;
+
+        Ok(Self { sender })
     }
 }
 
