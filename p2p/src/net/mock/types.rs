@@ -102,6 +102,11 @@ pub enum ConnectivityEvent<T: MockTransport> {
     ConnectionClosed {
         peer_id: MockPeerId,
     },
+    /// A peer misbehaved and its reputation must be adjusted according to the error type.
+    Misbehaved {
+        peer_id: MockPeerId,
+        error: error::P2pError,
+    },
 }
 
 // TODO: use two events, one for txs and one for blocks?

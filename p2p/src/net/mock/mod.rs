@@ -19,6 +19,8 @@ pub mod request_manager;
 pub mod transport;
 pub mod types;
 
+mod constants;
+
 use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
@@ -29,10 +31,11 @@ use serialization::Encode;
 
 use crate::{
     config,
-    error::P2pError,
+    error::{P2pError, PublishError},
     message,
     net::{
         mock::{
+            constants::ANNOUNCEMENT_MAX_SIZE,
             transport::{MockListener, MockTransport},
             types::{MockMessageId, MockPeerId, MockPeerInfo, MockRequestId},
         },
@@ -242,6 +245,9 @@ where
             types::ConnectivityEvent::ConnectionClosed { peer_id } => {
                 Ok(ConnectivityEvent::ConnectionClosed { peer_id })
             }
+            types::ConnectivityEvent::Misbehaved { peer_id, error } => {
+                Ok(ConnectivityEvent::Misbehaved { peer_id, error })
+            }
         }
     }
 }
@@ -294,6 +300,12 @@ where
         announcement: message::Announcement,
     ) -> crate::Result<()> {
         let message = announcement.encode();
+        if message.len() > ANNOUNCEMENT_MAX_SIZE {
+            return Err(P2pError::PublishError(PublishError::MessageTooLarge(
+                Some(message.len()),
+                Some(ANNOUNCEMENT_MAX_SIZE),
+            )));
+        }
 
         let topic = match &announcement {
             message::Announcement::Block(_) => PubSubTopic::Blocks,
