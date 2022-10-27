@@ -46,7 +46,8 @@ pub fn using_proptest<B: Backend, F: BackendFn<B>, S: proptest::prelude::Strateg
 ) {
     let config = {
         let mut config = proptest::prelude::ProptestConfig::with_source_file(source_file);
-        config.cases = 64;
+        // Decrease the number of test cases. By default, this is 256 / 8 = 64.
+        config.cases /= 8;
         config
     };
     let mut runner = proptest::test_runner::TestRunner::new(config);
