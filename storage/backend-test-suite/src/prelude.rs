@@ -32,7 +32,7 @@ impl<B: Backend, F: 'static + Fn() -> B + Send + Sync> BackendFn<B> for F {}
 /// A couple of DB index constants
 pub const IDX: (DbIndex, DbIndex) = (DbIndex::new(0), DbIndex::new(1));
 
-/// Sample datbase decription with `n` maps
+/// Sample database description with `n` maps
 pub fn desc(n: usize) -> DbDesc {
     (0..n).map(|x| MapDesc::new(format!("map_{:02}", x))).collect()
 }
