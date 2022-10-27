@@ -49,7 +49,7 @@ use crate::error::TxValidationError;
 use crate::feerate::FeeRate;
 use crate::feerate::INCREMENTAL_RELAY_FEE_RATE;
 use crate::feerate::INCREMENTAL_RELAY_THRESHOLD;
-use crate::handle::MempoolMethodCall;
+use crate::mempool_interface_impl::MempoolMethodCall;
 use crate::tx_accumulator::TransactionAccumulator;
 use crate::MempoolEvent;
 use store::MempoolRemovalReason;

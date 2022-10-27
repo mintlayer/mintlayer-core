@@ -24,6 +24,7 @@ use common::chain::Transaction;
 use common::primitives::Id;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
+use utils::eventhandler::EventHandler;
 
 pub struct MempoolInterfaceImpl {
     sender: mpsc::UnboundedSender<MempoolMethodCall>,
