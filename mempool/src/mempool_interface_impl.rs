@@ -15,8 +15,8 @@
 
 use std::sync::Arc;
 
-use crate::config::GetMemoryUsage;
 use crate::error::Error;
+use crate::get_memory_usage::GetMemoryUsage;
 use crate::tx_accumulator::TransactionAccumulator;
 use crate::MempoolEvent;
 use crate::MempoolInterface;

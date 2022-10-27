@@ -15,7 +15,7 @@
 
 use common::chain::TxInput;
 
-use crate::config::GetMemoryUsage;
+use crate::get_memory_usage::GetMemoryUsage;
 
 use super::Mempool;
 

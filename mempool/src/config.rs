@@ -13,15 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use mockall::*;
 use std::time::Duration;
-
-pub(crate) type MemoryUsage = usize;
-
-#[automock]
-pub trait GetMemoryUsage {
-    fn get_memory_usage(&self) -> MemoryUsage;
-}
 
 pub(crate) type Time = Duration;
 
