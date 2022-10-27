@@ -276,11 +276,6 @@ impl Manager {
 
         // Run all the subsystem tasks.
         let mut task_handles: Vec<_> = self.subsystem_tasks.into_iter().map(task::spawn).collect();
-        /*
-        for subsys in self.subsystem_tasks {
-            task::spawn(subsys);
-        }
-        */
 
         // Signal the manager is shut down so it does not wait for itself
         std::mem::drop(self.shutting_down_tx);
