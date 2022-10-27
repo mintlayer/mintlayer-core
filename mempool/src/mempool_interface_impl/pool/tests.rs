@@ -91,7 +91,7 @@ where
     M: GetMemoryUsage + Send + Sync,
 {
     fn get_minimum_rolling_fee(&self) -> FeeRate {
-        self.rolling_fee_rate.read().rolling_minimum_fee_rate
+        self.rolling_fee_rate.read().rolling_minimum_fee_rate()
     }
 }
 

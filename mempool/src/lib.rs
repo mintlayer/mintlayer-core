@@ -31,7 +31,6 @@ pub use crate::mempool_interface_impl::SystemUsageEstimator;
 
 mod config;
 pub mod error;
-mod feerate;
 mod interface;
 mod mempool_interface_impl;
 pub mod rpc;

@@ -45,12 +45,13 @@ use utils::tap_error_log::LogError;
 
 use crate::error::Error;
 use crate::error::TxValidationError;
-use crate::feerate::FeeRate;
-use crate::feerate::INCREMENTAL_RELAY_FEE_RATE;
-use crate::feerate::INCREMENTAL_RELAY_THRESHOLD;
 use crate::mempool_interface_impl::MempoolMethodCall;
 use crate::tx_accumulator::TransactionAccumulator;
 use crate::MempoolEvent;
+use feerate::FeeRate;
+use feerate::INCREMENTAL_RELAY_FEE_RATE;
+use feerate::INCREMENTAL_RELAY_THRESHOLD;
+use rolling_fee_rate::RollingFeeRate;
 use spends_unconfirmed::SpendsUnconfirmed;
 use store::MempoolRemovalReason;
 use store::MempoolStore;
@@ -60,6 +61,8 @@ pub use crate::interface::MempoolInterface;
 
 use crate::config::*;
 
+mod feerate;
+mod rolling_fee_rate;
 mod spends_unconfirmed;
 mod store;
 
@@ -130,50 +133,6 @@ newtype! {
 newtype! {
     #[derive(Debug)]
     struct Conflicts(BTreeSet<Id<Transaction>>);
-}
-
-#[derive(Clone, Copy, Debug)]
-struct RollingFeeRate {
-    block_since_last_rolling_fee_bump: bool,
-    rolling_minimum_fee_rate: FeeRate,
-    last_rolling_fee_update: Time,
-}
-
-impl RollingFeeRate {
-    #[allow(clippy::float_arithmetic)]
-    fn decay_fee(mut self, halflife: Time, current_time: Time) -> Self {
-        log::debug!(
-            "decay_fee: old fee rate:  {:?}\nCurrent time: {:?}\nLast Rolling Fee Update: {:?}\nHalflife: {:?}",
-            self.rolling_minimum_fee_rate,
-            self.last_rolling_fee_update,
-            current_time,
-            halflife,
-        );
-
-        let divisor = ((current_time.as_secs() - self.last_rolling_fee_update.as_secs()) as f64
-            / (halflife.as_secs() as f64))
-            .exp2();
-        self.rolling_minimum_fee_rate = FeeRate::new(Amount::from_atoms(
-            (self.rolling_minimum_fee_rate.atoms_per_kb() as f64 / divisor) as u128,
-        ));
-
-        log::debug!(
-            "decay_fee: new fee rate:  {:?}",
-            self.rolling_minimum_fee_rate
-        );
-        self.last_rolling_fee_update = current_time;
-        self
-    }
-}
-
-impl RollingFeeRate {
-    fn new(creation_time: Time) -> Self {
-        Self {
-            block_since_last_rolling_fee_bump: false,
-            rolling_minimum_fee_rate: FeeRate::new(Amount::from_atoms(0)),
-            last_rolling_fee_update: creation_time,
-        }
-    }
 }
 
 pub struct Mempool<M: GetMemoryUsage + 'static + Send + std::marker::Sync> {
@@ -260,7 +219,7 @@ where
         );
         // TODO(Roy) handle the new tip
         let mut rolling_fee_rate = self.rolling_fee_rate.write();
-        (*rolling_fee_rate).block_since_last_rolling_fee_bump = true;
+        (*rolling_fee_rate).set_block_since_last_rolling_fee_bump(true);
     }
     //
 
@@ -281,19 +240,19 @@ where
 
     fn update_min_fee_rate(&self, rate: FeeRate) {
         let mut rolling_fee_rate = self.rolling_fee_rate.write();
-        (*rolling_fee_rate).rolling_minimum_fee_rate = rate;
-        rolling_fee_rate.block_since_last_rolling_fee_bump = false;
+        (*rolling_fee_rate).set_rolling_minimum_fee_rate(rate);
+        rolling_fee_rate.set_block_since_last_rolling_fee_bump(false);
     }
 
     fn get_update_min_fee_rate(&self) -> FeeRate {
         log::debug!("get_update_min_fee_rate");
         let rolling_fee_rate = *self.rolling_fee_rate.read();
-        if !rolling_fee_rate.block_since_last_rolling_fee_bump
-            || rolling_fee_rate.rolling_minimum_fee_rate == FeeRate::new(Amount::from_atoms(0))
+        if !rolling_fee_rate.block_since_last_rolling_fee_bump()
+            || rolling_fee_rate.rolling_minimum_fee_rate() == FeeRate::new(Amount::from_atoms(0))
         {
-            return rolling_fee_rate.rolling_minimum_fee_rate;
+            return rolling_fee_rate.rolling_minimum_fee_rate();
         } else if self.clock.get_time()
-            > rolling_fee_rate.last_rolling_fee_update + ROLLING_FEE_DECAY_INTERVAL
+            > rolling_fee_rate.last_rolling_fee_update() + ROLLING_FEE_DECAY_INTERVAL
         {
             // Decay the rolling fee
             self.decay_rolling_fee_rate();
@@ -302,22 +261,23 @@ where
                 self.rolling_fee_rate
             );
 
-            if self.rolling_fee_rate.read().rolling_minimum_fee_rate < INCREMENTAL_RELAY_THRESHOLD {
-                log::trace!("rolling fee rate {:?} less than half of the incremental fee rate, dropping the fee", self.rolling_fee_rate.read().rolling_minimum_fee_rate);
+            if self.rolling_fee_rate.read().rolling_minimum_fee_rate() < INCREMENTAL_RELAY_THRESHOLD
+            {
+                log::trace!("rolling fee rate {:?} less than half of the incremental fee rate, dropping the fee", self.rolling_fee_rate.read().rolling_minimum_fee_rate());
                 self.drop_rolling_fee();
-                return self.rolling_fee_rate.read().rolling_minimum_fee_rate;
+                return self.rolling_fee_rate.read().rolling_minimum_fee_rate();
             }
         }
 
         std::cmp::max(
-            self.rolling_fee_rate.read().rolling_minimum_fee_rate,
+            self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
             INCREMENTAL_RELAY_FEE_RATE,
         )
     }
 
     fn drop_rolling_fee(&self) {
         let mut rolling_fee_rate = self.rolling_fee_rate.write();
-        (*rolling_fee_rate).rolling_minimum_fee_rate = FeeRate::new(Amount::from_atoms(0));
+        (*rolling_fee_rate).set_rolling_minimum_fee_rate(FeeRate::new(Amount::from_atoms(0)));
     }
 
     fn decay_rolling_fee_rate(&self) {
@@ -694,7 +654,7 @@ where
                 (*removed_fees.iter().max().expect("removed_fees should not be empty")
                     + INCREMENTAL_RELAY_FEE_RATE)
                     .ok_or(TxValidationError::FeeOverflow)?;
-            if new_minimum_fee_rate > self.rolling_fee_rate.read().rolling_minimum_fee_rate {
+            if new_minimum_fee_rate > self.rolling_fee_rate.read().rolling_minimum_fee_rate() {
                 self.update_min_fee_rate(new_minimum_fee_rate)
             }
         }

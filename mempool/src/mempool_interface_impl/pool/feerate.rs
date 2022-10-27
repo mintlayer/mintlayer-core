@@ -23,16 +23,16 @@ pub(crate) const INCREMENTAL_RELAY_FEE_RATE: FeeRate = FeeRate::new(Amount::from
 pub(crate) const INCREMENTAL_RELAY_THRESHOLD: FeeRate = FeeRate::new(Amount::from_atoms(500));
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct FeeRate {
+pub struct FeeRate {
     amount_per_kb: Amount,
 }
 
 impl FeeRate {
-    pub(crate) const fn new(amount_per_kb: Amount) -> Self {
+    pub const fn new(amount_per_kb: Amount) -> Self {
         Self { amount_per_kb }
     }
 
-    pub(crate) fn from_total_tx_fee(
+    pub fn from_total_tx_fee(
         total_tx_fee: Amount,
         tx_size: NonZeroUsize,
     ) -> Result<Self, TxValidationError> {
@@ -43,7 +43,7 @@ impl FeeRate {
         })
     }
 
-    pub(crate) fn compute_fee(&self, size: usize) -> Result<Amount, TxValidationError> {
+    pub fn compute_fee(&self, size: usize) -> Result<Amount, TxValidationError> {
         let size = u128::try_from(size).expect("compute_fee conversion");
         let fee = (self.amount_per_kb * size).ok_or(TxValidationError::FeeOverflow)?;
         // +999 for ceil operation
@@ -52,7 +52,7 @@ impl FeeRate {
         Ok(fee)
     }
 
-    pub(crate) const fn atoms_per_kb(&self) -> u128 {
+    pub const fn atoms_per_kb(&self) -> u128 {
         self.amount_per_kb.into_atoms()
     }
 }
