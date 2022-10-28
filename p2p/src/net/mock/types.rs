@@ -203,7 +203,7 @@ pub enum PeerEvent {
 }
 
 /// Events sent by the mock backend to peers
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum MockEvent {
     Disconnect,
     SendMessage(Box<Message>),

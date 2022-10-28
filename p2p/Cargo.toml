@@ -29,6 +29,7 @@ jsonrpsee = { version = "0.15", features = ["macros"]}
 libp2p = { version = "0.46", default-features = false, features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "request-response", "tcp-tokio"] }
 tokio = { version = "1", default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 tokio-util = {version = "0.7", default-features = false, features = ["codec"] }
+rand = "0.8"
 
 [dev-dependencies]
 chainstate-storage = { path = "../chainstate/storage" }
