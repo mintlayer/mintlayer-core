@@ -20,7 +20,7 @@ use super::{
         TransactionVerifierStorageRef,
     },
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
-    BlockUndoEntry, TransactionVerifier,
+    BlockUndoEntry, TransactionSource, TransactionVerifier,
 };
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
@@ -83,13 +83,6 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
             None => self.storage_ref.get_token_aux_data(token_id),
         }
     }
-
-    fn get_mempool_undo_data(&self) -> Result<Option<BlockUndo>, TransactionVerifierStorageError> {
-        match &self.mempool_txs_undo {
-            Some(u) => Ok(Some(u.undo.clone())),
-            None => self.storage_ref.get_mempool_undo_data(),
-        }
-    }
 }
 
 impl<'a, S: TransactionVerifierStorageRef> UtxosStorageRead for TransactionVerifier<'a, S> {
@@ -105,7 +98,7 @@ impl<'a, S: TransactionVerifierStorageRef> UtxosStorageRead for TransactionVerif
         &self,
         id: Id<Block>,
     ) -> Result<Option<utxo::BlockUndo>, storage_result::Error> {
-        match self.utxo_block_undo.get(&id) {
+        match self.utxo_block_undo.get(&TransactionSource::Chain(id)) {
             Some(v) => Ok(Some(v.undo.clone())),
             None => self.storage_ref.get_undo_data(id),
         }
@@ -174,10 +167,10 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageMut
 
     fn set_undo_data(
         &mut self,
-        id: Id<Block>,
+        tx_source: TransactionSource,
         new_undo: &BlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
-        match self.utxo_block_undo.entry(id) {
+        match self.utxo_block_undo.entry(tx_source) {
             std::collections::btree_map::Entry::Vacant(e) => {
                 e.insert(BlockUndoEntry {
                     undo: new_undo.clone(),
@@ -191,41 +184,21 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageMut
         Ok(())
     }
 
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), TransactionVerifierStorageError> {
+    fn del_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), TransactionVerifierStorageError> {
         // delete undo from current cache
-        if self.utxo_block_undo.remove(&id).is_none() {
+        if self.utxo_block_undo.remove(&tx_source).is_none() {
             // if current cache doesn't have such data - insert empty undo to be flushed to the parent
             self.utxo_block_undo.insert(
-                id,
+                tx_source,
                 BlockUndoEntry {
                     undo: Default::default(),
                     is_fresh: false,
                 },
             );
         }
-        Ok(())
-    }
-
-    fn set_mempool_undo_data(
-        &mut self,
-        new_undo: &BlockUndo,
-    ) -> Result<(), TransactionVerifierStorageError> {
-        match &mut self.mempool_txs_undo {
-            Some(txs_undo) => {
-                txs_undo.undo.combine(new_undo.clone())?;
-            }
-            None => {
-                self.mempool_txs_undo = Some(BlockUndoEntry {
-                    undo: new_undo.clone(),
-                    is_fresh: true,
-                });
-            }
-        };
-        Ok(())
-    }
-
-    fn del_mempool_undo_data(&mut self) -> Result<(), TransactionVerifierStorageError> {
-        self.mempool_txs_undo = None;
         Ok(())
     }
 }

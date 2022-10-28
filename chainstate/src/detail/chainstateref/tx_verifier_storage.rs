@@ -33,6 +33,7 @@ use common::{
     },
     primitives::Id,
 };
+use tx_verifier::transaction_verifier::TransactionSource;
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDBMut, UtxosStorageRead};
 
 impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
@@ -68,12 +69,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
         self.db_tx
             .get_token_aux_data(token_id)
             .map_err(TransactionVerifierStorageError::from)
-    }
-
-    fn get_mempool_undo_data(
-        &self,
-    ) -> Result<Option<utxo::BlockUndo>, TransactionVerifierStorageError> {
-        Ok(None)
     }
 }
 
@@ -187,26 +182,31 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
 
     fn set_undo_data(
         &mut self,
-        id: Id<Block>,
+        tx_source: TransactionSource,
         undo: &utxo::BlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.db_tx
-            .set_undo_data(id, undo)
-            .map_err(TransactionVerifierStorageError::from)
+        match tx_source {
+            TransactionSource::Chain(id) => self
+                .db_tx
+                .set_undo_data(id, undo)
+                .map_err(TransactionVerifierStorageError::from),
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
     }
 
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), TransactionVerifierStorageError> {
-        self.db_tx.del_undo_data(id).map_err(TransactionVerifierStorageError::from)
-    }
-
-    fn set_mempool_undo_data(
+    fn del_undo_data(
         &mut self,
-        _undo: &utxo::BlockUndo,
+        tx_source: TransactionSource,
     ) -> Result<(), TransactionVerifierStorageError> {
-        panic!("Mempool info should not be written to storage")
-    }
-
-    fn del_mempool_undo_data(&mut self) -> Result<(), TransactionVerifierStorageError> {
-        panic!("Mempool info should not be written to storage")
+        match tx_source {
+            TransactionSource::Chain(id) => {
+                self.db_tx.del_undo_data(id).map_err(TransactionVerifierStorageError::from)
+            }
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
     }
 }

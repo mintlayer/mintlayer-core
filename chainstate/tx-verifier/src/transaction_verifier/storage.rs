@@ -24,7 +24,10 @@ use common::{
 use thiserror::Error;
 use utxo::{BlockUndo, BlockUndoError, FlushableUtxoView, UtxosStorageRead};
 
-use super::error::{TokensError, TxIndexError};
+use super::{
+    error::{TokensError, TxIndexError},
+    TransactionSource,
+};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum TransactionVerifierStorageError {
@@ -71,8 +74,6 @@ pub trait TransactionVerifierStorageRef: UtxosStorageRead {
         &self,
         token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError>;
-
-    fn get_mempool_undo_data(&self) -> Result<Option<BlockUndo>, TransactionVerifierStorageError>;
 }
 
 pub trait TransactionVerifierStorageMut: TransactionVerifierStorageRef + FlushableUtxoView {
@@ -111,16 +112,12 @@ pub trait TransactionVerifierStorageMut: TransactionVerifierStorageRef + Flushab
 
     fn set_undo_data(
         &mut self,
-        id: Id<Block>,
+        tx_source: TransactionSource,
         undo: &BlockUndo,
     ) -> Result<(), TransactionVerifierStorageError>;
 
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), TransactionVerifierStorageError>;
-
-    fn set_mempool_undo_data(
+    fn del_undo_data(
         &mut self,
-        undo: &BlockUndo,
+        tx_source: TransactionSource,
     ) -> Result<(), TransactionVerifierStorageError>;
-
-    fn del_mempool_undo_data(&mut self) -> Result<(), TransactionVerifierStorageError>;
 }

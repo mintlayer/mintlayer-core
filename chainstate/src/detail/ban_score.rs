@@ -84,6 +84,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::MissingBlockUndo(_) => 0,
             ConnectTransactionError::MissingBlockRewardUndo(_) => 0,
             ConnectTransactionError::MissingTxUndo(_) => 0,
+            ConnectTransactionError::TxUndoWithDependency(_) => 0,
             ConnectTransactionError::MissingMempoolTxsUndo => 0,
             ConnectTransactionError::UtxoError(err) => err.ban_score(),
             ConnectTransactionError::TokensError(err) => err.ban_score(),

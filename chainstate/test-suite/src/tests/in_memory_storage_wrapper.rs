@@ -16,9 +16,9 @@
 use std::sync::Arc;
 
 use ::tx_verifier::transaction_verifier::storage::{
-    TransactionVerifierStorageError, TransactionVerifierStorageMut, TransactionVerifierStorageRef,
+    TransactionVerifierStorageError, TransactionVerifierStorageRef,
 };
-use chainstate_storage::{inmemory::Store, BlockchainStorageRead, BlockchainStorageWrite};
+use chainstate_storage::{inmemory::Store, BlockchainStorageRead};
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
@@ -27,7 +27,7 @@ use common::{
     },
     primitives::Id,
 };
-use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
+use utxo::UtxosStorageRead;
 
 pub struct InMemoryStorageWrapper {
     storage: Store,
@@ -82,12 +82,6 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
             .get_token_aux_data(token_id)
             .map_err(TransactionVerifierStorageError::from)
     }
-
-    fn get_mempool_undo_data(
-        &self,
-    ) -> Result<Option<utxo::BlockUndo>, TransactionVerifierStorageError> {
-        Ok(None)
-    }
 }
 
 impl UtxosStorageRead for InMemoryStorageWrapper {
@@ -109,96 +103,5 @@ impl UtxosStorageRead for InMemoryStorageWrapper {
         id: Id<Block>,
     ) -> Result<Option<utxo::BlockUndo>, chainstate_types::storage_result::Error> {
         self.storage.get_undo_data(id)
-    }
-}
-
-impl FlushableUtxoView for InMemoryStorageWrapper {
-    fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error> {
-        let mut db = UtxosDBMut::new(&mut self.storage);
-        db.batch_write(utxos)
-    }
-}
-
-impl TransactionVerifierStorageMut for InMemoryStorageWrapper {
-    fn set_mainchain_tx_index(
-        &mut self,
-        tx_id: &OutPointSourceId,
-        tx_index: &common::chain::TxMainChainIndex,
-    ) -> Result<(), TransactionVerifierStorageError> {
-        self.storage
-            .set_mainchain_tx_index(tx_id, tx_index)
-            .map_err(TransactionVerifierStorageError::from)
-    }
-
-    fn del_mainchain_tx_index(
-        &mut self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<(), TransactionVerifierStorageError> {
-        self.storage
-            .del_mainchain_tx_index(tx_id)
-            .map_err(TransactionVerifierStorageError::from)
-    }
-
-    fn set_token_aux_data(
-        &mut self,
-        token_id: &TokenId,
-        data: &TokenAuxiliaryData,
-    ) -> Result<(), TransactionVerifierStorageError> {
-        self.storage
-            .set_token_aux_data(token_id, data)
-            .map_err(TransactionVerifierStorageError::from)
-    }
-
-    fn del_token_aux_data(
-        &mut self,
-        token_id: &TokenId,
-    ) -> Result<(), TransactionVerifierStorageError> {
-        self.storage
-            .del_token_aux_data(token_id)
-            .map_err(TransactionVerifierStorageError::from)
-    }
-
-    fn set_token_id(
-        &mut self,
-        issuance_tx_id: &Id<Transaction>,
-        token_id: &TokenId,
-    ) -> Result<(), TransactionVerifierStorageError> {
-        self.storage
-            .set_token_id(issuance_tx_id, token_id)
-            .map_err(TransactionVerifierStorageError::from)
-    }
-
-    fn del_token_id(
-        &mut self,
-        issuance_tx_id: &Id<Transaction>,
-    ) -> Result<(), TransactionVerifierStorageError> {
-        self.storage
-            .del_token_id(issuance_tx_id)
-            .map_err(TransactionVerifierStorageError::from)
-    }
-
-    fn set_undo_data(
-        &mut self,
-        id: Id<Block>,
-        undo: &utxo::BlockUndo,
-    ) -> Result<(), TransactionVerifierStorageError> {
-        self.storage
-            .set_undo_data(id, undo)
-            .map_err(TransactionVerifierStorageError::from)
-    }
-
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), TransactionVerifierStorageError> {
-        self.storage.del_undo_data(id).map_err(TransactionVerifierStorageError::from)
-    }
-
-    fn set_mempool_undo_data(
-        &mut self,
-        _undo: &utxo::BlockUndo,
-    ) -> Result<(), TransactionVerifierStorageError> {
-        panic!("Mempool info should not be written to storage")
-    }
-
-    fn del_mempool_undo_data(&mut self) -> Result<(), TransactionVerifierStorageError> {
-        panic!("Mempool info should not be written to storage")
     }
 }

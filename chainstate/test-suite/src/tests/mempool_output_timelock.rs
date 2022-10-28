@@ -82,7 +82,7 @@ fn output_lock_until_height() {
         );
 
         let spend_locked_tx = TransactionBuilder::new()
-            .add_input(locked_output.1.clone(), locked_output.0.clone())
+            .add_input(locked_output.1.clone(), locked_output.0)
             .add_anyone_can_spend_output(5000)
             .build();
 
@@ -146,7 +146,7 @@ fn output_lock_for_block_count() {
         );
 
         let spend_locked_tx = TransactionBuilder::new()
-            .add_input(locked_output.1.clone(), locked_output.0.clone())
+            .add_input(locked_output.1.clone(), locked_output.0)
             .add_anyone_can_spend_output(5000)
             .build();
 
@@ -229,7 +229,7 @@ fn output_lock_until_time() {
         );
 
         let spend_locked_tx = TransactionBuilder::new()
-            .add_input(locked_output.1.clone(), locked_output.0.clone())
+            .add_input(locked_output.1.clone(), locked_output.0)
             .add_anyone_can_spend_output(5000)
             .build();
 
@@ -320,7 +320,7 @@ fn output_lock_for_seconds() {
         );
 
         let spend_locked_tx = TransactionBuilder::new()
-            .add_input(locked_output.1.clone(), locked_output.0.clone())
+            .add_input(locked_output.1.clone(), locked_output.0)
             .add_anyone_can_spend_output(5000)
             .build();
 
