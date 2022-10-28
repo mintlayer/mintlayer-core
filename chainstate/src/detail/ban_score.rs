@@ -91,6 +91,8 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::BlockIndexCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::TransactionVerifierError(err) => err.ban_score(),
             ConnectTransactionError::BlockUndoError(_) => 100,
+            ConnectTransactionError::BurnAmountSumError(_) => 100,
+            ConnectTransactionError::AttemptToSpendBurnedAmount => 100,
         }
     }
 }

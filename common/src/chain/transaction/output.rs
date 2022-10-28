@@ -41,14 +41,26 @@ pub enum OutputPurpose {
     LockThenTransfer(Destination, OutputTimeLock),
     #[codec(index = 2)]
     StakeLock(Destination),
+    #[codec(index = 3)]
+    Burn, // TODO: Add test that attempts to spend OutputPurpose::Burn
 }
 
 impl OutputPurpose {
-    pub fn destination(&self) -> &Destination {
+    pub fn destination(&self) -> Option<&Destination> {
         match self {
-            OutputPurpose::Transfer(d) => d,
-            OutputPurpose::LockThenTransfer(d, _) => d,
-            OutputPurpose::StakeLock(d) => d,
+            OutputPurpose::Transfer(d) => Some(d),
+            OutputPurpose::LockThenTransfer(d, _) => Some(d),
+            OutputPurpose::StakeLock(d) => Some(d),
+            OutputPurpose::Burn => None,
+        }
+    }
+
+    pub fn is_burn(&self) -> bool {
+        match self {
+            OutputPurpose::Transfer(_) => false,
+            OutputPurpose::LockThenTransfer(_, _) => false,
+            OutputPurpose::StakeLock(_) => false,
+            OutputPurpose::Burn => true,
         }
     }
 }
@@ -77,6 +89,7 @@ impl TxOutput {
             OutputPurpose::Transfer(_) => false,
             OutputPurpose::LockThenTransfer(_, _) => true,
             OutputPurpose::StakeLock(_) => false,
+            OutputPurpose::Burn => false,
         }
     }
 }

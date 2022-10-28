@@ -20,7 +20,7 @@ use chainstate::{
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
 use common::chain::{
     signature::inputsig::InputWitness,
-    tokens::{token_id, Metadata, NftIssuanceV1, TokenData, TokenTransferV1},
+    tokens::{token_id, Metadata, NftIssuanceV1, OutputValue, TokenData, TokenTransferV1},
     Destination, OutputPurpose, TxInput, TxOutput,
 };
 use common::primitives::Amount;
@@ -45,6 +45,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
         // Issuance
         let block_index = tf
@@ -70,6 +71,10 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
                         }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Coin(token_min_issuance_fee),
+                        OutputPurpose::Burn,
                     ))
                     .build(),
             )
@@ -154,6 +159,8 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+
         // Issuance
         let block_index = tf
             .make_block_builder()
@@ -178,6 +185,10 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
                         }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Coin(token_min_issuance_fee),
+                        OutputPurpose::Burn,
                     ))
                     .build(),
             )

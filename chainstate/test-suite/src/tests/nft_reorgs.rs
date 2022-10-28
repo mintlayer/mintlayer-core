@@ -90,6 +90,10 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         OutputValue::Coin(token_min_issuance_fee),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Coin(token_min_issuance_fee),
+                        OutputPurpose::Burn,
+                    ))
                     .build(),
             )
             .build_and_process()
@@ -354,6 +358,8 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+
         // Issue a new NFT
         let issuance_value = NftIssuanceV1 {
             metadata: Metadata {
@@ -381,6 +387,10 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         issuance_value.clone().into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Coin(token_min_issuance_fee),
+                        OutputPurpose::Burn,
                     ))
                     .build(),
             )

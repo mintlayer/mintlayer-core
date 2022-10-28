@@ -42,7 +42,8 @@ use common::{
         signature::{verify_signature, Signable, Transactable},
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
-        Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput,
+        Block, ChainConfig, GenBlock, OutPointSourceId, OutputPurpose, Transaction, TxInput,
+        TxOutput,
     },
     primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable, H256},
 };
@@ -234,7 +235,6 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
 
     fn check_transferred_amounts_and_get_fee(
         &self,
-        block_id: Option<Id<Block>>,
         tx: &Transaction,
     ) -> Result<Fee, ConnectTransactionError> {
         let inputs_total_map = self.calculate_total_inputs(tx.inputs())?;
@@ -243,14 +243,30 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         check_transferred_amount(&inputs_total_map, &outputs_total_map)?;
         let total_fee = Self::get_total_fee(&inputs_total_map, &outputs_total_map)?;
 
-        // TODO: the fee has the issue that it doesn't deduct the issuance fee from the total fee,
-        // which means that anyone issuing tokens will have a free-of-charge priority and a possibly
-        // huge transaction compared to what they would get for without the issuance.
-        // This has to be studied
+        Ok(total_fee)
+    }
 
+    fn check_issuance_fee_burn(
+        &self,
+        tx: &Transaction,
+        block_id: &Option<Id<Block>>,
+    ) -> Result<(), ConnectTransactionError> {
         // Check if the fee is enough for issuance
         let issuance_count = get_tokens_issuance_count(tx.outputs());
-        if issuance_count > 0 && total_fee < Fee(self.chain_config.token_min_issuance_fee()) {
+        if issuance_count == 0 {
+            return Ok(());
+        }
+
+        let total_burned = tx
+            .outputs()
+            .iter()
+            .filter(|o| *o.purpose() == OutputPurpose::Burn)
+            .filter_map(|o| o.value().coin_amount())
+            .try_fold(Amount::ZERO, |so_far, v| {
+                (so_far + v).ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))
+            })?;
+
+        if total_burned < self.chain_config.token_min_issuance_fee() {
             return Err(ConnectTransactionError::TokensError(
                 TokensError::InsufficientTokenFees(
                     tx.get_id(),
@@ -258,7 +274,8 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 ),
             ));
         }
-        Ok(total_fee)
+
+        Ok(())
     }
 
     pub fn check_block_reward(
@@ -321,12 +338,12 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         spending_time: &BlockTimestamp,
     ) -> Result<(), ConnectTransactionError> {
         use common::chain::timelock::OutputTimeLock;
-        use common::chain::OutputPurpose;
 
         let timelock = match output.purpose() {
             OutputPurpose::Transfer(_) => return Ok(()),
             OutputPurpose::LockThenTransfer(_, tl) => tl,
             OutputPurpose::StakeLock(_) => return Ok(()),
+            OutputPurpose::Burn => return Ok(()),
         };
 
         let source_block_height = source_block_index.block_height();
@@ -372,8 +389,11 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
 
             // TODO: see if a different treatment should be done for different output purposes
             // TODO: ensure that signature verification is tested in the test-suite, they seem to be tested only internally
-            verify_signature(utxo.output().purpose().destination(), tx, input_idx)
-                .map_err(ConnectTransactionError::SignatureVerificationFailed)?;
+            match utxo.output().purpose().destination() {
+                Some(d) => verify_signature(d, tx, input_idx)
+                    .map_err(ConnectTransactionError::SignatureVerificationFailed)?,
+                None => return Err(ConnectTransactionError::AttemptToSpendBurnedAmount),
+            }
         }
 
         Ok(())
@@ -521,7 +541,10 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         )?;
 
         // check for attempted money printing
-        let fee = Some(self.check_transferred_amounts_and_get_fee(block_id, tx.transaction())?);
+        let fee = Some(self.check_transferred_amounts_and_get_fee(tx.transaction())?);
+
+        // check token issuance fee
+        self.check_issuance_fee_burn(tx.transaction(), &block_id)?;
 
         // Register tokens if tx has issuance data
         self.token_issuance_cache.register(block_id, tx.transaction())?;

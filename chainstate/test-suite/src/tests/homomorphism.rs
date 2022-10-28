@@ -148,6 +148,10 @@ fn tokens_homomorphism(#[case] seed: Seed) {
                 .into(),
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(tf.chainstate.get_chain_config().token_min_issuance_fee()),
+                OutputPurpose::Burn,
+            ))
             .build();
         let token_id = token_id(tx_1.transaction()).unwrap();
 

@@ -129,6 +129,10 @@ fn store_token(#[case] seed: Seed) {
                 .into(),
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(tf.chainstate.get_chain_config().token_min_issuance_fee()),
+                OutputPurpose::Burn,
+            ))
             .build();
         let tx_id = tx.transaction().get_id();
         let tx_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx_id), 0);
@@ -359,6 +363,10 @@ fn reorg_store_token(#[case] seed: Seed) {
                 .into(),
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(tf.chainstate.get_chain_config().token_min_issuance_fee()),
+                OutputPurpose::Burn,
+            ))
             .build();
         let tx_1_outpoint = OutPoint::new(
             OutPointSourceId::Transaction(tx_1.transaction().get_id()),
@@ -389,6 +397,10 @@ fn reorg_store_token(#[case] seed: Seed) {
                 }
                 .into(),
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(tf.chainstate.get_chain_config().token_min_issuance_fee()),
+                OutputPurpose::Burn,
             ))
             .build();
         let tx_2_id = tx_2.transaction().get_id();

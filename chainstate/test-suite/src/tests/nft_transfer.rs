@@ -46,6 +46,8 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
 
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
@@ -74,6 +76,10 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         output_value.clone().into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Coin(token_min_issuance_fee),
+                        OutputPurpose::Burn,
                     ))
                     .build(),
             )
@@ -126,6 +132,8 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
 
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
@@ -154,6 +162,10 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         output_value.clone().into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Coin(token_min_issuance_fee),
+                        OutputPurpose::Burn,
                     ))
                     .build(),
             )
@@ -271,6 +283,10 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
                         OutputValue::Coin((token_min_issuance_fee * 2).unwrap()),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Coin(token_min_issuance_fee),
+                        OutputPurpose::Burn,
+                    ))
                     .build(),
             )
             .build_and_process()
@@ -321,6 +337,10 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         OutputValue::Coin(token_min_issuance_fee),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Coin(token_min_issuance_fee),
+                        OutputPurpose::Burn,
                     ))
                     .build(),
             )
@@ -385,6 +405,8 @@ fn nft_valid_transfer(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
 
+        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
@@ -413,6 +435,10 @@ fn nft_valid_transfer(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         output_value.clone().into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Coin(token_min_issuance_fee),
+                        OutputPurpose::Burn,
                     ))
                     .build(),
             )

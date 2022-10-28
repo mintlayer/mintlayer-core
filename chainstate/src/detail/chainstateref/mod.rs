@@ -464,6 +464,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
                         block.get_id(),
                     ))
                 }
+                common::chain::OutputPurpose::Burn => {
+                    return Err(CheckBlockError::InvalidBlockRewardOutputType(
+                        block.get_id(),
+                    ))
+                }
             }
         }
         Ok(())

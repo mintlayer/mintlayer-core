@@ -203,7 +203,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             return Ok(());
         }
 
-        // Look up the parent of block 1 to figure out the geneis ID according to storage
+        // Look up the parent of block 1 to figure out the genesis ID according to storage
         let block1_id = dbtx
             .get_block_id_by_height(&BlockHeight::new(1))?
             .ok_or(InitializationError::Block1Missing)?;
