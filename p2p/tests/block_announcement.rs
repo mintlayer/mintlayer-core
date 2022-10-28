@@ -412,15 +412,11 @@ async fn block_announcement_too_big_message_libp2p() {
     block_announcement_too_big_message::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: Add limits for the announcements.
-#[ignore]
 #[tokio::test]
 async fn block_announcement_too_big_message_tcp() {
     block_announcement_too_big_message::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
-// TODO: Add limits for the announcements.
-#[ignore]
 #[tokio::test]
 async fn block_announcement_too_big_message_channels() {
     block_announcement_too_big_message::<MakeChannelAddress, MockService<ChannelMockTransport>>()
