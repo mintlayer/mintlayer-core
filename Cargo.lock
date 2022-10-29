@@ -2939,7 +2939,6 @@ dependencies = [
  "p2p-test-utils",
  "parity-scale-codec",
  "portpicker",
- "rand 0.8.5",
  "rpc",
  "serialization",
  "sscanf",

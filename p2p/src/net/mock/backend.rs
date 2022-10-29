@@ -28,13 +28,13 @@ use std::{
 };
 
 use futures::{future::join_all, FutureExt, TryFutureExt};
-use rand::seq::SliceRandom;
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
 };
 
 use common::chain::ChainConfig;
+use crypto::random::{make_pseudo_rng, SliceRandom};
 use logging::log;
 use serialization::{Decode, Encode};
 
@@ -267,7 +267,7 @@ where
                 })
             })
             .collect();
-        futures.shuffle(&mut rand::thread_rng());
+        futures.shuffle(&mut make_pseudo_rng());
 
         join_all(futures).await;
     }
@@ -291,7 +291,7 @@ where
                 })
             })
             .collect();
-        futures.shuffle(&mut rand::thread_rng());
+        futures.shuffle(&mut make_pseudo_rng());
 
         // TODO: We don't really need to return an error here. It is only needed temporarily in
         // order to mimic the libp2p behavior.
