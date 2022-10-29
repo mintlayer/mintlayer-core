@@ -13,16 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod hdkd;
 pub mod rschnorr;
 pub mod signature;
 
 use serialization::{Decode, Encode};
 
+use crate::key::hdkd::derivation_path::ChildNumber;
+use crate::key::hdkd::{Derivable, DerivationError};
+use crate::key::rschnorr::{MLRistrettoPrivateKey, MLRistrettoPublicKey, RistrettoSignatureError};
 use crate::key::Signature::RistrettoSchnorr;
 use crate::random::make_true_rng;
 pub use signature::Signature;
-
-use self::rschnorr::RistrettoSignatureError;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum SignatureError {
@@ -48,12 +50,12 @@ pub struct PublicKey {
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub(crate) enum PrivateKeyHolder {
-    RistrettoSchnorr(rschnorr::MLRistrettoPrivateKey),
+    RistrettoSchnorr(MLRistrettoPrivateKey),
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Decode, Encode)]
 pub(crate) enum PublicKeyHolder {
-    RistrettoSchnorr(rschnorr::MLRistrettoPublicKey),
+    RistrettoSchnorr(MLRistrettoPublicKey),
 }
 
 impl From<RistrettoSignatureError> for SignatureError {
@@ -71,7 +73,7 @@ impl PrivateKey {
         let mut rng = make_true_rng();
         match key_kind {
             KeyKind::RistrettoSchnorr => {
-                let k = rschnorr::MLRistrettoPrivateKey::new(&mut rng);
+                let k = MLRistrettoPrivateKey::new(&mut rng);
                 (
                     PrivateKey {
                         key: PrivateKeyHolder::RistrettoSchnorr(k.0),
@@ -102,13 +104,29 @@ impl PrivateKey {
     }
 }
 
+impl Derivable for PrivateKey {
+    fn derive_child(&self, num: &ChildNumber) -> Result<Self, DerivationError> {
+        match self.key {
+            PrivateKeyHolder::RistrettoSchnorr(ref key) => Ok(key.derive_child(num)?.into()),
+        }
+    }
+}
+
+impl From<MLRistrettoPrivateKey> for PrivateKey {
+    fn from(key: MLRistrettoPrivateKey) -> Self {
+        PrivateKey {
+            key: PrivateKeyHolder::RistrettoSchnorr(key),
+        }
+    }
+}
+
 impl PublicKey {
     pub fn from_private_key(private_key: &PrivateKey) -> Self {
         match private_key.get_internal_key() {
             PrivateKeyHolder::RistrettoSchnorr(ref k) => PublicKey {
-                pub_key: PublicKeyHolder::RistrettoSchnorr(
-                    rschnorr::MLRistrettoPublicKey::from_private_key(k),
-                ),
+                pub_key: PublicKeyHolder::RistrettoSchnorr(MLRistrettoPublicKey::from_private_key(
+                    k,
+                )),
             },
         }
     }
@@ -130,6 +148,8 @@ impl PublicKey {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::key::hdkd::derivation_path::DerivationPath;
+    use std::str::FromStr;
 
     #[test]
     fn sign_and_verify() {
@@ -139,5 +159,15 @@ mod test {
         let msg: Vec<u8> = (0..msg_size).map(|_| rand::random::<u8>()).collect();
         let sig = sk.sign_message(&msg).unwrap();
         assert!(pk.verify_message(&sig, &msg));
+    }
+
+    #[test]
+    fn derive() {
+        let (sk, _) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let sk1 = sk.derive_child(&ChildNumber::hardened(123).unwrap()).unwrap();
+        let sk2 = sk1.derive_child(&ChildNumber::hardened(456).unwrap()).unwrap();
+        let sk3 = sk2.derive_child(&ChildNumber::hardened(789).unwrap()).unwrap();
+        let sk4 = sk.derive_path(&DerivationPath::from_str("m/123h/456h/789h").unwrap()).unwrap();
+        assert_eq!(sk3, sk4);
     }
 }

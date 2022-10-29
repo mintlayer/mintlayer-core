@@ -15,7 +15,12 @@
 
 mod internal;
 
+use crate::key::hdkd::derivation_path::ChildNumber;
+use crate::key::hdkd::DerivationError::UnsupportedDerivationType;
+use crate::key::hdkd::{Derivable, DerivationError};
 use crate::random::{CryptoRng, Rng};
+use schnorrkel::derive::{ChainCode, CHAIN_CODE_LENGTH};
+use schnorrkel::ExpansionMode::Ed25519;
 use serialization::{Decode, Encode};
 use zeroize::Zeroize;
 
@@ -129,6 +134,27 @@ impl MLRistrettoPrivateKey {
     }
 }
 
+impl ChildNumber {
+    fn to_schnorrkel_chaincode(&self) -> ChainCode {
+        let mut chaincode = ChainCode([0u8; CHAIN_CODE_LENGTH]);
+        chaincode.0[0..4].copy_from_slice(&self.to_encoded_index().to_be_bytes());
+        chaincode
+    }
+}
+
+impl Derivable for MLRistrettoPrivateKey {
+    fn derive_child(&self, num: &ChildNumber) -> Result<Self, DerivationError> {
+        // We can perform only hard derivations
+        if !num.is_hardened() {
+            return Err(UnsupportedDerivationType);
+        }
+        let chaincode = Some(num.to_schnorrkel_chaincode());
+        let mini_key = self.as_native().hard_derive_mini_secret_key(chaincode, b"").0;
+        let key = MLRistrettoPrivateKey::from_native(mini_key.expand(Ed25519));
+        Ok(key)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct MLRistrettoPublicKey {
     pubkey_data: schnorrkel::PublicKey,
@@ -208,9 +234,12 @@ impl std::ops::Add for &MLRistrettoPublicKey {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::key::hdkd::derivation_path::DerivationPath;
     use crate::random::make_true_rng;
     use hex::ToHex;
     use serialization::DecodeAll;
+    use serialization::{Decode, Encode};
+    use std::str::FromStr;
 
     #[test]
     fn basic() {
@@ -321,5 +350,28 @@ mod test {
         let pk_sum = MLRistrettoPublicKey::from_bytes(&hex::decode(pk_sum).unwrap()).unwrap();
 
         assert_eq!(&pk1 + &pk2, pk_sum);
+    }
+
+    #[test]
+    fn test_derivation_private_key() {
+        let sk_bytes = hex::decode("0101181b259bac04d8ec3f6ea2a86b37f39a353288a8410fc469b9f2d5c59ce30a36c10bfdc906c8343fe0fb42c2564d6b1d3bf8ae3d73f0f7e5424cb60a9639d7e0").unwrap();
+        let sk = MLRistrettoPrivateKey::decode(&mut sk_bytes.as_slice()).unwrap();
+
+        let path = DerivationPath::from_str("m/0'").unwrap();
+        let child_sk = sk.derive_path(&path).unwrap();
+
+        assert_eq!(hex::encode(child_sk.encode()), "010118959f5bfcde4299d177763c94c30b56cd8a7df22d6fc4861d45067c4dccd0470957e0852e2b4af0d8d44a29ad8fdf17db6cf0f5f7feef9d268790b326bda500");
+
+        let child_sk_final = child_sk.derive_child(&ChildNumber::hardened(1).unwrap()).unwrap();
+
+        let path = DerivationPath::from_str("m/0'/1'").unwrap();
+        let child_sk_final_alt = sk.derive_path(&path).unwrap();
+
+        assert_eq!(child_sk_final.encode(), child_sk_final_alt.encode());
+
+        assert_eq!(
+            hex::encode(child_sk_final.encode()),
+            "010110088b095ac8dac54b0a4837031e90731a0c442240a532889295ade79e924a700e7a2e2030eaf4b37a317bd79191535d21be2582422b65fabcc7157109dc4271"
+        );
     }
 }
