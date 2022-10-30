@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::chain::tokens::OutputValue;
+
 use super::*;
 
 async fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Result<(), Error> {

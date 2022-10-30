@@ -25,7 +25,6 @@ use tokio::sync::mpsc;
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::chain::signed_transaction::SignedTransaction;
-use common::chain::tokens::OutputValue;
 use common::chain::ChainConfig;
 use common::time_getter::TimeGetter;
 use parking_lot::RwLock;
@@ -57,6 +56,7 @@ use spends_unconfirmed::SpendsUnconfirmed;
 use store::MempoolRemovalReason;
 use store::MempoolStore;
 use store::TxMempoolEntry;
+use try_get_fee::TryGetFee;
 
 pub use crate::interface::mempool_interface::MempoolInterface;
 
@@ -66,59 +66,11 @@ mod feerate;
 mod rolling_fee_rate;
 mod spends_unconfirmed;
 mod store;
-
-#[async_trait::async_trait]
-impl<M> TryGetFee for Mempool<M>
-where
-    M: GetMemoryUsage + Send + std::marker::Sync,
-{
-    // TODO this calculation is already done in ChainState, reuse it
-    async fn try_get_fee(&self, tx: &SignedTransaction) -> Result<Amount, TxValidationError> {
-        let tx_clone = tx.clone();
-        let chainstate_input_values = self
-            .chainstate_handle
-            .call(move |this| this.get_inputs_outpoints_values(tx_clone.transaction()))
-            .await??;
-
-        let mut input_values = Vec::<Amount>::new();
-        for (i, chainstate_input_value) in chainstate_input_values.iter().enumerate() {
-            if let Some(value) = chainstate_input_value {
-                input_values.push(*value)
-            } else {
-                let value = self.store.get_unconfirmed_outpoint_value(
-                    tx.transaction().inputs().get(i).expect("index").outpoint(),
-                )?;
-                input_values.push(value);
-            }
-        }
-
-        let sum_inputs = input_values
-            .iter()
-            .cloned()
-            .sum::<Option<_>>()
-            .ok_or(TxValidationError::InputValuesOverflow)?;
-        let sum_outputs = tx
-            .transaction()
-            .outputs()
-            .iter()
-            .filter_map(|output| match output.value() {
-                OutputValue::Coin(coin) => Some(*coin),
-                OutputValue::Token(_) => None,
-            })
-            .sum::<Option<_>>()
-            .ok_or(TxValidationError::OutputValuesOverflow)?;
-        (sum_inputs - sum_outputs).ok_or(TxValidationError::InputsBelowOutputs)
-    }
-}
+mod try_get_fee;
 
 fn get_relay_fee(tx: &SignedTransaction) -> Amount {
     // TODO we should never reach the expect, but should this be an error anyway?
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
-}
-
-#[async_trait::async_trait]
-trait TryGetFee {
-    async fn try_get_fee(&self, tx: &SignedTransaction) -> Result<Amount, TxValidationError>;
 }
 
 newtype! {

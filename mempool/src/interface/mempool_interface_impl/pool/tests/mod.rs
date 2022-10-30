@@ -31,6 +31,7 @@ use common::chain::block::BlockReward;
 use common::chain::block::ConsensusData;
 use common::chain::config::ChainConfig;
 use common::chain::signature::inputsig::InputWitness;
+use common::chain::tokens::OutputValue;
 use common::chain::transaction::{Destination, TxInput, TxOutput};
 use common::chain::OutPointSourceId;
 use common::chain::OutputPurpose;
