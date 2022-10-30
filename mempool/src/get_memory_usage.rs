@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use mockall::*;
-pub(crate) type MemoryUsage = usize;
+pub type MemoryUsage = usize;
 
 #[automock]
 pub trait GetMemoryUsage {
