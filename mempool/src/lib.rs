@@ -24,16 +24,15 @@ use common::time_getter::TimeGetter;
 pub use interface::mempool_interface::MempoolInterface;
 
 use crate::error::Error as MempoolError;
-use crate::mempool_interface_impl::MempoolInterfaceImpl;
+use crate::interface::mempool_interface_impl::MempoolInterfaceImpl;
 use get_memory_usage::GetMemoryUsage;
 
-pub use crate::mempool_interface_impl::SystemUsageEstimator;
+pub use interface::mempool_interface_impl::SystemUsageEstimator;
 
 mod config;
 pub mod error;
 mod get_memory_usage;
 mod interface;
-mod mempool_interface_impl;
 pub mod rpc;
 pub mod tx_accumulator;
 
