@@ -13,29 +13,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use crate::{error::Error, tx_accumulator::TransactionAccumulator, MempoolEvent};
-use common::{
-    chain::{signed_transaction::SignedTransaction, Transaction},
-    primitives::Id,
-};
-
-#[async_trait::async_trait]
-pub trait MempoolInterface: Send {
-    async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error>;
-    async fn get_all(&self) -> Result<Vec<SignedTransaction>, Error>;
-
-    // Returns `true` if the mempool contains a transaction with the given id, `false` otherwise.
-    async fn contains_transaction(&self, tx: &Id<Transaction>) -> Result<bool, Error>;
-
-    async fn collect_txs(
-        &self,
-        tx_accumulator: Box<dyn TransactionAccumulator + Send>,
-    ) -> Result<Box<dyn TransactionAccumulator>, Error>;
-
-    async fn subscribe_to_events(
-        &mut self,
-        handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
-    ) -> Result<(), Error>;
-}
+pub mod mempool_interface;

@@ -59,7 +59,7 @@ use store::MempoolRemovalReason;
 use store::MempoolStore;
 use store::TxMempoolEntry;
 
-pub use crate::interface::MempoolInterface;
+pub use crate::interface::mempool_interface::MempoolInterface;
 
 use crate::config::*;
 

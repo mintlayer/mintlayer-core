@@ -21,7 +21,7 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use common::chain::{Block, ChainConfig};
 use common::primitives::{BlockHeight, Id};
 use common::time_getter::TimeGetter;
-pub use interface::MempoolInterface;
+pub use interface::mempool_interface::MempoolInterface;
 
 use crate::error::Error as MempoolError;
 use crate::mempool_interface_impl::MempoolInterfaceImpl;
