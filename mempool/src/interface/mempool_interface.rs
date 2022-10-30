@@ -22,7 +22,7 @@ use common::{
 };
 
 #[async_trait::async_trait]
-pub trait MempoolInterface: Send {
+pub trait MempoolInterface: Send + Sync {
     async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error>;
     async fn get_all(&self) -> Result<Vec<SignedTransaction>, Error>;
 
