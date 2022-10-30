@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use super::*;
+use crate::SystemUsageEstimator;
 
 #[rstest]
 #[trace]

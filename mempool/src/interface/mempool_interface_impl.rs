@@ -29,8 +29,8 @@ use common::primitives::Id;
 use common::time_getter::TimeGetter;
 use tokio::sync::mpsc;
 
+pub use crate::SystemUsageEstimator;
 use pool::Mempool;
-pub use pool::SystemUsageEstimator;
 
 mod mempool_method_call;
 mod pool;

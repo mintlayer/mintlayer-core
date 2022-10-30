@@ -46,7 +46,6 @@ use utils::tap_error_log::LogError;
 use crate::error::Error;
 use crate::error::TxValidationError;
 use crate::get_memory_usage::GetMemoryUsage;
-use crate::get_memory_usage::MemoryUsage;
 use crate::interface::mempool_interface_impl::mempool_method_call::MempoolMethodCall;
 use crate::tx_accumulator::TransactionAccumulator;
 use crate::MempoolEvent;
@@ -722,15 +721,6 @@ where
                 .drop_tx_and_descendants(removed.tx_id(), MempoolRemovalReason::SizeLimit);
         }
         Ok(removed_fees)
-    }
-}
-
-#[derive(Clone)]
-pub struct SystemUsageEstimator;
-impl GetMemoryUsage for SystemUsageEstimator {
-    fn get_memory_usage(&self) -> MemoryUsage {
-        //TODO implement real usage estimation here
-        0
     }
 }
 

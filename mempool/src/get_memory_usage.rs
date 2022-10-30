@@ -20,3 +20,12 @@ pub(crate) type MemoryUsage = usize;
 pub trait GetMemoryUsage {
     fn get_memory_usage(&self) -> MemoryUsage;
 }
+
+#[derive(Clone)]
+pub struct SystemUsageEstimator;
+impl GetMemoryUsage for SystemUsageEstimator {
+    fn get_memory_usage(&self) -> MemoryUsage {
+        //TODO implement real usage estimation here
+        0
+    }
+}

@@ -16,6 +16,7 @@
 use super::*;
 use crate::get_memory_usage::MockGetMemoryUsage;
 use crate::tx_accumulator::DefaultTxAccumulator;
+use crate::SystemUsageEstimator;
 use chainstate::chainstate_interface;
 use chainstate::make_chainstate;
 use chainstate::BlockSource;
