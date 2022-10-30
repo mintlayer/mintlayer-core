@@ -674,12 +674,7 @@ where
         }
         Ok(removed_fees)
     }
-}
 
-impl<M> Mempool<M>
-where
-    M: GetMemoryUsage + Send + std::marker::Sync,
-{
     pub async fn run(mut self) -> Result<(), Error> {
         tokio::spawn(async move {
             let event_receiver =
