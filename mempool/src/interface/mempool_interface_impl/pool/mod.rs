@@ -22,18 +22,15 @@ use std::time::Duration;
 use common::chain::Block;
 use common::primitives::BlockHeight;
 use tokio::sync::mpsc;
-use tokio::sync::oneshot;
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::chain::signed_transaction::SignedTransaction;
-use common::chain::tokens::OutputValue;
 use common::chain::ChainConfig;
 use common::time_getter::TimeGetter;
 use parking_lot::RwLock;
 use serialization::Encode;
 
 use common::chain::transaction::Transaction;
-use common::chain::transaction::TxInput;
 use common::primitives::amount::Amount;
 use common::primitives::Id;
 use common::primitives::Idable;
@@ -47,90 +44,33 @@ use utils::tap_error_log::LogError;
 
 use crate::error::Error;
 use crate::error::TxValidationError;
-use crate::feerate::FeeRate;
-use crate::feerate::INCREMENTAL_RELAY_FEE_RATE;
-use crate::feerate::INCREMENTAL_RELAY_THRESHOLD;
+use crate::get_memory_usage::GetMemoryUsage;
+use crate::interface::mempool_interface_impl::mempool_method_call::MempoolMethodCall;
 use crate::tx_accumulator::TransactionAccumulator;
 use crate::MempoolEvent;
+use feerate::FeeRate;
+use feerate::INCREMENTAL_RELAY_FEE_RATE;
+use feerate::INCREMENTAL_RELAY_THRESHOLD;
+use rolling_fee_rate::RollingFeeRate;
+use spends_unconfirmed::SpendsUnconfirmed;
 use store::MempoolRemovalReason;
 use store::MempoolStore;
 use store::TxMempoolEntry;
+use try_get_fee::TryGetFee;
+
+pub use crate::interface::mempool_interface::MempoolInterface;
 
 use crate::config::*;
 
+mod feerate;
+mod rolling_fee_rate;
+mod spends_unconfirmed;
 mod store;
-
-#[async_trait::async_trait]
-impl<M> TryGetFee for Mempool<M>
-where
-    M: GetMemoryUsage + Send + std::marker::Sync,
-{
-    // TODO this calculation is already done in ChainState, reuse it
-    async fn try_get_fee(&self, tx: &SignedTransaction) -> Result<Amount, TxValidationError> {
-        let tx_clone = tx.clone();
-        let chainstate_input_values = self
-            .chainstate_handle
-            .call(move |this| this.get_inputs_outpoints_values(tx_clone.transaction()))
-            .await??;
-
-        let mut input_values = Vec::<Amount>::new();
-        for (i, chainstate_input_value) in chainstate_input_values.iter().enumerate() {
-            if let Some(value) = chainstate_input_value {
-                input_values.push(*value)
-            } else {
-                let value = self.store.get_unconfirmed_outpoint_value(
-                    tx.transaction().inputs().get(i).expect("index").outpoint(),
-                )?;
-                input_values.push(value);
-            }
-        }
-
-        let sum_inputs = input_values
-            .iter()
-            .cloned()
-            .sum::<Option<_>>()
-            .ok_or(TxValidationError::InputValuesOverflow)?;
-        let sum_outputs = tx
-            .transaction()
-            .outputs()
-            .iter()
-            .filter_map(|output| match output.value() {
-                OutputValue::Coin(coin) => Some(*coin),
-                OutputValue::Token(_) => None,
-            })
-            .sum::<Option<_>>()
-            .ok_or(TxValidationError::OutputValuesOverflow)?;
-        (sum_inputs - sum_outputs).ok_or(TxValidationError::InputsBelowOutputs)
-    }
-}
+mod try_get_fee;
 
 fn get_relay_fee(tx: &SignedTransaction) -> Amount {
     // TODO we should never reach the expect, but should this be an error anyway?
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
-}
-
-#[async_trait::async_trait]
-pub trait MempoolInterface: Send {
-    async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error>;
-    async fn get_all(&self) -> Result<Vec<SignedTransaction>, Error>;
-
-    // Returns `true` if the mempool contains a transaction with the given id, `false` otherwise.
-    async fn contains_transaction(&self, tx: &Id<Transaction>) -> Result<bool, Error>;
-
-    async fn collect_txs(
-        &self,
-        tx_accumulator: Box<dyn TransactionAccumulator + Send>,
-    ) -> Result<Box<dyn TransactionAccumulator>, Error>;
-
-    async fn subscribe_to_events(
-        &mut self,
-        handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
-    ) -> Result<(), Error>;
-}
-
-#[async_trait::async_trait]
-trait TryGetFee {
-    async fn try_get_fee(&self, tx: &SignedTransaction) -> Result<Amount, TxValidationError>;
 }
 
 newtype! {
@@ -146,50 +86,6 @@ newtype! {
 newtype! {
     #[derive(Debug)]
     struct Conflicts(BTreeSet<Id<Transaction>>);
-}
-
-#[derive(Clone, Copy, Debug)]
-struct RollingFeeRate {
-    block_since_last_rolling_fee_bump: bool,
-    rolling_minimum_fee_rate: FeeRate,
-    last_rolling_fee_update: Time,
-}
-
-impl RollingFeeRate {
-    #[allow(clippy::float_arithmetic)]
-    fn decay_fee(mut self, halflife: Time, current_time: Time) -> Self {
-        log::debug!(
-            "decay_fee: old fee rate:  {:?}\nCurrent time: {:?}\nLast Rolling Fee Update: {:?}\nHalflife: {:?}",
-            self.rolling_minimum_fee_rate,
-            self.last_rolling_fee_update,
-            current_time,
-            halflife,
-        );
-
-        let divisor = ((current_time.as_secs() - self.last_rolling_fee_update.as_secs()) as f64
-            / (halflife.as_secs() as f64))
-            .exp2();
-        self.rolling_minimum_fee_rate = FeeRate::new(Amount::from_atoms(
-            (self.rolling_minimum_fee_rate.atoms_per_kb() as f64 / divisor) as u128,
-        ));
-
-        log::debug!(
-            "decay_fee: new fee rate:  {:?}",
-            self.rolling_minimum_fee_rate
-        );
-        self.last_rolling_fee_update = current_time;
-        self
-    }
-}
-
-impl RollingFeeRate {
-    pub(crate) fn new(creation_time: Time) -> Self {
-        Self {
-            block_since_last_rolling_fee_bump: false,
-            rolling_minimum_fee_rate: FeeRate::new(Amount::from_atoms(0)),
-            last_rolling_fee_update: creation_time,
-        }
-    }
 }
 
 pub struct Mempool<M: GetMemoryUsage + 'static + Send + std::marker::Sync> {
@@ -219,7 +115,7 @@ impl<M> Mempool<M>
 where
     M: GetMemoryUsage + Send + std::marker::Sync,
 {
-    pub(crate) fn new(
+    pub fn new(
         chain_config: Arc<ChainConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         clock: TimeGetter,
@@ -241,7 +137,7 @@ where
         }
     }
 
-    pub(crate) async fn subscribe_to_chainstate_events(
+    pub async fn subscribe_to_chainstate_events(
         &mut self,
     ) -> crate::Result<mpsc::UnboundedReceiver<(Id<Block>, BlockHeight)>> {
         let (tx, rx) = mpsc::unbounded_channel();
@@ -268,7 +164,7 @@ where
         Ok(rx)
     }
 
-    pub(crate) fn new_tip_set(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
+    pub fn new_tip_set(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
         log::info!(
             "new tip with block_id {:?} and block_height {:?}",
             block_id,
@@ -276,7 +172,7 @@ where
         );
         // TODO(Roy) handle the new tip
         let mut rolling_fee_rate = self.rolling_fee_rate.write();
-        (*rolling_fee_rate).block_since_last_rolling_fee_bump = true;
+        (*rolling_fee_rate).set_block_since_last_rolling_fee_bump(true);
     }
     //
 
@@ -295,21 +191,21 @@ where
         self.memory_usage_estimator.get_memory_usage()
     }
 
-    pub(crate) fn update_min_fee_rate(&self, rate: FeeRate) {
+    fn update_min_fee_rate(&self, rate: FeeRate) {
         let mut rolling_fee_rate = self.rolling_fee_rate.write();
-        (*rolling_fee_rate).rolling_minimum_fee_rate = rate;
-        rolling_fee_rate.block_since_last_rolling_fee_bump = false;
+        (*rolling_fee_rate).set_rolling_minimum_fee_rate(rate);
+        rolling_fee_rate.set_block_since_last_rolling_fee_bump(false);
     }
 
-    pub(crate) fn get_update_min_fee_rate(&self) -> FeeRate {
+    fn get_update_min_fee_rate(&self) -> FeeRate {
         log::debug!("get_update_min_fee_rate");
         let rolling_fee_rate = *self.rolling_fee_rate.read();
-        if !rolling_fee_rate.block_since_last_rolling_fee_bump
-            || rolling_fee_rate.rolling_minimum_fee_rate == FeeRate::new(Amount::from_atoms(0))
+        if !rolling_fee_rate.block_since_last_rolling_fee_bump()
+            || rolling_fee_rate.rolling_minimum_fee_rate() == FeeRate::new(Amount::from_atoms(0))
         {
-            return rolling_fee_rate.rolling_minimum_fee_rate;
+            return rolling_fee_rate.rolling_minimum_fee_rate();
         } else if self.clock.get_time()
-            > rolling_fee_rate.last_rolling_fee_update + ROLLING_FEE_DECAY_INTERVAL
+            > rolling_fee_rate.last_rolling_fee_update() + ROLLING_FEE_DECAY_INTERVAL
         {
             // Decay the rolling fee
             self.decay_rolling_fee_rate();
@@ -318,22 +214,23 @@ where
                 self.rolling_fee_rate
             );
 
-            if self.rolling_fee_rate.read().rolling_minimum_fee_rate < INCREMENTAL_RELAY_THRESHOLD {
-                log::trace!("rolling fee rate {:?} less than half of the incremental fee rate, dropping the fee", self.rolling_fee_rate.read().rolling_minimum_fee_rate);
+            if self.rolling_fee_rate.read().rolling_minimum_fee_rate() < INCREMENTAL_RELAY_THRESHOLD
+            {
+                log::trace!("rolling fee rate {:?} less than half of the incremental fee rate, dropping the fee", self.rolling_fee_rate.read().rolling_minimum_fee_rate());
                 self.drop_rolling_fee();
-                return self.rolling_fee_rate.read().rolling_minimum_fee_rate;
+                return self.rolling_fee_rate.read().rolling_minimum_fee_rate();
             }
         }
 
         std::cmp::max(
-            self.rolling_fee_rate.read().rolling_minimum_fee_rate,
+            self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
             INCREMENTAL_RELAY_FEE_RATE,
         )
     }
 
     fn drop_rolling_fee(&self) {
         let mut rolling_fee_rate = self.rolling_fee_rate.write();
-        (*rolling_fee_rate).rolling_minimum_fee_rate = FeeRate::new(Amount::from_atoms(0));
+        (*rolling_fee_rate).set_rolling_minimum_fee_rate(FeeRate::new(Amount::from_atoms(0)));
     }
 
     fn decay_rolling_fee_rate(&self) {
@@ -710,7 +607,7 @@ where
                 (*removed_fees.iter().max().expect("removed_fees should not be empty")
                     + INCREMENTAL_RELAY_FEE_RATE)
                     .ok_or(TxValidationError::FeeOverflow)?;
-            if new_minimum_fee_rate > self.rolling_fee_rate.read().rolling_minimum_fee_rate {
+            if new_minimum_fee_rate > self.rolling_fee_rate.read().rolling_minimum_fee_rate() {
                 self.update_min_fee_rate(new_minimum_fee_rate)
             }
         }
@@ -777,134 +674,8 @@ where
         }
         Ok(removed_fees)
     }
-}
 
-trait SpendsUnconfirmed<M>
-where
-    M: GetMemoryUsage + Send + std::marker::Sync,
-{
-    fn spends_unconfirmed(&self, mempool: &Mempool<M>) -> bool;
-}
-
-impl<M> SpendsUnconfirmed<M> for TxInput
-where
-    M: GetMemoryUsage + Send + std::marker::Sync,
-{
-    fn spends_unconfirmed(&self, mempool: &Mempool<M>) -> bool {
-        let outpoint_id = self.outpoint().tx_id().get_tx_id().cloned();
-        outpoint_id.is_some()
-            && mempool
-                .contains_transaction(self.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
-    }
-}
-
-#[derive(Clone)]
-pub struct SystemClock;
-impl GetTime for SystemClock {
-    fn get_time(&self) -> Duration {
-        common::primitives::time::get()
-    }
-}
-
-#[derive(Clone)]
-pub struct SystemUsageEstimator;
-impl GetMemoryUsage for SystemUsageEstimator {
-    fn get_memory_usage(&self) -> MemoryUsage {
-        //TODO implement real usage estimation here
-        0
-    }
-}
-
-pub(crate) struct MempoolInterfaceHandle {
-    sender: mpsc::UnboundedSender<MempoolMethodCall>,
-}
-
-impl MempoolInterfaceHandle {
-    pub(crate) fn new(sender: mpsc::UnboundedSender<MempoolMethodCall>) -> Self {
-        Self { sender }
-    }
-}
-
-pub(crate) enum MempoolMethodCall {
-    AddTransaction {
-        tx: SignedTransaction,
-        rtx: oneshot::Sender<Result<(), Error>>,
-    },
-    GetAll {
-        rtx: oneshot::Sender<Vec<SignedTransaction>>,
-    },
-    CollectTxs {
-        tx_accumulator: Box<dyn TransactionAccumulator + Send>,
-        rtx: oneshot::Sender<Box<dyn TransactionAccumulator>>,
-    },
-    ContainsTransaction {
-        tx_id: Id<Transaction>,
-        rtx: oneshot::Sender<bool>,
-    },
-    SubscribeToEvents {
-        handler: Arc<dyn Fn(MempoolEvent) + Sync + Send>,
-        rtx: oneshot::Sender<()>,
-    },
-}
-
-#[async_trait::async_trait]
-impl MempoolInterface for MempoolInterfaceHandle {
-    async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
-        let (rtx, rrx) = tokio::sync::oneshot::channel();
-        self.sender
-            .send(MempoolMethodCall::AddTransaction { tx, rtx })
-            .map_err(|_| Error::SendError)?;
-        rrx.await.map_err(|_| Error::RecvError)?
-    }
-
-    async fn get_all(&self) -> Result<Vec<SignedTransaction>, Error> {
-        let (rtx, rrx) = tokio::sync::oneshot::channel();
-        self.sender
-            .send(MempoolMethodCall::GetAll { rtx })
-            .map_err(|_| Error::SendError)?;
-        rrx.await.map_err(|_| Error::RecvError)
-    }
-
-    // Returns `true` if the mempool contains a transaction with the given id, `false` otherwise.
-    async fn contains_transaction(&self, tx_id: &Id<Transaction>) -> Result<bool, Error> {
-        let (rtx, rrx) = tokio::sync::oneshot::channel();
-        self.sender
-            .send(MempoolMethodCall::ContainsTransaction { tx_id: *tx_id, rtx })
-            .map_err(|_| Error::SendError)?;
-        rrx.await.map_err(|_| Error::RecvError)
-    }
-
-    async fn collect_txs(
-        &self,
-        tx_accumulator: Box<dyn TransactionAccumulator + Send>,
-    ) -> Result<Box<dyn TransactionAccumulator>, Error> {
-        let (rtx, rrx) = tokio::sync::oneshot::channel();
-        self.sender
-            .send(MempoolMethodCall::CollectTxs {
-                tx_accumulator,
-                rtx,
-            })
-            .map_err(|_| Error::SendError)?;
-        rrx.await.map_err(|_| Error::RecvError)
-    }
-
-    async fn subscribe_to_events(
-        &mut self,
-        handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
-    ) -> Result<(), Error> {
-        let (rtx, rrx) = tokio::sync::oneshot::channel();
-        self.sender
-            .send(MempoolMethodCall::SubscribeToEvents { handler, rtx })
-            .map_err(|_| Error::SendError)?;
-        rrx.await.map_err(|_| Error::RecvError)
-    }
-}
-
-impl<M> Mempool<M>
-where
-    M: GetMemoryUsage + Send + std::marker::Sync,
-{
-    pub(crate) async fn run(mut self) -> Result<(), Error> {
+    pub async fn run(mut self) -> Result<(), Error> {
         tokio::spawn(async move {
             let event_receiver =
                 self.subscribe_to_chainstate_events().await.log_err().expect("chainstate dead");
@@ -913,7 +684,7 @@ where
         Ok(())
     }
 
-    pub(crate) async fn mempool_event_loop(
+    pub async fn mempool_event_loop(
         mut self,
         mut chainstate_event_receiver: mpsc::UnboundedReceiver<(Id<Block>, BlockHeight)>,
     ) {
@@ -927,7 +698,7 @@ where
         }
     }
 
-    pub(crate) async fn handle_mempool_method_call(&mut self, method_call: MempoolMethodCall) {
+    pub async fn handle_mempool_method_call(&mut self, method_call: MempoolMethodCall) {
         match method_call {
             MempoolMethodCall::AddTransaction { tx, rtx } => {
                 if let Err(e) = rtx.send(self.add_transaction(tx).await) {
@@ -964,7 +735,7 @@ where
         }
     }
 
-    pub(crate) async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
+    pub async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
         let conflicts = self.validate_transaction(&tx).await?;
         self.store.drop_conflicts(conflicts);
         self.finalize_tx(tx).await?;
@@ -972,7 +743,7 @@ where
         Ok(())
     }
 
-    pub(crate) fn get_all(&self) -> Vec<SignedTransaction> {
+    pub fn get_all(&self) -> Vec<SignedTransaction> {
         self.store
             .txs_by_descendant_score
             .values()
@@ -982,7 +753,7 @@ where
             .collect()
     }
 
-    pub(crate) fn collect_txs(
+    pub fn collect_txs(
         &self,
         mut tx_accumulator: Box<dyn TransactionAccumulator>,
     ) -> Box<dyn TransactionAccumulator> {
@@ -1011,7 +782,7 @@ where
         tx_accumulator
     }
 
-    pub(crate) fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
+    pub fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
         self.store.txs_by_id.contains_key(tx_id)
     }
 

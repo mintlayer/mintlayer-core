@@ -33,7 +33,7 @@ use tokio::sync::mpsc;
 use chainstate::chainstate_interface;
 use common::chain::ChainConfig;
 use logging::log;
-use mempool::pool::MempoolInterface;
+use mempool::MempoolInterface;
 
 use crate::{
     config::P2pConfig,

@@ -21,17 +21,18 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use common::chain::{Block, ChainConfig};
 use common::primitives::{BlockHeight, Id};
 use common::time_getter::TimeGetter;
-use pool::MempoolInterface;
+pub use interface::mempool_interface::MempoolInterface;
 
-use crate::config::GetMemoryUsage;
 use crate::error::Error as MempoolError;
-use crate::pool::Mempool;
-use crate::pool::MempoolInterfaceHandle;
+use crate::interface::mempool_interface_impl::MempoolInterfaceImpl;
+use get_memory_usage::GetMemoryUsage;
+
+pub use crate::get_memory_usage::SystemUsageEstimator;
 
 mod config;
 pub mod error;
-mod feerate;
-pub mod pool;
+mod get_memory_usage;
+mod interface;
 pub mod rpc;
 pub mod tx_accumulator;
 
@@ -55,17 +56,13 @@ pub async fn make_mempool<M>(
 where
     M: GetMemoryUsage + 'static + Send + std::marker::Sync,
 {
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-
-    Mempool::new(
-        chain_config,
-        chainstate_handle,
-        time_getter,
-        memory_usage_estimator,
-        receiver,
-    )
-    .run()
-    .await?;
-
-    Ok(Box::new(MempoolInterfaceHandle::new(sender)))
+    Ok(Box::new(
+        MempoolInterfaceImpl::new(
+            chain_config,
+            chainstate_handle,
+            time_getter,
+            memory_usage_estimator,
+        )
+        .await?,
+    ))
 }
