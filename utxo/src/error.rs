@@ -36,6 +36,8 @@ pub enum Error {
     NoBlockchainHeightFound,
     #[error("Block reward undo info is missing while unspending the utxo for block `{0}`")]
     MissingBlockRewardUndo(Id<GenBlock>),
+    #[error("Block reward type is invalid `{0}`")]
+    InvalidBlockRewardOutputType(Id<GenBlock>),
     #[error("Database error: `{0}`")]
     DBError(#[from] storage_result::Error),
 }

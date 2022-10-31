@@ -85,11 +85,6 @@ impl<B: storage::Backend> Store<B> {
         let res = map
             .prefix_iter(&())?
             .map(|(k, v)| crate::Result::<(OutPoint, Utxo)>::Ok((k, v.decode())))
-            .filter(|r| match r {
-                // remove OutputPurpose::Burn outputs to avoid attempting to spend them
-                Ok((_k, v)) => !v.output().purpose().is_burn(),
-                Err(_) => true,
-            })
             .collect::<Result<BTreeMap<OutPoint, Utxo>, _>>()?;
 
         Ok(res)

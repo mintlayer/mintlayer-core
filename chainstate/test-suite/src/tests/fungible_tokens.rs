@@ -1655,6 +1655,10 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
                     ))
                     .add_output(TxOutput::new(
                         OutputValue::Coin(token_min_issuance_fee),
+                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    ))
+                    .add_output(TxOutput::new(
+                        OutputValue::Coin(token_min_issuance_fee),
                         OutputPurpose::Burn,
                     ))
                     .build(),
