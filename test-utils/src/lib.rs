@@ -15,6 +15,7 @@
 
 pub mod nft_utils;
 pub mod random;
+pub mod test_dir;
 
 use crypto::random::distributions::uniform::SampleRange;
 use crypto::random::Rng;
