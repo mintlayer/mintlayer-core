@@ -111,6 +111,15 @@ where
     }
 }
 
+impl<M> GetMemoryUsage for Mempool<M>
+where
+    M: GetMemoryUsage + Send + Sync,
+{
+    fn get_memory_usage(&self) -> usize {
+        self.memory_usage_estimator.get_memory_usage()
+    }
+}
+
 impl<M> Mempool<M>
 where
     M: GetMemoryUsage + Send + std::marker::Sync,
@@ -185,10 +194,6 @@ where
         } else {
             ROLLING_FEE_BASE_HALFLIFE
         }
-    }
-
-    fn get_memory_usage(&self) -> usize {
-        self.memory_usage_estimator.get_memory_usage()
     }
 
     fn update_min_fee_rate(&self, rate: FeeRate) {
