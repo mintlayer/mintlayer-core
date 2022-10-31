@@ -21,8 +21,8 @@ use std::{
     time::Duration,
 };
 
-use super::in_memory_storage_wrapper::InMemoryStorageWrapper;
-use super::utils::add_block_with_locked_output;
+use super::helpers::add_block_with_locked_output;
+use super::helpers::in_memory_storage_wrapper::InMemoryStorageWrapper;
 
 use chainstate::ConnectTransactionError;
 use chainstate_test_framework::{TestFramework, TestStore, TransactionBuilder};

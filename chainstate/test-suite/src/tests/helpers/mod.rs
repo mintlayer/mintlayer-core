@@ -22,6 +22,8 @@ use common::{
     primitives::{Amount, BlockDistance},
 };
 
+pub mod in_memory_storage_wrapper;
+
 /// Adds a block with the locked output and returns input corresponding to this output.
 pub fn add_block_with_locked_output(
     tf: &mut TestFramework,

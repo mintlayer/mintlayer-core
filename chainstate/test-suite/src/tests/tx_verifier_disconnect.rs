@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::in_memory_storage_wrapper::InMemoryStorageWrapper;
+use super::helpers::in_memory_storage_wrapper::InMemoryStorageWrapper;
 use super::*;
 
 use chainstate_test_framework::{
@@ -44,7 +44,7 @@ fn setup() -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
 #[trace]
 #[case(Seed::from_entropy(), 5)]
 fn disconnect_tx_mainchain(#[case] seed: Seed, #[case] max_height: usize) {
-    ::utils::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (chain_config, storage, mut tf) = setup();
 
@@ -97,7 +97,7 @@ fn disconnect_tx_mainchain(#[case] seed: Seed, #[case] max_height: usize) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
-    ::utils::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (chain_config, storage, mut tf) = setup();
 

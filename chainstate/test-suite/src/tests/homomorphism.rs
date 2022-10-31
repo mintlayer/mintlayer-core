@@ -34,7 +34,7 @@ use common::{
 #[trace]
 #[case(Seed::from_entropy())]
 fn coins_homomorphism(#[case] seed: Seed) {
-    ::utils::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
         let storage1 = TestStore::new_empty().unwrap();
@@ -115,7 +115,7 @@ fn coins_homomorphism(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn tokens_homomorphism(#[case] seed: Seed) {
-    ::utils::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
         let storage1 = TestStore::new_empty().unwrap();

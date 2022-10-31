@@ -34,7 +34,7 @@ use utxo::UtxosStorageRead;
 #[trace]
 #[case(Seed::from_entropy())]
 fn store_coin(#[case] seed: Seed) {
-    ::utils::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
         let mut tf = TestFramework::builder().with_storage(storage.clone()).build();
         let mut rng = make_seedable_rng(seed);
@@ -105,7 +105,7 @@ fn store_coin(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn store_token(#[case] seed: Seed) {
-    ::utils::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
         let mut tf = TestFramework::builder().with_storage(storage.clone()).build();
         let mut rng = make_seedable_rng(seed);
@@ -185,7 +185,7 @@ fn store_token(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn reorg_store_coin(#[case] seed: Seed) {
-    ::utils::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
         let mut tf = TestFramework::builder().with_storage(storage.clone()).build();
         let genesis_id = tf.genesis().get_id();
@@ -338,7 +338,7 @@ fn reorg_store_coin(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn reorg_store_token(#[case] seed: Seed) {
-    ::utils::concurrency::model(move || {
+    utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
         let mut tf = TestFramework::builder().with_storage(storage.clone()).build();
         let genesis_id = tf.genesis().get_id();

@@ -33,7 +33,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id, Idable},
 };
 
-use super::utils::add_block_with_locked_output;
+use super::helpers::add_block_with_locked_output;
 use chainstate::BlockError;
 use chainstate::ChainstateError;
 use chainstate::ConnectTransactionError;

@@ -25,7 +25,7 @@ use common::{
 };
 
 fn genesis_check_ok(num_blocks: u64) {
-    ::utils::concurrency::model(move || {
+    utils::concurrency::model(move || {
         // Get initial storage from the test framework.
         let storage = {
             let mut tf = TestFramework::default();
@@ -53,7 +53,7 @@ fn genesis_check_ok(num_blocks: u64) {
 }
 
 fn genesis_check_err(num_blocks: u64) {
-    ::utils::concurrency::model(move || {
+    utils::concurrency::model(move || {
         // Two different configs with separate genesis IDs.
         let conf0 = ChainConfigBuilder::new(ChainType::Mainnet)
             .net_upgrades(NetUpgrades::unit_tests())

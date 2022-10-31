@@ -51,8 +51,7 @@ mod syncing_tests;
 mod tx_verification_simulation;
 mod tx_verifier_disconnect;
 
-mod in_memory_storage_wrapper;
-mod utils;
+mod helpers;
 
 type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
 
