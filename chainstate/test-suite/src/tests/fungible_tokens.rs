@@ -1841,7 +1841,7 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
                 amount: total_funds,
             })
             .into(),
-            OutputPurpose::Transfer(Destination::PublicKey(pub_key.clone())),
+            OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
         );
         let block = tf
             .make_block_builder()

@@ -84,7 +84,7 @@ pub fn create_utxo_data(
 
     Some((
         empty_witness(rng),
-        TxInput::new(outsrc.clone(), index as u32),
+        TxInput::new(outsrc, index as u32),
         new_output,
     ))
 }
