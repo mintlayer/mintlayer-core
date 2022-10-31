@@ -53,6 +53,24 @@ macro_rules! test_root {
     }
 }
 
+/// Outcome of an attempt to create a directory
+#[derive(Eq, PartialEq, Clone, Copy, Debug)]
+pub enum DirCreationOutcome {
+    Created,
+    AlreadyExists,
+}
+
+/// Create a directory, signalling whether it was created or already existed
+pub fn try_create_dir(path: impl AsRef<Path>) -> io::Result<DirCreationOutcome> {
+    match fs::create_dir(path.as_ref()) {
+        Ok(()) => Ok(DirCreationOutcome::Created),
+        Err(e) => match e.kind() {
+            std::io::ErrorKind::AlreadyExists => Ok(DirCreationOutcome::AlreadyExists),
+            _ => Err(e),
+        },
+    }
+}
+
 /// Root directory for a test run.
 ///
 /// Corresponds to a working directory for a test binary run
@@ -71,21 +89,17 @@ impl TestRoot {
             let path = top_path.as_ref().join(format!("run_{:08x}", rng.gen::<u32>()));
 
             // Attempt to create the candidate directory
-            match fs::create_dir(&path) {
-                Ok(()) => {
+            match try_create_dir(&path)? {
+                DirCreationOutcome::Created => {
                     // Successfully created
                     let counter = AtomicU32::new(0);
                     return Ok(Self(Arc::new(TestRootImpl { path, counter })));
                 }
-                Err(e) => match e.kind() {
+                DirCreationOutcome::AlreadyExists => {
                     // If directory already exists, continue the loop to try again.
-                    std::io::ErrorKind::AlreadyExists => (),
-                    // Bail on any other error.
-                    _ => return Err(e),
-                },
+                    std::thread::sleep(delay);
+                }
             }
-
-            std::thread::sleep(delay);
         }
 
         Err(io::Error::new(
@@ -97,7 +111,7 @@ impl TestRoot {
     /// Create the new test subdirectory
     pub fn fresh_test_dir(&self, name: impl AsRef<str>) -> TestDir {
         let seq_no = self.0.counter.fetch_add(1, Ordering::SeqCst);
-        let name = name.as_ref().replace(&['/', ':', '\\'], "_");
+        let name = name.as_ref().replace(['/', ':', '\\'], "_");
         let path = self.0.path.join(format!("case_{:08x}_{}", seq_no, name));
         fs::create_dir(&path).expect("directory creation to succeed");
         TestDir { path }

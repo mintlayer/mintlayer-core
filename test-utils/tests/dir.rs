@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use test_utils::test_dir::*;
+
 #[test]
 fn existing_dir_error() {
     pub const TARGET_TMPDIR: &str = env!("CARGO_TARGET_TMPDIR");
     // Target tmpdir should have been created by cargo, check we get the expected error code
-    match std::fs::create_dir(TARGET_TMPDIR) {
-        Ok(()) => panic!("expected dir creation to fail"),
-        Err(e) => assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists),
-    }
+    assert_eq!(
+        try_create_dir(TARGET_TMPDIR).unwrap(),
+        DirCreationOutcome::AlreadyExists
+    );
 }
