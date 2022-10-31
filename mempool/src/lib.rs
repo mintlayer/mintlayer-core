@@ -54,7 +54,7 @@ pub async fn make_mempool<M>(
     memory_usage_estimator: M,
 ) -> crate::Result<Box<dyn MempoolInterface>>
 where
-    M: GetMemoryUsage + 'static + Send + std::marker::Sync,
+    M: GetMemoryUsage + 'static + Send + Sync,
 {
     Ok(Box::new(
         MempoolInterfaceImpl::new(

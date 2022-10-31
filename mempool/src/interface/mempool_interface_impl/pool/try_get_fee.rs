@@ -30,7 +30,7 @@ pub trait TryGetFee {
 #[async_trait::async_trait]
 impl<M> TryGetFee for Mempool<M>
 where
-    M: GetMemoryUsage + Send + std::marker::Sync,
+    M: GetMemoryUsage + Send + Sync,
 {
     // TODO this calculation is already done in ChainState, reuse it
     async fn try_get_fee(&self, tx: &SignedTransaction) -> Result<Amount, TxValidationError> {

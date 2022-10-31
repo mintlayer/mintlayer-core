@@ -88,7 +88,7 @@ newtype! {
     struct Conflicts(BTreeSet<Id<Transaction>>);
 }
 
-pub struct Mempool<M: GetMemoryUsage + 'static + Send + std::marker::Sync> {
+pub struct Mempool<M: GetMemoryUsage + 'static + Send + Sync> {
     #[allow(unused)]
     chain_config: Arc<ChainConfig>,
     store: MempoolStore,
@@ -104,7 +104,7 @@ pub struct Mempool<M: GetMemoryUsage + 'static + Send + std::marker::Sync> {
 
 impl<M> std::fmt::Debug for Mempool<M>
 where
-    M: GetMemoryUsage + 'static + Send + std::marker::Sync,
+    M: GetMemoryUsage + 'static + Send + Sync,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.store)
@@ -122,7 +122,7 @@ where
 
 impl<M> Mempool<M>
 where
-    M: GetMemoryUsage + Send + std::marker::Sync,
+    M: GetMemoryUsage + Send + Sync,
 {
     pub fn new(
         chain_config: Arc<ChainConfig>,
@@ -183,7 +183,6 @@ where
         let mut rolling_fee_rate = self.rolling_fee_rate.write();
         (*rolling_fee_rate).set_block_since_last_rolling_fee_bump(true);
     }
-    //
 
     fn rolling_fee_halflife(&self) -> Time {
         let mem_usage = self.get_memory_usage();
