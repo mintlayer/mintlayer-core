@@ -42,7 +42,7 @@ pub enum OutputPurpose {
     #[codec(index = 2)]
     StakeLock(Destination),
     #[codec(index = 3)]
-    Burn, // TODO: Add test that attempts to spend OutputPurpose::Burn
+    Burn,
 }
 
 impl OutputPurpose {

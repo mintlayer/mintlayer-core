@@ -462,6 +462,76 @@ fn duplicate_odd_tx_in_the_same_block(#[case] seed: Seed) {
     });
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_spend_burned_output_same_block(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+
+        let first_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
+                OutputPurpose::Burn,
+            ))
+            .build();
+        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
+
+        let block = tf.make_block_builder().with_transactions(vec![first_tx, second_tx]).build();
+
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendBurnedAmount
+            ))
+        );
+        assert_eq!(tf.best_block_id(), tf.genesis().get_id());
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_spend_burned_output_different_blocks(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+
+        let first_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
+                OutputPurpose::Burn,
+            ))
+            .build();
+        let block = tf.make_block_builder().with_transactions(vec![first_tx.clone()]).build();
+        tf.process_block(block, BlockSource::Local).unwrap();
+
+        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
+        let block_2 = tf.make_block_builder().with_transactions(vec![second_tx]).build();
+        assert_eq!(
+            tf.process_block(block_2, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendBurnedAmount
+            ))
+        );
+    });
+}
+
 // Creates a transaction with an input based on the first transaction from the genesis block.
 fn tx_from_genesis(genesis: &Genesis, rng: &mut impl Rng, output_value: u128) -> SignedTransaction {
     TransactionBuilder::new()
