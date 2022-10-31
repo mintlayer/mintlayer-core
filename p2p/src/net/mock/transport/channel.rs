@@ -166,12 +166,22 @@ mod tests {
         let mut server_stream = server_res.unwrap().0;
         let mut peer_stream = peer_res.unwrap();
 
-        let msg = Message::Request {
-            request_id: MockRequestId::new(1337u64),
-            request: Request::BlockListRequest(BlockListRequest::new(vec![])),
-        };
-        peer_stream.send(msg.clone()).await.unwrap();
+        let request_id = MockRequestId::new(1337u64);
+        let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
+        peer_stream
+            .send(Message::Request {
+                request_id,
+                request: request.clone(),
+            })
+            .await
+            .unwrap();
 
-        assert_eq!(server_stream.recv().await.unwrap().unwrap(), msg);
+        assert_eq!(
+            server_stream.recv().await.unwrap().unwrap(),
+            Message::Request {
+                request_id,
+                request,
+            }
+        );
     }
 }

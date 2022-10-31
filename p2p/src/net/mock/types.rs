@@ -225,7 +225,7 @@ pub enum HandshakeMessage {
     },
 }
 
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 pub enum Message {
     Handshake(HandshakeMessage),
     Request {
