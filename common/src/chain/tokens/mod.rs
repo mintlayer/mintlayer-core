@@ -95,12 +95,6 @@ pub struct TokenIssuanceV1 {
     pub metadata_uri: Vec<u8>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub struct TokenBurnV1 {
-    pub token_id: TokenId,
-    pub amount_to_burn: Amount,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum TokenData {
     /// TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.
@@ -109,11 +103,8 @@ pub enum TokenData {
     /// New token creation
     #[codec(index = 2)]
     TokenIssuanceV1(Box<TokenIssuanceV1>),
-    /// Burning a token or NFT
-    #[codec(index = 3)]
-    TokenBurnV1(TokenBurnV1),
     // A new NFT creation
-    #[codec(index = 4)]
+    #[codec(index = 3)]
     NftIssuanceV1(Box<NftIssuanceV1>),
     // TODO: These types will be implemented in the future PRs
     // // Increase amount of tokens
@@ -133,6 +124,12 @@ impl From<NftIssuanceV1> for TokenData {
 impl From<TokenIssuanceV1> for TokenData {
     fn from(d: TokenIssuanceV1) -> Self {
         Self::TokenIssuanceV1(Box::new(d))
+    }
+}
+
+impl From<TokenTransferV1> for OutputValue {
+    fn from(d: TokenTransferV1) -> Self {
+        TokenData::TokenTransferV1(d).into()
     }
 }
 

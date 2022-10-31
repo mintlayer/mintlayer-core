@@ -13,14 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::{BlockError, BlockSource, ChainstateError, ConnectTransactionError, TokensError};
+use chainstate::{BlockError, BlockSource, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
 use common::{
     chain::{
         signature::inputsig::InputWitness,
-        tokens::{
-            token_id, Metadata, NftIssuanceV1, OutputValue, TokenBurnV1, TokenData, TokenTransferV1,
-        },
+        tokens::{token_id, Metadata, NftIssuanceV1, OutputValue, TokenData, TokenTransferV1},
         Destination, OutputPurpose, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
@@ -118,12 +116,12 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenBurnV1(TokenBurnV1 {
+                        TokenTransferV1 {
                             token_id,
-                            amount_to_burn: Amount::from_atoms(1),
-                        })
+                            amount: Amount::from_atoms(1),
+                        }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        OutputPurpose::Burn,
                     ))
                     .add_output(TxOutput::new(
                         OutputValue::Coin(Amount::from_atoms(123455)),
@@ -162,14 +160,12 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             )
             .build_and_process();
 
-        assert!(matches!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::TokensError(
-                    TokensError::AttemptToTransferBurnedTokens
-                ))
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::MissingOutputOrSpent
             ))
-        ));
+        );
 
         // Let's add C1
         let output_value = OutputValue::Coin(Amount::from_atoms(123453));
@@ -259,12 +255,12 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenBurnV1(TokenBurnV1 {
+                        TokenTransferV1 {
                             token_id,
-                            amount_to_burn: Amount::from_atoms(1),
-                        })
+                            amount: Amount::from_atoms(1),
+                        }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        OutputPurpose::Burn,
                     ))
                     .add_output(TxOutput::new(
                         OutputValue::Coin(Amount::from_atoms(123454)),
@@ -294,12 +290,12 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenBurnV1(TokenBurnV1 {
+                        TokenTransferV1 {
                             token_id,
-                            amount_to_burn: Amount::from_atoms(1),
-                        })
+                            amount: Amount::from_atoms(1),
+                        }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        OutputPurpose::Burn,
                     ))
                     .add_output(TxOutput::new(
                         OutputValue::Coin(Amount::from_atoms(123454)),

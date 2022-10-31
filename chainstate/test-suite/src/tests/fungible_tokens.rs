@@ -20,9 +20,7 @@ use chainstate::{
     ConnectTransactionError, TokensError, TxIndexError,
 };
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
-use common::chain::tokens::{
-    Metadata, NftIssuanceV1, TokenBurnV1, TokenIssuanceV1, TokenTransferV1,
-};
+use common::chain::tokens::{Metadata, NftIssuanceV1, TokenIssuanceV1, TokenTransferV1};
 use common::primitives::{id, Id};
 use common::{
     chain::{
@@ -512,12 +510,12 @@ fn token_transfer_test(#[case] seed: Seed) {
             )
             .build_and_process();
 
-        assert!(matches!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::MissingOutputOrSpent
             ))
-        ));
+        );
 
         // Try to transfer zero amount
         let result = tf
@@ -707,7 +705,7 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
 
         // Try to process tx with insufficient token fees
         assert!(matches!(
-            dbg!(result),
+            result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::TokensError(
                     TokensError::InsufficientTokenFees(_, _)
@@ -911,12 +909,12 @@ fn burn_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenBurnV1(TokenBurnV1 {
+                        TokenTransferV1 {
                             token_id,
-                            amount_to_burn: Amount::from_atoms(total_funds.into_atoms() + 1),
-                        })
+                            amount: Amount::from_atoms(total_funds.into_atoms() + 1),
+                        }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        OutputPurpose::Burn,
                     ))
                     .build(),
             )
@@ -939,12 +937,12 @@ fn burn_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenBurnV1(TokenBurnV1 {
+                        TokenTransferV1 {
                             token_id,
-                            amount_to_burn: quarter_funds,
-                        })
+                            amount: quarter_funds,
+                        }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        OutputPurpose::Burn,
                     ))
                     .add_output(TxOutput::new(
                         TokenData::TokenTransferV1(TokenTransferV1 {
@@ -973,12 +971,12 @@ fn burn_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenBurnV1(TokenBurnV1 {
+                        TokenTransferV1 {
                             token_id,
-                            amount_to_burn: quarter_funds,
-                        })
+                            amount: quarter_funds,
+                        }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        OutputPurpose::Burn,
                     ))
                     .add_output(TxOutput::new(
                         TokenData::TokenTransferV1(TokenTransferV1 {
@@ -1007,12 +1005,12 @@ fn burn_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenBurnV1(TokenBurnV1 {
+                        TokenTransferV1 {
                             token_id,
-                            amount_to_burn: quarter_funds,
-                        })
+                            amount: quarter_funds,
+                        }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        OutputPurpose::Burn,
                     ))
                     .build(),
             )
@@ -1032,24 +1030,22 @@ fn burn_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenTransferV1 {
                             token_id,
-                            amount: total_funds,
-                        })
+                            amount: quarter_funds,
+                        }
                         .into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .build(),
             )
             .build_and_process();
-        assert!(matches!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::TokensError(
-                    TokensError::AttemptToTransferBurnedTokens
-                ))
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendBurnedAmount
             ))
-        ));
+        );
     })
 }
 
@@ -1129,12 +1125,12 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenBurnV1(TokenBurnV1 {
+                        TokenTransferV1 {
                             token_id,
-                            amount_to_burn: total_funds,
-                        })
+                            amount: total_funds,
+                        }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        OutputPurpose::Burn,
                     ))
                     .add_output(TxOutput::new(
                         OutputValue::Coin(Amount::from_atoms(123455)),
@@ -1174,14 +1170,12 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             )
             .build_and_process();
 
-        assert!(matches!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::TokensError(
-                    TokensError::AttemptToTransferBurnedTokens
-                ))
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::MissingOutputOrSpent
             ))
-        ));
+        );
 
         // Let's add C1
         let output_value = OutputValue::Coin(Amount::from_atoms(123453));
@@ -1273,12 +1267,12 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenBurnV1(TokenBurnV1 {
+                        TokenTransferV1 {
                             token_id,
-                            amount_to_burn: total_funds,
-                        })
+                            amount: total_funds,
+                        }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        OutputPurpose::Burn,
                     ))
                     .add_output(TxOutput::new(
                         OutputValue::Coin(Amount::from_atoms(123454)),
@@ -1309,12 +1303,12 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenBurnV1(TokenBurnV1 {
+                        TokenTransferV1 {
                             token_id,
-                            amount_to_burn: total_funds,
-                        })
+                            amount: total_funds,
+                        }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        OutputPurpose::Burn,
                     ))
                     .add_output(TxOutput::new(
                         OutputValue::Coin(Amount::from_atoms(123454)),
@@ -1351,14 +1345,12 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             )
             .build_and_process();
 
-        assert!(matches!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::TxIndexError(
-                    TxIndexError::MissingOutputOrSpent
-                ))
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TxIndexError(TxIndexError::MissingOutputOrSpent)
             ))
-        ));
+        );
     })
 }
 
@@ -1866,12 +1858,12 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
 
         // Check if it burn
         let reward_output = TxOutput::new(
-            TokenData::TokenBurnV1(TokenBurnV1 {
+            TokenTransferV1 {
                 token_id: TokenId::random_using(&mut rng),
-                amount_to_burn: total_funds,
-            })
+                amount: total_funds,
+            }
             .into(),
-            OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+            OutputPurpose::Burn,
         );
         let block = tf
             .make_block_builder()
@@ -1926,17 +1918,6 @@ fn chosen_hashes_for_token_data() {
             0xbe6ad7ed36c9f898fae21bf5f3164c090c979a5b4083643a60276028012db15a
         "#]]
     .assert_debug_eq(&Id::<NftIssuanceV1>::new(hash_stream.finalize().into()).get());
-
-    // Token burn
-    let token_data = TokenData::TokenBurnV1(TokenBurnV1 {
-        token_id: TokenId::zero(),
-        amount_to_burn: Amount::from_atoms(1234567890),
-    });
-    id::hash_encoded_to(&token_data, &mut hash_stream);
-    expect![[r#"
-            0xf33c5e6a8bc8575ee5f5f747f2fdb1f7c77f6dc17e7bca5b13f500f672f68b3c
-        "#]]
-    .assert_debug_eq(&Id::<TokenData>::new(hash_stream.finalize().into()).get());
 
     // Token Transfer
     let token_data = TokenData::TokenTransferV1(TokenTransferV1 {

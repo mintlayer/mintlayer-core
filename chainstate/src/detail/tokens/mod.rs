@@ -44,19 +44,6 @@ pub fn check_tokens_transfer_data(
     Ok(())
 }
 
-pub fn check_tokens_burn_data(
-    tx: &Transaction,
-    source_block_id: &Id<Block>,
-    amount_to_burn: &Amount,
-) -> Result<(), TokensError> {
-    // Check amount
-    ensure!(
-        amount_to_burn != &Amount::from_atoms(0),
-        TokensError::BurnZeroTokens(tx.get_id(), *source_block_id)
-    );
-    Ok(())
-}
-
 pub fn check_nft_issuance_data(
     chain_config: &ChainConfig,
     issuance: &NftIssuanceV1,
@@ -183,9 +170,6 @@ pub fn check_tokens_data(
                 tx.get_id(),
                 source_block_id,
             )?;
-        }
-        TokenData::TokenBurnV1(burn) => {
-            check_tokens_burn_data(tx, &source_block_id, &burn.amount_to_burn)?;
         }
         TokenData::NftIssuanceV1(issuance) => {
             check_nft_issuance_data(chain_config, issuance, tx.get_id(), source_block_id)?

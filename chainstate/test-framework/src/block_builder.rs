@@ -83,27 +83,29 @@ impl<'f> BlockBuilder<'f> {
     pub fn add_test_transaction(mut self, rng: &mut impl Rng) -> Self {
         let utxo_set = self.framework.storage.read_utxo_set().unwrap();
 
-        // TODO: get n utxos as inputs and create m new outputs
-        let index = rng.gen_range(0..utxo_set.len());
-        let (outpoint, utxo) = utxo_set.iter().nth(index).unwrap();
-        if !self.used_utxo.contains(outpoint) {
-            let new_utxo_data = create_multiple_utxo_data(
-                &self.framework.chainstate,
-                outpoint.tx_id(),
-                outpoint.output_index() as usize,
-                utxo.output(),
-                rng,
-            );
-
-            if let Some((witness, input, output)) = new_utxo_data {
-                self.used_utxo.insert(outpoint.clone());
-                return self.add_transaction(
-                    SignedTransaction::new(
-                        Transaction::new(0, vec![input], output, 0).unwrap(),
-                        vec![witness],
-                    )
-                    .expect("invalid witness count"),
+        if !utxo_set.is_empty() {
+            // TODO: get n utxos as inputs and create m new outputs
+            let index = rng.gen_range(0..utxo_set.len());
+            let (outpoint, utxo) = utxo_set.iter().nth(index).unwrap();
+            if !self.used_utxo.contains(outpoint) {
+                let new_utxo_data = create_multiple_utxo_data(
+                    &self.framework.chainstate,
+                    outpoint.tx_id(),
+                    outpoint.output_index() as usize,
+                    utxo.output(),
+                    rng,
                 );
+
+                if let Some((witness, input, output)) = new_utxo_data {
+                    self.used_utxo.insert(outpoint.clone());
+                    return self.add_transaction(
+                        SignedTransaction::new(
+                            Transaction::new(0, vec![input], output, 0).unwrap(),
+                            vec![witness],
+                        )
+                        .expect("invalid witness count"),
+                    );
+                }
             }
         }
         self
