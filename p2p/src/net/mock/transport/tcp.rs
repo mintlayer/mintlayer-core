@@ -189,13 +189,23 @@ mod tests {
         let mut server_stream = server_res.unwrap().0;
         let mut peer_stream = peer_res.unwrap();
 
-        let msg = Message::Request {
-            request_id: MockRequestId::new(1337u64),
-            request: Request::BlockListRequest(BlockListRequest::new(vec![])),
-        };
-        peer_stream.send(msg.clone()).await.unwrap();
+        let request_id = MockRequestId::new(1337u64);
+        let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
+        peer_stream
+            .send(Message::Request {
+                request_id,
+                request: request.clone(),
+            })
+            .await
+            .unwrap();
 
-        assert_eq!(server_stream.recv().await.unwrap().unwrap(), msg);
+        assert_eq!(
+            server_stream.recv().await.unwrap().unwrap(),
+            Message::Request {
+                request_id,
+                request,
+            }
+        );
     }
 
     #[tokio::test]
@@ -208,19 +218,38 @@ mod tests {
         let mut server_stream = server_res.unwrap().0;
         let mut peer_stream = peer_res.unwrap();
 
-        let msg1 = Message::Request {
-            request_id: MockRequestId::new(1337u64),
-            request: Request::BlockListRequest(BlockListRequest::new(vec![])),
-        };
-        peer_stream.send(msg1.clone()).await.unwrap();
+        let id_1 = MockRequestId::new(1337u64);
+        let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
+        peer_stream
+            .send(Message::Request {
+                request_id: id_1,
+                request: request.clone(),
+            })
+            .await
+            .unwrap();
 
-        let msg2 = Message::Request {
-            request_id: MockRequestId::new(1338u64),
-            request: Request::BlockListRequest(BlockListRequest::new(vec![])),
-        };
-        peer_stream.send(msg2.clone()).await.unwrap();
+        let id_2 = MockRequestId::new(1338u64);
+        peer_stream
+            .send(Message::Request {
+                request_id: id_2,
+                request: request.clone(),
+            })
+            .await
+            .unwrap();
 
-        assert_eq!(server_stream.recv().await.unwrap().unwrap(), msg1);
-        assert_eq!(server_stream.recv().await.unwrap().unwrap(), msg2);
+        assert_eq!(
+            server_stream.recv().await.unwrap().unwrap(),
+            Message::Request {
+                request_id: id_1,
+                request: request.clone(),
+            }
+        );
+        assert_eq!(
+            server_stream.recv().await.unwrap().unwrap(),
+            Message::Request {
+                request_id: id_2,
+                request,
+            }
+        );
     }
 }

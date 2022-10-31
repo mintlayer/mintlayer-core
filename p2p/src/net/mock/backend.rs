@@ -253,8 +253,6 @@ where
     }
 
     async fn subscribe(&mut self, topics: BTreeSet<PubSubTopic>) {
-        let subscription = MockEvent::SendMessage(Box::new(Message::Subscribe { topics }));
-
         // Send the message to all peers in pseudorandom order.
         // TODO: This can be moved to a separate function and reused in the `announce_data`
         // function, when we no longer need the special logic for the `InsufficientPeers` error.
@@ -262,7 +260,10 @@ where
             .peers
             .iter()
             .map(|(id, p)| {
-                p.tx.send(subscription.clone()).inspect_err(move |e| {
+                p.tx.send(MockEvent::SendMessage(Box::new(Message::Subscribe {
+                    topics: topics.clone(),
+                })))
+                .inspect_err(move |e| {
                     log::error!("Failed to send subscription to {id:?} peer: {e:?}")
                 })
             })
@@ -278,7 +279,6 @@ where
     /// topic.
     async fn announce_data(&mut self, topic: PubSubTopic, message: Vec<u8>) -> crate::Result<()> {
         let announcement = message::Announcement::decode(&mut &message[..])?;
-        let announcement = MockEvent::SendMessage(Box::new(Message::Announcement { announcement }));
 
         // Send the message to peers in pseudorandom order.
         let mut futures: Vec<_> = self
@@ -286,9 +286,13 @@ where
             .iter()
             .filter(|(_, peer)| peer.subscriptions.contains(&topic))
             .map(|(id, peer)| {
-                peer.tx.send(announcement.clone()).inspect_err(move |e| {
-                    log::error!("Failed to send announcement to peer {id}: {e:?}")
-                })
+                peer.tx
+                    .send(MockEvent::SendMessage(Box::new(Message::Announcement {
+                        announcement: announcement.clone(),
+                    })))
+                    .inspect_err(move |e| {
+                        log::error!("Failed to send announcement to peer {id}: {e:?}")
+                    })
             })
             .collect();
         futures.shuffle(&mut make_pseudo_rng());
