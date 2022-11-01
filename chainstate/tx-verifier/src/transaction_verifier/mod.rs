@@ -664,40 +664,33 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         &self,
         tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
-    ) -> bool {
+    ) -> Result<bool, ConnectTransactionError> {
         match tx_source {
             TransactionSource::Chain(block_id) => {
-                let current_block_height =
-                    match self.storage_ref.get_gen_block_index(&(*block_id).into()) {
-                        Ok(block_index) => match block_index {
-                            Some(block_index) => block_index.block_height(),
-                            None => return false,
-                        },
-                        Err(_) => return false,
-                    };
-
-                let best_block_height = match self.storage_ref.get_gen_block_index(&self.best_block)
-                {
-                    Ok(block_index) => match block_index {
-                        Some(block_index) => block_index.block_height(),
-                        None => return false,
-                    },
-                    Err(_) => return false,
-                };
+                let current_block_height = self
+                    .storage_ref
+                    .get_gen_block_index(&(*block_id).into())?
+                    .ok_or(ConnectTransactionError::BlockIndexCouldNotBeLoaded(
+                        (*block_id).into(),
+                    ))?
+                    .block_height();
+                let best_block_height = self
+                    .storage_ref
+                    .get_gen_block_index(&self.best_block)?
+                    .ok_or(ConnectTransactionError::BlockIndexCouldNotBeLoaded(
+                        self.best_block,
+                    ))?
+                    .block_height();
 
                 if current_block_height < best_block_height {
-                    false
+                    Ok(false)
                 } else {
-                    match self.read_block_undo(tx_source) {
-                        Ok(block_undo) => !block_undo.has_children_of(tx_id),
-                        Err(_) => false,
-                    }
+                    Ok(!self.read_block_undo(tx_source)?.has_children_of(tx_id))
                 }
             }
-            TransactionSource::Mempool => match self.read_block_undo(tx_source) {
-                Ok(block_undo) => !block_undo.has_children_of(tx_id),
-                Err(_) => false,
-            },
+            TransactionSource::Mempool => {
+                Ok(!self.read_block_undo(tx_source)?.has_children_of(tx_id))
+            }
         }
     }
 

@@ -16,6 +16,7 @@
 use super::helpers::in_memory_storage_wrapper::InMemoryStorageWrapper;
 use super::*;
 
+use chainstate::ConnectTransactionError;
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
 };
@@ -63,9 +64,9 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
             let tx_id = tx.transaction().get_id();
 
             // check if can be disconnected
-            assert!(
-                !verifier.can_disconnect_transaction(&TransactionSource::Chain(block_id), &tx_id),
-            );
+            assert!(!verifier
+                .can_disconnect_transaction(&TransactionSource::Chain(block_id), &tx_id)
+                .unwrap());
 
             // try to disconnect anyway
             let mut tmp_verifier = verifier.derive_child();
@@ -86,7 +87,9 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
         let tx = block.transactions().get(0).unwrap();
         let tx_id = tx.transaction().get_id();
 
-        assert!(verifier.can_disconnect_transaction(&TransactionSource::Chain(block_id), &tx_id),);
+        assert!(verifier
+            .can_disconnect_transaction(&TransactionSource::Chain(block_id), &tx_id)
+            .unwrap());
         verifier
             .disconnect_transaction(&TransactionSource::Chain(block_id), tx)
             .unwrap();
@@ -164,18 +167,28 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
         {
             // derived verifier that didn't connect a tx should not be able to disconnect it
             let mut child_verifier = verifier.derive_child();
-            assert!(!child_verifier.can_disconnect_transaction(
-                &TransactionSource::Mempool,
-                &tx1.transaction().get_id()
-            ));
+            assert_eq!(
+                child_verifier
+                    .can_disconnect_transaction(
+                        &TransactionSource::Mempool,
+                        &tx1.transaction().get_id(),
+                    )
+                    .unwrap_err(),
+                ConnectTransactionError::MissingMempoolTxsUndo,
+            );
             assert_eq!(
                 child_verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1),
                 Err(chainstate::ConnectTransactionError::MissingMempoolTxsUndo)
             );
-            assert!(!child_verifier.can_disconnect_transaction(
-                &TransactionSource::Mempool,
-                &tx2.transaction().get_id()
-            ));
+            assert_eq!(
+                child_verifier
+                    .can_disconnect_transaction(
+                        &TransactionSource::Mempool,
+                        &tx2.transaction().get_id()
+                    )
+                    .unwrap_err(),
+                ConnectTransactionError::MissingMempoolTxsUndo,
+            );
             assert_eq!(
                 child_verifier.disconnect_transaction(&TransactionSource::Mempool, &tx2),
                 Err(chainstate::ConnectTransactionError::MissingMempoolTxsUndo)
@@ -184,9 +197,11 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
 
         // disconnect should work in proper order only: tx2 and then tx1
         assert!(!verifier
-            .can_disconnect_transaction(&TransactionSource::Mempool, &tx1.transaction().get_id()));
+            .can_disconnect_transaction(&TransactionSource::Mempool, &tx1.transaction().get_id())
+            .unwrap());
         assert!(verifier
-            .can_disconnect_transaction(&TransactionSource::Mempool, &tx2.transaction().get_id()));
+            .can_disconnect_transaction(&TransactionSource::Mempool, &tx2.transaction().get_id())
+            .unwrap());
 
         assert_eq!(
             verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1),
@@ -197,7 +212,8 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
         verifier.disconnect_transaction(&TransactionSource::Mempool, &tx2).unwrap();
 
         assert!(verifier
-            .can_disconnect_transaction(&TransactionSource::Mempool, &tx1.transaction().get_id()));
+            .can_disconnect_transaction(&TransactionSource::Mempool, &tx1.transaction().get_id())
+            .unwrap());
         verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1).unwrap();
     });
 }
