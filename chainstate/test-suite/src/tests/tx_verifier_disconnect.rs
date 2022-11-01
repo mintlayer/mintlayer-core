@@ -42,18 +42,18 @@ fn setup() -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy(), 5)]
-fn disconnect_tx_mainchain(#[case] seed: Seed, #[case] max_height: usize) {
+#[case(Seed::from_entropy(), 2)]
+fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: usize) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (chain_config, storage, mut tf) = setup();
 
         let genesis_id = tf.genesis().get_id();
-        tf.create_chain(&genesis_id.into(), max_height, &mut rng).unwrap();
+        tf.create_chain(&genesis_id.into(), num_blocks, &mut rng).unwrap();
 
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
-        for height in 1..max_height {
+        for height in 1..num_blocks {
             let block_id = match tf.block_id(height as u64).classify(&chain_config) {
                 GenBlockId::Genesis(_) => unreachable!(),
                 GenBlockId::Block(id) => id,
@@ -78,7 +78,7 @@ fn disconnect_tx_mainchain(#[case] seed: Seed, #[case] max_height: usize) {
         }
 
         // only txs from the last block can be disconnected
-        let block_id = match tf.block_id(max_height as u64).classify(&chain_config) {
+        let block_id = match tf.block_id(num_blocks as u64).classify(&chain_config) {
             GenBlockId::Genesis(_) => unreachable!(),
             GenBlockId::Block(id) => id,
         };

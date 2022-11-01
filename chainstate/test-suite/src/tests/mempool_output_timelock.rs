@@ -13,20 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
-
 use super::helpers::add_block_with_locked_output;
 use super::helpers::in_memory_storage_wrapper::InMemoryStorageWrapper;
 
 use chainstate::ConnectTransactionError;
 use chainstate_test_framework::{TestFramework, TestStore, TransactionBuilder};
-use common::time_getter::TimeGetter;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, config::Builder as ConfigBuilder,
@@ -39,26 +30,6 @@ use tx_verifier::transaction_verifier::{TransactionSourceForConnect, Transaction
 fn setup() -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();
     let tf = TestFramework::builder().with_storage(storage.clone()).build();
-
-    let chain_config = ConfigBuilder::test_chain().build();
-    let storage = InMemoryStorageWrapper::new(storage, chain_config.clone());
-
-    (chain_config, storage, tf)
-}
-
-fn setup_with_time_getter(
-    current_time: &Arc<AtomicU64>,
-) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
-    let storage = TestStore::new_empty().unwrap();
-
-    let current_time_ = Arc::clone(current_time);
-    let time_getter = TimeGetter::new(Arc::new(move || {
-        Duration::from_secs(current_time_.load(Ordering::SeqCst))
-    }));
-    let tf = TestFramework::builder()
-        .with_time_getter(time_getter)
-        .with_storage(storage.clone())
-        .build();
 
     let chain_config = ConfigBuilder::test_chain().build();
     let storage = InMemoryStorageWrapper::new(storage, chain_config.clone());
@@ -198,8 +169,7 @@ fn output_lock_for_block_count() {
 #[test]
 fn output_lock_until_time() {
     utils::concurrency::model(|| {
-        let current_time = Arc::new(AtomicU64::new(1));
-        let (chain_config, storage, mut tf) = setup_with_time_getter(&current_time);
+        let (chain_config, storage, mut tf) = setup();
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
         let genesis_timestamp = tf.genesis().timestamp();
@@ -215,7 +185,7 @@ fn output_lock_until_time() {
         // Check that the last block allows to unlock the output.
         assert_eq!(median_block_time(&block_times), lock_time);
 
-        current_time.store(*block_times.last().unwrap(), Ordering::SeqCst);
+        tf.set_time_seconds_since_epoch(*block_times.last().unwrap());
 
         let expected_height = 1;
         let locked_output = add_block_with_locked_output(
@@ -288,8 +258,7 @@ fn output_lock_until_time() {
 #[test]
 fn output_lock_for_seconds() {
     utils::concurrency::model(|| {
-        let current_time = Arc::new(AtomicU64::new(1));
-        let (chain_config, storage, mut tf) = setup_with_time_getter(&current_time);
+        let (chain_config, storage, mut tf) = setup();
         let mut verifier = TransactionVerifier::new(&storage, &chain_config);
 
         let genesis_timestamp = tf.genesis().timestamp();
@@ -306,7 +275,7 @@ fn output_lock_for_seconds() {
         // Check that the last block allows to unlock the output.
         assert_eq!(median_block_time(&block_times), unlock_time);
 
-        current_time.store(*block_times.last().unwrap(), Ordering::SeqCst);
+        tf.set_time_seconds_since_epoch(*block_times.last().unwrap());
 
         let expected_height = 1;
         let locked_output = add_block_with_locked_output(

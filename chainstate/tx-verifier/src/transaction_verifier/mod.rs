@@ -446,6 +446,25 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         Ok(())
     }
 
+    fn read_block_undo(
+        &self,
+        tx_source: &TransactionSource,
+    ) -> Result<BlockUndo, ConnectTransactionError> {
+        match self.utxo_block_undo.get(tx_source) {
+            Some(entry) => Ok(entry.undo.clone()),
+            None => match tx_source {
+                TransactionSource::Chain(block_id) => {
+                    let block_undo = self
+                        .storage_ref
+                        .get_undo_data(*block_id)?
+                        .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
+                    Ok(block_undo)
+                }
+                TransactionSource::Mempool => Err(ConnectTransactionError::MissingMempoolTxsUndo),
+            },
+        }
+    }
+
     fn fetch_block_undo(
         &mut self,
         tx_source: &TransactionSource,
@@ -642,7 +661,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
     }
 
     pub fn can_disconnect_transaction(
-        &mut self,
+        &self,
         tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
     ) -> bool {
@@ -669,13 +688,13 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 if current_block_height < best_block_height {
                     false
                 } else {
-                    match self.fetch_block_undo(tx_source) {
+                    match self.read_block_undo(tx_source) {
                         Ok(block_undo) => !block_undo.has_children_of(tx_id),
                         Err(_) => false,
                     }
                 }
             }
-            TransactionSource::Mempool => match self.fetch_block_undo(tx_source) {
+            TransactionSource::Mempool => match self.read_block_undo(tx_source) {
                 Ok(block_undo) => !block_undo.has_children_of(tx_id),
                 Err(_) => false,
             },
