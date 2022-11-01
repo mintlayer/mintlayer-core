@@ -234,6 +234,32 @@ where
     }
 }
 
+struct TxWithFee {
+    tx: SignedTransaction,
+    fee: Amount,
+}
+
+impl TxWithFee {
+    async fn new<M: GetMemoryUsage + Sync + Send>(
+        mempool: &Mempool<M>,
+        tx: &SignedTransaction,
+    ) -> Result<Self, TxValidationError> {
+        let fee = mempool.try_get_fee(tx).await?;
+        Ok(Self {
+            tx: tx.clone(),
+            fee,
+        })
+    }
+
+    fn tx(&self) -> &SignedTransaction {
+        &self.tx
+    }
+
+    fn fee(&self) -> Amount {
+        self.fee
+    }
+}
+
 // Rolling-fee-related methods
 impl<M> Mempool<M>
 where
@@ -405,13 +431,14 @@ where
             return Err(TxValidationError::TransactionAlreadyInMempool);
         }
 
-        let conflicts = self.rbf_checks(tx).await?;
+        let tx = TxWithFee::new(self, tx.clone()).await?;
+        let conflicts = self.rbf_checks(&tx)?;
 
-        self.verify_inputs_available(tx).await?;
+        self.verify_inputs_available(tx.tx()).await?;
 
-        self.pays_minimum_relay_fees(tx).await?;
+        self.pays_minimum_relay_fees(&tx)?;
 
-        self.pays_minimum_mempool_fee(tx).await?;
+        self.pays_minimum_mempool_fee(&tx)?;
 
         Ok(conflicts)
     }
@@ -443,12 +470,9 @@ where
             )
     }
 
-    async fn pays_minimum_mempool_fee(
-        &self,
-        tx: &SignedTransaction,
-    ) -> Result<(), TxValidationError> {
-        let tx_fee = self.try_get_fee(tx).await?;
-        let minimum_fee = self.get_update_minimum_mempool_fee(tx)?;
+    fn pays_minimum_mempool_fee(&self, tx: &TxWithFee) -> Result<(), TxValidationError> {
+        let tx_fee = tx.fee();
+        let minimum_fee = self.get_update_minimum_mempool_fee(tx.tx())?;
         log::debug!(
             "pays_minimum_mempool_fee tx_fee = {:?}, minimum_fee = {:?}",
             tx_fee,
@@ -481,12 +505,9 @@ where
         res
     }
 
-    async fn pays_minimum_relay_fees(
-        &self,
-        tx: &SignedTransaction,
-    ) -> Result<(), TxValidationError> {
-        let tx_fee = self.try_get_fee(tx).await?;
-        let relay_fee = get_relay_fee(tx);
+    fn pays_minimum_relay_fees(&self, tx: &TxWithFee) -> Result<(), TxValidationError> {
+        let tx_fee = tx.fee();
+        let relay_fee = get_relay_fee(tx.tx());
         log::debug!("tx_fee: {:?}, relay_fee: {:?}", tx_fee, relay_fee);
         ensure!(
             tx_fee >= relay_fee,
@@ -501,8 +522,9 @@ impl<M> Mempool<M>
 where
     M: GetMemoryUsage + Send + Sync,
 {
-    async fn rbf_checks(&self, tx: &SignedTransaction) -> Result<Conflicts, TxValidationError> {
+    fn rbf_checks(&self, tx: &TxWithFee) -> Result<Conflicts, TxValidationError> {
         let conflicts = tx
+            .tx()
             .transaction()
             .inputs()
             .iter()
@@ -513,13 +535,13 @@ where
         if conflicts.is_empty() {
             Ok(Conflicts(BTreeSet::new()))
         } else {
-            self.do_rbf_checks(tx, &conflicts).await
+            self.do_rbf_checks(tx, &conflicts)
         }
     }
 
-    async fn do_rbf_checks(
+    fn do_rbf_checks(
         &self,
-        tx: &SignedTransaction,
+        tx: &TxWithFee,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<Conflicts, TxValidationError> {
         for entry in conflicts {
@@ -536,32 +558,28 @@ where
         // more economically rational to mine. Before we go digging through the mempool for all
         // transactions that would need to be removed (direct conflicts and all descendants), check
         // that the replacement transaction pays more than its direct conflicts.
-        self.pays_more_than_direct_conflicts(tx, conflicts).await?;
+        self.pays_more_than_direct_conflicts(tx, conflicts)?;
         // Enforce BIP125 Rule #2.
         self.spends_no_new_unconfirmed_outputs(tx, conflicts)?;
         // Enforce BIP125 Rule #5.
         let conflicts_with_descendants = self.potential_replacements_within_limit(conflicts)?;
         // Enforce BIP125 Rule #3.
-        let total_conflict_fees = self
-            .pays_more_than_conflicts_with_descendants(tx, &conflicts_with_descendants)
-            .await?;
+        let total_conflict_fees =
+            self.pays_more_than_conflicts_with_descendants(tx, &conflicts_with_descendants)?;
         // Enforce BIP125 Rule #4.
-        self.pays_for_bandwidth(tx, total_conflict_fees).await?;
+        self.pays_for_bandwidth(tx, total_conflict_fees)?;
         Ok(Conflicts::from(conflicts_with_descendants))
     }
 
-    async fn pays_for_bandwidth(
+    fn pays_for_bandwidth(
         &self,
-        tx: &SignedTransaction,
+        tx: &TxWithFee,
         total_conflict_fees: Amount,
     ) -> Result<(), TxValidationError> {
-        log::debug!(
-            "pays_for_bandwidth: tx fee is {:?}",
-            self.try_get_fee(tx).await?
-        );
-        let additional_fees = (self.try_get_fee(tx).await? - total_conflict_fees)
-            .ok_or(TxValidationError::AdditionalFeesUnderflow)?;
-        let relay_fee = get_relay_fee(tx);
+        log::debug!("pays_for_bandwidth: tx fee is {:?}", tx.fee(),);
+        let additional_fees =
+            (tx.fee() - total_conflict_fees).ok_or(TxValidationError::AdditionalFeesUnderflow)?;
+        let relay_fee = get_relay_fee(tx.tx());
         log::debug!(
             "conflict fees: {:?}, additional fee: {:?}, relay_fee {:?}",
             total_conflict_fees,
@@ -575,9 +593,9 @@ where
         Ok(())
     }
 
-    async fn pays_more_than_conflicts_with_descendants(
+    fn pays_more_than_conflicts_with_descendants(
         &self,
-        tx: &SignedTransaction,
+        tx: &TxWithFee,
         conflicts_with_descendants: &BTreeSet<Id<Transaction>>,
     ) -> Result<Amount, TxValidationError> {
         let conflicts_with_descendants = conflicts_with_descendants.iter().map(|conflict_id| {
@@ -589,7 +607,7 @@ where
             .sum::<Option<Amount>>()
             .ok_or(TxValidationError::ConflictsFeeOverflow)?;
 
-        let replacement_fee = self.try_get_fee(tx).await?;
+        let replacement_fee = tx.fee();
         ensure!(
             replacement_fee > total_conflict_fees,
             TxValidationError::TransactionFeeLowerThanConflictsWithDescendants
@@ -599,7 +617,7 @@ where
 
     fn spends_no_new_unconfirmed_outputs(
         &self,
-        tx: &SignedTransaction,
+        tx: &TxWithFee,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), TxValidationError> {
         let outpoints_spent_by_conflicts = conflicts
@@ -609,7 +627,8 @@ where
             })
             .collect::<BTreeSet<_>>();
 
-        tx.transaction()
+        tx.tx()
+            .transaction()
             .inputs()
             .iter()
             .find(|input| {
@@ -623,17 +642,17 @@ where
             })
     }
 
-    async fn pays_more_than_direct_conflicts(
+    fn pays_more_than_direct_conflicts(
         &self,
-        tx: &SignedTransaction,
+        tx: &TxWithFee,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), TxValidationError> {
-        let replacement_fee = self.try_get_fee(tx).await?;
+        let replacement_fee = tx.fee();
         conflicts.iter().find(|conflict| conflict.fee() >= replacement_fee).map_or_else(
             || Ok(()),
             |conflict| {
                 Err(TxValidationError::ReplacementFeeLowerThanOriginal {
-                    replacement_tx: tx.transaction().get_id().get(),
+                    replacement_tx: tx.tx().transaction().get_id().get(),
                     replacement_fee,
                     original_fee: conflict.fee(),
                     original_tx: conflict.tx_id().get(),
