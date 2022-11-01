@@ -20,5 +20,5 @@ mod traits;
 pub use self::{
     channel::{ChannelMockListener, ChannelMockStream, ChannelMockTransport},
     tcp::TcpMockTransport,
-    traits::{MockListener, MockStream, MockTransport},
+    traits::{GetIp, MockListener, MockStream, MockTransport},
 };

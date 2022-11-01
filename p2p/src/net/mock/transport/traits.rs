@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, hash::Hash, str::FromStr};
+use std::{fmt::Debug, hash::Hash, net::IpAddr, str::FromStr};
 
 use async_trait::async_trait;
 
@@ -23,7 +23,7 @@ use crate::{net::mock::types::Message, Result};
 #[async_trait]
 pub trait MockTransport: Send + 'static {
     /// An address type.
-    type Address: Clone + Debug + Eq + Hash + Send + Sync + ToString + FromStr;
+    type Address: Clone + Debug + Eq + Hash + Send + Sync + ToString + FromStr + GetIp;
 
     /// A listener type.
     type Listener: MockListener<Self::Stream, Self::Address>;
@@ -56,4 +56,8 @@ pub trait MockStream: Send {
 
     /// Receives a message from a remote peer.
     async fn recv(&mut self) -> Result<Option<Message>>;
+}
+
+pub trait GetIp {
+    fn ip(&self) -> IpAddr;
 }

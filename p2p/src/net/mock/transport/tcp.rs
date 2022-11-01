@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{io, net::SocketAddr};
+use std::{
+    io,
+    net::{IpAddr, SocketAddr},
+};
 
 use async_trait::async_trait;
 use bytes::{Buf, BytesMut};
@@ -28,7 +31,7 @@ use serialization::{Decode, Encode};
 use crate::{
     constants::MAX_MESSAGE_SIZE,
     net::mock::{
-        transport::{MockListener, MockStream, MockTransport},
+        transport::{GetIp, MockListener, MockStream, MockTransport},
         types::Message,
     },
     P2pError, Result,
@@ -168,6 +171,12 @@ impl Encoder<Message> for EncoderDecoder {
         dst.extend_from_slice(&encoded);
 
         Ok(())
+    }
+}
+
+impl GetIp for SocketAddr {
+    fn ip(&self) -> IpAddr {
+        self.ip()
     }
 }
 

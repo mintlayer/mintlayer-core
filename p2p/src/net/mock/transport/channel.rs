@@ -13,7 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, io, sync::Mutex};
+use std::{
+    collections::BTreeMap,
+    io,
+    net::{IpAddr, Ipv4Addr},
+    sync::Mutex,
+};
 
 use async_trait::async_trait;
 use once_cell::sync::Lazy;
@@ -25,7 +30,7 @@ use tokio::sync::{
 use crate::{
     error::DialError,
     net::mock::{
-        transport::{MockListener, MockStream, MockTransport},
+        transport::{GetIp, MockListener, MockStream, MockTransport},
         types::Message,
     },
     P2pError, Result,
@@ -145,6 +150,14 @@ impl MockStream for ChannelMockStream {
             .await
             .ok_or_else(|| io::Error::from(io::ErrorKind::UnexpectedEof).into())
             .map(Some)
+    }
+}
+
+impl GetIp for Address {
+    fn ip(&self) -> IpAddr {
+        // Stub implementation. We only need an ip address to properly ban a peer and it isn't
+        // going to work with the channels anyway.
+        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))
     }
 }
 

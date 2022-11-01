@@ -74,8 +74,7 @@ async fn ban_connected_peer_libp2p() {
 
 #[tokio::test]
 async fn ban_connected_peer_mock_tcp() {
-    // TODO: implement `ban_peer()`
-    // ban_connected_peer::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    ban_connected_peer::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
 #[tokio::test]
