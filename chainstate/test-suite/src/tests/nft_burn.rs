@@ -20,17 +20,15 @@ use chainstate::{
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
 use common::chain::{
     signature::inputsig::InputWitness,
-    tokens::{token_id, Metadata, NftIssuanceV1, OutputValue, TokenData, TokenTransferV1},
+    tokens::{token_id, OutputValue, TokenData, TokenTransferV1},
     Destination, OutputPurpose, TxInput, TxOutput,
 };
 use common::primitives::Amount;
 use crypto::random::Rng;
 use rstest::rstest;
-use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
-    nft_utils::random_creator,
+    nft_utils::random_nft_issuance,
     random::{make_seedable_rng, Seed},
-    random_string,
 };
 
 #[rstest]
@@ -42,10 +40,8 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
 
-        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
-        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let chain_config = tf.chainstate.get_chain_config();
+        let token_min_issuance_fee = chain_config.token_min_issuance_fee();
 
         // Issuance
         let block_index = tf
@@ -57,19 +53,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        NftIssuanceV1 {
-                            metadata: Metadata {
-                                creator: Some(random_creator()),
-                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                                icon_uri: DataOrNoVec::from(None),
-                                additional_metadata_uri: DataOrNoVec::from(None),
-                                media_uri: DataOrNoVec::from(None),
-                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                            },
-                        }
-                        .into(),
+                        random_nft_issuance(chain_config, &mut rng).into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
@@ -96,12 +80,12 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenBurnV1(common::chain::tokens::TokenBurnV1 {
+                        TokenTransferV1 {
                             token_id,
-                            amount_to_burn: Amount::from_atoms(rng.gen_range(2..123)),
-                        })
+                            amount: Amount::from_atoms(rng.gen_range(2..123)),
+                        }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        OutputPurpose::Burn,
                     ))
                     .build(),
             )
@@ -124,12 +108,12 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenBurnV1(common::chain::tokens::TokenBurnV1 {
+                        TokenTransferV1 {
                             token_id,
-                            amount_to_burn: Amount::from_atoms(0),
-                        })
+                            amount: Amount::from_atoms(0),
+                        }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        OutputPurpose::Burn,
                     ))
                     .build(),
             )
@@ -139,7 +123,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
             result,
             Err(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokensError(TokensError::BurnZeroTokens(_, _))
+                    CheckBlockTransactionsError::TokensError(TokensError::TransferZeroTokens(_, _))
                 ))
             ))
         ));
@@ -155,11 +139,8 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
 
-        let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
-        let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
-        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
-
-        let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let chain_config = tf.chainstate.get_chain_config();
+        let token_min_issuance_fee = chain_config.token_min_issuance_fee();
 
         // Issuance
         let block_index = tf
@@ -171,19 +152,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        NftIssuanceV1 {
-                            metadata: Metadata {
-                                creator: Some(random_creator()),
-                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                                icon_uri: DataOrNoVec::from(None),
-                                additional_metadata_uri: DataOrNoVec::from(None),
-                                media_uri: DataOrNoVec::from(None),
-                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                            },
-                        }
-                        .into(),
+                        random_nft_issuance(chain_config, &mut rng).into(),
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
@@ -210,12 +179,12 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenBurnV1(common::chain::tokens::TokenBurnV1 {
+                        TokenTransferV1 {
                             token_id,
-                            amount_to_burn: Amount::from_atoms(1),
-                        })
+                            amount: Amount::from_atoms(1),
+                        }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        OutputPurpose::Burn,
                     ))
                     .build(),
             )
@@ -245,13 +214,11 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
                     .build(),
             )
             .build_and_process();
-        assert!(matches!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::TokensError(
-                    TokensError::AttemptToTransferBurnedTokens
-                ))
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendBurnedAmount
             ))
-        ));
+        );
     })
 }

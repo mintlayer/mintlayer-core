@@ -222,7 +222,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
                         &nft.metadata,
                     )))
                 }
-                TokenData::TokenTransferV1(_) | TokenData::TokenBurnV1(_) => None,
+                TokenData::TokenTransferV1(_) => None,
             }))
     }
 

@@ -66,9 +66,6 @@ pub fn get_output_token_id_and_amount(
                 }
                 None => None,
             },
-            TokenData::TokenBurnV1(burn) => {
-                Some((CoinOrTokenId::TokenId(burn.token_id), burn.amount_to_burn))
-            }
             TokenData::NftIssuanceV1(_) => match include_issuance {
                 Some(tx) => {
                     let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
@@ -97,13 +94,6 @@ pub fn get_input_token_id_and_amount<
                 .ok_or(ConnectTransactionError::TokensError(
                     TokensError::TokenIdCantBeCalculated,
                 ))?,
-            TokenData::TokenBurnV1(_) => {
-                // Tokens have burned and can't be transferred
-                return Err(ConnectTransactionError::TokensError(
-                    TokensError::AttemptToTransferBurnedTokens,
-                ));
-            }
-
             TokenData::NftIssuanceV1(_) => issuance_token_id_getter()?
                 // TODO: Find more appropriate way to check NFTs when we add multi-token feature
                 .map(|token_id| (CoinOrTokenId::TokenId(token_id), Amount::from_atoms(1)))

@@ -185,16 +185,12 @@ pub enum TokensError {
     CoinOrTokenOverflow,
     #[error("Insufficient token issuance fee in transaction {0} in block {1}")]
     InsufficientTokenFees(Id<Transaction>, Id<Block>),
-    #[error("Can't burn zero value in transaction {0} in block {1}")]
-    BurnZeroTokens(Id<Transaction>, Id<Block>),
     #[error("Can't transfer zero tokens in transaction {0} in block {1}")]
     TransferZeroTokens(Id<Transaction>, Id<Block>),
     #[error("Can't fetch transaction inputs in main chain by outpoint")]
     NoTxInMainChainByOutpoint,
     #[error("Tokens ID can't be calculated")]
     TokenIdCantBeCalculated,
-    #[error("Burned tokens cannot be transferred")]
-    AttemptToTransferBurnedTokens,
     #[error("Block reward can't be paid in tokens")]
     TokensInBlockReward,
     #[error("Invariant broken - attempt undo issuance on non-existent token {0}")]
