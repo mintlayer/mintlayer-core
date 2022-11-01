@@ -261,6 +261,7 @@ impl BanScore for utxo::Error {
             utxo::Error::NoUtxoFound => 100,
             utxo::Error::NoBlockchainHeightFound => 0,
             utxo::Error::MissingBlockRewardUndo(_) => 0,
+            utxo::Error::InvalidBlockRewardOutputType(_) => 100,
             utxo::Error::DBError(_) => 0,
         }
     }

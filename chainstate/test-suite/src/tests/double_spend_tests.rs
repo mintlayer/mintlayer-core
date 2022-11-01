@@ -490,7 +490,7 @@ fn try_spend_burned_output_same_block(#[case] seed: Seed) {
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToSpendBurnedAmount
+                ConnectTransactionError::MissingOutputOrSpent
             ))
         );
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
@@ -526,7 +526,7 @@ fn try_spend_burned_output_different_blocks(#[case] seed: Seed) {
         assert_eq!(
             tf.process_block(block_2, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToSpendBurnedAmount
+                ConnectTransactionError::MissingOutputOrSpent
             ))
         );
     });

@@ -177,15 +177,19 @@ impl<'a> UtxosCache<'a> {
     ) -> Result<(), Error> {
         let id = OutPointSourceId::from(tx.get_id());
 
-        for (idx, output) in tx.outputs().iter().enumerate() {
-            let outpoint = OutPoint::new(id.clone(), idx as u32);
-            // by default no overwrite allowed.
-            let overwrite = check_for_overwrite && self.has_utxo(&outpoint);
-            let utxo = Utxo::new(output.clone(), false, source.clone());
+        tx.outputs()
+            .iter()
+            // burned outputs should not be included into utxo set
+            .filter(|output| !output.purpose().is_burn())
+            .enumerate()
+            .try_for_each(|(idx, output)| {
+                let outpoint = OutPoint::new(id.clone(), idx as u32);
+                // by default no overwrite allowed.
+                let overwrite = check_for_overwrite && self.has_utxo(&outpoint);
+                let utxo = Utxo::new(output.clone(), false, source.clone());
 
-            self.add_utxo(&outpoint, utxo, overwrite)?;
-        }
-        Ok(())
+                self.add_utxo(&outpoint, utxo, overwrite)
+            })
     }
 
     /// Marks the inputs of a transaction as 'spent', adds outputs to the utxo set.
@@ -217,9 +221,12 @@ impl<'a> UtxosCache<'a> {
         tx: &Transaction,
         tx_undo: TxUndo,
     ) -> Result<(), Error> {
-        for (i, _) in tx.outputs().iter().enumerate() {
+        for (i, output) in tx.outputs().iter().enumerate() {
             let tx_outpoint = OutPoint::new(OutPointSourceId::from(tx.get_id()), i as u32);
-            self.spend_utxo(&tx_outpoint)?;
+
+            if !output.purpose().is_burn() {
+                self.spend_utxo(&tx_outpoint)?;
+            }
         }
 
         assert_eq!(tx.inputs().len(), tx_undo.inner().len());
@@ -248,6 +255,9 @@ impl<'a> UtxosCache<'a> {
         if let Some(outputs) = reward_transactable.outputs() {
             let source_id = OutPointSourceId::from(*block_id);
             for (idx, output) in outputs.iter().enumerate() {
+                if output.purpose().is_burn() {
+                    return Err(Error::InvalidBlockRewardOutputType(*block_id));
+                }
                 let outpoint = OutPoint::new(source_id.clone(), idx as u32);
                 let utxo = Utxo::new(output.clone(), true, UtxoSource::Blockchain(height));
                 self.add_utxo(&outpoint, utxo, false)?;
