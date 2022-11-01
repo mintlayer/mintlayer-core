@@ -17,7 +17,7 @@ use std::vec;
 
 use chainstate::{
     BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
-    ConnectTransactionError, TokensError, TxIndexError,
+    ConnectTransactionError, TokensError,
 };
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
 use common::chain::tokens::{Metadata, NftIssuanceV1, TokenIssuanceV1, TokenTransferV1};
@@ -1348,7 +1348,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TxIndexError(TxIndexError::MissingOutputOrSpent)
+                ConnectTransactionError::MissingOutputOrSpent
             ))
         );
     })

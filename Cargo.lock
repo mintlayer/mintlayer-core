@@ -690,6 +690,7 @@ dependencies = [
  "rstest",
  "serialization",
  "test-utils",
+ "tx-verifier",
  "utils",
  "utxo",
 ]

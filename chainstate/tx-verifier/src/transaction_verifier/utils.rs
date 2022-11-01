@@ -18,15 +18,35 @@ use std::collections::BTreeMap;
 use common::{
     chain::{
         tokens::{token_id, OutputValue, TokenData, TokenId},
-        Transaction,
+        Transaction, TxOutput,
     },
     primitives::Amount,
 };
+use fallible_iterator::FallibleIterator;
 
 use super::{
+    amounts_map::AmountsMap,
     error::{ConnectTransactionError, TokensError},
     token_issuance_cache::CoinOrTokenId,
+    Fee,
 };
+
+pub fn get_total_fee(
+    inputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
+    outputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
+) -> Result<Fee, ConnectTransactionError> {
+    // TODO: fees should support tokens as well in the future
+    let outputs_total =
+        *outputs_total_map.get(&CoinOrTokenId::Coin).unwrap_or(&Amount::from_atoms(0));
+    let inputs_total =
+        *inputs_total_map.get(&CoinOrTokenId::Coin).unwrap_or(&Amount::from_atoms(0));
+    (inputs_total - outputs_total)
+        .map(Fee)
+        .ok_or(ConnectTransactionError::TxFeeTotalCalcFailed(
+            inputs_total,
+            outputs_total,
+        ))
+}
 
 pub fn check_transferred_amount(
     inputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
@@ -49,7 +69,20 @@ pub fn check_transferred_amount(
     Ok(())
 }
 
-pub fn get_output_token_id_and_amount(
+pub fn calculate_total_outputs(
+    outputs: &[TxOutput],
+    include_issuance: Option<&Transaction>,
+) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
+    let iter = outputs
+        .iter()
+        .map(|output| get_output_token_id_and_amount(output.value(), include_issuance));
+    let iter = fallible_iterator::convert(iter).filter_map(Ok).map_err(Into::into);
+
+    let result = AmountsMap::from_fallible_iter(iter)?;
+    Ok(result.take())
+}
+
+fn get_output_token_id_and_amount(
     output_value: &OutputValue,
     include_issuance: Option<&Transaction>,
 ) -> Result<Option<(CoinOrTokenId, Amount)>, TokensError> {

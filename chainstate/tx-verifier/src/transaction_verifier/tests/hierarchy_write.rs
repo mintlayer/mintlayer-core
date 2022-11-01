@@ -40,7 +40,7 @@ use utxo::TxUndoWithSources;
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn utxo_set_hierarchy(#[case] seed: Seed) {
+fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = ConfigBuilder::test_chain().build();
@@ -76,19 +76,25 @@ fn utxo_set_hierarchy(#[case] seed: Seed) {
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
         .expect_set_undo_data()
-        .with(eq(block_1_id), eq(block_1_undo.clone()))
+        .with(
+            eq(TransactionSource::Chain(block_1_id)),
+            eq(block_1_undo.clone()),
+        )
         .times(1)
         .return_const(Ok(()));
     store
         .expect_set_undo_data()
-        .with(eq(block_2_id), eq(block_2_undo.clone()))
+        .with(
+            eq(TransactionSource::Chain(block_2_id)),
+            eq(block_2_undo.clone()),
+        )
         .times(1)
         .return_const(Ok(()));
 
     let mut verifier1 = TransactionVerifier::new(&store, &chain_config);
     verifier1.utxo_cache.add_utxo(&outpoint1, utxo1, false).unwrap();
     verifier1.utxo_block_undo.insert(
-        block_1_id,
+        TransactionSource::Chain(block_1_id),
         BlockUndoEntry {
             undo: block_1_undo,
             is_fresh: true,
@@ -99,7 +105,7 @@ fn utxo_set_hierarchy(#[case] seed: Seed) {
         let mut verifier = verifier1.derive_child();
         verifier.utxo_cache.add_utxo(&outpoint2, utxo2, false).unwrap();
         verifier.utxo_block_undo.insert(
-            block_2_id,
+            TransactionSource::Chain(block_2_id),
             BlockUndoEntry {
                 undo: block_2_undo,
                 is_fresh: true,
@@ -267,7 +273,7 @@ fn tokens_set_hierarchy(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn utxo_del_hierarchy(#[case] seed: Seed) {
+fn utxo_del_from_chain_hierarchy(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = ConfigBuilder::test_chain().build();
@@ -295,14 +301,22 @@ fn utxo_del_hierarchy(#[case] seed: Seed) {
         .times(1)
         .return_const(Ok(Some(utxo2)));
 
-    store.expect_del_undo_data().with(eq(block_1_id)).times(1).return_const(Ok(()));
-    store.expect_del_undo_data().with(eq(block_2_id)).times(1).return_const(Ok(()));
+    store
+        .expect_del_undo_data()
+        .with(eq(TransactionSource::Chain(block_1_id)))
+        .times(1)
+        .return_const(Ok(()));
+    store
+        .expect_del_undo_data()
+        .with(eq(TransactionSource::Chain(block_2_id)))
+        .times(1)
+        .return_const(Ok(()));
     store.expect_batch_write().times(1).return_const(Ok(()));
 
     let mut verifier1 = TransactionVerifier::new(&store, &chain_config);
     verifier1.utxo_cache.spend_utxo(&outpoint1).unwrap();
     verifier1.utxo_block_undo.insert(
-        block_1_id,
+        TransactionSource::Chain(block_1_id),
         BlockUndoEntry {
             undo: block_1_undo,
             is_fresh: false,
@@ -313,7 +327,7 @@ fn utxo_del_hierarchy(#[case] seed: Seed) {
         let mut verifier = verifier1.derive_child();
         verifier.utxo_cache.spend_utxo(&outpoint2).unwrap();
         verifier.utxo_block_undo.insert(
-            block_2_id,
+            TransactionSource::Chain(block_2_id),
             BlockUndoEntry {
                 undo: block_2_undo,
                 is_fresh: false,
@@ -494,7 +508,7 @@ fn utxo_conflict_hierarchy(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn block_undo_conflict_hierarchy(#[case] seed: Seed) {
+fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = ConfigBuilder::test_chain().build();
@@ -531,14 +545,17 @@ fn block_undo_conflict_hierarchy(#[case] seed: Seed) {
         .return_const(Ok(Some(H256::zero().into())));
     store
         .expect_set_undo_data()
-        .with(eq(block_id), eq(expected_block_undo))
+        .with(
+            eq(TransactionSource::Chain(block_id)),
+            eq(expected_block_undo),
+        )
         .times(1)
         .return_const(Ok(()));
     store.expect_batch_write().times(1).return_const(Ok(()));
 
     let mut verifier1 = TransactionVerifier::new(&store, &chain_config);
     verifier1.utxo_block_undo.insert(
-        block_id,
+        TransactionSource::Chain(block_id),
         BlockUndoEntry {
             undo: block_undo_1,
             is_fresh: true,
@@ -548,7 +565,7 @@ fn block_undo_conflict_hierarchy(#[case] seed: Seed) {
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
         verifier.utxo_block_undo.insert(
-            block_id,
+            TransactionSource::Chain(block_id),
             BlockUndoEntry {
                 undo: block_undo_2,
                 is_fresh: true,

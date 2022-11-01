@@ -30,9 +30,10 @@ use common::{
         tokens::OutputValue,
         OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
-    primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable},
 };
 
+use super::helpers::add_block_with_locked_output;
 use chainstate::BlockError;
 use chainstate::ChainstateError;
 use chainstate::ConnectTransactionError;
@@ -693,44 +694,6 @@ fn output_lock_for_seconds_attempted_overflow() {
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
     });
-}
-
-/// Adds a block with the locked output and returns input corresponding to this output.
-fn add_block_with_locked_output(
-    tf: &mut TestFramework,
-    output_time_lock: OutputTimeLock,
-    timestamp: BlockTimestamp,
-) -> (InputWitness, TxInput) {
-    // Find the last block.
-    let current_height = tf.best_block_index().block_height();
-    let prev_block_info = tf.block_info(current_height.into());
-
-    tf.make_block_builder()
-        .add_transaction(
-            TransactionBuilder::new()
-                .add_input(
-                    TxInput::new(prev_block_info.txns[0].0.clone(), 0),
-                    InputWitness::NoSignature(None),
-                )
-                .add_anyone_can_spend_output(10000)
-                .add_output(TxOutput::new(
-                    OutputValue::Coin(Amount::from_atoms(100000)),
-                    OutputPurpose::LockThenTransfer(anyonecanspend_address(), output_time_lock),
-                ))
-                .build(),
-        )
-        .with_timestamp(timestamp)
-        .build_and_process()
-        .unwrap();
-
-    let new_height = (current_height + BlockDistance::new(1)).unwrap();
-    assert_eq!(tf.best_block_index().block_height(), new_height);
-
-    let block_info = tf.block_info(new_height.into());
-    (
-        InputWitness::NoSignature(None),
-        TxInput::new(block_info.txns[0].0.clone(), 1),
-    )
 }
 
 fn median_block_time(times: &[u64]) -> u64 {

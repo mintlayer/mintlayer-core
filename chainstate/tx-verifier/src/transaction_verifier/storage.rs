@@ -24,7 +24,10 @@ use common::{
 use thiserror::Error;
 use utxo::{BlockUndo, BlockUndoError, FlushableUtxoView, UtxosStorageRead};
 
-use super::error::{TokensError, TxIndexError};
+use super::{
+    error::{TokensError, TxIndexError},
+    TransactionSource,
+};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum TransactionVerifierStorageError {
@@ -32,7 +35,7 @@ pub enum TransactionVerifierStorageError {
     GenBlockIndexRetrievalFailed(Id<GenBlock>),
     #[error("Failed to persist state: {0}")]
     StatePersistenceError(#[from] storage_result::Error),
-    #[error("Failed to persist state: {0}")]
+    #[error("Failed to get ancestor: {0}")]
     GetAncestorError(#[from] chainstate_types::GetAncestorError),
     #[error("Duplicate undo info for block: {0}")]
     DuplicateBlockUndo(Id<Block>),
@@ -109,9 +112,12 @@ pub trait TransactionVerifierStorageMut: TransactionVerifierStorageRef + Flushab
 
     fn set_undo_data(
         &mut self,
-        id: Id<Block>,
+        tx_source: TransactionSource,
         undo: &BlockUndo,
     ) -> Result<(), TransactionVerifierStorageError>;
 
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), TransactionVerifierStorageError>;
+    fn del_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), TransactionVerifierStorageError>;
 }

@@ -33,6 +33,7 @@ use common::{
     },
     primitives::Id,
 };
+use tx_verifier::transaction_verifier::TransactionSource;
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDBMut, UtxosStorageRead};
 
 impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
@@ -181,15 +182,31 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
 
     fn set_undo_data(
         &mut self,
-        id: Id<Block>,
+        tx_source: TransactionSource,
         undo: &utxo::BlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.db_tx
-            .set_undo_data(id, undo)
-            .map_err(TransactionVerifierStorageError::from)
+        match tx_source {
+            TransactionSource::Chain(id) => self
+                .db_tx
+                .set_undo_data(id, undo)
+                .map_err(TransactionVerifierStorageError::from),
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
     }
 
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), TransactionVerifierStorageError> {
-        self.db_tx.del_undo_data(id).map_err(TransactionVerifierStorageError::from)
+    fn del_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        match tx_source {
+            TransactionSource::Chain(id) => {
+                self.db_tx.del_undo_data(id).map_err(TransactionVerifierStorageError::from)
+            }
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
     }
 }
