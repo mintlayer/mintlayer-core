@@ -559,10 +559,11 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 new_block_index: block_index,
             } => {
                 // update tx index only for txs from main chain
+
+                let tx_index_fetcher =
+                    |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
                 // pre-cache all inputs
-                self.tx_index_cache.precache_inputs(tx.inputs(), |tx_id: &OutPointSourceId| {
-                    self.storage_ref.get_mainchain_tx_index(tx_id)
-                })?;
+                self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
 
                 // mark tx index as spent
                 self.tx_index_cache
@@ -670,9 +671,9 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 let current_block_height = self
                     .storage_ref
                     .get_gen_block_index(&(*block_id).into())?
-                    .ok_or(ConnectTransactionError::BlockIndexCouldNotBeLoaded(
-                        (*block_id).into(),
-                    ))?
+                    .ok_or_else(|| {
+                        ConnectTransactionError::BlockIndexCouldNotBeLoaded((*block_id).into())
+                    })?
                     .block_height();
                 let best_block_height = self
                     .storage_ref
@@ -702,10 +703,11 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         let tx_undo = match tx_source {
             TransactionSource::Chain(_) => {
                 // update tx index only for txs from main chain
+
+                let tx_index_fetcher =
+                    |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
                 // pre-cache all inputs
-                self.tx_index_cache.precache_inputs(tx.inputs(), |tx_id: &OutPointSourceId| {
-                    self.storage_ref.get_mainchain_tx_index(tx_id)
-                })?;
+                self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
 
                 // unspend inputs
                 self.tx_index_cache.unspend_tx_index_inputs(tx.inputs())?;
