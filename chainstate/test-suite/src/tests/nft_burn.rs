@@ -20,7 +20,7 @@ use chainstate::{
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
 use common::chain::{
     signature::inputsig::InputWitness,
-    tokens::{token_id, OutputValue, TokenData, TokenTransferV1},
+    tokens::{token_id, OutputValue, TokenData, TokenTransfer},
     Destination, OutputPurpose, TxInput, TxOutput,
 };
 use common::primitives::Amount;
@@ -80,7 +80,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(rng.gen_range(2..123)),
                         }
@@ -108,7 +108,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(0),
                         }
@@ -179,7 +179,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         }
@@ -204,7 +204,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         })

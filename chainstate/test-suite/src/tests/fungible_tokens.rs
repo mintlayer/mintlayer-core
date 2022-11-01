@@ -20,7 +20,7 @@ use chainstate::{
     ConnectTransactionError, TokensError,
 };
 use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
-use common::chain::tokens::{Metadata, NftIssuanceV1, TokenIssuanceV1, TokenTransferV1};
+use common::chain::tokens::{Metadata, NftIssuance, TokenIssuance, TokenTransfer};
 use common::primitives::{id, Id};
 use common::{
     chain::{
@@ -61,7 +61,7 @@ fn token_issue_test(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenIssuanceV1 {
+                        TokenIssuance {
                             token_ticker: random_string(&mut rng, 10..u16::MAX as usize)
                                 .as_bytes()
                                 .to_vec(),
@@ -101,7 +101,7 @@ fn token_issue_test(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenIssuanceV1 {
+                        TokenIssuance {
                             token_ticker: b"".to_vec(),
                             amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                             number_of_decimals: rng.gen_range(1..18),
@@ -153,7 +153,7 @@ fn token_issue_test(#[case] seed: Seed) {
                                 InputWitness::NoSignature(None),
                             )
                             .add_output(TxOutput::new(
-                                TokenIssuanceV1 {
+                                TokenIssuance {
                                     token_ticker,
                                     amount_to_issue: Amount::from_atoms(
                                         rng.gen_range(1..u128::MAX),
@@ -197,7 +197,7 @@ fn token_issue_test(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenIssuanceV1 {
+                        TokenIssuance {
                             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                             amount_to_issue: Amount::from_atoms(0),
                             number_of_decimals: rng.gen_range(1..18),
@@ -236,7 +236,7 @@ fn token_issue_test(#[case] seed: Seed) {
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::new(
-                            TokenIssuanceV1 {
+                            TokenIssuance {
                                 token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                                 amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                                 number_of_decimals: decimals_count_to_use,
@@ -280,7 +280,7 @@ fn token_issue_test(#[case] seed: Seed) {
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::new(
-                            TokenIssuanceV1 {
+                            TokenIssuance {
                                 token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                                 amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                                 number_of_decimals: rng.gen_range(1..18),
@@ -321,7 +321,7 @@ fn token_issue_test(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenIssuanceV1 {
+                        TokenIssuance {
                             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                             amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                             number_of_decimals: rng.gen_range(1..18),
@@ -350,7 +350,7 @@ fn token_issue_test(#[case] seed: Seed) {
         ));
 
         // Valid case
-        let output_value = TokenIssuanceV1 {
+        let output_value = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
             number_of_decimals: rng.gen_range(1..18),
@@ -400,7 +400,7 @@ fn token_transfer_test(#[case] seed: Seed) {
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
         // Issue a new token
-        let output_value = TokenIssuanceV1 {
+        let output_value = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
@@ -471,7 +471,7 @@ fn token_transfer_test(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(total_funds.into_atoms() + 1),
                         })
@@ -499,7 +499,7 @@ fn token_transfer_test(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id: TokenId::random_using(&mut rng),
                             amount: total_funds,
                         })
@@ -527,7 +527,7 @@ fn token_transfer_test(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(0),
                         })
@@ -557,7 +557,7 @@ fn token_transfer_test(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: total_funds,
                         })
@@ -585,7 +585,7 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
         // Issue a couple of tokens
-        let issuance_value = TokenIssuanceV1 {
+        let issuance_value = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
@@ -668,7 +668,7 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
         let genesis_outpoint_id = tf.genesis().get_id().into();
 
         // Issuance data
-        let issuance_data = TokenIssuanceV1 {
+        let issuance_data = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
@@ -754,7 +754,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
 
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = TokenIssuanceV1 {
+        let output_value = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
@@ -797,7 +797,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
                     )
                     // One piece of tokens in the first output, other piece of tokens in the second output
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: (total_funds - quarter_funds).unwrap(),
                         })
@@ -805,7 +805,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: quarter_funds,
                         })
@@ -833,7 +833,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: total_funds,
                         })
@@ -865,7 +865,7 @@ fn burn_tokens(#[case] seed: Seed) {
 
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = TokenIssuanceV1 {
+        let output_value = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
@@ -909,7 +909,7 @@ fn burn_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(total_funds.into_atoms() + 1),
                         }
@@ -937,7 +937,7 @@ fn burn_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: quarter_funds,
                         }
@@ -945,7 +945,7 @@ fn burn_tokens(#[case] seed: Seed) {
                         OutputPurpose::Burn,
                     ))
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: half_funds,
                         })
@@ -971,7 +971,7 @@ fn burn_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: quarter_funds,
                         }
@@ -979,7 +979,7 @@ fn burn_tokens(#[case] seed: Seed) {
                         OutputPurpose::Burn,
                     ))
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: quarter_funds,
                         })
@@ -1005,7 +1005,7 @@ fn burn_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: quarter_funds,
                         }
@@ -1030,7 +1030,7 @@ fn burn_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: quarter_funds,
                         }
@@ -1071,7 +1071,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let issuance_data = TokenIssuanceV1 {
+        let issuance_data = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
@@ -1125,7 +1125,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: total_funds,
                         }
@@ -1155,7 +1155,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: total_funds,
                         })
@@ -1231,7 +1231,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: total_funds,
                         })
@@ -1267,7 +1267,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: total_funds,
                         }
@@ -1303,7 +1303,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: total_funds,
                         }
@@ -1368,7 +1368,7 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
 
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = TokenIssuanceV1 {
+        let output_value = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
@@ -1412,7 +1412,7 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: (total_funds + Amount::from_atoms(1)).unwrap(),
                         })
@@ -1440,7 +1440,7 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: total_funds,
                         })
@@ -1469,7 +1469,7 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
 
         // Issue a new token
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = TokenIssuanceV1 {
+        let output_value = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
@@ -1513,7 +1513,7 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: total_funds,
                         })
@@ -1521,7 +1521,7 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: total_funds,
                         })
@@ -1549,7 +1549,7 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: total_funds,
                         })
@@ -1575,7 +1575,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX - 1));
         // Issuance a few different tokens
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = TokenIssuanceV1 {
+        let output_value = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
             number_of_decimals: rng.gen_range(1..18),
@@ -1628,7 +1628,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id: first_token_id,
                             amount: total_funds,
                         })
@@ -1636,7 +1636,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        TokenIssuanceV1 {
+                        TokenIssuance {
                             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                             amount_to_issue: total_funds,
                             number_of_decimals: 1,
@@ -1684,7 +1684,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id: first_token_id,
                             amount: Amount::from_atoms(total_funds.into_atoms() + 1),
                         })
@@ -1719,7 +1719,7 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
         // Issue a new token
-        let issuance_value = TokenIssuanceV1 {
+        let issuance_value = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
             number_of_decimals: rng.gen_range(1..18),
@@ -1816,7 +1816,7 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
 
         // Check if it issuance
         let reward_output = TxOutput::new(
-            TokenIssuanceV1 {
+            TokenIssuance {
                 token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
                 amount_to_issue: total_funds,
                 number_of_decimals: rng.gen_range(1..18),
@@ -1840,7 +1840,7 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
 
         // Check if it transfer
         let reward_output = TxOutput::new(
-            TokenData::TokenTransferV1(TokenTransferV1 {
+            TokenData::TokenTransfer(TokenTransfer {
                 token_id: TokenId::random_using(&mut rng),
                 amount: total_funds,
             })
@@ -1862,7 +1862,7 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
 
         // Check if it burn
         let reward_output = TxOutput::new(
-            TokenTransferV1 {
+            TokenTransfer {
                 token_id: TokenId::random_using(&mut rng),
                 amount: total_funds,
             }
@@ -1890,7 +1890,7 @@ fn chosen_hashes_for_token_data() {
     let mut hash_stream = id::DefaultHashAlgoStream::new();
 
     // Token issuance
-    let token_issuance = TokenIssuanceV1 {
+    let token_issuance = TokenIssuance {
         token_ticker: b"SOME".to_vec(),
         amount_to_issue: Amount::from_atoms(123456789),
         number_of_decimals: 123,
@@ -1900,10 +1900,10 @@ fn chosen_hashes_for_token_data() {
     expect![[r#"
             0xa63a4ae4146ff43096baa2b8e648edca108abf34960e746def28443957ffe04e
         "#]]
-    .assert_debug_eq(&Id::<TokenIssuanceV1>::new(hash_stream.finalize().into()).get());
+    .assert_debug_eq(&Id::<TokenIssuance>::new(hash_stream.finalize().into()).get());
 
     // NFT issuance
-    let nft_issuance = NftIssuanceV1 {
+    let nft_issuance = NftIssuance {
         metadata: Metadata {
             creator: None,
             name: b"SOME".to_vec(),
@@ -1921,10 +1921,10 @@ fn chosen_hashes_for_token_data() {
     expect![[r#"
             0xbe6ad7ed36c9f898fae21bf5f3164c090c979a5b4083643a60276028012db15a
         "#]]
-    .assert_debug_eq(&Id::<NftIssuanceV1>::new(hash_stream.finalize().into()).get());
+    .assert_debug_eq(&Id::<NftIssuance>::new(hash_stream.finalize().into()).get());
 
     // Token Transfer
-    let token_data = TokenData::TokenTransferV1(TokenTransferV1 {
+    let token_data = TokenData::TokenTransfer(TokenTransfer {
         token_id: TokenId::zero(),
         amount: Amount::from_atoms(1234567890),
     });
@@ -1954,7 +1954,7 @@ fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
-                TokenIssuanceV1 {
+                TokenIssuance {
                     token_ticker: "XXXX".as_bytes().to_vec(),
                     amount_to_issue: Amount::from_atoms(rng.gen_range(100_000..u128::MAX)),
                     number_of_decimals: rng.gen_range(1..18),
@@ -1978,7 +1978,7 @@ fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
-                TokenData::TokenTransferV1(TokenTransferV1 {
+                TokenData::TokenTransfer(TokenTransfer {
                     token_id: token_id(tx_1.transaction()).unwrap(),
                     amount: Amount::from_atoms(rng.gen_range(1..100_000)),
                 })

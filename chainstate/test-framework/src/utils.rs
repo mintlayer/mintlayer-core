@@ -18,7 +18,7 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{
         signature::inputsig::InputWitness,
-        tokens::{OutputValue, TokenData, TokenTransferV1},
+        tokens::{OutputValue, TokenData, TokenTransfer},
         Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
     primitives::Amount,
@@ -69,14 +69,14 @@ pub fn create_utxo_data(
             )
         }
         OutputValue::Token(token_data) => match &**token_data {
-            TokenData::TokenTransferV1(_transfer) => TxOutput::new(
+            TokenData::TokenTransfer(_transfer) => TxOutput::new(
                 OutputValue::Token(token_data.clone()),
                 OutputPurpose::Transfer(anyonecanspend_address()),
             ),
-            TokenData::TokenIssuanceV1(issuance) => {
+            TokenData::TokenIssuance(issuance) => {
                 new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)
             }
-            TokenData::NftIssuanceV1(_issuance) => {
+            TokenData::NftIssuance(_issuance) => {
                 new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))
             }
         },
@@ -149,7 +149,7 @@ pub fn create_multiple_utxo_data(
             }
         }
         OutputValue::Token(token_data) => match &**token_data {
-            TokenData::TokenTransferV1(transfer) => {
+            TokenData::TokenTransfer(transfer) => {
                 if rng.gen::<bool>() {
                     // burn transferred tokens
                     let amount_to_burn = if transfer.amount.into_atoms() > 1 {
@@ -158,7 +158,7 @@ pub fn create_multiple_utxo_data(
                         transfer.amount
                     };
                     vec![TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id: transfer.token_id,
                             amount: amount_to_burn,
                         }
@@ -175,7 +175,7 @@ pub fn create_multiple_utxo_data(
                                 let amount =
                                     Amount::from_atoms(transfer.amount.into_atoms() / num_outputs);
                                 TxOutput::new(
-                                    TokenTransferV1 {
+                                    TokenTransfer {
                                         token_id: transfer.token_id,
                                         amount,
                                     }
@@ -193,7 +193,7 @@ pub fn create_multiple_utxo_data(
                     }
                 }
             }
-            TokenData::TokenIssuanceV1(issuance) => {
+            TokenData::TokenIssuance(issuance) => {
                 if rng.gen::<bool>() {
                     vec![new_token_burn_output(
                         chainstate,
@@ -204,7 +204,7 @@ pub fn create_multiple_utxo_data(
                     vec![new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)]
                 }
             }
-            TokenData::NftIssuanceV1(_issuance) => {
+            TokenData::NftIssuance(_issuance) => {
                 if rng.gen::<bool>() {
                     vec![new_token_burn_output(chainstate, &outsrc, Amount::from_atoms(1))]
                 } else {
@@ -227,7 +227,7 @@ fn new_token_transfer_output(
     amount: Amount,
 ) -> TxOutput {
     TxOutput::new(
-        TokenTransferV1 {
+        TokenTransfer {
             token_id: match outsrc {
                 OutPointSourceId::Transaction(prev_tx) => {
                     chainstate.get_token_id_from_issuance_tx(prev_tx).expect("ok").expect("some")
@@ -249,7 +249,7 @@ fn new_token_burn_output(
     amount_to_burn: Amount,
 ) -> TxOutput {
     TxOutput::new(
-        TokenTransferV1 {
+        TokenTransfer {
             token_id: match outsrc {
                 OutPointSourceId::Transaction(prev_tx) => {
                     chainstate.get_token_id_from_issuance_tx(prev_tx).expect("ok").expect("some")
