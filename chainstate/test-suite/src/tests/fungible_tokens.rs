@@ -1043,7 +1043,7 @@ fn burn_tokens(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToSpendBurnedAmount
+                ConnectTransactionError::MissingOutputOrSpent
             ))
         );
     })
