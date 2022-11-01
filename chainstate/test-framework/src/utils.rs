@@ -111,10 +111,7 @@ pub fn create_multiple_utxo_data(
                             random_nft_issuance(chainstate.get_chain_config(), rng).into(),
                             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                         ),
-                        TxOutput::new(
-                            OutputValue::Coin((*output_value - min_tx_fee).unwrap()),
-                            OutputPurpose::Transfer(anyonecanspend_address()),
-                        ),
+                        TxOutput::new(OutputValue::Coin(min_tx_fee), OutputPurpose::Burn),
                     ]
                 } else {
                     return None;
@@ -130,10 +127,7 @@ pub fn create_multiple_utxo_data(
                             random_token_issuance(chainstate.get_chain_config(), rng).into(),
                             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                         ),
-                        TxOutput::new(
-                            OutputValue::Coin((*output_value - min_tx_fee).unwrap()),
-                            OutputPurpose::Transfer(anyonecanspend_address()),
-                        ),
+                        TxOutput::new(OutputValue::Coin(min_tx_fee), OutputPurpose::Burn),
                     ]
                 } else {
                     return None;

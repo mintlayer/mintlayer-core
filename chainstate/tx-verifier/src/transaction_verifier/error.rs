@@ -80,6 +80,10 @@ pub enum ConnectTransactionError {
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("BlockUndo error: {0}")]
     BlockUndoError(#[from] BlockUndoError),
+    #[error("Failed to sum amounts of burns in transaction: {0}")]
+    BurnAmountSumError(Id<Transaction>),
+    #[error("Attempt to spend burned amount in transaction")]
+    AttemptToSpendBurnedAmount,
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

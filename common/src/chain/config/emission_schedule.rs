@@ -540,7 +540,7 @@ mod tests {
             let _ = es.subsidy(ht);
         }
 
-        // Check year transition heights + 5 block neighbourhood
+        // Check year transition heights + 5 block neighborhood
         let year_transition_block_heights = (1..20).flat_map(|year| {
             (0..=10).map(move |offset| BlockHeight::from(year * BLOCKS_PER_YEAR + offset - 5))
         });
