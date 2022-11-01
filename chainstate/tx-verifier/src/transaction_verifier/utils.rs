@@ -89,17 +89,17 @@ fn get_output_token_id_and_amount(
     Ok(match output_value {
         OutputValue::Coin(amount) => Some((CoinOrTokenId::Coin, *amount)),
         OutputValue::Token(token_data) => match &**token_data {
-            TokenData::TokenTransferV1(transfer) => {
+            TokenData::TokenTransfer(transfer) => {
                 Some((CoinOrTokenId::TokenId(transfer.token_id), transfer.amount))
             }
-            TokenData::TokenIssuanceV1(issuance) => match include_issuance {
+            TokenData::TokenIssuance(issuance) => match include_issuance {
                 Some(tx) => {
                     let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
                     Some((CoinOrTokenId::TokenId(token_id), issuance.amount_to_issue))
                 }
                 None => None,
             },
-            TokenData::NftIssuanceV1(_) => match include_issuance {
+            TokenData::NftIssuance(_) => match include_issuance {
                 Some(tx) => {
                     let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
                     Some((CoinOrTokenId::TokenId(token_id), Amount::from_atoms(1)))
@@ -119,15 +119,15 @@ pub fn get_input_token_id_and_amount<
     Ok(match output_value {
         OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
         OutputValue::Token(token_data) => match &**token_data {
-            TokenData::TokenTransferV1(transfer) => {
+            TokenData::TokenTransfer(transfer) => {
                 (CoinOrTokenId::TokenId(transfer.token_id), transfer.amount)
             }
-            TokenData::TokenIssuanceV1(issuance) => issuance_token_id_getter()?
+            TokenData::TokenIssuance(issuance) => issuance_token_id_getter()?
                 .map(|token_id| (CoinOrTokenId::TokenId(token_id), issuance.amount_to_issue))
                 .ok_or(ConnectTransactionError::TokensError(
                     TokensError::TokenIdCantBeCalculated,
                 ))?,
-            TokenData::NftIssuanceV1(_) => issuance_token_id_getter()?
+            TokenData::NftIssuance(_) => issuance_token_id_getter()?
                 // TODO: Find more appropriate way to check NFTs when we add multi-token feature
                 .map(|token_id| (CoinOrTokenId::TokenId(token_id), Amount::from_atoms(1)))
                 .ok_or(ConnectTransactionError::TokensError(

@@ -82,13 +82,13 @@ impl From<TokenData> for OutputValue {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub struct TokenTransferV1 {
+pub struct TokenTransfer {
     pub token_id: TokenId,
     pub amount: Amount,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub struct TokenIssuanceV1 {
+pub struct TokenIssuance {
     pub token_ticker: Vec<u8>,
     pub amount_to_issue: Amount,
     pub number_of_decimals: u8,
@@ -99,13 +99,13 @@ pub struct TokenIssuanceV1 {
 pub enum TokenData {
     /// TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.
     #[codec(index = 1)]
-    TokenTransferV1(TokenTransferV1),
+    TokenTransfer(TokenTransfer),
     /// New token creation
     #[codec(index = 2)]
-    TokenIssuanceV1(Box<TokenIssuanceV1>),
+    TokenIssuance(Box<TokenIssuance>),
     // A new NFT creation
     #[codec(index = 3)]
-    NftIssuanceV1(Box<NftIssuanceV1>),
+    NftIssuance(Box<NftIssuance>),
     // TODO: These types will be implemented in the future PRs
     // // Increase amount of tokens
     // #[codec(index = 4)]
@@ -115,32 +115,32 @@ pub enum TokenData {
     // },
 }
 
-impl From<NftIssuanceV1> for TokenData {
-    fn from(d: NftIssuanceV1) -> Self {
-        Self::NftIssuanceV1(Box::new(d))
+impl From<NftIssuance> for TokenData {
+    fn from(d: NftIssuance) -> Self {
+        Self::NftIssuance(Box::new(d))
     }
 }
 
-impl From<TokenIssuanceV1> for TokenData {
-    fn from(d: TokenIssuanceV1) -> Self {
-        Self::TokenIssuanceV1(Box::new(d))
+impl From<TokenIssuance> for TokenData {
+    fn from(d: TokenIssuance) -> Self {
+        Self::TokenIssuance(Box::new(d))
     }
 }
 
-impl From<TokenTransferV1> for OutputValue {
-    fn from(d: TokenTransferV1) -> Self {
-        TokenData::TokenTransferV1(d).into()
+impl From<TokenTransfer> for OutputValue {
+    fn from(d: TokenTransfer) -> Self {
+        TokenData::TokenTransfer(d).into()
     }
 }
 
-impl From<NftIssuanceV1> for OutputValue {
-    fn from(d: NftIssuanceV1) -> Self {
-        TokenData::NftIssuanceV1(Box::new(d)).into()
+impl From<NftIssuance> for OutputValue {
+    fn from(d: NftIssuance) -> Self {
+        TokenData::NftIssuance(Box::new(d)).into()
     }
 }
 
-impl From<TokenIssuanceV1> for OutputValue {
-    fn from(d: TokenIssuanceV1) -> Self {
-        TokenData::TokenIssuanceV1(Box::new(d)).into()
+impl From<TokenIssuance> for OutputValue {
+    fn from(d: TokenIssuance) -> Self {
+        TokenData::TokenIssuance(Box::new(d)).into()
     }
 }

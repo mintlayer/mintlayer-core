@@ -21,7 +21,7 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         tokens::{
-            token_id, OutputValue, TokenAuxiliaryData, TokenData, TokenIssuanceV1, TokenTransferV1,
+            token_id, OutputValue, TokenAuxiliaryData, TokenData, TokenIssuance, TokenTransfer,
         },
         Destination, OutPoint, OutPointSourceId, SpendablePosition, TxInput, TxOutput,
     },
@@ -120,7 +120,7 @@ fn store_token(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
-                TokenIssuanceV1 {
+                TokenIssuance {
                     token_ticker: "XXXX".as_bytes().to_vec(),
                     amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                     number_of_decimals: rng.gen_range(1..18),
@@ -354,7 +354,7 @@ fn reorg_store_token(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
-                TokenIssuanceV1 {
+                TokenIssuance {
                     token_ticker: "AAAA".as_bytes().to_vec(),
                     amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
                     number_of_decimals: rng.gen_range(1..18),
@@ -389,7 +389,7 @@ fn reorg_store_token(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
-                TokenIssuanceV1 {
+                TokenIssuance {
                     token_ticker: "BBBB".as_bytes().to_vec(),
                     amount_to_issue: bbbb_tokens_amount,
                     number_of_decimals: rng.gen_range(1..18),
@@ -422,7 +422,7 @@ fn reorg_store_token(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
-                TokenData::TokenTransferV1(TokenTransferV1 {
+                TokenData::TokenTransfer(TokenTransfer {
                     token_id: token_2_id,
                     amount: bbbb_tokens_amount,
                 })

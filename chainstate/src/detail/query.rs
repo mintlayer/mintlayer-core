@@ -203,7 +203,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
             })
             // Find issuance data and return RPCTokenInfo
             .find_map(|token_data| match &**token_data {
-                TokenData::TokenIssuanceV1(issuance) => {
+                TokenData::TokenIssuance(issuance) => {
                     Some(RPCTokenInfo::new_fungible(RPCFungibleTokenInfo::new(
                         token_id,
                         token_aux_data.issuance_tx().get_id(),
@@ -214,7 +214,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
                         issuance.metadata_uri.clone(),
                     )))
                 }
-                TokenData::NftIssuanceV1(nft) => {
+                TokenData::NftIssuance(nft) => {
                     Some(RPCTokenInfo::new_nonfungible(RPCNonFungibleTokenInfo::new(
                         token_id,
                         token_aux_data.issuance_tx().get_id(),
@@ -222,7 +222,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
                         &nft.metadata,
                     )))
                 }
-                TokenData::TokenTransferV1(_) => None,
+                TokenData::TokenTransfer(_) => None,
             }))
     }
 

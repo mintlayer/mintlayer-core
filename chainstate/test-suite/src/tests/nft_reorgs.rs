@@ -18,7 +18,7 @@ use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder
 use common::{
     chain::{
         signature::inputsig::InputWitness,
-        tokens::{token_id, Metadata, NftIssuanceV1, OutputValue, TokenData, TokenTransferV1},
+        tokens::{token_id, Metadata, NftIssuance, OutputValue, TokenData, TokenTransfer},
         Destination, OutputPurpose, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
@@ -57,7 +57,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
 
         // Issue a new NFT
         let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let issuance_data = NftIssuanceV1 {
+        let issuance_data = NftIssuance {
             metadata: Metadata {
                 creator: Some(random_creator()),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -116,7 +116,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         }
@@ -145,7 +145,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         })
@@ -220,7 +220,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         })
@@ -255,7 +255,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         }
@@ -290,7 +290,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         }
@@ -355,7 +355,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
         // Issue a new NFT
-        let issuance_value = NftIssuanceV1 {
+        let issuance_value = NftIssuance {
             metadata: Metadata {
                 creator: Some(random_creator()),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
