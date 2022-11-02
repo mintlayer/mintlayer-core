@@ -66,7 +66,7 @@ fn add_discovered_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
 
 fn add_banned_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
     let (id, info) = make_peer_info();
-    peerdb.register_peer_info(Multiaddr::empty(), info);
+    peerdb.register_peer_info("/ip4/160.9.112.46".parse().unwrap(), info);
     peerdb.ban_peer(&id);
 
     id

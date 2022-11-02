@@ -220,7 +220,7 @@ async fn validate_invalid_outbound_connection() {
 
     // valid connection
     let peer_id = libp2p::PeerId::random();
-    let address = Multiaddr::empty();
+    let address: Multiaddr = "/ip4/175.69.140.46".parse().unwrap();
     let res = swarm.accept_connection(
         address.clone(),
         net::types::PeerInfo::<Libp2pService> {
@@ -232,11 +232,11 @@ async fn validate_invalid_outbound_connection() {
         },
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(swarm.peerdb.is_address_banned(&address));
+    assert!(!swarm.peerdb.is_address_banned(&address));
 
     // invalid magic bytes
     let peer_id = libp2p::PeerId::random();
-    let address = Multiaddr::empty();
+    let address: Multiaddr = "/ip4/59.176.127.176".parse().unwrap();
     let res = swarm.accept_connection(
         address.clone(),
         net::types::PeerInfo::<Libp2pService> {
@@ -252,7 +252,7 @@ async fn validate_invalid_outbound_connection() {
 
     // invalid version
     let peer_id = libp2p::PeerId::random();
-    let address = Multiaddr::empty();
+    let address: Multiaddr = "/ip4/181.117.202.208".parse().unwrap();
     let res = swarm.accept_connection(
         address.clone(),
         net::types::PeerInfo::<Libp2pService> {
@@ -268,8 +268,7 @@ async fn validate_invalid_outbound_connection() {
 
     // protocol missing
     let peer_id = libp2p::PeerId::random();
-    // TODO: FIXME: Random address.
-    let address = Multiaddr::empty();
+    let address: Multiaddr = "/ip4/196.102.132.83".parse().unwrap();
     let res = swarm.accept_connection(
         address.clone(),
         net::types::PeerInfo::<Libp2pService> {
@@ -299,7 +298,7 @@ async fn validate_invalid_inbound_connection() {
 
     // valid connection
     let peer_id = libp2p::PeerId::random();
-    let address = Multiaddr::empty();
+    let address: Multiaddr = "/ip4/114.212.230.173".parse().unwrap();
     let res = swarm.accept_inbound_connection(
         address.clone(),
         net::types::PeerInfo::<Libp2pService> {
@@ -311,11 +310,11 @@ async fn validate_invalid_inbound_connection() {
         },
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(swarm.peerdb.is_address_banned(&address));
+    assert!(!swarm.peerdb.is_address_banned(&address));
 
     // invalid magic bytes
     let peer_id = libp2p::PeerId::random();
-    let address = Multiaddr::empty();
+    let address: Multiaddr = "/ip4/179.123.143.96".parse().unwrap();
     let res = swarm.accept_inbound_connection(
         address.clone(),
         net::types::PeerInfo::<Libp2pService> {
@@ -327,11 +326,11 @@ async fn validate_invalid_inbound_connection() {
         },
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(swarm.peerdb.is_address_banned(&address));
+    assert!(!swarm.peerdb.is_address_banned(&address));
 
     // invalid version
     let peer_id = libp2p::PeerId::random();
-    let address = Multiaddr::empty();
+    let address: Multiaddr = "/ip4/61.247.77.9".parse().unwrap();
     let res = swarm.accept_inbound_connection(
         address.clone(),
         net::types::PeerInfo::<Libp2pService> {
@@ -343,11 +342,11 @@ async fn validate_invalid_inbound_connection() {
         },
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(swarm.peerdb.is_address_banned(&address));
+    assert!(!swarm.peerdb.is_address_banned(&address));
 
     // protocol missing
     let peer_id = libp2p::PeerId::random();
-    let address = Multiaddr::empty();
+    let address: Multiaddr = "/ip4/58.52.214.119".parse().unwrap();
     let res = swarm.accept_inbound_connection(
         address.clone(),
         net::types::PeerInfo::<Libp2pService> {

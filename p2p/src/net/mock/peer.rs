@@ -108,8 +108,9 @@ where
                             network: *self.config.magic_bytes(),
                             // TODO: Replace the hard-coded values when ping and pubsub protocols are implemented for the mock interface.
                             protocols: [
-                                Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
-                                Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
+                                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                                Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                                Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
                             ]
                             .into_iter()
                             .collect(),
@@ -140,8 +141,9 @@ where
                         version: *self.config.version(),
                         network: *self.config.magic_bytes(),
                         protocols: [
-                            Protocol::new(ProtocolType::PubSub, *self.config.version()),
-                            Protocol::new(ProtocolType::Ping, *self.config.version()),
+                            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
                         ]
                         .into_iter()
                         .collect(),
@@ -274,8 +276,9 @@ mod tests {
                 version: *config.version(),
                 network: *config.magic_bytes(),
                 protocols: [
-                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
                     Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                    Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
                 ]
                 .into_iter()
                 .collect(),
@@ -293,8 +296,9 @@ mod tests {
                     network: *config.magic_bytes(),
                     version: *config.version(),
                     protocols: [
-                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
                         Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
                     ]
                     .into_iter()
                     .collect(),
@@ -349,8 +353,9 @@ mod tests {
                         version: *config.version(),
                         network: *config.magic_bytes(),
                         protocols: [
-                            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
                             Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
                         ]
                         .into_iter()
                         .collect(),
@@ -370,8 +375,9 @@ mod tests {
                     network: *config.magic_bytes(),
                     version: *config.version(),
                     protocols: [
-                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
                         Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
                     ]
                     .into_iter()
                     .collect(),
@@ -422,8 +428,9 @@ mod tests {
                 version: *config.version(),
                 network: [1, 2, 3, 4],
                 protocols: [
-                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
                     Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                    Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
                 ]
                 .into_iter()
                 .collect(),

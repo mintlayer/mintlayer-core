@@ -399,7 +399,7 @@ impl<T: NetworkingService> PeerDb<T> {
 
         self.available.remove(peer_id);
 
-        if let Some(address) = self.peers.get(&peer_id).and_then(|p| p.address()) {
+        if let Some(address) = self.peers.get(peer_id).and_then(|p| p.address()) {
             let ip = address.ip();
             let ban_till = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
