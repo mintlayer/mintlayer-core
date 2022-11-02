@@ -4,10 +4,6 @@ https://www.mintlayer.org/
 
 For a more technical introduction to Mintlayer visit [our docs](https://docs.mintlayer.org/).
 
-A draft of the DSA consensus paper can be found [here](https://www.mintlayer.org/docs/DSA-consensus-paper-draft.pdf).
-
-NOTE: DSA is not currently implemented.
-
 As it stands this code base is a work in progress and nothing here should be considered production ready.
 
 ## Security issues
