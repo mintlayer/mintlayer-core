@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::test_helper::create_utxo;
+use super::{empty_test_utxos_view, test_helper::create_utxo};
 use crate::{FlushableUtxoView, UtxosCache, UtxosView};
 use common::{chain::OutPoint, primitives::H256};
 use crypto::random::Rng;
@@ -34,7 +34,8 @@ fn cache_simulation_test(
 ) {
     let mut rng = make_seedable_rng(seed);
     let mut result: Vec<OutPoint> = Vec::new();
-    let mut base = UtxosCache::new_for_test(H256::random().into());
+    let test_view = empty_test_utxos_view();
+    let mut base = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
     let new_cache = simulation_step(
         &mut rng,
@@ -69,14 +70,15 @@ fn simulation_step<'a>(
         return None;
     }
 
-    let mut cache = UtxosCache::new(parent);
+    let mut cache = UtxosCache::from_borrowed_parent(parent);
     let mut new_cache_res = populate_cache(rng, &mut cache, iterations_per_cache, result);
     result.append(&mut new_cache_res);
 
     let new_cache = simulation_step(rng, result, &cache, iterations_per_cache, nested_level - 1);
 
-    if let Some(new_cache) = new_cache {
-        let consumed_cache = new_cache.consume();
+    let consumed_cache_op = new_cache.map(|c| c.consume());
+
+    if let Some(consumed_cache) = consumed_cache_op {
         cache.batch_write(consumed_cache).expect("batch write must succeed");
     }
 

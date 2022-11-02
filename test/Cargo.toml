@@ -7,7 +7,6 @@ license = "MIT"
 
 [dependencies]
 node = { path = "../node" }
-common = { path = "../common" }
 
 tokio = { version = "1.19", features = ['full'] }
 

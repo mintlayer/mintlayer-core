@@ -81,8 +81,9 @@ impl<T: Idable> From<T> for WithId<T> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use typename::TypeName;
 
-    #[derive(Eq, PartialEq, Debug, Clone, serialization::Encode)]
+    #[derive(Eq, PartialEq, Debug, Clone, serialization::Encode, TypeName)]
     struct TestStruct {
         num: u64,
         blurb: String,

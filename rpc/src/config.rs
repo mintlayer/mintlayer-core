@@ -15,21 +15,36 @@
 
 use std::{net::SocketAddr, str::FromStr};
 
-use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use utils::make_config_setting;
+
+make_config_setting!(
+    HttpBindAddress,
+    SocketAddr,
+    SocketAddr::from_str("127.0.0.1:3030").expect("Address must be correct")
+);
+
+make_config_setting!(HttpRpcEnabled, bool, true);
+
+make_config_setting!(
+    WebsocketBindAddress,
+    SocketAddr,
+    SocketAddr::from_str("127.0.0.1:3031").expect("Address must be correct")
+);
+
+make_config_setting!(WebsocketRpcEnabled, bool, true);
 
 /// The rpc subsystem configuration.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug, Default)]
 pub struct RpcConfig {
-    /// Address to bind RPC to.
-    pub bind_address: SocketAddr,
-}
+    /// Address to bind http RPC to.
+    pub http_bind_address: HttpBindAddress,
 
-impl RpcConfig {
-    /// Creates a new rpc configuration instance.
-    pub fn new() -> Result<Self> {
-        Ok(Self {
-            bind_address: SocketAddr::from_str("127.0.0.1:3030")?,
-        })
-    }
+    /// Whether http RPC is enabled
+    pub http_enabled: HttpRpcEnabled,
+
+    /// Address to bind websocket RPC to.
+    pub ws_bind_address: WebsocketBindAddress,
+
+    /// Whether websocket RPC is enabled
+    pub ws_enabled: WebsocketRpcEnabled,
 }

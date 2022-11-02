@@ -14,12 +14,15 @@
 // limitations under the License.
 
 mod with_id;
+
 pub use with_id::WithId;
+
+use std::fmt::{Debug, Display};
 
 use crate::{construct_fixed_hash, Uint256};
 use generic_array::{typenum, GenericArray};
 use serialization::{Decode, Encode};
-use std::fmt::Display;
+use typename::TypeName;
 
 construct_fixed_hash! {
     #[derive(Encode, Decode)]
@@ -66,26 +69,32 @@ impl<'de> serde::Deserialize<'de> for H256 {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
-pub struct Id<T: ?Sized> {
+pub struct Id<T> {
     id: H256,
     #[serde(skip)]
     _shadow: std::marker::PhantomData<fn() -> T>,
 }
 
+impl<T: TypeName> Debug for Id<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Id<{}>{{{:?}}}", T::typename_str(), self.id)
+    }
+}
+
 // Implementing Clone manually to avoid the Clone constraint on T
-impl<T: ?Sized> Clone for Id<T> {
+impl<T> Clone for Id<T> {
     fn clone(&self) -> Self {
         Self::new(self.id)
     }
 }
 
-impl<T: ?Sized> Copy for Id<T> {}
+impl<T> Copy for Id<T> {}
 
-impl<T: ?Sized> Display for Id<T> {
+impl<T> Display for Id<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.id.fmt(f)
+        std::fmt::Display::fmt(&self.id, f)
     }
 }
 
@@ -109,7 +118,7 @@ impl<T: Eq> From<H256> for Id<T> {
     }
 }
 
-impl<T: ?Sized> Id<T> {
+impl<T> Id<T> {
     pub fn get(&self) -> H256 {
         self.id
     }
@@ -122,7 +131,7 @@ impl<T: ?Sized> Id<T> {
     }
 }
 
-impl<T: ?Sized> AsRef<[u8]> for Id<T> {
+impl<T> AsRef<[u8]> for Id<T> {
     fn as_ref(&self) -> &[u8] {
         &self.id[..]
     }
@@ -130,7 +139,7 @@ impl<T: ?Sized> AsRef<[u8]> for Id<T> {
 
 /// a trait for objects that deserve having a unique id with implementations to how to ID them
 pub trait Idable {
-    type Tag: ?Sized;
+    type Tag: TypeName;
     fn get_id(&self) -> Id<Self::Tag>;
 }
 
@@ -173,7 +182,34 @@ mod tests {
     use super::*;
     use crypto::hash::StreamHasher;
     use hex::FromHex;
+    use rstest::rstest;
     use std::str::FromStr;
+    use test_utils::random::Seed;
+
+    #[derive(Eq, PartialEq, Debug, TypeName)]
+    struct TestType1;
+
+    #[derive(Eq, PartialEq, Debug)]
+    struct TestType2;
+
+    impl TypeName for TestType2 {
+        fn typename_str() -> std::borrow::Cow<'static, str> {
+            "TestType2".into()
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn typename(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let h1: Id<TestType1> = H256::random_using(&mut rng).into();
+        assert!(format!("{h1:?}").starts_with("Id<TestType1>{"));
+
+        let h2: Id<TestType2> = H256::random_using(&mut rng).into();
+        assert!(format!("{h2:?}").starts_with("Id<TestType2>{"));
+    }
 
     #[test]
     fn hashes_stream_and_msg_identical() {

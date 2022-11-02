@@ -20,12 +20,14 @@ use std::{
 
 use chainstate_types::Locator;
 use chainstate_types::{BlockIndex, GenBlockIndex};
+use common::chain::TxInput;
 use common::chain::{
     block::{timestamp::BlockTimestamp, BlockReward},
     config::ChainConfig,
     tokens::TokenAuxiliaryData,
     OutPointSourceId, TxMainChainIndex,
 };
+use common::chain::{OutPoint, Transaction};
 use common::{
     chain::{
         block::BlockHeader,
@@ -35,6 +37,7 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 use utils::eventhandler::EventHandler;
+use utxo::Utxo;
 
 use crate::ChainstateConfig;
 use crate::{
@@ -151,7 +154,10 @@ impl<
         self.deref().subscribers()
     }
 
-    fn calculate_median_time_past(&self, starting_block: &Id<GenBlock>) -> BlockTimestamp {
+    fn calculate_median_time_past(
+        &self,
+        starting_block: &Id<GenBlock>,
+    ) -> Result<BlockTimestamp, ChainstateError> {
         self.deref().calculate_median_time_past(starting_block)
     }
 
@@ -206,6 +212,43 @@ impl<
     ) -> Result<Option<TokenId>, ChainstateError> {
         self.deref().get_token_id_from_issuance_tx(tx_id)
     }
+
+    fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError> {
+        self.deref().available_inputs(tx)
+    }
+    fn get_inputs_outpoints_values(
+        &self,
+        tx: &Transaction,
+    ) -> Result<Vec<Option<common::primitives::Amount>>, ChainstateError> {
+        self.deref().get_inputs_outpoints_values(tx)
+    }
+
+    fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
+        self.deref().get_mainchain_blocks_list()
+    }
+
+    fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
+        self.deref().get_block_id_tree_as_list()
+    }
+
+    fn import_bootstrap_stream<'a>(
+        &mut self,
+        reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
+    ) -> Result<(), ChainstateError> {
+        self.deref_mut().import_bootstrap_stream(reader)
+    }
+
+    fn export_bootstrap_stream<'a>(
+        &self,
+        writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
+        include_orphans: bool,
+    ) -> Result<(), ChainstateError> {
+        self.deref().export_bootstrap_stream(writer, include_orphans)
+    }
+
+    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError> {
+        self.deref().utxo(outpoint)
+    }
 }
 
 #[cfg(test)]
@@ -219,7 +262,10 @@ mod tests {
         primitives::BlockHeight,
     };
 
-    use crate::{chainstate_interface::ChainstateInterface, make_chainstate, ChainstateConfig};
+    use crate::{
+        chainstate_interface::ChainstateInterface, make_chainstate, ChainstateConfig,
+        DefaultTransactionVerificationStrategy,
+    };
     use common::time_getter::TimeGetter;
 
     fn test_interface_ref<C: ChainstateInterface>(chainstate: &C, chain_config: &ChainConfig) {
@@ -249,8 +295,9 @@ mod tests {
         utils::concurrency::model(|| {
             let chain_config = Arc::new(create_unit_test_config());
             let chainstate_config = ChainstateConfig {
-                max_db_commit_attempts: 10,
-                max_orphan_blocks: 0,
+                max_db_commit_attempts: 10.into(),
+                max_orphan_blocks: 0.into(),
+                min_max_bootstrap_import_buffer_sizes: Default::default(),
             };
             let chainstate_storage = Store::new_empty().unwrap();
 
@@ -258,6 +305,7 @@ mod tests {
                 chain_config.clone(),
                 chainstate_config,
                 chainstate_storage,
+                DefaultTransactionVerificationStrategy::new(),
                 None,
                 TimeGetter::default(),
             )

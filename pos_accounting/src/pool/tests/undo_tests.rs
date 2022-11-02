@@ -17,7 +17,12 @@ use common::{
     chain::{OutPoint, OutPointSourceId},
     primitives::{Amount, Id, H256},
 };
-use crypto::key::{KeyKind, PrivateKey, PublicKey};
+use crypto::{
+    key::{KeyKind, PrivateKey, PublicKey},
+    random::Rng,
+};
+use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
     error::Error,
@@ -34,45 +39,62 @@ use crate::{
 };
 
 fn create_pool(
+    rng: &mut impl Rng,
     op: &mut impl PoSAccountingOperatorWrite,
     pledged_amount: Amount,
 ) -> Result<(PoolId, PublicKey, PoSAccountingUndo), Error> {
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    let outpoint = OutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random())), 0);
+    let outpoint = OutPoint::new(
+        OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
+        0,
+    );
     op.create_pool(&outpoint, pledged_amount, pub_key.clone())
         .map(|(id, undo)| (id, pub_key, undo))
 }
 
 fn create_delegation_id(
+    rng: &mut impl Rng,
     op: &mut impl PoSAccountingOperatorWrite,
     target_pool: PoolId,
 ) -> Result<(DelegationId, PublicKey, PoSAccountingUndo), Error> {
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    let outpoint = OutPoint::new(OutPointSourceId::BlockReward(Id::new(H256::random())), 0);
+    let outpoint = OutPoint::new(
+        OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
+        0,
+    );
     op.create_delegation_id(target_pool, pub_key.clone(), &outpoint)
         .map(|(id, undo)| (id, pub_key, undo))
 }
 
-#[test]
-fn check_create_pool_storage() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_create_pool_storage(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
     let mut db = PoSAccountingDBMut::new_empty(&mut storage);
 
-    check_create_pool(&mut db);
+    check_create_pool(&mut rng, &mut db);
 }
 
-#[test]
-fn check_create_pool_delta() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_create_pool_delta(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
     let db = PoSAccountingDBMut::new_empty(&mut storage);
     let mut delta = PoSAccountingDelta::new(&db);
 
-    check_create_pool(&mut delta);
+    check_create_pool(&mut rng, &mut delta);
 }
 
-fn check_create_pool(op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingView)) {
+fn check_create_pool(
+    rng: &mut impl Rng,
+    op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingView),
+) {
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, undo) = create_pool(op, pledged_amount).unwrap();
+    let (pool_id, pub_key, undo) = create_pool(rng, op, pledged_amount).unwrap();
 
     assert_eq!(
         op.get_pool_balance(pool_id)
@@ -101,26 +123,35 @@ fn check_create_pool(op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingVi
         .is_none());
 }
 
-#[test]
-fn check_decommission_pool_storage() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_decommission_pool_storage(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
     let mut db = PoSAccountingDBMut::new_empty(&mut storage);
 
-    check_decommission_pool(&mut db);
+    check_decommission_pool(&mut rng, &mut db);
 }
 
-#[test]
-fn check_decommission_pool_delta() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_decommission_pool_delta(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
     let db = PoSAccountingDBMut::new_empty(&mut storage);
     let mut delta = PoSAccountingDelta::new(&db);
 
-    check_decommission_pool(&mut delta);
+    check_decommission_pool(&mut rng, &mut delta);
 }
 
-fn check_decommission_pool(op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingView)) {
+fn check_decommission_pool(
+    rng: &mut impl Rng,
+    op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingView),
+) {
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, _) = create_pool(op, pledged_amount).unwrap();
+    let (pool_id, pub_key, _) = create_pool(rng, op, pledged_amount).unwrap();
 
     let undo = op.decommission_pool(pool_id).unwrap();
 
@@ -151,27 +182,36 @@ fn check_decommission_pool(op: &mut (impl PoSAccountingOperatorWrite + PoSAccoun
         .is_none());
 }
 
-#[test]
-fn check_delegation_id_storage() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_delegation_id_storage(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
     let mut db = PoSAccountingDBMut::new_empty(&mut storage);
 
-    check_delegation_id(&mut db);
+    check_delegation_id(&mut rng, &mut db);
 }
 
-#[test]
-fn check_delegation_id_delta() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_delegation_id_delta(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
     let db = PoSAccountingDBMut::new_empty(&mut storage);
     let mut delta = PoSAccountingDelta::new(&db);
 
-    check_delegation_id(&mut delta);
+    check_delegation_id(&mut rng, &mut delta);
 }
 
-fn check_delegation_id(op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingView)) {
+fn check_delegation_id(
+    rng: &mut impl Rng,
+    op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingView),
+) {
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, _) = create_pool(op, pledged_amount).unwrap();
-    let (delegation_id, del_pub_key, undo) = create_delegation_id(op, pool_id).unwrap();
+    let (pool_id, pub_key, _) = create_pool(rng, op, pledged_amount).unwrap();
+    let (delegation_id, del_pub_key, undo) = create_delegation_id(rng, op, pool_id).unwrap();
 
     assert_eq!(
         op.get_delegation_data(delegation_id)
@@ -214,27 +254,36 @@ fn check_delegation_id(op: &mut (impl PoSAccountingOperatorWrite + PoSAccounting
         .is_none());
 }
 
-#[test]
-fn check_delegate_staking_storage() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_delegate_staking_storage(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
     let mut db = PoSAccountingDBMut::new_empty(&mut storage);
 
-    check_delegate_staking(&mut db);
+    check_delegate_staking(&mut rng, &mut db);
 }
 
-#[test]
-fn check_delegate_staking_delta() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_delegate_staking_delta(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
     let db = PoSAccountingDBMut::new_empty(&mut storage);
     let mut delta = PoSAccountingDelta::new(&db);
 
-    check_delegate_staking(&mut delta);
+    check_delegate_staking(&mut rng, &mut delta);
 }
 
-fn check_delegate_staking(op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingView)) {
+fn check_delegate_staking(
+    rng: &mut impl Rng,
+    op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingView),
+) {
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, _) = create_pool(op, pledged_amount).unwrap();
-    let (delegation_id, del_pub_key, _) = create_delegation_id(op, pool_id).unwrap();
+    let (pool_id, pub_key, _) = create_pool(rng, op, pledged_amount).unwrap();
+    let (delegation_id, del_pub_key, _) = create_delegation_id(rng, op, pool_id).unwrap();
 
     let delegated_amount = Amount::from_atoms(300);
     let undo = op.delegate_staking(delegation_id, delegated_amount).unwrap();
@@ -284,27 +333,36 @@ fn check_delegate_staking(op: &mut (impl PoSAccountingOperatorWrite + PoSAccount
         .is_none());
 }
 
-#[test]
-fn check_spend_share_storage() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_spend_share_storage(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
     let mut db = PoSAccountingDBMut::new_empty(&mut storage);
 
-    check_delegate_staking(&mut db);
+    check_delegate_staking(&mut rng, &mut db);
 }
 
-#[test]
-fn check_spend_share_delta() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_spend_share_delta(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
     let db = PoSAccountingDBMut::new_empty(&mut storage);
     let mut delta = PoSAccountingDelta::new(&db);
 
-    check_spend_share(&mut delta);
+    check_spend_share(&mut rng, &mut delta);
 }
 
-fn check_spend_share(op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingView)) {
+fn check_spend_share(
+    rng: &mut impl Rng,
+    op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingView),
+) {
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, _) = create_pool(op, pledged_amount).unwrap();
-    let (delegation_id, del_pub_key, _) = create_delegation_id(op, pool_id).unwrap();
+    let (pool_id, pub_key, _) = create_pool(rng, op, pledged_amount).unwrap();
+    let (delegation_id, del_pub_key, _) = create_delegation_id(rng, op, pool_id).unwrap();
 
     let delegated_amount = Amount::from_atoms(300);
     op.delegate_staking(delegation_id, delegated_amount).unwrap();

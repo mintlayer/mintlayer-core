@@ -15,7 +15,10 @@
 
 use super::{
     orphan_blocks::OrphanAddError,
-    transaction_verifier::error::{ConnectTransactionError, TokensError},
+    transaction_verifier::{
+        error::{ConnectTransactionError, TokensError},
+        storage::TransactionVerifierStorageError,
+    },
 };
 use chainstate_types::PropertyQueryError;
 use common::{
@@ -49,6 +52,8 @@ pub enum BlockError {
     DatabaseCommitError(Id<Block>, usize, chainstate_storage::Error),
     #[error("Block proof calculation error for block: {0}")]
     BlockProofCalculationError(Id<Block>),
+    #[error("TransactionVerifier error: {0}")]
+    TransactionVerifierError(#[from] TransactionVerifierStorageError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -89,6 +94,8 @@ pub enum CheckBlockTransactionsError {
     DuplicateInputInTransaction(Id<Transaction>, Id<Block>),
     #[error("Duplicate input in block")]
     DuplicateInputInBlock(Id<Block>),
+    #[error("Number of signatures differs from number of inputs")]
+    InvalidWitnessCount,
     #[error("Empty inputs or outputs in transaction found in block")]
     EmptyInputsOutputsInTransactionInBlock(Id<Transaction>, Id<Block>),
     #[error("Tokens error: {0}")]
@@ -113,6 +120,18 @@ pub enum BlockSizeError {
     SizeOfTxs(usize, usize),
     #[error("Block smart contracts component size too large (current: {0}, limit: {1})")]
     SizeOfSmartContracts(usize, usize),
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum InitializationError {
+    #[error("Block storage error: `{0}`")]
+    StorageError(#[from] chainstate_storage::Error),
+    #[error("{0}")]
+    PropertyQuery(#[from] PropertyQueryError),
+    #[error("Not at genesis but block at height 1 not available")]
+    Block1Missing,
+    #[error("Genesis mismatch: {0} according to configuration, {1} inferred from storage")]
+    GenesisMismatch(Id<GenBlock>, Id<GenBlock>),
 }
 
 impl From<OrphanAddError> for Result<(), OrphanCheckError> {

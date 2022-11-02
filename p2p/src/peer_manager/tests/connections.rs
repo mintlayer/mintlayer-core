@@ -284,10 +284,7 @@ where
         &mut swarm2.peer_connectivity_handle,
     )
     .await;
-    assert_eq!(
-        swarm2.accept_inbound_connection(address, peer_info).await,
-        Ok(())
-    );
+    assert_eq!(swarm2.accept_inbound_connection(address, peer_info), Ok(()));
 }
 
 #[tokio::test]
@@ -332,7 +329,7 @@ where
     .await;
 
     assert_eq!(
-        swarm2.accept_inbound_connection(address, peer_info).await,
+        swarm2.accept_inbound_connection(address, peer_info),
         Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
             [1, 2, 3, 4],
             *config::create_mainnet().magic_bytes(),
@@ -521,14 +518,10 @@ where
     let config = Arc::new(config::create_mainnet());
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
 
-    swarm1
-        .peer_connectivity_handle
-        .connect(addr2.clone())
-        .await
-        .expect("dial to succeed");
+    swarm1.peer_connectivity_handle.connect(addr2).await.expect("dial to succeed");
 
     match timeout(
-        Duration::from_secs(swarm1._p2p_config.outbound_connection_timeout),
+        Duration::from_secs(*swarm1._p2p_config.outbound_connection_timeout),
         swarm1.peer_connectivity_handle.poll_next(),
     )
     .await
@@ -556,9 +549,21 @@ async fn connection_timeout_libp2p() {
 }
 
 #[tokio::test]
-#[ignore]
-async fn connection_timeout_mock() {
-    // TODO: implement timeouts for mock backend
+async fn connection_timeout_mock_tcp() {
+    connection_timeout::<MockService<TcpMockTransport>>(
+        MakeTcpAddress::make_address(),
+        MakeTcpAddress::make_address(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn connection_timeout_mock_channels() {
+    connection_timeout::<MockService<ChannelMockTransport>>(
+        MakeChannelAddress::make_address(),
+        65_535,
+    )
+    .await;
 }
 
 // try to establish a new connection through RPC and verify that it is notified of the timeout
@@ -571,7 +576,7 @@ where
 {
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(Default::default());
-    let (conn, _, _) = T::start(addr1, Arc::clone(&config), Arc::clone(&p2p_config)).await.unwrap();
+    let (conn, _) = T::start(addr1, Arc::clone(&config), Arc::clone(&p2p_config)).await.unwrap();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
 
@@ -596,7 +601,7 @@ where
     tx.send(SwarmEvent::Connect(addr2, rtx)).unwrap();
 
     match timeout(
-        Duration::from_secs(p2p_config.outbound_connection_timeout),
+        Duration::from_secs(*p2p_config.outbound_connection_timeout),
         rrx,
     )
     .await
@@ -621,7 +626,19 @@ async fn connection_timeout_rpc_notified_libp2p() {
 }
 
 #[tokio::test]
-#[ignore]
-async fn connection_timeout_rpc_notified_mock() {
-    // TODO: implement timeouts for mock backend
+async fn connection_timeout_rpc_notified_mock_tcp() {
+    connection_timeout_rpc_notified::<MockService<TcpMockTransport>>(
+        MakeTcpAddress::make_address(),
+        MakeTcpAddress::make_address(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn connection_timeout_rpc_notified_mock_channels() {
+    connection_timeout_rpc_notified::<MockService<ChannelMockTransport>>(
+        MakeChannelAddress::make_address(),
+        9999,
+    )
+    .await;
 }

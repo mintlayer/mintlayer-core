@@ -37,9 +37,11 @@ fn next_pow2(n: usize) -> usize {
     (1 << active_bits) as usize
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum MerkleTreeFormError {
+    #[error("Merkle tree input too small: {0}")]
     TooSmall(usize),
+    #[error("Unknown error: {0}")]
     Unknown(String),
 }
 
@@ -113,7 +115,7 @@ impl std::hash::Hasher for BlockchainHashAlgorithm {
     }
 }
 
-/// In this implementation we tell the merkletree crate how to calculate hashes
+/// In this implementation we tell the merkle-tree crate how to calculate hashes
 /// from individual nodes in the tree
 impl merkletree::hash::Algorithm<H256> for BlockchainHashAlgorithm {
     fn hash(&mut self) -> H256 {
@@ -148,7 +150,7 @@ impl Element for H256 {
     }
 
     fn from_slice(bytes: &[u8]) -> Self {
-        H256(bytes.try_into().expect("merkletree internal error"))
+        H256(bytes.try_into().expect("merkle-tree internal error"))
     }
 }
 

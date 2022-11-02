@@ -21,7 +21,7 @@ use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 use directories::UserDirs;
 
-use crate::regtest_options::RegtestOptions;
+use crate::{config_files::StorageBackendConfigFile, regtest_options::RegtestOptions};
 
 const DATA_DIR_NAME: &str = ".mintlayer";
 const CONFIG_NAME: &str = "config.toml";
@@ -30,13 +30,9 @@ const CONFIG_NAME: &str = "config.toml";
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
 pub struct Options {
-    /// Where to write logs
-    #[clap(long, value_name = "PATH")]
-    pub log_path: Option<PathBuf>,
-
     /// The path to the data directory.
-    #[clap(short, long = "datadir", default_value_os_t = default_data_dir())]
-    pub data_dir: PathBuf,
+    #[clap(short, long = "datadir")]
+    pub data_dir: Option<PathBuf>,
 
     /// The path to the config file.
     #[clap(short, long = "conf")]
@@ -60,6 +56,10 @@ pub enum Command {
 
 #[derive(Args, Debug)]
 pub struct RunOptions {
+    /// Storage backend to use
+    #[clap(long)]
+    pub storage_backend: Option<StorageBackendConfigFile>,
+
     /// The number of maximum attempts to process a block.
     #[clap(long)]
     pub max_db_commit_attempts: Option<usize>,
@@ -92,9 +92,21 @@ pub struct RunOptions {
     #[clap(long)]
     pub p2p_outbound_connection_timeout: Option<u64>,
 
-    /// Address to bind RPC to.
+    /// Address to bind http RPC to.
     #[clap(long, value_name = "ADDR")]
-    pub rpc_addr: Option<SocketAddr>,
+    pub http_rpc_addr: Option<SocketAddr>,
+
+    /// Enable/Disable http RPC.
+    #[clap(long)]
+    pub http_rpc_enabled: Option<bool>,
+
+    /// Address to bind websocket RPC to.
+    #[clap(long, value_name = "ADDR")]
+    pub ws_rpc_addr: Option<SocketAddr>,
+
+    /// Enable/Disable websocket RPC.
+    #[clap(long)]
+    pub ws_rpc_enabled: Option<bool>,
 }
 
 impl Options {
@@ -102,10 +114,10 @@ impl Options {
     ///
     /// The data directory is created as a side-effect of the invocation.
     pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Result<Self> {
-        let options: Options = clap::Parser::parse_from(args);
+        let options: Options = clap::Parser::try_parse_from(args)?;
 
         // We want to check earlier if directories can be created.
-        fs::create_dir_all(&options.data_dir).with_context(|| {
+        fs::create_dir_all(&options.data_dir()).with_context(|| {
             format!(
                 "Failed to create the '{:?}' data directory",
                 options.data_dir
@@ -121,9 +133,14 @@ impl Options {
         Ok(options)
     }
 
+    /// Returns the data directory
+    pub fn data_dir(&self) -> PathBuf {
+        self.data_dir.clone().unwrap_or_else(default_data_dir)
+    }
+
     /// Returns a path to the config file.
     pub fn config_path(&self) -> PathBuf {
-        self.config_path.clone().unwrap_or_else(|| self.data_dir.join(CONFIG_NAME))
+        self.config_path.clone().unwrap_or_else(|| self.data_dir().join(CONFIG_NAME))
     }
 }
 

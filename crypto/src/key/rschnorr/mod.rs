@@ -16,14 +16,10 @@
 mod internal;
 
 use crate::random::{CryptoRng, Rng};
-use generic_array::GenericArray;
-pub use internal::add_sigs;
-pub use internal::RistrettoSchnorrSignature;
-use internal::*;
 use serialization::{Decode, Encode};
-use tari_crypto::{keys::PublicKey, tari_utilities::ByteArray};
+use zeroize::Zeroize;
 
-use crate::hash::{Blake2b32Stream, StreamHasher};
+const SIGNATURE_CONTEXT: &[u8; 19] = b"mintlayer-signature";
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum RistrettoKeyError {
@@ -37,119 +33,133 @@ pub enum RistrettoSignatureError {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MLRistrettoPrivateKey {
-    key_data: RistrettoSecretKey,
+    key_data: schnorrkel::SecretKey,
 }
 
 impl Encode for MLRistrettoPrivateKey {
     fn encode(&self) -> Vec<u8> {
-        self.key_data.as_bytes().encode()
+        let mut key_bytes = self.key_data.to_ed25519_bytes();
+        let encoded = key_bytes.as_ref().encode();
+        key_bytes.zeroize();
+        encoded
     }
 
     fn encoded_size(&self) -> usize {
-        self.key_data.as_bytes().encoded_size()
+        let mut key_bytes = self.key_data.to_ed25519_bytes();
+        let size = key_bytes.as_ref().encoded_size();
+        key_bytes.zeroize();
+        size
     }
 
     fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
-        self.key_data.as_bytes().encode_to(dest)
+        let mut key_bytes = self.key_data.to_ed25519_bytes();
+        key_bytes.as_ref().encode_to(dest);
+        key_bytes.zeroize();
     }
 
     fn size_hint(&self) -> usize {
-        self.key_data.as_bytes().size_hint()
+        let mut key_bytes = self.key_data.to_ed25519_bytes();
+        let size_hint = key_bytes.as_ref().size_hint();
+        key_bytes.zeroize();
+        size_hint
     }
 
     fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-        self.key_data.as_bytes().using_encoded(f)
+        let mut key_bytes = self.key_data.to_ed25519_bytes();
+        let using_encoded = key_bytes.as_ref().using_encoded(f);
+        key_bytes.zeroize();
+        using_encoded
     }
 }
 
 impl Decode for MLRistrettoPrivateKey {
     fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
-        let v = Vec::decode(input)?;
-        RistrettoSecretKey::from_bytes(&v)
+        let mut v = Vec::decode(input)?;
+        let result = schnorrkel::SecretKey::from_ed25519_bytes(&v)
             .map(|r| MLRistrettoPrivateKey { key_data: r })
-            .map_err(|_| serialization::Error::from("Private Key deserialization failed"))
+            .map_err(|_| serialization::Error::from("Private Key deserialization failed"));
+        v.zeroize();
+        result
     }
 }
 
 impl MLRistrettoPrivateKey {
     pub fn new<R: Rng + CryptoRng>(rng: &mut R) -> (MLRistrettoPrivateKey, MLRistrettoPublicKey) {
-        let pair = RistrettoPublicKey::random_keypair(rng);
+        let secret = schnorrkel::SecretKey::generate_with(rng);
+        let public = secret.to_public();
         (
-            MLRistrettoPrivateKey::from_native(pair.0),
-            MLRistrettoPublicKey::from_native(pair.1),
+            MLRistrettoPrivateKey::from_native(secret),
+            MLRistrettoPublicKey::from_native(public),
         )
     }
 
-    pub fn as_bytes(&self) -> &[u8] {
-        self.key_data.as_bytes()
+    pub fn as_bytes(&self) -> [u8; schnorrkel::SECRET_KEY_LENGTH] {
+        /*
+        TODO consider removing this method as it copies secret data to an array that is
+        not automatically zeroed after use. If this is needed then consider returning
+        secrecy::Secret<[u8; schnorrkel::SECRET_KEY_LENGTH]>
+        */
+        self.key_data.to_ed25519_bytes()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, RistrettoKeyError> {
-        let sk =
-            RistrettoSecretKey::from_bytes(bytes).map_err(|_| RistrettoKeyError::InvalidData)?;
+        let sk = schnorrkel::SecretKey::from_ed25519_bytes(bytes)
+            .map_err(|_| RistrettoKeyError::InvalidData)?;
         let result = Self::from_native(sk);
         Ok(result)
     }
 
-    pub fn as_native(&self) -> &RistrettoSecretKey {
+    pub fn as_native(&self) -> &schnorrkel::SecretKey {
         &self.key_data
     }
 
-    pub fn from_native(native: RistrettoSecretKey) -> Self {
+    pub fn from_native(native: schnorrkel::SecretKey) -> Self {
         Self { key_data: native }
     }
 
-    pub fn construct_challenge_from_message(
-        msg: &[u8],
-    ) -> GenericArray<u8, generic_array::typenum::U32> {
-        Blake2b32Stream::new().write(msg).finalize()
-    }
-
-    pub(crate) fn sign_message<R: Rng + CryptoRng>(
+    pub(crate) fn sign_message(
         &self,
-        rng: &mut R,
         msg: &[u8],
-    ) -> Result<RistrettoSchnorrSignature, RistrettoSignatureError> {
-        let (r, r_pub) = RistrettoPublicKey::random_keypair(rng);
-        let k = &self.key_data;
-        let e = Self::construct_challenge_from_message(msg);
-        let sig = RistrettoSchnorr::sign(k.clone(), r, &e).expect("signing failed");
-        debug_assert_eq!(*sig.get_public_nonce(), r_pub);
+    ) -> Result<schnorrkel::Signature, RistrettoSignatureError> {
+        let ctx = schnorrkel::signing_context(SIGNATURE_CONTEXT);
+        let pub_key = self.key_data.to_public();
+        let transcript = ctx.bytes(msg);
+        let sig = self.key_data.sign(transcript, &pub_key);
         Ok(sig)
     }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct MLRistrettoPublicKey {
-    pubkey_data: RistrettoPublicKey,
+    pubkey_data: schnorrkel::PublicKey,
 }
 
 impl Encode for MLRistrettoPublicKey {
     fn encode(&self) -> Vec<u8> {
-        self.pubkey_data.as_bytes().encode()
+        self.pubkey_data.as_ref().encode()
     }
 
     fn encoded_size(&self) -> usize {
-        self.pubkey_data.as_bytes().encoded_size()
+        self.pubkey_data.as_ref().encoded_size()
     }
 
     fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
-        self.pubkey_data.as_bytes().encode_to(dest)
+        self.pubkey_data.as_ref().encode_to(dest)
     }
 
     fn size_hint(&self) -> usize {
-        self.pubkey_data.as_bytes().size_hint()
+        self.pubkey_data.as_ref().size_hint()
     }
 
     fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-        self.pubkey_data.as_bytes().using_encoded(f)
+        self.pubkey_data.as_ref().using_encoded(f)
     }
 }
 
 impl Decode for MLRistrettoPublicKey {
     fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         let v = Vec::decode(input)?;
-        RistrettoPublicKey::from_bytes(&v)
+        schnorrkel::PublicKey::from_bytes(&v)
             .map(|r| MLRistrettoPublicKey { pubkey_data: r })
             .map_err(|_| serialization::Error::from("Public Key deserialization failed"))
     }
@@ -157,50 +167,41 @@ impl Decode for MLRistrettoPublicKey {
 
 impl MLRistrettoPublicKey {
     pub fn as_bytes(&self) -> &[u8] {
-        self.pubkey_data.as_bytes()
+        self.pubkey_data.as_ref()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, RistrettoKeyError> {
         let pk =
-            RistrettoPublicKey::from_bytes(bytes).map_err(|_| RistrettoKeyError::InvalidData)?;
+            schnorrkel::PublicKey::from_bytes(bytes).map_err(|_| RistrettoKeyError::InvalidData)?;
         let result = Self::from_native(pk);
         Ok(result)
     }
 
-    pub fn as_native(&self) -> &RistrettoPublicKey {
+    pub fn as_native(&self) -> &schnorrkel::PublicKey {
         &self.pubkey_data
     }
 
-    pub fn from_native(native: RistrettoPublicKey) -> Self {
+    pub fn from_native(native: schnorrkel::PublicKey) -> Self {
         Self {
             pubkey_data: native,
         }
     }
 
     pub fn from_private_key(private_key: &MLRistrettoPrivateKey) -> Self {
-        Self::from_native(RistrettoPublicKey::from_secret_key(&private_key.key_data))
+        Self::from_native(private_key.key_data.to_public())
     }
 
-    #[allow(unused)]
-    pub(crate) fn verify_challenge(
-        &self,
-        signature: &RistrettoSchnorrSignature,
-        challenge: &[u8],
-    ) -> bool {
-        signature.verify_challenge(self.as_native(), challenge)
-    }
-
-    pub(crate) fn verify_message(&self, signature: &RistrettoSchnorrSignature, msg: &[u8]) -> bool {
-        let e = Blake2b32Stream::new().write(msg).finalize();
-        signature.verify_challenge(self.as_native(), &e)
+    pub(crate) fn verify_message(&self, signature: &schnorrkel::Signature, msg: &[u8]) -> bool {
+        let ctx = schnorrkel::signing_context(SIGNATURE_CONTEXT);
+        self.pubkey_data.verify(ctx.bytes(msg), signature).is_ok()
     }
 }
 
 impl std::ops::Add for &MLRistrettoPublicKey {
     type Output = MLRistrettoPublicKey;
     fn add(self, rhs: Self) -> MLRistrettoPublicKey {
-        let result = self.as_native() + rhs.as_native();
-        MLRistrettoPublicKey::from_native(result)
+        let result = self.pubkey_data.as_point() + rhs.pubkey_data.as_point();
+        MLRistrettoPublicKey::from_native(schnorrkel::PublicKey::from_point(result))
     }
 }
 
@@ -210,7 +211,6 @@ mod test {
     use crate::random::make_true_rng;
     use hex::ToHex;
     use serialization::DecodeAll;
-    use tari_crypto::tari_utilities::message_format::MessageFormat;
 
     #[test]
     fn basic() {
@@ -227,7 +227,7 @@ mod test {
         {
             let sk_bytes = sk.as_bytes();
             let sk_short = &sk_bytes[..sk_bytes.len() - 1];
-            assert_eq!(sk_short.len(), 31);
+            assert_eq!(sk_short.len(), 63);
             let sk_again = MLRistrettoPrivateKey::from_bytes(sk_short);
             assert!(sk_again.is_err());
         }
@@ -254,28 +254,26 @@ mod test {
 
     #[test]
     fn serialize_chosen_data() {
-        let sk = RistrettoSecretKey::from_base64(
-            "IAAAAAAAAAC46tzI9UVS8WiNtYENaQbUWW58Ti7SHPdLrNsicPZiAQ==",
+        let sk = MLRistrettoPrivateKey::from_bytes(
+            &hex::decode("181b259bac04d8ec3f6ea2a86b37f39a353288a8410fc469b9f2d5c59ce30a36c10bfdc906c8343fe0fb42c2564d6b1d3bf8ae3d73f0f7e5424cb60a9639d7e0")
+                .unwrap(),
         )
         .unwrap();
-        let pk = RistrettoPublicKey::from_base64(
-            "IAAAAAAAAAAqODDr/WZY9yAdMzAZSrv6+APxs2SHbeUYxh+e26mVJg==",
+        let pk = MLRistrettoPublicKey::from_bytes(
+            &hex::decode("283462ee4f0840e21d6de7744ba42929d1b74b7a948e8229d9551e7760ec8c52")
+                .unwrap(),
         )
         .unwrap();
 
-        let sk = MLRistrettoPrivateKey::from_native(sk);
-        let pk = MLRistrettoPublicKey::from_native(pk);
+        assert_eq!(pk.as_native(), &sk.as_native().to_public());
 
         let sk_encoded = sk.encode();
         let pk_encoded = pk.encode();
 
-        assert_eq!(
-            sk_encoded.encode_hex::<String>(),
-            "80b8eadcc8f54552f1688db5810d6906d4596e7c4e2ed21cf74bacdb2270f66201"
-        );
+        assert_eq!(sk_encoded.encode_hex::<String>(), "0101181b259bac04d8ec3f6ea2a86b37f39a353288a8410fc469b9f2d5c59ce30a36c10bfdc906c8343fe0fb42c2564d6b1d3bf8ae3d73f0f7e5424cb60a9639d7e0");
         assert_eq!(
             pk_encoded.encode_hex::<String>(),
-            "802a3830ebfd6658f7201d3330194abbfaf803f1b364876de518c61f9edba99526"
+            "80283462ee4f0840e21d6de7744ba42929d1b74b7a948e8229d9551e7760ec8c52"
         );
 
         let sk2 = MLRistrettoPrivateKey::decode_all(&mut sk_encoded.as_slice()).unwrap();
@@ -290,7 +288,7 @@ mod test {
         let msg_size = 1 + rand::random::<usize>() % 10000;
         let msg: Vec<u8> = (0..msg_size).map(|_| rand::random::<u8>()).collect();
         let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
-        let sig = sk.sign_message(&mut rng, &msg).unwrap();
+        let sig = sk.sign_message(&msg).unwrap();
         assert!(pk.verify_message(&sig, &msg));
     }
 
@@ -299,22 +297,29 @@ mod test {
         let mut rng = make_true_rng();
         let msg: Vec<u8> = Vec::new();
         let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
-        let sig = sk.sign_message(&mut rng, &msg).unwrap();
+        let sig = sk.sign_message(&msg).unwrap();
         assert!(pk.verify_message(&sig, &msg));
     }
 
     #[test]
     fn sk_zeroed() {
-        use std::slice;
         let mut rng = make_true_rng();
-        let zero_sk = &vec![0u8; 32][..];
-        let hldr;
-        {
-            let (sk, _pk) = MLRistrettoPrivateKey::new(&mut rng);
-            hldr = sk.as_bytes().as_ptr();
-        }
-        unsafe {
-            assert_eq!(slice::from_raw_parts(hldr, 32), zero_sk);
-        }
+        let (mut sk, _) = MLRistrettoPrivateKey::new(&mut rng);
+        unsafe { core::ptr::drop_in_place(&mut sk) };
+        let zero_sk = &vec![0u8; 64];
+        assert_eq!(sk.as_bytes().as_ref(), zero_sk);
+    }
+
+    #[test]
+    fn add_public_keys() {
+        let pk1 = "d819669a3c9f79aee57e2ae6be47f78444feda3796fdf72ca1f428a2edecc909";
+        let pk2 = "ce3138c10e1858ac26f342c7cad4a974975af93835d59004a91508ea472a8375";
+        let pk_sum = "64dc721dcf6b7a9cc75db624681cc33d6d8e4080b7bc371da9ca1dfbeb497d21";
+
+        let pk1 = MLRistrettoPublicKey::from_bytes(&hex::decode(pk1).unwrap()).unwrap();
+        let pk2 = MLRistrettoPublicKey::from_bytes(&hex::decode(pk2).unwrap()).unwrap();
+        let pk_sum = MLRistrettoPublicKey::from_bytes(&hex::decode(pk_sum).unwrap()).unwrap();
+
+        assert_eq!(&pk1 + &pk2, pk_sum);
     }
 }

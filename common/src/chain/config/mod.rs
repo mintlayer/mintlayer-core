@@ -85,6 +85,10 @@ pub struct ChainConfig {
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_ticker_len: usize,
+    token_max_name_len: usize,
+    token_max_description_len: usize,
+    token_min_hash_len: usize,
+    token_max_hash_len: usize,
     empty_consensus_reward_maturity_distance: BlockDistance,
 }
 
@@ -173,6 +177,22 @@ impl ChainConfig {
         self.token_max_ticker_len
     }
 
+    pub fn token_max_description_len(&self) -> usize {
+        self.token_max_description_len
+    }
+
+    pub fn token_max_name_len(&self) -> usize {
+        self.token_max_name_len
+    }
+
+    pub fn min_hash_len(&self) -> usize {
+        self.token_min_hash_len
+    }
+
+    pub fn max_hash_len(&self) -> usize {
+        self.token_max_hash_len
+    }
+
     pub fn empty_consensus_reward_maturity_distance(&self) -> BlockDistance {
         self.empty_consensus_reward_maturity_distance
     }
@@ -188,18 +208,21 @@ const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 524_288;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 524_288;
 const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
-const TOKEN_MAX_URI_LEN: usize = 1024;
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
 const TOKEN_MAX_TICKER_LEN: usize = 5;
+const TOKEN_MIN_HASH_LEN: usize = 4;
+const TOKEN_MAX_HASH_LEN: usize = 32;
+const TOKEN_MAX_NAME_LEN: usize = 10;
+const TOKEN_MAX_DESCRIPTION_LEN: usize = 100;
+const TOKEN_MAX_URI_LEN: usize = 1024;
 
 fn create_mainnet_genesis() -> Genesis {
     use crate::chain::transaction::TxOutput;
 
     // TODO: replace this with our mint key
     // Private key: "0080732e24bb0b704cb455e233b539f2c63ab411989a54984f84a6a2eb2e933e160f"
-    // Pubub key:  "008090f5aee58be97ce2f7c014fa97ffff8c459a0c491f8124950724a187d134e25c"
+    // Public key:  "008090f5aee58be97ce2f7c014fa97ffff8c459a0c491f8124950724a187d134e25c"
     // Public key hash:  "8640e6a3d3d53c7dffe2790b0e147c9a77197033"
-    // Destination:  "008640e6a3d3d53c7dffe2790b0e147c9a77197033"
     let genesis_mint_pubkeyhash_hex_encoded = "008640e6a3d3d53c7dffe2790b0e147c9a77197033";
     let genesis_mint_pubkeyhash_encoded = Vec::from_hex(genesis_mint_pubkeyhash_hex_encoded)
         .expect("Hex decoding of pubkeyhash shouldn't fail");
@@ -212,7 +235,7 @@ fn create_mainnet_genesis() -> Genesis {
 
     // TODO: replace this with the real genesis mint value
     let output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(100000000000000)),
+        OutputValue::Coin(Amount::from_atoms(100_000_000_000_000)),
         OutputPurpose::Transfer(genesis_mint_destination),
     );
 
@@ -229,7 +252,7 @@ fn create_unit_test_genesis(premine_destination: Destination) -> Genesis {
     let genesis_message = String::new();
 
     let output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(100000000000000)),
+        OutputValue::Coin(Amount::from_atoms(100_000_000_000_000_000_000)),
         OutputPurpose::Transfer(premine_destination),
     );
 

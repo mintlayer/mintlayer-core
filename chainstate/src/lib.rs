@@ -14,22 +14,22 @@
 // limitations under the License.
 
 mod interface;
+use detail::bootstrap::BootstrapError;
+pub use detail::tx_verification_strategy::*;
 pub use interface::chainstate_interface;
 use interface::chainstate_interface_impl;
 pub use interface::chainstate_interface_impl_delegation;
 
 pub mod rpc;
 
-pub use crate::detail::calculate_median_time_past;
-pub use crate::detail::CheckBlockError;
-pub use crate::detail::CheckBlockTransactionsError;
-pub use crate::detail::ConnectTransactionError;
-pub use crate::detail::OrphanCheckError;
-pub use crate::detail::TokensError;
-
 pub use crate::{
     config::ChainstateConfig,
-    detail::{ban_score, BlockError, BlockSource, Locator, HEADER_LIMIT},
+    detail::{
+        ban_score, calculate_median_time_past, is_rfc3986_valid_symbol, BlockError, BlockSource,
+        CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError, InitializationError,
+        Locator, OrphanCheckError, TokensError, TransactionVerifierStorageError, TxIndexError,
+        HEADER_LIMIT,
+    },
 };
 
 mod config;
@@ -37,7 +37,7 @@ mod detail;
 
 use std::sync::Arc;
 
-use chainstate_types::PropertyQueryError;
+pub use chainstate_types::PropertyQueryError;
 use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
@@ -55,22 +55,28 @@ pub enum ChainstateEvent {
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum ChainstateError {
-    #[error("Initialization error")]
-    FailedToInitializeChainstate(String),
+    #[error("Initialization error: {0}")]
+    FailedToInitializeChainstate(#[from] InitializationError),
     #[error("Block processing failed: `{0}`")]
-    ProcessBlockError(BlockError),
+    ProcessBlockError(#[from] BlockError),
     #[error("Property read error: `{0}`")]
-    FailedToReadProperty(PropertyQueryError),
+    FailedToReadProperty(#[from] PropertyQueryError),
+    #[error("Block import error {0}")]
+    BootstrapError(#[from] BootstrapError),
 }
 
 impl subsystem::Subsystem for Box<dyn ChainstateInterface> {}
 
-type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface>>;
+pub type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface>>;
 
-pub fn make_chainstate<S: chainstate_storage::BlockchainStorage + 'static>(
+pub fn make_chainstate<
+    S: chainstate_storage::BlockchainStorage + 'static,
+    V: TransactionVerificationStrategy + 'static,
+>(
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,
     chainstate_storage: S,
+    tx_verification_strategy: V,
     custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
     time_getter: TimeGetter,
 ) -> Result<Box<dyn ChainstateInterface>, ChainstateError> {
@@ -78,6 +84,7 @@ pub fn make_chainstate<S: chainstate_storage::BlockchainStorage + 'static>(
         chain_config,
         chainstate_config,
         chainstate_storage,
+        tx_verification_strategy,
         custom_orphan_error_hook,
         time_getter,
     )?;

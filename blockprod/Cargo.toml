@@ -1,0 +1,24 @@
+[package]
+name = "blockprod"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chainstate = { path = "../chainstate/" }
+common = { path = "../common/" }
+mempool = { path = "../mempool/" }
+subsystem = { path = "../subsystem/" }
+logging = {path = '../logging'}
+utils = {path = '../utils'}
+rpc = { path = "../rpc/" }
+
+thiserror = "1.0"
+tokio = { version = "1", default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
+futures = "0.3"
+void = "1.0"
+crossbeam-channel = "0.5"
+jsonrpsee = {version = "0.15", features = ["macros"]}
+async-trait = "0.1"

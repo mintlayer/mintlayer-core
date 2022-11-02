@@ -24,9 +24,9 @@ use crate::{
     },
 };
 
-use self::inputsig::StandardInputSignature;
+use self::inputsig::{InputWitness, StandardInputSignature};
 
-use super::{Destination, Transaction, TxOutput};
+use super::{signed_transaction::SignedTransaction, Destination, Transaction, TxOutput};
 
 pub mod inputsig;
 pub mod sighashtype;
@@ -39,10 +39,14 @@ pub enum TransactionSigError {
     InvalidSigHashValue(u8),
     #[error("Invalid input index was provided (provided: `{0}` vs available: `{1}`")]
     InvalidInputIndex(usize, usize),
+    #[error("Invalid signature index was provided (provided: `{0}` vs available: `{1}`")]
+    InvalidSignatureIndex(usize, usize),
     #[error("Requested signature hash without the presence of any inputs")]
     SigHashRequestWithoutInputs,
     #[error("Attempted to verify signatures for a transaction without inputs")]
     SignatureVerificationWithoutInputs,
+    #[error("Attempted to verify signatures for a transaction without signatures")]
+    SignatureVerificationWithoutSigs,
     #[error("Input corresponding to output number {0} does not exist (number of inputs is {1})")]
     InvalidOutputIndexForModeSingle(usize, usize),
     #[error("Decoding witness failed ")]
@@ -65,6 +69,8 @@ pub enum TransactionSigError {
     AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
     #[error("AnyoneCanSpend should not use standard signatures, so producing a signature for it is not possible")]
     AttemptedToProduceSignatureForAnyoneCanSpend,
+    #[error("Number of signatures does not match number of inputs")]
+    InvalidWitnessCount,
     #[error("Unsupported yet!")]
     Unsupported,
 }
@@ -173,7 +179,7 @@ fn hash_encoded_if_some<T: Encode>(val: &Option<T>, stream: &mut DefaultHashAlgo
     }
 }
 
-pub trait Transactable {
+pub trait Signable {
     fn inputs(&self) -> Option<&[TxInput]>;
     fn outputs(&self) -> Option<&[TxOutput]>;
     fn version_byte(&self) -> Option<u8>;
@@ -181,7 +187,11 @@ pub trait Transactable {
     fn flags(&self) -> Option<u32>;
 }
 
-impl Transactable for Transaction {
+pub trait Transactable: Signable {
+    fn signatures(&self) -> Option<&[InputWitness]>;
+}
+
+impl Signable for Transaction {
     fn inputs(&self) -> Option<&[TxInput]> {
         Some(self.inputs())
     }
@@ -203,7 +213,35 @@ impl Transactable for Transaction {
     }
 }
 
-fn stream_signature_hash<T: Transactable>(
+impl Signable for SignedTransaction {
+    fn inputs(&self) -> Option<&[TxInput]> {
+        Some(self.inputs())
+    }
+
+    fn outputs(&self) -> Option<&[TxOutput]> {
+        Some(self.outputs())
+    }
+
+    fn version_byte(&self) -> Option<u8> {
+        Some(self.version_byte())
+    }
+
+    fn lock_time(&self) -> Option<u32> {
+        Some(self.lock_time())
+    }
+
+    fn flags(&self) -> Option<u32> {
+        Some(self.flags())
+    }
+}
+
+impl Transactable for SignedTransaction {
+    fn signatures(&self) -> Option<&[InputWitness]> {
+        Some(self.signatures())
+    }
+}
+
+fn stream_signature_hash<T: Signable>(
     tx: &T,
     stream: &mut DefaultHashAlgoStream,
     mode: sighashtype::SigHashType,
@@ -242,7 +280,7 @@ fn stream_signature_hash<T: Transactable>(
     Ok(())
 }
 
-pub fn signature_hash<T: Transactable>(
+pub fn signature_hash<T: Signable>(
     mode: sighashtype::SigHashType,
     tx: &T,
     input_num: usize,
@@ -272,11 +310,12 @@ pub fn verify_signature<T: Transactable>(
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
     let inputs = tx.inputs().ok_or(TransactionSigError::SignatureVerificationWithoutInputs)?;
-    let target_input = inputs.get(input_num).ok_or(TransactionSigError::InvalidInputIndex(
+    let sigs = tx.signatures().ok_or(TransactionSigError::SignatureVerificationWithoutSigs)?;
+    let input_witness = sigs.get(input_num).ok_or(TransactionSigError::InvalidSignatureIndex(
         input_num,
         inputs.len(),
     ))?;
-    let input_witness = target_input.witness();
+
     match input_witness {
         inputsig::InputWitness::NoSignature(_) => match outpoint_destination {
             Destination::Address(_) | Destination::PublicKey(_) | Destination::ScriptHash(_) => {

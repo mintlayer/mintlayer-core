@@ -1,0 +1,25 @@
+[package]
+name = "tx-verifier"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common = {path = '../../common'}
+chainstate-storage = {path = '../storage'}
+chainstate-types = {path = '../types'}
+utils = {path = '../../utils'}
+utxo = {path = '../../utxo'}
+crypto = {path = '../../crypto'}
+
+thiserror = "1.0"
+fallible-iterator = "0.2.0"
+replace_with = "0.1"
+
+[dev-dependencies]
+test-utils = { path = "../../test-utils" }
+
+rstest = "0.15"
+mockall = "0.11"

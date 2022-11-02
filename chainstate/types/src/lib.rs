@@ -16,11 +16,15 @@
 pub mod storage_result;
 
 pub use crate::{
-    block_index::BlockIndex, error::PropertyQueryError, gen_block_index::GenBlockIndex,
-    height_skip::get_skip_height, locator::Locator,
+    ancestor::block_index_ancestor_getter, ancestor::gen_block_index_getter,
+    block_index::BlockIndex, block_index_handle::BlockIndexHandle, error::GetAncestorError,
+    error::PropertyQueryError, gen_block_index::GenBlockIndex, height_skip::get_skip_height,
+    locator::Locator,
 };
 
+mod ancestor;
 mod block_index;
+mod block_index_handle;
 mod error;
 mod gen_block_index;
 mod height_skip;

@@ -93,8 +93,8 @@ async fn test_connect_accept() {
     assert!(service1.is_ok());
     assert!(service2.is_ok());
 
-    let (mut service1, _, _) = service1.unwrap();
-    let (mut service2, _, _) = service2.unwrap();
+    let (mut service1, _) = service1.unwrap();
+    let (mut service2, _) = service2.unwrap();
     let conn_addr = service1.local_addr().await.unwrap().unwrap();
 
     let (res1, res2): (crate::Result<ConnectivityEvent<Libp2pService>>, _) =
@@ -104,13 +104,13 @@ async fn test_connect_accept() {
     assert!(res1.is_ok());
 }
 
-// try to connect to a remote peer with a multiaddress that's missing the peerid
+// try to connect to a remote peer with a multi-address that's missing the peerid
 // and verify that the connection fails
 #[tokio::test]
 async fn test_connect_peer_id_missing() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let addr: Multiaddr = "/ip6/::1/tcp/8904".parse().unwrap();
-    let (mut service, _, _) =
+    let (mut service, _) =
         Libp2pService::start(MakeP2pAddress::make_address(), config, Default::default())
             .await
             .unwrap();
@@ -292,11 +292,11 @@ fn test_parse_peers_valid_3_peers_1_valid() {
 #[tokio::test]
 async fn test_connect_with_timeout() {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut service, _, _) = Libp2pService::start(
+    let (mut service, _) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         config,
         Arc::new(config::P2pConfig {
-            outbound_connection_timeout: 2,
+            outbound_connection_timeout: 2.into(),
             ..Default::default()
         }),
     )

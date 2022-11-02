@@ -19,6 +19,9 @@ mod internal;
 mod is_transaction_seal;
 #[cfg(any(test, feature = "mock"))]
 pub mod mock;
+pub mod schema;
+
+use std::collections::BTreeMap;
 
 pub use internal::{utxo_db, Store};
 
@@ -71,8 +74,11 @@ pub trait BlockchainStorageRead: UtxosStorageRead {
     /// Get token creation tx
     fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
 
-    // Get token id by id of the creation tx
+    /// Get token id by id of the creation tx
     fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
+
+    /// Get block tree as height vs ids
+    fn get_block_tree_by_height(&self) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 }
 
 /// Modifying operations on persistent blockchain data
@@ -160,10 +166,10 @@ pub trait Transactional<'t> {
     type TransactionRw: TransactionRw + 't;
 
     /// Start a read-only transaction.
-    fn transaction_ro<'s: 't>(&'s self) -> Self::TransactionRo;
+    fn transaction_ro<'s: 't>(&'s self) -> crate::Result<Self::TransactionRo>;
 
     /// Start a read-write transaction.
-    fn transaction_rw<'s: 't>(&'s self) -> Self::TransactionRw;
+    fn transaction_rw<'s: 't>(&'s self) -> crate::Result<Self::TransactionRw>;
 }
 
 pub trait BlockchainStorage: BlockchainStorageWrite + for<'tx> Transactional<'tx> + Send {}

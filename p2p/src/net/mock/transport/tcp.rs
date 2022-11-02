@@ -88,12 +88,22 @@ impl MockStream for TcpMockStream {
         Ok(())
     }
 
+    /// Read a framed message from socket
+    ///
+    /// First try to decode whatever may be in the stream's buffer and if it's empty
+    /// or the frame hasn't been completely received, wait on the socket until the buffer
+    /// has all data. If the buffer has a full frame that can be decoded, return that without
+    /// calling the socket first.
     async fn recv(&mut self) -> Result<Option<Message>> {
-        if self.stream.read_buf(&mut self.buffer).await? == 0 {
-            return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
+        match (EncoderDecoder {}.decode(&mut self.buffer)) {
+            Ok(None) => {
+                if self.stream.read_buf(&mut self.buffer).await? == 0 {
+                    return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
+                }
+                self.recv().await
+            }
+            frame => frame,
         }
-
-        EncoderDecoder {}.decode(&mut self.buffer).map_err(Into::into)
     }
 }
 
@@ -179,12 +189,67 @@ mod tests {
         let mut server_stream = server_res.unwrap().0;
         let mut peer_stream = peer_res.unwrap();
 
-        let msg = Message::Request {
-            request_id: MockRequestId::new(1337u64),
-            request: Request::BlockListRequest(BlockListRequest::new(vec![])),
-        };
-        peer_stream.send(msg.clone()).await.unwrap();
+        let request_id = MockRequestId::new(1337u64);
+        let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
+        peer_stream
+            .send(Message::Request {
+                request_id,
+                request: request.clone(),
+            })
+            .await
+            .unwrap();
 
-        assert_eq!(server_stream.recv().await.unwrap().unwrap(), msg);
+        assert_eq!(
+            server_stream.recv().await.unwrap().unwrap(),
+            Message::Request {
+                request_id,
+                request,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn send_2_reqs() {
+        let address = "[::1]:0".parse().unwrap();
+        let mut server = TcpMockTransport::bind(address).await.unwrap();
+        let peer_fut = TcpMockTransport::connect(server.local_address().unwrap());
+
+        let (server_res, peer_res) = tokio::join!(MockListener::accept(&mut server), peer_fut);
+        let mut server_stream = server_res.unwrap().0;
+        let mut peer_stream = peer_res.unwrap();
+
+        let id_1 = MockRequestId::new(1337u64);
+        let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
+        peer_stream
+            .send(Message::Request {
+                request_id: id_1,
+                request: request.clone(),
+            })
+            .await
+            .unwrap();
+
+        let id_2 = MockRequestId::new(1338u64);
+        peer_stream
+            .send(Message::Request {
+                request_id: id_2,
+                request: request.clone(),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            server_stream.recv().await.unwrap().unwrap(),
+            Message::Request {
+                request_id: id_1,
+                request: request.clone(),
+            }
+        );
+        assert_eq!(
+            server_stream.recv().await.unwrap().unwrap(),
+            Message::Request {
+                request_id: id_2,
+                request,
+            }
+        );
     }
 }

@@ -55,9 +55,6 @@ pub struct Libp2pBackend {
     /// Sender for outgoing connectivity events
     pub(super) conn_tx: mpsc::UnboundedSender<types::ConnectivityEvent>,
 
-    /// Sender for outgoing gossipsub events
-    pub(super) gossip_tx: mpsc::UnboundedSender<types::PubSubEvent>,
-
     /// Sender for outgoing syncing events
     pub(super) sync_tx: mpsc::UnboundedSender<types::SyncingEvent>,
 
@@ -71,14 +68,12 @@ impl Libp2pBackend {
         swarm: Swarm<behaviour::Libp2pBehaviour>,
         cmd_rx: mpsc::UnboundedReceiver<types::Command>,
         conn_tx: mpsc::UnboundedSender<types::ConnectivityEvent>,
-        gossip_tx: mpsc::UnboundedSender<types::PubSubEvent>,
         sync_tx: mpsc::UnboundedSender<types::SyncingEvent>,
     ) -> Self {
         Self {
             swarm,
             cmd_rx,
             conn_tx,
-            gossip_tx,
             sync_tx,
             listen_addr: None,
         }
@@ -103,9 +98,6 @@ impl Libp2pBackend {
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::Syncing(event)) => {
                         self.sync_tx.send(event).map_err(P2pError::from)?;
                     }
-                    SwarmEvent::Behaviour(Libp2pBehaviourEvent::PubSub(event)) => {
-                        self.gossip_tx.send(event).map_err(P2pError::from)?;
-                    }
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::Control(
                         ControlEvent::CloseConnection { peer_id })
                     ) => {
@@ -117,7 +109,7 @@ impl Libp2pBackend {
                     }
                 },
                 command = self.cmd_rx.recv() => match command {
-                    Some(cmd) => self.on_command(cmd).await?,
+                    Some(cmd) => self.on_command(cmd)?,
                     None => return Err(P2pError::ChannelClosed),
                 },
             }
@@ -301,7 +293,7 @@ impl Libp2pBackend {
 
     // TODO: design p2p global command system
     /// Handle command received from the libp2p front-end
-    async fn on_command(&mut self, cmd: types::Command) -> crate::Result<()> {
+    fn on_command(&mut self, cmd: types::Command) -> crate::Result<()> {
         log::trace!("handle incoming command {:?}", cmd);
 
         match cmd {
@@ -422,10 +414,9 @@ mod tests {
     async fn test_command_listen_success() {
         let swarm = make_swarm().await;
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
-        let (gossip_tx, _) = mpsc::unbounded_channel();
         let (conn_tx, _) = mpsc::unbounded_channel();
         let (sync_tx, _) = mpsc::unbounded_channel();
-        let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
+        let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, sync_tx);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -447,10 +438,9 @@ mod tests {
     async fn test_command_listen_addrinuse() {
         let swarm = make_swarm().await;
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
-        let (gossip_tx, _) = mpsc::unbounded_channel();
         let (conn_tx, _) = mpsc::unbounded_channel();
         let (sync_tx, _) = mpsc::unbounded_channel();
-        let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
+        let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, sync_tx);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -484,10 +474,9 @@ mod tests {
     async fn test_drop_command_tx() {
         let swarm = make_swarm().await;
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
-        let (gossip_tx, _) = mpsc::unbounded_channel();
         let (conn_tx, _) = mpsc::unbounded_channel();
         let (sync_tx, _) = mpsc::unbounded_channel();
-        let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
+        let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, sync_tx);
 
         drop(cmd_tx);
         assert_eq!(backend.run().await, Err(P2pError::ChannelClosed));

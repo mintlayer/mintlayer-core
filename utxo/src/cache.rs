@@ -15,12 +15,15 @@
 
 use crate::{
     utxo_entry::{IsDirty, IsFresh, UtxoEntry},
-    {BlockRewardUndo, Error, FlushableUtxoView, TxUndo, Utxo, UtxoSource, UtxosView},
+    {
+        BlockRewardUndo, Error, FlushableUtxoView, TxUndo, TxUndoWithSources, Utxo, UtxoSource,
+        UtxosView,
+    },
 };
 use common::{
     chain::{
         block::{BlockReward, BlockRewardTransactable},
-        signature::Transactable,
+        signature::Signable,
         GenBlock, OutPoint, OutPointSourceId, Transaction,
     },
     primitives::{BlockHeight, Id, Idable},
@@ -30,15 +33,53 @@ use std::{
     fmt::{Debug, Formatter},
 };
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ConsumedUtxoCache {
     pub(crate) container: BTreeMap<OutPoint, UtxoEntry>,
     pub(crate) best_block: Id<GenBlock>,
 }
 
-#[derive(Clone)]
+// We don't use std::borrow::Cow because that requires ToOwned to be implemented,
+// and we don't use MaybeOwned crate because that doesn't offer the ?Sized trait,
+// which means that trait objects won't work with it
+pub enum UtxosViewCow<'a> {
+    Borrowed(&'a dyn UtxosView),
+    Owned(Box<dyn UtxosView + 'a>),
+}
+
+impl<'a> UtxosView for UtxosViewCow<'a> {
+    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
+        self.as_bounded_ref().utxo(outpoint)
+    }
+
+    fn has_utxo(&self, outpoint: &OutPoint) -> bool {
+        self.as_bounded_ref().has_utxo(outpoint)
+    }
+
+    fn best_block_hash(&self) -> Id<GenBlock> {
+        self.as_bounded_ref().best_block_hash()
+    }
+
+    fn estimated_size(&self) -> Option<usize> {
+        self.as_bounded_ref().estimated_size()
+    }
+
+    fn derive_cache(&self) -> UtxosCache {
+        self.as_bounded_ref().derive_cache()
+    }
+}
+
+impl<'a> UtxosViewCow<'a> {
+    pub fn as_bounded_ref(&self) -> &dyn UtxosView {
+        match self {
+            UtxosViewCow::Borrowed(r) => *r,
+            UtxosViewCow::Owned(o) => o.as_ref(),
+        }
+    }
+}
+
 pub struct UtxosCache<'a> {
-    parent: Option<&'a dyn UtxosView>,
+    parent: UtxosViewCow<'a>,
     current_block_hash: Id<GenBlock>,
     // pub(crate) visibility is required for tests that are in a different mod
     pub(crate) utxos: BTreeMap<OutPoint, UtxoEntry>,
@@ -49,9 +90,9 @@ pub struct UtxosCache<'a> {
 
 impl<'a> UtxosCache<'a> {
     #[cfg(test)]
-    pub fn new_for_test(best_block: Id<GenBlock>) -> Self {
+    pub fn new_for_test(best_block: Id<GenBlock>, view: &'a dyn UtxosView) -> Self {
         Self {
-            parent: None,
+            parent: UtxosViewCow::Borrowed(view),
             current_block_hash: best_block,
             utxos: Default::default(),
             memory_usage: 0,
@@ -67,24 +108,34 @@ impl<'a> UtxosCache<'a> {
         }
 
         // since the utxo does not exist in this view, try to check from parent.
-        self.parent.and_then(|parent| {
+        {
             // if the utxo exists in parent:
             // dirty is 'No' because this view does not have the utxo, therefore is different from parent
             // fresh is 'No' because this view does not have the utxo but the parent has.
-            let entry = parent
+            let entry = self
+                .parent
                 .utxo(outpoint)
                 .map(|utxo| UtxoEntry::new(Some(utxo), IsFresh::No, IsDirty::No));
             if let Some(entry) = &entry {
                 self.utxos.insert(outpoint.clone(), entry.clone());
             }
             entry
-        })
+        }
     }
 
-    pub fn new(parent: &'a dyn UtxosView) -> Self {
+    pub fn from_borrowed_parent(parent: &'a dyn UtxosView) -> Self {
         UtxosCache {
-            parent: Some(parent),
+            parent: UtxosViewCow::Borrowed(parent),
             current_block_hash: parent.best_block_hash(),
+            utxos: BTreeMap::new(),
+            memory_usage: 0,
+        }
+    }
+
+    pub fn from_owned_parent(parent: Box<dyn UtxosView + 'a>) -> Self {
+        UtxosCache {
+            current_block_hash: parent.best_block_hash(),
+            parent: UtxosViewCow::Owned(parent),
             utxos: BTreeMap::new(),
             memory_usage: 0,
         }
@@ -126,15 +177,19 @@ impl<'a> UtxosCache<'a> {
     ) -> Result<(), Error> {
         let id = OutPointSourceId::from(tx.get_id());
 
-        for (idx, output) in tx.outputs().iter().enumerate() {
-            let outpoint = OutPoint::new(id.clone(), idx as u32);
-            // by default no overwrite allowed.
-            let overwrite = check_for_overwrite && self.has_utxo(&outpoint);
-            let utxo = Utxo::new(output.clone(), false, source.clone());
+        tx.outputs()
+            .iter()
+            .enumerate()
+            // burned outputs should not be included into utxo set
+            .filter(|(_, output)| !output.purpose().is_burn())
+            .try_for_each(|(idx, output)| {
+                let outpoint = OutPoint::new(id.clone(), idx as u32);
+                // by default no overwrite allowed.
+                let overwrite = check_for_overwrite && self.has_utxo(&outpoint);
+                let utxo = Utxo::new(output.clone(), false, source.clone());
 
-            self.add_utxo(&outpoint, utxo, overwrite)?;
-        }
-        Ok(())
+                self.add_utxo(&outpoint, utxo, overwrite)
+            })
     }
 
     /// Marks the inputs of a transaction as 'spent', adds outputs to the utxo set.
@@ -143,13 +198,21 @@ impl<'a> UtxosCache<'a> {
         &mut self,
         tx: &Transaction,
         height: BlockHeight,
-    ) -> Result<TxUndo, Error> {
-        let tx_undo: Result<Vec<Utxo>, Error> =
-            tx.inputs().iter().map(|tx_in| self.spend_utxo(tx_in.outpoint())).collect();
+    ) -> Result<TxUndoWithSources, Error> {
+        let (sources, utxos) = tx
+            .inputs()
+            .iter()
+            .map(|tx_in| {
+                let utxo = self.spend_utxo(tx_in.outpoint())?;
+                Ok((tx_in.outpoint().tx_id(), utxo))
+            })
+            .collect::<Result<Vec<_>, Error>>()?
+            .into_iter()
+            .unzip();
 
         self.add_utxos_from_tx(tx, UtxoSource::Blockchain(height), false)?;
 
-        tx_undo.map(TxUndo::new)
+        Ok(TxUndoWithSources::new(utxos, sources))
     }
 
     // Marks outputs of a transaction as spent and inputs as unspent
@@ -158,9 +221,12 @@ impl<'a> UtxosCache<'a> {
         tx: &Transaction,
         tx_undo: TxUndo,
     ) -> Result<(), Error> {
-        for (i, _) in tx.outputs().iter().enumerate() {
+        for (i, output) in tx.outputs().iter().enumerate() {
             let tx_outpoint = OutPoint::new(OutPointSourceId::from(tx.get_id()), i as u32);
-            self.spend_utxo(&tx_outpoint)?;
+
+            if !output.purpose().is_burn() {
+                self.spend_utxo(&tx_outpoint)?;
+            }
         }
 
         assert_eq!(tx.inputs().len(), tx_undo.inner().len());
@@ -189,6 +255,9 @@ impl<'a> UtxosCache<'a> {
         if let Some(outputs) = reward_transactable.outputs() {
             let source_id = OutPointSourceId::from(*block_id);
             for (idx, output) in outputs.iter().enumerate() {
+                if output.purpose().is_burn() {
+                    return Err(Error::InvalidBlockRewardOutputType(*block_id));
+                }
                 let outpoint = OutPoint::new(source_id.clone(), idx as u32);
                 let utxo = Utxo::new(output.clone(), true, UtxoSource::Blockchain(height));
                 self.add_utxo(&outpoint, utxo, false)?;
@@ -339,7 +408,6 @@ impl<'a> Debug for UtxosCache<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UtxosCache")
             // we wouldn't want to display the parent's children; only to check whether it has a parent.
-            .field("has_parent", &self.parent.is_some())
             .field("current_block_hash", &self.current_block_hash)
             .field("utxos", &self.utxos)
             .finish()
@@ -354,7 +422,7 @@ impl<'a> UtxosView for UtxosCache<'a> {
         }
 
         // if utxo is not found in this view, use parent's `get_utxo`.
-        self.parent.and_then(|parent| parent.utxo(outpoint))
+        self.parent.utxo(outpoint)
     }
 
     fn has_utxo(&self, outpoint: &OutPoint) -> bool {
@@ -370,7 +438,7 @@ impl<'a> UtxosView for UtxosCache<'a> {
     }
 
     fn derive_cache(&self) -> UtxosCache {
-        UtxosCache::new(self)
+        UtxosCache::from_borrowed_parent(self)
     }
 }
 
@@ -439,15 +507,23 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
 #[cfg(test)]
 mod unit_test {
     use super::*;
-    use crate::tests::test_helper::{insert_single_entry, Presence};
+    use crate::tests::{
+        empty_test_utxos_view,
+        test_helper::{insert_single_entry, Presence},
+    };
     use common::primitives::H256;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 
-    #[test]
-    fn set_best_block() {
-        let expected_best_block_id: Id<GenBlock> = H256::random().into();
-        let mut cache = UtxosCache::new_for_test(H256::random().into());
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn set_best_block(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let expected_best_block_id: Id<GenBlock> = H256::random_using(&mut rng).into();
+        let test_view = empty_test_utxos_view();
+        let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
         cache.set_best_block(expected_best_block_id);
         assert_eq!(expected_best_block_id, cache.best_block_hash());
     }
@@ -457,7 +533,8 @@ mod unit_test {
     #[case(Seed::from_entropy())]
     fn uncache_absent(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let mut cache = UtxosCache::new_for_test(H256::random().into());
+        let test_view = empty_test_utxos_view();
+        let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
         // when the outpoint does not exist.
         let (_, outp) = insert_single_entry(&mut rng, &mut cache, Presence::Absent, None, None);
@@ -470,7 +547,8 @@ mod unit_test {
     #[case(Seed::from_entropy())]
     fn uncache_not_fresh_not_dirty(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let mut cache = UtxosCache::new_for_test(H256::random().into());
+        let test_view = empty_test_utxos_view();
+        let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
         // when the entry is not dirty and not fresh
         let (_, outp) = insert_single_entry(
@@ -489,7 +567,8 @@ mod unit_test {
     #[case(Seed::from_entropy())]
     fn uncache_dirty_not_fresh(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let mut cache = UtxosCache::new_for_test(H256::random().into());
+        let test_view = empty_test_utxos_view();
+        let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
         // when the entry is dirty, entry cannot be removed.
         let (_, outp) = insert_single_entry(
@@ -507,7 +586,8 @@ mod unit_test {
     #[case(Seed::from_entropy())]
     fn uncache_fresh_and_dirty(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let mut cache = UtxosCache::new_for_test(H256::random().into());
+        let test_view = empty_test_utxos_view();
+        let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
         // when the entry is both fresh and dirty, entry cannot be removed.
         let (_, outp) = insert_single_entry(
@@ -525,7 +605,8 @@ mod unit_test {
     #[case(Seed::from_entropy())]
     fn fetch_an_entry(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let mut cache1 = UtxosCache::new_for_test(H256::random().into());
+        let test_view = empty_test_utxos_view();
+        let mut cache1 = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
         let (_, outpoint) = insert_single_entry(
             &mut rng,
             &mut cache1,
@@ -534,7 +615,7 @@ mod unit_test {
             None,
         );
 
-        let mut cache2 = UtxosCache::new(&cache1);
+        let mut cache2 = UtxosCache::from_borrowed_parent(&cache1);
 
         assert!(cache1.has_utxo_in_cache(&outpoint));
         assert!(!cache2.has_utxo_in_cache(&outpoint));

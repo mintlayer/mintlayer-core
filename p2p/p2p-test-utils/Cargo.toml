@@ -5,9 +5,6 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-portpicker = "0.1"
-
-# local dependencies
 chainstate-storage = { path = "../../chainstate/storage" }
 chainstate = { path = "../../chainstate/" }
 common = { path = "../../common/" }
@@ -16,12 +13,6 @@ mempool = { path = "../../mempool/" }
 p2p = { path = "../" }
 subsystem = { path = "../../subsystem/" }
 
-[dependencies.libp2p]
-version = "0.46"
-default-features = false
-features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "tcp-async-io"]
-
-[dependencies.tokio]
-version = "1"
-default-features = false
-features = ["io-util", "macros", "net", "rt", "sync"]
+portpicker = "0.1"
+tokio = { version = "1", default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+libp2p = { version = "0.46", default-features = false, features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "tcp-async-io"] }

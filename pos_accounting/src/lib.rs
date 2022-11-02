@@ -14,15 +14,16 @@
 // limitations under the License.
 
 use common::primitives::Id;
+use typename::TypeName;
 
 pub mod error;
 pub mod pool;
 pub mod storage;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, TypeName)]
 pub struct Pool;
 type PoolId = Id<Pool>;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, TypeName)]
 pub struct Delegation;
 type DelegationId = Id<Delegation>;

@@ -49,7 +49,7 @@ impl<'a> Stack<'a> {
     /// Check the stack state represents a successful script verification.
     pub fn verify(&self) -> crate::Result<()> {
         match &self.0[..] {
-            [x] => script::read_scriptbool(x).then(|| ()).ok_or(Error::VerifyFail),
+            [x] => script::read_scriptbool(x).then_some(()).ok_or(Error::VerifyFail),
             _ => Err(Error::StackNotClean),
         }
     }
@@ -769,7 +769,7 @@ mod test {
             let result = run_script(&ctx, &script, stack);
             prop_assert!(result.is_ok());
 
-            let expected = cond.then(|| then_val).unwrap_or(else_val) as i64;
+            let expected = if cond { then_val } else { else_val } as i64;
             let expected_stack = Stack(vec![script::build_scriptint(expected).into()]);
             prop_assert_eq!(result.unwrap(), expected_stack);
         }

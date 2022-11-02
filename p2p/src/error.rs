@@ -73,6 +73,7 @@ pub enum PublishError {
     SigningFailed,
     #[error("No peers in topic")]
     InsufficientPeers,
+    // TODO: The sizes are optional for now only because libp2p hides this information.
     #[error("Message is too large. Tried to send {0:?} bytes when limit is {1:?}")]
     MessageTooLarge(Option<usize>, Option<usize>),
     #[error("Failed to compress the message")]

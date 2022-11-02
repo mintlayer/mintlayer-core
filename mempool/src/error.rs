@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate::ChainstateError;
+use subsystem::subsystem::CallError;
 use thiserror::Error;
 
 use common::chain::transaction::Transaction;
@@ -27,6 +29,12 @@ pub enum Error {
     MempoolFull,
     #[error(transparent)]
     TxValidationError(#[from] TxValidationError),
+    #[error("Subsystem failure")]
+    SubsystemFailure,
+    #[error("Send error")]
+    SendError,
+    #[error("Receive error")]
+    RecvError,
 }
 
 #[derive(Debug, Error)]
@@ -77,10 +85,20 @@ pub enum TxValidationError {
     InsufficientFeesToRelayRBF,
     #[error("Rolling fee threshold not met.")]
     RollingFeeThresholdNotMet { minimum_fee: Amount, tx_fee: Amount },
+    #[error("Overflow encountered while computing fee with ancestors")]
+    AncestorFeeOverflow,
     #[error("Overflow encountered while updating ancestor fee.")]
     AncestorFeeUpdateOverflow,
+    #[error("Fee overflow")]
+    FeeOverflow,
+    #[error("Get parent error")]
+    GetParentError,
     #[error("Transaction is a descendant of expired transaction.")]
     DescendantOfExpiredTransaction,
+    #[error("Chainstate error")]
+    ChainstateError(#[from] ChainstateError),
+    #[error("Subsystem call error")]
+    CallError(#[from] CallError),
     #[error("Internal Error.")]
     InternalError,
 }

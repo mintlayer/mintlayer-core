@@ -13,20 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use mockall::*;
 use std::time::Duration;
 
-pub(crate) type MemoryUsage = usize;
-
-#[automock]
-pub trait GetMemoryUsage {
-    fn get_memory_usage(&self) -> MemoryUsage;
-}
-
 pub(crate) type Time = Duration;
-pub trait GetTime {
-    fn get_time(&self) -> Time;
-}
 
 pub(crate) const ROLLING_FEE_BASE_HALFLIFE: Time = Duration::new(60 * 60 * 12, 1);
 // TODO this willbe defined elsewhere (some of limits.rs file)

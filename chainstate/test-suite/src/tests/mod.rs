@@ -31,14 +31,27 @@ use rstest::rstest;
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 
+mod bootstrap;
+mod chainstate_storage_tests;
 mod double_spend_tests;
 mod events_tests;
 mod fungible_tokens;
+mod homomorphism;
+mod initialization;
+mod mempool_output_timelock;
+mod nft_burn;
+mod nft_issuance;
+mod nft_reorgs;
+mod nft_transfer;
 mod output_timelock;
 mod processing_tests;
 mod reorgs_tests;
 mod signature_tests;
 mod syncing_tests;
+mod tx_verification_simulation;
+mod tx_verifier_disconnect;
+
+mod helpers;
 
 type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
 
@@ -55,7 +68,8 @@ fn generate_blocks_for_functional_tests(#[case] seed: Seed) {
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);
 
     for _ in 1..6 {
-        let mut mined_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
+        let mut mined_block =
+            tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
         let bits = difficulty.into();
         assert!(consensus::pow::mine(&mut mined_block, u128::MAX, bits)
             .expect("Unexpected conversion error"));

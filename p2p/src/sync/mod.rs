@@ -13,15 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    error::{P2pError, PeerError, ProtocolError},
-    event, message,
-    net::{self, types::SyncingEvent, NetworkingService, SyncingMessagingService},
-};
-use chainstate::{
-    ban_score::BanScore, chainstate_interface, BlockError, ChainstateError::ProcessBlockError,
-    Locator,
-};
+//! This module is responsible for both initial syncing and further blocks processing (the reaction
+//! to block announcement from peers and the announcement of blocks produced by this node).
+
+pub mod peer;
+
+mod request;
+
+use std::{collections::HashMap, sync::Arc};
+
+use futures::FutureExt;
+use tokio::sync::{mpsc, oneshot};
+use void::Void;
+
+use chainstate::{ban_score::BanScore, chainstate_interface, BlockError, ChainstateError, Locator};
 use common::{
     chain::{
         block::{Block, BlockHeader},
@@ -29,14 +34,19 @@ use common::{
     },
     primitives::{Id, Idable},
 };
-use futures::FutureExt;
 use logging::log;
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::{mpsc, oneshot};
 use utils::ensure;
 
-pub mod peer;
-mod request;
+use crate::{
+    error::{P2pError, PeerError, ProtocolError},
+    event,
+    message::{self, Announcement},
+    net::{
+        self,
+        types::{PubSubTopic, SyncingEvent, ValidationResult},
+        NetworkingService, SyncingMessagingService,
+    },
+};
 
 // TODO: from config? global constant?
 const HEADER_LIMIT: usize = 2000;
@@ -56,8 +66,8 @@ pub enum SyncState {
     /// Downloading blocks from remote node(s)
     DownloadingBlocks,
 
-    /// Local block index is fully synced
-    Idle,
+    /// The local block index is fully synced.
+    Done,
 }
 
 /// Sync manager is responsible for syncing the local blockchain to the chain with most trust
@@ -84,9 +94,6 @@ pub struct BlockSyncManager<T: NetworkingService> {
     /// TX channel for sending control events to swarm
     tx_swarm: mpsc::UnboundedSender<event::SwarmEvent<T>>,
 
-    /// TX channel for sending control events to pubsub (used to tell pubsub that syncing to best block is done)
-    tx_pubsub: mpsc::UnboundedSender<event::PubSubControlEvent>,
-
     /// Hashmap of connected peers
     peers: HashMap<T::PeerId, peer::PeerContext<T>>,
 
@@ -109,14 +116,12 @@ where
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         rx_sync: mpsc::UnboundedReceiver<event::SyncControlEvent<T>>,
         tx_swarm: mpsc::UnboundedSender<event::SwarmEvent<T>>,
-        tx_pubsub: mpsc::UnboundedSender<event::PubSubControlEvent>,
     ) -> Self {
         Self {
             config,
             peer_sync_handle: handle,
             rx_sync,
             tx_swarm,
-            tx_pubsub,
             chainstate_handle,
             peers: Default::default(),
             requests: HashMap::new(),
@@ -249,7 +254,7 @@ where
             _ => return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)),
         }
 
-        for (a, b) in itertools::zip(&headers, &headers[1..]) {
+        for (a, b) in headers.iter().zip(&headers[1..]) {
             ensure!(
                 b.prev_block_id() == &a.get_id(),
                 P2pError::ProtocolError(ProtocolError::InvalidMessage),
@@ -318,7 +323,7 @@ where
 
         match result {
             Ok(_) => {}
-            Err(ProcessBlockError(BlockError::BlockAlreadyExists(_id))) => {}
+            Err(ChainstateError::ProcessBlockError(BlockError::BlockAlreadyExists(_id))) => {}
             Err(err) => return Err(P2pError::ChainstateError(err)),
         }
 
@@ -348,14 +353,11 @@ where
         }
     }
 
-    /// Check the current state of syncing
+    /// Checks the current state of syncing.
     ///
-    /// The node is considered fully synced, i.e., that its initial block download is done, if:
-    /// - all of its peers are in `Idle` state
-    ///
-    /// When the node is synced, [`crate::pubsub::PubSubMessageHandler`] is notified so it knows to
-    /// subscribe to the needed publish-subscribe topics.
-    pub async fn check_state(&mut self) -> crate::Result<()> {
+    /// The node is considered fully synced (its initial block download is done) if all its peers
+    /// are in the `Done` state.
+    pub async fn update_state(&mut self) -> crate::Result<()> {
         // TODO: improve "initial block download done" check
 
         if self.peers.is_empty() {
@@ -377,11 +379,8 @@ where
             }
         }
 
-        self.state = SyncState::Idle;
-        // TODO: global event system
-        self.tx_pubsub
-            .send(event::PubSubControlEvent::InitialBlockDownloadDone)
-            .map_err(P2pError::from)
+        self.state = SyncState::Done;
+        self.peer_sync_handle.subscribe(&[PubSubTopic::Blocks]).await
     }
 
     pub async fn process_error(
@@ -393,16 +392,11 @@ where
         match error {
             net::types::RequestResponseError::Timeout => {
                 if let Some(request) = self.requests.remove(&request_id) {
-                    log::warn!(
-                        "outbound request {:?} for peer {} timed out",
-                        request_id,
-                        peer_id
-                    );
+                    log::warn!("outbound request {request_id:?} for peer {peer_id} timed out");
 
                     if request.retry_count == RETRY_LIMIT {
                         log::error!(
-                            "peer {} failed to respond to request, close connection",
-                            peer_id
+                            "peer {peer_id} failed to respond to request, close connection"
                         );
                         self.unregister_peer(peer_id);
                         // TODO: global event system
@@ -437,6 +431,22 @@ where
         Ok(())
     }
 
+    pub async fn process_announcement(
+        &mut self,
+        peer_id: T::PeerId,
+        message_id: T::SyncingMessageId,
+        announcement: Announcement,
+    ) -> crate::Result<()> {
+        // TODO: Discuss if we should announce blocks or headers, because announcing
+        // blocks seems wasteful, in the sense that it's possible for peers to get
+        // blocks again, and again, wasting their bandwidth.
+        match announcement {
+            Announcement::Block(block) => {
+                self.process_block_announcement(peer_id, message_id, block).await
+            }
+        }
+    }
+
     // TODO: refactor this
     pub async fn handle_error(
         &mut self,
@@ -447,7 +457,7 @@ where
             Ok(_) => Ok(()),
             Err(P2pError::ChannelClosed) => Err(P2pError::ChannelClosed),
             Err(P2pError::ProtocolError(err)) => {
-                log::error!("Peer {} commited a protocol error: {}", peer_id, err);
+                log::error!("Peer {peer_id} committed a protocol error: {err}");
 
                 let (tx, rx) = oneshot::channel();
                 self.tx_swarm
@@ -460,7 +470,7 @@ where
                 rx.await.map_err(P2pError::from)?
             }
             Err(P2pError::ChainstateError(err)) => match err {
-                ProcessBlockError(err) => {
+                ChainstateError::ProcessBlockError(err) => {
                     if err.ban_score() > 0 {
                         let (tx, rx) = oneshot::channel();
                         self.tx_swarm
@@ -476,16 +486,16 @@ where
                     Ok(())
                 }
                 err => {
-                    log::error!("Peer {} caused a chainstate error: {}", peer_id, err);
+                    log::error!("Peer {peer_id} caused a chainstate error: {err}");
                     Ok(())
                 }
             },
             Err(P2pError::PeerError(err)) => {
-                log::error!("Peer error: {}", err);
+                log::error!("Peer error: {err}");
                 Ok(())
             }
             Err(err) => {
-                log::error!("Unexpected error occurred: {}", err);
+                log::error!("Unexpected error occurred: {err}");
 
                 if err.ban_score() > 0 {
                     // TODO: better abstraction over channels
@@ -505,9 +515,11 @@ where
         }
     }
 
-    /// Run SyncManager event loop
-    pub async fn run(&mut self) -> crate::Result<void::Void> {
+    /// Runs the SyncManager event loop.
+    pub async fn run(&mut self) -> crate::Result<Void> {
         log::info!("Starting SyncManager");
+
+        let mut block_rx = self.subscribe_to_chainstate_events().await?;
 
         loop {
             tokio::select! {
@@ -518,10 +530,7 @@ where
                         request,
                     } => match request {
                         message::Request::HeaderListRequest(request) => {
-                            log::debug!(
-                                "process header request (id {:?}) from peer {}",
-                                request_id, peer_id
-                            );
+                            log::debug!("process header request (id {request_id:?}) from peer {peer_id}");
                             log::trace!("locator: {:#?}", request.locator());
 
                             let result = self.process_header_request(
@@ -532,10 +541,7 @@ where
                             self.handle_error(peer_id, result).await?;
                         }
                         message::Request::BlockListRequest(request) => {
-                            log::debug!(
-                                "process block request (id {:?}) from peer {}",
-                                request_id, peer_id
-                            );
+                            log::debug!("process block request (id {request_id:?}) from peer {peer_id}");
                             log::trace!("requested block ids: {:#?}", request.block_ids());
 
                             let result = self.process_block_request(
@@ -552,20 +558,14 @@ where
                         response,
                     } => match response {
                         message::Response::HeaderListResponse(response) => {
-                            log::debug!(
-                                "process header response (id {:?}) from peer {}",
-                                request_id, peer_id
-                            );
+                            log::debug!("process header response (id {request_id:?}) from peer {peer_id}");
                             log::trace!("received headers: {:#?}", response.headers());
 
                             let result = self.process_header_response(peer_id, response.into_headers()).await;
                             self.handle_error(peer_id, result).await?;
                         }
                         message::Response::BlockListResponse(response) => {
-                            log::debug!(
-                                "process block response (id {:?}) from peer {}",
-                                request_id, peer_id
-                            );
+                            log::debug!("process block response (id {request_id:?}) from peer {peer_id}");
                             log::trace!(
                                 "# of received blocks: {}, block ids: {:#?}",
                                 response.blocks().len(),
@@ -584,22 +584,101 @@ where
                         let result = self.process_error(peer_id, request_id, error).await;
                         self.handle_error(peer_id, result).await?;
                     },
+                    SyncingEvent::Announcement{ peer_id, message_id, announcement } => {
+                        self.process_announcement(peer_id, message_id, announcement).await?;
+                    }
                 },
                 event = self.rx_sync.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     event::SyncControlEvent::Connected(peer_id) => {
-                        log::debug!("register peer {} to sync manager", peer_id);
+                        log::debug!("register peer {peer_id} to sync manager");
                         let result = self.register_peer(peer_id).await;
                         self.handle_error(peer_id, result).await?;
                     }
                     event::SyncControlEvent::Disconnected(peer_id) => {
-                        log::debug!("unregister peer {} from sync manager", peer_id);
+                        log::debug!("unregister peer {peer_id} from sync manager");
                         self.unregister_peer(peer_id)
                     }
-                }
-            };
+                },
+                block_id = block_rx.recv().fuse(), if self.state == SyncState::Done => {
+                    let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
 
-            self.check_state().await?;
+                    match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
+                        Some(block) => self.peer_sync_handle.make_announcement(Announcement::Block(block)).await?,
+                        None => log::error!("CRITICAL: best block not available"),
+                    }
+                }
+            }
+
+            self.update_state().await?;
         }
+    }
+
+    /// Returns a receiver for the chainstate `NewTip` events.
+    async fn subscribe_to_chainstate_events(
+        &mut self,
+    ) -> crate::Result<mpsc::UnboundedReceiver<Id<Block>>> {
+        let (tx, rx) = mpsc::unbounded_channel();
+
+        let subscribe_func =
+            Arc::new(
+                move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
+                    chainstate::ChainstateEvent::NewTip(block_id, _) => {
+                        if let Err(e) = tx.send(block_id) {
+                            log::error!("PubSubMessageHandler closed: {e:?}")
+                        }
+                    }
+                },
+            );
+
+        self.chainstate_handle
+            .call_mut(|this| this.subscribe_to_events(subscribe_func))
+            .await
+            .map_err(|_| P2pError::SubsystemFailure)?;
+
+        Ok(rx)
+    }
+
+    async fn process_block_announcement(
+        &mut self,
+        peer_id: T::PeerId,
+        message_id: T::SyncingMessageId,
+        block: Block,
+    ) -> crate::Result<()> {
+        let result = match self
+            .chainstate_handle
+            .call(move |this| this.preliminary_block_check(block))
+            .await?
+        {
+            Ok(block) => {
+                self.chainstate_handle
+                    .call_mut(move |this| this.process_block(block, chainstate::BlockSource::Peer))
+                    .await?
+            }
+            Err(err) => Err(err),
+        };
+
+        let score = match result {
+            Ok(_) => 0,
+            Err(e) => match e {
+                ChainstateError::FailedToInitializeChainstate(_) => 0,
+                ChainstateError::ProcessBlockError(err) => err.ban_score(),
+                ChainstateError::FailedToReadProperty(_) => 0,
+                ChainstateError::BootstrapError(_) => 0,
+            },
+        };
+
+        if score > 0 {
+            // TODO: better abstraction over channels
+            let (tx, rx) = oneshot::channel();
+            self.tx_swarm
+                .send(event::SwarmEvent::AdjustPeerScore(peer_id, score, tx))
+                .map_err(P2pError::from)?;
+            let _ = rx.await.map_err(P2pError::from)?;
+        }
+
+        self.peer_sync_handle
+            .report_validation_result(peer_id, message_id, ValidationResult::Ignore)
+            .await
     }
 }
 

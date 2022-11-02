@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::BlockIndex;
+use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
     chain::block::timestamp::BlockTimestamp,
     primitives::{BlockHeight, Compact},
     Uint256,
 };
 
-use crate::{pow::error::ConsensusPoWError, validator::BlockIndexHandle};
+use crate::pow::error::ConsensusPoWError;
 
 /// checks if retargeting is due for the provided block_height
 pub fn due_for_retarget(difficulty_adjustment_interval: u64, block_height: BlockHeight) -> bool {

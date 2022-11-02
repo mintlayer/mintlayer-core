@@ -24,6 +24,7 @@ use chainstate_test_framework::anyonecanspend_address;
 use chainstate_test_framework::empty_witness;
 use chainstate_test_framework::TestFramework;
 use chainstate_test_framework::TransactionBuilder;
+use common::chain::signed_transaction::SignedTransaction;
 use common::primitives::Idable;
 use common::{
     chain::{tokens::OutputValue, OutPointSourceId, Transaction, TxInput, TxOutput},
@@ -252,11 +253,10 @@ fn overspend_multiple_outputs(#[case] seed: Seed) {
             OutputPurpose::Transfer(anyonecanspend_address()),
         );
         let tx2 = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                tx1.get_id().into(),
-                0,
+            .add_input(
+                TxInput::new(tx1.transaction().get_id().into(), 0),
                 InputWitness::NoSignature(None),
-            ))
+            )
             .with_outputs(vec![tx2_output.clone(), tx2_output])
             .build();
 
@@ -300,16 +300,17 @@ fn duplicate_input_in_the_same_tx(#[case] seed: Seed) {
         let tx1_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
 
-        let input = TxInput::new(first_tx.get_id().into(), 0, InputWitness::NoSignature(None));
+        let witness = InputWitness::NoSignature(None);
+        let input = TxInput::new(first_tx.transaction().get_id().into(), 0);
         let second_tx = TransactionBuilder::new()
-            .add_input(input.clone())
-            .add_input(input)
+            .add_input(input.clone(), witness.clone())
+            .add_input(input, witness)
             .add_output(TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
                 OutputPurpose::Transfer(anyonecanspend_address()),
             ))
             .build();
-        let second_tx_id = second_tx.get_id();
+        let second_tx_id = second_tx.transaction().get_id();
 
         let block = tf.make_block_builder().with_transactions(vec![first_tx, second_tx]).build();
         let block_id = block.get_id();
@@ -352,25 +353,19 @@ fn same_input_diff_sig_in_the_same_tx(#[case] seed: Seed) {
         let tx1_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
 
-        let input1 = TxInput::new(
-            first_tx.get_id().into(),
-            0,
-            InputWitness::NoSignature(Some(vec![0, 1, 2])),
-        );
-        let input2 = TxInput::new(
-            first_tx.get_id().into(),
-            0,
-            InputWitness::NoSignature(Some(vec![0, 1, 2, 3])),
-        );
+        let witness1 = InputWitness::NoSignature(Some(vec![0, 1, 2]));
+        let input1 = TxInput::new(first_tx.transaction().get_id().into(), 0);
+        let witness2 = InputWitness::NoSignature(Some(vec![0, 1, 2, 3]));
+        let input2 = TxInput::new(first_tx.transaction().get_id().into(), 0);
         let second_tx = TransactionBuilder::new()
-            .add_input(input1)
-            .add_input(input2)
+            .add_input(input1, witness1)
+            .add_input(input2, witness2)
             .add_output(TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
                 OutputPurpose::Transfer(anyonecanspend_address()),
             ))
             .build();
-        let second_tx_id = second_tx.get_id();
+        let second_tx_id = second_tx.transaction().get_id();
 
         let block = tf.make_block_builder().with_transactions(vec![first_tx, second_tx]).build();
         let block_id = block.get_id();
@@ -466,14 +461,83 @@ fn duplicate_odd_tx_in_the_same_block(#[case] seed: Seed) {
     });
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_spend_burned_output_same_block(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+
+        let first_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
+                OutputPurpose::Burn,
+            ))
+            .build();
+        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
+
+        let block = tf.make_block_builder().with_transactions(vec![first_tx, second_tx]).build();
+
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::MissingOutputOrSpent
+            ))
+        );
+        assert_eq!(tf.best_block_id(), tf.genesis().get_id());
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_spend_burned_output_different_blocks(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+
+        let first_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
+                OutputPurpose::Burn,
+            ))
+            .build();
+        let block = tf.make_block_builder().with_transactions(vec![first_tx.clone()]).build();
+        tf.process_block(block, BlockSource::Local).unwrap();
+
+        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
+        let block_2 = tf.make_block_builder().with_transactions(vec![second_tx]).build();
+        assert_eq!(
+            tf.process_block(block_2, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::MissingOutputOrSpent
+            ))
+        );
+    });
+}
+
 // Creates a transaction with an input based on the first transaction from the genesis block.
-fn tx_from_genesis(genesis: &Genesis, rng: &mut impl Rng, output_value: u128) -> Transaction {
+fn tx_from_genesis(genesis: &Genesis, rng: &mut impl Rng, output_value: u128) -> SignedTransaction {
     TransactionBuilder::new()
-        .add_input(TxInput::new(
-            OutPointSourceId::BlockReward(genesis.get_id().into()),
-            0,
+        .add_input(
+            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(rng),
-        ))
+        )
         .add_output(TxOutput::new(
             OutputValue::Coin(Amount::from_atoms(output_value)),
             OutputPurpose::Transfer(anyonecanspend_address()),
@@ -482,11 +546,15 @@ fn tx_from_genesis(genesis: &Genesis, rng: &mut impl Rng, output_value: u128) ->
 }
 
 // Creates a transaction with an input based on the specified transaction id.
-fn tx_from_tx(tx: &Transaction, output_value: u128) -> Transaction {
-    let input = TxInput::new(tx.get_id().into(), 0, InputWitness::NoSignature(None));
+fn tx_from_tx(tx: &SignedTransaction, output_value: u128) -> SignedTransaction {
+    let input = TxInput::new(tx.transaction().get_id().into(), 0);
     let output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(output_value)),
         OutputPurpose::Transfer(anyonecanspend_address()),
     );
-    Transaction::new(0, vec![input], vec![output], 0).unwrap()
+    SignedTransaction::new(
+        Transaction::new(0, vec![input], vec![output], 0).unwrap(),
+        vec![InputWitness::NoSignature(None)],
+    )
+    .expect("invalid witness count")
 }

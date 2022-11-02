@@ -19,8 +19,8 @@ use crate::{
 };
 use common::{
     chain::{
-        signature::inputsig::InputWitness, tokens::OutputValue, Destination, GenBlock, OutPoint,
-        OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
+        tokens::OutputValue, Destination, GenBlock, OutPoint, OutPointSourceId, OutputPurpose,
+        Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, Id, H256},
 };
@@ -58,18 +58,19 @@ pub fn create_tx_inputs(rng: &mut impl Rng, outpoints: &[OutPoint]) -> Vec<TxInp
         .into_iter()
         .map(|idx| {
             let outpoint = outpoints.get(idx).expect("should return an outpoint");
-            TxInput::new(
-                outpoint.tx_id(),
-                outpoint.output_index(),
-                InputWitness::NoSignature(None),
-            )
+            TxInput::new(outpoint.tx_id(), outpoint.output_index())
         })
         .collect_vec()
 }
 
 /// converts the given parameters into the tuple (Outpoint, Utxo).
-pub fn convert_to_utxo(output: TxOutput, height: u64, output_idx: usize) -> (OutPoint, Utxo) {
-    let utxo_id: Id<GenBlock> = Id::new(H256::random());
+pub fn convert_to_utxo(
+    rng: &mut impl Rng,
+    output: TxOutput,
+    height: u64,
+    output_idx: usize,
+) -> (OutPoint, Utxo) {
+    let utxo_id: Id<GenBlock> = Id::new(H256::random_using(rng));
     let id = OutPointSourceId::BlockReward(utxo_id);
     let outpoint = OutPoint::new(id, output_idx as u32);
     let utxo = Utxo::new_for_blockchain(output, true, BlockHeight::new(height));
@@ -116,10 +117,10 @@ fn inner_create_utxo(
     // create the id based on the `is_block_reward` value.
     let id = {
         if !is_block_reward {
-            let utxo_id: Id<Transaction> = Id::new(H256::random());
+            let utxo_id: Id<Transaction> = Id::new(H256::random_using(rng));
             OutPointSourceId::Transaction(utxo_id)
         } else {
-            let utxo_id: Id<GenBlock> = Id::new(H256::random());
+            let utxo_id: Id<GenBlock> = Id::new(H256::random_using(rng));
             OutPointSourceId::BlockReward(utxo_id)
         }
     };

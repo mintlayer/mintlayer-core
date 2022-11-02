@@ -9,25 +9,17 @@ default = [ "time" ]
 time = [ "tokio/time" ]
 
 [dependencies]
-
 # External dependencies
 async-trait = "0.1"
 cfg-if = "1.0"
 thiserror = "1.0"
+futures = { version = "0.3", default-features = false, features = ["alloc"]}
+tokio = { version = "1.0", default-features = false, features = ["macros", "rt", "rt-multi-thread", "signal", "sync"]}
 
 # Local dependencies
 logging = { path = "../logging" }
 
-[dependencies.futures]
-version = "0.3"
-default-features = false
-features = [ "alloc" ]
-
-[dependencies.tokio]
-version = "1"
-default-features = false
-features = [ "macros", "rt", "rt-multi-thread", "signal", "sync" ]
-
 [dev-dependencies]
-utils = { path = "../utils" }
 testing_logger = "0.1"
+
+utils = { path = "../utils" }

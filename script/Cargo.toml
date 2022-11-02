@@ -8,16 +8,18 @@ license = "MIT"
 crypto = { path = '../crypto' }
 serialization = { path = "../serialization" }
 utils = { path = '../utils' }
+typename = { path = "../utils/typename" }
 
 parity-scale-codec = "3.1"
 thiserror = "1.0"
 
 [dev-dependencies]
+logging = { path = '../logging' }
+
 flate2 = "1.0"
 hex = "0.4"
 hex-literal = "0.3"
 proptest = "1.0"
-logging = { path = '../logging' }
 
 [features]
 default = ['testcontext']

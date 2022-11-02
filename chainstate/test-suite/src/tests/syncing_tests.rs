@@ -101,7 +101,7 @@ fn get_headers(#[case] seed: Seed) {
             let block = tf
                 .make_block_builder()
                 .with_parent(last_block_id)
-                .add_test_transaction(&mut rng)
+                .add_test_transaction_from_best_block(&mut rng)
                 .build();
             last_block_id = block.get_id().into();
             let header = block.header().clone();
@@ -194,7 +194,7 @@ fn get_headers_different_chains(#[case] seed: Seed) {
             let block = tf1
                 .make_block_builder()
                 .with_parent(prev.id)
-                .add_test_transaction(&mut rng)
+                .add_test_transaction_from_best_block(&mut rng)
                 .build();
             prev = TestBlockInfo::from_block(&block);
             tf1.process_block(block.clone(), BlockSource::Local).unwrap();
@@ -232,7 +232,7 @@ fn filter_already_existing_blocks(#[case] seed: Seed) {
             let block = tf1
                 .make_block_builder()
                 .with_parent(prev1.id)
-                .add_test_transaction(&mut rng)
+                .add_test_transaction_from_best_block(&mut rng)
                 .build();
             prev1 = TestBlockInfo::from_block(&block);
             tf1.process_block(block.clone(), BlockSource::Local).unwrap();
@@ -299,7 +299,7 @@ fn filter_already_existing_blocks_detached_headers(#[case] seed: Seed) {
             let block = tf1
                 .make_block_builder()
                 .with_parent(prev.id)
-                .add_test_transaction(&mut rng)
+                .add_test_transaction_from_best_block(&mut rng)
                 .build();
             prev = TestBlockInfo::from_block(&block);
             tf1.process_block(block.clone(), BlockSource::Local).unwrap();

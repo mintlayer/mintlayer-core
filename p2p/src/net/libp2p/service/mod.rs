@@ -14,5 +14,4 @@
 // limitations under the License.
 
 pub mod connectivity;
-pub mod pubsub;
 pub mod syncing;

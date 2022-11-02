@@ -14,5 +14,5 @@
 // limitations under the License.
 
 fn main() {
-    storage_backend_test_suite::main(storage_inmemory::InMemory::new())
+    storage_backend_test_suite::main(storage_inmemory::InMemory::new).exit();
 }

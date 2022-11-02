@@ -48,7 +48,8 @@ fn reorg_simple(#[case] seed: Seed) {
         let genesis_id = tf.genesis().get_id();
         assert_eq!(tf.best_block_id(), genesis_id);
 
-        let block_a = tf.make_block_builder().add_test_transaction(&mut rng).build();
+        let block_a =
+            tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
         tf.process_block(block_a.clone(), BlockSource::Local).unwrap();
         assert_eq!(tf.best_block_id(), block_a.get_id());
 
@@ -403,7 +404,7 @@ fn check_block_status(
             Some(block_index) => {
                 let block = tf.chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
                 for tx in block.transactions() {
-                    check_spend_status(tf, tx, &spend_status);
+                    check_spend_status(tf, tx.transaction(), &spend_status);
                 }
             }
             None => {

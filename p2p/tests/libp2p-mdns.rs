@@ -29,22 +29,30 @@ use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 #[tokio::test]
 async fn test_libp2p_peer_discovery() {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut serv, _, _) = Libp2pService::start(
+    let (mut serv, _) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         Arc::clone(&config),
         Arc::new(config::P2pConfig {
-            mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
+            mdns_config: config::MdnsConfig::Enabled {
+                query_interval: 200.into(),
+                enable_ipv6_mdns_discovery: Default::default(),
+            }
+            .into(),
             ..Default::default()
         }),
     )
     .await
     .unwrap();
 
-    let (mut serv2, _, _) = Libp2pService::start(
+    let (mut serv2, _) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         Arc::clone(&config),
         Arc::new(config::P2pConfig {
-            mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
+            mdns_config: config::MdnsConfig::Enabled {
+                query_interval: 200.into(),
+                enable_ipv6_mdns_discovery: Default::default(),
+            }
+            .into(),
             ..Default::default()
         }),
     )

@@ -1,4 +1,4 @@
-datadir = "../.mintlayer"
+datadir = "."
 
 [chainstate]
 max_db_commit_attempts = 10

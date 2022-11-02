@@ -14,8 +14,9 @@
 // limitations under the License.
 
 use std::{
-    collections::hash_map::DefaultHasher,
+    collections::{hash_map::DefaultHasher, BTreeSet},
     hash::{Hash, Hasher},
+    str::FromStr,
 };
 
 use tokio::sync::oneshot;
@@ -26,7 +27,11 @@ use serialization::{Decode, Encode};
 
 use crate::{
     error, message,
-    net::{self, mock::transport::MockTransport, types::Protocol},
+    net::{
+        self,
+        mock::transport::MockTransport,
+        types::{Protocol, PubSubTopic},
+    },
 };
 
 pub enum Command<T: MockTransport> {
@@ -47,11 +52,18 @@ pub enum Command<T: MockTransport> {
         message: message::Request,
         response: oneshot::Sender<crate::Result<MockRequestId>>,
     },
-
     /// Send response to remote peer
     SendResponse {
         request_id: MockRequestId,
         message: message::Response,
+        response: oneshot::Sender<crate::Result<()>>,
+    },
+    Subscribe {
+        topics: BTreeSet<PubSubTopic>,
+    },
+    AnnounceData {
+        topic: PubSubTopic,
+        message: Vec<u8>,
         response: oneshot::Sender<crate::Result<()>>,
     },
 }
@@ -62,11 +74,14 @@ pub enum SyncingEvent {
         request_id: MockRequestId,
         request: message::Request,
     },
-
     Response {
         peer_id: MockPeerId,
         request_id: MockRequestId,
         response: message::Response,
+    },
+    Announcement {
+        peer_id: MockPeerId,
+        announcement: Box<message::Announcement>,
     },
 }
 
@@ -86,6 +101,11 @@ pub enum ConnectivityEvent<T: MockTransport> {
     },
     ConnectionClosed {
         peer_id: MockPeerId,
+    },
+    /// A peer misbehaved and its reputation must be adjusted according to the error type.
+    Misbehaved {
+        peer_id: MockPeerId,
+        error: error::P2pError,
     },
 }
 
@@ -124,6 +144,14 @@ impl std::fmt::Display for MockRequestId {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Encode, Decode)]
 pub struct MockPeerId(u64);
 
+impl FromStr for MockPeerId {
+    type Err = <u64 as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        u64::from_str(s).map(Self)
+    }
+}
+
 impl MockPeerId {
     pub fn random() -> Self {
         let mut rng = make_pseudo_rng();
@@ -142,6 +170,11 @@ impl std::fmt::Display for MockPeerId {
         write!(f, "{}", self.0)
     }
 }
+
+// This type is only needed to satisfy the `NetworkingService` trait requirements. It should be
+// removed along with the libp2p backend.
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub struct MockMessageId;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct MockPeerInfo {
@@ -192,7 +225,7 @@ pub enum HandshakeMessage {
     },
 }
 
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 pub enum Message {
     Handshake(HandshakeMessage),
     Request {
@@ -202,5 +235,11 @@ pub enum Message {
     Response {
         request_id: MockRequestId,
         response: message::Response,
+    },
+    Subscribe {
+        topics: BTreeSet<PubSubTopic>,
+    },
+    Announcement {
+        announcement: message::Announcement,
     },
 }

@@ -13,33 +13,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
+use crate::utils::{create_multiple_utxo_data, create_new_outputs};
+use crate::{TestBlockInfo, TestFramework};
+use chainstate::{BlockSource, ChainstateError};
+use chainstate_types::BlockIndex;
+use common::chain::OutPoint;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         signature::inputsig::InputWitness,
-        Transaction, TxInput, TxOutput,
+        signed_transaction::SignedTransaction,
+        Block, GenBlock, Transaction, TxInput, TxOutput,
     },
-    primitives::{time, Id, H256},
+    primitives::{Id, H256},
 };
 use crypto::random::Rng;
-
-use crate::framework::create_new_outputs;
-use crate::framework::TestBlockInfo;
-use crate::TestFramework;
-use chainstate::{BlockSource, ChainstateError};
-use chainstate_types::BlockIndex;
-use common::chain::Block;
-use common::chain::GenBlock;
+use itertools::Itertools;
 
 /// The block builder that allows construction and processing of a block.
 pub struct BlockBuilder<'f> {
     framework: &'f mut TestFramework,
-    transactions: Vec<Transaction>,
+    transactions: Vec<SignedTransaction>,
     prev_block_hash: Id<GenBlock>,
     timestamp: BlockTimestamp,
     consensus_data: ConsensusData,
     reward: BlockReward,
     block_source: BlockSource,
+    used_utxo: BTreeSet<OutPoint>,
 }
 
 impl<'f> BlockBuilder<'f> {
@@ -47,10 +49,11 @@ impl<'f> BlockBuilder<'f> {
     pub fn new(framework: &'f mut TestFramework) -> Self {
         let transactions = Vec::new();
         let prev_block_hash = framework.chainstate.get_best_block_id().unwrap();
-        let timestamp = BlockTimestamp::from_duration_since_epoch(time::get());
+        let timestamp = BlockTimestamp::from_duration_since_epoch(framework.time_getter.get_time());
         let consensus_data = ConsensusData::None;
         let reward = BlockReward::new(Vec::new());
         let block_source = BlockSource::Local;
+        let used_utxo = BTreeSet::new();
 
         Self {
             framework,
@@ -60,46 +63,85 @@ impl<'f> BlockBuilder<'f> {
             consensus_data,
             reward,
             block_source,
+            used_utxo,
         }
     }
 
     /// Replaces the transactions.
-    pub fn with_transactions(mut self, transactions: Vec<Transaction>) -> Self {
+    pub fn with_transactions(mut self, transactions: Vec<SignedTransaction>) -> Self {
         self.transactions = transactions;
         self
     }
 
     /// Appends the given transaction to the transactions list.
-    pub fn add_transaction(mut self, transaction: Transaction) -> Self {
+    pub fn add_transaction(mut self, transaction: SignedTransaction) -> Self {
         self.transactions.push(transaction);
         self
     }
 
-    /// Adds a transaction that uses the transactions from the previous block as inputs and
+    /// Adds a transaction that uses random utxos
+    pub fn add_test_transaction(mut self, rng: &mut impl Rng) -> Self {
+        let utxo_set = self.framework.storage.read_utxo_set().unwrap();
+
+        if !utxo_set.is_empty() {
+            // TODO: get n utxos as inputs and create m new outputs
+            let index = rng.gen_range(0..utxo_set.len());
+            let (outpoint, utxo) = utxo_set.iter().nth(index).unwrap();
+            if !self.used_utxo.contains(outpoint) {
+                let new_utxo_data = create_multiple_utxo_data(
+                    &self.framework.chainstate,
+                    outpoint.tx_id(),
+                    outpoint.output_index() as usize,
+                    utxo.output(),
+                    rng,
+                );
+
+                if let Some((witness, input, output)) = new_utxo_data {
+                    self.used_utxo.insert(outpoint.clone());
+                    return self.add_transaction(
+                        SignedTransaction::new(
+                            Transaction::new(0, vec![input], output, 0).unwrap(),
+                            vec![witness],
+                        )
+                        .expect("invalid witness count"),
+                    );
+                }
+            }
+        }
+        self
+    }
+
+    /// Adds a transaction that uses the transactions from the best block as inputs and
     /// produces new outputs.
-    pub fn add_test_transaction(self, rng: &mut impl Rng) -> Self {
+    pub fn add_test_transaction_from_best_block(self, rng: &mut impl Rng) -> Self {
         let parent = self.framework.best_block_id();
         self.add_test_transaction_with_parent(parent, rng)
     }
 
-    /// Same as `add_test_transaction`, but with a custom parent.
+    /// Same as `add_test_transaction_from_best_block`, but with a custom parent.
     pub fn add_test_transaction_with_parent(
         self,
         parent: Id<GenBlock>,
         rng: &mut impl Rng,
     ) -> Self {
-        let (inputs, outputs): (Vec<_>, Vec<_>) = self.make_test_inputs_outputs(
+        let (witnesses, inputs, outputs) = self.make_test_inputs_outputs(
             TestBlockInfo::from_id(&self.framework.chainstate, parent),
             rng,
         );
-        self.add_transaction(Transaction::new(0, inputs, outputs, 0).unwrap())
+        self.add_transaction(
+            SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
+                .expect("invalid witness count"),
+        )
     }
 
     /// Same as `add_test_transaction_with_parent`, but uses reference to a block.
     pub fn add_test_transaction_from_block(self, parent: &Block, rng: &mut impl Rng) -> Self {
-        let (inputs, outputs): (Vec<_>, Vec<_>) =
+        let (witnesses, inputs, outputs) =
             self.make_test_inputs_outputs(TestBlockInfo::from_block(parent), rng);
-        self.add_transaction(Transaction::new(0, inputs, outputs, 0).unwrap())
+        self.add_transaction(
+            SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
+                .expect("invalid witness count"),
+        )
     }
 
     /// Adds a transaction that tries to spend the already spent output from the specified block.
@@ -110,14 +152,14 @@ impl<'f> BlockBuilder<'f> {
         rng: &mut impl Rng,
     ) -> Self {
         let parent = TestBlockInfo::from_id(&self.framework.chainstate, parent);
-        let (mut inputs, outputs): (Vec<_>, Vec<_>) = self.make_test_inputs_outputs(parent, rng);
+        let (mut witnesses, mut inputs, outputs) = self.make_test_inputs_outputs(parent, rng);
         let spend_from = TestBlockInfo::from_id(&self.framework.chainstate, spend_from.into());
-        inputs.push(TxInput::new(
-            spend_from.txns[0].0.clone(),
-            0,
-            InputWitness::NoSignature(None),
-        ));
-        self.transactions.push(Transaction::new(0, inputs, outputs, 0).unwrap());
+        inputs.push(TxInput::new(spend_from.txns[0].0.clone(), 0));
+        witnesses.push(InputWitness::NoSignature(None));
+        self.transactions.push(
+            SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
+                .expect("invalid witness count"),
+        );
         self
     }
 
@@ -128,8 +170,8 @@ impl<'f> BlockBuilder<'f> {
     }
 
     /// Overrides the previous block hash by a random value making the resulting block an orphan.
-    pub fn make_orphan(mut self) -> Self {
-        self.prev_block_hash = Id::new(H256::random());
+    pub fn make_orphan(mut self, rng: &mut impl Rng) -> Self {
+        self.prev_block_hash = Id::new(H256::random_using(rng));
         self
     }
 
@@ -181,11 +223,13 @@ impl<'f> BlockBuilder<'f> {
         &self,
         parent: TestBlockInfo,
         rng: &mut impl Rng,
-    ) -> (Vec<TxInput>, Vec<TxOutput>) {
+    ) -> (Vec<InputWitness>, Vec<TxInput>, Vec<TxOutput>) {
         parent
             .txns
             .into_iter()
             .flat_map(|(s, o)| create_new_outputs(&self.framework.chainstate, s, &o, rng))
-            .unzip()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .multiunzip()
     }
 }

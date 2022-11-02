@@ -16,15 +16,19 @@
 use std::sync::Arc;
 use std::{sync::atomic::Ordering, time::Duration};
 
+use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{
     make_chainstate, BlockError, BlockSource, ChainstateConfig, ChainstateError, CheckBlockError,
-    CheckBlockTransactionsError, OrphanCheckError,
+    CheckBlockTransactionsError, ConnectTransactionError, DefaultTransactionVerificationStrategy,
+    OrphanCheckError,
 };
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestBlockInfo, TestFramework, TestStore,
     TransactionBuilder,
 };
-use chainstate_types::{GenBlockIndex, PropertyQueryError};
+use chainstate_types::{GenBlockIndex, GetAncestorError, PropertyQueryError};
+use common::chain::OutPoint;
+use common::chain::{signed_transaction::SignedTransaction, Transaction};
 use common::primitives::BlockDistance;
 use common::{
     chain::{
@@ -46,6 +50,7 @@ use crypto::{
 };
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+use utxo::UtxoSource;
 
 #[rstest]
 #[trace]
@@ -68,7 +73,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                 coins.clone(),
                 OutputPurpose::Transfer(destination.clone()),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         let block_id = block.get_id();
@@ -89,7 +94,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                     OutputTimeLock::UntilHeight(BlockHeight::max()),
                 ),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         let block_id = block.get_id();
@@ -110,7 +115,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                     OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(u64::MAX)),
                 ),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         let block_id = block.get_id();
@@ -131,7 +136,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                     OutputTimeLock::ForSeconds(u64::MAX),
                 ),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         let block_id = block.get_id();
@@ -152,7 +157,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                     OutputTimeLock::ForBlockCount(u64::MAX),
                 ),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         let block_id = block.get_id();
@@ -179,7 +184,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                     OutputTimeLock::ForBlockCount(reward_lock_distance as u64 - 1),
                 ),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         let block_id = block.get_id();
@@ -201,7 +206,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                 coins.clone(),
                 OutputPurpose::StakeLock(destination.clone()),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         assert!(matches!(
@@ -227,7 +232,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                     OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
                 ),
             )])
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
 
         let block_id = block.get_id();
@@ -248,7 +253,8 @@ fn orphans_chains(#[case] seed: Seed) {
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
 
         // Prepare, but not process the block.
-        let missing_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
+        let missing_block =
+            tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
 
         // Create and process orphan blocks.
         const MAX_ORPHANS_COUNT_IN_TEST: usize = 100;
@@ -300,15 +306,23 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
 
+        // Check that genesis utxos are present in the utxo set
+        let genesis_id = tf.genesis().get_id();
+        for (idx, txo) in tf.genesis().utxos().iter().enumerate() {
+            let idx = idx as u32;
+            let utxo = tf.chainstate.utxo(&OutPoint::new(genesis_id.into(), idx)).unwrap().unwrap();
+            assert!(!utxo.is_block_reward());
+            assert_eq!(utxo.output(), txo);
+            assert_eq!(utxo.source(), &UtxoSource::Blockchain(BlockHeight::new(0)));
+        }
+
         // Create a new block
-        let block = tf.make_block_builder().add_test_transaction(&mut rng).build();
+        let block = tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
 
         // Check that all tx not in the main chain
         for tx in block.transactions() {
             assert_eq!(
-                tf.chainstate
-                    .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
-                    .unwrap(),
+                tf.chainstate.get_mainchain_tx_index(&tx.transaction().get_id().into()).unwrap(),
                 None
             );
         }
@@ -317,21 +331,88 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         tf.process_block(block.clone(), BlockSource::Local).unwrap();
         assert_eq!(tf.best_block_id(), <Id<GenBlock>>::from(block.get_id()));
 
-        // Check that the transactions are in the main-chain and their inputs are not spent.
+        // Check that the transactions are in the main-chain and ensure that the connected previous
+        // outputs are spent.
         for tx in block.transactions() {
-            let tx_index = tf
-                .chainstate
-                .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
-                .unwrap()
-                .unwrap();
-
-            for input in tx.inputs() {
+            let tx_id = tx.transaction().get_id();
+            // All inputs must spend a corresponding output
+            for tx_in in tx.transaction().inputs() {
+                let outpoint = tx_in.outpoint();
+                let prev_out_tx_index =
+                    tf.chainstate.get_mainchain_tx_index(&outpoint.tx_id()).unwrap().unwrap();
                 assert_eq!(
-                    tx_index.get_spent_state(input.outpoint().output_index()).unwrap(),
+                    prev_out_tx_index.get_spent_state(outpoint.output_index()).unwrap(),
+                    OutputSpentState::SpentBy(tx_id.into())
+                );
+                assert_eq!(tf.chainstate.utxo(outpoint), Ok(None))
+            }
+            // All the outputs of this transaction should be unspent
+            let tx_index = tf.chainstate.get_mainchain_tx_index(&tx_id.into()).unwrap().unwrap();
+            for (idx, txo) in tx.transaction().outputs().iter().enumerate() {
+                let idx = idx as u32;
+                assert_eq!(
+                    tx_index.get_spent_state(idx).unwrap(),
                     OutputSpentState::Unspent
                 );
+                let utxo = tf.chainstate.utxo(&OutPoint::new(tx_id.into(), idx)).unwrap().unwrap();
+                assert!(!utxo.is_block_reward());
+                assert_eq!(utxo.output(), txo);
+                assert_eq!(utxo.source(), &UtxoSource::Blockchain(BlockHeight::new(1)));
             }
         }
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn transaction_processing_order(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::default();
+
+        // Transaction that spends the genesis reward
+        let tx1 = SignedTransaction::new(
+            Transaction::new(
+                0,
+                vec![TxInput::new(tf.genesis().get_id().into(), 0)],
+                vec![TxOutput::new(
+                    tf.genesis().utxos()[0].value().clone(),
+                    OutputPurpose::Transfer(anyonecanspend_address()),
+                )],
+                0,
+            )
+            .unwrap(),
+            vec![empty_witness(&mut rng)],
+        )
+        .expect("invalid witness count");
+
+        // Transaction that spends tx1
+        let tx2 = SignedTransaction::new(
+            Transaction::new(
+                0,
+                vec![TxInput::new(tx1.transaction().get_id().into(), 0)],
+                vec![TxOutput::new(
+                    tx1.transaction().outputs()[0].value().clone(),
+                    OutputPurpose::Transfer(anyonecanspend_address()),
+                )],
+                0,
+            )
+            .unwrap(),
+            vec![empty_witness(&mut rng)],
+        )
+        .expect("invalid witness count");
+
+        // Create a new block with tx2 appearing before tx1
+        let block = tf.make_block_builder().add_transaction(tx2).add_transaction(tx1).build();
+
+        // Processing this block should cause an error
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::MissingOutputOrSpent
+            ))
+        );
     });
 }
 
@@ -396,10 +477,12 @@ fn get_ancestor_invalid_height(#[case] seed: Seed) {
 
     let invalid_height = height + 1;
     assert_eq!(
-        ChainstateError::FailedToReadProperty(PropertyQueryError::InvalidAncestorHeight {
-            ancestor_height: u64::try_from(invalid_height).unwrap().into(),
-            block_height: u64::try_from(height).unwrap().into(),
-        }),
+        ChainstateError::FailedToReadProperty(PropertyQueryError::GetAncestorError(
+            GetAncestorError::InvalidAncestorHeight {
+                ancestor_height: u64::try_from(invalid_height).unwrap().into(),
+                block_height: u64::try_from(height).unwrap().into(),
+            }
+        )),
         tf.chainstate
             .get_ancestor(
                 &tf.best_block_index(),
@@ -617,7 +700,7 @@ fn consensus_type(#[case] seed: Seed) {
         ),
     ];
 
-    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid netupgrades");
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     // Internally this calls Consensus::new, which processes the genesis block
     // This should succeed because config::Builder by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
@@ -636,7 +719,7 @@ fn consensus_type(#[case] seed: Seed) {
     // processing a block with PoWData will fail
     assert!(matches!(
         tf.make_block_builder()
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .with_consensus_data(ConsensusData::PoW(PoWData::new(Compact(0), 0)))
             .build_and_process()
             .unwrap_err(),
@@ -647,7 +730,7 @@ fn consensus_type(#[case] seed: Seed) {
         ))
     ));
 
-    // Create 4 more blocks with Consensus Nonw
+    // Create 4 more blocks with Consensus Now
     tf.create_chain(&tf.genesis().get_id().into(), 4, &mut rng)
         .expect("chain creation");
 
@@ -655,7 +738,7 @@ fn consensus_type(#[case] seed: Seed) {
     // with ConsensusData::None and see that adding it fails
     assert!(matches!(
         tf.make_block_builder()
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build_and_process()
             .unwrap_err(),
         ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
@@ -780,7 +863,7 @@ fn pow(#[case] seed: Seed) {
         ),
     ];
 
-    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid netupgrades");
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     // Internally this calls Consensus::new, which processes the genesis block
     // This should succeed because TestChainConfig by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
@@ -807,7 +890,7 @@ fn pow(#[case] seed: Seed) {
                 OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
             ),
         )])
-        .add_test_transaction(&mut rng)
+        .add_test_transaction_from_best_block(&mut rng)
         .build();
     make_invalid_pow_block(&mut random_invalid_block, u128::MAX, difficulty.into())
         .expect("generate invalid block");
@@ -851,7 +934,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
         ),
     ];
 
-    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid netupgrades");
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     // Internally this calls Consensus::new, which processes the genesis block
     // This should succeed because TestChainConfig by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
@@ -886,7 +969,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
         let mut random_invalid_block = tf
             .make_block_builder()
             .with_reward(expected_block_reward.clone())
-            .add_test_transaction(&mut rng)
+            .add_test_transaction_from_best_block(&mut rng)
             .build();
         make_invalid_pow_block(&mut random_invalid_block, u128::MAX, difficulty.into())
             .expect("generate invalid block");
@@ -947,7 +1030,7 @@ fn blocks_from_the_future() {
         {
             // constrain the test to protect this test becoming legacy by changing the definition of median time for genesis
             assert_eq!(
-                tf.chainstate.calculate_median_time_past(&tf.genesis().get_id().into()),
+                tf.chainstate.calculate_median_time_past(&tf.genesis().get_id().into()).unwrap(),
                 tf.chainstate.get_chain_config().genesis_block().timestamp()
             );
         }
@@ -1010,6 +1093,7 @@ fn mainnet_initialization() {
         chain_config,
         chainstate_config,
         storage,
+        DefaultTransactionVerificationStrategy::new(),
         None,
         Default::default(),
     )
@@ -1022,7 +1106,7 @@ fn empty_inputs_in_tx() {
         let mut tf = TestFramework::default();
 
         let first_tx = TransactionBuilder::new().build();
-        let first_tx_id = first_tx.get_id();
+        let first_tx_id = first_tx.transaction().get_id();
 
         let block = tf.make_block_builder().with_transactions(vec![first_tx]).build();
         let block_id = block.get_id();
@@ -1052,7 +1136,7 @@ fn empty_outputs_in_tx() {
                 OutputPurpose::Transfer(anyonecanspend_address()),
             ))
             .build();
-        let first_tx_id = first_tx.get_id();
+        let first_tx_id = first_tx.transaction().get_id();
 
         let block = tf.make_block_builder().with_transactions(vec![first_tx]).build();
         let block_id = block.get_id();
@@ -1080,13 +1164,15 @@ fn burn_inputs_in_tx(#[case] seed: Seed) {
 
         let mut rng = make_seedable_rng(seed);
         let first_tx = TransactionBuilder::new()
-            .add_input(TxInput::new(
-                OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                0,
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
                 empty_witness(&mut rng),
-            ))
+            )
             .build();
-        let first_tx_id = first_tx.get_id();
+        let first_tx_id = first_tx.transaction().get_id();
 
         let block = tf.make_block_builder().with_transactions(vec![first_tx]).build();
         let block_id = block.get_id();

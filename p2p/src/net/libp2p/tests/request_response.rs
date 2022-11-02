@@ -16,8 +16,7 @@
 use super::*;
 use crate::{
     error::{P2pError, PeerError},
-    net::libp2p::tests::message_types::SyncRequest,
-    net::libp2p::types,
+    net::libp2p::{behaviour::sync_codec::message_types::SyncRequest, types},
 };
 use futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
@@ -27,7 +26,7 @@ use tokio::sync::oneshot;
 // try to send request to an uknown peer and verify that the request is not rejected
 #[tokio::test]
 async fn request_sent_directly_but_peer_not_part_of_swarm() {
-    let (mut backend, _cmd, _conn_rx, _gossip_rx, _sync_rx) = make_libp2p(
+    let (mut backend, _cmd, _conn_rx, _sync_rx) = make_libp2p(
         common::chain::config::create_mainnet(),
         Arc::new(Default::default()),
         MakeP2pAddress::make_address(),
@@ -50,7 +49,7 @@ async fn request_sent_directly_but_peer_not_part_of_swarm() {
 // that the request is rejected by the backend
 #[tokio::test]
 async fn request_sent_but_peer_not_part_of_swarm() {
-    let (mut backend, _cmd, _conn_rx, _gossip_rx, _sync_rx) = make_libp2p(
+    let (mut backend, _cmd, _conn_rx, _sync_rx) = make_libp2p(
         common::chain::config::create_mainnet(),
         Arc::new(Default::default()),
         MakeP2pAddress::make_address(),

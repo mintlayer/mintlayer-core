@@ -14,19 +14,19 @@
 // limitations under the License.
 
 use common::chain::block::block_header::BlockHeader;
+use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::{Block, GenBlock};
 use common::primitives::{BlockHeight, Id, Idable};
 use common::Uint256;
 use serialization::{Decode, Encode};
 
-use common::chain::block::timestamp::BlockTimestamp;
+use crate::GenBlockIndex;
 
 #[derive(Debug, Clone, Encode, Decode)]
-#[allow(dead_code, unused_variables)]
 pub struct BlockIndex {
     block_id: Id<Block>,
     block_header: BlockHeader,
-    skip: Id<GenBlock>,
+    some_ancestor: Id<GenBlock>,
     chain_trust: Uint256,
     height: BlockHeight,
     time_max: BlockTimestamp,
@@ -44,7 +44,7 @@ impl BlockIndex {
         Self {
             block_header: block.header().clone(),
             block_id: block.get_id(),
-            skip: some_ancestor,
+            some_ancestor,
             chain_trust,
             height,
             time_max,
@@ -80,10 +80,14 @@ impl BlockIndex {
     }
 
     pub fn some_ancestor(&self) -> &Id<GenBlock> {
-        &self.skip
+        &self.some_ancestor
     }
 
     pub fn into_block_header(self) -> BlockHeader {
         self.block_header
+    }
+
+    pub fn into_gen_block_index(self) -> GenBlockIndex {
+        self.into()
     }
 }

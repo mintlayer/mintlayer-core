@@ -13,14 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::primitives::{id::WithId, Id, Idable};
-use serialization::{DirectDecode, DirectEncode, Encode};
 use thiserror::Error;
 
+use serialization::{DirectDecode, DirectEncode};
+use typename::TypeName;
+
 use crate::chain::transaction::transaction_v1::TransactionV1;
+use crate::primitives::{id::WithId, Id, Idable, H256};
 
 pub mod input;
 pub use input::*;
+
+pub mod signed_transaction;
 
 pub mod output;
 pub use output::*;
@@ -31,6 +35,7 @@ pub mod transaction_index;
 pub use transaction_index::*;
 
 use self::signature::inputsig::InputWitness;
+use self::signed_transaction::SignedTransaction;
 
 mod transaction_v1;
 
@@ -39,7 +44,7 @@ pub enum TransactionSize {
     SmartContractTransaction(usize),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode, TypeName)]
 pub enum Transaction {
     V1(TransactionV1),
 }
@@ -61,14 +66,11 @@ impl PartialEq for WithId<Transaction> {
 
 impl Eq for WithId<Transaction> {}
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum TransactionCreationError {
+    #[error("The number of signatures does not match the number of inputs")]
+    InvalidWitnessCount,
     #[error("An unknown error has occurred")]
-    Unknown,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TransactionUpdateError {
     Unknown,
 }
 
@@ -120,7 +122,7 @@ impl Transaction {
     }
 
     /// provides the hash of a transaction including the witness (malleable)
-    pub fn serialized_hash(&self) -> Id<Transaction> {
+    pub fn serialized_hash(&self) -> H256 {
         match &self {
             Transaction::V1(tx) => tx.serialized_hash(),
         }
@@ -130,22 +132,14 @@ impl Transaction {
         false
     }
 
-    pub fn transaction_data_size(&self) -> TransactionSize {
-        if self.has_smart_contracts() {
-            TransactionSize::SmartContractTransaction(self.encoded_size())
-        } else {
-            TransactionSize::ScriptedTransaction(self.encoded_size())
+    pub fn with_signatures(
+        self,
+        witnesses: Vec<InputWitness>,
+    ) -> Result<SignedTransaction, TransactionCreationError> {
+        if witnesses.len() != self.inputs().len() {
+            return Err(TransactionCreationError::InvalidWitnessCount);
         }
-    }
-
-    pub fn update_witness(
-        &mut self,
-        input_index: usize,
-        witness: InputWitness,
-    ) -> Result<(), TransactionUpdateError> {
-        match self {
-            Transaction::V1(tx) => tx.update_witness(input_index, witness),
-        }
+        SignedTransaction::new(self, witnesses)
     }
 }
 
@@ -153,7 +147,7 @@ impl Transaction {
 mod test {
     use super::*;
     use crypto::random::RngCore;
-    use serialization::Decode;
+    use serialization::{Decode, Encode};
 
     #[test]
     #[allow(clippy::eq_op)]

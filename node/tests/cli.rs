@@ -19,7 +19,7 @@ use assert_cmd::Command;
 use directories::UserDirs;
 use tempfile::TempDir;
 
-use node::{NodeConfig, RunOptions};
+use node::{NodeConfigFile, RunOptions, StorageBackendConfigFile};
 
 const BIN_NAME: &str = env!("CARGO_BIN_EXE_node");
 const CONFIG_NAME: &str = "config.toml";
@@ -50,20 +50,23 @@ fn create_default_config() {
     assert!(config_path.is_file());
 
     let options = default_run_options();
-    let config = NodeConfig::read(&config_path, &options).unwrap();
+    let config = NodeConfigFile::read(&config_path, &None, &options).unwrap();
 
     assert_eq!(config.datadir, data_dir.path());
 
-    assert_eq!(config.chainstate.max_db_commit_attempts, 10);
-    assert_eq!(config.chainstate.max_orphan_blocks, 512);
+    assert_eq!(
+        config.chainstate.chainstate_config.max_db_commit_attempts,
+        None
+    );
+    assert_eq!(config.chainstate.chainstate_config.max_orphan_blocks, None);
 
-    assert_eq!(config.p2p.bind_address, "/ip6/::1/tcp/3031");
-    assert_eq!(config.p2p.ban_threshold, 100);
-    assert_eq!(config.p2p.outbound_connection_timeout, 10);
+    assert_eq!(config.p2p.bind_address, None);
+    assert_eq!(config.p2p.ban_threshold, None);
+    assert_eq!(config.p2p.outbound_connection_timeout, None);
 
     assert_eq!(
-        config.rpc.bind_address,
-        SocketAddr::from_str("127.0.0.1:3030").unwrap()
+        config.rpc.http_bind_address,
+        Some(SocketAddr::from_str("127.0.0.1:3030").unwrap())
     );
 }
 
@@ -86,8 +89,10 @@ fn read_config_override_values() {
     let p2p_addr = "address";
     let p2p_ban_threshold = 3;
     let p2p_timeout = 10000;
-    let rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
+    let http_rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
+    let ws_rpc_addr = SocketAddr::from_str("127.0.0.1:5433").unwrap();
     let enable_mdns = false;
+    let backend_type = StorageBackendConfigFile::InMemory;
 
     let options = RunOptions {
         max_db_commit_attempts: Some(max_db_commit_attempts),
@@ -98,23 +103,37 @@ fn read_config_override_values() {
         p2p_enable_mdns: Some(enable_mdns),
         p2p_mdns_query_interval: None,
         p2p_enable_ipv6_mdns_discovery: None,
-        rpc_addr: Some(rpc_addr),
+        http_rpc_addr: Some(http_rpc_addr),
+        http_rpc_enabled: Some(true),
+        ws_rpc_addr: Some(ws_rpc_addr),
+        ws_rpc_enabled: Some(false),
+        storage_backend: Some(backend_type.clone()),
     };
-    let config = NodeConfig::read(&config_path, &options).unwrap();
+    let datadir_opt = Some(data_dir.path().into());
+    let config = NodeConfigFile::read(&config_path, &datadir_opt, &options).unwrap();
 
     assert_eq!(config.datadir, data_dir.path());
 
     assert_eq!(
-        config.chainstate.max_db_commit_attempts,
-        max_db_commit_attempts
+        config.chainstate.chainstate_config.max_db_commit_attempts,
+        Some(max_db_commit_attempts)
     );
-    assert_eq!(config.chainstate.max_orphan_blocks, max_orphan_blocks);
+    assert_eq!(
+        config.chainstate.chainstate_config.max_orphan_blocks,
+        Some(max_orphan_blocks)
+    );
 
-    assert_eq!(config.p2p.bind_address, p2p_addr);
-    assert_eq!(config.p2p.ban_threshold, p2p_ban_threshold);
-    assert_eq!(config.p2p.outbound_connection_timeout, p2p_timeout);
+    assert_eq!(config.p2p.bind_address, Some(p2p_addr.into()));
+    assert_eq!(config.p2p.ban_threshold, Some(p2p_ban_threshold));
+    assert_eq!(config.p2p.outbound_connection_timeout, Some(p2p_timeout));
 
-    assert_eq!(config.rpc.bind_address, rpc_addr);
+    assert_eq!(config.rpc.http_bind_address, Some(http_rpc_addr));
+    assert!(config.rpc.http_enabled.unwrap());
+
+    assert_eq!(config.rpc.ws_bind_address, Some(ws_rpc_addr));
+    assert!(!config.rpc.ws_enabled.unwrap());
+
+    assert_eq!(config.chainstate.storage_backend, backend_type);
 }
 
 // Check that the `--conf` option has the precedence over the default data directory value.
@@ -134,7 +153,7 @@ fn custom_config_path() {
     assert!(config_path.is_file());
 
     let options = default_run_options();
-    let config = NodeConfig::read(&config_path, &options).unwrap();
+    let config = NodeConfigFile::read(&config_path, &None, &options).unwrap();
 
     assert_eq!(config.datadir, data_dir);
 }
@@ -157,7 +176,7 @@ fn custom_config_path_and_data_dir() {
     assert!(config_path.is_file());
 
     let options = default_run_options();
-    let config = NodeConfig::read(&config_path, &options).unwrap();
+    let config = NodeConfigFile::read(&config_path, &None, &options).unwrap();
 
     assert_eq!(config.datadir, data_dir.path());
 }
@@ -172,6 +191,10 @@ fn default_run_options() -> RunOptions {
         p2p_enable_mdns: None,
         p2p_mdns_query_interval: None,
         p2p_enable_ipv6_mdns_discovery: None,
-        rpc_addr: None,
+        http_rpc_addr: None,
+        http_rpc_enabled: None,
+        ws_rpc_addr: None,
+        ws_rpc_enabled: None,
+        storage_backend: None,
     }
 }

@@ -21,7 +21,7 @@ use common::primitives::id::WithId;
 use common::primitives::{Id, Idable};
 use crypto::random::SliceRandom;
 
-// FIXME: The Arc here is unnecessary: https://github.com/mintlayer/mintlayer-core/issues/164
+// TODO: The Arc here is unnecessary: https://github.com/mintlayer/mintlayer-core/issues/164
 pub struct OrphanBlocksPool {
     orphan_ids: Vec<Id<Block>>,
     orphan_by_id: BTreeMap<Id<Block>, Arc<WithId<Block>>>,
@@ -58,7 +58,7 @@ impl OrphanBlocksPool {
         // remove from the vector
         self.orphan_ids.retain(|id| *id != *block_id);
 
-        // remove from the prevs
+        // remove from the orphan_by_prev_id
         match self.orphan_by_prev_id.entry(prev_block_id) {
             Entry::Vacant(_) => panic!("Orphan pool parent map inconsistent"),
             Entry::Occupied(mut entry) => {
@@ -174,6 +174,7 @@ mod tests {
         use super::*;
         use common::chain::block::timestamp::BlockTimestamp;
         use common::chain::block::{BlockReward, ConsensusData};
+        use common::chain::signed_transaction::SignedTransaction;
         use common::chain::transaction::Transaction;
         use common::primitives::H256;
         use crypto::random::Rng;
@@ -190,7 +191,7 @@ mod tests {
             let tx = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
 
             Block::new(
-                vec![tx],
+                vec![SignedTransaction::new(tx, vec![]).expect("invalid witness count")],
                 prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()).into()),
                 BlockTimestamp::from_int_seconds(rng.gen()),
                 ConsensusData::None,

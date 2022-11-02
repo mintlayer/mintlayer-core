@@ -15,58 +15,54 @@
 
 #![deny(clippy::clone_on_ref_ptr)]
 
-use pool::MempoolInterface;
+use std::sync::Arc;
 
-use crate::config::GetMemoryUsage;
-use crate::config::GetTime;
+use chainstate::chainstate_interface::ChainstateInterface;
+use common::chain::{Block, ChainConfig};
+use common::primitives::{BlockHeight, Id};
+use common::time_getter::TimeGetter;
+pub use interface::mempool_interface::MempoolInterface;
+
 use crate::error::Error as MempoolError;
-use crate::pool::ChainState;
-use crate::pool::Mempool;
+use crate::interface::mempool_interface_impl::MempoolInterfaceImpl;
+use get_memory_usage::GetMemoryUsage;
+
+pub use crate::get_memory_usage::SystemUsageEstimator;
 
 mod config;
 pub mod error;
-mod feerate;
-pub mod pool;
+mod get_memory_usage;
+mod interface;
 pub mod rpc;
+pub mod tx_accumulator;
 
-impl<C: 'static> subsystem::Subsystem for Box<dyn MempoolInterface<C>> {}
+#[derive(Debug, Clone)]
+pub enum MempoolEvent {
+    NewTip(Id<Block>, BlockHeight),
+}
 
-#[allow(dead_code)]
-type MempoolHandle<C> = subsystem::Handle<Box<dyn MempoolInterface<C>>>;
+impl subsystem::Subsystem for Box<dyn MempoolInterface> {}
+
+pub type MempoolHandle = subsystem::Handle<Box<dyn MempoolInterface>>;
 
 pub type Result<T> = core::result::Result<T, MempoolError>;
 
-#[derive(Debug)]
-pub struct DummyMempoolChainState;
-
-impl ChainState for DummyMempoolChainState {
-    fn contains_outpoint(&self, _outpoint: &common::chain::OutPoint) -> bool {
-        false
-    }
-    fn get_outpoint_value(
-        &self,
-        _outpoint: &common::chain::OutPoint,
-    ) -> core::result::Result<common::primitives::Amount, anyhow::Error> {
-        Err(anyhow::Error::msg("this is a dummy placeholder chainstate"))
-    }
-}
-
-pub fn make_mempool<C, T, M, H>(
-    chainstate: C,
-    chainstate_handle: H,
-    time_getter: T,
+pub async fn make_mempool<M>(
+    chain_config: Arc<ChainConfig>,
+    chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+    time_getter: TimeGetter,
     memory_usage_estimator: M,
-) -> crate::Result<Box<dyn MempoolInterface<C>>>
+) -> crate::Result<Box<dyn MempoolInterface>>
 where
-    C: ChainState + 'static + Send,
-    H: 'static + Send,
-    T: GetTime + 'static + Send,
-    M: GetMemoryUsage + 'static + Send,
+    M: GetMemoryUsage + 'static + Send + std::marker::Sync,
 {
-    Ok(Box::new(Mempool::new(
-        chainstate,
-        chainstate_handle,
-        time_getter,
-        memory_usage_estimator,
-    )))
+    Ok(Box::new(
+        MempoolInterfaceImpl::new(
+            chain_config,
+            chainstate_handle,
+            time_getter,
+            memory_usage_estimator,
+        )
+        .await?,
+    ))
 }

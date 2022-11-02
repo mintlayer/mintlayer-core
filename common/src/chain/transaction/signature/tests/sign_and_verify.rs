@@ -16,7 +16,9 @@
 use itertools::Itertools;
 
 use crypto::key::{KeyKind, PrivateKey};
+use rstest::rstest;
 use script::Script;
+use test_utils::random::Seed;
 
 use super::utils::*;
 use crate::{
@@ -34,41 +36,45 @@ use crate::{
 // Generate a transaction with a different number of inputs and outputs, then sign it as a whole.
 // For `ALL`, `ALL | ANYONECANPAY`, `NONE` and `NONE | ANYONECANPAY` it should succeed in all cases
 // except for `ScriptHash` and `AnyoneCanSpend` destinations.
-#[test]
-fn sign_and_verify_all_and_none() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn sign_and_verify_all_and_none(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let test_data = [(0, 31), (31, 0), (20, 3), (3, 20)];
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
 
-    for ((destination, sighash_type), (inputs, outputs)) in destinations(public_key)
+    for ((destination, sighash_type), (inputs, outputs)) in destinations(&mut rng, public_key)
         .cartesian_product(sig_hash_types().filter(|t| t.outputs_mode() != OutputsMode::Single))
         .cartesian_product(test_data)
     {
-        let mut tx = generate_unsigned_tx(&destination, inputs, outputs).unwrap();
-        let res = sign_whole_tx(&mut tx, &private_key, sighash_type, &destination);
+        let tx = generate_unsigned_tx(&mut rng, &destination, inputs, outputs).unwrap();
+        let signed_tx = sign_whole_tx(tx, &private_key, sighash_type, &destination);
         // `sign_whole_tx` does nothing if there no inputs.
         if destination == Destination::AnyoneCanSpend && inputs > 0 {
             assert_eq!(
-                res,
+                signed_tx,
                 Err(TransactionSigError::AttemptedToProduceSignatureForAnyoneCanSpend)
             );
         } else if matches!(destination, Destination::ScriptHash(_)) && inputs > 0 {
             // This should be updated after ScriptHash support is implemented.
-            assert_eq!(res, Err(TransactionSigError::Unsupported));
+            assert_eq!(signed_tx, Err(TransactionSigError::Unsupported));
         } else {
-            assert_eq!(Ok(()), res, "{sighash_type:?} {destination:?}");
-            assert_eq!(
-                Ok(()),
-                verify_signed_tx(&tx, &destination),
-                "{sighash_type:?} {destination:?}"
-            );
+            let signed_tx = signed_tx.expect("{sighash_type:?} {destination:?}");
+            verify_signed_tx(&signed_tx, &destination).expect("{sighash_type:?} {destination:?}")
         }
     }
 }
 
 // Same as `sign_and_verify_all_and_none` but for `SINGLE` and `SINGLE | ANYONECANPAY` signature
 // hash types.
-#[test]
-fn sign_and_verify_single() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn sign_and_verify_single(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let test_data = [
         // SigHashType::SINGLE. Destination = PubKey.
@@ -206,7 +212,7 @@ fn sign_and_verify_single() {
         // SigHashType::SINGLE. Destination = ScriptHash.
         // This is currently unsupported, so test should be updated in the future.
         (
-            Destination::ScriptHash(Id::<Script>::from(H256::random())),
+            Destination::ScriptHash(Id::<Script>::from(H256::random_using(&mut rng))),
             SigHashType::try_from(SigHashType::SINGLE).unwrap(),
             21,
             33,
@@ -215,7 +221,7 @@ fn sign_and_verify_single() {
         // SigHashType::SINGLE | SigHashType::ANYONECANPAY. Destination = ScriptHash
         // This is currently unsupported, so test should be updated in the future.
         (
-            Destination::ScriptHash(Id::<Script>::from(H256::random())),
+            Destination::ScriptHash(Id::<Script>::from(H256::random_using(&mut rng))),
             SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap(),
             21,
             33,
@@ -224,13 +230,10 @@ fn sign_and_verify_single() {
     ];
 
     for (destination, sighash_type, inputs, outputs, expected) in test_data.into_iter() {
-        let mut tx = generate_unsigned_tx(&destination, inputs, outputs).unwrap();
-        match sign_whole_tx(&mut tx, &private_key, sighash_type, &destination) {
-            Ok(_) => assert_eq!(
-                verify_signed_tx(&tx, &destination),
-                expected,
-                "{sighash_type:X?}, {destination:?}"
-            ),
+        let tx = generate_unsigned_tx(&mut rng, &destination, inputs, outputs).unwrap();
+        match sign_whole_tx(tx, &private_key, sighash_type, &destination) {
+            Ok(signed_tx) => verify_signed_tx(&signed_tx, &destination)
+                .expect("{sighash_type:X?}, {destination:?}"),
             Err(err) => assert_eq!(Err(err), expected, "{sighash_type:X?}, {destination:?}"),
         }
     }

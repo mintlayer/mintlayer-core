@@ -20,14 +20,13 @@ pub mod types;
 use std::{
     fmt::{Debug, Display},
     hash::Hash,
+    str::FromStr,
     sync::Arc,
 };
 
 use async_trait::async_trait;
 
-use common::primitives;
-
-use crate::{config, error, message};
+use crate::{config, message, message::Announcement};
 
 /// [NetworkingService] provides the low-level network interface
 /// that each network service provider must implement
@@ -41,25 +40,22 @@ pub trait NetworkingService {
     ///
     /// For an implementation built on libp2p, the address format is:
     ///     `/ip4/0.0.0.0/tcp/8888/p2p/<peer ID>`
-    type Address: Clone + Debug + Eq + Hash + Send + Sync + ToString;
+    type Address: Clone + Debug + Eq + Hash + Send + Sync + ToString + FromStr;
 
     /// Unique ID assigned to a peer on the network
-    type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString;
+    type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString + FromStr;
 
     /// Unique ID assigned to each received request from a peer
     type SyncingPeerRequestId: Debug + Eq + Hash + Send + Sync;
 
-    /// Handle for sending/receiving connecitivity-related events
+    /// Handle for sending/receiving connectivity-related events
     type ConnectivityHandle: Send;
-
-    /// Handle for sending/receiving pubsub-related events
-    type PubSubHandle: Send;
 
     /// Handle for sending/receiving request-response messages
     type SyncingMessagingHandle: Send;
 
     /// Unique ID assigned to each pubsub message
-    type PubSubMessageId: Clone + Debug + Send;
+    type SyncingMessageId: Clone + Debug + Send;
 
     /// Initialize the network service provider
     ///
@@ -75,11 +71,7 @@ pub trait NetworkingService {
         bind_addr: Self::Address,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
-    ) -> crate::Result<(
-        Self::ConnectivityHandle,
-        Self::PubSubHandle,
-        Self::SyncingMessagingHandle,
-    )>;
+    ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)>;
 }
 
 /// [ConnectivityService] provides an interface through which objects can send
@@ -91,7 +83,7 @@ where
 {
     /// Connect to a remote node
     ///
-    /// This function doens't block on the connection but returns immediately
+    /// This function doesn't block on the connection but returns immediately
     /// after dialing the remote peer. The connection success/failure event
     /// is returned through the [`ConnectivityService::poll_next()`] function.
     ///
@@ -125,47 +117,6 @@ where
     async fn poll_next(&mut self) -> crate::Result<types::ConnectivityEvent<T>>;
 }
 
-/// [PubSubService] provides an interface through which objects can send
-/// and receive pubsub-related events to/from the network service provider
-#[async_trait]
-pub trait PubSubService<T>
-where
-    T: NetworkingService,
-{
-    /// Publish a data announcement on the network
-    ///
-    /// # Arguments
-    /// `announcement` - SCALE-encodable block or transaction
-    async fn publish(&mut self, announcement: message::Announcement) -> crate::Result<()>;
-
-    /// Report message validation result back to the backend
-    ///
-    /// # Arguments
-    /// * `source` - source of the message
-    /// * `msg_id` - unique ID of the message
-    /// * `result` - result of validation, see [types::ValidationResult] for more details
-    async fn report_validation_result(
-        &mut self,
-        source: T::PeerId,
-        msg_id: T::PubSubMessageId,
-        result: types::ValidationResult,
-    ) -> crate::Result<()>;
-
-    /// Subscribe to publish-subscribe topics
-    ///
-    /// # Arguments
-    /// * `topics` - list of topics
-    async fn subscribe(&mut self, topics: &[types::PubSubTopic]) -> crate::Result<()>;
-
-    /// Poll unvalidated pubsub messages
-    ///
-    /// The message must be validated by the application layer and the validation
-    /// result must reported using [PubSubService::report_validation_result].
-    ///
-    /// The message is not forwarded to any other peer before that function is called.
-    async fn poll_next(&mut self) -> crate::Result<types::PubSubEvent<T>>;
-}
-
 /// [SyncingMessagingService] provides an interface for sending and receiving block
 /// and header requests with a remote peer.
 #[async_trait]
@@ -193,6 +144,22 @@ where
         &mut self,
         request_id: T::SyncingPeerRequestId,
         response: message::Response,
+    ) -> crate::Result<()>;
+
+    /// Publishes an announcement on the network.
+    async fn make_announcement(&mut self, announcement: Announcement) -> crate::Result<()>;
+
+    /// Subscribes to the specified list of topics.
+    async fn subscribe(&mut self, topics: &[types::PubSubTopic]) -> crate::Result<()>;
+
+    /// Reports a message validation result back to the backend.
+    ///
+    /// This function must be called as a result of an announcement processing.
+    async fn report_validation_result(
+        &mut self,
+        source: T::PeerId,
+        msg_id: T::SyncingMessageId,
+        result: types::ValidationResult,
     ) -> crate::Result<()>;
 
     /// Poll syncing-related event from the networking service

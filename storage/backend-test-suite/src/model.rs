@@ -74,7 +74,7 @@ impl Model {
 
     /// New model obtained by dumping a database
     pub fn from_db<B: backend::BackendImpl>(storage: &B, idx: DbIndex) -> Self {
-        let dbtx = storage.transaction_ro();
+        let dbtx = storage.transaction_ro().unwrap();
         Self::from_tx(&dbtx, idx)
     }
 

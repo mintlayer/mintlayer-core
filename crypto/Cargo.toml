@@ -8,6 +8,8 @@ authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+serialization = { path = "../serialization" }
+
 sha-1 = "0.10"
 sha2 = "0.10"
 sha3 = "0.10"
@@ -17,7 +19,6 @@ generic-array = "0.14"
 rand = "0.8"
 tari_crypto = "0.11"
 parity-scale-codec = "3.1"
-serialization = { path = "../serialization" }
 num = "0.4"
 num-derive = "0.3"
 num-traits = "0.2"
@@ -25,7 +26,12 @@ chacha20poly1305 = "0.10"
 thiserror = "1.0"
 schnorrkel = "0.10.2"
 merlin = { version = "3.0.0", default-features = false }
+argon2 = { version = "0.4", features = ["std"] }
+zeroize = "1.5.7"
 
 [dev-dependencies]
+test-utils = { path = "../test-utils" }
+
+rstest = "0.15"
 hex = "0.4"
 rand_chacha = "0.3.1"

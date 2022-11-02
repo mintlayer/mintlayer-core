@@ -38,11 +38,31 @@ pub enum PropertyQueryError {
     BlockForHeightNotFound(BlockHeight),
     #[error("Provided an empty list")]
     InvalidInputEmpty,
+    #[error("Genesis block has no header")]
+    GetAncestorError(#[from] GetAncestorError),
+    #[error("Outpoint not found")]
+    OutpointNotFound,
+    #[error("Outpoint index out of range")]
+    OutpointIndexOutOfRange,
+    #[error("Transaction not found")]
+    TxNotFound,
+    #[error("Genesis block has no header")]
+    GenesisHeaderRequested,
+    #[error("Tried getting value of a token outpoint")]
+    ExpectedCoinOutpointAndFoundToken,
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum GetAncestorError {
+    #[error("Blockchain storage error: {0}")]
+    StorageError(#[from] crate::storage_result::Error),
     #[error("Invalid ancestor height: sought ancestor with height {ancestor_height} for block with height {block_height}")]
     InvalidAncestorHeight {
         block_height: BlockHeight,
         ancestor_height: BlockHeight,
     },
-    #[error("Genesis block has no header")]
-    GenesisHeaderRequested,
+    #[error("Previous block index not found {0}")]
+    PrevBlockIndexNotFound(Id<GenBlock>),
+    #[error("Starting point in ancestor getter not found {0}")]
+    StartingPointNotFound(Id<GenBlock>),
 }

@@ -15,6 +15,7 @@
 
 use crate::detail::query::locator_tip_distances;
 use crate::interface::chainstate_interface_impl::ChainstateInterfaceImpl;
+use crate::DefaultTransactionVerificationStrategy;
 
 use super::*;
 use chainstate_storage::inmemory::Store;
@@ -25,7 +26,7 @@ use common::chain::NetUpgrades;
 use common::Uint256;
 use static_assertions::*;
 
-assert_impl_all!(ChainstateInterfaceImpl<chainstate_storage::inmemory::Store>: Send);
+assert_impl_all!(ChainstateInterfaceImpl<chainstate_storage::inmemory::Store, DefaultTransactionVerificationStrategy>: Send);
 
 // TODO: write tests for consensus crate
 #[test]
@@ -44,15 +45,19 @@ fn process_genesis_block() {
             Arc::new(chain_config),
             chainstate_config,
             chainstate_storage,
+            DefaultTransactionVerificationStrategy::new(),
             None,
             time_getter,
         );
 
         chainstate.process_genesis().unwrap();
-        let chainstate_ref = chainstate.make_db_tx_ro();
+        let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
 
         // Check the genesis block is properly set up
-        assert_eq!(chainstate.query().get_best_block_id().unwrap(), genesis_id);
+        assert_eq!(
+            chainstate.query().unwrap().get_best_block_id().unwrap(),
+            genesis_id
+        );
         let genesis_index = chainstate_ref.get_gen_block_index(&genesis_id).unwrap().unwrap();
         assert_eq!(genesis_index.block_height(), BlockHeight::from(0));
         assert_eq!(genesis_index.block_id(), genesis_id);
@@ -84,10 +89,11 @@ fn empty_chainstate_no_genesis() {
             Arc::new(chain_config),
             chainstate_config,
             chainstate_storage,
+            DefaultTransactionVerificationStrategy::new(),
             None,
             time_getter,
         );
         // This panics
-        let _ = chainstate.query().get_best_block_id();
+        let _ = chainstate.query().unwrap().get_best_block_id();
     })
 }

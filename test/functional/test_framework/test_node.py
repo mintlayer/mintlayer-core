@@ -63,7 +63,7 @@ class TestNode():
     - one or more P2P connections to the node
 
 
-    To make things easier for the test writer, any unrecognised messages will
+    To make things easier for the test writer, any unrecognized messages will
     be dispatched to the RPC connection."""
 
     def __init__(self, i, datadir, *, chain, rpchost, timewait, timeout_factor, bitcoind, bitcoin_cli, coverage_dir, cwd, extra_conf=None, extra_args=None, use_cli=False, start_perf=False, use_valgrind=False, version=None, descriptors=False):
@@ -99,19 +99,19 @@ class TestNode():
         rpc_addr = self.init_rpc_url.split("http://")[-1].split('@')[-1]
         p2p_addr = p2p_url(self.index)
 
-        datadir_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), ".mintlayer")
+        config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), ".mintlayer", "config.toml")
 
         # Configuration for logging is set as command-line args rather than in the bitcoin.conf file.
         # This means that starting a bitcoind using the temp dir to debug a failed test won't
         # spam debug.log.
         self.args = [
             self.binary,
-            "--datadir={}".format(datadir_path),
+            "--conf={}".format(config_path),
+            "--datadir={}".format(datadir),
             "regtest",
-            "--rpc-addr={}".format(rpc_addr),
+            "--http-rpc-addr={}".format(rpc_addr),
             "--p2p-addr={}".format(p2p_addr),
             #"-X",
-            #"-datadir=" + self.datadir,
             #"-logtimemicros",
             #"-debug",
             #"-debugexclude=libevent",
@@ -217,10 +217,12 @@ class TestNode():
         # add environment variable LIBC_FATAL_STDERR_=1 so that libc errors are written to stderr and not the terminal
         subp_env = dict(os.environ, LIBC_FATAL_STDERR_="1")
 
-        self.process = subprocess.Popen(self.args + extra_args, env=subp_env, stdout=stdout, stderr=stderr, cwd=cwd, **kwargs)
+        cmd = self.args + extra_args
+        self.log.debug("Starting node with command: {}".format(" ".join(self.args + extra_args)))
+        self.process = subprocess.Popen(cmd, env=subp_env, stdout=stdout, stderr=stderr, cwd=cwd, **kwargs)
 
         self.running = True
-        self.log.debug("bitcoind started, waiting for RPC to come up")
+        self.log.debug("mintlayer-core started, waiting for RPC to come up")
 
         if self.start_perf:
             self._start_perf()

@@ -13,13 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{
-    chain::{tokens::TokenData, Block, ChainConfig, Transaction},
-    primitives::{Amount, Id, Idable},
-};
-use utils::ensure;
+use self::check_utils::check_media_hash;
 
 use super::transaction_verifier::error::TokensError;
+use common::{
+    chain::{
+        tokens::{NftIssuance, TokenData},
+        Block, ChainConfig, Transaction,
+    },
+    primitives::{Amount, Id, Idable},
+};
+use serialization::{DecodeAll, Encode};
+use utils::ensure;
+
+mod check_utils;
+pub use check_utils::is_rfc3986_valid_symbol;
+use check_utils::{check_nft_description, check_nft_name, check_token_ticker, is_uri_valid};
 
 pub fn check_tokens_transfer_data(
     source_block_id: Id<Block>,
@@ -35,16 +44,71 @@ pub fn check_tokens_transfer_data(
     Ok(())
 }
 
-pub fn check_tokens_burn_data(
-    tx: &Transaction,
-    source_block_id: &Id<Block>,
-    amount_to_burn: &Amount,
+pub fn check_nft_issuance_data(
+    chain_config: &ChainConfig,
+    issuance: &NftIssuance,
+    tx_id: Id<Transaction>,
+    source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
-    // Check amount
-    ensure!(
-        amount_to_burn != &Amount::from_atoms(0),
-        TokensError::BurnZeroTokens(tx.get_id(), *source_block_id)
-    );
+    check_token_ticker(
+        chain_config,
+        &issuance.metadata.ticker,
+        tx_id,
+        source_block_id,
+    )?;
+    check_nft_name(
+        chain_config,
+        &issuance.metadata.name,
+        tx_id,
+        source_block_id,
+    )?;
+    check_nft_description(
+        chain_config,
+        &issuance.metadata.description,
+        tx_id,
+        source_block_id,
+    )?;
+
+    let icon_uri = Vec::<u8>::decode_all(&mut issuance.metadata.icon_uri.encode().as_slice())
+        .map_err(|_| TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id))?;
+    if !icon_uri.is_empty() {
+        ensure!(
+            icon_uri.len() <= chain_config.token_max_uri_len(),
+            TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id)
+        );
+        ensure!(
+            is_uri_valid(&icon_uri),
+            TokensError::IssueErrorIncorrectIconURI(tx_id, source_block_id)
+        );
+    }
+
+    let additional_metadata_uri =
+        Vec::<u8>::decode_all(&mut issuance.metadata.additional_metadata_uri.encode().as_slice())
+            .map_err(|_| TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id))?;
+    if !additional_metadata_uri.is_empty() {
+        ensure!(
+            additional_metadata_uri.len() <= chain_config.token_max_uri_len(),
+            TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id)
+        );
+        ensure!(
+            is_uri_valid(&additional_metadata_uri),
+            TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id)
+        );
+    }
+
+    let media_uri = Vec::<u8>::decode_all(&mut issuance.metadata.media_uri.encode().as_slice())
+        .map_err(|_| TokensError::IssueErrorIncorrectMediaURI(tx_id, source_block_id))?;
+    if !media_uri.is_empty() {
+        ensure!(
+            media_uri.len() <= chain_config.token_max_uri_len(),
+            TokensError::IssueErrorIncorrectMediaURI(tx_id, source_block_id)
+        );
+        ensure!(
+            is_uri_valid(&media_uri),
+            TokensError::IssueErrorIncorrectMediaURI(tx_id, source_block_id)
+        );
+    }
+    check_media_hash(chain_config, &issuance.metadata.media_hash)?;
     Ok(())
 }
 
@@ -57,24 +121,8 @@ pub fn check_tokens_issuance_data(
     tx_id: Id<Transaction>,
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
-    // Check token name
-    if token_ticker.len() > chain_config.token_max_ticker_len() || token_ticker.is_empty() {
-        return Err(TokensError::IssueErrorInvalidTickerLength(
-            tx_id,
-            source_block_id,
-        ));
-    }
-
-    // Check the name consists of alphanumeric characters only
-    let is_alphanumeric = String::from_utf8(token_ticker.to_vec())
-        .map_err(|_| TokensError::IssueErrorTickerHasNoneAlphaNumericChar(tx_id, source_block_id))?
-        .chars()
-        .all(char::is_alphanumeric);
-
-    ensure!(
-        is_alphanumeric,
-        TokensError::IssueErrorTickerHasNoneAlphaNumericChar(tx_id, source_block_id)
-    );
+    // Check token ticker
+    check_token_ticker(chain_config, token_ticker, tx_id, source_block_id)?;
 
     // Check amount
     if amount_to_issue == &Amount::from_atoms(0) {
@@ -90,14 +138,13 @@ pub fn check_tokens_issuance_data(
     }
 
     // Check URI
-    let is_ascii = String::from_utf8(metadata_uri.to_vec())
-        .map_err(|_| TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id))?
-        .chars()
-        // TODO: this is probably an invalid way to validate URLs. Find the proper way to do this in rust.
-        .all(|ch| ch.is_alphanumeric() || ch.is_ascii_punctuation() || ch.is_ascii_control());
+    ensure!(
+        is_uri_valid(metadata_uri),
+        TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id)
+    );
 
     ensure!(
-        is_ascii && metadata_uri.len() <= chain_config.token_max_uri_len(),
+        metadata_uri.len() <= chain_config.token_max_uri_len(),
         TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id)
     );
     Ok(())
@@ -110,33 +157,22 @@ pub fn check_tokens_data(
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
     match token_data {
-        TokenData::TokenTransferV1 {
-            token_id: _,
-            amount,
-        } => {
-            check_tokens_transfer_data(source_block_id, tx, amount)?;
+        TokenData::TokenTransfer(transfer) => {
+            check_tokens_transfer_data(source_block_id, tx, &transfer.amount)?;
         }
-        TokenData::TokenIssuanceV1 {
-            token_ticker,
-            amount_to_issue,
-            number_of_decimals,
-            metadata_uri,
-        } => {
+        TokenData::TokenIssuance(issuance) => {
             check_tokens_issuance_data(
                 chain_config,
-                token_ticker,
-                amount_to_issue,
-                number_of_decimals,
-                metadata_uri,
+                &issuance.token_ticker,
+                &issuance.amount_to_issue,
+                &issuance.number_of_decimals,
+                &issuance.metadata_uri,
                 tx.get_id(),
                 source_block_id,
             )?;
         }
-        TokenData::TokenBurnV1 {
-            token_id: _,
-            amount_to_burn,
-        } => {
-            check_tokens_burn_data(tx, &source_block_id, amount_to_burn)?;
+        TokenData::NftIssuance(issuance) => {
+            check_nft_issuance_data(chain_config, issuance, tx.get_id(), source_block_id)?
         }
     }
     Ok(())

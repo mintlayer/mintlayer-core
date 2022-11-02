@@ -14,12 +14,9 @@
 // limitations under the License.
 
 use super::test_helper::create_tx_outputs;
-use crate::{FlushableUtxoView, TxUndo, UtxoSource, UtxosCache, UtxosView};
+use crate::{FlushableUtxoView, TxUndoWithSources, UtxoSource, UtxosCache, UtxosView};
 use common::{
-    chain::{
-        block::BlockReward, signature::inputsig::InputWitness, OutPoint, OutPointSourceId,
-        Transaction, TxInput,
-    },
+    chain::{block::BlockReward, OutPoint, OutPointSourceId, Transaction, TxInput},
     primitives::{BlockHeight, Id, Idable, H256},
 };
 use crypto::random::Rng;
@@ -36,7 +33,7 @@ struct ResultWithUndo {
 
 struct UndoInfo {
     prev_outpoint: OutPoint,
-    tx_undo: TxUndo,
+    tx_undo: TxUndoWithSources,
 }
 
 // This test creates an arbitrary long chain of caches.
@@ -53,7 +50,8 @@ fn cache_simulation_with_undo(
 ) {
     let mut rng = make_seedable_rng(seed);
     let mut result: ResultWithUndo = Default::default();
-    let mut base = UtxosCache::new_for_test(H256::random().into());
+    let test_view = super::empty_test_utxos_view();
+    let mut base = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
 
     let new_cache = simulation_step(
         &mut rng,
@@ -88,15 +86,16 @@ fn simulation_step<'a>(
         return None;
     }
 
-    let mut cache = UtxosCache::new(parent);
+    let mut cache = UtxosCache::from_borrowed_parent(parent);
     let mut new_cache_res = populate_cache_with_undo(rng, &mut cache, iterations_per_cache, result);
     result.utxo_outpoints.append(&mut new_cache_res.utxo_outpoints);
     result.outpoints_with_undo.append(&mut new_cache_res.outpoints_with_undo);
 
     let new_cache = simulation_step(rng, result, &cache, iterations_per_cache, nested_level - 1);
 
-    if let Some(new_cache) = new_cache {
-        let consumed_cache = new_cache.consume();
+    let consumed_cache_op = new_cache.map(|c| c.consume());
+
+    if let Some(consumed_cache) = consumed_cache_op {
         cache.batch_write(consumed_cache).expect("batch write must succeed");
     }
 
@@ -120,7 +119,7 @@ fn populate_cache_with_undo(
             if i % 20 < 10 {
                 let reward = BlockReward::new(create_tx_outputs(rng, 1));
                 let block_height = BlockHeight::new(rng.gen_range(0..iterations_count as u64));
-                let block_id = Id::new(H256::random());
+                let block_id = Id::new(H256::random_using(rng));
                 cache
                     .add_utxos_from_block_reward(
                         &reward,
@@ -147,11 +146,7 @@ fn populate_cache_with_undo(
                 };
 
                 //use this outpoint as input for transaction
-                let input = TxInput::new(
-                    outpoint.tx_id(),
-                    outpoint.output_index(),
-                    InputWitness::NoSignature(None),
-                );
+                let input = TxInput::new(outpoint.tx_id(), outpoint.output_index());
                 let tx =
                     Transaction::new(0x00, vec![input], create_tx_outputs(rng, 1), 0x01).unwrap();
 
@@ -183,7 +178,7 @@ fn populate_cache_with_undo(
                 cache
                     .add_utxo(
                         &undo_info.prev_outpoint,
-                        undo_info.tx_undo.inner()[0].clone(),
+                        undo_info.tx_undo.utxos()[0].clone(),
                         cache.has_utxo(&undo_info.prev_outpoint),
                     )
                     .unwrap();

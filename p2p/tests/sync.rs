@@ -28,7 +28,7 @@ use common::{
 };
 use p2p::{
     error::P2pError,
-    event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
+    event::{SwarmEvent, SyncControlEvent},
     message::{BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response},
     net::{
         self,
@@ -55,7 +55,6 @@ async fn make_sync_manager<T>(
     BlockSyncManager<T>,
     T::ConnectivityHandle,
     mpsc::UnboundedSender<SyncControlEvent<T>>,
-    mpsc::UnboundedReceiver<PubSubControlEvent>,
     mpsc::UnboundedReceiver<SwarmEvent<T>>,
 )
 where
@@ -64,24 +63,15 @@ where
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
-    let (tx_pubsub, rx_pubsub) = mpsc::unbounded_channel();
     let (tx_swarm, rx_swarm) = mpsc::unbounded_channel();
 
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (conn, _, sync) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
+    let (conn, sync) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
 
     (
-        BlockSyncManager::<T>::new(
-            Arc::clone(&config),
-            sync,
-            handle,
-            rx_p2p_sync,
-            tx_swarm,
-            tx_pubsub,
-        ),
+        BlockSyncManager::<T>::new(Arc::clone(&config), sync, handle, rx_p2p_sync, tx_swarm),
         conn,
         tx_p2p_sync,
-        rx_pubsub,
         rx_swarm,
     )
 }
@@ -210,9 +200,17 @@ where
         } => {
             mgr.process_error(peer_id, request_id, error).await?;
         }
+        net::types::SyncingEvent::Announcement {
+            peer_id,
+            message_id,
+            announcement,
+        } => {
+            mgr.process_announcement(peer_id, message_id, announcement).await?;
+        }
     }
 
-    mgr.check_state().await
+    mgr.update_state().await.unwrap();
+    Ok(())
 }
 
 async fn local_and_remote_in_sync<A, T>()
@@ -232,8 +230,8 @@ where
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
-    let (mut mgr2, mut conn2, _, _, _) = make_sync_manager::<T>(addr2, handle2).await;
+    let (mut mgr1, mut conn1, _, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _) = make_sync_manager::<T>(addr2, handle2).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<T>(&mut conn1, &mut conn2).await;
@@ -250,11 +248,7 @@ where
     assert_eq!(res2, Ok(()));
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
-    assert_eq!(
-        pubsub.try_recv(),
-        Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    );
+    assert_eq!(mgr1.state(), &SyncState::Done);
 }
 
 #[tokio::test]
@@ -262,9 +256,7 @@ async fn local_and_remote_in_sync_libp2p() {
     local_and_remote_in_sync::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn local_and_remote_in_sync_mock_tcp() {
     local_and_remote_in_sync::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -293,8 +285,8 @@ where
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
-    let (mut mgr2, mut conn2, _, _, _) = make_sync_manager::<T>(addr2, handle2).await;
+    let (mut mgr1, mut conn1, _, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _) = make_sync_manager::<T>(addr2, handle2).await;
 
     // add 7 more blocks on top of the best block (which is also known by mgr1)
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
@@ -364,14 +356,10 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
+    mgr1.update_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
-    assert_eq!(
-        pubsub.try_recv(),
-        Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    );
+    assert_eq!(mgr1.state(), &SyncState::Done);
 }
 
 #[tokio::test]
@@ -379,9 +367,7 @@ async fn remote_ahead_by_7_blocks_libp2p() {
     remote_ahead_by_7_blocks::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn remote_ahead_by_7_blocks_mock_tcp() {
     remote_ahead_by_7_blocks::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -407,8 +393,8 @@ where
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
-    let (mut mgr2, mut conn2, _, _pubsub2, _) = make_sync_manager::<T>(addr2, handle2).await;
+    let (mut mgr1, mut conn1, _, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _) = make_sync_manager::<T>(addr2, handle2).await;
 
     // add 12 more blocks on top of the best block (which is also known by mgr2)
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
@@ -502,15 +488,11 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
-    mgr2.check_state().await.unwrap();
+    mgr1.update_state().await.unwrap();
+    mgr2.update_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
-    assert_eq!(
-        pubsub.try_recv(),
-        Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    );
+    assert_eq!(mgr1.state(), &SyncState::Done);
 }
 
 #[tokio::test]
@@ -518,9 +500,7 @@ async fn local_ahead_by_12_blocks_libp2p() {
     local_ahead_by_12_blocks::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn local_ahead_by_12_blocks_mock_tcp() {
     local_ahead_by_12_blocks::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -547,8 +527,8 @@ where
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
-    let (mut mgr2, mut conn2, _, _, _) = make_sync_manager::<T>(addr2, handle2).await;
+    let (mut mgr1, mut conn1, _, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _) = make_sync_manager::<T>(addr2, handle2).await;
 
     // add 14 more blocks to local chain and 7 more blocks to remote chain
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
@@ -665,17 +645,13 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
-    mgr2.check_state().await.unwrap();
+    mgr1.update_state().await.unwrap();
+    mgr2.update_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await == local_tip);
     assert!(get_tip(&mgr2_handle).await != remote_tip);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
-    assert_eq!(
-        pubsub.try_recv(),
-        Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    );
+    assert_eq!(mgr1.state(), &SyncState::Done);
 }
 
 // TODO: Use something like `libtest_mimic`.
@@ -684,8 +660,6 @@ async fn remote_local_diff_chains_local_higher_libp2p() {
     remote_local_diff_chains_local_higher::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
-#[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn remote_local_diff_chains_local_higher_mock_tcp() {
     remote_local_diff_chains_local_higher::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
@@ -715,8 +689,8 @@ where
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
-    let (mut mgr2, mut conn2, _, _pubsub2, _) = make_sync_manager::<T>(addr2, handle2).await;
+    let (mut mgr1, mut conn1, _, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _) = make_sync_manager::<T>(addr2, handle2).await;
 
     // add 5 more blocks to local chain and 12 more blocks to remote chain
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
@@ -833,17 +807,13 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
-    mgr2.check_state().await.unwrap();
+    mgr1.update_state().await.unwrap();
+    mgr2.update_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await != local_tip);
     assert!(get_tip(&mgr2_handle).await == remote_tip);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
-    assert_eq!(
-        pubsub.try_recv(),
-        Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    );
+    assert_eq!(mgr1.state(), &SyncState::Done);
 }
 
 #[tokio::test]
@@ -851,9 +821,7 @@ async fn remote_local_diff_chains_remote_higher_libp2p() {
     remote_local_diff_chains_remote_higher::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn remote_local_diff_chains_remote_higher_mock_tcp() {
     remote_local_diff_chains_remote_higher::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -880,9 +848,9 @@ where
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
-    let (mut mgr2, mut conn2, _, _, _) = make_sync_manager::<T>(addr2, handle2).await;
-    let (mut mgr3, mut conn3, _, _, _) = make_sync_manager::<T>(addr3, handle3).await;
+    let (mut mgr1, mut conn1, _, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _) = make_sync_manager::<T>(addr2, handle2).await;
+    let (mut mgr3, mut conn3, _, _) = make_sync_manager::<T>(addr3, handle3).await;
 
     // add 5 more blocks for first remote and 7 blocks to second remote
     p2p_test_utils::add_more_blocks(Arc::clone(&config), &mgr2_handle, 5).await;
@@ -963,16 +931,12 @@ where
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
+    mgr1.update_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
     assert!(get_tip(&mgr3_handle).await == mgr3_tip);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
-    assert_eq!(
-        pubsub.try_recv(),
-        Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    );
+    assert_eq!(mgr1.state(), &SyncState::Done);
 }
 
 #[tokio::test]
@@ -980,9 +944,7 @@ async fn two_remote_nodes_different_chains_libp2p() {
     two_remote_nodes_different_chains::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn two_remote_nodes_different_chains_mock_tcp() {
     two_remote_nodes_different_chains::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -1010,9 +972,9 @@ where
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
-    let (mut mgr2, mut conn2, _, _, _) = make_sync_manager::<T>(addr2, handle2).await;
-    let (mut mgr3, mut conn3, _, _, _) = make_sync_manager::<T>(addr3, handle3).await;
+    let (mut mgr1, mut conn1, _, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _) = make_sync_manager::<T>(addr2, handle2).await;
+    let (mut mgr3, mut conn3, _, _) = make_sync_manager::<T>(addr3, handle3).await;
 
     // add the same 32 new blocks for both mgr2 and mgr3
     let blocks = p2p_test_utils::create_n_blocks(
@@ -1045,7 +1007,7 @@ where
         loop {
             advance_mgr_state(&mut mgr1).await.unwrap();
 
-            if mgr1.state() == &SyncState::Idle {
+            if mgr1.state() == &SyncState::Done {
                 break;
             }
         }
@@ -1109,16 +1071,12 @@ where
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
+    mgr1.update_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
     assert!(get_tip(&mgr3_handle).await == mgr3_tip);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
-    assert_eq!(
-        pubsub.try_recv(),
-        Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    );
+    assert_eq!(mgr1.state(), &SyncState::Done);
 }
 
 #[tokio::test]
@@ -1126,9 +1084,7 @@ async fn two_remote_nodes_same_chains_libp2p() {
     two_remote_nodes_same_chains::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn two_remote_nodes_same_chains_mock_tcp() {
     two_remote_nodes_same_chains::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
@@ -1155,9 +1111,9 @@ where
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
-    let (mut mgr2, mut conn2, _, _, _) = make_sync_manager::<T>(addr2, handle2).await;
-    let (mut mgr3, mut conn3, _, _, _) = make_sync_manager::<T>(addr3, handle3).await;
+    let (mut mgr1, mut conn1, _, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _) = make_sync_manager::<T>(addr2, handle2).await;
+    let (mut mgr3, mut conn3, _, _) = make_sync_manager::<T>(addr3, handle3).await;
 
     // add the same 32 new blocks for both mgr2 and mgr3
     let blocks = p2p_test_utils::create_n_blocks(
@@ -1186,7 +1142,7 @@ where
         loop {
             advance_mgr_state(&mut mgr1).await.unwrap();
 
-            if mgr1.state() == &SyncState::Idle {
+            if mgr1.state() == &SyncState::Done {
                 break;
             }
         }
@@ -1266,15 +1222,11 @@ where
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
+    mgr1.update_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(same_tip(&mgr2_handle, &mgr3_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
-    assert_eq!(
-        pubsub.try_recv(),
-        Ok(PubSubControlEvent::InitialBlockDownloadDone),
-    );
+    assert_eq!(mgr1.state(), &SyncState::Done);
 }
 
 #[tokio::test]
@@ -1282,9 +1234,7 @@ async fn two_remote_nodes_same_chains_new_blocks_libp2p() {
     two_remote_nodes_same_chains_new_blocks::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn two_remote_nodes_same_chains_new_blocks_mock_tcp() {
     two_remote_nodes_same_chains_new_blocks::<MakeTcpAddress, MockService<TcpMockTransport>>()
         .await;
@@ -1315,8 +1265,8 @@ where
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, _pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
-    let (mut mgr2, mut conn2, _, _, _) = make_sync_manager::<T>(addr2, handle2).await;
+    let (mut mgr1, mut conn1, _, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _) = make_sync_manager::<T>(addr2, handle2).await;
 
     connect_services::<T>(&mut conn1, &mut conn2).await;
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
@@ -1332,7 +1282,7 @@ where
     assert_eq!(res2, Ok(()));
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(mgr1.state(), &SyncState::Done);
 
     mgr1.unregister_peer(*conn2.peer_id());
     assert_eq!(conn1.disconnect(*conn2.peer_id()).await, Ok(()));
@@ -1411,10 +1361,10 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state().await.unwrap();
+    mgr1.update_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(mgr1.state(), &SyncState::Done);
 }
 
 #[tokio::test]
@@ -1422,9 +1372,7 @@ async fn test_connect_disconnect_resyncing_libp2p() {
     test_connect_disconnect_resyncing::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn test_connect_disconnect_resyncing_mock_tcp() {
     test_connect_disconnect_resyncing::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }

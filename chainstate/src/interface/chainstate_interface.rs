@@ -15,21 +15,23 @@
 
 use std::sync::Arc;
 
+use crate::detail::BlockSource;
 use crate::ChainstateConfig;
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::tokens::TokenAuxiliaryData;
-use common::chain::Transaction;
-use common::{
-    chain::{
-        block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
-        tokens::{RPCTokenInfo, TokenId},
-        ChainConfig, OutPointSourceId, TxMainChainIndex,
-    },
-    primitives::{BlockHeight, Id},
+use common::chain::TxInput;
+use common::chain::{
+    block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
+    tokens::{RPCTokenInfo, TokenId},
+    ChainConfig, OutPointSourceId, TxMainChainIndex,
 };
+use common::chain::{OutPoint, Transaction};
+use common::primitives::{Amount, BlockHeight, Id};
 use utils::eventhandler::EventHandler;
 
-use crate::{detail::BlockSource, ChainstateError, ChainstateEvent, Locator};
+use crate::{ChainstateError, ChainstateEvent};
+use chainstate_types::Locator;
+use utxo::Utxo;
 
 pub trait ChainstateInterface: Send {
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>);
@@ -88,7 +90,10 @@ pub trait ChainstateInterface: Send {
         tx_id: &OutPointSourceId,
     ) -> Result<Option<TxMainChainIndex>, ChainstateError>;
     fn subscribers(&self) -> &Vec<EventHandler<ChainstateEvent>>;
-    fn calculate_median_time_past(&self, starting_block: &Id<GenBlock>) -> BlockTimestamp;
+    fn calculate_median_time_past(
+        &self,
+        starting_block: &Id<GenBlock>,
+    ) -> Result<BlockTimestamp, ChainstateError>;
     fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool;
     fn orphans_count(&self) -> usize;
     fn get_ancestor(
@@ -118,4 +123,36 @@ pub trait ChainstateInterface: Send {
         &self,
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TokenId>, ChainstateError>;
+
+    /// Returns all spendable inputs of a Transaction
+    fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError>;
+
+    /// Returns the values of the outpoints spent by a transaction
+    fn get_inputs_outpoints_values(
+        &self,
+        tx: &Transaction,
+    ) -> Result<Vec<Option<Amount>>, ChainstateError>;
+
+    /// Returns a list of all block ids in mainchain in order (starting from block of height 1, hence the result length is best_height - 1)
+    fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
+
+    /// Returns a list of all blocks in the block tree, including orphans. The length cannot be predicted before the call
+    fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
+
+    /// Imports a bootstrap file exported with export_bootstrap_stream
+    fn import_bootstrap_stream<'a>(
+        &mut self,
+        reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
+    ) -> Result<(), ChainstateError>;
+
+    /// Writes the blocks of the blockchain into a stream that's meant to go to a file.
+    /// The blocks in the stream can be used to resync the blockchain in another node
+    fn export_bootstrap_stream<'a>(
+        &self,
+        writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
+        include_orphans: bool,
+    ) -> Result<(), ChainstateError>;
+
+    /// Returns the UTXO for a specified OutPoint
+    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError>;
 }

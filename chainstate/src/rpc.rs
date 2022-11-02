@@ -15,12 +15,14 @@
 
 //! Chainstate subsystem RPC handler
 
+use std::io::{Read, Write};
+
 use crate::{Block, BlockSource, ChainstateError, GenBlock};
 use common::{
     chain::tokens::{RPCTokenInfo, TokenId},
     primitives::{BlockHeight, Id},
 };
-use serialization::Decode;
+use serialization::{Decode, Encode};
 use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, namespace = "chainstate")]
@@ -32,6 +34,10 @@ trait ChainstateRpc {
     /// Get block ID at given height in the mainchain
     #[method(name = "block_id_at_height")]
     async fn block_id_at_height(&self, height: BlockHeight) -> rpc::Result<Option<Id<GenBlock>>>;
+
+    /// Returns a hex-encoded serialized block with the given id.
+    #[method(name = "get_block")]
+    async fn get_block(&self, id: Id<Block>) -> rpc::Result<Option<String>>;
 
     /// Submit a block to be included in the chain
     #[method(name = "submit_block")]
@@ -51,6 +57,18 @@ trait ChainstateRpc {
     /// Get token information
     #[method(name = "token_info")]
     async fn token_info(&self, token_id: TokenId) -> rpc::Result<Option<RPCTokenInfo>>;
+
+    /// Write blocks to disk
+    #[method(name = "export_bootstrap_file")]
+    async fn export_bootstrap_file(
+        &self,
+        file_path: &std::path::Path,
+        include_orphans: bool,
+    ) -> rpc::Result<()>;
+
+    /// Reads blocks from disk
+    #[method(name = "import_bootstrap_file")]
+    async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> rpc::Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -61,6 +79,11 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn block_id_at_height(&self, height: BlockHeight) -> rpc::Result<Option<Id<GenBlock>>> {
         handle_error(self.call(move |this| this.get_block_id_from_height(&height)).await)
+    }
+
+    async fn get_block(&self, id: Id<Block>) -> rpc::Result<Option<String>> {
+        let block = handle_error(self.call(move |this| this.get_block(id)).await)?;
+        Ok(block.map(|b| hex::encode(b.encode())))
     }
 
     async fn submit_block(&self, block_hex: String) -> rpc::Result<()> {
@@ -87,6 +110,35 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     async fn token_info(&self, token_id: TokenId) -> rpc::Result<Option<RPCTokenInfo>> {
         handle_error(self.call(move |this| this.get_token_info_for_rpc(token_id)).await)
     }
+
+    async fn export_bootstrap_file(
+        &self,
+        file_path: &std::path::Path,
+        include_orphans: bool,
+    ) -> rpc::Result<()> {
+        // TODO: test this function in functional tests
+        let file_obj = std::fs::File::create(file_path).map_err(rpc::Error::to_call_error)?;
+        let writer: std::io::BufWriter<Box<dyn Write + Send>> =
+            std::io::BufWriter::new(Box::new(file_obj));
+
+        handle_error(
+            self.call(move |this| this.export_bootstrap_stream(writer, include_orphans))
+                .await,
+        )?;
+
+        Ok(())
+    }
+
+    async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> rpc::Result<()> {
+        // TODO: test this function in functional tests
+        let file_obj = std::fs::File::open(file_path).map_err(rpc::Error::to_call_error)?;
+        let reader: std::io::BufReader<Box<dyn Read + Send>> =
+            std::io::BufReader::new(Box::new(file_obj));
+
+        handle_error(self.call_mut(move |this| this.import_bootstrap_stream(reader)).await)?;
+
+        Ok(())
+    }
 }
 
 fn handle_error<T>(e: Result<Result<T, ChainstateError>, CallError>) -> rpc::Result<T> {
@@ -96,7 +148,7 @@ fn handle_error<T>(e: Result<Result<T, ChainstateError>, CallError>) -> rpc::Res
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ChainstateConfig;
+    use crate::{ChainstateConfig, DefaultTransactionVerificationStrategy};
     use serde_json::Value;
     use std::{future::Future, sync::Arc};
 
@@ -113,6 +165,7 @@ mod test {
                 chain_config,
                 chainstate_config,
                 storage,
+                DefaultTransactionVerificationStrategy::new(),
                 None,
                 Default::default(),
             )

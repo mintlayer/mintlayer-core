@@ -33,7 +33,7 @@ where
     let addr = A::make_address();
     let peer_id = P::random();
 
-    let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
+    let (mut mgr, _conn, _sync, _swarm) = make_sync_manager::<T>(addr).await;
     register_peer(&mut mgr, peer_id).await;
 
     assert_eq!(mgr.peers.len(), 1);
@@ -48,9 +48,7 @@ async fn test_peer_reconnected_libp2p() {
     test_peer_reconnected::<MakeP2pAddress, PeerId, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn test_peer_reconnected_mock_tcp() {
     test_peer_reconnected::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
 }
@@ -74,7 +72,7 @@ where
     let peer_id1 = P::random();
     let peer_id2 = P::random();
 
-    let (mut mgr, _conn, _sync, _pubsub, _swarm) = make_sync_manager::<T>(addr).await;
+    let (mut mgr, _conn, _sync, _swarm) = make_sync_manager::<T>(addr).await;
 
     // send Connected event to SyncManager
     register_peer(&mut mgr, peer_id1).await;
@@ -93,9 +91,7 @@ async fn test_peer_disconnected_libp2p() {
     test_peer_disconnected::<MakeP2pAddress, PeerId, Libp2pService>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
-#[cfg(not(target_os = "macos"))]
 async fn test_peer_disconnected_mock_tcp() {
     test_peer_disconnected::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
 }

@@ -84,18 +84,24 @@ mod test {
         Destination,
     };
     use crypto::key::{KeyKind, PrivateKey};
-    use rand::Rng;
+    use crypto::random::Rng;
+    use rstest::rstest;
+    use test_utils::random::Seed;
 
     const INPUTS: usize = 10;
     const OUTPUTS: usize = 10;
 
     // Try to produce a signature for a non-existent input.
-    #[test]
-    fn invalid_input_index() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn invalid_input_index(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let destination = Destination::Address(pubkey_hash);
-        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+        let tx = generate_unsigned_tx(&mut rng, &destination, 1, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             let res = StandardInputSignature::produce_signature_for_input(
@@ -110,12 +116,15 @@ mod test {
     }
 
     // Using Destination::PublicKey for AuthorizedPublicKeyHashSpend.
-    #[test]
-    fn wrong_destination_type() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn wrong_destination_type(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let destination = Destination::PublicKey(public_key);
-        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
-        let mut rng = rand::thread_rng();
+        let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_signature_for_input(
@@ -136,13 +145,16 @@ mod test {
         }
     }
 
-    #[test]
-    fn invalid_signature_type() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn invalid_signature_type(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let destination = Destination::Address(pubkey_hash);
-        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
-        let mut rng = rand::thread_rng();
+        let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_signature_for_input(
@@ -170,13 +182,16 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_verify_address_spending() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_verify_address_spending(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let destination = Destination::Address(pubkey_hash);
-        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
-        let mut rng = rand::thread_rng();
+        let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
 
         for sighash_type in sig_hash_types() {
             let input = rng.gen_range(0..INPUTS);
@@ -197,13 +212,16 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_sign_address_spending() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_sign_address_spending(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let destination = Destination::PublicKey(public_key.clone());
         let pubkey_hash = PublicKeyHash::from(&public_key);
-        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
-        let mut rng = rand::thread_rng();
+        let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
 
         for sighash_type in sig_hash_types() {
             let input = rng.gen_range(0..INPUTS);

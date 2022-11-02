@@ -18,6 +18,7 @@ use crypto::random::RngCore;
 
 use super::*;
 use crate::chain::block::timestamp::BlockTimestamp;
+use crate::chain::signed_transaction::SignedTransaction;
 use crate::chain::tokens::OutputValue;
 use crate::chain::OutputPurpose;
 use crate::{
@@ -214,23 +215,32 @@ fn generate_random_bytes(g: &mut impl crypto::random::Rng, length: usize) -> Vec
     bytes
 }
 
+fn generate_random_invalid_witness(
+    count: usize,
+    g: &mut impl crypto::random::Rng,
+) -> Vec<InputWitness> {
+    (0..count)
+        .into_iter()
+        .map(|_| {
+            let witness_size = g.next_u32();
+            let witness_size = 1 + witness_size % 1000;
+            let witness = generate_random_bytes(g, witness_size as usize);
+            InputWitness::Standard(StandardInputSignature::new(
+                SigHashType::try_from(SigHashType::ALL).unwrap(),
+                witness,
+            ))
+        })
+        .collect::<Vec<_>>()
+}
+
 fn generate_random_invalid_input(g: &mut impl crypto::random::Rng) -> TxInput {
-    let witness_size = g.next_u32();
-    let witness = generate_random_bytes(g, (1 + witness_size % 1000) as usize);
     let outpoint = if g.next_u32() % 2 == 0 {
         OutPointSourceId::Transaction(Id::new(generate_random_h256(g)))
     } else {
         OutPointSourceId::BlockReward(Id::new(generate_random_h256(g)))
     };
 
-    TxInput::new(
-        outpoint,
-        g.next_u32(),
-        InputWitness::Standard(StandardInputSignature::new(
-            SigHashType::try_from(SigHashType::ALL).unwrap(),
-            witness,
-        )),
-    )
+    TxInput::new(outpoint, g.next_u32())
 }
 
 fn generate_random_invalid_output(g: &mut impl crypto::random::Rng) -> TxOutput {
@@ -274,6 +284,14 @@ fn generate_random_invalid_block() -> Block {
             .map(|_| generate_random_invalid_transaction(&mut rng))
             .collect::<Vec<_>>()
     };
+    let transactions = transactions
+        .into_iter()
+        .map(|tx| {
+            let inputs_count = tx.inputs().len();
+            SignedTransaction::new(tx, generate_random_invalid_witness(inputs_count, &mut rng))
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .expect("invalid witness count");
     let time = rng.next_u64();
     let prev_id = Id::new(generate_random_h256(&mut rng));
     let reward = BlockReward::new(Vec::new());

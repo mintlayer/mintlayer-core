@@ -42,7 +42,7 @@ where
     <T as NetworkingService>::Address: FromStr,
     <<T as NetworkingService>::Address as FromStr>::Err: Debug,
 {
-    let (conn, _, _) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
+    let (conn, _) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
     let (_, rx) = tokio::sync::mpsc::unbounded_channel();
     let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
 
@@ -52,7 +52,7 @@ where
         }
     });
 
-    let p2p_config = Arc::new(P2pConfig::new());
+    let p2p_config = Arc::new(P2pConfig::default());
     PeerManager::<T>::new(Arc::clone(&config), p2p_config, conn, rx, tx_sync)
 }
 

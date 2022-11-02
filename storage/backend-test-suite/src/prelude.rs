@@ -25,28 +25,34 @@ pub use utils::{sync, thread};
 
 pub use std::{mem::drop, sync::Arc};
 
-/// Alias for `Send + Sync + 'static`
-pub trait ThreadSafe: std::panic::UnwindSafe + Send + Sync + 'static {}
-impl<T: std::panic::UnwindSafe + Send + Sync + 'static> ThreadSafe for T {}
+/// A function to construct a backend
+pub trait BackendFn<B: Backend>: 'static + Fn() -> B + Send + Sync {}
+impl<B: Backend, F: 'static + Fn() -> B + Send + Sync> BackendFn<B> for F {}
 
+/// A couple of DB index constants
 pub const IDX: (DbIndex, DbIndex) = (DbIndex::new(0), DbIndex::new(1));
 
-/// Sample datbase decription with `n` maps
+/// Sample database description with `n` maps
 pub fn desc(n: usize) -> DbDesc {
     (0..n).map(|x| MapDesc::new(format!("map_{:02}", x))).collect()
 }
 
 /// Run tests with backend using proptest
-pub fn using_proptest<B: Backend + ThreadSafe + Clone, S: proptest::prelude::Strategy>(
+pub fn using_proptest<B: Backend, F: BackendFn<B>, S: proptest::prelude::Strategy>(
     source_file: &'static str,
-    backend: B,
+    backend_fn: impl std::ops::Deref<Target = F>,
     strategy: S,
     test: impl Fn(B, S::Value),
 ) {
-    let config = proptest::prelude::ProptestConfig::with_source_file(source_file);
+    let config = {
+        let mut config = proptest::prelude::ProptestConfig::with_source_file(source_file);
+        // Decrease the number of test cases. By default, this is 256 / 8 = 64.
+        config.cases /= 8;
+        config
+    };
     let mut runner = proptest::test_runner::TestRunner::new(config);
     let result = runner.run(&strategy, |val| {
-        test(backend.clone(), val);
+        test(backend_fn(), val);
         Ok(())
     });
     result.unwrap_or_else(|e| panic!("{}{}", &e, &runner))
@@ -58,14 +64,14 @@ pub mod support {
     use libtest_mimic::Trial;
 
     /// Create the test list
-    pub fn create_tests<B: Backend + ThreadSafe + Clone>(
-        backend: B,
-        tests: impl IntoIterator<Item = (&'static str, fn(B))>,
+    pub fn create_tests<B: 'static + Backend, F: BackendFn<B>>(
+        backend_fn: Arc<F>,
+        tests: impl IntoIterator<Item = (&'static str, fn(Arc<F>))>,
     ) -> impl Iterator<Item = Trial> {
         tests.into_iter().map(move |(name, test)| {
-            let backend = backend.clone();
+            let backend_fn = Arc::clone(&backend_fn);
             let test_fn = move || {
-                utils::concurrency::model(move || test(backend.clone()));
+                utils::concurrency::model(move || test(backend_fn.clone()));
                 Ok(())
             };
             Trial::test(name, test_fn)
@@ -75,11 +81,11 @@ pub mod support {
 
 macro_rules! tests {
     ($($name:ident),* $(,)?) => {
-        pub fn tests<B: crate::prelude::Backend + crate::prelude::ThreadSafe + Clone>(
-            backend: B,
+        pub fn tests<B: 'static + $crate::prelude::Backend, F: $crate::prelude::BackendFn<B>>(
+            backend_fn: Arc<F>,
         ) -> impl std::iter::Iterator<Item = libtest_mimic::Trial> {
-            crate::prelude::support::create_tests(backend, [
-                $((concat!(module_path!(), "::", stringify!($name)), $name as fn(B)),)*
+            $crate::prelude::support::create_tests(backend_fn, [
+                $((concat!(module_path!(), "::", stringify!($name)), $name as fn(Arc<F>)),)*
             ])
         }
     }

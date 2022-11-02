@@ -13,37 +13,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_trait::async_trait;
+use libp2p::{core::PeerId, gossipsub::MessageId, request_response::RequestId};
+use tokio::sync::{mpsc, oneshot};
+
+use logging::log;
+use serialization::{Decode, Encode};
+
 use crate::{
-    error::{P2pError, ProtocolError},
+    error::{P2pError, ProtocolError, PublishError},
     message,
     net::{
         libp2p::{
             behaviour::sync_codec::message_types::{SyncRequest, SyncResponse},
-            types,
+            constants::GOSSIPSUB_MAX_TRANSMIT_SIZE,
+            types::{Command, SyncingEvent as P2pSyncingEvent},
         },
-        types::SyncingEvent,
+        types::{PubSubTopic, SyncingEvent, ValidationResult},
         NetworkingService, SyncingMessagingService,
     },
 };
-use async_trait::async_trait;
-use libp2p::{core::PeerId, gossipsub::MessageId, request_response::*};
-use logging::log;
-use serialization::{Decode, Encode};
-use tokio::sync::{mpsc, oneshot};
 
 pub struct Libp2pSyncHandle<T: NetworkingService> {
     /// Channel for sending commands to libp2p backend
-    cmd_tx: mpsc::UnboundedSender<types::Command>,
+    cmd_tx: mpsc::UnboundedSender<Command>,
 
     /// Channel for receiving pubsub events from libp2p backend
-    sync_rx: mpsc::UnboundedReceiver<types::SyncingEvent>,
+    sync_rx: mpsc::UnboundedReceiver<P2pSyncingEvent>,
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
 impl<T: NetworkingService> Libp2pSyncHandle<T> {
     pub fn new(
-        cmd_tx: mpsc::UnboundedSender<types::Command>,
-        sync_rx: mpsc::UnboundedReceiver<types::SyncingEvent>,
+        cmd_tx: mpsc::UnboundedSender<Command>,
+        sync_rx: mpsc::UnboundedReceiver<P2pSyncingEvent>,
     ) -> Self {
         Self {
             cmd_tx,
@@ -58,7 +61,7 @@ impl<T> SyncingMessagingService<T> for Libp2pSyncHandle<T>
 where
     T: NetworkingService<
             PeerId = PeerId,
-            PubSubMessageId = MessageId,
+            SyncingMessageId = MessageId,
             SyncingPeerRequestId = RequestId,
         > + Send,
 {
@@ -68,7 +71,7 @@ where
         request: message::Request,
     ) -> crate::Result<T::SyncingPeerRequestId> {
         let (tx, rx) = oneshot::channel();
-        self.cmd_tx.send(types::Command::SendRequest {
+        self.cmd_tx.send(Command::SendRequest {
             peer_id,
             request: Box::new(SyncRequest::new(request.encode())),
             response: tx,
@@ -84,7 +87,7 @@ where
         response: message::Response,
     ) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();
-        self.cmd_tx.send(types::Command::SendResponse {
+        self.cmd_tx.send(Command::SendResponse {
             request_id,
             response: Box::new(SyncResponse::new(response.encode())),
             channel: tx,
@@ -94,9 +97,59 @@ where
         rx.await?
     }
 
+    async fn make_announcement(
+        &mut self,
+        announcement: message::Announcement,
+    ) -> crate::Result<()> {
+        let message = announcement.encode();
+        if message.len() > GOSSIPSUB_MAX_TRANSMIT_SIZE {
+            return Err(P2pError::PublishError(PublishError::MessageTooLarge(
+                Some(message.len()),
+                Some(GOSSIPSUB_MAX_TRANSMIT_SIZE),
+            )));
+        }
+
+        let topic = match &announcement {
+            message::Announcement::Block(_) => PubSubTopic::Blocks,
+        };
+
+        let (response, rx) = oneshot::channel();
+        self.cmd_tx.send(Command::AnnounceData {
+            topic,
+            message,
+            response,
+        })?;
+        rx.await?
+    }
+
+    async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(Command::Subscribe {
+            topics: topics.iter().map(|topic| topic.into()).collect::<Vec<_>>(),
+            response: tx,
+        })?;
+        rx.await?
+    }
+
+    async fn report_validation_result(
+        &mut self,
+        source: T::PeerId,
+        message_id: T::SyncingMessageId,
+        result: ValidationResult,
+    ) -> crate::Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(Command::ReportValidationResult {
+            message_id,
+            source,
+            result: result.into(),
+            response: tx,
+        })?;
+        rx.await?
+    }
+
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent<T>> {
         match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::SyncingEvent::Request {
+            P2pSyncingEvent::Request {
                 peer_id,
                 request_id,
                 request,
@@ -113,7 +166,7 @@ where
                     request,
                 })
             }
-            types::SyncingEvent::Response {
+            P2pSyncingEvent::Response {
                 peer_id,
                 request_id,
                 response,
@@ -130,7 +183,7 @@ where
                     response,
                 })
             }
-            types::SyncingEvent::Error {
+            P2pSyncingEvent::Error {
                 peer_id,
                 request_id,
                 error,
@@ -138,6 +191,15 @@ where
                 peer_id,
                 request_id,
                 error,
+            }),
+            P2pSyncingEvent::Announcement {
+                peer_id,
+                message_id,
+                announcement,
+            } => Ok(SyncingEvent::Announcement {
+                peer_id,
+                message_id,
+                announcement: *announcement,
             }),
         }
     }
