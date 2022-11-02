@@ -57,6 +57,7 @@ use store::MempoolRemovalReason;
 use store::MempoolStore;
 use store::TxMempoolEntry;
 use try_get_fee::TryGetFee;
+use tx_with_fee::TxWithFee;
 
 pub use crate::interface::mempool_interface::MempoolInterface;
 
@@ -67,6 +68,7 @@ mod rolling_fee_rate;
 mod spends_unconfirmed;
 mod store;
 mod try_get_fee;
+mod tx_with_fee;
 
 fn get_relay_fee(tx: &SignedTransaction) -> Amount {
     // TODO we should never reach the expect, but should this be an error anyway?
@@ -231,32 +233,6 @@ where
             .await
             .map_err(|_| crate::error::Error::SubsystemFailure)?;
         Ok(rx)
-    }
-}
-
-struct TxWithFee {
-    tx: SignedTransaction,
-    fee: Amount,
-}
-
-impl TxWithFee {
-    async fn new<M: GetMemoryUsage + Sync + Send>(
-        mempool: &Mempool<M>,
-        tx: &SignedTransaction,
-    ) -> Result<Self, TxValidationError> {
-        let fee = mempool.try_get_fee(tx).await?;
-        Ok(Self {
-            tx: tx.clone(),
-            fee,
-        })
-    }
-
-    fn tx(&self) -> &SignedTransaction {
-        &self.tx
-    }
-
-    fn fee(&self) -> Amount {
-        self.fee
     }
 }
 
