@@ -91,12 +91,12 @@ pub enum TransactionSource {
     Mempool,
 }
 
-pub enum TransactionSourceForConnect {
-    Chain { new_block_index: BlockIndex },
-    Mempool { current_best: BlockIndex },
+pub enum TransactionSourceForConnect<'a> {
+    Chain { new_block_index: &'a BlockIndex },
+    Mempool { current_best: &'a BlockIndex },
 }
 
-impl TransactionSourceForConnect {
+impl<'a> TransactionSourceForConnect<'a> {
     /// The block height of the transaction to be connected
     /// For the mempool, it's the height of the next-to-be block
     /// For the chain, it's for the block being connected
@@ -416,7 +416,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                         db_tx.get_gen_block_index(id)
                     };
 
-                let starting_point = match tx_source {
+                let starting_point: &BlockIndex = match tx_source {
                     TransactionSourceForConnect::Chain { new_block_index } => new_block_index,
                     TransactionSourceForConnect::Mempool { current_best } => current_best,
                 };
@@ -643,8 +643,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
 
                 self.connect_transaction(
                     &TransactionSourceForConnect::Chain {
-                        // TODO: get rid of this clone
-                        new_block_index: block_index.clone(),
+                        new_block_index: block_index,
                     },
                     tx,
                     median_time_past,
