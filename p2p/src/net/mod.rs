@@ -26,7 +26,7 @@ use std::{
 
 use async_trait::async_trait;
 
-use crate::{config, message, message::Announcement};
+use crate::{config, message, message::Announcement, net::mock::transport::GetIp};
 
 /// [NetworkingService] provides the low-level network interface
 /// that each network service provider must implement
@@ -40,7 +40,7 @@ pub trait NetworkingService {
     ///
     /// For an implementation built on libp2p, the address format is:
     ///     `/ip4/0.0.0.0/tcp/8888/p2p/<peer ID>`
-    type Address: Clone + Debug + Eq + Hash + Send + Sync + ToString + FromStr;
+    type Address: Clone + Debug + Eq + Hash + Send + Sync + ToString + FromStr + GetIp;
 
     /// Unique ID assigned to a peer on the network
     type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString + FromStr;

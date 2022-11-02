@@ -61,3 +61,17 @@ pub trait MockStream: Send {
 pub trait GetIp {
     fn ip(&self) -> IpAddr;
 }
+
+impl GetIp for libp2p::Multiaddr {
+    fn ip(&self) -> IpAddr {
+        // TODO: This is ugly and incorrect.
+        while let Some(component) = self.iter().next() {
+            match component {
+                libp2p::multiaddr::Protocol::Ip4(a) => return a.into(),
+                libp2p::multiaddr::Protocol::Ip6(a) => return a.into(),
+                _ => continue,
+            }
+        }
+        panic!("Unable to get ip from the {:?} address", self)
+    }
+}

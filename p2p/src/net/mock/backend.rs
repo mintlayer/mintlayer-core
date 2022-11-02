@@ -608,7 +608,7 @@ where
     async fn ban_peer(&mut self, peer: &MockPeerId) -> crate::Result<()> {
         let ip = self
             .peers
-            .get(&peer)
+            .get(peer)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
             .address
             .ip();

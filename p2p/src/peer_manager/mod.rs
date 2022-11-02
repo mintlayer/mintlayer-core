@@ -119,16 +119,6 @@ where
         self.peerdb.expire_peers(peers)
     }
 
-    /// Check is the IP address banned
-    fn validate_address(&self, address: &T::Address) -> bool {
-        !self.peerdb.is_address_banned(address)
-    }
-
-    /// Check is the peer ID banned
-    fn validate_peer_id(&self, peer_id: &T::PeerId) -> bool {
-        !self.peerdb.is_id_banned(peer_id)
-    }
-
     /// Verifies the protocols compatibility.
     ///
     /// Checks that the given set of protocols contains the following protocols with the exact
@@ -235,12 +225,8 @@ where
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
         ensure!(
-            self.validate_address(&address),
+            self.peerdb.is_address_banned(&address),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
-        );
-        ensure!(
-            self.validate_peer_id(&info.peer_id),
-            P2pError::PeerError(PeerError::BannedPeer(info.peer_id.to_string())),
         );
 
         // if the maximum number of connections is reached, the connection cannot be
@@ -312,7 +298,7 @@ where
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
         ensure!(
-            self.validate_address(&address),
+            self.peerdb.is_address_banned(&address),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
