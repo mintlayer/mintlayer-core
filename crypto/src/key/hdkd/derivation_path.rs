@@ -22,11 +22,16 @@ use std::str::FromStr;
 
 const PREFIX: &str = "m";
 const SEPARATOR: &str = "/";
+const HARDENED_APOS: char = '\'';
+const HARDENED_H: char = 'h';
 const HARDENED_BIT: u32 = 0x80000000;
 
 /// BIP32-like child numbers. Currently we only support hardened derivations
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
-pub enum ChildNumber {
+pub struct ChildNumber(DerivationType);
+
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+enum DerivationType {
     Hardened(u32),
 }
 
@@ -34,7 +39,7 @@ impl ChildNumber {
     /// Return a hardened child number
     pub fn hardened(index: u32) -> Result<Self, DerivationError> {
         if index & HARDENED_BIT == 0 {
-            Ok(ChildNumber::Hardened(index))
+            Ok(ChildNumber(DerivationType::Hardened(index)))
         } else {
             Err(InvalidChildNumber(index))
         }
@@ -52,15 +57,15 @@ impl ChildNumber {
 
     /// Return a BIP32-like child number index that has the hardened bit set if needed
     pub fn to_encoded_index(&self) -> u32 {
-        match self {
-            ChildNumber::Hardened(i) => i | HARDENED_BIT,
+        match self.0 {
+            DerivationType::Hardened(i) => i | HARDENED_BIT,
         }
     }
 
     /// Returns true if this child number is hardened
     pub fn is_hardened(&self) -> bool {
-        match self {
-            ChildNumber::Hardened(_) => true,
+        match self.0 {
+            DerivationType::Hardened(_) => true,
         }
     }
 }
@@ -69,12 +74,11 @@ impl FromStr for ChildNumber {
     type Err = DerivationError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if !s.is_ascii() {
+            return Err(InvalidDerivationPathFormat);
+        }
         // Check if this child number is hardened
-        let is_hardened = s.ends_with('\'') || s.ends_with('h');
-        if is_hardened {
-            // This will never panic because we know that the string is at least 1 character long
-            // and it is always on the boundary of a UTF-8 code point
-            let (s, _) = s.split_at(s.len() - 1);
+        if let Some(s) = s.strip_suffix([HARDENED_APOS, HARDENED_H]) {
             ChildNumber::hardened(s.parse().map_err(|_| InvalidChildNumberFormat)?)
         } else {
             ChildNumber::normal(s.parse().map_err(|_| InvalidChildNumberFormat)?)
@@ -84,8 +88,8 @@ impl FromStr for ChildNumber {
 
 impl fmt::Display for ChildNumber {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match *self {
-            ChildNumber::Hardened(index) => {
+        match self.0 {
+            DerivationType::Hardened(index) => {
                 fmt::Display::fmt(&index, f)?;
                 let alt = f.alternate();
                 f.write_str(if alt { "h" } else { "'" })
@@ -189,19 +193,19 @@ mod tests {
         );
         assert_eq!(
             DerivationPath::from_str("m/①②③h"),
-            Err(InvalidChildNumberFormat)
+            Err(InvalidDerivationPathFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/❶❷❸'"),
-            Err(InvalidChildNumberFormat)
+            Err(InvalidDerivationPathFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/⓵⓶⓷"),
-            Err(InvalidChildNumberFormat)
+            Err(InvalidDerivationPathFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/⑴⑵⑶/456"),
-            Err(InvalidChildNumberFormat)
+            Err(InvalidDerivationPathFormat)
         );
 
         assert_eq!(
@@ -243,6 +247,14 @@ mod tests {
                 ChildNumber::hardened(1000000000).unwrap(),
             ]
             .into())
+        );
+        assert_eq!(
+            DerivationPath::from_str("m/2147483647'"),
+            Ok(vec![ChildNumber::hardened(2147483647).unwrap()].into())
+        );
+        assert_eq!(
+            DerivationPath::from_str("m/2147483648'"),
+            Err(InvalidChildNumber(2147483648))
         );
     }
 }

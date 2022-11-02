@@ -134,12 +134,10 @@ impl MLRistrettoPrivateKey {
     }
 }
 
-impl ChildNumber {
-    fn to_schnorrkel_chaincode(&self) -> ChainCode {
-        let mut chaincode = ChainCode([0u8; CHAIN_CODE_LENGTH]);
-        chaincode.0[0..4].copy_from_slice(&self.to_encoded_index().to_be_bytes());
-        chaincode
-    }
+fn child_num_to_schnorrkel_chaincode(num: &ChildNumber) -> ChainCode {
+    let mut chaincode = ChainCode([0u8; CHAIN_CODE_LENGTH]);
+    chaincode.0[0..4].copy_from_slice(&num.to_encoded_index().to_be_bytes());
+    chaincode
 }
 
 impl Derivable for MLRistrettoPrivateKey {
@@ -148,7 +146,7 @@ impl Derivable for MLRistrettoPrivateKey {
         if !num.is_hardened() {
             return Err(UnsupportedDerivationType);
         }
-        let chaincode = Some(num.to_schnorrkel_chaincode());
+        let chaincode = Some(child_num_to_schnorrkel_chaincode(num));
         let mini_key = self.as_native().hard_derive_mini_secret_key(chaincode, b"").0;
         let key = MLRistrettoPrivateKey::from_native(mini_key.expand(Ed25519));
         Ok(key)

@@ -32,8 +32,7 @@ pub enum DerivationError {
 pub trait Derivable: Sized + Clone {
     /// Derive a child private key given a derivation path
     fn derive_path(&self, path: &DerivationPath) -> Result<Self, DerivationError> {
-        let key = path.into_iter().try_fold(self.clone(), |key, num| key.derive_child(num))?;
-        Ok(key)
+        path.into_iter().try_fold(self.clone(), |key, num| key.derive_child(num))
     }
 
     fn derive_child(&self, num: &ChildNumber) -> Result<Self, DerivationError>;
