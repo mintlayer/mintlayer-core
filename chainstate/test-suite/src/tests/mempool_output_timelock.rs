@@ -67,7 +67,7 @@ fn output_lock_until_height() {
             assert_eq!(
                 verifier.connect_transaction(
                     &TransactionSourceForConnect::Mempool {
-                        current_best: best_block_index,
+                        current_best: &best_block_index,
                     },
                     &spend_locked_tx,
                     &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
@@ -90,7 +90,7 @@ fn output_lock_until_height() {
         verifier
             .connect_transaction(
                 &TransactionSourceForConnect::Mempool {
-                    current_best: best_block_index,
+                    current_best: &best_block_index,
                 },
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
@@ -131,7 +131,7 @@ fn output_lock_for_block_count() {
             assert_eq!(
                 verifier.connect_transaction(
                     &TransactionSourceForConnect::Mempool {
-                        current_best: best_block_index,
+                        current_best: &best_block_index,
                     },
                     &spend_locked_tx,
                     &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
@@ -157,7 +157,7 @@ fn output_lock_for_block_count() {
         verifier
             .connect_transaction(
                 &TransactionSourceForConnect::Mempool {
-                    current_best: best_block_index,
+                    current_best: &best_block_index,
                 },
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
@@ -219,7 +219,7 @@ fn output_lock_until_time() {
             assert_eq!(
                 verifier.connect_transaction(
                     &TransactionSourceForConnect::Mempool {
-                        current_best: best_block_index,
+                        current_best: &best_block_index,
                     },
                     &spend_locked_tx,
                     &mtp
@@ -246,7 +246,7 @@ fn output_lock_until_time() {
         verifier
             .connect_transaction(
                 &TransactionSourceForConnect::Mempool {
-                    current_best: best_block_index,
+                    current_best: &best_block_index,
                 },
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
@@ -309,7 +309,7 @@ fn output_lock_for_seconds() {
             assert_eq!(
                 verifier.connect_transaction(
                     &TransactionSourceForConnect::Mempool {
-                        current_best: best_block_index,
+                        current_best: &best_block_index,
                     },
                     &spend_locked_tx,
                     &mtp
@@ -341,7 +341,7 @@ fn output_lock_for_seconds() {
         verifier
             .connect_transaction(
                 &TransactionSourceForConnect::Mempool {
-                    current_best: best_block_index,
+                    current_best: &best_block_index,
                 },
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(time::get()),
