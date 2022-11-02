@@ -22,11 +22,9 @@
 //! peers are distinguished by their socket addresses.
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap},
     io::ErrorKind,
-    net::IpAddr,
     sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use futures::{future::join_all, FutureExt, TryFutureExt};
@@ -47,7 +45,7 @@ use crate::{
         mock::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             peer, request_manager,
-            transport::{GetIp, MockListener, MockTransport},
+            transport::{MockListener, MockTransport},
             types::{
                 Command, ConnectivityEvent, Message, MockEvent, MockPeerId, MockPeerInfo,
                 MockRequestId, PeerEvent, SyncingEvent,
@@ -58,12 +56,9 @@ use crate::{
     },
 };
 
-const BAN_DURATION: Duration = Duration::from_secs(60 * 60 * 24);
-
 #[derive(Debug)]
-struct PeerContext<T: MockTransport> {
+struct PeerContext {
     _peer_id: MockPeerId,
-    address: T::Address,
     subscriptions: BTreeSet<PubSubTopic>,
     tx: mpsc::Sender<MockEvent>,
 }
@@ -91,13 +86,10 @@ pub struct Backend<T: MockTransport> {
     cmd_rx: mpsc::Receiver<Command<T>>,
 
     /// Active peers
-    peers: HashMap<MockPeerId, PeerContext<T>>,
-
-    // TODO: Store banned peers persistently.
-    banned_peers: BTreeMap<IpAddr, Duration>,
+    peers: HashMap<MockPeerId, PeerContext>,
 
     /// Pending connections
-    pending: HashMap<MockPeerId, (mpsc::Sender<MockEvent>, ConnectionState<T>, T::Address)>,
+    pending: HashMap<MockPeerId, (mpsc::Sender<MockEvent>, ConnectionState<T>)>,
 
     /// RX channel for receiving events from peers
     #[allow(clippy::type_complexity)]
@@ -146,7 +138,6 @@ where
             sync_tx,
             timeout,
             peers: HashMap::new(),
-            banned_peers: BTreeMap::new(),
             pending: HashMap::new(),
             peer_chan: mpsc::channel(64),
             local_peer_id,
@@ -176,7 +167,7 @@ where
                     self.create_peer(
                         socket,
                         self.local_peer_id,
-                        address.clone(),
+                        MockPeerId::from_socket_address::<T>(&address),
                         peer::Role::Outbound,
                         ConnectionState::OutboundAccepted { address },
                     )
@@ -399,7 +390,13 @@ where
                 // Accept a new peer connection.
                 res = self.socket.accept() => {
                     let (stream, address) = res.map_err(|_| P2pError::Other("accept() failed"))?;
-                    self.handle_accept(stream, address).await?;
+                    self.create_peer(
+                        stream,
+                        self.local_peer_id,
+                        MockPeerId::from_socket_address::<T>(&address),
+                        peer::Role::Inbound,
+                        ConnectionState::InboundAccepted { address }
+                    ).await?;
                 }
                 // Handle peer events.
                 event = self.peer_chan.1.recv().fuse() => {
@@ -414,33 +411,6 @@ where
         }
     }
 
-    async fn handle_accept(&mut self, stream: T::Stream, address: T::Address) -> crate::Result<()> {
-        // Check if the peer is banned.
-        let ip = address.ip();
-        if let Some(banned_till) = self.banned_peers.get(&ip) {
-            // Check if the ban has expired.
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_err(|_| P2pError::Other("Invalid system time"))?;
-            if now > *banned_till {
-                self.banned_peers.remove(&ip);
-            } else {
-                return Err(P2pError::PeerError(PeerError::BannedPeer(format!(
-                    "{ip:?}"
-                ))));
-            }
-        }
-
-        self.create_peer(
-            stream,
-            self.local_peer_id,
-            address.clone(),
-            peer::Role::Inbound,
-            ConnectionState::InboundAccepted { address },
-        )
-        .await
-    }
-
     /// Create new peer
     ///
     /// Move the connection to `pending` where it stays until either the connection is closed
@@ -450,14 +420,13 @@ where
         &mut self,
         socket: T::Stream,
         local_peer_id: MockPeerId,
-        peer_address: T::Address,
+        remote_peer_id: MockPeerId,
         role: peer::Role,
         state: ConnectionState<T>,
     ) -> crate::Result<()> {
         let (tx, rx) = mpsc::channel(16);
 
-        let remote_peer_id = MockPeerId::from_socket_address::<T>(&peer_address);
-        self.pending.insert(remote_peer_id, (tx, state, peer_address));
+        self.pending.insert(remote_peer_id, (tx, state));
 
         let tx = self.peer_chan.0.clone();
         let config = Arc::clone(&self.config);
@@ -487,7 +456,7 @@ where
                 version,
                 protocols,
             } => {
-                let (tx, state, address) = self.pending.remove(&peer_id).expect("peer to exist");
+                let (tx, state) = self.pending.remove(&peer_id).expect("peer to exist");
 
                 match state {
                     ConnectionState::OutboundAccepted { address } => {
@@ -526,7 +495,6 @@ where
                     received_id,
                     PeerContext {
                         _peer_id: received_id,
-                        address,
                         subscriptions: BTreeSet::new(),
                         tx,
                     },
@@ -580,44 +548,38 @@ where
             Command::Connect { address, response } => {
                 self.connect(address, response).await?;
             }
-            Command::Disconnect { peer_id, response } |
-            // TODO: implement proper banning mechanism
-            Command::BanPeer { peer_id, response } => {
-                let res = self.ban_peer(&peer_id).await;
+            Command::Disconnect { peer_id, response } | Command::BanPeer { peer_id, response } => {
+                let res = self.disconnect_peer(&peer_id).await;
                 response.send(res).map_err(|_| P2pError::ChannelClosed)?;
             }
-            Command::SendRequest { peer_id, message, response } => {
+            Command::SendRequest {
+                peer_id,
+                message,
+                response,
+            } => {
                 let res = self.send_request(&peer_id, message).await;
                 response.send(res).map_err(|_| P2pError::ChannelClosed)?;
             }
-            Command::SendResponse { request_id, message, response } => {
+            Command::SendResponse {
+                request_id,
+                message,
+                response,
+            } => {
                 let res = self.send_response(request_id, message).await;
                 response.send(res).map_err(|_| P2pError::ChannelClosed)?;
             }
             Command::Subscribe { topics } => {
                 self.subscribe(topics).await;
             }
-            Command::AnnounceData { topic, message, response } => {
+            Command::AnnounceData {
+                topic,
+                message,
+                response,
+            } => {
                 let res = self.announce_data(topic, message).await;
                 response.send(res).map_err(|_| P2pError::ChannelClosed)?;
             }
         }
-        Ok(())
-    }
-
-    async fn ban_peer(&mut self, peer: &MockPeerId) -> crate::Result<()> {
-        let ip = self
-            .peers
-            .get(peer)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
-            .address
-            .ip();
-        let ban_till = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| P2pError::Other("Invalid system time"))?
-            + BAN_DURATION;
-        self.banned_peers.insert(ip, ban_till);
-        self.disconnect_peer(peer).await?;
         Ok(())
     }
 }
