@@ -105,9 +105,9 @@ impl PrivateKey {
 }
 
 impl Derivable for PrivateKey {
-    fn derive_child(&self, num: &ChildNumber) -> Result<Self, DerivationError> {
+    fn derive_child(self, num: ChildNumber) -> Result<Self, DerivationError> {
         match self.key {
-            PrivateKeyHolder::RistrettoSchnorr(ref key) => Ok(key.derive_child(num)?.into()),
+            PrivateKeyHolder::RistrettoSchnorr(key) => Ok(key.derive_child(num)?.into()),
         }
     }
 }
@@ -164,9 +164,9 @@ mod test {
     #[test]
     fn derive() {
         let (sk, _) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let sk1 = sk.derive_child(&ChildNumber::hardened(123).unwrap()).unwrap();
-        let sk2 = sk1.derive_child(&ChildNumber::hardened(456).unwrap()).unwrap();
-        let sk3 = sk2.derive_child(&ChildNumber::hardened(789).unwrap()).unwrap();
+        let sk1 = sk.clone().derive_child(ChildNumber::hardened(123).unwrap()).unwrap();
+        let sk2 = sk1.derive_child(ChildNumber::hardened(456).unwrap()).unwrap();
+        let sk3 = sk2.derive_child(ChildNumber::hardened(789).unwrap()).unwrap();
         let sk4 = sk.derive_path(&DerivationPath::from_str("m/123h/456h/789h").unwrap()).unwrap();
         assert_eq!(sk3, sk4);
     }

@@ -132,21 +132,21 @@ impl MLRistrettoPrivateKey {
         let sig = self.key_data.sign(transcript, &pub_key);
         Ok(sig)
     }
-}
 
-fn child_num_to_schnorrkel_chaincode(num: &ChildNumber) -> ChainCode {
-    let mut chaincode = ChainCode([0u8; CHAIN_CODE_LENGTH]);
-    chaincode.0[0..4].copy_from_slice(&num.to_encoded_index().to_be_bytes());
-    chaincode
+    fn child_num_to_chaincode(num: ChildNumber) -> ChainCode {
+        let mut chaincode = ChainCode([0u8; CHAIN_CODE_LENGTH]);
+        chaincode.0[0..4].copy_from_slice(&num.to_encoded_index().to_be_bytes());
+        chaincode
+    }
 }
 
 impl Derivable for MLRistrettoPrivateKey {
-    fn derive_child(&self, num: &ChildNumber) -> Result<Self, DerivationError> {
+    fn derive_child(self, num: ChildNumber) -> Result<Self, DerivationError> {
         // We can perform only hard derivations
         if !num.is_hardened() {
             return Err(UnsupportedDerivationType);
         }
-        let chaincode = Some(child_num_to_schnorrkel_chaincode(num));
+        let chaincode = Some(MLRistrettoPrivateKey::child_num_to_chaincode(num));
         let mini_key = self.as_native().hard_derive_mini_secret_key(chaincode, b"").0;
         let key = MLRistrettoPrivateKey::from_native(mini_key.expand(Ed25519));
         Ok(key)
@@ -356,11 +356,11 @@ mod test {
         let sk = MLRistrettoPrivateKey::decode(&mut sk_bytes.as_slice()).unwrap();
 
         let path = DerivationPath::from_str("m/0'").unwrap();
-        let child_sk = sk.derive_path(&path).unwrap();
+        let child_sk = sk.clone().derive_path(&path).unwrap();
 
         assert_eq!(hex::encode(child_sk.encode()), "010118959f5bfcde4299d177763c94c30b56cd8a7df22d6fc4861d45067c4dccd0470957e0852e2b4af0d8d44a29ad8fdf17db6cf0f5f7feef9d268790b326bda500");
 
-        let child_sk_final = child_sk.derive_child(&ChildNumber::hardened(1).unwrap()).unwrap();
+        let child_sk_final = child_sk.derive_child(ChildNumber::hardened(1).unwrap()).unwrap();
 
         let path = DerivationPath::from_str("m/0'/1'").unwrap();
         let child_sk_final_alt = sk.derive_path(&path).unwrap();

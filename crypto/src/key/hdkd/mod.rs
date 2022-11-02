@@ -29,13 +29,13 @@ pub enum DerivationError {
     UnsupportedDerivationType,
 }
 
-pub trait Derivable: Sized + Clone {
+pub trait Derivable: Sized {
     /// Derive a child private key given a derivation path
-    fn derive_path(&self, path: &DerivationPath) -> Result<Self, DerivationError> {
-        path.into_iter().try_fold(self.clone(), |key, num| key.derive_child(num))
+    fn derive_path(self, path: &DerivationPath) -> Result<Self, DerivationError> {
+        path.into_iter().try_fold(self, |key, num| key.derive_child(*num))
     }
 
-    fn derive_child(&self, num: &ChildNumber) -> Result<Self, DerivationError>;
+    fn derive_child(self, num: ChildNumber) -> Result<Self, DerivationError>;
 }
 
 #[cfg(test)]
@@ -47,9 +47,9 @@ mod tests {
     pub struct DummyDerivable(Vec<ChildNumber>);
 
     impl Derivable for DummyDerivable {
-        fn derive_child(&self, num: &ChildNumber) -> Result<Self, DerivationError> {
-            let mut dummy_child = self.clone();
-            dummy_child.0.push(num.clone());
+        fn derive_child(self, num: ChildNumber) -> Result<Self, DerivationError> {
+            let mut dummy_child = self;
+            dummy_child.0.push(num);
             Ok(dummy_child)
         }
     }
@@ -65,7 +65,7 @@ mod tests {
             ChildNumber::hardened(3).unwrap(),
         ]);
         assert_eq!(derived, expected);
-        let derived = derived.derive_child(&ChildNumber::hardened(4).unwrap()).unwrap();
+        let derived = derived.derive_child(ChildNumber::hardened(4).unwrap()).unwrap();
         expected.0.push(ChildNumber::hardened(4).unwrap());
         assert_eq!(derived, expected);
     }

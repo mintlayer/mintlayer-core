@@ -16,8 +16,7 @@
 use crate::key::hdkd::DerivationError;
 use crate::key::hdkd::DerivationError::*;
 use core::fmt;
-use std::fmt::Formatter;
-use std::slice::Iter;
+use std::fmt::{Formatter, Write};
 use std::str::FromStr;
 
 const PREFIX: &str = "m";
@@ -27,10 +26,10 @@ const HARDENED_H: char = 'h';
 const HARDENED_BIT: u32 = 0x80000000;
 
 /// BIP32-like child numbers. Currently we only support hardened derivations
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChildNumber(DerivationType);
 
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum DerivationType {
     Hardened(u32),
 }
@@ -56,7 +55,7 @@ impl ChildNumber {
     }
 
     /// Return a BIP32-like child number index that has the hardened bit set if needed
-    pub fn to_encoded_index(&self) -> u32 {
+    pub fn to_encoded_index(self) -> u32 {
         match self.0 {
             DerivationType::Hardened(i) => i | HARDENED_BIT,
         }
@@ -74,14 +73,28 @@ impl FromStr for ChildNumber {
     type Err = DerivationError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if !s.is_ascii() {
-            return Err(InvalidDerivationPathFormat);
+        // Check if this child number is hardened and get the index number string
+        let (index_str, is_hardened) = match s.strip_suffix([HARDENED_APOS, HARDENED_H]) {
+            Some(prefix) => (prefix, true),
+            None => (s, false),
+        };
+
+        // Check that the number string contains only digits
+        if index_str.bytes().any(|c| !c.is_ascii_digit()) {
+            return Err(InvalidChildNumberFormat);
         }
-        // Check if this child number is hardened
-        if let Some(s) = s.strip_suffix([HARDENED_APOS, HARDENED_H]) {
-            ChildNumber::hardened(s.parse().map_err(|_| InvalidChildNumberFormat)?)
+
+        // Check if the number has leading 0s
+        if index_str.len() > 1 && index_str.starts_with('0') {
+            return Err(InvalidChildNumberFormat);
+        }
+
+        let index = index_str.parse().map_err(|_| InvalidChildNumberFormat)?;
+
+        if is_hardened {
+            ChildNumber::hardened(index)
         } else {
-            ChildNumber::normal(s.parse().map_err(|_| InvalidChildNumberFormat)?)
+            ChildNumber::normal(index)
         }
     }
 }
@@ -92,7 +105,7 @@ impl fmt::Display for ChildNumber {
             DerivationType::Hardened(index) => {
                 fmt::Display::fmt(&index, f)?;
                 let alt = f.alternate();
-                f.write_str(if alt { "h" } else { "'" })
+                f.write_char(if alt { HARDENED_H } else { HARDENED_APOS })
             }
         }
     }
@@ -110,7 +123,7 @@ impl From<Vec<ChildNumber>> for DerivationPath {
 
 impl<'a> IntoIterator for &'a DerivationPath {
     type Item = &'a ChildNumber;
-    type IntoIter = Iter<'a, ChildNumber>;
+    type IntoIter = std::slice::Iter<'a, ChildNumber>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
@@ -192,20 +205,36 @@ mod tests {
             Err(InvalidChildNumberFormat)
         );
         assert_eq!(
+            DerivationPath::from_str("m/1e2h"),
+            Err(InvalidChildNumberFormat)
+        );
+        assert_eq!(
+            DerivationPath::from_str("m/+3h"),
+            Err(InvalidChildNumberFormat)
+        );
+        assert_eq!(
+            DerivationPath::from_str("m/-4"),
+            Err(InvalidChildNumberFormat)
+        );
+        assert_eq!(
+            DerivationPath::from_str("m/0008h"),
+            Err(InvalidChildNumberFormat)
+        );
+        assert_eq!(
             DerivationPath::from_str("m/①②③h"),
-            Err(InvalidDerivationPathFormat)
+            Err(InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/❶❷❸'"),
-            Err(InvalidDerivationPathFormat)
+            Err(InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/⓵⓶⓷"),
-            Err(InvalidDerivationPathFormat)
+            Err(InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/⑴⑵⑶/456"),
-            Err(InvalidDerivationPathFormat)
+            Err(InvalidChildNumberFormat)
         );
 
         assert_eq!(
