@@ -58,6 +58,7 @@ pub trait MockStream: Send {
     async fn recv(&mut self) -> Result<Option<Message>>;
 }
 
+// TODO: Move somewhere.
 pub trait GetIp {
     fn ip(&self) -> IpAddr;
 }

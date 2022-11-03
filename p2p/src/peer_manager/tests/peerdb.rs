@@ -41,14 +41,14 @@ fn make_peer_info() -> (PeerId, types::PeerInfo<Libp2pService>) {
 
 fn add_active_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
     let (id, info) = make_peer_info();
-    peerdb.peer_connected(Multiaddr::empty(), info);
+    peerdb.peer_connected("/ip4/160.9.112.44".parse().unwrap(), info);
 
     id
 }
 
 fn add_idle_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
     let (id, info) = make_peer_info();
-    peerdb.register_peer_info(Multiaddr::empty(), info);
+    peerdb.register_peer_info("/ip4/160.9.112.45".parse().unwrap(), info);
 
     id
 }
@@ -152,7 +152,7 @@ fn adjust_peer_score_higher_threshold() {
     assert!(!peerdb.adjust_peer_score(&id, 100));
 
     let address = peerdb.peers().get(&id).unwrap().address().unwrap().clone();
-    assert!(peerdb.is_address_banned(&address));
+    assert!(!peerdb.is_address_banned(&address));
 }
 
 #[test]
@@ -205,8 +205,6 @@ fn ban_peer() {
         peerdb.peers().get(&id),
         Some(Peer::Banned(_))
     ));
-    let address = peerdb.peers().get(&id).unwrap().address().unwrap().clone();
-    assert!(peerdb.is_address_banned(&address));
     assert!(!peerdb.available().contains(&id));
 }
 
