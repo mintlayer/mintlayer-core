@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod hdkd;
+mod key_holder;
 pub mod rschnorr;
 pub mod signature;
 
@@ -26,6 +27,7 @@ use crate::random::make_true_rng;
 pub use signature::Signature;
 
 use self::hdkd::derivable::{Derivable, DerivationError};
+use self::key_holder::{PrivateKeyHolder, PublicKeyHolder};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum SignatureError {
@@ -48,16 +50,6 @@ pub struct PrivateKey {
 #[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Decode, Encode)]
 pub struct PublicKey {
     pub_key: PublicKeyHolder,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
-pub(crate) enum PrivateKeyHolder {
-    RistrettoSchnorr(MLRistrettoPrivateKey),
-}
-
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Decode, Encode)]
-pub(crate) enum PublicKeyHolder {
-    RistrettoSchnorr(MLRistrettoPublicKey),
 }
 
 impl From<RistrettoSignatureError> for SignatureError {
