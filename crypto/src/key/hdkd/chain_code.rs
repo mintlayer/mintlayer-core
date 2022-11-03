@@ -15,16 +15,18 @@
 
 use super::derivation_path::ChildNumber;
 
+pub const CHAINCODE_LENGTH: usize = 32;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainCode([u8; 32]);
 
-impl From<[u8; 32]> for ChainCode {
+impl From<[u8; CHAINCODE_LENGTH]> for ChainCode {
     fn from(arr: [u8; 32]) -> Self {
         Self(arr)
     }
 }
 
-impl From<ChainCode> for [u8; 32] {
+impl From<ChainCode> for [u8; CHAINCODE_LENGTH] {
     fn from(cc: ChainCode) -> Self {
         cc.0
     }
@@ -32,7 +34,7 @@ impl From<ChainCode> for [u8; 32] {
 
 impl From<ChildNumber> for ChainCode {
     fn from(num: ChildNumber) -> Self {
-        let mut chaincode = ChainCode([0u8; 32]);
+        let mut chaincode = ChainCode([0u8; CHAINCODE_LENGTH]);
         chaincode.0[0..4].copy_from_slice(&num.to_encoded_index().to_be_bytes());
         chaincode
     }

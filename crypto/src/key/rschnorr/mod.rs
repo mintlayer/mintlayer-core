@@ -135,7 +135,7 @@ impl MLRistrettoPrivateKey {
 
 impl From<super::hdkd::chain_code::ChainCode> for schnorrkel::derive::ChainCode {
     fn from(cc: super::hdkd::chain_code::ChainCode) -> Self {
-        let arr: [u8; 32] = cc.into();
+        let arr: [u8; super::hdkd::chain_code::CHAINCODE_LENGTH] = cc.into();
         Self(arr)
     }
 }
