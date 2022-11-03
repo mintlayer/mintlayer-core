@@ -298,7 +298,7 @@ where
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
         ensure!(
-            self.peerdb.is_address_banned(&address),
+            !self.peerdb.is_address_banned(&address),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
