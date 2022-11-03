@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::key::hdkd::DerivationError;
-use crate::key::hdkd::DerivationError::*;
+use super::derivable::DerivationError;
 use core::fmt;
 use std::fmt::{Formatter, Write};
 use std::str::FromStr;
@@ -40,7 +39,7 @@ impl ChildNumber {
         if index & HARDENED_BIT == 0 {
             Ok(ChildNumber(DerivationType::Hardened(index)))
         } else {
-            Err(InvalidChildNumber(index))
+            Err(DerivationError::InvalidChildNumber(index))
         }
     }
 
@@ -48,9 +47,9 @@ impl ChildNumber {
     fn normal(index: u32) -> Result<Self, DerivationError> {
         if index & HARDENED_BIT == 0 {
             // For the time being we don't support non-hardened derivations
-            Err(UnsupportedDerivationType)
+            Err(DerivationError::UnsupportedDerivationType)
         } else {
-            Err(InvalidChildNumber(index))
+            Err(DerivationError::InvalidChildNumber(index))
         }
     }
 
@@ -81,15 +80,15 @@ impl FromStr for ChildNumber {
 
         // Check that the number string contains only digits
         if index_str.bytes().any(|c| !c.is_ascii_digit()) {
-            return Err(InvalidChildNumberFormat);
+            return Err(DerivationError::InvalidChildNumberFormat);
         }
 
         // Check if the number has leading 0s
         if index_str.len() > 1 && index_str.starts_with('0') {
-            return Err(InvalidChildNumberFormat);
+            return Err(DerivationError::InvalidChildNumberFormat);
         }
 
-        let index = index_str.parse().map_err(|_| InvalidChildNumberFormat)?;
+        let index = index_str.parse().map_err(|_| DerivationError::InvalidChildNumberFormat)?;
 
         if is_hardened {
             ChildNumber::hardened(index)
@@ -136,10 +135,10 @@ impl FromStr for DerivationPath {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parts = s.split(SEPARATOR);
         // Get the prefix part, if it exists
-        let prefix_part = parts.next().ok_or(InvalidDerivationPathFormat)?;
+        let prefix_part = parts.next().ok_or(DerivationError::InvalidDerivationPathFormat)?;
         // Check if that prefix == "m"
         if prefix_part != PREFIX {
-            return Err(InvalidDerivationPathFormat);
+            return Err(DerivationError::InvalidDerivationPathFormat);
         }
         // Parse the rest of the parts to ChildNumber
         let path: Result<Vec<ChildNumber>, DerivationError> = parts.map(str::parse).collect();
@@ -166,83 +165,83 @@ mod tests {
     fn test_parse_derivation_path() {
         assert_eq!(
             DerivationPath::from_str(""),
-            Err(InvalidDerivationPathFormat)
+            Err(DerivationError::InvalidDerivationPathFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/"),
-            Err(InvalidChildNumberFormat)
+            Err(DerivationError::InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/42"),
-            Err(UnsupportedDerivationType)
+            Err(DerivationError::UnsupportedDerivationType)
         );
         assert_eq!(
             DerivationPath::from_str("m/h"),
-            Err(InvalidChildNumberFormat)
+            Err(DerivationError::InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("42"),
-            Err(InvalidDerivationPathFormat)
+            Err(DerivationError::InvalidDerivationPathFormat)
         );
         assert_eq!(
             DerivationPath::from_str("n/0'/0"),
-            Err(InvalidDerivationPathFormat)
+            Err(DerivationError::InvalidDerivationPathFormat)
         );
         assert_eq!(
             DerivationPath::from_str("4/m/5"),
-            Err(InvalidDerivationPathFormat)
+            Err(DerivationError::InvalidDerivationPathFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m//3/0'"),
-            Err(InvalidChildNumberFormat)
+            Err(DerivationError::InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/0h/0x"),
-            Err(InvalidChildNumberFormat)
+            Err(DerivationError::InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/2147483648"),
-            Err(InvalidChildNumber(2147483648))
+            Err(DerivationError::InvalidChildNumber(2147483648))
         );
         assert_eq!(
             DerivationPath::from_str("m/123'h"),
-            Err(InvalidChildNumberFormat)
+            Err(DerivationError::InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/123h'"),
-            Err(InvalidChildNumberFormat)
+            Err(DerivationError::InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/1e2h"),
-            Err(InvalidChildNumberFormat)
+            Err(DerivationError::InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/+3h"),
-            Err(InvalidChildNumberFormat)
+            Err(DerivationError::InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/-4"),
-            Err(InvalidChildNumberFormat)
+            Err(DerivationError::InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/0008h"),
-            Err(InvalidChildNumberFormat)
+            Err(DerivationError::InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/①②③h"),
-            Err(InvalidChildNumberFormat)
+            Err(DerivationError::InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/❶❷❸'"),
-            Err(InvalidChildNumberFormat)
+            Err(DerivationError::InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/⓵⓶⓷"),
-            Err(InvalidChildNumberFormat)
+            Err(DerivationError::InvalidChildNumberFormat)
         );
         assert_eq!(
             DerivationPath::from_str("m/⑴⑵⑶/456"),
-            Err(InvalidChildNumberFormat)
+            Err(DerivationError::InvalidChildNumberFormat)
         );
 
         assert_eq!(
@@ -291,7 +290,7 @@ mod tests {
         );
         assert_eq!(
             DerivationPath::from_str("m/2147483648'"),
-            Err(InvalidChildNumber(2147483648))
+            Err(DerivationError::InvalidChildNumber(2147483648))
         );
     }
 }

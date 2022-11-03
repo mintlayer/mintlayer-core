@@ -16,12 +16,12 @@
 mod internal;
 
 use crate::key::hdkd::derivation_path::ChildNumber;
-use crate::key::hdkd::DerivationError::UnsupportedDerivationType;
-use crate::key::hdkd::{Derivable, DerivationError};
 use crate::random::{CryptoRng, Rng};
 use schnorrkel::ExpansionMode::Ed25519;
 use serialization::{Decode, Encode};
 use zeroize::Zeroize;
+
+use super::hdkd::derivable::{Derivable, DerivationError};
 
 const SIGNATURE_CONTEXT: &[u8; 19] = b"mintlayer-signature";
 
@@ -144,7 +144,7 @@ impl Derivable for MLRistrettoPrivateKey {
     fn derive_child(self, num: ChildNumber) -> Result<Self, DerivationError> {
         // We can perform only hard derivations
         if !num.is_hardened() {
-            return Err(UnsupportedDerivationType);
+            return Err(DerivationError::UnsupportedDerivationType);
         }
         let chaincode: super::hdkd::chain_code::ChainCode = num.into();
         let mini_key = self.as_native().hard_derive_mini_secret_key(Some(chaincode.into()), b"").0;

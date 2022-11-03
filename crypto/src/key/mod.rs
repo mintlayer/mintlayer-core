@@ -20,11 +20,12 @@ pub mod signature;
 use serialization::{Decode, Encode};
 
 use crate::key::hdkd::derivation_path::ChildNumber;
-use crate::key::hdkd::{Derivable, DerivationError};
 use crate::key::rschnorr::{MLRistrettoPrivateKey, MLRistrettoPublicKey, RistrettoSignatureError};
 use crate::key::Signature::RistrettoSchnorr;
 use crate::random::make_true_rng;
 pub use signature::Signature;
+
+use self::hdkd::derivable::{Derivable, DerivationError};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum SignatureError {
