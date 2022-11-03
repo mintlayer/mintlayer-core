@@ -13,7 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) mod derivation_path;
+pub mod chain_code;
+pub mod derivation_path;
 
 use crate::key::hdkd::derivation_path::{ChildNumber, DerivationPath};
 

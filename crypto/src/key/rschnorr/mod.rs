@@ -19,7 +19,6 @@ use crate::key::hdkd::derivation_path::ChildNumber;
 use crate::key::hdkd::DerivationError::UnsupportedDerivationType;
 use crate::key::hdkd::{Derivable, DerivationError};
 use crate::random::{CryptoRng, Rng};
-use schnorrkel::derive::{ChainCode, CHAIN_CODE_LENGTH};
 use schnorrkel::ExpansionMode::Ed25519;
 use serialization::{Decode, Encode};
 use zeroize::Zeroize;
@@ -132,11 +131,12 @@ impl MLRistrettoPrivateKey {
         let sig = self.key_data.sign(transcript, &pub_key);
         Ok(sig)
     }
+}
 
-    fn child_num_to_chaincode(num: ChildNumber) -> ChainCode {
-        let mut chaincode = ChainCode([0u8; CHAIN_CODE_LENGTH]);
-        chaincode.0[0..4].copy_from_slice(&num.to_encoded_index().to_be_bytes());
-        chaincode
+impl From<super::hdkd::chain_code::ChainCode> for schnorrkel::derive::ChainCode {
+    fn from(cc: super::hdkd::chain_code::ChainCode) -> Self {
+        let arr: [u8; 32] = cc.into();
+        Self(arr)
     }
 }
 
@@ -146,8 +146,8 @@ impl Derivable for MLRistrettoPrivateKey {
         if !num.is_hardened() {
             return Err(UnsupportedDerivationType);
         }
-        let chaincode = Some(MLRistrettoPrivateKey::child_num_to_chaincode(num));
-        let mini_key = self.as_native().hard_derive_mini_secret_key(chaincode, b"").0;
+        let chaincode: super::hdkd::chain_code::ChainCode = num.into();
+        let mini_key = self.as_native().hard_derive_mini_secret_key(Some(chaincode.into()), b"").0;
         let key = MLRistrettoPrivateKey::from_native(mini_key.expand(Ed25519));
         Ok(key)
     }
