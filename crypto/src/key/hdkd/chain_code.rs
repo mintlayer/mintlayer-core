@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::derivation_path::ChildNumber;
+use super::child_number::ChildNumber;
 
 pub const CHAINCODE_LENGTH: usize = 32;
 

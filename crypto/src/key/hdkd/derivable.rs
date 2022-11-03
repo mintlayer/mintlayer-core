@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::key::hdkd::derivation_path::{ChildNumber, DerivationPath};
+use crate::key::hdkd::derivation_path::DerivationPath;
+
+use super::child_number::ChildNumber;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum DerivationError {

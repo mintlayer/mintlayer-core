@@ -15,13 +15,15 @@
 
 mod internal;
 
-use crate::key::hdkd::derivation_path::ChildNumber;
 use crate::random::{CryptoRng, Rng};
 use schnorrkel::ExpansionMode::Ed25519;
 use serialization::{Decode, Encode};
 use zeroize::Zeroize;
 
-use super::hdkd::derivable::{Derivable, DerivationError};
+use super::hdkd::{
+    child_number::ChildNumber,
+    derivable::{Derivable, DerivationError},
+};
 
 const SIGNATURE_CONTEXT: &[u8; 19] = b"mintlayer-signature";
 

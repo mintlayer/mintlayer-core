@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod chain_code;
+pub mod child_number;
 pub mod derivable;
 pub mod derivation_path;
 pub mod u31;
