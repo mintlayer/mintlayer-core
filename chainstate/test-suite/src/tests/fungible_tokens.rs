@@ -19,7 +19,7 @@ use chainstate::{
     BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError, TokensError,
 };
-use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::tokens::{Metadata, NftIssuance, TokenIssuance, TokenTransfer};
 use common::primitives::{id, Id};
 use common::{
@@ -753,7 +753,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
         // Issue a new token
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let output_value = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
@@ -864,7 +864,7 @@ fn burn_tokens(#[case] seed: Seed) {
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
         // Issue a new token
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let output_value = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
@@ -1070,7 +1070,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         // Issue a new token
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let issuance_data = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
@@ -1367,7 +1367,7 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
         // Issue a new token
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let output_value = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
@@ -1468,7 +1468,7 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
         // Issue a new token
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let output_value = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,
@@ -1574,7 +1574,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
         // To have possibility to send exceed tokens amount than we have, let's limit the max issuance tokens amount
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX - 1));
         // Issuance a few different tokens
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let output_value = TokenIssuance {
             token_ticker: random_string(&mut rng, 1..5).as_bytes().to_vec(),
             amount_to_issue: total_funds,

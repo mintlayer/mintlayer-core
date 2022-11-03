@@ -19,7 +19,6 @@ use chainstate::BlockSource;
 
 use chainstate::ChainstateError;
 use chainstate::HEADER_LIMIT;
-use chainstate_test_framework::TestBlockInfo;
 use chainstate_test_framework::TestFramework;
 use chainstate_types::PropertyQueryError;
 use common::chain::GenBlock;
@@ -188,22 +187,26 @@ fn get_headers_different_chains(#[case] seed: Seed) {
         let mut tf1 = TestFramework::default();
         let mut tf2 = TestFramework::default();
 
-        let mut prev = TestBlockInfo::from_genesis(&tf1.genesis());
-        assert_eq!(&prev, &TestBlockInfo::from_genesis(&tf2.genesis()));
+        assert_eq!(tf1.genesis().get_id(), tf2.genesis().get_id());
+        assert_eq!(
+            tf1.outputs_from_genblock(tf1.genesis().get_id().into()),
+            tf2.outputs_from_genblock(tf2.genesis().get_id().into())
+        );
+        let mut prev_id = tf1.genesis().get_id().into();
         for _ in 0..rng.gen_range(100..250) {
             let block = tf1
                 .make_block_builder()
-                .with_parent(prev.id)
+                .with_parent(prev_id)
                 .add_test_transaction_from_best_block(&mut rng)
                 .build();
-            prev = TestBlockInfo::from_block(&block);
+            prev_id = block.get_id().into();
             tf1.process_block(block.clone(), BlockSource::Local).unwrap();
             tf2.process_block(block.clone(), BlockSource::Local).unwrap();
             assert_eq!(tf1.best_block_id(), tf2.best_block_id());
         }
 
-        tf1.create_chain(&prev.id, rng.gen_range(32..256), &mut rng).unwrap();
-        tf2.create_chain(&prev.id, rng.gen_range(256..512), &mut rng).unwrap();
+        tf1.create_chain(&prev_id, rng.gen_range(32..256), &mut rng).unwrap();
+        tf2.create_chain(&prev_id, rng.gen_range(256..512), &mut rng).unwrap();
 
         let locator = tf1.chainstate.get_locator().unwrap();
         let headers = tf2.chainstate.get_headers(locator).unwrap();
@@ -227,21 +230,21 @@ fn filter_already_existing_blocks(#[case] seed: Seed) {
         let mut tf1 = TestFramework::default();
         let mut tf2 = TestFramework::default();
 
-        let mut prev1 = TestBlockInfo::from_genesis(&tf1.genesis());
+        let mut prev1_id = tf1.genesis().get_id().into();
         for _ in 0..rng.gen_range(8..16) {
             let block = tf1
                 .make_block_builder()
-                .with_parent(prev1.id)
+                .with_parent(prev1_id)
                 .add_test_transaction_from_best_block(&mut rng)
                 .build();
-            prev1 = TestBlockInfo::from_block(&block);
+            prev1_id = block.get_id().into();
             tf1.process_block(block.clone(), BlockSource::Local).unwrap();
             tf2.process_block(block.clone(), BlockSource::Local).unwrap();
             assert_eq!(tf1.best_block_id(), tf2.best_block_id());
         }
 
         let limit = rng.gen_range(32..256);
-        let mut prev2 = prev1.clone();
+        let mut prev2_id = prev1_id;
         let mut headers1 = vec![];
         let mut headers2 = vec![];
 
@@ -250,20 +253,20 @@ fn filter_already_existing_blocks(#[case] seed: Seed) {
             if i <= limit {
                 let block = tf1
                     .make_block_builder()
-                    .with_parent(prev1.id)
-                    .add_test_transaction_with_parent(prev1.id, &mut rng)
+                    .with_parent(prev1_id)
+                    .add_test_transaction_with_parent(prev1_id, &mut rng)
                     .build();
-                prev1 = TestBlockInfo::from_block(&block);
+                prev1_id = block.get_id().into();
                 headers1.push(block.header().clone());
                 tf1.process_block(block, BlockSource::Local).unwrap();
             }
 
             let block = tf2
                 .make_block_builder()
-                .with_parent(prev2.id)
-                .add_test_transaction_with_parent(prev2.id, &mut rng)
+                .with_parent(prev2_id)
+                .add_test_transaction_with_parent(prev2_id, &mut rng)
                 .build();
-            prev2 = TestBlockInfo::from_block(&block);
+            prev2_id = block.get_id().into();
             headers2.push(block.header().clone());
             tf2.process_block(block, BlockSource::Local).unwrap();
         }
@@ -294,14 +297,14 @@ fn filter_already_existing_blocks_detached_headers(#[case] seed: Seed) {
         let mut tf1 = TestFramework::default();
         let mut tf2 = TestFramework::default();
 
-        let mut prev = TestBlockInfo::from_genesis(&tf1.genesis());
+        let mut prev_id = tf1.genesis().get_id().into();
         for _ in 0..rng.gen_range(8..16) {
             let block = tf1
                 .make_block_builder()
-                .with_parent(prev.id)
+                .with_parent(prev_id)
                 .add_test_transaction_from_best_block(&mut rng)
                 .build();
-            prev = TestBlockInfo::from_block(&block);
+            prev_id = block.get_id().into();
             tf1.process_block(block.clone(), BlockSource::Local).unwrap();
             tf2.process_block(block.clone(), BlockSource::Local).unwrap();
             assert_eq!(tf1.best_block_id(), tf2.best_block_id());
@@ -311,10 +314,10 @@ fn filter_already_existing_blocks_detached_headers(#[case] seed: Seed) {
         for _ in 0..rng.gen_range(3..10) {
             let block = tf2
                 .make_block_builder()
-                .with_parent(prev.id)
-                .add_test_transaction_with_parent(prev.id, &mut rng)
+                .with_parent(prev_id)
+                .add_test_transaction_with_parent(prev_id, &mut rng)
                 .build();
-            prev = TestBlockInfo::from_block(&block);
+            prev_id = block.get_id().into();
             headers.push(block.header().clone());
             tf2.process_block(block, BlockSource::Local).unwrap();
         }

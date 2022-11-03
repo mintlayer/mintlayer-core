@@ -17,7 +17,7 @@ use chainstate::{
     is_rfc3986_valid_symbol, BlockError, ChainstateError, CheckBlockError,
     CheckBlockTransactionsError, TokensError,
 };
-use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::tokens::OutputValue;
 use common::chain::tokens::TokenData;
 use common::chain::Block;
@@ -44,7 +44,7 @@ use test_utils::{
 fn nft_name_too_long(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -101,7 +101,7 @@ fn nft_name_too_long(#[case] seed: Seed) {
 fn nft_empty_name(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -153,7 +153,7 @@ fn nft_empty_name(#[case] seed: Seed) {
 fn nft_invalid_name(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -218,7 +218,7 @@ fn nft_invalid_name(#[case] seed: Seed) {
 fn nft_ticker_too_long(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -276,7 +276,7 @@ fn nft_ticker_too_long(#[case] seed: Seed) {
 fn nft_empty_ticker(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -329,7 +329,7 @@ fn nft_empty_ticker(#[case] seed: Seed) {
 fn nft_invalid_ticker(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -394,7 +394,7 @@ fn nft_invalid_ticker(#[case] seed: Seed) {
 fn nft_description_too_long(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -452,7 +452,7 @@ fn nft_description_too_long(#[case] seed: Seed) {
 fn nft_empty_description(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -505,7 +505,7 @@ fn nft_empty_description(#[case] seed: Seed) {
 fn nft_invalid_description(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -569,7 +569,7 @@ fn nft_invalid_description(#[case] seed: Seed) {
 fn nft_icon_uri_too_long(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
@@ -626,7 +626,7 @@ fn nft_icon_uri_too_long(#[case] seed: Seed) {
 fn nft_icon_uri_empty(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -676,7 +676,8 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
         );
 
         let block = tf.block(*block_index.block_id());
-        let outputs = &TestBlockInfo::from_block(&block).txns[0].1;
+        let outputs =
+            tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
         assert_eq!(issuance_output.value(), &output_value);
@@ -689,7 +690,7 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
 fn nft_icon_uri_invalid(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -756,7 +757,7 @@ fn nft_icon_uri_invalid(#[case] seed: Seed) {
 fn nft_metadata_uri_too_long(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         // Metadata URI is too long
@@ -814,7 +815,7 @@ fn nft_metadata_uri_too_long(#[case] seed: Seed) {
 fn nft_metadata_uri_empty(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
@@ -863,7 +864,8 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
         );
 
         let block = tf.block(*block_index.block_id());
-        let outputs = &TestBlockInfo::from_block(&block).txns[0].1;
+        let outputs =
+            tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
         assert_eq!(issuance_output.value(), &output_value);
@@ -876,7 +878,7 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
 fn nft_metadata_uri_invalid(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -943,7 +945,7 @@ fn nft_metadata_uri_invalid(#[case] seed: Seed) {
 fn nft_media_uri_too_long(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         // Media URI is too long
@@ -1001,7 +1003,7 @@ fn nft_media_uri_too_long(#[case] seed: Seed) {
 fn nft_media_uri_empty(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
@@ -1052,7 +1054,8 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
         );
 
         let block = tf.block(*block_index.block_id());
-        let outputs = &TestBlockInfo::from_block(&block).txns[0].1;
+        let outputs =
+            tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
         assert_eq!(issuance_output.value(), &output_value);
@@ -1065,7 +1068,7 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
 fn nft_media_uri_invalid(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -1180,7 +1183,7 @@ fn new_block_with_media_hash(
 fn nft_media_hash_too_short(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
         let min_hash_len = tf.chainstate.get_chain_config().min_hash_len();
 
@@ -1210,7 +1213,7 @@ fn nft_media_hash_too_short(#[case] seed: Seed) {
 fn nft_media_hash_too_long(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
         let max_hash_len = tf.chainstate.get_chain_config().max_hash_len();
 
@@ -1240,7 +1243,7 @@ fn nft_media_hash_too_long(#[case] seed: Seed) {
 fn nft_media_hash_valid(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let min_hash_len = tf.chainstate.get_chain_config().min_hash_len();
@@ -1268,7 +1271,8 @@ fn nft_media_hash_valid(#[case] seed: Seed) {
             let _ = tf.process_block(block, chainstate::BlockSource::Local).unwrap();
 
             let block = tf.block(block_id);
-            let outputs = &TestBlockInfo::from_block(&block).txns[0].1;
+            let outputs =
+                tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
             let issuance_output = &outputs[0];
 
             match issuance_output.value().token_data().unwrap() {
@@ -1287,7 +1291,7 @@ fn nft_media_hash_valid(#[case] seed: Seed) {
 fn nft_valid_case(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
-        let outpoint_source_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -1338,7 +1342,8 @@ fn nft_valid_case(#[case] seed: Seed) {
         );
 
         let block = tf.block(*block_index.block_id());
-        let outputs = &TestBlockInfo::from_block(&block).txns[0].1;
+        let outputs =
+            tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
         assert_eq!(issuance_output.value(), &output_value.into());

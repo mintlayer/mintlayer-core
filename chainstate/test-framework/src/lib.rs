@@ -18,7 +18,6 @@
 mod block_builder;
 mod framework;
 mod framework_builder;
-mod test_block_info;
 mod transaction_builder;
 mod tx_verification_strategy;
 mod utils;
@@ -30,10 +29,11 @@ pub type TestStore = chainstate_storage::inmemory::Store;
 pub type TestChainstate = Box<dyn chainstate::chainstate_interface::ChainstateInterface>;
 
 pub use {
-    crate::utils::{anyonecanspend_address, empty_witness},
+    crate::utils::{
+        anyonecanspend_address, empty_witness, outputs_from_block, outputs_from_genesis,
+    },
     block_builder::BlockBuilder,
     framework::TestFramework,
     framework_builder::{OrphanErrorHandler, TestFrameworkBuilder, TxVerificationStrategy},
-    test_block_info::TestBlockInfo,
     transaction_builder::TransactionBuilder,
 };
