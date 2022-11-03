@@ -169,6 +169,10 @@ mod tests {
             Err(InvalidDerivationPathFormat)
         );
         assert_eq!(
+            DerivationPath::from_str("m/"),
+            Err(InvalidChildNumberFormat)
+        );
+        assert_eq!(
             DerivationPath::from_str("m/42"),
             Err(UnsupportedDerivationType)
         );
