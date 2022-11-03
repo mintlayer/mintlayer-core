@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod protocol;
-
 pub use protocol::{Protocol, ProtocolType};
 
-use std::{collections::BTreeSet, fmt::Display};
+mod protocol;
+
+use std::{collections::BTreeSet, fmt::Display, net::IpAddr};
 
 use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
@@ -210,4 +210,8 @@ pub enum ValidationResult {
 
     /// Message is not invalid but it shouldn't be forwarded to other peers
     Ignore,
+}
+
+pub trait GetIp {
+    fn ip(&self) -> IpAddr;
 }

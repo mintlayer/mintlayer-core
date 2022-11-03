@@ -29,9 +29,12 @@ use tokio::sync::{
 
 use crate::{
     error::DialError,
-    net::mock::{
-        transport::{GetIp, MockListener, MockStream, MockTransport},
-        types::Message,
+    net::{
+        mock::{
+            transport::{MockListener, MockStream, MockTransport},
+            types::Message,
+        },
+        types::GetIp,
     },
     P2pError, Result,
 };

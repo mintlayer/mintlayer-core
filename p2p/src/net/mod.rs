@@ -26,7 +26,7 @@ use std::{
 
 use async_trait::async_trait;
 
-use crate::{config, message, message::Announcement, net::mock::transport::GetIp};
+use crate::{config, message, message::Announcement, net::types::GetIp};
 
 /// [NetworkingService] provides the low-level network interface
 /// that each network service provider must implement

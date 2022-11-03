@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::net::IpAddr;
+
 use libp2p::{
     gossipsub::{IdentTopic as Topic, MessageAcceptance, MessageId, TopicHash},
     identify::IdentifyInfo,
@@ -27,6 +29,7 @@ use crate::{
     net::{
         self,
         libp2p::behaviour::sync_codec::message_types::{SyncRequest, SyncResponse},
+        types::GetIp,
     },
 };
 
@@ -230,4 +233,18 @@ pub enum Libp2pBehaviourEvent {
     Connectivity(ConnectivityEvent),
     Syncing(SyncingEvent),
     Control(ControlEvent),
+}
+
+impl GetIp for libp2p::Multiaddr {
+    fn ip(&self) -> IpAddr {
+        // TODO: This is ugly and incorrect.
+        while let Some(component) = self.iter().next() {
+            match component {
+                libp2p::multiaddr::Protocol::Ip4(a) => return a.into(),
+                libp2p::multiaddr::Protocol::Ip6(a) => return a.into(),
+                _ => continue,
+            }
+        }
+        panic!("Unable to get ip from the {:?} address", self)
+    }
 }

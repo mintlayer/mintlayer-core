@@ -13,11 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, hash::Hash, net::IpAddr, str::FromStr};
+use std::{fmt::Debug, hash::Hash, str::FromStr};
 
 use async_trait::async_trait;
 
-use crate::{net::mock::types::Message, Result};
+use crate::{
+    net::{mock::types::Message, types::GetIp},
+    Result,
+};
 
 /// An abstraction layer for creating and opening connections.
 #[async_trait]
@@ -56,23 +59,4 @@ pub trait MockStream: Send {
 
     /// Receives a message from a remote peer.
     async fn recv(&mut self) -> Result<Option<Message>>;
-}
-
-// TODO: Move somewhere.
-pub trait GetIp {
-    fn ip(&self) -> IpAddr;
-}
-
-impl GetIp for libp2p::Multiaddr {
-    fn ip(&self) -> IpAddr {
-        // TODO: This is ugly and incorrect.
-        while let Some(component) = self.iter().next() {
-            match component {
-                libp2p::multiaddr::Protocol::Ip4(a) => return a.into(),
-                libp2p::multiaddr::Protocol::Ip6(a) => return a.into(),
-                _ => continue,
-            }
-        }
-        panic!("Unable to get ip from the {:?} address", self)
-    }
 }

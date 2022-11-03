@@ -30,9 +30,12 @@ use serialization::{Decode, Encode};
 
 use crate::{
     constants::MAX_MESSAGE_SIZE,
-    net::mock::{
-        transport::{GetIp, MockListener, MockStream, MockTransport},
-        types::Message,
+    net::{
+        mock::{
+            transport::{MockListener, MockStream, MockTransport},
+            types::Message,
+        },
+        types::GetIp,
     },
     P2pError, Result,
 };

@@ -40,7 +40,10 @@ use logging::log;
 use crate::{
     config,
     error::P2pError,
-    net::{mock::transport::GetIp, types, NetworkingService},
+    net::{
+        types::{self, GetIp},
+        NetworkingService,
+    },
 };
 
 const BAN_DURATION: Duration = Duration::from_secs(60 * 60 * 24);
