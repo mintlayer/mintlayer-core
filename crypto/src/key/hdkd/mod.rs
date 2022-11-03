@@ -16,3 +16,4 @@
 pub mod chain_code;
 pub mod derivable;
 pub mod derivation_path;
+pub mod u31;

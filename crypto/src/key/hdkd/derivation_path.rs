@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use super::derivable::DerivationError;
+use super::u31::U31;
 use core::fmt;
 use std::fmt::{Formatter, Write};
 use std::str::FromStr;
@@ -22,7 +23,6 @@ const PREFIX: &str = "m";
 const SEPARATOR: &str = "/";
 const HARDENED_APOS: char = '\'';
 const HARDENED_H: char = 'h';
-const HARDENED_BIT: u32 = 0x80000000;
 
 /// BIP32-like child numbers. Currently we only support hardened derivations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
@@ -30,33 +30,35 @@ pub struct ChildNumber(DerivationType);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 enum DerivationType {
-    Hardened(u32),
+    Hardened(U31),
 }
 
 impl ChildNumber {
     /// Return a hardened child number
-    pub fn hardened(index: u32) -> Result<Self, DerivationError> {
-        if index & HARDENED_BIT == 0 {
-            Ok(ChildNumber(DerivationType::Hardened(index)))
-        } else {
-            Err(DerivationError::InvalidChildNumber(index))
-        }
+    pub fn from_hardened(index: U31) -> Result<Self, DerivationError> {
+        Ok(ChildNumber(DerivationType::Hardened(index)))
     }
 
-    /// Return a normal child number. Currently unsupported
-    fn normal(index: u32) -> Result<Self, DerivationError> {
-        if index & HARDENED_BIT == 0 {
-            // For the time being we don't support non-hardened derivations
-            Err(DerivationError::UnsupportedDerivationType)
+    /// Return a normal child number
+    fn from_normal(_index: U31) -> Result<Self, DerivationError> {
+        // For the time being we don't support non-hardened derivations
+        Err(DerivationError::UnsupportedDerivationType)
+    }
+
+    /// Return a child based on the hardened bit (MSB bit)
+    pub fn from_index_with_hardened_bit(index: u32) -> Result<Self, DerivationError> {
+        let (index_u31, msb) = U31::from_u32_with_msb(index);
+        if msb {
+            Self::from_hardened(index_u31)
         } else {
-            Err(DerivationError::InvalidChildNumber(index))
+            Self::from_normal(index_u31)
         }
     }
 
     /// Return a BIP32-like child number index that has the hardened bit set if needed
     pub fn to_encoded_index(self) -> u32 {
         match self.0 {
-            DerivationType::Hardened(i) => i | HARDENED_BIT,
+            DerivationType::Hardened(i) => i.into_encoded_with_msb(true),
         }
     }
 
@@ -88,12 +90,12 @@ impl FromStr for ChildNumber {
             return Err(DerivationError::InvalidChildNumberFormat);
         }
 
-        let index = index_str.parse().map_err(|_| DerivationError::InvalidChildNumberFormat)?;
+        let index = U31::from_str(index_str)?;
 
         if is_hardened {
-            ChildNumber::hardened(index)
+            ChildNumber::from_hardened(index)
         } else {
-            ChildNumber::normal(index)
+            ChildNumber::from_normal(index)
         }
     }
 }
@@ -252,41 +254,41 @@ mod tests {
         assert_eq!(DerivationPath::from_str("m"), Ok(vec![].into()));
         assert_eq!(
             DerivationPath::from_str("m/0'"),
-            Ok(vec![ChildNumber::hardened(0).unwrap()].into())
+            Ok(vec![ChildNumber::from_hardened(0.try_into().unwrap()).unwrap()].into())
         );
         assert_eq!(
             DerivationPath::from_str("m/0h/1'/2'"),
             Ok(vec![
-                ChildNumber::hardened(0).unwrap(),
-                ChildNumber::hardened(1).unwrap(),
-                ChildNumber::hardened(2).unwrap(),
+                ChildNumber::from_hardened(0.try_into().unwrap()).unwrap(),
+                ChildNumber::from_hardened(1.try_into().unwrap()).unwrap(),
+                ChildNumber::from_hardened(2.try_into().unwrap()).unwrap(),
             ]
             .into())
         );
         assert_eq!(
             DerivationPath::from_str("m/0'/1'/2h/2h"),
             Ok(vec![
-                ChildNumber::hardened(0).unwrap(),
-                ChildNumber::hardened(1).unwrap(),
-                ChildNumber::hardened(2).unwrap(),
-                ChildNumber::hardened(2).unwrap(),
+                ChildNumber::from_hardened(0.try_into().unwrap()).unwrap(),
+                ChildNumber::from_hardened(1.try_into().unwrap()).unwrap(),
+                ChildNumber::from_hardened(2.try_into().unwrap()).unwrap(),
+                ChildNumber::from_hardened(2.try_into().unwrap()).unwrap(),
             ]
             .into())
         );
         assert_eq!(
             DerivationPath::from_str("m/0'/1'/2'/2'/1000000000'"),
             Ok(vec![
-                ChildNumber::hardened(0).unwrap(),
-                ChildNumber::hardened(1).unwrap(),
-                ChildNumber::hardened(2).unwrap(),
-                ChildNumber::hardened(2).unwrap(),
-                ChildNumber::hardened(1000000000).unwrap(),
+                ChildNumber::from_hardened(0.try_into().unwrap()).unwrap(),
+                ChildNumber::from_hardened(1.try_into().unwrap()).unwrap(),
+                ChildNumber::from_hardened(2.try_into().unwrap()).unwrap(),
+                ChildNumber::from_hardened(2.try_into().unwrap()).unwrap(),
+                ChildNumber::from_hardened(1000000000.try_into().unwrap()).unwrap(),
             ]
             .into())
         );
         assert_eq!(
             DerivationPath::from_str("m/2147483647'"),
-            Ok(vec![ChildNumber::hardened(2147483647).unwrap()].into())
+            Ok(vec![ChildNumber::from_hardened(2147483647.try_into().unwrap()).unwrap()].into())
         );
         assert_eq!(
             DerivationPath::from_str("m/2147483648'"),

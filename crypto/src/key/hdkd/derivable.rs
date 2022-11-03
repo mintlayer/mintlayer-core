@@ -58,13 +58,15 @@ mod tests {
         let path = DerivationPath::from_str("m/1'/2'/3'").unwrap();
         let derived = dummy.derive_path(&path).unwrap();
         let mut expected = DummyDerivable(vec![
-            ChildNumber::hardened(1).unwrap(),
-            ChildNumber::hardened(2).unwrap(),
-            ChildNumber::hardened(3).unwrap(),
+            ChildNumber::from_hardened(1.try_into().unwrap()).unwrap(),
+            ChildNumber::from_hardened(2.try_into().unwrap()).unwrap(),
+            ChildNumber::from_hardened(3.try_into().unwrap()).unwrap(),
         ]);
         assert_eq!(derived, expected);
-        let derived = derived.derive_child(ChildNumber::hardened(4).unwrap()).unwrap();
-        expected.0.push(ChildNumber::hardened(4).unwrap());
+        let derived = derived
+            .derive_child(ChildNumber::from_hardened(4.try_into().unwrap()).unwrap())
+            .unwrap();
+        expected.0.push(ChildNumber::from_hardened(4.try_into().unwrap()).unwrap());
         assert_eq!(derived, expected);
     }
 }

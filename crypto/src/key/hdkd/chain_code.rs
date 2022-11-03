@@ -18,7 +18,13 @@ use super::derivation_path::ChildNumber;
 pub const CHAINCODE_LENGTH: usize = 32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-pub struct ChainCode([u8; 32]);
+pub struct ChainCode([u8; CHAINCODE_LENGTH]);
+
+impl ChainCode {
+    pub fn into_array(self) -> [u8; CHAINCODE_LENGTH] {
+        self.0
+    }
+}
 
 impl From<[u8; CHAINCODE_LENGTH]> for ChainCode {
     fn from(arr: [u8; 32]) -> Self {
