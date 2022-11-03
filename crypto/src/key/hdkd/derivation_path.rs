@@ -165,6 +165,10 @@ mod tests {
     #[test]
     fn test_parse_derivation_path() {
         assert_eq!(
+            DerivationPath::from_str(""),
+            Err(InvalidDerivationPathFormat)
+        );
+        assert_eq!(
             DerivationPath::from_str("m/42"),
             Err(UnsupportedDerivationType)
         );
