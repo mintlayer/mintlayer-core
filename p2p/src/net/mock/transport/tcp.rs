@@ -35,7 +35,7 @@ use crate::{
             transport::{MockListener, MockStream, MockTransport},
             types::Message,
         },
-        types::GetIp,
+        AsBannableAddress,
     },
     P2pError, Result,
 };
@@ -46,6 +46,7 @@ pub struct TcpMockTransport {}
 #[async_trait]
 impl MockTransport for TcpMockTransport {
     type Address = SocketAddr;
+    type BannableAddress = IpAddr;
     type Listener = TcpListener;
     type Stream = TcpMockStream;
 
@@ -177,9 +178,11 @@ impl Encoder<Message> for EncoderDecoder {
     }
 }
 
-impl GetIp for SocketAddr {
-    fn ip(&self) -> IpAddr {
-        self.ip()
+impl AsBannableAddress for SocketAddr {
+    type BannableAddress = IpAddr;
+
+    fn as_bannable(&self) -> Option<Self::BannableAddress> {
+        Some(self.ip())
     }
 }
 

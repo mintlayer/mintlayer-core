@@ -113,6 +113,7 @@ where
     T: MockTransport,
 {
     type Address = T::Address;
+    type BannableAddress = T::BannableAddress;
     type PeerId = MockPeerId;
     type SyncingPeerRequestId = MockRequestId;
     type SyncingMessageId = MockMessageId;

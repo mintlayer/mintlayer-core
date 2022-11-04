@@ -46,7 +46,7 @@ use crate::{
     net::{
         self,
         types::{Protocol, ProtocolType},
-        ConnectivityService, NetworkingService,
+        AsBannableAddress, ConnectivityService, NetworkingService,
     },
 };
 
@@ -224,8 +224,12 @@ where
             !self.peerdb.is_active_peer(&info.peer_id),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
+
+        let bannable_address = address.as_bannable().ok_or(P2pError::ProtocolError(
+            ProtocolError::UnableToBanAddress(format!("{address:?}")),
+        ))?;
         ensure!(
-            !self.peerdb.is_address_banned(&address),
+            !self.peerdb.is_address_banned(&bannable_address),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
@@ -297,8 +301,12 @@ where
             !self.pending.contains_key(&address),
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
+
+        let bannable_address = address.as_bannable().ok_or(P2pError::ProtocolError(
+            ProtocolError::UnableToBanAddress(format!("{address:?}")),
+        ))?;
         ensure!(
-            !self.peerdb.is_address_banned(&address),
+            !self.peerdb.is_address_banned(&bannable_address),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 

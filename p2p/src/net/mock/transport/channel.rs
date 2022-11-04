@@ -13,12 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::BTreeMap,
-    io,
-    net::{IpAddr, Ipv4Addr},
-    sync::Mutex,
-};
+use std::{collections::BTreeMap, io, sync::Mutex};
 
 use async_trait::async_trait;
 use once_cell::sync::Lazy;
@@ -34,7 +29,7 @@ use crate::{
             transport::{MockListener, MockStream, MockTransport},
             types::Message,
         },
-        types::GetIp,
+        AsBannableAddress,
     },
     P2pError, Result,
 };
@@ -56,6 +51,7 @@ pub struct ChannelMockTransport {}
 #[async_trait]
 impl MockTransport for ChannelMockTransport {
     type Address = Address;
+    type BannableAddress = Address;
     type Listener = ChannelMockListener;
     type Stream = ChannelMockStream;
 
@@ -156,11 +152,11 @@ impl MockStream for ChannelMockStream {
     }
 }
 
-impl GetIp for Address {
-    fn ip(&self) -> IpAddr {
-        // Stub implementation. We only need an ip address to properly ban a peer and it isn't
-        // going to work with the channels anyway.
-        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))
+impl AsBannableAddress for Address {
+    type BannableAddress = Address;
+
+    fn as_bannable(&self) -> Option<Self::BannableAddress> {
+        Some(*self)
     }
 }
 

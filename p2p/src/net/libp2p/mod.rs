@@ -23,7 +23,7 @@ mod backend;
 mod tests;
 mod types;
 
-use std::sync::Arc;
+use std::{net::IpAddr, sync::Arc};
 
 use async_trait::async_trait;
 use libp2p::{
@@ -43,7 +43,7 @@ use logging::log;
 use crate::{
     config,
     error::{DialError, P2pError},
-    net::{libp2p::backend::Libp2pBackend, NetworkingService},
+    net::{libp2p::backend::Libp2pBackend, AsBannableAddress, NetworkingService},
 };
 
 #[derive(Debug)]
@@ -67,6 +67,7 @@ fn make_libp2p_keys() -> (
 #[async_trait]
 impl NetworkingService for Libp2pService {
     type Address = Multiaddr;
+    type BannableAddress = IpAddr;
     type PeerId = PeerId;
     type SyncingPeerRequestId = RequestId;
     type SyncingMessageId = MessageId;
@@ -128,5 +129,20 @@ impl NetworkingService for Libp2pService {
             Self::ConnectivityHandle::new(peer_id, cmd_tx.clone(), conn_rx),
             Self::SyncingMessagingHandle::new(cmd_tx, sync_rx),
         ))
+    }
+}
+
+impl AsBannableAddress for Multiaddr {
+    type BannableAddress = IpAddr;
+
+    fn as_bannable(&self) -> Option<Self::BannableAddress> {
+        while let Some(component) = self.iter().next() {
+            match component {
+                libp2p::multiaddr::Protocol::Ip4(a) => return Some(a.into()),
+                libp2p::multiaddr::Protocol::Ip6(a) => return Some(a.into()),
+                _ => continue,
+            }
+        }
+        None
     }
 }

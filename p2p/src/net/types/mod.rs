@@ -17,7 +17,7 @@ pub use protocol::{Protocol, ProtocolType};
 
 mod protocol;
 
-use std::{collections::BTreeSet, fmt::Display, net::IpAddr};
+use std::{collections::BTreeSet, fmt::Display};
 
 use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
@@ -210,11 +210,4 @@ pub enum ValidationResult {
 
     /// Message is not invalid but it shouldn't be forwarded to other peers
     Ignore,
-}
-
-// TODO: This can be removed when libp2p and "channels transport" are removed.
-/// This trait is needed to get an ip address from different addresses that are used by different
-/// p2p backends, such as SocketAddr and MultiAddr.
-pub trait GetIp {
-    fn ip(&self) -> IpAddr;
 }

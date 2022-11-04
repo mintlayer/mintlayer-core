@@ -26,13 +26,16 @@ use std::{
 
 use async_trait::async_trait;
 
-use crate::{config, message, message::Announcement, net::types::GetIp};
+use crate::{config, message, message::Announcement};
 
 /// [NetworkingService] provides the low-level network interface
 /// that each network service provider must implement
 #[async_trait]
 pub trait NetworkingService {
-    /// Generic socket address that the underlying implementation uses
+    /// A generic network address.
+    ///
+    /// Although the `Address` allows a fallible conversion to `BannableAddress`, a valid address
+    /// must be able to be successfully converted into a bannable address.
     ///
     /// # Examples
     /// For an implementation built on `TcpListener`, the address format is:
@@ -40,7 +43,21 @@ pub trait NetworkingService {
     ///
     /// For an implementation built on libp2p, the address format is:
     ///     `/ip4/0.0.0.0/tcp/8888/p2p/<peer ID>`
-    type Address: Clone + Debug + Eq + Hash + Send + Sync + ToString + FromStr + GetIp;
+    type Address: Clone
+        + Debug
+        + Eq
+        + Hash
+        + Send
+        + Sync
+        + ToString
+        + FromStr
+        + AsBannableAddress<BannableAddress = Self::BannableAddress>;
+
+    /// An address type that can be banned.
+    ///
+    /// Usually it is part of the `NetworkingService::Address`. For example for a socket address
+    /// that consists of an IP address and a port we want to ban the IP address.
+    type BannableAddress: Debug + Eq + Ord + Send;
 
     /// Unique ID assigned to a peer on the network
     type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString + FromStr;
@@ -164,4 +181,12 @@ where
 
     /// Poll syncing-related event from the networking service
     async fn poll_next(&mut self) -> crate::Result<types::SyncingEvent<T>>;
+}
+
+// TODO: We can require infallible conversion after getting rid of `libp2p::MultiAddr`.
+/// Represents a fallible conversion to a bannable address.
+pub trait AsBannableAddress {
+    type BannableAddress;
+
+    fn as_bannable(&self) -> Option<Self::BannableAddress>;
 }

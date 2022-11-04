@@ -30,7 +30,7 @@ use crate::{
             MockService,
         },
         types::{Protocol, ProtocolType},
-        ConnectivityService, NetworkingService,
+        AsBannableAddress, ConnectivityService, NetworkingService,
     },
     peer_manager::tests::{connect_services, default_protocols, make_peer_manager},
 };
@@ -48,7 +48,7 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut swarm1 = make_peer_manager::<T>(addr1.clone(), Arc::clone(&config)).await;
+    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
     let (address, peer_info) = connect_services::<T>(
@@ -60,6 +60,14 @@ where
 
     let peer_id = *swarm1.peer_connectivity_handle.peer_id();
     assert_eq!(swarm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
+    let addr1 = swarm1
+        .peer_connectivity_handle
+        .local_addr()
+        .await
+        .unwrap()
+        .unwrap()
+        .as_bannable()
+        .unwrap();
     assert!(swarm2.peerdb.is_address_banned(&addr1));
     assert!(std::matches!(
         swarm2.peer_connectivity_handle.poll_next().await,
@@ -95,7 +103,7 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut swarm1 = make_peer_manager::<T>(addr1.clone(), Arc::clone(&config)).await;
+    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
     let (address, peer_info) = connect_services::<T>(
@@ -107,6 +115,14 @@ where
 
     let peer_id = *swarm1.peer_connectivity_handle.peer_id();
     assert_eq!(swarm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
+    let addr1 = swarm1
+        .peer_connectivity_handle
+        .local_addr()
+        .await
+        .unwrap()
+        .unwrap()
+        .as_bannable()
+        .unwrap();
     assert!(swarm2.peerdb.is_address_banned(&addr1));
     assert!(std::matches!(
         swarm2.peer_connectivity_handle.poll_next().await,
@@ -155,7 +171,7 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut swarm1 = make_peer_manager::<T>(addr1.clone(), Arc::clone(&config)).await;
+    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
     let (address, peer_info) = connect_services::<T>(
@@ -167,6 +183,14 @@ where
 
     let peer_id = *swarm1.peer_connectivity_handle.peer_id();
     assert_eq!(swarm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
+    let addr1 = swarm1
+        .peer_connectivity_handle
+        .local_addr()
+        .await
+        .unwrap()
+        .unwrap()
+        .as_bannable()
+        .unwrap();
     assert!(swarm2.peerdb.is_address_banned(&addr1));
     assert!(std::matches!(
         swarm2.peer_connectivity_handle.poll_next().await,
@@ -221,8 +245,9 @@ async fn validate_invalid_outbound_connection() {
     // valid connection
     let peer_id = libp2p::PeerId::random();
     let address: Multiaddr = "/ip4/175.69.140.46".parse().unwrap();
+    let bannable_address = address.as_bannable().unwrap();
     let res = swarm.accept_connection(
-        address.clone(),
+        address,
         net::types::PeerInfo::<Libp2pService> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
@@ -233,7 +258,7 @@ async fn validate_invalid_outbound_connection() {
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(swarm.peerdb.is_active_peer(&peer_id));
-    assert!(!swarm.peerdb.is_address_banned(&address));
+    assert!(!swarm.peerdb.is_address_banned(&bannable_address));
 
     // invalid magic bytes
     let peer_id = libp2p::PeerId::random();
@@ -300,8 +325,9 @@ async fn validate_invalid_inbound_connection() {
     // valid connection
     let peer_id = libp2p::PeerId::random();
     let address: Multiaddr = "/ip4/114.212.230.173".parse().unwrap();
+    let bannable_address = address.as_bannable().unwrap();
     let res = swarm.accept_inbound_connection(
-        address.clone(),
+        address,
         net::types::PeerInfo::<Libp2pService> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
@@ -311,7 +337,7 @@ async fn validate_invalid_inbound_connection() {
         },
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(!swarm.peerdb.is_address_banned(&address));
+    assert!(!swarm.peerdb.is_address_banned(&bannable_address));
 
     // invalid magic bytes
     let peer_id = libp2p::PeerId::random();
