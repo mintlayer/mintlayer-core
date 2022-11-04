@@ -15,8 +15,9 @@
 
 use std::collections::BTreeSet;
 
+use crate::framework::BlockOutputs;
 use crate::utils::{create_multiple_utxo_data, create_new_outputs};
-use crate::{TestBlockInfo, TestFramework};
+use crate::{outputs_from_block, TestFramework};
 use chainstate::{BlockSource, ChainstateError};
 use chainstate_types::BlockIndex;
 use common::chain::OutPoint;
@@ -124,10 +125,8 @@ impl<'f> BlockBuilder<'f> {
         parent: Id<GenBlock>,
         rng: &mut impl Rng,
     ) -> Self {
-        let (witnesses, inputs, outputs) = self.make_test_inputs_outputs(
-            TestBlockInfo::from_id(&self.framework.chainstate, parent),
-            rng,
-        );
+        let (witnesses, inputs, outputs) =
+            self.make_test_inputs_outputs(self.framework.outputs_from_genblock(parent), rng);
         self.add_transaction(
             SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
                 .expect("invalid witness count"),
@@ -137,7 +136,7 @@ impl<'f> BlockBuilder<'f> {
     /// Same as `add_test_transaction_with_parent`, but uses reference to a block.
     pub fn add_test_transaction_from_block(self, parent: &Block, rng: &mut impl Rng) -> Self {
         let (witnesses, inputs, outputs) =
-            self.make_test_inputs_outputs(TestBlockInfo::from_block(parent), rng);
+            self.make_test_inputs_outputs(outputs_from_block(parent), rng);
         self.add_transaction(
             SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
                 .expect("invalid witness count"),
@@ -151,10 +150,11 @@ impl<'f> BlockBuilder<'f> {
         spend_from: Id<Block>,
         rng: &mut impl Rng,
     ) -> Self {
-        let parent = TestBlockInfo::from_id(&self.framework.chainstate, parent);
-        let (mut witnesses, mut inputs, outputs) = self.make_test_inputs_outputs(parent, rng);
-        let spend_from = TestBlockInfo::from_id(&self.framework.chainstate, spend_from.into());
-        inputs.push(TxInput::new(spend_from.txns[0].0.clone(), 0));
+        let parent_outputs = self.framework.outputs_from_genblock(parent);
+        let (mut witnesses, mut inputs, outputs) =
+            self.make_test_inputs_outputs(parent_outputs, rng);
+        let spend_from = self.framework.outputs_from_genblock(spend_from.into());
+        inputs.push(TxInput::new(spend_from.keys().next().unwrap().clone(), 0));
         witnesses.push(InputWitness::NoSignature(None));
         self.transactions.push(
             SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
@@ -221,11 +221,10 @@ impl<'f> BlockBuilder<'f> {
     /// Produces a new set of inputs and outputs from the transactions of the specified block.
     fn make_test_inputs_outputs(
         &self,
-        parent: TestBlockInfo,
+        outputs: BlockOutputs,
         rng: &mut impl Rng,
     ) -> (Vec<InputWitness>, Vec<TxInput>, Vec<TxOutput>) {
-        parent
-            .txns
+        outputs
             .into_iter()
             .flat_map(|(s, o)| create_new_outputs(&self.framework.chainstate, s, &o, rng))
             .collect::<Vec<_>>()

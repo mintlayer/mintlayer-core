@@ -74,12 +74,12 @@ fn output_lock_until_height() {
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
 
         // create another block, and spend the first input from the previous block
-        let prev_block_info = tf.block_info(1);
+        let prev_block_outputs = tf.outputs_from_genblock(tf.block_id(1));
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(prev_block_info.txns[0].0.clone(), 0),
+                        TxInput::new(prev_block_outputs.keys().next().unwrap().clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_anyone_can_spend_output(10000)
@@ -128,7 +128,7 @@ fn output_lock_until_height() {
         // now we should be able to spend it at block_height_that_unlocks
         assert_eq!(
             tf.best_block_id(),
-            tf.block_info(block_height_that_unlocks - 1).id
+            tf.block_id(block_height_that_unlocks - 1)
         );
         tf.make_block_builder()
             .add_transaction(
@@ -228,12 +228,12 @@ fn output_lock_for_block_count() {
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
 
         // create another block, and spend the first input from the previous block
-        let prev_block_info = tf.best_block_info();
+        let prev_block_outputs = tf.outputs_from_genblock(tf.best_block_id());
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(prev_block_info.txns[0].0.clone(), 0),
+                        TxInput::new(prev_block_outputs.keys().next().unwrap().clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_anyone_can_spend_output(10000)

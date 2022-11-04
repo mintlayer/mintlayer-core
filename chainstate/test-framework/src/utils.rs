@@ -13,15 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::TestChainstate;
+use crate::{framework::BlockOutputs, TestChainstate};
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{
         signature::inputsig::InputWitness,
         tokens::{OutputValue, TokenData, TokenTransfer},
-        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
+        Block, Destination, Genesis, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
-    primitives::Amount,
+    primitives::{Amount, Idable},
 };
 use crypto::random::Rng;
 use test_utils::nft_utils::*;
@@ -263,4 +263,31 @@ fn new_token_burn_output(
         .into(),
         OutputPurpose::Burn,
     )
+}
+
+pub fn outputs_from_genesis(genesis: &Genesis) -> BlockOutputs {
+    [(
+        OutPointSourceId::BlockReward(genesis.get_id().into()),
+        genesis.utxos().to_vec(),
+    )]
+    .into_iter()
+    .collect()
+}
+
+pub fn outputs_from_block(blk: &Block) -> BlockOutputs {
+    // This copied from TestBlockInfo which did not copy reward outputs before.
+    // Adding them now breaks tests::processing_tests::consensus_type::case_1.
+    // TODO(Pavel): Revert reward outputs and fix chainstate-test-suite.
+    std::iter::once((
+        OutPointSourceId::BlockReward(blk.get_id().into()),
+        blk.block_reward().outputs().to_vec(),
+    ))
+    .skip(1)
+    .chain(blk.transactions().iter().map(|tx| {
+        (
+            OutPointSourceId::Transaction(tx.transaction().get_id()),
+            tx.transaction().outputs().clone(),
+        )
+    }))
+    .collect()
 }

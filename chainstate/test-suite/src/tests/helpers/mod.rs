@@ -32,13 +32,13 @@ pub fn add_block_with_locked_output(
 ) -> (InputWitness, TxInput) {
     // Find the last block.
     let current_height = tf.best_block_index().block_height();
-    let prev_block_info = tf.block_info(current_height.into());
+    let prev_block_outputs = tf.outputs_from_genblock(tf.block_id(current_height.into()));
 
     tf.make_block_builder()
         .add_transaction(
             TransactionBuilder::new()
                 .add_input(
-                    TxInput::new(prev_block_info.txns[0].0.clone(), 0),
+                    TxInput::new(prev_block_outputs.keys().next().unwrap().clone(), 0),
                     InputWitness::NoSignature(None),
                 )
                 .add_anyone_can_spend_output(10000)
@@ -55,9 +55,9 @@ pub fn add_block_with_locked_output(
     let new_height = (current_height + BlockDistance::new(1)).unwrap();
     assert_eq!(tf.best_block_index().block_height(), new_height);
 
-    let block_info = tf.block_info(new_height.into());
+    let block_utxos = tf.outputs_from_genblock(tf.block_id(new_height.into()));
     (
         InputWitness::NoSignature(None),
-        TxInput::new(block_info.txns[0].0.clone(), 1),
+        TxInput::new(block_utxos.keys().next().unwrap().clone(), 1),
     )
 }
