@@ -2358,8 +2358,8 @@ dependencies = [
 
 [[package]]
 name = "lmdb-mintlayer"
-version = "0.15.0"
-source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.15.0#0cbb16fc2d4b0071f2b07a86c464d4f3d016710a"
+version = "0.15.2"
+source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.15.2#94151f1655547fcd3639863093ae4ce43540933f"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -2370,7 +2370,7 @@ dependencies = [
 [[package]]
 name = "lmdb-rkv-sys"
 version = "0.11.2"
-source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.15.0#0cbb16fc2d4b0071f2b07a86c464d4f3d016710a"
+source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.15.2#94151f1655547fcd3639863093ae4ce43540933f"
 dependencies = [
  "cc",
  "libc",
