@@ -177,14 +177,14 @@ impl<T: NetworkingService> PeerDb<T> {
 
     /// Checks if the given address is banned.
     pub fn is_address_banned(&mut self, address: &T::BannableAddress) -> bool {
-        if let Some(banned_till) = self.banned.get(&address) {
+        if let Some(banned_till) = self.banned.get(address) {
             // Check if the ban has expired.
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 // This can fail only if `SystemTime::now()` returns the time before `UNIX_EPOCH`.
                 .expect("Invalid system time");
             if now > *banned_till {
-                self.banned.remove(&address);
+                self.banned.remove(address);
             } else {
                 return true;
             }
