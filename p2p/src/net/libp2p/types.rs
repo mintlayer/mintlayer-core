@@ -235,9 +235,9 @@ pub enum Libp2pBehaviourEvent {
     Control(ControlEvent),
 }
 
-impl GetIp for libp2p::Multiaddr {
+impl GetIp for Multiaddr {
     fn ip(&self) -> IpAddr {
-        // TODO: This is ugly and incorrect.
+        // TODO: This isn't the best solution, but it will be removed along with libp2p.
         while let Some(component) = self.iter().next() {
             match component {
                 libp2p::multiaddr::Protocol::Ip4(a) => return a.into(),

@@ -212,6 +212,9 @@ pub enum ValidationResult {
     Ignore,
 }
 
+// TODO: This can be removed when libp2p and "channels transport" are removed.
+/// This trait is needed to get an ip address from different addresses that are used by different
+/// p2p backends, such as SocketAddr and MultiAddr.
 pub trait GetIp {
     fn ip(&self) -> IpAddr;
 }
