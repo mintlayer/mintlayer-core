@@ -13,16 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{BlockBuilder, TestBlockInfo, TestFrameworkBuilder, TestStore};
+use crate::{
+    utils::{outputs_from_block, outputs_from_genesis},
+    BlockBuilder, TestFrameworkBuilder, TestStore,
+};
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
-    chain::{Block, GenBlock, Genesis},
+    chain::{Block, GenBlock, GenBlockId, Genesis, OutPointSourceId, TxOutput},
     primitives::{id::WithId, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
 use crypto::random::Rng;
 use std::{
+    collections::BTreeMap,
     sync::{atomic::AtomicU64, Arc},
     time::Duration,
 };
@@ -37,6 +41,8 @@ pub struct TestFramework {
     // current time since epoch; if None, it means a custom TimeGetter was supplied and this is useless
     pub time_value: Option<Arc<AtomicU64>>,
 }
+
+pub type BlockOutputs = BTreeMap<OutPointSourceId, Vec<TxOutput>>;
 
 impl TestFramework {
     pub fn chainstate(self) -> super::TestChainstate {
@@ -137,12 +143,6 @@ impl TestFramework {
         self.best_block_index().block_id()
     }
 
-    /// Returns a test block information for the best block.
-    #[track_caller]
-    pub fn best_block_info(&self) -> TestBlockInfo {
-        TestBlockInfo::from_id(&self.chainstate, self.best_block_id())
-    }
-
     /// Returns a block identifier for the specified height.
     #[track_caller]
     pub fn block_id(&self, height: u64) -> Id<GenBlock> {
@@ -152,15 +152,17 @@ impl TestFramework {
             .unwrap()
     }
 
-    /// Returns a test block information for the specified height.
+    /// Returns the list of outputs from the selected block.
     #[track_caller]
-    pub fn block_info(&self, height: u64) -> TestBlockInfo {
-        let id = self
-            .chainstate
-            .get_block_id_from_height(&BlockHeight::from(height))
-            .unwrap()
-            .unwrap();
-        TestBlockInfo::from_id(&self.chainstate, id)
+    pub fn outputs_from_genblock(&self, id: Id<GenBlock>) -> BlockOutputs {
+        match id.classify(&self.chainstate.get_chain_config()) {
+            GenBlockId::Genesis(_) => {
+                outputs_from_genesis(self.chainstate.get_chain_config().genesis_block())
+            }
+            GenBlockId::Block(id) => {
+                outputs_from_block(&self.chainstate.get_block(id).unwrap().unwrap())
+            }
+        }
     }
 
     /// Returns a block corresponding to the specified identifier.

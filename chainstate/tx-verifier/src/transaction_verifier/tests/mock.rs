@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::transaction_verifier::TransactionSource;
+
 use super::storage::{
     TransactionVerifierStorageError, TransactionVerifierStorageMut, TransactionVerifierStorageRef,
 };
@@ -85,8 +87,8 @@ mockall::mock! {
             issuance_tx_id: &Id<Transaction>,
         ) -> Result<(), TransactionVerifierStorageError>;
 
-        fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), TransactionVerifierStorageError>;
-        fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), TransactionVerifierStorageError>;
+        fn set_undo_data(&mut self, tx_source: TransactionSource, undo: &BlockUndo) -> Result<(), TransactionVerifierStorageError>;
+        fn del_undo_data(&mut self, tx_source: TransactionSource) -> Result<(), TransactionVerifierStorageError>;
     }
 
     impl UtxosStorageRead for Store {

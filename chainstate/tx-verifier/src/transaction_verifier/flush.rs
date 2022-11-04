@@ -87,11 +87,11 @@ pub fn flush_to_storage(
     storage.batch_write(consumed.utxo_cache)?;
 
     // flush block undo
-    for (block_id, entry) in consumed.utxo_block_undo {
+    for (tx_source, entry) in consumed.utxo_block_undo {
         if entry.is_fresh {
-            storage.set_undo_data(block_id, &entry.undo)?;
+            storage.set_undo_data(tx_source, &entry.undo)?;
         } else if entry.undo.is_empty() {
-            storage.del_undo_data(block_id)?;
+            storage.del_undo_data(tx_source)?;
         } else {
             unreachable!("BlockUndo was not used up completely")
         }

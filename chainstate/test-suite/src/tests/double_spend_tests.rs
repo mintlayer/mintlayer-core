@@ -20,7 +20,6 @@ use chainstate::ChainstateError;
 use chainstate::CheckBlockError;
 use chainstate::CheckBlockTransactionsError;
 use chainstate::ConnectTransactionError;
-use chainstate::TxIndexError;
 use chainstate_test_framework::anyonecanspend_address;
 use chainstate_test_framework::empty_witness;
 use chainstate_test_framework::TestFramework;
@@ -96,7 +95,7 @@ fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TxIndexError(TxIndexError::MissingOutputOrSpent)
+                ConnectTransactionError::MissingOutputOrSpent
             ))
         );
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());

@@ -14,12 +14,12 @@
 // limitations under the License.
 
 use chainstate::{BlockError, BlockSource, ChainstateError, ConnectTransactionError};
-use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
         signature::inputsig::InputWitness,
-        tokens::{token_id, Metadata, NftIssuanceV1, OutputValue, TokenData, TokenTransferV1},
-        Destination, OutputPurpose, TxInput, TxOutput,
+        tokens::{token_id, Metadata, NftIssuance, OutputValue, TokenData, TokenTransfer},
+        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
@@ -56,8 +56,8 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
         // Issue a new NFT
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let issuance_data = NftIssuanceV1 {
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
+        let issuance_data = NftIssuance {
             metadata: Metadata {
                 creator: Some(random_creator()),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -99,7 +99,12 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .unwrap();
 
         let issuance_block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id = TestBlockInfo::from_block(&issuance_block).txns[0].0.clone();
+        let issuance_outpoint_id = tf
+            .outputs_from_genblock(issuance_block.get_id().into())
+            .keys()
+            .next()
+            .unwrap()
+            .clone();
         let token_id = token_id(issuance_block.transactions()[0].transaction()).unwrap();
 
         // B1 - burn NFT in mainchain
@@ -116,7 +121,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         }
@@ -133,7 +138,12 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block_b1 = tf.block(*block_index.block_id());
-        let b1_outpoint_id = TestBlockInfo::from_block(&block_b1).txns[0].0.clone();
+        let b1_outpoint_id = tf
+            .outputs_from_genblock(block_b1.get_id().into())
+            .keys()
+            .next()
+            .unwrap()
+            .clone();
 
         // Try to transfer burnt NFT
         let result = tf
@@ -145,7 +155,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         })
@@ -187,7 +197,12 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block_c1 = tf.block(*block_index.block_id());
-        let c1_outpoint_id = TestBlockInfo::from_block(&block_c1).txns[0].0.clone();
+        let c1_outpoint_id = tf
+            .outputs_from_genblock(block_c1.get_id().into())
+            .keys()
+            .next()
+            .unwrap()
+            .clone();
         // Let's add D1
         let block_index = tf
             .make_block_builder()
@@ -207,7 +222,12 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block_d1 = tf.block(*block_index.block_id());
-        let _ = TestBlockInfo::from_block(&block_d1).txns[0].0.clone();
+        let _ = tf
+            .outputs_from_genblock(block_d1.get_id().into())
+            .keys()
+            .next()
+            .unwrap()
+            .clone();
 
         // Second chain - B2
         let block_b2 = tf
@@ -220,7 +240,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         })
@@ -234,7 +254,11 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                     .build(),
             )
             .build();
-        let b2_outpoint_id = TestBlockInfo::from_block(&block_b2).txns[0].0.clone();
+        let b2_outpoint_id = chainstate_test_framework::outputs_from_block(&block_b2)
+            .keys()
+            .next()
+            .unwrap()
+            .clone();
         assert!(
             tf.process_block(block_b2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
@@ -255,7 +279,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         }
@@ -269,7 +293,11 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                     .build(),
             )
             .build();
-        let c2_outpoint_id = TestBlockInfo::from_block(&block_c2).txns[0].0.clone();
+        let c2_outpoint_id = chainstate_test_framework::outputs_from_block(&block_c2)
+            .keys()
+            .next()
+            .unwrap()
+            .clone();
         assert!(
             tf.process_block(block_c2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
@@ -290,7 +318,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         }
@@ -304,7 +332,11 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                     .build(),
             )
             .build();
-        let d2_outpoint_id = TestBlockInfo::from_block(&block_d2).txns[0].0.clone();
+        let d2_outpoint_id = chainstate_test_framework::outputs_from_block(&block_d2)
+            .keys()
+            .next()
+            .unwrap()
+            .clone();
         assert!(
             tf.process_block(block_d2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
@@ -334,9 +366,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
         assert!(matches!(
             result,
             Err(ChainstateError::ProcessBlockError(
-                BlockError::StateUpdateFailed(ConnectTransactionError::TxIndexError(
-                    chainstate::TxIndexError::MissingOutputOrSpent
-                ))
+                BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
             ))
         ));
     })
@@ -357,7 +387,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
         // Issue a new NFT
-        let issuance_value = NftIssuanceV1 {
+        let issuance_value = NftIssuance {
             metadata: Metadata {
                 creator: Some(random_creator()),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -370,7 +400,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
             },
         };
         let genesis_id = tf.genesis().get_id();
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let block_index = tf
             .make_block_builder()
             .with_parent(genesis_id.into())

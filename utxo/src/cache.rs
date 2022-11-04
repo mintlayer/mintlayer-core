@@ -179,9 +179,9 @@ impl<'a> UtxosCache<'a> {
 
         tx.outputs()
             .iter()
-            // burned outputs should not be included into utxo set
-            .filter(|output| !output.purpose().is_burn())
             .enumerate()
+            // burned outputs should not be included into utxo set
+            .filter(|(_, output)| !output.purpose().is_burn())
             .try_for_each(|(idx, output)| {
                 let outpoint = OutPoint::new(id.clone(), idx as u32);
                 // by default no overwrite allowed.

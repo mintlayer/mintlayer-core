@@ -20,7 +20,7 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
-        tokens::{token_id, OutputValue, TokenData, TokenIssuanceV1, TokenTransferV1},
+        tokens::{token_id, OutputValue, TokenData, TokenIssuance, TokenTransfer},
         Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
@@ -139,7 +139,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::new(
-                TokenIssuanceV1 {
+                TokenIssuance {
                     token_ticker: "XXXX".as_bytes().to_vec(),
                     amount_to_issue: Amount::from_atoms(rng.gen_range(100_000..u128::MAX)),
                     number_of_decimals: rng.gen_range(1..18),
@@ -164,7 +164,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
-                TokenData::TokenTransferV1(TokenTransferV1 {
+                TokenData::TokenTransfer(TokenTransfer {
                     token_id,
                     amount: Amount::from_atoms(rng.gen_range(1..100_000)),
                 })

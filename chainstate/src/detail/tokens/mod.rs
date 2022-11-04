@@ -18,7 +18,7 @@ use self::check_utils::check_media_hash;
 use super::transaction_verifier::error::TokensError;
 use common::{
     chain::{
-        tokens::{NftIssuanceV1, TokenData},
+        tokens::{NftIssuance, TokenData},
         Block, ChainConfig, Transaction,
     },
     primitives::{Amount, Id, Idable},
@@ -46,7 +46,7 @@ pub fn check_tokens_transfer_data(
 
 pub fn check_nft_issuance_data(
     chain_config: &ChainConfig,
-    issuance: &NftIssuanceV1,
+    issuance: &NftIssuance,
     tx_id: Id<Transaction>,
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
@@ -157,10 +157,10 @@ pub fn check_tokens_data(
     source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
     match token_data {
-        TokenData::TokenTransferV1(transfer) => {
+        TokenData::TokenTransfer(transfer) => {
             check_tokens_transfer_data(source_block_id, tx, &transfer.amount)?;
         }
-        TokenData::TokenIssuanceV1(issuance) => {
+        TokenData::TokenIssuance(issuance) => {
             check_tokens_issuance_data(
                 chain_config,
                 &issuance.token_ticker,
@@ -171,7 +171,7 @@ pub fn check_tokens_data(
                 source_block_id,
             )?;
         }
-        TokenData::NftIssuanceV1(issuance) => {
+        TokenData::NftIssuance(issuance) => {
             check_nft_issuance_data(chain_config, issuance, tx.get_id(), source_block_id)?
         }
     }

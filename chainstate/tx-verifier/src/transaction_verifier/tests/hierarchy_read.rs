@@ -33,7 +33,7 @@ use utxo::{TxUndoWithSources, UtxosStorageRead};
 // Create the following hierarchy:
 //
 // TransactionVerifier -> TransactionVerifier -> MockStore
-// utxo2 & block_undo2    utxo1 & block_undo1    utxo0 & block_undo0
+// utxo2                  utxo1                  utxo0
 //
 // Check that data can be accessed through derived entities
 #[rstest]
@@ -41,44 +41,11 @@ use utxo::{TxUndoWithSources, UtxosStorageRead};
 #[case(Seed::from_entropy())]
 fn hierarchy_test_utxo(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
-
     let chain_config = ConfigBuilder::test_chain().build();
 
     let (outpoint0, utxo0) = create_utxo(&mut rng, 100);
-    let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
-    let (_, utxo0_undo) = create_utxo(&mut rng, 100);
-    let block_undo_0 = BlockUndo::new(
-        None,
-        BTreeMap::from([(
-            H256::random_using(&mut rng).into(),
-            TxUndoWithSources::new(vec![utxo0_undo], vec![]),
-        )]),
-    )
-    .unwrap();
-
     let (outpoint1, utxo1) = create_utxo(&mut rng, 1000);
-    let block_undo_id_1: Id<Block> = Id::new(H256::random_using(&mut rng));
-    let (_, utxo1_undo) = create_utxo(&mut rng, 100);
-    let block_undo_1 = BlockUndo::new(
-        None,
-        BTreeMap::from([(
-            H256::random_using(&mut rng).into(),
-            TxUndoWithSources::new(vec![utxo1_undo], vec![]),
-        )]),
-    )
-    .unwrap();
-
     let (outpoint2, utxo2) = create_utxo(&mut rng, 2000);
-    let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
-    let (_, utxo2_undo) = create_utxo(&mut rng, 100);
-    let block_undo_2 = BlockUndo::new(
-        None,
-        BTreeMap::from([(
-            H256::random_using(&mut rng).into(),
-            TxUndoWithSources::new(vec![utxo2_undo], vec![]),
-        )]),
-    )
-    .unwrap();
 
     let mut store = mock::MockStore::new();
     store
@@ -90,44 +57,20 @@ fn hierarchy_test_utxo(#[case] seed: Seed) {
         .times(2)
         .return_const(Ok(Some(utxo0.clone())));
     store
-        .expect_get_undo_data()
-        .with(eq(block_undo_id_0))
-        .times(2)
-        .return_const(Ok(Some(block_undo_0.clone())));
-    store
         .expect_get_utxo()
         .with(eq(outpoint2.clone()))
-        .times(1)
-        .return_const(Ok(None));
-    store
-        .expect_get_undo_data()
-        .with(eq(block_undo_id_2))
         .times(1)
         .return_const(Ok(None));
 
     let verifier1 = {
         let mut verifier = TransactionVerifier::new(&store, &chain_config);
         verifier.utxo_cache.add_utxo(&outpoint1, utxo1.clone(), false).unwrap();
-        verifier.utxo_block_undo.insert(
-            block_undo_id_1,
-            BlockUndoEntry {
-                undo: block_undo_1.clone(),
-                is_fresh: true,
-            },
-        );
         verifier
     };
 
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
         verifier.utxo_cache.add_utxo(&outpoint2, utxo2.clone(), false).unwrap();
-        verifier.utxo_block_undo.insert(
-            block_undo_id_2,
-            BlockUndoEntry {
-                undo: block_undo_2.clone(),
-                is_fresh: true,
-            },
-        );
         verifier
     };
 
@@ -152,6 +95,92 @@ fn hierarchy_test_utxo(#[case] seed: Seed) {
         verifier2.get_utxo(&outpoint2).unwrap().as_ref(),
         Some(&utxo2)
     );
+}
+
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+// block_undo2            block_undo1            block_undo0
+//
+// Check that data can be accessed through derived entities
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+    let chain_config = ConfigBuilder::test_chain().build();
+
+    let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let (_, utxo0_undo) = create_utxo(&mut rng, 100);
+    let block_undo_0 = BlockUndo::new(
+        None,
+        BTreeMap::from([(
+            H256::random_using(&mut rng).into(),
+            TxUndoWithSources::new(vec![utxo0_undo], vec![]),
+        )]),
+    )
+    .unwrap();
+
+    let block_undo_id_1: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let (_, utxo1_undo) = create_utxo(&mut rng, 100);
+    let block_undo_1 = BlockUndo::new(
+        None,
+        BTreeMap::from([(
+            H256::random_using(&mut rng).into(),
+            TxUndoWithSources::new(vec![utxo1_undo], vec![]),
+        )]),
+    )
+    .unwrap();
+
+    let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let (_, utxo2_undo) = create_utxo(&mut rng, 100);
+    let block_undo_2 = BlockUndo::new(
+        None,
+        BTreeMap::from([(
+            H256::random_using(&mut rng).into(),
+            TxUndoWithSources::new(vec![utxo2_undo], vec![]),
+        )]),
+    )
+    .unwrap();
+
+    let mut store = mock::MockStore::new();
+    store
+        .expect_get_best_block_for_utxos()
+        .return_const(Ok(Some(H256::zero().into())));
+    store
+        .expect_get_undo_data()
+        .with(eq(block_undo_id_0))
+        .times(2)
+        .return_const(Ok(Some(block_undo_0.clone())));
+    store
+        .expect_get_undo_data()
+        .with(eq(block_undo_id_2))
+        .times(1)
+        .return_const(Ok(None));
+
+    let verifier1 = {
+        let mut verifier = TransactionVerifier::new(&store, &chain_config);
+        verifier.utxo_block_undo.insert(
+            TransactionSource::Chain(block_undo_id_1),
+            BlockUndoEntry {
+                undo: block_undo_1.clone(),
+                is_fresh: true,
+            },
+        );
+        verifier
+    };
+
+    let verifier2 = {
+        let mut verifier = verifier1.derive_child();
+        verifier.utxo_block_undo.insert(
+            TransactionSource::Chain(block_undo_id_2),
+            BlockUndoEntry {
+                undo: block_undo_2.clone(),
+                is_fresh: true,
+            },
+        );
+        verifier
+    };
 
     assert_eq!(
         verifier1.get_undo_data(block_undo_id_0).unwrap().as_ref(),

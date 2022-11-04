@@ -17,13 +17,15 @@ use chainstate::{
     BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError, TokensError,
 };
-use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder};
+use common::chain::OutPointSourceId;
 use common::chain::{
     signature::inputsig::InputWitness,
-    tokens::{token_id, OutputValue, TokenData, TokenTransferV1},
+    tokens::{token_id, OutputValue, TokenData, TokenTransfer},
     Destination, OutputPurpose, TxInput, TxOutput,
 };
 use common::primitives::Amount;
+use common::primitives::Idable;
 use crypto::random::Rng;
 use rstest::rstest;
 use test_utils::{
@@ -38,7 +40,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
         let chain_config = tf.chainstate.get_chain_config();
         let token_min_issuance_fee = chain_config.token_min_issuance_fee();
@@ -67,7 +69,8 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
+        let issuance_outpoint_id =
+            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Burn more NFT than we have
@@ -80,7 +83,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(rng.gen_range(2..123)),
                         }
@@ -108,7 +111,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(0),
                         }
@@ -137,7 +140,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
         let chain_config = tf.chainstate.get_chain_config();
         let token_min_issuance_fee = chain_config.token_min_issuance_fee();
@@ -166,7 +169,8 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
+        let issuance_outpoint_id =
+            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Burn
@@ -179,7 +183,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         }
@@ -192,7 +196,8 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        let first_burn_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
+        let first_burn_outpoint_id =
+            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
 
         // Try to transfer burned tokens
         let result = tf
@@ -204,7 +209,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         })
@@ -217,7 +222,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToSpendBurnedAmount
+                ConnectTransactionError::MissingOutputOrSpent
             ))
         );
     })

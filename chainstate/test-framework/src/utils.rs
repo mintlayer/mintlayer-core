@@ -13,15 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::TestChainstate;
+use crate::{framework::BlockOutputs, TestChainstate};
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{
         signature::inputsig::InputWitness,
-        tokens::{OutputValue, TokenData, TokenTransferV1},
-        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
+        tokens::{OutputValue, TokenData, TokenTransfer},
+        Block, Destination, Genesis, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
-    primitives::Amount,
+    primitives::{Amount, Idable},
 };
 use crypto::random::Rng;
 use test_utils::nft_utils::*;
@@ -69,14 +69,14 @@ pub fn create_utxo_data(
             )
         }
         OutputValue::Token(token_data) => match &**token_data {
-            TokenData::TokenTransferV1(_transfer) => TxOutput::new(
+            TokenData::TokenTransfer(_transfer) => TxOutput::new(
                 OutputValue::Token(token_data.clone()),
                 OutputPurpose::Transfer(anyonecanspend_address()),
             ),
-            TokenData::TokenIssuanceV1(issuance) => {
+            TokenData::TokenIssuance(issuance) => {
                 new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)
             }
-            TokenData::NftIssuanceV1(_issuance) => {
+            TokenData::NftIssuance(_issuance) => {
                 new_token_transfer_output(chainstate, &outsrc, Amount::from_atoms(1))
             }
         },
@@ -149,7 +149,7 @@ pub fn create_multiple_utxo_data(
             }
         }
         OutputValue::Token(token_data) => match &**token_data {
-            TokenData::TokenTransferV1(transfer) => {
+            TokenData::TokenTransfer(transfer) => {
                 if rng.gen::<bool>() {
                     // burn transferred tokens
                     let amount_to_burn = if transfer.amount.into_atoms() > 1 {
@@ -158,7 +158,7 @@ pub fn create_multiple_utxo_data(
                         transfer.amount
                     };
                     vec![TxOutput::new(
-                        TokenTransferV1 {
+                        TokenTransfer {
                             token_id: transfer.token_id,
                             amount: amount_to_burn,
                         }
@@ -175,7 +175,7 @@ pub fn create_multiple_utxo_data(
                                 let amount =
                                     Amount::from_atoms(transfer.amount.into_atoms() / num_outputs);
                                 TxOutput::new(
-                                    TokenTransferV1 {
+                                    TokenTransfer {
                                         token_id: transfer.token_id,
                                         amount,
                                     }
@@ -193,7 +193,7 @@ pub fn create_multiple_utxo_data(
                     }
                 }
             }
-            TokenData::TokenIssuanceV1(issuance) => {
+            TokenData::TokenIssuance(issuance) => {
                 if rng.gen::<bool>() {
                     vec![new_token_burn_output(
                         chainstate,
@@ -204,7 +204,7 @@ pub fn create_multiple_utxo_data(
                     vec![new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)]
                 }
             }
-            TokenData::NftIssuanceV1(_issuance) => {
+            TokenData::NftIssuance(_issuance) => {
                 if rng.gen::<bool>() {
                     vec![new_token_burn_output(chainstate, &outsrc, Amount::from_atoms(1))]
                 } else {
@@ -227,7 +227,7 @@ fn new_token_transfer_output(
     amount: Amount,
 ) -> TxOutput {
     TxOutput::new(
-        TokenTransferV1 {
+        TokenTransfer {
             token_id: match outsrc {
                 OutPointSourceId::Transaction(prev_tx) => {
                     chainstate.get_token_id_from_issuance_tx(prev_tx).expect("ok").expect("some")
@@ -249,7 +249,7 @@ fn new_token_burn_output(
     amount_to_burn: Amount,
 ) -> TxOutput {
     TxOutput::new(
-        TokenTransferV1 {
+        TokenTransfer {
             token_id: match outsrc {
                 OutPointSourceId::Transaction(prev_tx) => {
                     chainstate.get_token_id_from_issuance_tx(prev_tx).expect("ok").expect("some")
@@ -263,4 +263,31 @@ fn new_token_burn_output(
         .into(),
         OutputPurpose::Burn,
     )
+}
+
+pub fn outputs_from_genesis(genesis: &Genesis) -> BlockOutputs {
+    [(
+        OutPointSourceId::BlockReward(genesis.get_id().into()),
+        genesis.utxos().to_vec(),
+    )]
+    .into_iter()
+    .collect()
+}
+
+pub fn outputs_from_block(blk: &Block) -> BlockOutputs {
+    // This copied from TestBlockInfo which did not copy reward outputs before.
+    // Adding them now breaks tests::processing_tests::consensus_type::case_1.
+    // TODO(Pavel): Revert reward outputs and fix chainstate-test-suite.
+    std::iter::once((
+        OutPointSourceId::BlockReward(blk.get_id().into()),
+        blk.block_reward().outputs().to_vec(),
+    ))
+    .skip(1)
+    .chain(blk.transactions().iter().map(|tx| {
+        (
+            OutPointSourceId::Transaction(tx.transaction().get_id()),
+            tx.transaction().outputs().clone(),
+        )
+    }))
+    .collect()
 }

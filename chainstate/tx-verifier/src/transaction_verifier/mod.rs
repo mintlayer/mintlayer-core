@@ -26,11 +26,9 @@ use self::{
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{CoinOrTokenId, ConsumedTokenIssuanceCache},
     tx_index_cache::TxIndexCache,
-    utils::get_output_token_id_and_amount,
 };
 use ::utils::ensure;
 use cached_operation::CachedInputsOperation;
-use fallible_iterator::FallibleIterator;
 
 use std::collections::{btree_map::Entry, BTreeMap};
 
@@ -55,11 +53,13 @@ mod token_issuance_cache;
 use self::token_issuance_cache::TokenIssuanceCache;
 
 mod utils;
-use self::utils::{check_transferred_amount, get_input_token_id_and_amount};
+use self::utils::{
+    calculate_total_outputs, check_transferred_amount, get_input_token_id_and_amount, get_total_fee,
+};
 
 // TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee`
 //       that essentially belongs to this type, but return Amount
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fee(pub Amount);
 
 pub struct Subsidy(pub Amount);
@@ -85,19 +85,27 @@ pub enum BlockTransactableRef<'a> {
     BlockReward(&'a WithId<Block>),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum TransactionSource {
-    Chain { new_block_index: BlockIndex },
-    Mempool { current_best: BlockIndex },
+    Chain(Id<Block>),
+    Mempool,
 }
 
-impl TransactionSource {
+pub enum TransactionSourceForConnect<'a> {
+    Chain { new_block_index: &'a BlockIndex },
+    Mempool { current_best: &'a BlockIndex },
+}
+
+impl<'a> TransactionSourceForConnect<'a> {
     /// The block height of the transaction to be connected
     /// For the mempool, it's the height of the next-to-be block
     /// For the chain, it's for the block being connected
     pub fn expected_block_height(&self) -> BlockHeight {
         match self {
-            TransactionSource::Chain { new_block_index } => new_block_index.block_height(),
-            TransactionSource::Mempool {
+            TransactionSourceForConnect::Chain { new_block_index } => {
+                new_block_index.block_height()
+            }
+            TransactionSourceForConnect::Mempool {
                 current_best: best_block_index,
             } => best_block_index.block_height().next_height(),
         }
@@ -105,8 +113,8 @@ impl TransactionSource {
 
     pub fn chain_block_index(&self) -> Option<&BlockIndex> {
         match self {
-            TransactionSource::Chain { new_block_index } => Some(new_block_index),
-            TransactionSource::Mempool { current_best: _ } => None,
+            TransactionSourceForConnect::Chain { new_block_index } => Some(new_block_index),
+            TransactionSourceForConnect::Mempool { current_best: _ } => None,
         }
     }
 }
@@ -116,7 +124,7 @@ impl TransactionSource {
 pub struct TransactionVerifierDelta {
     tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
     utxo_cache: ConsumedUtxoCache,
-    utxo_block_undo: BTreeMap<Id<Block>, BlockUndoEntry>,
+    utxo_block_undo: BTreeMap<TransactionSource, BlockUndoEntry>,
     token_issuance_cache: ConsumedTokenIssuanceCache,
 }
 
@@ -126,7 +134,7 @@ pub struct TransactionVerifier<'a, S> {
     storage_ref: &'a S,
     tx_index_cache: TxIndexCache,
     utxo_cache: UtxosCache<'a>,
-    utxo_block_undo: BTreeMap<Id<Block>, BlockUndoEntry>,
+    utxo_block_undo: BTreeMap<TransactionSource, BlockUndoEntry>,
     token_issuance_cache: TokenIssuanceCache,
     best_block: Id<GenBlock>,
 }
@@ -157,19 +165,6 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
             token_issuance_cache: TokenIssuanceCache::new(),
             best_block: self.best_block,
         }
-    }
-
-    fn calculate_total_outputs(
-        outputs: &[TxOutput],
-        include_issuance: Option<&Transaction>,
-    ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
-        let iter = outputs
-            .iter()
-            .map(|output| get_output_token_id_and_amount(output.value(), include_issuance));
-        let iter = fallible_iterator::convert(iter).filter_map(Ok).map_err(Into::into);
-
-        let result = AmountsMap::from_fallible_iter(iter)?;
-        Ok(result.take())
     }
 
     fn amount_from_outpoint(
@@ -219,29 +214,15 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         Ok(amounts_map.take())
     }
 
-    fn get_total_fee(
-        inputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
-        outputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,
-    ) -> Result<Fee, ConnectTransactionError> {
-        // TODO: fees should support tokens as well in the future
-        let outputs_total =
-            *outputs_total_map.get(&CoinOrTokenId::Coin).unwrap_or(&Amount::from_atoms(0));
-        let inputs_total =
-            *inputs_total_map.get(&CoinOrTokenId::Coin).unwrap_or(&Amount::from_atoms(0));
-        (inputs_total - outputs_total).map(Fee).ok_or(
-            ConnectTransactionError::TxFeeTotalCalcFailed(inputs_total, outputs_total),
-        )
-    }
-
     fn check_transferred_amounts_and_get_fee(
         &self,
         tx: &Transaction,
     ) -> Result<Fee, ConnectTransactionError> {
         let inputs_total_map = self.calculate_total_inputs(tx.inputs())?;
-        let outputs_total_map = Self::calculate_total_outputs(tx.outputs(), None)?;
+        let outputs_total_map = calculate_total_outputs(tx.outputs(), None)?;
 
         check_transferred_amount(&inputs_total_map, &outputs_total_map)?;
-        let total_fee = Self::get_total_fee(&inputs_total_map, &outputs_total_map)?;
+        let total_fee = get_total_fee(&inputs_total_map, &outputs_total_map)?;
 
         Ok(total_fee)
     }
@@ -310,7 +291,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                         TokensError::TokensInBlockReward,
                     ));
                 }
-                Ok(Self::calculate_total_outputs(outputs, None)?
+                Ok(calculate_total_outputs(outputs, None)?
                     .get(&CoinOrTokenId::Coin)
                     .cloned()
                     .unwrap_or(Amount::from_atoms(0)))
@@ -401,7 +382,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
 
     fn check_timelocks<T: Transactable>(
         &self,
-        tx_source: &TransactionSource,
+        tx_source: &TransactionSourceForConnect,
         tx: &T,
         spending_time: &BlockTimestamp,
     ) -> Result<(), ConnectTransactionError> {
@@ -417,18 +398,14 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 .utxo(outpoint)
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
-            // TODO: See if we can check timelocks for the current block without needing the block index.
-            //       The problem is that it won't be possible to use tx_verifier without the block index history
-            //       if this is not restricted with the 'if' condition. But the side effect is that all
-            //       timelock txs be rejected if they spend outputs from the same block.
             if utxo.output().has_timelock() {
                 let height = match utxo.source() {
                     utxo::UtxoSource::Blockchain(h) => *h,
                     utxo::UtxoSource::Mempool => match tx_source {
-                        TransactionSource::Chain { new_block_index: _ } => {
+                        TransactionSourceForConnect::Chain { new_block_index: _ } => {
                             unreachable!("Mempool utxos can never be reached from storage while connecting local transactions")
                         }
-                        TransactionSource::Mempool { current_best } => {
+                        TransactionSourceForConnect::Mempool { current_best } => {
                             current_best.block_height().next_height()
                         }
                     },
@@ -439,9 +416,9 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                         db_tx.get_gen_block_index(id)
                     };
 
-                let starting_point = match tx_source {
-                    TransactionSource::Chain { new_block_index } => new_block_index,
-                    TransactionSource::Mempool { current_best } => current_best,
+                let starting_point: &BlockIndex = match tx_source {
+                    TransactionSourceForConnect::Chain { new_block_index } => new_block_index,
+                    TransactionSourceForConnect::Mempool { current_best } => current_best,
                 };
 
                 let source_block_index = block_index_ancestor_getter(
@@ -469,50 +446,72 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         Ok(())
     }
 
+    fn read_block_undo(
+        &self,
+        tx_source: &TransactionSource,
+    ) -> Result<BlockUndo, ConnectTransactionError> {
+        match self.utxo_block_undo.get(tx_source) {
+            Some(entry) => Ok(entry.undo.clone()),
+            None => match tx_source {
+                TransactionSource::Chain(block_id) => {
+                    let block_undo = self
+                        .storage_ref
+                        .get_undo_data(*block_id)?
+                        .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
+                    Ok(block_undo)
+                }
+                TransactionSource::Mempool => Err(ConnectTransactionError::MissingMempoolTxsUndo),
+            },
+        }
+    }
+
     fn fetch_block_undo(
         &mut self,
-        block_id: &Id<Block>,
+        tx_source: &TransactionSource,
     ) -> Result<&mut BlockUndo, ConnectTransactionError> {
-        match self.utxo_block_undo.entry(*block_id) {
+        match self.utxo_block_undo.entry(*tx_source) {
             Entry::Occupied(entry) => Ok(&mut entry.into_mut().undo),
-            Entry::Vacant(entry) => {
-                let block_undo = self
-                    .storage_ref
-                    .get_undo_data(*block_id)?
-                    .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
-                Ok(&mut entry
-                    .insert(BlockUndoEntry {
-                        undo: block_undo,
-                        is_fresh: false,
-                    })
-                    .undo)
-            }
+            Entry::Vacant(entry) => match tx_source {
+                TransactionSource::Chain(block_id) => {
+                    let block_undo = self
+                        .storage_ref
+                        .get_undo_data(*block_id)?
+                        .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
+                    Ok(&mut entry
+                        .insert(BlockUndoEntry {
+                            undo: block_undo,
+                            is_fresh: false,
+                        })
+                        .undo)
+                }
+                TransactionSource::Mempool => Err(ConnectTransactionError::MissingMempoolTxsUndo),
+            },
         }
     }
 
     fn take_tx_undo(
         &mut self,
-        block_id: &Id<Block>,
+        tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
     ) -> Result<TxUndo, ConnectTransactionError> {
-        let block_undo = self.fetch_block_undo(block_id)?;
+        let block_undo = self.fetch_block_undo(tx_source)?;
 
         block_undo
             .take_tx_undo(tx_id)
-            .ok_or(ConnectTransactionError::MissingTxUndo(*tx_id, *block_id))
+            .ok_or(ConnectTransactionError::MissingTxUndo(*tx_id))
     }
 
     fn take_block_reward_undo(
         &mut self,
-        block_id: &Id<Block>,
+        tx_source: &TransactionSource,
     ) -> Result<Option<BlockRewardUndo>, ConnectTransactionError> {
-        Ok(self.fetch_block_undo(block_id)?.take_block_reward_undo())
+        Ok(self.fetch_block_undo(tx_source)?.take_block_reward_undo())
     }
 
-    fn get_or_create_block_undo(&mut self, block_id: &Id<Block>) -> &mut BlockUndo {
+    fn get_or_create_block_undo(&mut self, tx_source: &TransactionSource) -> &mut BlockUndo {
         &mut self
             .utxo_block_undo
-            .entry(*block_id)
+            .entry(*tx_source)
             .or_insert(BlockUndoEntry {
                 is_fresh: true,
                 undo: Default::default(),
@@ -522,17 +521,11 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
 
     pub fn connect_transaction(
         &mut self,
-        tx_source: &TransactionSource,
+        tx_source: &TransactionSourceForConnect,
         tx: &SignedTransaction,
         median_time_past: &BlockTimestamp,
     ) -> Result<Option<Fee>, ConnectTransactionError> {
-        let tx_index_fetcher =
-            |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
-
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
-
-        // pre-cache all inputs
-        self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
 
         // pre-cache token ids to check ensure it's not in the db when issuing
         self.token_issuance_cache.precache_token_issuance(
@@ -561,16 +554,32 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
             .connect_transaction(tx.transaction(), tx_source.expected_block_height())
             .map_err(ConnectTransactionError::from)?;
 
-        let tx_id = tx.transaction().get_id();
+        match tx_source {
+            TransactionSourceForConnect::Chain {
+                new_block_index: block_index,
+            } => {
+                // update tx index only for txs from main chain
 
-        // save spent utxos for undo
-        if let Some(id) = block_id {
-            self.get_or_create_block_undo(&id).insert_tx_undo(tx_id, tx_undo)?;
-        }
+                let tx_index_fetcher =
+                    |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
+                // pre-cache all inputs
+                self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
 
-        // mark tx index as spent
-        let spender = tx.transaction().get_id().into();
-        self.tx_index_cache.spend_tx_index_inputs(tx.inputs(), spender)?;
+                // mark tx index as spent
+                self.tx_index_cache
+                    .spend_tx_index_inputs(tx.inputs(), tx.transaction().get_id().into())?;
+
+                // save spent utxos for undo
+                self.get_or_create_block_undo(&TransactionSource::Chain(*block_index.block_id()))
+                    .insert_tx_undo(tx.transaction().get_id(), tx_undo)?;
+            }
+            TransactionSourceForConnect::Mempool { current_best: _ } => {
+                // save spent utxos for undo
+                let tx_id = tx.transaction().get_id();
+                self.get_or_create_block_undo(&TransactionSource::Mempool)
+                    .insert_tx_undo(tx_id, tx_undo)?;
+            }
+        };
 
         Ok(fee)
     }
@@ -607,7 +616,8 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
 
         if let Some(reward_undo) = reward_undo {
             // save spent utxos for undo
-            self.get_or_create_block_undo(&block_id).set_block_reward_undo(reward_undo);
+            self.get_or_create_block_undo(&TransactionSource::Chain(block_id))
+                .set_block_reward_undo(reward_undo);
         }
 
         if let Some(inputs) = reward_transactable.inputs() {
@@ -632,9 +642,8 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 )?;
 
                 self.connect_transaction(
-                    &TransactionSource::Chain {
-                        // TODO: get rid of this clone
-                        new_block_index: block_index.clone(),
+                    &TransactionSourceForConnect::Chain {
+                        new_block_index: block_index,
                     },
                     tx,
                     median_time_past,
@@ -651,6 +660,84 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         Ok(fee)
     }
 
+    pub fn can_disconnect_transaction(
+        &self,
+        tx_source: &TransactionSource,
+        tx_id: &Id<Transaction>,
+    ) -> Result<bool, ConnectTransactionError> {
+        match tx_source {
+            TransactionSource::Chain(block_id) => {
+                let current_block_height = self
+                    .storage_ref
+                    .get_gen_block_index(&(*block_id).into())?
+                    .ok_or_else(|| {
+                        ConnectTransactionError::BlockIndexCouldNotBeLoaded((*block_id).into())
+                    })?
+                    .block_height();
+                let best_block_height = self
+                    .storage_ref
+                    .get_gen_block_index(&self.best_block)?
+                    .ok_or(ConnectTransactionError::BlockIndexCouldNotBeLoaded(
+                        self.best_block,
+                    ))?
+                    .block_height();
+
+                if current_block_height < best_block_height {
+                    Ok(false)
+                } else {
+                    Ok(!self.read_block_undo(tx_source)?.has_children_of(tx_id))
+                }
+            }
+            TransactionSource::Mempool => {
+                Ok(!self.read_block_undo(tx_source)?.has_children_of(tx_id))
+            }
+        }
+    }
+
+    pub fn disconnect_transaction(
+        &mut self,
+        tx_source: &TransactionSource,
+        tx: &SignedTransaction,
+    ) -> Result<(), ConnectTransactionError> {
+        let tx_undo = match tx_source {
+            TransactionSource::Chain(_) => {
+                // update tx index only for txs from main chain
+
+                let tx_index_fetcher =
+                    |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
+                // pre-cache all inputs
+                self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
+
+                // unspend inputs
+                self.tx_index_cache.unspend_tx_index_inputs(tx.inputs())?;
+
+                self.take_tx_undo(tx_source, &tx.transaction().get_id())
+            }
+            TransactionSource::Mempool => {
+                let tx_id = tx.transaction().get_id();
+
+                if !self.fetch_block_undo(tx_source)?.has_children_of(&tx_id) {
+                    self.take_tx_undo(tx_source, &tx_id)
+                } else {
+                    return Err(ConnectTransactionError::TxUndoWithDependency(tx_id));
+                }
+            }
+        }?;
+
+        self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
+
+        // pre-cache token ids before removing them
+        self.token_issuance_cache.precache_token_issuance(
+            |id| self.storage_ref.get_token_aux_data(id),
+            tx.transaction(),
+        )?;
+
+        // Remove issued tokens
+        self.token_issuance_cache.unregister(tx.transaction())?;
+
+        Ok(())
+    }
+
     pub fn disconnect_transactable(
         &mut self,
         spend_ref: BlockTransactableRef,
@@ -658,40 +745,22 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
         // Delete TxMainChainIndex for the current tx
         self.tx_index_cache.remove_tx_index(spend_ref)?;
 
-        let tx_index_fetcher =
-            |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
-
         match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
                 let block_id = block.get_id();
                 let tx = block.transactions().get(tx_num).ok_or(
                     ConnectTransactionError::TxNumWrongInBlockOnDisconnect(tx_num, block_id),
                 )?;
-
-                let tx_id = tx.transaction().get_id();
-
-                let tx_undo = self.take_tx_undo(&block_id, &tx_id)?;
-                self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
-
-                // pre-cache all inputs
-                self.tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
-
-                // pre-cache token ids before removing them
-                self.token_issuance_cache.precache_token_issuance(
-                    |id| self.storage_ref.get_token_aux_data(id),
-                    tx.transaction(),
-                )?;
-
-                // unspend inputs
-                self.tx_index_cache.unspend_tx_index_inputs(tx.inputs())?;
-
-                // Remove issued tokens
-                self.token_issuance_cache.unregister(tx.transaction())?;
+                self.disconnect_transaction(&TransactionSource::Chain(block_id), tx)?;
             }
             BlockTransactableRef::BlockReward(block) => {
+                let tx_index_fetcher =
+                    |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
+
                 let reward_transactable = block.block_reward_transactable();
 
-                let reward_undo = self.take_block_reward_undo(&block.get_id())?;
+                let reward_undo =
+                    self.take_block_reward_undo(&TransactionSource::Chain(block.get_id()))?;
                 self.utxo_cache.disconnect_block_transactable(
                     &reward_transactable,
                     &block.get_id().into(),

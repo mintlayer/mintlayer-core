@@ -38,6 +38,7 @@ mod events_tests;
 mod fungible_tokens;
 mod homomorphism;
 mod initialization;
+mod mempool_output_timelock;
 mod nft_burn;
 mod nft_issuance;
 mod nft_reorgs;
@@ -48,6 +49,9 @@ mod reorgs_tests;
 mod signature_tests;
 mod syncing_tests;
 mod tx_verification_simulation;
+mod tx_verifier_disconnect;
+
+mod helpers;
 
 type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
 

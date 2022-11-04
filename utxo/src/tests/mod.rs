@@ -65,7 +65,7 @@ use common::{
         },
         signature::inputsig::InputWitness,
         tokens::OutputValue,
-        OutPoint, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
+        Destination, OutPoint, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
 };
@@ -836,4 +836,46 @@ fn check_burn_output_in_block_reward(#[case] seed: Seed) {
             .unwrap_err(),
         Error::InvalidBlockRewardOutputType(block_id)
     );
+}
+
+// This test checks that if burned output is skipped at index 0 it won't influence
+// subsequent output at index 1
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_burn_output_indexing(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let test_view = empty_test_utxos_view();
+    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+
+    // add 1 utxo to the utxo set
+    let (u, outpoint) = test_helper::create_utxo(&mut rng, 1);
+    cache.add_utxo(&outpoint, u, false).unwrap();
+
+    // create burn output at index 0
+    let output1 = TxOutput::new(
+        OutputValue::Coin(Amount::from_atoms(10)),
+        OutputPurpose::Burn,
+    );
+    // create transfer output at index 1
+    let output2 = TxOutput::new(
+        OutputValue::Coin(Amount::from_atoms(10)),
+        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+    );
+    let input = TxInput::new(outpoint.tx_id(), outpoint.output_index());
+    let tx = Transaction::new(0x00, vec![input], vec![output1, output2], 0x01).unwrap();
+    let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
+    assert!(!cache.has_utxo_in_cache(&outpoint));
+    assert!(undo1.utxos().len() == 1);
+
+    //undo spending
+    cache
+        .disconnect_transaction(&tx, TxUndo::new(undo1.utxos().to_owned()))
+        .unwrap();
+    assert!(cache.has_utxo_in_cache(&outpoint));
+
+    //spend the transaction again
+    let undo2 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
+    assert!(!cache.has_utxo_in_cache(&outpoint));
+    assert_eq!(undo1, undo2);
 }

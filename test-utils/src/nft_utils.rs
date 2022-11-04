@@ -19,7 +19,7 @@ use crate::random_string;
 use common::{
     chain::{
         config::ChainConfig,
-        tokens::{Metadata, NftIssuanceV1, TokenCreator, TokenIssuanceV1},
+        tokens::{Metadata, NftIssuance, TokenCreator, TokenIssuance},
     },
     primitives::Amount,
 };
@@ -34,15 +34,12 @@ pub fn random_creator() -> TokenCreator {
     TokenCreator::from(public_key)
 }
 
-pub fn random_token_issuance(
-    chain_config: Arc<ChainConfig>,
-    rng: &mut impl Rng,
-) -> TokenIssuanceV1 {
+pub fn random_token_issuance(chain_config: Arc<ChainConfig>, rng: &mut impl Rng) -> TokenIssuance {
     let max_ticker_len = chain_config.token_max_ticker_len();
     let max_dec_count = chain_config.token_max_dec_count();
     let max_uri_len = chain_config.token_max_uri_len();
 
-    TokenIssuanceV1 {
+    TokenIssuance {
         token_ticker: random_string(rng, 1..max_ticker_len).as_bytes().to_vec(),
         amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
         number_of_decimals: rng.gen_range(1..max_dec_count),
@@ -50,12 +47,12 @@ pub fn random_token_issuance(
     }
 }
 
-pub fn random_nft_issuance(chain_config: Arc<ChainConfig>, rng: &mut impl Rng) -> NftIssuanceV1 {
+pub fn random_nft_issuance(chain_config: Arc<ChainConfig>, rng: &mut impl Rng) -> NftIssuance {
     let max_desc_len = chain_config.token_max_description_len();
     let max_name_len = chain_config.token_max_name_len();
     let max_ticker_len = chain_config.token_max_ticker_len();
 
-    NftIssuanceV1 {
+    NftIssuance {
         metadata: Metadata {
             creator: Some(random_creator()),
             name: random_string(rng, 1..max_name_len).into_bytes(),

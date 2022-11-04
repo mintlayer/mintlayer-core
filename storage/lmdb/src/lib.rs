@@ -158,7 +158,7 @@ impl Lmdb {
 
     /// Use a writable memory map.
     ///
-    /// This disables some protections in excahnge for better performance.
+    /// This disables some protections in exchange for better performance.
     /// See [lmdb::EnvironmentFlags::WRITE_MAP] for more detail.
     pub fn with_write_map(mut self) -> Self {
         self.flags |= lmdb::EnvironmentFlags::WRITE_MAP;

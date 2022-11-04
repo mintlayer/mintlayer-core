@@ -20,11 +20,10 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{
     make_chainstate, BlockError, BlockSource, ChainstateConfig, ChainstateError, CheckBlockError,
     CheckBlockTransactionsError, ConnectTransactionError, DefaultTransactionVerificationStrategy,
-    OrphanCheckError, TxIndexError,
+    OrphanCheckError,
 };
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestBlockInfo, TestFramework, TestStore,
-    TransactionBuilder,
+    anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
 };
 use chainstate_types::{GenBlockIndex, GetAncestorError, PropertyQueryError};
 use common::chain::OutPoint;
@@ -410,7 +409,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TxIndexError(TxIndexError::MissingOutputOrSpent)
+                ConnectTransactionError::MissingOutputOrSpent
             ))
         );
     });
@@ -438,17 +437,17 @@ fn straight_chain(#[case] seed: Seed) {
         let chain_config_clone = tf.chainstate.get_chain_config();
         let mut block_index =
             GenBlockIndex::Genesis(Arc::clone(chain_config_clone.genesis_block()));
-        let mut prev_block = TestBlockInfo::from_genesis(&tf.genesis());
+        let mut prev_blk_id: Id<GenBlock> = tf.genesis().get_id().into();
 
         for _ in 0..rng.gen_range(100..200) {
-            assert_eq!(tf.chainstate.get_best_block_id().unwrap(), prev_block.id);
+            assert_eq!(tf.chainstate.get_best_block_id().unwrap(), prev_blk_id);
             let prev_block_id = block_index.block_id();
             let best_block_id = tf.best_block_id();
             assert_eq!(best_block_id, block_index.block_id());
             let new_block = tf
                 .make_block_builder()
-                .with_parent(prev_block.id)
-                .add_test_transaction_with_parent(prev_block.id, &mut rng)
+                .with_parent(prev_block_id)
+                .add_test_transaction_with_parent(prev_block_id, &mut rng)
                 .build();
             let new_block_index =
                 tf.process_block(new_block.clone(), BlockSource::Peer).unwrap().unwrap();
@@ -461,7 +460,7 @@ fn straight_chain(#[case] seed: Seed) {
             );
 
             block_index = GenBlockIndex::Block(new_block_index);
-            prev_block = TestBlockInfo::from_block(&new_block);
+            prev_blk_id = new_block.get_id().into();
         }
     });
 }

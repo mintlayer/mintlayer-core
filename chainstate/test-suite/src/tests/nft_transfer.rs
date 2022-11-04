@@ -17,14 +17,13 @@ use chainstate::{
     BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError, TokensError,
 };
-use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder};
+use common::primitives::Idable;
 use common::{
     chain::{
         signature::inputsig::InputWitness,
-        tokens::{
-            token_id, Metadata, NftIssuanceV1, OutputValue, TokenData, TokenId, TokenTransferV1,
-        },
-        Destination, OutputPurpose, TxInput, TxOutput,
+        tokens::{token_id, Metadata, NftIssuance, OutputValue, TokenData, TokenId, TokenTransfer},
+        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight},
 };
@@ -44,7 +43,7 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
@@ -52,7 +51,7 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         // Issue a new NFT
-        let output_value = NftIssuanceV1 {
+        let output_value = NftIssuance {
             metadata: Metadata {
                 creator: Some(random_creator()),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -91,7 +90,8 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
             block.transactions()[0].outputs()[0].value(),
             &output_value.into()
         );
-        let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
+        let issuance_outpoint_id =
+            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
 
         // Try to transfer NFT with wrong ID
         let result = tf
@@ -103,7 +103,7 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id: TokenId::random_using(&mut rng),
                             amount: Amount::from_atoms(1),
                         })
@@ -130,7 +130,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
@@ -138,7 +138,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         // Issue a new NFT
-        let output_value = NftIssuanceV1 {
+        let output_value = NftIssuance {
             metadata: Metadata {
                 creator: Some(random_creator()),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -178,7 +178,8 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
             block.transactions()[0].outputs()[0].value(),
             &output_value.into()
         );
-        let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
+        let issuance_outpoint_id =
+            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
 
         // Try to transfer 0 NFT
         let result = tf
@@ -190,7 +191,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(0),
                         })
@@ -220,7 +221,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(rng.gen_range(2..123)),
                         })
@@ -252,8 +253,8 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
         // Issuance a few different NFT
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
-        let output_value = NftIssuanceV1 {
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
+        let output_value = NftIssuance {
             metadata: Metadata {
                 creator: Some(random_creator()),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -294,7 +295,8 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let first_issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
+        let first_issuance_outpoint_id =
+            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
         let first_token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
@@ -311,7 +313,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id: first_token_id,
                             amount: Amount::from_atoms(1),
                         })
@@ -319,7 +321,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
                         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                     ))
                     .add_output(TxOutput::new(
-                        NftIssuanceV1 {
+                        NftIssuance {
                             metadata: Metadata {
                                 creator: Some(random_creator()),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -349,7 +351,8 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let second_issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
+        let second_issuance_outpoint_id =
+            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
         let _ = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Try to spend 2 NFTs but use one ID
@@ -372,7 +375,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::new(
-                        TokenData::TokenTransferV1(TokenTransferV1 {
+                        TokenData::TokenTransfer(TokenTransfer {
                             token_id: first_token_id,
                             amount: Amount::from_atoms(2),
                         })
@@ -403,7 +406,7 @@ fn nft_valid_transfer(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
@@ -411,7 +414,7 @@ fn nft_valid_transfer(#[case] seed: Seed) {
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         // Issue a new NFT
-        let output_value = NftIssuanceV1 {
+        let output_value = NftIssuance {
             metadata: Metadata {
                 creator: Some(random_creator()),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
@@ -451,10 +454,11 @@ fn nft_valid_transfer(#[case] seed: Seed) {
             block.transactions()[0].outputs()[0].value(),
             &output_value.into()
         );
-        let issuance_outpoint_id = TestBlockInfo::from_block(&block).txns[0].0.clone();
+        let issuance_outpoint_id =
+            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
 
         // Valid case
-        let transfer_value = TokenData::TokenTransferV1(TokenTransferV1 {
+        let transfer_value = TokenData::TokenTransfer(TokenTransfer {
             token_id,
             amount: Amount::from_atoms(1),
         });
@@ -479,7 +483,8 @@ fn nft_valid_transfer(#[case] seed: Seed) {
         assert_eq!(block_index.block_height(), BlockHeight::from(2));
 
         let block = tf.block(*block_index.block_id());
-        let outputs = &TestBlockInfo::from_block(&block).txns[0].1;
+        let outputs =
+            tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let transfer_output = &outputs[0];
 
         assert_eq!(transfer_output.value(), &transfer_value.into());
