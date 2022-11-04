@@ -225,9 +225,9 @@ where
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
 
-        let bannable_address = address.as_bannable().ok_or(P2pError::ProtocolError(
-            ProtocolError::UnableToBanAddress(format!("{address:?}")),
-        ))?;
+        let bannable_address = address.as_bannable().ok_or_else(|| {
+            P2pError::ProtocolError(ProtocolError::UnableToBanAddress(format!("{address:?}")))
+        })?;
         ensure!(
             !self.peerdb.is_address_banned(&bannable_address),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
@@ -302,9 +302,9 @@ where
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
 
-        let bannable_address = address.as_bannable().ok_or(P2pError::ProtocolError(
-            ProtocolError::UnableToBanAddress(format!("{address:?}")),
-        ))?;
+        let bannable_address = address.as_bannable().ok_or_else(|| {
+            P2pError::ProtocolError(ProtocolError::UnableToBanAddress(format!("{address:?}")))
+        })?;
         ensure!(
             !self.peerdb.is_address_banned(&bannable_address),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
