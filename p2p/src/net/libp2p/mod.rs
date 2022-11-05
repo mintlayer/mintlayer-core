@@ -136,7 +136,8 @@ impl AsBannableAddress for Multiaddr {
     type BannableAddress = IpAddr;
 
     fn as_bannable(&self) -> Option<Self::BannableAddress> {
-        while let Some(component) = self.iter().next() {
+        let mut iter = self.iter();
+        while let Some(component) = iter.next() {
             match component {
                 libp2p::multiaddr::Protocol::Ip4(a) => return Some(a.into()),
                 libp2p::multiaddr::Protocol::Ip6(a) => return Some(a.into()),
