@@ -46,7 +46,7 @@ fn new_delegation_id(v: u64) -> DelegationId {
 fn check_merge_deltas(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let db = PoSAccountingDBMut::new_empty(&mut storage);
+    let db = PoSAccountingDBMut::new(&mut storage);
 
     let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let data1 = PoSAccountingDeltaData {
@@ -220,7 +220,7 @@ fn check_merge_values_with_deltas(#[case] seed: Seed) {
     let original_storage = storage.clone();
 
     let (delta_origin, undo_data) = {
-        let mut db = PoSAccountingDBMut::new_empty(&mut storage);
+        let mut db = PoSAccountingDBMut::new(&mut storage);
 
         let delta_data = PoSAccountingDeltaData {
             pool_data: DeltaDataCollection::from_iter(
@@ -301,7 +301,7 @@ fn check_merge_values_with_deltas(#[case] seed: Seed) {
 
     assert_eq!(storage, expected_storage);
 
-    let mut db = PoSAccountingDBMut::new_empty(&mut storage);
+    let mut db = PoSAccountingDBMut::new(&mut storage);
     db.undo_merge_with_delta(delta_origin, undo_data).unwrap();
     assert_eq!(storage, original_storage);
 }

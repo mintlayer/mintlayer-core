@@ -24,7 +24,7 @@ use crate::{
     DelegationId, PoolId,
 };
 
-use super::{sum_maps, PoSAccountingDelta};
+use super::{sum_maps, PoSAccountingDelta, PoSAccountingViewCow};
 
 fn signed_to_unsigned_pair(
     (k, v): (DelegationId, SignedAmount),
@@ -33,7 +33,54 @@ fn signed_to_unsigned_pair(
     Ok((k, v))
 }
 
+impl<'a> PoSAccountingView for PoSAccountingViewCow<'a> {
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
+        self.as_bounded_ref().pool_exists(pool_id)
+    }
+
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
+        self.as_bounded_ref().get_pool_balance(pool_id)
+    }
+
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
+        self.as_bounded_ref().get_pool_data(pool_id)
+    }
+
+    fn get_pool_delegations_shares(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Error> {
+        self.as_bounded_ref().get_pool_delegations_shares(pool_id)
+    }
+
+    fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Option<Amount>, Error> {
+        self.as_bounded_ref().get_delegation_balance(delegation_id)
+    }
+
+    fn get_delegation_data(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<DelegationData>, Error> {
+        self.as_bounded_ref().get_delegation_data(delegation_id)
+    }
+
+    fn get_pool_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Error> {
+        self.as_bounded_ref().get_pool_delegation_share(pool_id, delegation_id)
+    }
+}
+
 impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
+        Ok(self
+            .get_pool_data(pool_id)?
+            .ok_or_else(|| self.parent.get_pool_data(pool_id))
+            .is_ok())
+    }
+
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
         let parent_balance = self.parent.get_pool_balance(pool_id)?;
         let local_delta = self.data.pool_balances.data().get(&pool_id).cloned();

@@ -22,6 +22,8 @@ use crate::{error::Error, DelegationId, PoolId};
 use super::{delegation::DelegationData, pool_data::PoolData};
 
 pub trait PoSAccountingView {
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error>;
+
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error>;
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error>;
