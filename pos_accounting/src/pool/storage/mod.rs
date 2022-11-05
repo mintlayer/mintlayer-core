@@ -34,12 +34,22 @@ pub mod view_impls;
 mod helpers;
 use helpers::BorrowedStorageValue;
 
+pub struct PoSAccountingDB<'a, S> {
+    store: &'a S,
+}
+
+impl<'a, S> PoSAccountingDB<'a, S> {
+    pub fn new(store: &'a S) -> Self {
+        Self { store }
+    }
+}
+
 pub struct PoSAccountingDBMut<'a, S> {
     store: &'a mut S,
 }
 
 impl<'a, S> PoSAccountingDBMut<'a, S> {
-    pub fn new_empty(store: &'a mut S) -> Self {
+    pub fn new(store: &'a mut S) -> Self {
         Self { store }
     }
 }
@@ -329,12 +339,10 @@ impl<'a, S: PoSAccountingStorageRead> PoSAccountingDBMut<'a, S> {
         &self,
         delegation_target: DelegationId,
     ) -> Result<DelegationData, Error> {
-        let delegation_target = self
-            .store
+        self.store
             .get_delegation_data(delegation_target)
             .map_err(Error::from)?
-            .ok_or(Error::DelegateToNonexistingId)?;
-        Ok(delegation_target)
+            .ok_or(Error::DelegateToNonexistingId)
     }
 }
 

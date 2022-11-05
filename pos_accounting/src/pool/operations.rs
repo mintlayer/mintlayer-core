@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use accounting::DataDeltaUndo;
 use common::{chain::OutPoint, primitives::Amount};
 use crypto::key::PublicKey;
@@ -66,7 +64,7 @@ pub enum PoSAccountingUndo {
 
 use super::{delegation::DelegationData, pool_data::PoolData};
 
-pub trait PoSAccountingOperatorWrite {
+pub trait PoSAccountingOperations {
     fn create_pool(
         &mut self,
         input0_outpoint: &OutPoint,
@@ -96,33 +94,4 @@ pub trait PoSAccountingOperatorWrite {
     ) -> Result<PoSAccountingUndo, Error>;
 
     fn undo(&mut self, undo_data: PoSAccountingUndo) -> Result<(), Error>;
-}
-
-pub trait PoSAccountingOperatorRead {
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error>;
-
-    fn get_delegation_shares(
-        &self,
-        pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Error>;
-
-    fn get_delegation_share(
-        &self,
-        pool_id: PoolId,
-        delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Error>;
-
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error>;
-
-    fn get_delegation_id_balance(
-        &self,
-        delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Error>;
-
-    fn get_delegation_id_data(
-        &self,
-        delegation_id: DelegationId,
-    ) -> Result<Option<DelegationData>, Error>;
-
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error>;
 }

@@ -24,7 +24,7 @@ use crate::{
         helpers::{make_delegation_id, make_pool_id},
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
-            DelegationDataUndo, PoSAccountingOperatorWrite, PoSAccountingUndo, PoolDataUndo,
+            DelegationDataUndo, PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo,
             SpendFromShareUndo,
         },
         pool_data::PoolData,
@@ -35,7 +35,7 @@ use crate::{
 
 use super::PoSAccountingDelta;
 
-impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
+impl<'a> PoSAccountingOperations for PoSAccountingDelta<'a> {
     fn create_pool(
         &mut self,
         input0_outpoint: &OutPoint,

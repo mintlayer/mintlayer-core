@@ -20,10 +20,12 @@ pub mod error;
 pub mod pool;
 pub mod storage;
 
+pub use error::Error;
+
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, TypeName)]
 pub struct Pool;
-type PoolId = Id<Pool>;
+pub type PoolId = Id<Pool>;
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, TypeName)]
 pub struct Delegation;
-type DelegationId = Id<Delegation>;
+pub type DelegationId = Id<Delegation>;

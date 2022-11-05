@@ -28,8 +28,22 @@ pub mod data;
 pub mod operator_impls;
 mod view_impl;
 
+enum PoSAccountingViewCow<'a> {
+    Borrowed(&'a dyn PoSAccountingView),
+    Owned(Box<dyn PoSAccountingView + 'a>),
+}
+
+impl<'a> PoSAccountingViewCow<'a> {
+    fn as_bounded_ref(&self) -> &dyn PoSAccountingView {
+        match self {
+            PoSAccountingViewCow::Borrowed(r) => *r,
+            PoSAccountingViewCow::Owned(o) => o.as_ref(),
+        }
+    }
+}
+
 pub struct PoSAccountingDelta<'a> {
-    parent: &'a dyn PoSAccountingView,
+    parent: PoSAccountingViewCow<'a>,
     data: PoSAccountingDeltaData,
 }
 
@@ -40,15 +54,26 @@ pub struct DeltaMergeUndo {
 }
 
 impl<'a> PoSAccountingDelta<'a> {
-    pub fn new(parent: &'a dyn PoSAccountingView) -> Self {
+    pub fn from_borrowed_parent(parent: &'a dyn PoSAccountingView) -> Self {
         Self {
-            parent,
+            parent: PoSAccountingViewCow::Borrowed(parent),
             data: PoSAccountingDeltaData::new(),
         }
     }
 
+    pub fn from_owned_parent(parent: Box<dyn PoSAccountingView + 'a>) -> Self {
+        Self {
+            parent: PoSAccountingViewCow::Owned(parent),
+            data: PoSAccountingDeltaData::new(),
+        }
+    }
+
+    #[cfg(test)]
     pub fn from_data(parent: &'a dyn PoSAccountingView, data: PoSAccountingDeltaData) -> Self {
-        Self { parent, data }
+        Self {
+            parent: PoSAccountingViewCow::Borrowed(parent),
+            data,
+        }
     }
 
     pub fn consume(self) -> PoSAccountingDeltaData {

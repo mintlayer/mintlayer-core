@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use common::{chain::OutPoint, primitives::Amount};
 use crypto::key::PublicKey;
 
@@ -25,18 +23,19 @@ use crate::{
         helpers::{make_delegation_id, make_pool_id},
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
-            DelegationDataUndo, PoSAccountingOperatorRead, PoSAccountingOperatorWrite,
-            PoSAccountingUndo, PoolDataUndo, SpendFromShareUndo,
+            DelegationDataUndo, PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo,
+            SpendFromShareUndo,
         },
         pool_data::PoolData,
+        view::PoSAccountingView,
     },
-    storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
+    storage::PoSAccountingStorageWrite,
     DelegationId, PoolId,
 };
 
 use super::PoSAccountingDBMut;
 
-impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccountingDBMut<'a, S> {
+impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperations for PoSAccountingDBMut<'a, S> {
     fn create_pool(
         &mut self,
         input0_outpoint: &OutPoint,
@@ -266,51 +265,5 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         self.add_delegation_to_pool_share(pool_id, undo_data.delegation_id, undo_data.amount)?;
 
         Ok(())
-    }
-}
-
-impl<'a, S: PoSAccountingStorageRead> PoSAccountingOperatorRead for PoSAccountingDBMut<'a, S> {
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
-        self.store.get_pool_balance(pool_id).map_err(Error::from).map(|v| v.is_some())
-    }
-
-    // TODO: test that all values within the pool will be returned, especially boundary values, and off boundary aren't returned
-    fn get_delegation_shares(
-        &self,
-        pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Error> {
-        self.store.get_pool_delegations_shares(pool_id).map_err(Error::from)
-    }
-
-    fn get_delegation_share(
-        &self,
-        pool_id: PoolId,
-        delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Error> {
-        self.store
-            .get_pool_delegation_share(pool_id, delegation_id)
-            .map_err(Error::from)
-    }
-
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
-        self.store.get_pool_balance(pool_id).map_err(Error::from)
-    }
-
-    fn get_delegation_id_balance(
-        &self,
-        delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Error> {
-        self.store.get_delegation_balance(delegation_id).map_err(Error::from)
-    }
-
-    fn get_delegation_id_data(
-        &self,
-        delegation_id: DelegationId,
-    ) -> Result<Option<DelegationData>, Error> {
-        self.store.get_delegation_data(delegation_id).map_err(Error::from)
-    }
-
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
-        self.store.get_pool_data(pool_id).map_err(Error::from)
     }
 }
