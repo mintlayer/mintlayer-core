@@ -112,14 +112,17 @@ fn threaded_reads_consistent<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
                 .to_owned()
         }
     });
-    let thr1 = thread::spawn(move || {
-        store
-            .transaction_ro()
-            .unwrap()
-            .get(IDX.0, TEST_KEY)
-            .unwrap()
-            .unwrap()
-            .to_owned()
+    let thr1 = thread::spawn({
+        let store = store.clone();
+        move || {
+            store
+                .transaction_ro()
+                .unwrap()
+                .get(IDX.0, TEST_KEY)
+                .unwrap()
+                .unwrap()
+                .to_owned()
+        }
     });
 
     assert_eq!(thr0.join().unwrap(), val);
