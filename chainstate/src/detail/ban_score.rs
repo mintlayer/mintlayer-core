@@ -73,6 +73,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvariantBrokenAlreadyUnspent => 0,
             // Even though this is an invariant error, it stems from referencing a block for reward that doesn't exist
             ConnectTransactionError::MissingOutputOrSpent => 100,
+            ConnectTransactionError::MissingCoinOutputToStake => 100,
             ConnectTransactionError::AttemptToPrintMoney(_, _) => 100,
             ConnectTransactionError::TxFeeTotalCalcFailed(_, _) => 100,
             ConnectTransactionError::SignatureVerificationFailed(_) => 100,
@@ -94,9 +95,14 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _) => 100,
             ConnectTransactionError::BlockIndexCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::TransactionVerifierError(err) => err.ban_score(),
-            ConnectTransactionError::BlockUndoError(_) => 100,
+            ConnectTransactionError::UtxoBlockUndoError(_) => 100,
             ConnectTransactionError::BurnAmountSumError(_) => 100,
             ConnectTransactionError::AttemptToSpendBurnedAmount => 100,
+            ConnectTransactionError::MissingPoSAccountingUndo(_) => 0,
+            ConnectTransactionError::PoSAccountingError(err) => err.ban_score(),
+            ConnectTransactionError::TokenInputForPoSAccountingOperation(_) => 100,
+            ConnectTransactionError::TokenOutputForPoSAccountingOperation(_) => 100,
+            ConnectTransactionError::AccountingBlockUndoError(_) => 100,
         }
     }
 }
@@ -111,8 +117,10 @@ impl BanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::TokensError(err) => err.ban_score(),
             TransactionVerifierStorageError::UtxoError(err) => err.ban_score(),
             TransactionVerifierStorageError::TxIndexError(err) => err.ban_score(),
-            TransactionVerifierStorageError::BlockUndoError(_) => 100,
+            TransactionVerifierStorageError::UtxoBlockUndoError(_) => 100,
             TransactionVerifierStorageError::TransactionIndexDisabled => 0,
+            TransactionVerifierStorageError::PoSAccountingError(err) => err.ban_score(),
+            TransactionVerifierStorageError::AccountingBlockUndoError(_) => 100,
         }
     }
 }
@@ -266,6 +274,52 @@ impl BanScore for utxo::Error {
             utxo::Error::MissingBlockRewardUndo(_) => 0,
             utxo::Error::InvalidBlockRewardOutputType(_) => 100,
             utxo::Error::DBError(_) => 0,
+        }
+    }
+}
+
+impl BanScore for pos_accounting::Error {
+    fn ban_score(&self) -> u32 {
+        match self {
+            pos_accounting::Error::StorageError(_) => todo!(),
+            pos_accounting::Error::AccountingError(_) => todo!(),
+            pos_accounting::Error::InvariantErrorPoolBalanceAlreadyExists => todo!(),
+            pos_accounting::Error::InvariantErrorPoolDataAlreadyExists => todo!(),
+            pos_accounting::Error::AttemptedDecommissionNonexistingPoolBalance => todo!(),
+            pos_accounting::Error::AttemptedDecommissionNonexistingPoolData => todo!(),
+            pos_accounting::Error::DelegationCreationFailedPoolDoesNotExist => todo!(),
+            pos_accounting::Error::InvariantErrorDelegationCreationFailedIdAlreadyExists => todo!(),
+            pos_accounting::Error::DelegateToNonexistingId => todo!(),
+            pos_accounting::Error::DelegateToNonexistingPool => todo!(),
+            pos_accounting::Error::AdditionError => todo!(),
+            pos_accounting::Error::SubError => todo!(),
+            pos_accounting::Error::DelegationBalanceAdditionError => todo!(),
+            pos_accounting::Error::DelegationBalanceSubtractionError => todo!(),
+            pos_accounting::Error::PoolBalanceAdditionError => todo!(),
+            pos_accounting::Error::PoolBalanceSubtractionError => todo!(),
+            pos_accounting::Error::DelegationSharesAdditionError => todo!(),
+            pos_accounting::Error::DelegationSharesSubtractionError => todo!(),
+            pos_accounting::Error::InvariantErrorPoolCreationReversalFailedBalanceNotFound => {
+                todo!()
+            }
+            pos_accounting::Error::InvariantErrorPoolCreationReversalFailedDataNotFound => todo!(),
+            pos_accounting::Error::InvariantErrorPoolCreationReversalFailedAmountChanged => todo!(),
+            pos_accounting::Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists => {
+                todo!()
+            }
+            pos_accounting::Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists => {
+                todo!()
+            }
+            pos_accounting::Error::InvariantErrorDelegationIdUndoFailedNotFound => todo!(),
+            pos_accounting::Error::InvariantErrorDelegationIdUndoFailedDataConflict => todo!(),
+            pos_accounting::Error::InvariantErrorDelegationBalanceAdditionUndoError => todo!(),
+            pos_accounting::Error::InvariantErrorPoolBalanceAdditionUndoError => todo!(),
+            pos_accounting::Error::InvariantErrorDelegationSharesAdditionUndoError => todo!(),
+            pos_accounting::Error::InvariantErrorDelegationShareNotFound => todo!(),
+            pos_accounting::Error::PledgeValueToSignedError => todo!(),
+            pos_accounting::Error::InvariantErrorDelegationUndoFailedDataNotFound => todo!(),
+            pos_accounting::Error::DuplicatesInDeltaAndUndo => todo!(),
+            pos_accounting::Error::FailedToCreateDeltaUndo => todo!(),
         }
     }
 }

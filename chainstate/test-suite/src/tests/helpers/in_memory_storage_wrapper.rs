@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use ::tx_verifier::transaction_verifier::storage::{
     TransactionVerifierStorageError, TransactionVerifierStorageRef,
@@ -25,8 +25,9 @@ use common::{
         tokens::{TokenAuxiliaryData, TokenId},
         Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction, TxMainChainIndex,
     },
-    primitives::Id,
+    primitives::{Amount, Id},
 };
+use pos_accounting::{DelegationData, DelegationId, PoSAccountingView, PoolData, PoolId};
 use utxo::UtxosStorageRead;
 
 pub struct InMemoryStorageWrapper {
@@ -82,6 +83,14 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
             .get_token_aux_data(token_id)
             .map_err(TransactionVerifierStorageError::from)
     }
+
+    fn get_accounting_undo(
+        &self,
+        _id: Id<Block>,
+    ) -> Result<Option<pos_accounting::BlockUndo>, TransactionVerifierStorageError> {
+        //FIXME: impl
+        Ok(None)
+    }
 }
 
 impl UtxosStorageRead for InMemoryStorageWrapper {
@@ -103,5 +112,48 @@ impl UtxosStorageRead for InMemoryStorageWrapper {
         id: Id<Block>,
     ) -> Result<Option<utxo::BlockUndo>, chainstate_types::storage_result::Error> {
         self.storage.get_undo_data(id)
+    }
+}
+
+impl PoSAccountingView for InMemoryStorageWrapper {
+    fn pool_exists(&self, _pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
+        todo!()
+    }
+
+    fn get_pool_balance(&self, _pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error> {
+        todo!()
+    }
+
+    fn get_pool_data(&self, _pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error> {
+        todo!()
+    }
+
+    fn get_delegation_balance(
+        &self,
+        _delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, pos_accounting::Error> {
+        todo!()
+    }
+
+    fn get_delegation_data(
+        &self,
+        _delegation_id: DelegationId,
+    ) -> Result<Option<DelegationData>, pos_accounting::Error> {
+        todo!()
+    }
+
+    fn get_pool_delegations_shares(
+        &self,
+        _pool_id: PoolId,
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, pos_accounting::Error> {
+        todo!()
+    }
+
+    fn get_pool_delegation_share(
+        &self,
+        _pool_id: PoolId,
+        _delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, pos_accounting::Error> {
+        todo!()
     }
 }

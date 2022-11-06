@@ -26,9 +26,10 @@ use common::{
     primitives::H256,
 };
 use mockall::predicate::eq;
+use pos_accounting::{PoSAccountingView, PoolData};
 use rstest::rstest;
 use test_utils::random::Seed;
-use utxo::{TxUndoWithSources, UtxosStorageRead};
+use utxo::{BlockUndo, TxUndoWithSources, UtxosStorageRead};
 
 // Create the following hierarchy:
 //
@@ -162,25 +163,25 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
     let verifier1 = {
         let mut verifier =
             TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
-        verifier.utxo_block_undo.insert(
+        verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_undo_id_1),
-            BlockUndoEntry {
+            UtxosBlockUndoEntry {
                 undo: block_undo_1.clone(),
                 is_fresh: true,
             },
-        );
+        )]));
         verifier
     };
 
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
-        verifier.utxo_block_undo.insert(
+        verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_undo_id_2),
-            BlockUndoEntry {
+            UtxosBlockUndoEntry {
                 undo: block_undo_2.clone(),
                 is_fresh: true,
             },
-        );
+        )]));
         verifier
     };
 
@@ -465,4 +466,187 @@ fn hierarchy_test_block_index(#[case] seed: Seed) {
 
     let verifier2 = verifier1.derive_child();
     verifier2.get_gen_block_index(&block_id.into()).unwrap();
+}
+
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+// pool2/undo             pool1/undo             pool0/undo
+//
+// Check that data can be accessed through derived entities
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn hierarchy_test_stake_pool(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+    let chain_config = ConfigBuilder::test_chain().build();
+
+    let (outpoint0, _) = create_utxo(&mut rng, 100);
+    let (outpoint1, _) = create_utxo(&mut rng, 1000);
+    let (outpoint2, _) = create_utxo(&mut rng, 2000);
+
+    let (_, pub_key0) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+
+    let pool_balance0 = Amount::from_atoms(100);
+    let pool_balance1 = Amount::from_atoms(200);
+    let pool_balance2 = Amount::from_atoms(300);
+
+    let pool_data0 = PoolData::new(pub_key0, pool_balance0);
+    let pool_data1 = PoolData::new(pub_key1.clone(), pool_balance1);
+    let pool_data2 = PoolData::new(pub_key2.clone(), pool_balance2);
+
+    let pool_id_0 = pos_accounting::make_pool_id(&outpoint0);
+    let pool_id_1 = pos_accounting::make_pool_id(&outpoint1);
+    let pool_id_2 = pos_accounting::make_pool_id(&outpoint2);
+
+    let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_id_1: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
+
+    let mut store = mock::MockStore::new();
+    store
+        .expect_get_best_block_for_utxos()
+        .return_const(Ok(Some(H256::zero().into())));
+    store
+        .expect_get_pool_balance()
+        .with(eq(pool_id_0))
+        .times(2)
+        .return_const(Ok(Some(pool_balance0)));
+    store
+        .expect_get_pool_balance()
+        .with(eq(pool_id_1))
+        .times(3)
+        .return_const(Ok(None));
+    store
+        .expect_get_pool_balance()
+        .with(eq(pool_id_2))
+        .times(3)
+        .return_const(Ok(None));
+
+    store
+        .expect_get_pool_data()
+        .with(eq(pool_id_0))
+        .times(2)
+        .return_const(Ok(Some(pool_data0.clone())));
+    store.expect_get_pool_data().with(eq(pool_id_1)).times(1).return_const(Ok(None));
+    store.expect_get_pool_data().with(eq(pool_id_2)).times(2).return_const(Ok(None));
+
+    store
+        .expect_get_accounting_undo()
+        .with(eq(block_undo_id_0))
+        .times(2)
+        .return_const(Ok(None));
+    store
+        .expect_get_accounting_undo()
+        .with(eq(block_undo_id_2))
+        .times(1)
+        .return_const(Ok(None));
+
+    let verifier1 = {
+        let mut verifier =
+            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+        let (_, undo) = verifier
+            .accounting_delta
+            .create_pool(&outpoint1, pool_balance1, pub_key1)
+            .unwrap();
+
+        let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
+        let block_undo = pos_accounting::BlockUndo::new(BTreeMap::from([(
+            tx_id,
+            pos_accounting::TxUndo::new(vec![undo]),
+        )]));
+
+        verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
+            TransactionSource::Chain(block_undo_id_1),
+            AccountsBlockUndoEntry {
+                undo: block_undo,
+                is_fresh: true,
+            },
+        )]));
+        verifier
+    };
+
+    let verifier2 = {
+        let mut verifier = verifier1.derive_child();
+        let (_, undo) = verifier
+            .accounting_delta
+            .create_pool(&outpoint2, pool_balance2, pub_key2)
+            .unwrap();
+
+        let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
+        let block_undo = pos_accounting::BlockUndo::new(BTreeMap::from([(
+            tx_id,
+            pos_accounting::TxUndo::new(vec![undo]),
+        )]));
+
+        verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
+            TransactionSource::Chain(block_undo_id_2),
+            AccountsBlockUndoEntry {
+                undo: block_undo,
+                is_fresh: true,
+            },
+        )]));
+        verifier
+    };
+
+    // fetch pool balances
+    assert_eq!(
+        verifier1.get_pool_balance(pool_id_0).unwrap().as_ref(),
+        Some(&pool_balance0)
+    );
+    assert_eq!(
+        verifier1.get_pool_balance(pool_id_1).unwrap().as_ref(),
+        Some(&pool_balance1)
+    );
+    assert_eq!(
+        verifier1.get_pool_balance(pool_id_2).unwrap().as_ref(),
+        None
+    );
+
+    assert_eq!(
+        verifier2.get_pool_balance(pool_id_0).unwrap().as_ref(),
+        Some(&pool_balance0)
+    );
+    assert_eq!(
+        verifier2.get_pool_balance(pool_id_1).unwrap().as_ref(),
+        Some(&pool_balance1)
+    );
+    assert_eq!(
+        verifier2.get_pool_balance(pool_id_2).unwrap().as_ref(),
+        Some(&pool_balance2)
+    );
+
+    // fetch pool data
+    assert_eq!(
+        verifier1.get_pool_data(pool_id_0).unwrap().as_ref(),
+        Some(&pool_data0)
+    );
+    assert_eq!(
+        verifier1.get_pool_data(pool_id_1).unwrap().as_ref(),
+        Some(&pool_data1)
+    );
+    assert_eq!(verifier1.get_pool_data(pool_id_2).unwrap().as_ref(), None);
+
+    assert_eq!(
+        verifier2.get_pool_data(pool_id_0).unwrap().as_ref(),
+        Some(&pool_data0)
+    );
+    assert_eq!(
+        verifier2.get_pool_data(pool_id_1).unwrap().as_ref(),
+        Some(&pool_data1)
+    );
+    assert_eq!(
+        verifier2.get_pool_data(pool_id_2).unwrap().as_ref(),
+        Some(&pool_data2)
+    );
+
+    // fetch undo
+    assert!(verifier1.get_accounting_undo(block_undo_id_0).unwrap().is_none());
+    assert!(verifier1.get_accounting_undo(block_undo_id_1).unwrap().is_some());
+    assert!(verifier1.get_accounting_undo(block_undo_id_2).unwrap().is_none());
+    assert!(verifier2.get_accounting_undo(block_undo_id_0).unwrap().is_none());
+    assert!(verifier2.get_accounting_undo(block_undo_id_1).unwrap().is_some());
+    assert!(verifier2.get_accounting_undo(block_undo_id_2).unwrap().is_some());
 }

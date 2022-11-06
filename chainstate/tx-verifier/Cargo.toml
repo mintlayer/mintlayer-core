@@ -10,9 +10,10 @@ license = "MIT"
 common = {path = '../../common'}
 chainstate-storage = {path = '../storage'}
 chainstate-types = {path = '../types'}
+crypto = {path = '../../crypto'}
+pos_accounting = {path = '../../pos_accounting'}
 utils = {path = '../../utils'}
 utxo = {path = '../../utxo'}
-crypto = {path = '../../crypto'}
 
 thiserror = "1.0"
 fallible-iterator = "0.2.0"

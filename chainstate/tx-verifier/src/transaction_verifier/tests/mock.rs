@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use crate::transaction_verifier::TransactionSource;
 
 use super::storage::{
@@ -24,9 +26,13 @@ use common::{
         tokens::{TokenAuxiliaryData, TokenId},
         Block, GenBlock, OutPoint, OutPointSourceId, Transaction, TxMainChainIndex,
     },
-    primitives::Id,
+    primitives::{Amount, Id},
 };
-use utxo::{BlockUndo, ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead};
+use pos_accounting::{
+    DelegationData, DelegationId, FlushablePoSAccountingView, PoSAccountingDeltaData,
+    PoSAccountingView, PoolData, PoolId,
+};
+use utxo::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead};
 
 mockall::mock! {
     pub Store {}
@@ -51,6 +57,11 @@ mockall::mock! {
             &self,
             token_id: &TokenId,
         ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError>;
+
+        fn get_accounting_undo(
+            &self,
+            id: Id<Block>,
+        ) -> Result<Option<pos_accounting::BlockUndo>, TransactionVerifierStorageError>;
     }
 
     impl TransactionVerifierStorageMut for Store {
@@ -87,17 +98,58 @@ mockall::mock! {
             issuance_tx_id: &Id<Transaction>,
         ) -> Result<(), TransactionVerifierStorageError>;
 
-        fn set_undo_data(&mut self, tx_source: TransactionSource, undo: &BlockUndo) -> Result<(), TransactionVerifierStorageError>;
-        fn del_undo_data(&mut self, tx_source: TransactionSource) -> Result<(), TransactionVerifierStorageError>;
+        fn set_utxo_undo_data(&mut self, tx_source: TransactionSource, undo: &utxo::BlockUndo) -> Result<(), TransactionVerifierStorageError>;
+        fn del_utxo_undo_data(&mut self, tx_source: TransactionSource) -> Result<(), TransactionVerifierStorageError>;
+
+        fn set_accounting_undo_data(
+            &mut self,
+            tx_source: TransactionSource,
+            undo: &pos_accounting::BlockUndo,
+        ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn del_accounting_undo_data(
+            &mut self,
+            tx_source: TransactionSource,
+        ) -> Result<(), TransactionVerifierStorageError>;
     }
 
     impl UtxosStorageRead for Store {
         fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, storage_result::Error>;
         fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>,storage_result::Error>;
-        fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, storage_result::Error>;
+        fn get_undo_data(&self, id: Id<Block>) -> Result<Option<utxo::BlockUndo>, storage_result::Error>;
     }
 
     impl FlushableUtxoView for Store {
         fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error>;
+    }
+
+    impl PoSAccountingView for Store{
+        fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error>;
+
+        fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error>;
+
+        fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error>;
+
+        fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Option<Amount>, pos_accounting::Error>;
+
+        fn get_delegation_data(
+            &self,
+            delegation_id: DelegationId,
+        ) -> Result<Option<DelegationData>, pos_accounting::Error>;
+
+        fn get_pool_delegations_shares(
+            &self,
+            pool_id: PoolId,
+        ) -> Result<Option<BTreeMap<DelegationId, Amount>>, pos_accounting::Error>;
+
+        fn get_pool_delegation_share(
+            &self,
+            pool_id: PoolId,
+            delegation_id: DelegationId,
+        ) -> Result<Option<Amount>, pos_accounting::Error>;
+    }
+
+    impl FlushablePoSAccountingView for Store {
+        fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<(), pos_accounting::Error>;
     }
 }

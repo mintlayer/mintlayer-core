@@ -20,11 +20,15 @@ use common::primitives::{signed_amount::SignedAmount, Amount};
 
 use crate::{
     error::Error,
-    pool::{delegation::DelegationData, pool_data::PoolData, view::PoSAccountingView},
+    pool::{
+        delegation::DelegationData,
+        pool_data::PoolData,
+        view::{FlushablePoSAccountingView, PoSAccountingView},
+    },
     DelegationId, PoolId,
 };
 
-use super::{sum_maps, PoSAccountingDelta, PoSAccountingViewCow};
+use super::{data::PoSAccountingDeltaData, sum_maps, PoSAccountingDelta, PoSAccountingViewCow};
 
 fn signed_to_unsigned_pair(
     (k, v): (DelegationId, SignedAmount),
@@ -33,7 +37,7 @@ fn signed_to_unsigned_pair(
     Ok((k, v))
 }
 
-impl<'a> PoSAccountingView for PoSAccountingViewCow<'a> {
+impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingViewCow<'a, P> {
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
         self.as_bounded_ref().pool_exists(pool_id)
     }
@@ -73,7 +77,7 @@ impl<'a> PoSAccountingView for PoSAccountingViewCow<'a> {
     }
 }
 
-impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
+impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<'a, P> {
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
         Ok(self
             .get_pool_data(pool_id)?
@@ -140,5 +144,11 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
         let local_amount =
             self.data.pool_delegation_shares.data().get(&(pool_id, delegation_id)).copied();
         combine_amount_delta(&parent_amount, &local_amount).map_err(Error::AccountingError)
+    }
+}
+
+impl<'a, P: PoSAccountingView> FlushablePoSAccountingView for PoSAccountingDelta<'a, P> {
+    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<(), Error> {
+        self.merge_with_delta(data).map(|_| ())
     }
 }

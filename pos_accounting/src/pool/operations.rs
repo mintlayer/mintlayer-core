@@ -16,44 +16,53 @@
 use accounting::DataDeltaUndo;
 use common::{chain::OutPoint, primitives::Amount};
 use crypto::key::PublicKey;
+use serialization::{Decode, Encode};
 
 use crate::{error::Error, DelegationId, PoolId};
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub(crate) enum PoolDataUndo {
     Data(Box<PoolData>),
     DataDelta(Box<(Amount, DataDeltaUndo<PoolData>)>),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub(crate) enum DelegationDataUndo {
     Data(Box<DelegationData>),
     DataDelta(Box<DataDeltaUndo<DelegationData>>),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct CreatePoolUndo {
     pub(crate) pool_id: PoolId,
     pub(crate) data_undo: PoolDataUndo,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct CreateDelegationIdUndo {
     pub(crate) delegation_id: DelegationId,
     pub(crate) data_undo: DelegationDataUndo,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct DecommissionPoolUndo {
     pub(crate) pool_id: PoolId,
     pub(crate) data_undo: PoolDataUndo,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct DelegateStakingUndo {
     pub(crate) delegation_target: DelegationId,
     pub(crate) amount_to_delegate: Amount,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct SpendFromShareUndo {
     pub(crate) delegation_id: DelegationId,
     pub(crate) amount: Amount,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum PoSAccountingUndo {
     CreatePool(CreatePoolUndo),
     DecommissionPool(DecommissionPoolUndo),

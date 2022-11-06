@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use super::{
     cached_operation::CachedInputsOperation,
     storage::{
@@ -20,7 +22,7 @@ use super::{
         TransactionVerifierStorageRef,
     },
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
-    BlockUndoEntry, TransactionSource, TransactionVerifier,
+    TransactionSource, TransactionVerifier,
 };
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
@@ -28,12 +30,16 @@ use common::{
         tokens::{TokenAuxiliaryData, TokenId},
         Block, GenBlock, OutPoint, OutPointSourceId, Transaction, TxMainChainIndex,
     },
-    primitives::Id,
+    primitives::{Amount, Id},
+};
+use pos_accounting::{
+    DelegationData, DelegationId, FlushablePoSAccountingView, PoSAccountingDeltaData,
+    PoSAccountingView, PoolData, PoolId,
 };
 use utxo::{BlockUndo, ConsumedUtxoCache, FlushableUtxoView, UtxosStorageRead, UtxosView};
 
-impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStorageRef
-    for TransactionVerifier<'a, S, U>
+impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
+    TransactionVerifierStorageRef for TransactionVerifier<'a, S, U, A>
 {
     fn get_token_id_from_issuance_tx(
         &self,
@@ -86,10 +92,20 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStor
             None => self.storage_ref.get_token_aux_data(token_id),
         }
     }
+
+    fn get_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<pos_accounting::BlockUndo>, TransactionVerifierStorageError> {
+        match self.accounting_delta_undo.data().get(&TransactionSource::Chain(id)) {
+            Some(v) => Ok(Some(v.undo.clone())),
+            None => self.storage_ref.get_accounting_undo(id),
+        }
+    }
 }
 
-impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> UtxosStorageRead
-    for TransactionVerifier<'a, S, U>
+impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> UtxosStorageRead
+    for TransactionVerifier<'a, S, U, A>
 {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<utxo::Utxo>, storage_result::Error> {
         Ok(self.utxo_cache.utxo(outpoint))
@@ -103,15 +119,15 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> UtxosStorageRead
         &self,
         id: Id<Block>,
     ) -> Result<Option<utxo::BlockUndo>, storage_result::Error> {
-        match self.utxo_block_undo.get(&TransactionSource::Chain(id)) {
+        match self.utxo_block_undo.data().get(&TransactionSource::Chain(id)) {
             Some(v) => Ok(Some(v.undo.clone())),
             None => self.storage_ref.get_undo_data(id),
         }
     }
 }
 
-impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStorageMut
-    for TransactionVerifier<'a, S, U>
+impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
+    TransactionVerifierStorageMut for TransactionVerifier<'a, S, U, A>
 {
     fn set_mainchain_tx_index(
         &mut self,
@@ -176,48 +192,105 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStor
             .map_err(TransactionVerifierStorageError::TokensError)
     }
 
-    fn set_undo_data(
+    fn set_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
         new_undo: &BlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
-        match self.utxo_block_undo.entry(tx_source) {
-            std::collections::btree_map::Entry::Vacant(e) => {
-                e.insert(BlockUndoEntry {
-                    undo: new_undo.clone(),
-                    is_fresh: true,
-                });
-            }
-            std::collections::btree_map::Entry::Occupied(mut e) => {
-                e.get_mut().undo.combine(new_undo.clone())?;
-            }
-        };
-        Ok(())
+        self.utxo_block_undo
+            .set_undo_data(tx_source, new_undo)
+            .map_err(TransactionVerifierStorageError::UtxoBlockUndoError)
     }
 
-    fn del_undo_data(
+    fn del_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), TransactionVerifierStorageError> {
-        // delete undo from current cache
-        if self.utxo_block_undo.remove(&tx_source).is_none() {
-            // if current cache doesn't have such data - insert empty undo to be flushed to the parent
-            self.utxo_block_undo.insert(
-                tx_source,
-                BlockUndoEntry {
-                    undo: Default::default(),
-                    is_fresh: false,
-                },
-            );
-        }
-        Ok(())
+        self.utxo_block_undo
+            .del_undo_data(tx_source)
+            .map_err(TransactionVerifierStorageError::UtxoBlockUndoError)
+    }
+
+    fn set_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+        new_undo: &pos_accounting::BlockUndo,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        self.accounting_delta_undo
+            .set_undo_data(tx_source, new_undo)
+            .map_err(TransactionVerifierStorageError::AccountingBlockUndoError)
+    }
+
+    fn del_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        self.accounting_delta_undo
+            .del_undo_data(tx_source)
+            .map_err(TransactionVerifierStorageError::AccountingBlockUndoError)
     }
 }
 
-impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> FlushableUtxoView
-    for TransactionVerifier<'a, S, U>
+impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> FlushableUtxoView
+    for TransactionVerifier<'a, S, U, A>
 {
     fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error> {
         self.utxo_cache.batch_write(utxos)
+    }
+}
+
+impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> PoSAccountingView
+    for TransactionVerifier<'a, S, U, A>
+{
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
+        self.accounting_delta.pool_exists(pool_id)
+    }
+
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error> {
+        self.accounting_delta.get_pool_balance(pool_id)
+    }
+
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error> {
+        self.accounting_delta.get_pool_data(pool_id)
+    }
+
+    fn get_delegation_balance(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, pos_accounting::Error> {
+        self.accounting_delta.get_delegation_balance(delegation_id)
+    }
+
+    fn get_delegation_data(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<DelegationData>, pos_accounting::Error> {
+        self.accounting_delta.get_delegation_data(delegation_id)
+    }
+
+    fn get_pool_delegations_shares(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, pos_accounting::Error> {
+        self.accounting_delta.get_pool_delegations_shares(pool_id)
+    }
+
+    fn get_pool_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, pos_accounting::Error> {
+        self.accounting_delta.get_pool_delegation_share(pool_id, delegation_id)
+    }
+}
+
+impl<'a, S, U, A: PoSAccountingView> FlushablePoSAccountingView
+    for TransactionVerifier<'a, S, U, A>
+{
+    fn batch_write_delta(
+        &mut self,
+        data: PoSAccountingDeltaData,
+    ) -> Result<(), pos_accounting::Error> {
+        self.accounting_delta.batch_write_delta(data)
     }
 }

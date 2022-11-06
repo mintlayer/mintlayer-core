@@ -22,69 +22,86 @@ use crate::{
     DelegationId, PoolId,
 };
 
-use chainstate_types::storage_result::Error;
+use chainstate_types::storage_result;
 
 pub trait PoSAccountingStorageRead {
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error>;
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, storage_result::Error>;
 
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error>;
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, storage_result::Error>;
 
-    fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Option<Amount>, Error>;
+    fn get_delegation_balance(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, storage_result::Error>;
 
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Option<DelegationData>, Error>;
+    ) -> Result<Option<DelegationData>, storage_result::Error>;
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Error>;
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, storage_result::Error>;
 
     fn get_pool_delegation_share(
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Error>;
+    ) -> Result<Option<Amount>, storage_result::Error>;
 }
 
 pub trait PoSAccountingStorageWrite: PoSAccountingStorageRead {
-    fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> Result<(), Error>;
+    fn set_pool_balance(
+        &mut self,
+        pool_id: PoolId,
+        amount: Amount,
+    ) -> Result<(), storage_result::Error>;
 
-    fn del_pool_balance(&mut self, pool_id: PoolId) -> Result<(), Error>;
+    fn del_pool_balance(&mut self, pool_id: PoolId) -> Result<(), storage_result::Error>;
 
-    fn set_pool_data(&mut self, pool_id: PoolId, pool_data: &PoolData) -> Result<(), Error>;
+    fn set_pool_data(
+        &mut self,
+        pool_id: PoolId,
+        pool_data: &PoolData,
+    ) -> Result<(), storage_result::Error>;
 
-    fn del_pool_data(&mut self, pool_id: PoolId) -> Result<(), Error>;
+    fn del_pool_data(&mut self, pool_id: PoolId) -> Result<(), storage_result::Error>;
 
     fn set_delegation_balance(
         &mut self,
         delegation_target: DelegationId,
         amount: Amount,
-    ) -> Result<(), Error>;
+    ) -> Result<(), storage_result::Error>;
 
-    fn del_delegation_balance(&mut self, delegation_target: DelegationId) -> Result<(), Error>;
+    fn del_delegation_balance(
+        &mut self,
+        delegation_target: DelegationId,
+    ) -> Result<(), storage_result::Error>;
 
     fn set_delegation_data(
         &mut self,
         delegation_id: DelegationId,
         delegation_data: &DelegationData,
-    ) -> Result<(), Error>;
+    ) -> Result<(), storage_result::Error>;
 
-    fn del_delegation_data(&mut self, delegation_id: DelegationId) -> Result<(), Error>;
+    fn del_delegation_data(
+        &mut self,
+        delegation_id: DelegationId,
+    ) -> Result<(), storage_result::Error>;
 
     fn set_pool_delegation_share(
         &mut self,
         pool_id: PoolId,
         delegation_id: DelegationId,
         amount: Amount,
-    ) -> Result<(), Error>;
+    ) -> Result<(), storage_result::Error>;
 
     fn del_pool_delegation_share(
         &mut self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<(), Error>;
+    ) -> Result<(), storage_result::Error>;
 }
 
 #[cfg(test)]

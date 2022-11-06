@@ -12,13 +12,14 @@ chainstate = { path = '../' }
 chainstate-storage = { path = '../storage' }
 chainstate-types = { path = '../types' }
 common = { path = '../../common' }
-test-utils = {path = '../../test-utils'}
+consensus = { path = '../../consensus' }
 crypto = { path = '../../crypto' }
+logging = { path = '../../logging' }
+pos_accounting = {path = '../../pos_accounting'}
 serialization = { path = '../../serialization' }
+test-utils = {path = '../../test-utils'}
 tx-verifier = { path = '../tx-verifier' }
 utils = { path = '../../utils' }
-consensus = { path = '../../consensus' }
-logging = { path = '../../logging' }
 utxo = { path = '../../utxo' }
 
 hex = "0.4"

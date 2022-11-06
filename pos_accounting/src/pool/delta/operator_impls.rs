@@ -35,7 +35,7 @@ use crate::{
 
 use super::PoSAccountingDelta;
 
-impl<'a> PoSAccountingOperations for PoSAccountingDelta<'a> {
+impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<'a, P> {
     fn create_pool(
         &mut self,
         input0_outpoint: &OutPoint,
@@ -186,7 +186,7 @@ impl<'a> PoSAccountingOperations for PoSAccountingDelta<'a> {
     }
 }
 
-impl<'a> PoSAccountingDelta<'a> {
+impl<'a, P: PoSAccountingView> PoSAccountingDelta<'a, P> {
     fn undo_create_pool(&mut self, undo: CreatePoolUndo) -> Result<(), Error> {
         let (pledge_amount, undo_data) = match undo.data_undo {
             PoolDataUndo::DataDelta(v) => *v,
