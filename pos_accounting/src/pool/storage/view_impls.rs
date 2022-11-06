@@ -19,8 +19,13 @@ use common::primitives::Amount;
 
 use crate::{
     error::Error,
-    pool::{delegation::DelegationData, pool_data::PoolData, view::PoSAccountingView},
-    storage::PoSAccountingStorageRead,
+    pool::{
+        delegation::DelegationData,
+        delta::data::PoSAccountingDeltaData,
+        pool_data::PoolData,
+        view::{FlushablePoSAccountingView, PoSAccountingView},
+    },
+    storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
     DelegationId, PoolId,
 };
 
@@ -107,5 +112,11 @@ impl<'a, S: PoSAccountingStorageRead> PoSAccountingView for PoSAccountingDBMut<'
         self.store
             .get_pool_delegation_share(pool_id, delegation_id)
             .map_err(Error::from)
+    }
+}
+
+impl<'a, S: PoSAccountingStorageWrite> FlushablePoSAccountingView for PoSAccountingDBMut<'a, S> {
+    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<(), Error> {
+        self.merge_with_delta(data).map(|_| ())
     }
 }

@@ -17,12 +17,16 @@ use std::collections::BTreeMap;
 
 use super::DataDelta;
 
+use serialization::{Decode, Encode};
+
 /// The operations we have to do in order to undo a delta
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub(super) enum DataDeltaUndoOpInternal<T> {
     Write(DataDelta<T>),
     Erase,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct DataDeltaUndoOp<T>(pub(super) DataDeltaUndoOpInternal<T>);
 
 pub struct DeltaDataUndoCollection<K: Ord, T> {

@@ -23,7 +23,7 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
-use utxo::{BlockUndo, Utxo};
+use utxo::Utxo;
 
 storage::decl_schema! {
     /// Database schema for blockchain storage
@@ -40,8 +40,8 @@ storage::decl_schema! {
         pub DBBlockByHeight: Map<BlockHeight, Id<GenBlock>>,
         /// Store for Utxo Entries
         pub DBUtxo: Map<OutPoint, Utxo>,
-        /// Store for BlockUndo
-        pub DBBlockUndo: Map<Id<Block>, BlockUndo>,
+        /// Store for utxo BlockUndo
+        pub DBBlockUndo: Map<Id<Block>, utxo::BlockUndo>,
         /// Store for token's info; created on issuance
         pub DBTokensAuxData: Map<TokenId, TokenAuxiliaryData>,
         /// Store of issuance tx id vs token id

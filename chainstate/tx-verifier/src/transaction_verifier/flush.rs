@@ -86,14 +86,28 @@ pub fn flush_to_storage(
     // flush utxo set
     storage.batch_write(consumed.utxo_cache)?;
 
-    // flush block undo
+    // flush utxo block undo
     for (tx_source, entry) in consumed.utxo_block_undo {
         if entry.is_fresh {
-            storage.set_undo_data(tx_source, &entry.undo)?;
+            storage.set_utxo_undo_data(tx_source, &entry.undo)?;
         } else if entry.undo.is_empty() {
-            storage.del_undo_data(tx_source)?;
+            storage.del_utxo_undo_data(tx_source)?;
         } else {
-            unreachable!("BlockUndo was not used up completely")
+            panic!("BlockUndo was not used up completely")
+        }
+    }
+
+    // flush pos accounting
+    storage.batch_write_delta(consumed.accounting_delta)?;
+
+    // flush accounting block undo
+    for (tx_source, entry) in consumed.accounting_delta_undo {
+        if entry.is_fresh {
+            storage.set_accounting_undo_data(tx_source, &entry.undo)?;
+        } else if entry.undo.is_empty() {
+            storage.del_accounting_undo_data(tx_source)?;
+        } else {
+            panic!("BlockUndo was not used up completely")
         }
     }
 

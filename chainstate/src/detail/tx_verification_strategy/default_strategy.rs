@@ -26,6 +26,7 @@ use common::{
     chain::{Block, ChainConfig},
     primitives::{id::WithId, Amount, Idable},
 };
+use pos_accounting::PoSAccountingView;
 use tx_verifier::transaction_verifier::{
     config::TransactionVerifierConfig, error::ConnectTransactionError,
     storage::TransactionVerifierStorageRef, BlockTransactableRef, BlockTransactableWithIndexRef,
@@ -49,7 +50,7 @@ impl Default for DefaultTransactionVerificationStrategy {
 }
 
 impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy {
-    fn connect_block<'a, H, S, M, U>(
+    fn connect_block<'a, H, S, M, U, A>(
         &self,
         tx_verifier_maker: M,
         block_index_handle: &'a H,
@@ -58,12 +59,17 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         verifier_config: TransactionVerifierConfig,
         block_index: &'a BlockIndex,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S, U>, BlockError>
+    ) -> Result<TransactionVerifier<'a, S, U, A>, BlockError>
     where
         H: BlockIndexHandle,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>,
+        A: PoSAccountingView,
+        M: Fn(
+            &'a S,
+            &'a ChainConfig,
+            TransactionVerifierConfig,
+        ) -> TransactionVerifier<'a, S, U, A>,
     {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past =
@@ -115,18 +121,23 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         Ok(tx_verifier)
     }
 
-    fn disconnect_block<'a, S, M, U>(
+    fn disconnect_block<'a, S, M, U, A>(
         &self,
         tx_verifier_maker: M,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S, U>, BlockError>
+    ) -> Result<TransactionVerifier<'a, S, U, A>, BlockError>
     where
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>,
+        A: PoSAccountingView,
+        M: Fn(
+            &'a S,
+            &'a ChainConfig,
+            TransactionVerifierConfig,
+        ) -> TransactionVerifier<'a, S, U, A>,
     {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
 

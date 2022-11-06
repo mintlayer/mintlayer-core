@@ -16,11 +16,9 @@
 use common::primitives::Id;
 use typename::TypeName;
 
-pub mod error;
-pub mod pool;
-pub mod storage;
-
-pub use error::Error;
+mod error;
+mod pool;
+mod storage;
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, TypeName)]
 pub struct Pool;
@@ -29,3 +27,18 @@ pub type PoolId = Id<Pool>;
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, TypeName)]
 pub struct Delegation;
 pub type DelegationId = Id<Delegation>;
+
+pub use crate::{
+    error::Error,
+    pool::{
+        block_undo::{BlockUndo, BlockUndoError, TxUndo},
+        delegation::DelegationData,
+        delta::{data::PoSAccountingDeltaData, PoSAccountingDelta},
+        helpers::make_pool_id,
+        operations::{PoSAccountingOperations, PoSAccountingUndo},
+        pool_data::PoolData,
+        storage::{PoSAccountingDB, PoSAccountingDBMut},
+        view::{FlushablePoSAccountingView, PoSAccountingView},
+    },
+    storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
+};

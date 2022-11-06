@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod block_undo;
 pub mod delegation;
 pub mod delta;
 pub mod helpers;

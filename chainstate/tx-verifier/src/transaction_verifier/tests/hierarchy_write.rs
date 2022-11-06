@@ -26,7 +26,7 @@ use common::chain::{
 use mockall::predicate::eq;
 use rstest::rstest;
 use test_utils::random::Seed;
-use utxo::TxUndoWithSources;
+use utxo::{BlockRewardUndo, BlockUndo, TxUndoWithSources};
 
 // TODO: ConsumedUtxoCache is not checked in these tests, think how to expose it from utxo crate
 
@@ -74,8 +74,9 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(()));
     store
-        .expect_set_undo_data()
+        .expect_set_utxo_undo_data()
         .with(
             eq(TransactionSource::Chain(block_1_id)),
             eq(block_1_undo.clone()),
@@ -83,7 +84,7 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
         .times(1)
         .return_const(Ok(()));
     store
-        .expect_set_undo_data()
+        .expect_set_utxo_undo_data()
         .with(
             eq(TransactionSource::Chain(block_2_id)),
             eq(block_2_undo.clone()),
@@ -94,24 +95,24 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     verifier1.utxo_cache.add_utxo(&outpoint1, utxo1, false).unwrap();
-    verifier1.utxo_block_undo.insert(
+    verifier1.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
         TransactionSource::Chain(block_1_id),
-        BlockUndoEntry {
+        UtxosBlockUndoEntry {
             undo: block_1_undo,
             is_fresh: true,
         },
-    );
+    )]));
 
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
         verifier.utxo_cache.add_utxo(&outpoint2, utxo2, false).unwrap();
-        verifier.utxo_block_undo.insert(
+        verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_2_id),
-            BlockUndoEntry {
+            UtxosBlockUndoEntry {
                 undo: block_2_undo,
                 is_fresh: true,
             },
-        );
+        )]));
         verifier
     };
 
@@ -150,6 +151,7 @@ fn tx_index_set_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(()));
     store
         .expect_set_mainchain_tx_index()
         .with(eq(outpoint1.clone()), eq(tx_index_1.clone()))
@@ -216,6 +218,7 @@ fn tokens_set_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(()));
     store
         .expect_set_token_aux_data()
         .with(eq(token_id_1), eq(token_data_1.clone()))
@@ -305,38 +308,39 @@ fn utxo_del_from_chain_hierarchy(#[case] seed: Seed) {
         .return_const(Ok(Some(utxo2)));
 
     store
-        .expect_del_undo_data()
+        .expect_del_utxo_undo_data()
         .with(eq(TransactionSource::Chain(block_1_id)))
         .times(1)
         .return_const(Ok(()));
     store
-        .expect_del_undo_data()
+        .expect_del_utxo_undo_data()
         .with(eq(TransactionSource::Chain(block_2_id)))
         .times(1)
         .return_const(Ok(()));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(()));
 
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     verifier1.utxo_cache.spend_utxo(&outpoint1).unwrap();
-    verifier1.utxo_block_undo.insert(
+    verifier1.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
         TransactionSource::Chain(block_1_id),
-        BlockUndoEntry {
+        UtxosBlockUndoEntry {
             undo: block_1_undo,
             is_fresh: false,
         },
-    );
+    )]));
 
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
         verifier.utxo_cache.spend_utxo(&outpoint2).unwrap();
-        verifier.utxo_block_undo.insert(
+        verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_2_id),
-            BlockUndoEntry {
+            UtxosBlockUndoEntry {
                 undo: block_2_undo,
                 is_fresh: false,
             },
-        );
+        )]));
         verifier
     };
 
@@ -370,6 +374,7 @@ fn tx_index_del_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(()));
     store
         .expect_del_mainchain_tx_index()
         .with(eq(outpoint1.clone()))
@@ -425,6 +430,7 @@ fn tokens_del_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(()));
     store
         .expect_del_token_aux_data()
         .with(eq(token_id_1))
@@ -484,6 +490,7 @@ fn utxo_conflict_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(()));
 
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
@@ -551,7 +558,7 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store
-        .expect_set_undo_data()
+        .expect_set_utxo_undo_data()
         .with(
             eq(TransactionSource::Chain(block_id)),
             eq(expected_block_undo),
@@ -559,26 +566,27 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
         .times(1)
         .return_const(Ok(()));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(()));
 
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
-    verifier1.utxo_block_undo.insert(
+    verifier1.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
         TransactionSource::Chain(block_id),
-        BlockUndoEntry {
+        UtxosBlockUndoEntry {
             undo: block_undo_1,
             is_fresh: true,
         },
-    );
+    )]));
 
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
-        verifier.utxo_block_undo.insert(
+        verifier.utxo_block_undo = UtxosBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_id),
-            BlockUndoEntry {
+            UtxosBlockUndoEntry {
                 undo: block_undo_2,
                 is_fresh: true,
             },
-        );
+        )]));
         verifier
     };
 
@@ -616,6 +624,7 @@ fn tx_index_conflict_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(()));
     store
         .expect_set_mainchain_tx_index()
         .with(eq(outpoint1.clone()), eq(tx_index_2.clone()))
@@ -676,6 +685,7 @@ fn tokens_conflict_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(()));
     store
         .expect_set_token_aux_data()
         .with(eq(token_id_1), eq(token_data_1.clone()))
@@ -716,6 +726,225 @@ fn tokens_conflict_hierarchy(#[case] seed: Seed) {
             TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(token_id_1),
         )
     );
+
+    let consumed_verifier1 = verifier1.consume().unwrap();
+    flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+    let chain_config = ConfigBuilder::test_chain().build();
+
+    let (outpoint1, _) = create_utxo(&mut rng, 1000);
+    let (outpoint2, _) = create_utxo(&mut rng, 2000);
+
+    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+
+    let pool_balance1 = Amount::from_atoms(200);
+    let pool_balance2 = Amount::from_atoms(300);
+
+    let pool_id_1 = pos_accounting::make_pool_id(&outpoint1);
+    let pool_id_2 = pos_accounting::make_pool_id(&outpoint2);
+
+    let mut store = mock::MockStore::new();
+    store
+        .expect_get_best_block_for_utxos()
+        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_batch_write().times(1).return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+
+    store
+        .expect_get_pool_balance()
+        .with(eq(pool_id_1))
+        .times(1)
+        .return_const(Ok(None));
+    store
+        .expect_get_pool_balance()
+        .with(eq(pool_id_2))
+        .times(1)
+        .return_const(Ok(None));
+
+    store.expect_get_pool_data().with(eq(pool_id_1)).times(1).return_const(Ok(None));
+    store.expect_get_pool_data().with(eq(pool_id_2)).times(1).return_const(Ok(None));
+
+    let mut verifier1 =
+        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+    verifier1
+        .accounting_delta
+        .create_pool(&outpoint1, pool_balance1, pub_key1)
+        .unwrap();
+
+    let mut verifier2 = verifier1.derive_child();
+    verifier2
+        .accounting_delta
+        .create_pool(&outpoint2, pool_balance2, pub_key2)
+        .unwrap();
+
+    let consumed_verifier2 = verifier2.consume().unwrap();
+    flush::flush_to_storage(&mut verifier1, consumed_verifier2).unwrap();
+
+    let consumed_verifier1 = verifier1.consume().unwrap();
+    flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+    let chain_config = ConfigBuilder::test_chain().build();
+
+    let (outpoint1, _) = create_utxo(&mut rng, 1000);
+    let (outpoint2, _) = create_utxo(&mut rng, 2000);
+
+    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+
+    let pool_balance1 = Amount::from_atoms(200);
+    let pool_balance2 = Amount::from_atoms(300);
+
+    let block_undo_id_1: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
+
+    let mut store = mock::MockStore::new();
+    store
+        .expect_get_best_block_for_utxos()
+        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_batch_write().times(1).return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+
+    store.expect_get_pool_balance().return_const(Ok(None));
+    store.expect_get_pool_data().return_const(Ok(None));
+
+    store
+        .expect_set_accounting_undo_data()
+        .withf(move |id, undo| *id == TransactionSource::Chain(block_undo_id_1) && !undo.is_empty())
+        .times(1)
+        .return_const(Ok(()));
+    store
+        .expect_set_accounting_undo_data()
+        .withf(move |id, undo| *id == TransactionSource::Chain(block_undo_id_2) && !undo.is_empty())
+        .times(1)
+        .return_const(Ok(()));
+
+    let mut verifier1 = {
+        let mut verifier =
+            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+        let (_, undo) = verifier
+            .accounting_delta
+            .create_pool(&outpoint1, pool_balance1, pub_key1)
+            .unwrap();
+
+        let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
+        let block_undo = pos_accounting::BlockUndo::new(BTreeMap::from([(
+            tx_id,
+            pos_accounting::TxUndo::new(vec![undo]),
+        )]));
+
+        verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
+            TransactionSource::Chain(block_undo_id_1),
+            AccountsBlockUndoEntry {
+                undo: block_undo,
+                is_fresh: true,
+            },
+        )]));
+        verifier
+    };
+
+    let verifier2 = {
+        let mut verifier = verifier1.derive_child();
+        let (_, undo) = verifier
+            .accounting_delta
+            .create_pool(&outpoint2, pool_balance2, pub_key2)
+            .unwrap();
+
+        let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
+        let block_undo = pos_accounting::BlockUndo::new(BTreeMap::from([(
+            tx_id,
+            pos_accounting::TxUndo::new(vec![undo]),
+        )]));
+
+        verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
+            TransactionSource::Chain(block_undo_id_2),
+            AccountsBlockUndoEntry {
+                undo: block_undo,
+                is_fresh: true,
+            },
+        )]));
+        verifier
+    };
+
+    let consumed_verifier2 = verifier2.consume().unwrap();
+    flush::flush_to_storage(&mut verifier1, consumed_verifier2).unwrap();
+
+    let consumed_verifier1 = verifier1.consume().unwrap();
+    flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+    let chain_config = ConfigBuilder::test_chain().build();
+
+    let block_undo_id_1: Id<Block> = Id::new(H256::random_using(&mut rng));
+    let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
+
+    let mut store = mock::MockStore::new();
+    store
+        .expect_get_best_block_for_utxos()
+        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_batch_write().times(1).return_const(Ok(()));
+    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+
+    store.expect_get_pool_balance().return_const(Ok(None));
+    store.expect_get_pool_data().return_const(Ok(None));
+
+    store
+        .expect_del_accounting_undo_data()
+        .with(eq(TransactionSource::Chain(block_undo_id_1)))
+        .times(1)
+        .return_const(Ok(()));
+    store
+        .expect_del_accounting_undo_data()
+        .with(eq(TransactionSource::Chain(block_undo_id_2)))
+        .times(1)
+        .return_const(Ok(()));
+
+    let mut verifier1 = {
+        let mut verifier =
+            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+
+        verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
+            TransactionSource::Chain(block_undo_id_1),
+            AccountsBlockUndoEntry {
+                undo: Default::default(),
+                is_fresh: false,
+            },
+        )]));
+        verifier
+    };
+
+    let verifier2 = {
+        let mut verifier = verifier1.derive_child();
+
+        verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
+            TransactionSource::Chain(block_undo_id_2),
+            AccountsBlockUndoEntry {
+                undo: Default::default(),
+                is_fresh: false,
+            },
+        )]));
+        verifier
+    };
+
+    let consumed_verifier2 = verifier2.consume().unwrap();
+    flush::flush_to_storage(&mut verifier1, consumed_verifier2).unwrap();
 
     let consumed_verifier1 = verifier1.consume().unwrap();
     flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();

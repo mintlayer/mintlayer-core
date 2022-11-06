@@ -102,7 +102,9 @@ impl BlockUndo {
     ) -> Result<Self, BlockUndoError> {
         let mut block_undo = BlockUndo {
             reward_undo,
-            ..Default::default()
+            tx_undos: Default::default(),
+            child_parent_dependencies: Default::default(),
+            parent_child_dependencies: Default::default(),
         };
         tx_undos
             .into_iter()
