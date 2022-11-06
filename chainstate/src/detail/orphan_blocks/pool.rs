@@ -95,12 +95,12 @@ impl OrphanBlocksPool {
         self.del_one_deepest_child(&id);
     }
 
-    pub fn add_block(&mut self, block: WithId<Block>) -> Result<(), OrphanAddError> {
+    pub fn add_block(&mut self, block: WithId<Block>) -> Result<(), Box<OrphanAddError>> {
         self.prune();
         let block_id = block.get_id();
         if self.orphan_by_id.contains_key(&block_id) {
-            return Err(OrphanAddError::BlockAlreadyInOrphanList(WithId::take(
-                block,
+            return Err(Box::new(OrphanAddError::BlockAlreadyInOrphanList(
+                WithId::take(block),
             )));
         }
 
@@ -384,7 +384,7 @@ mod tests {
         let rand_block = blocks.choose(&mut rng).expect("this should return any block");
 
         assert_eq!(
-            orphans_pool.add_block(rand_block.clone().into()).unwrap_err(),
+            *orphans_pool.add_block(rand_block.clone().into()).unwrap_err(),
             OrphanAddError::BlockAlreadyInOrphanList(rand_block.clone())
         );
     }

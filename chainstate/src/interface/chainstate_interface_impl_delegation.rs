@@ -311,8 +311,8 @@ mod tests {
             )
             .unwrap();
 
-            test_interface_ref(&boxed_chainstate, &*chain_config);
-            test_interface(boxed_chainstate, &*chain_config);
+            test_interface_ref(&boxed_chainstate, &chain_config);
+            test_interface(boxed_chainstate, &chain_config);
         });
     }
 }

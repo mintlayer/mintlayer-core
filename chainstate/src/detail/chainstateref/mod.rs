@@ -940,7 +940,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
     fn new_orphan_block(&mut self, block: WithId<Block>) -> Result<(), OrphanCheckError> {
         match self.orphan_blocks.add_block(block) {
             Ok(_) => Ok(()),
-            Err(err) => err.into(),
+            Err(err) => (*err).into(),
         }
     }
 }
