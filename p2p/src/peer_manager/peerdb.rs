@@ -397,7 +397,7 @@ impl<T: NetworkingService> PeerDb<T> {
         self.available.remove(peer_id);
 
         if let Some(address) =
-            self.peers.get(peer_id).and_then(|p| p.address()).and_then(|a| a.as_bannable())
+            self.peers.get(peer_id).and_then(|p| p.address()).map(|a| a.as_bannable())
         {
             let ban_till = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -405,7 +405,9 @@ impl<T: NetworkingService> PeerDb<T> {
                 .expect("Invalid system time")
                 + BAN_DURATION;
             self.banned.insert(address, ban_till);
-        };
+        } else {
+            log::error!("Failed to get address for peer {}", peer_id);
+        }
     }
 
     /// Adjust peer score

@@ -135,14 +135,15 @@ impl NetworkingService for Libp2pService {
 impl AsBannableAddress for Multiaddr {
     type BannableAddress = IpAddr;
 
-    fn as_bannable(&self) -> Option<Self::BannableAddress> {
+    fn as_bannable(&self) -> Self::BannableAddress {
+        // TODO: using a loop is wrong here. There should be a function that extracts the address from Multiaddr
         for component in self.iter() {
             match component {
-                libp2p::multiaddr::Protocol::Ip4(a) => return Some(a.into()),
-                libp2p::multiaddr::Protocol::Ip6(a) => return Some(a.into()),
+                libp2p::multiaddr::Protocol::Ip4(a) => return a.into(),
+                libp2p::multiaddr::Protocol::Ip6(a) => return a.into(),
                 _ => continue,
             }
         }
-        None
+        panic!("Failed to get bannable address from address {:?}", self);
     }
 }

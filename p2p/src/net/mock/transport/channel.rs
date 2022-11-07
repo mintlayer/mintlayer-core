@@ -155,8 +155,8 @@ impl MockStream for ChannelMockStream {
 impl AsBannableAddress for Address {
     type BannableAddress = Address;
 
-    fn as_bannable(&self) -> Option<Self::BannableAddress> {
-        Some(*self)
+    fn as_bannable(&self) -> Self::BannableAddress {
+        *self
     }
 }
 

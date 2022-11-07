@@ -188,5 +188,5 @@ where
 pub trait AsBannableAddress {
     type BannableAddress;
 
-    fn as_bannable(&self) -> Option<Self::BannableAddress>;
+    fn as_bannable(&self) -> Self::BannableAddress;
 }

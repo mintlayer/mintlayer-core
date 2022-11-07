@@ -181,8 +181,8 @@ impl Encoder<Message> for EncoderDecoder {
 impl AsBannableAddress for SocketAddr {
     type BannableAddress = IpAddr;
 
-    fn as_bannable(&self) -> Option<Self::BannableAddress> {
-        Some(self.ip())
+    fn as_bannable(&self) -> Self::BannableAddress {
+        self.ip()
     }
 }
 

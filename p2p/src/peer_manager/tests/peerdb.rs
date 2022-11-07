@@ -147,7 +147,7 @@ fn adjust_peer_score_normal_threshold() {
     let id = add_active_peer(&mut peerdb);
     assert!(peerdb.adjust_peer_score(&id, 100));
 
-    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable().unwrap();
+    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable();
     assert!(peerdb.is_address_banned(&address));
 }
 
@@ -162,7 +162,7 @@ fn adjust_peer_score_higher_threshold() {
     let id = add_active_peer(&mut peerdb);
     assert!(!peerdb.adjust_peer_score(&id, 100));
 
-    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable().unwrap();
+    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable();
     assert!(!peerdb.is_address_banned(&address));
 }
 
@@ -176,7 +176,7 @@ fn adjust_peer_score_lower_threshold() {
 
     let id = add_active_peer(&mut peerdb);
     assert!(peerdb.adjust_peer_score(&id, 30));
-    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable().unwrap();
+    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable();
     assert!(peerdb.is_address_banned(&address));
 }
 
@@ -192,7 +192,7 @@ fn ban_peer() {
         peerdb.peers().get(&id),
         Some(Peer::Banned(_))
     ));
-    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable().unwrap();
+    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable();
     assert!(peerdb.is_address_banned(&address));
     assert!(!peerdb.available().contains(&id));
 
@@ -204,7 +204,7 @@ fn ban_peer() {
         peerdb.peers().get(&id),
         Some(Peer::Banned(_))
     ));
-    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable().unwrap();
+    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable();
     assert!(peerdb.is_address_banned(&address));
     assert!(!peerdb.available().contains(&id));
 
