@@ -20,7 +20,7 @@ use libp2p::{multiaddr, Multiaddr, PeerId};
 use super::*;
 use crate::{
     config,
-    net::{libp2p::Libp2pService, types},
+    net::{libp2p::Libp2pService, types, AsBannableAddress},
     peer_manager::peerdb::{Peer, PeerDb},
 };
 
@@ -41,14 +41,14 @@ fn make_peer_info() -> (PeerId, types::PeerInfo<Libp2pService>) {
 
 fn add_active_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
     let (id, info) = make_peer_info();
-    peerdb.peer_connected(Multiaddr::empty(), info);
+    peerdb.peer_connected("/ip4/160.9.112.44".parse().unwrap(), info);
 
     id
 }
 
 fn add_idle_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
     let (id, info) = make_peer_info();
-    peerdb.register_peer_info(Multiaddr::empty(), info);
+    peerdb.register_peer_info("/ip4/160.9.112.45".parse().unwrap(), info);
 
     id
 }
@@ -64,12 +64,16 @@ fn add_discovered_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
     peer_id
 }
 
-fn add_banned_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
+fn add_banned_peer_address(peerdb: &mut PeerDb<Libp2pService>, address: Multiaddr) -> PeerId {
     let (id, info) = make_peer_info();
-    peerdb.register_peer_info(Multiaddr::empty(), info);
+    peerdb.register_peer_info(address, info);
     peerdb.ban_peer(&id);
 
     id
+}
+
+fn add_banned_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
+    add_banned_peer_address(peerdb, "/ip4/160.9.112.46".parse().unwrap())
 }
 
 #[test]
@@ -104,8 +108,15 @@ fn num_active_peers() {
     assert_eq!(peerdb.peers().len(), 7);
 
     // add 5 banned peers
-    for _ in 0..5 {
-        let _id = add_banned_peer(&mut peerdb);
+    let addresses = [
+        "/ip4/160.9.112.1",
+        "/ip4/160.9.112.2",
+        "/ip4/160.9.112.3",
+        "/ip4/160.9.112.4",
+        "/ip4/160.9.112.5",
+    ];
+    for address in addresses {
+        let _id = add_banned_peer_address(&mut peerdb, address.parse().unwrap());
     }
     assert_eq!(peerdb.idle_peer_count(), 4);
     assert_eq!(peerdb.active_peer_count(), 3);
@@ -135,7 +146,9 @@ fn adjust_peer_score_normal_threshold() {
 
     let id = add_active_peer(&mut peerdb);
     assert!(peerdb.adjust_peer_score(&id, 100));
-    assert!(peerdb.banned().contains(&id));
+
+    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable();
+    assert!(peerdb.is_address_banned(&address));
 }
 
 #[test]
@@ -148,7 +161,9 @@ fn adjust_peer_score_higher_threshold() {
 
     let id = add_active_peer(&mut peerdb);
     assert!(!peerdb.adjust_peer_score(&id, 100));
-    assert!(!peerdb.banned().contains(&id));
+
+    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable();
+    assert!(!peerdb.is_address_banned(&address));
 }
 
 #[test]
@@ -161,17 +176,13 @@ fn adjust_peer_score_lower_threshold() {
 
     let id = add_active_peer(&mut peerdb);
     assert!(peerdb.adjust_peer_score(&id, 30));
-    assert!(peerdb.banned().contains(&id));
+    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable();
+    assert!(peerdb.is_address_banned(&address));
 }
 
 #[test]
 fn ban_peer() {
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
-
-    // unknown peer only updates the `banned` set
-    assert_eq!(peerdb.banned().len(), 0);
-    peerdb.ban_peer(&PeerId::random());
-    assert_eq!(peerdb.banned().len(), 1);
 
     // idle peer
     let id = add_banned_peer(&mut peerdb);
@@ -181,7 +192,8 @@ fn ban_peer() {
         peerdb.peers().get(&id),
         Some(Peer::Banned(_))
     ));
-    assert!(peerdb.banned().contains(&id));
+    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable();
+    assert!(peerdb.is_address_banned(&address));
     assert!(!peerdb.available().contains(&id));
 
     // active peer
@@ -192,7 +204,8 @@ fn ban_peer() {
         peerdb.peers().get(&id),
         Some(Peer::Banned(_))
     ));
-    assert!(peerdb.banned().contains(&id));
+    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable();
+    assert!(peerdb.is_address_banned(&address));
     assert!(!peerdb.available().contains(&id));
 
     // discovered peer
@@ -203,7 +216,6 @@ fn ban_peer() {
         peerdb.peers().get(&id),
         Some(Peer::Banned(_))
     ));
-    assert!(peerdb.banned().contains(&id));
     assert!(!peerdb.available().contains(&id));
 }
 

@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{io, net::SocketAddr};
+use std::{
+    io,
+    net::{IpAddr, SocketAddr},
+};
 
 use async_trait::async_trait;
 use bytes::{Buf, BytesMut};
@@ -27,9 +30,12 @@ use serialization::{Decode, Encode};
 
 use crate::{
     constants::MAX_MESSAGE_SIZE,
-    net::mock::{
-        transport::{MockListener, MockStream, MockTransport},
-        types::Message,
+    net::{
+        mock::{
+            transport::{MockListener, MockStream, MockTransport},
+            types::Message,
+        },
+        AsBannableAddress, IsBannableAddress,
     },
     P2pError, Result,
 };
@@ -40,6 +46,7 @@ pub struct TcpMockTransport {}
 #[async_trait]
 impl MockTransport for TcpMockTransport {
     type Address = SocketAddr;
+    type BannableAddress = IpAddr;
     type Listener = TcpListener;
     type Stream = TcpMockStream;
 
@@ -168,6 +175,20 @@ impl Encoder<Message> for EncoderDecoder {
         dst.extend_from_slice(&encoded);
 
         Ok(())
+    }
+}
+
+impl AsBannableAddress for SocketAddr {
+    type BannableAddress = IpAddr;
+
+    fn as_bannable(&self) -> Self::BannableAddress {
+        self.ip()
+    }
+}
+
+impl IsBannableAddress for SocketAddr {
+    fn is_bannable(&self) -> bool {
+        true
     }
 }
 

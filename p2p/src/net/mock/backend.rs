@@ -388,18 +388,16 @@ where
         loop {
             tokio::select! {
                 // Accept a new peer connection.
-                res = self.socket.accept() => match res {
-                    Ok(info) => {
-                        self.create_peer(
-                            info.0,
-                            self.local_peer_id,
-                            MockPeerId::from_socket_address::<T>(&info.1),
-                            peer::Role::Inbound,
-                            ConnectionState::InboundAccepted { address: info.1 }
-                        ).await?;
-                    }
-                    Err(_err) => return Err(P2pError::Other("accept() failed")),
-                },
+                res = self.socket.accept() => {
+                    let (stream, address) = res.map_err(|_| P2pError::Other("accept() failed"))?;
+                    self.create_peer(
+                        stream,
+                        self.local_peer_id,
+                        MockPeerId::from_socket_address::<T>(&address),
+                        peer::Role::Inbound,
+                        ConnectionState::InboundAccepted { address }
+                    ).await?;
+                }
                 // Handle peer events.
                 event = self.peer_chan.1.recv().fuse() => {
                     let (peer, event) = event.ok_or(P2pError::ChannelClosed)?;
@@ -550,24 +548,34 @@ where
             Command::Connect { address, response } => {
                 self.connect(address, response).await?;
             }
-            Command::Disconnect { peer_id, response } |
-            // TODO: implement proper banning mechanism
-            Command::BanPeer { peer_id, response } => {
+            Command::Disconnect { peer_id, response } | Command::BanPeer { peer_id, response } => {
                 let res = self.disconnect_peer(&peer_id).await;
                 response.send(res).map_err(|_| P2pError::ChannelClosed)?;
             }
-            Command::SendRequest { peer_id, message, response } => {
+            Command::SendRequest {
+                peer_id,
+                message,
+                response,
+            } => {
                 let res = self.send_request(&peer_id, message).await;
                 response.send(res).map_err(|_| P2pError::ChannelClosed)?;
             }
-            Command::SendResponse { request_id, message, response } => {
+            Command::SendResponse {
+                request_id,
+                message,
+                response,
+            } => {
                 let res = self.send_response(request_id, message).await;
                 response.send(res).map_err(|_| P2pError::ChannelClosed)?;
             }
             Command::Subscribe { topics } => {
                 self.subscribe(topics).await;
             }
-            Command::AnnounceData { topic, message, response } => {
+            Command::AnnounceData {
+                topic,
+                message,
+                response,
+            } => {
                 let res = self.announce_data(topic, message).await;
                 response.send(res).map_err(|_| P2pError::ChannelClosed)?;
             }

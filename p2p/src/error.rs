@@ -41,6 +41,8 @@ pub enum ProtocolError {
     InvalidProtocol,
     #[error("Peer state is invalid for this operation. State is {0} but should be {1}")]
     InvalidState(&'static str, &'static str),
+    #[error("Unable to convert the address to a bannable form: {0}")]
+    UnableToConvertAddressToBannable(String),
 }
 
 /// Peer state errors (Errors either for an individual peer or for the [`PeerManager`])
@@ -295,6 +297,7 @@ impl BanScore for ProtocolError {
             ProtocolError::Unresponsive => 100,
             ProtocolError::InvalidProtocol => 100,
             ProtocolError::InvalidState(_, _) => 100,
+            ProtocolError::UnableToConvertAddressToBannable(_) => 100,
         }
     }
 }

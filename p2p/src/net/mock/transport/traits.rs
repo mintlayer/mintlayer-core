@@ -17,13 +17,28 @@ use std::{fmt::Debug, hash::Hash, str::FromStr};
 
 use async_trait::async_trait;
 
-use crate::{net::mock::types::Message, Result};
+use crate::{
+    net::{mock::types::Message, AsBannableAddress, IsBannableAddress},
+    Result,
+};
 
 /// An abstraction layer for creating and opening connections.
 #[async_trait]
 pub trait MockTransport: Send + 'static {
     /// An address type.
-    type Address: Clone + Debug + Eq + Hash + Send + Sync + ToString + FromStr;
+    type Address: Clone
+        + Debug
+        + Eq
+        + Hash
+        + Send
+        + Sync
+        + ToString
+        + FromStr
+        + AsBannableAddress<BannableAddress = Self::BannableAddress>
+        + IsBannableAddress;
+
+    /// A bannable address format.
+    type BannableAddress: Debug + Eq + Ord + Send;
 
     /// A listener type.
     type Listener: MockListener<Self::Stream, Self::Address>;

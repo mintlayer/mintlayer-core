@@ -28,16 +28,21 @@
 //!
 //! TODO: reserved peers
 
+use std::{
+    collections::{hash_map::Entry, BTreeMap, HashMap, HashSet, VecDeque},
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+
+use logging::log;
+
 use crate::{
     config,
     error::P2pError,
-    net::{types, NetworkingService},
+    net::{types, AsBannableAddress, NetworkingService},
 };
-use logging::log;
-use std::{
-    collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
-    sync::Arc,
-};
+
+const BAN_DURATION: Duration = Duration::from_secs(60 * 60 * 24);
 
 #[derive(Debug)]
 pub struct PeerContext<T: NetworkingService> {
@@ -61,6 +66,15 @@ pub enum BannedPeer<T: NetworkingService> {
     Unknown,
 }
 
+impl<T: NetworkingService> BannedPeer<T> {
+    pub fn address(&self) -> Option<&T::Address> {
+        match self {
+            BannedPeer::Known(c) => c.address.as_ref(),
+            BannedPeer::Discovered(_) | BannedPeer::Unknown => None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Peer<T: NetworkingService> {
     /// Active peer
@@ -74,6 +88,17 @@ pub enum Peer<T: NetworkingService> {
 
     /// Discovered peer (addresses have been received)
     Discovered(VecDeque<T::Address>),
+}
+
+impl<T: NetworkingService> Peer<T> {
+    pub fn address(&self) -> Option<&T::Address> {
+        match self {
+            Peer::Active(c) => c.address.as_ref(),
+            Peer::Idle(c) => c.address.as_ref(),
+            Peer::Banned(b) => b.address(),
+            Peer::Discovered(_) => None,
+        }
+    }
 }
 
 // TODO: store available peers into a binary heap
@@ -92,8 +117,11 @@ pub struct PeerDb<T: NetworkingService> {
     /// Pending connections
     pending: HashMap<T::Address, T::PeerId>,
 
-    /// Banned peers
-    banned: HashSet<T::PeerId>,
+    /// Banned addresses along with the duration of the ban.
+    ///
+    /// The duration represents the `UNIX_EPOCH + duration` time point, so the ban should end
+    /// when `current_time > ban_duration`.
+    banned: BTreeMap<T::BannableAddress, Duration>,
 }
 
 impl<T: NetworkingService> PeerDb<T> {
@@ -147,19 +175,22 @@ impl<T: NetworkingService> PeerDb<T> {
         &self.pending
     }
 
-    /// Get reference to the banned peer store
-    pub fn banned(&mut self) -> &HashSet<T::PeerId> {
-        &self.banned
-    }
+    /// Checks if the given address is banned.
+    pub fn is_address_banned(&mut self, address: &T::BannableAddress) -> bool {
+        if let Some(banned_till) = self.banned.get(address) {
+            // Check if the ban has expired.
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                // This can fail only if `SystemTime::now()` returns the time before `UNIX_EPOCH`.
+                .expect("Invalid system time");
+            if now > *banned_till {
+                self.banned.remove(address);
+            } else {
+                return true;
+            }
+        }
 
-    /// Check is the peer ID banned
-    pub fn is_id_banned(&self, peer_id: &T::PeerId) -> bool {
-        self.banned.contains(peer_id)
-    }
-
-    /// Check is the address banned
-    pub fn is_address_banned(&self, _address: &T::Address) -> bool {
-        false // TODO: implement
+        false
     }
 
     /// Check if the peers is part of our active swarm
@@ -337,7 +368,7 @@ impl<T: NetworkingService> PeerDb<T> {
         }
     }
 
-    /// Change peer state to `Peer::Banned` and and it to the list of banned peers
+    /// Changes the peer state to `Peer::Banned` and bans it for 24 hours.
     pub fn ban_peer(&mut self, peer_id: &T::PeerId) {
         if let Some(entry) = self.peers.remove(peer_id) {
             let entry = match entry {
@@ -364,7 +395,19 @@ impl<T: NetworkingService> PeerDb<T> {
         }
 
         self.available.remove(peer_id);
-        self.banned.insert(*peer_id);
+
+        if let Some(address) =
+            self.peers.get(peer_id).and_then(|p| p.address()).map(|a| a.as_bannable())
+        {
+            let ban_till = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                // This can fail only if `SystemTime::now()` returns the time before `UNIX_EPOCH`.
+                .expect("Invalid system time")
+                + BAN_DURATION;
+            self.banned.insert(address, ban_till);
+        } else {
+            log::error!("Failed to get address for peer {}", peer_id);
+        }
     }
 
     /// Adjust peer score
