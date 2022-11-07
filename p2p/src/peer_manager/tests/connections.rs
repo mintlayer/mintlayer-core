@@ -659,7 +659,9 @@ async fn connect_no_ip_in_address_libp2p() {
     for address in no_ip_addresses {
         assert_eq!(
             swarm.connect(address.clone()).await.unwrap_err(),
-            P2pError::ProtocolError(ProtocolError::UnableToBanAddress(format!("{address:?}")))
+            P2pError::ProtocolError(ProtocolError::UnableToConvertAddressToBannable(format!(
+                "{address:?}"
+            )))
         );
     }
 }

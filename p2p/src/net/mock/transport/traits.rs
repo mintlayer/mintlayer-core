@@ -18,7 +18,7 @@ use std::{fmt::Debug, hash::Hash, str::FromStr};
 use async_trait::async_trait;
 
 use crate::{
-    net::{mock::types::Message, AsBannableAddress},
+    net::{mock::types::Message, AsBannableAddress, IsBannableAddress},
     Result,
 };
 
@@ -34,7 +34,8 @@ pub trait MockTransport: Send + 'static {
         + Sync
         + ToString
         + FromStr
-        + AsBannableAddress<BannableAddress = Self::BannableAddress>;
+        + AsBannableAddress<BannableAddress = Self::BannableAddress>
+        + IsBannableAddress;
 
     /// A bannable address format.
     type BannableAddress: Debug + Eq + Ord + Send;

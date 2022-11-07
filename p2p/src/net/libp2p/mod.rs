@@ -43,7 +43,9 @@ use logging::log;
 use crate::{
     config,
     error::{DialError, P2pError},
-    net::{libp2p::backend::Libp2pBackend, AsBannableAddress, NetworkingService},
+    net::{
+        libp2p::backend::Libp2pBackend, AsBannableAddress, IsBannableAddress, NetworkingService,
+    },
 };
 
 #[derive(Debug)]
@@ -136,14 +138,26 @@ impl AsBannableAddress for Multiaddr {
     type BannableAddress = IpAddr;
 
     fn as_bannable(&self) -> Self::BannableAddress {
-        // TODO: using a loop is wrong here. There should be a function that extracts the address from Multiaddr
-        for component in self.iter() {
-            match component {
-                libp2p::multiaddr::Protocol::Ip4(a) => return a.into(),
-                libp2p::multiaddr::Protocol::Ip6(a) => return a.into(),
-                _ => continue,
-            }
-        }
-        panic!("Failed to get bannable address from address {:?}", self);
+        get_ip(self).expect(&format!(
+            "Failed to get bannable address from address {self:?}"
+        ))
     }
+}
+
+impl IsBannableAddress for Multiaddr {
+    fn is_bannable(&self) -> bool {
+        get_ip(self).is_some()
+    }
+}
+
+fn get_ip(address: &Multiaddr) -> Option<IpAddr> {
+    // TODO: using a loop is wrong here. There should be a function that extracts the address from Multiaddr
+    for component in address.iter() {
+        match component {
+            libp2p::multiaddr::Protocol::Ip4(a) => return Some(a.into()),
+            libp2p::multiaddr::Protocol::Ip6(a) => return Some(a.into()),
+            _ => continue,
+        }
+    }
+    None
 }

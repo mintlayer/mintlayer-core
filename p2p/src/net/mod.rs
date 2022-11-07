@@ -51,7 +51,8 @@ pub trait NetworkingService {
         + Sync
         + ToString
         + FromStr
-        + AsBannableAddress<BannableAddress = Self::BannableAddress>;
+        + AsBannableAddress<BannableAddress = Self::BannableAddress>
+        + IsBannableAddress;
 
     /// An address type that can be banned.
     ///
@@ -183,10 +184,20 @@ where
     async fn poll_next(&mut self) -> crate::Result<types::SyncingEvent<T>>;
 }
 
-// TODO: We can require infallible conversion after getting rid of `libp2p::MultiAddr`.
-/// Represents a fallible conversion to a bannable address.
+/// Extracts a bannable part from an address.
+///
+/// Usually we want to ban only a part of the address instead of the "whole" address. For example,
+/// `SocketAddr` contains a port in addition to an IP address and we want to ban only the latter
+/// one.
 pub trait AsBannableAddress {
     type BannableAddress;
 
+    /// Returns a bannable part of an address.
     fn as_bannable(&self) -> Self::BannableAddress;
+}
+
+// TODO: This is only needed because `libp2p::MultiAddr` can contain no IP address.
+/// Checks if an address can be converted to bannable.
+pub trait IsBannableAddress {
+    fn is_bannable(&self) -> bool;
 }

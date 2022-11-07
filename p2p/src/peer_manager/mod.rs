@@ -46,7 +46,7 @@ use crate::{
     net::{
         self,
         types::{Protocol, ProtocolType},
-        AsBannableAddress, ConnectivityService, NetworkingService,
+        AsBannableAddress, ConnectivityService, IsBannableAddress, NetworkingService,
     },
 };
 
@@ -299,6 +299,13 @@ where
             !self.pending.contains_key(&address),
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
+
+        // TODO: This can and should be removed after getting rid if libp2p.
+        if !address.is_bannable() {
+            return Err(P2pError::ProtocolError(
+                ProtocolError::UnableToConvertAddressToBannable(format!("{address:?}")),
+            ));
+        }
 
         let bannable_address = address.as_bannable();
         ensure!(

@@ -35,7 +35,7 @@ use crate::{
             transport::{MockListener, MockStream, MockTransport},
             types::Message,
         },
-        AsBannableAddress,
+        AsBannableAddress, IsBannableAddress,
     },
     P2pError, Result,
 };
@@ -183,6 +183,12 @@ impl AsBannableAddress for SocketAddr {
 
     fn as_bannable(&self) -> Self::BannableAddress {
         self.ip()
+    }
+}
+
+impl IsBannableAddress for SocketAddr {
+    fn is_bannable(&self) -> bool {
+        true
     }
 }
 
