@@ -138,9 +138,8 @@ impl AsBannableAddress for Multiaddr {
     type BannableAddress = IpAddr;
 
     fn as_bannable(&self) -> Self::BannableAddress {
-        get_ip(self).expect(&format!(
-            "Failed to get bannable address from address {self:?}"
-        ))
+        get_ip(self)
+            .unwrap_or_else(|| panic!("Failed to get bannable address from address {self:?}"))
     }
 }
 
