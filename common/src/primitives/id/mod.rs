@@ -223,7 +223,7 @@ mod tests {
 
         assert_eq!(h1, h2.into());
 
-        let h3 = crypto::hash::hash::<DefaultHashAlgo, _>(&random_bytes);
+        let h3 = crypto::hash::hash::<DefaultHashAlgo, _>(random_bytes);
 
         assert_eq!(h1, h3.into());
     }
@@ -295,7 +295,7 @@ mod tests {
             // ID should serialize into its hex string
             serde_test::assert_tokens(&id, &[serde_test::Token::Str(hex)]);
             assert_eq!(
-                serde_json::to_value(&id).ok(),
+                serde_json::to_value(id).ok(),
                 Some(Value::String(format!("{:x}", id.id)))
             );
         }

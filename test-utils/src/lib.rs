@@ -37,7 +37,7 @@ pub fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec
         .into_iter()
         .map(|idx| {
             if idx != random_index_to_replace {
-                rng.sample(&crypto::random::distributions::Alphanumeric)
+                rng.sample(crypto::random::distributions::Alphanumeric)
             } else {
                 c
             }

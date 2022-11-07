@@ -26,7 +26,7 @@ pub trait OrphanBlocks {
 
 pub trait OrphanBlocksMut: OrphanBlocks {
     fn clear(&mut self);
-    fn add_block(&mut self, block: WithId<Block>) -> Result<(), OrphanAddError>;
+    fn add_block(&mut self, block: WithId<Block>) -> Result<(), Box<OrphanAddError>>;
     fn take_all_children_of(&mut self, block_id: &Id<GenBlock>) -> Vec<WithId<Block>>;
 }
 
@@ -75,7 +75,7 @@ impl<'a> OrphanBlocksMut for OrphanBlocksRefMut<'a> {
         self.inner.clear()
     }
 
-    fn add_block(&mut self, block: WithId<Block>) -> Result<(), OrphanAddError> {
+    fn add_block(&mut self, block: WithId<Block>) -> Result<(), Box<OrphanAddError>> {
         self.inner.add_block(block)
     }
 
