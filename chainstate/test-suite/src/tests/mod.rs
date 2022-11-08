@@ -49,6 +49,7 @@ mod reorgs_tests;
 mod signature_tests;
 mod syncing_tests;
 mod tx_verification_simulation;
+mod tx_verifier_among_threads;
 mod tx_verifier_disconnect;
 
 mod helpers;

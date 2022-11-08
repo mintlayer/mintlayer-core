@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::{UtxosStorageRead, UtxosStorageWrite};
-use crate::{BlockUndo, Utxo, UtxosCache, UtxosView};
+use crate::{BlockUndo, Utxo, UtxosView};
 use chainstate_types::storage_result::Error;
 use common::{
     chain::{Block, GenBlock, OutPoint},
@@ -95,9 +95,5 @@ impl UtxosView for UtxosDBInMemoryImpl {
 
     fn estimated_size(&self) -> Option<usize> {
         None
-    }
-
-    fn derive_cache(&self) -> crate::UtxosCache {
-        UtxosCache::from_borrowed_parent(self)
     }
 }

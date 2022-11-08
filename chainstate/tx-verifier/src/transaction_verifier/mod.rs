@@ -140,18 +140,18 @@ impl TransactionVerifierConfig {
 }
 
 /// The tool used to verify transaction and cache their updated states in memory
-pub struct TransactionVerifier<'a, S> {
+pub struct TransactionVerifier<'a, S, P> {
     chain_config: &'a ChainConfig,
     storage_ref: &'a S,
     verifier_config: TransactionVerifierConfig,
     tx_index_cache: TxIndexCache,
-    utxo_cache: UtxosCache<'a>,
+    utxo_cache: UtxosCache<'a, P>,
     utxo_block_undo: BTreeMap<TransactionSource, BlockUndoEntry>,
     token_issuance_cache: TokenIssuanceCache,
     best_block: Id<GenBlock>,
 }
 
-impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
+impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S, UtxosDB<'a, S>> {
     pub fn new(
         storage_ref: &'a S,
         chain_config: &'a ChainConfig,
@@ -162,7 +162,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
             chain_config,
             verifier_config,
             tx_index_cache: TxIndexCache::new(),
-            utxo_cache: UtxosCache::from_owned_parent(Box::new(UtxosDB::new(storage_ref))),
+            utxo_cache: UtxosCache::from_owned_parent(UtxosDB::new(storage_ref)),
             utxo_block_undo: BTreeMap::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
             best_block: storage_ref
@@ -171,20 +171,49 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S> {
                 .expect("best block should be some"),
         }
     }
+}
 
-    pub fn derive_child(&'a self) -> TransactionVerifier<'a, Self> {
+impl<'a, S: TransactionVerifierStorageRef, P: UtxosView + Send + Sync>
+    TransactionVerifier<'a, S, P>
+{
+    pub fn new_from_handle(
+        storage_ref: &'a S,
+        chain_config: &'a ChainConfig,
+        utxos: P, // TODO: Replace this parameter with handle
+        verifier_config: TransactionVerifierConfig,
+    ) -> Self {
+        Self {
+            storage_ref,
+            chain_config,
+            tx_index_cache: TxIndexCache::new(),
+            utxo_cache: UtxosCache::from_owned_parent(utxos), // TODO: take utxos from handle
+            utxo_block_undo: BTreeMap::new(),
+            token_issuance_cache: TokenIssuanceCache::new(),
+            best_block: storage_ref
+                .get_best_block_for_utxos()
+                .expect("Database error while reading utxos best block")
+                .expect("best block should be some"),
+            verifier_config,
+        }
+    }
+}
+
+impl<'a, S: TransactionVerifierStorageRef, P: UtxosView> TransactionVerifier<'a, S, P> {
+    pub fn derive_child(&'a self) -> TransactionVerifier<'a, Self, UtxosCache<P>> {
         TransactionVerifier {
             storage_ref: self,
             chain_config: self.chain_config,
             verifier_config: self.verifier_config.clone(),
             tx_index_cache: TxIndexCache::new(),
-            utxo_cache: self.utxo_cache.derive_cache(),
+            utxo_cache: UtxosCache::from_borrowed_parent(&self.utxo_cache),
             utxo_block_undo: BTreeMap::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
             best_block: self.best_block,
         }
     }
+}
 
+impl<'a, S: TransactionVerifierStorageRef, P: UtxosView> TransactionVerifier<'a, S, P> {
     fn amount_from_outpoint(
         &self,
         tx_id: OutPointSourceId,

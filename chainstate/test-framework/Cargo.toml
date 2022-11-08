@@ -15,6 +15,7 @@ crypto = { path = '../../crypto' }
 test-utils = {path = '../../test-utils' }
 tx-verifier = { path = '../tx-verifier' }
 utils = { path = '../../utils' }
+utxo = {path = '../../utxo'}
 
 rstest = "0.15"
 itertools = "0.10"

@@ -16,7 +16,7 @@
 mod rw_impls;
 mod view_impls;
 
-use crate::{BlockUndo, FlushableUtxoView, Utxo, UtxosView};
+use crate::{BlockUndo, FlushableUtxoView, Utxo, UtxosCache};
 use chainstate_types::storage_result::Error;
 use common::{
     chain::{Block, ChainConfig, GenBlock, OutPoint},
@@ -81,7 +81,7 @@ impl<'a, S: UtxosStorageWrite> UtxosDBMut<'a, S> {
         // before deriving cache, there has to be a best block
         utxos_db.set_best_block_for_utxos(&genesis_id).expect("Setting genesis failed");
 
-        let mut utxos_cache = utxos_db.derive_cache();
+        let mut utxos_cache = UtxosCache::from_borrowed_parent(&utxos_db);
 
         for (index, output) in genesis.utxos().iter().enumerate() {
             utxos_cache

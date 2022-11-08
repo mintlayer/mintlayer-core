@@ -140,9 +140,9 @@ fn inner_create_utxo(
 /// `cache_presence` - sets the initial state of the cache.
 /// `cache_flags` - sets the entry of the utxo (fresh/not, dirty/not)
 /// `outpoint` - optional key to be used, rather than a randomly generated one.
-pub fn insert_single_entry(
+pub fn insert_single_entry<P>(
     rng: &mut (impl Rng + CryptoRng),
-    cache: &mut UtxosCache,
+    cache: &mut UtxosCache<P>,
     cache_presence: Presence,
     cache_flags: Option<(IsFresh, IsDirty)>,
     outpoint: Option<OutPoint>,
