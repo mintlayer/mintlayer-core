@@ -126,6 +126,7 @@ impl MempoolStore {
         &self,
         outpoint: &OutPoint,
     ) -> Result<Amount, TxValidationError> {
+        eprintln!("get_unconfirmed_outpoint_value: {:?}", outpoint);
         let tx_id = *outpoint.tx_id().get_tx_id().expect("Not coinbase");
         let err = || TxValidationError::OutPointNotFound {
             outpoint: outpoint.clone(),

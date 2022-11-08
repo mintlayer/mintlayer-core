@@ -34,6 +34,7 @@ where
 {
     // TODO this calculation is already done in ChainState, reuse it
     async fn try_get_fee(&self, tx: &SignedTransaction) -> Result<Amount, TxValidationError> {
+        eprintln!("try_get_fee");
         let tx_clone = tx.clone();
         let chainstate_input_values = self
             .chainstate_handle
@@ -42,9 +43,12 @@ where
 
         let mut input_values = Vec::<Amount>::new();
         for (i, chainstate_input_value) in chainstate_input_values.iter().enumerate() {
+            eprintln!("chainstate input value {}: {:?}", i, chainstate_input_value);
             if let Some(value) = chainstate_input_value {
+                eprintln!("if");
                 input_values.push(*value)
             } else {
+                eprintln!("else");
                 let value = self.store.get_unconfirmed_outpoint_value(
                     tx.transaction().inputs().get(i).expect("index").outpoint(),
                 )?;
