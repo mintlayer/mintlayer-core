@@ -109,8 +109,8 @@ where
             )));
         }
 
-        let topic = match &announcement {
-            message::Announcement::Block(_) => PubSubTopic::Blocks,
+        let topic = match announcement.announcement() {
+            message::AnnouncementType::Block(_) => PubSubTopic::Blocks,
         };
 
         let (response, rx) = oneshot::channel();

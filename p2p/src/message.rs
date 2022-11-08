@@ -113,7 +113,39 @@ pub enum Response {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub enum Announcement {
+pub struct Announcement {
+    announcement: AnnouncementType,
+    /// This flag distinguishes between an original announcement and announcement propagated from
+    /// another peer.
+    is_propagated: bool,
+}
+
+impl Announcement {
+    pub fn new(announcement: AnnouncementType, is_propagated: bool) -> Self {
+        Self {
+            announcement,
+            is_propagated,
+        }
+    }
+
+    pub fn announcement(&self) -> &AnnouncementType {
+        &self.announcement
+    }
+
+    pub fn is_propagated(&self) -> bool {
+        self.is_propagated
+    }
+
+    pub fn into_propagated(self) -> Self {
+        Self {
+            is_propagated: true,
+            ..self
+        }
+    }
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub enum AnnouncementType {
     #[codec(index = 0)]
     Block(Block),
 }

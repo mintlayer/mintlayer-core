@@ -40,7 +40,7 @@ use utils::ensure;
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event,
-    message::{self, Announcement},
+    message::{self, Announcement, AnnouncementType},
     net::{
         self,
         types::{PubSubTopic, SyncingEvent, ValidationResult},
@@ -440,11 +440,18 @@ where
         // TODO: Discuss if we should announce blocks or headers, because announcing
         // blocks seems wasteful, in the sense that it's possible for peers to get
         // blocks again, and again, wasting their bandwidth.
-        match announcement {
-            Announcement::Block(block) => {
+        let is_valid_announcement = match announcement.announcement().clone() {
+            AnnouncementType::Block(block) => {
                 self.process_block_announcement(peer_id, message_id, block).await
             }
+        }?;
+
+        if is_valid_announcement && !announcement.is_propagated() {
+            let announcement = announcement.into_propagated();
+            self.peer_sync_handle.make_announcement(announcement).await?;
         }
+
+        Ok(())
     }
 
     // TODO: refactor this
@@ -603,7 +610,9 @@ where
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
 
                     match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
-                        Some(block) => self.peer_sync_handle.make_announcement(Announcement::Block(block)).await?,
+                        Some(block) => self.peer_sync_handle.make_announcement(
+                            Announcement::new(AnnouncementType::Block(block), false)
+                        ).await?,
                         None => log::error!("CRITICAL: best block not available"),
                     }
                 }
@@ -643,7 +652,7 @@ where
         peer_id: T::PeerId,
         message_id: T::SyncingMessageId,
         block: Block,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<bool> {
         let result = match self
             .chainstate_handle
             .call(move |this| this.preliminary_block_check(block))
@@ -678,7 +687,9 @@ where
 
         self.peer_sync_handle
             .report_validation_result(peer_id, message_id, ValidationResult::Ignore)
-            .await
+            .await?;
+
+        Ok(score == 0)
     }
 }
 

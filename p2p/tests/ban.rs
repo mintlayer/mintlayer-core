@@ -20,7 +20,7 @@ use tokio::sync::mpsc;
 use p2p::{
     error::{P2pError, PublishError},
     event::SwarmEvent,
-    message::{Announcement, HeaderListResponse, Request, Response},
+    message::{Announcement, AnnouncementType, HeaderListResponse, Request, Response},
     net::{
         self,
         libp2p::Libp2pService,
@@ -108,7 +108,12 @@ async fn invalid_pubsub_block() {
             .unwrap();
 
         loop {
-            let res = sync2.make_announcement(Announcement::Block(blocks[2].clone())).await;
+            let res = sync2
+                .make_announcement(Announcement::new(
+                    AnnouncementType::Block(blocks[2].clone()),
+                    false,
+                ))
+                .await;
 
             if res.is_ok() {
                 break;

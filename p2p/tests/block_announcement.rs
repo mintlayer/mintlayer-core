@@ -29,7 +29,7 @@ use serialization::Encode;
 
 use p2p::{
     error::{P2pError, PublishError},
-    message::Announcement,
+    message::{Announcement, AnnouncementType},
     net::{
         libp2p::Libp2pService,
         mock::{
@@ -69,15 +69,18 @@ where
     // Spam the message until until we have a peer.
     loop {
         let res = sync1
-            .make_announcement(Announcement::Block(
-                Block::new(
-                    vec![],
-                    Id::new(H256([0x01; 32])),
-                    BlockTimestamp::from_int_seconds(1337u64),
-                    ConsensusData::None,
-                    BlockReward::new(Vec::new()),
-                )
-                .unwrap(),
+            .make_announcement(Announcement::new(
+                AnnouncementType::Block(
+                    Block::new(
+                        vec![],
+                        Id::new(H256([0x01; 32])),
+                        BlockTimestamp::from_int_seconds(1337u64),
+                        ConsensusData::None,
+                        BlockReward::new(Vec::new()),
+                    )
+                    .unwrap(),
+                ),
+                false,
             ))
             .await;
 
@@ -96,21 +99,26 @@ where
         SyncingEvent::Announcement {
             peer_id: _,
             message_id: _,
-            announcement: Announcement::Block(block),
-        } => block,
+            announcement,
+        } => match announcement.announcement() {
+            AnnouncementType::Block(block) => block.clone(),
+        },
         _ => panic!("Unexpected event"),
     };
     assert_eq!(block.timestamp().as_int_seconds(), 1337u64);
     sync2
-        .make_announcement(Announcement::Block(
-            Block::new(
-                vec![],
-                Id::new(H256([0x02; 32])),
-                BlockTimestamp::from_int_seconds(1338u64),
-                ConsensusData::None,
-                BlockReward::new(Vec::new()),
-            )
-            .unwrap(),
+        .make_announcement(Announcement::new(
+            AnnouncementType::Block(
+                Block::new(
+                    vec![],
+                    Id::new(H256([0x02; 32])),
+                    BlockTimestamp::from_int_seconds(1338u64),
+                    ConsensusData::None,
+                    BlockReward::new(Vec::new()),
+                )
+                .unwrap(),
+            ),
+            false,
         ))
         .await
         .unwrap();
@@ -119,8 +127,10 @@ where
         SyncingEvent::Announcement {
             peer_id: _,
             message_id: _,
-            announcement: Announcement::Block(block),
-        } => block,
+            announcement,
+        } => match announcement.announcement() {
+            AnnouncementType::Block(block) => block.clone(),
+        },
         _ => panic!("Unexpected event"),
     };
     assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));
@@ -163,7 +173,7 @@ where
     pin!(timeout);
     loop {
         select! {
-            res = sync1.make_announcement(Announcement::Block(
+            res = sync1.make_announcement(Announcement::new(AnnouncementType::Block(
                 Block::new(
                     vec![],
                     Id::new(H256([0x01; 32])),
@@ -172,7 +182,7 @@ where
                     BlockReward::new(Vec::new()),
                 )
                 .unwrap(),
-            )) => {
+            ), false)) => {
                 assert_eq!(Err(P2pError::PublishError(PublishError::InsufficientPeers)), res);
             }
             _ = &mut timeout => break,
@@ -240,15 +250,18 @@ where
     // Spam the message until we have a peer.
     loop {
         let res = sync1
-            .make_announcement(Announcement::Block(
-                Block::new(
-                    vec![],
-                    Id::new(H256([0x03; 32])),
-                    BlockTimestamp::from_int_seconds(1337u64),
-                    ConsensusData::None,
-                    BlockReward::new(Vec::new()),
-                )
-                .unwrap(),
+            .make_announcement(Announcement::new(
+                AnnouncementType::Block(
+                    Block::new(
+                        vec![],
+                        Id::new(H256([0x03; 32])),
+                        BlockTimestamp::from_int_seconds(1337u64),
+                        ConsensusData::None,
+                        BlockReward::new(Vec::new()),
+                    )
+                    .unwrap(),
+                ),
+                false,
             ))
             .await;
 
@@ -384,15 +397,18 @@ where
                 .expect("invalid witness count")
         })
         .collect::<Vec<_>>();
-    let message = Announcement::Block(
-        Block::new(
-            txs,
-            Id::new(H256([0x04; 32])),
-            BlockTimestamp::from_int_seconds(1337u64),
-            ConsensusData::None,
-            BlockReward::new(Vec::new()),
-        )
-        .unwrap(),
+    let message = Announcement::new(
+        AnnouncementType::Block(
+            Block::new(
+                txs,
+                Id::new(H256([0x04; 32])),
+                BlockTimestamp::from_int_seconds(1337u64),
+                ConsensusData::None,
+                BlockReward::new(Vec::new()),
+            )
+            .unwrap(),
+        ),
+        false,
     );
     let encoded_size = message.encode().len();
     // TODO: move this to a spec.rs so it's accessible everywhere

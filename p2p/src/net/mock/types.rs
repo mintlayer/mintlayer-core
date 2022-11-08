@@ -21,7 +21,7 @@ use std::{
 
 use tokio::sync::oneshot;
 
-use common::primitives::semver;
+use common::primitives::semver::SemVer;
 use crypto::random::{make_pseudo_rng, Rng};
 use serialization::{Decode, Encode};
 
@@ -180,7 +180,7 @@ pub struct MockMessageId;
 pub struct MockPeerInfo {
     pub peer_id: MockPeerId,
     pub network: [u8; 4],
-    pub version: common::primitives::semver::SemVer,
+    pub version: SemVer,
     pub agent: Option<String>,
     pub protocols: Vec<Protocol>,
 }
@@ -191,7 +191,7 @@ pub enum PeerEvent {
     PeerInfoReceived {
         peer_id: MockPeerId,
         network: [u8; 4],
-        version: semver::SemVer,
+        version: SemVer,
         protocols: Vec<Protocol>,
     },
 
@@ -213,13 +213,13 @@ pub enum MockEvent {
 pub enum HandshakeMessage {
     Hello {
         peer_id: MockPeerId,
-        version: common::primitives::semver::SemVer,
+        version: SemVer,
         network: [u8; 4],
         protocols: Vec<Protocol>,
     },
     HelloAck {
         peer_id: MockPeerId,
-        version: common::primitives::semver::SemVer,
+        version: SemVer,
         network: [u8; 4],
         protocols: Vec<Protocol>,
     },

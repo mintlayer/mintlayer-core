@@ -182,6 +182,7 @@ pub enum SyncingEvent<T: NetworkingService> {
         error: RequestResponseError,
     },
 
+    /// An announcement.
     Announcement {
         peer_id: T::PeerId,
         message_id: T::SyncingMessageId,
