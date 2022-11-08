@@ -342,17 +342,25 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         let outpoint_values = tx.inputs().iter().map(|input| input.outpoint()).try_fold(
             Vec::new(),
             |mut values, outpoint| {
-                if let Some(utxo) = utxo_view.utxo(outpoint) {
-                    match utxo.output().value() {
-                        OutputValue::Coin(amount) => values.push(Some(*amount)),
-                        _ => {
-                            return Err(ChainstateError::FailedToReadProperty(
-                                PropertyQueryError::ExpectedCoinOutpointAndFoundToken,
-                            ))
+                match outpoint.tx_id() {
+                    OutPointSourceId::Transaction(_tx) => {
+                        if let Some(utxo) = utxo_view.utxo(outpoint) {
+                            match utxo.output().value() {
+                                OutputValue::Coin(amount) => values.push(Some(*amount)),
+                                _ => {
+                                    return Err(ChainstateError::FailedToReadProperty(
+                                        PropertyQueryError::ExpectedCoinOutpointAndFoundToken,
+                                    ))
+                                }
+                            }
+                        } else {
+                            values.push(None)
                         }
                     }
-                } else {
-                    values.push(None)
+                    // TODO(PR) get actual block reward value
+                    OutPointSourceId::BlockReward(_id) => {
+                        values.push(Some(Amount::from_atoms(1_000)))
+                    }
                 }
                 Ok(values)
             },
