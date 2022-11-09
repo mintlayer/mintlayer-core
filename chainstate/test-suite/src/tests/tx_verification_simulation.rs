@@ -18,11 +18,21 @@ use chainstate_test_framework::TxVerificationStrategy;
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy(), 20, 50)]
-fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_block: usize) {
+#[case(Seed::from_entropy(), 20, 50, false)]
+#[case(Seed::from_entropy(), 20, 50, true)]
+fn simulation(
+    #[case] seed: Seed,
+    #[case] max_blocks: usize,
+    #[case] max_tx_per_block: usize,
+    #[case] tx_index_enabled: bool,
+) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder()
+            .with_chainstate_config(chainstate::ChainstateConfig {
+                tx_index_enabled: tx_index_enabled.into(),
+                ..Default::default()
+            })
             .with_tx_verification_strategy(TxVerificationStrategy::Randomized(seed))
             .build();
 
