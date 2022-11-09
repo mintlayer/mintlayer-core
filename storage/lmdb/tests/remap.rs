@@ -19,7 +19,12 @@ use utils::{concurrency, thread};
 
 const IDX0: DbIndex = DbIndex::new(0);
 
-fn perform_writes(name: &'static str, initial_size: MemSize, tx_size: MemSize, write_sizes: &[MemSize]) {
+fn perform_writes(
+    name: &'static str,
+    initial_size: MemSize,
+    tx_size: MemSize,
+    write_sizes: &[MemSize],
+) {
     #[cfg(not(loom))]
     logging::init_logging::<&std::path::Path>(None);
     let test_root = std::sync::Arc::new(test_utils::test_root!("remap-tests").unwrap());
