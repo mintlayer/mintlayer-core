@@ -54,6 +54,8 @@ pub enum BlockError {
     BlockProofCalculationError(Id<Block>),
     #[error("TransactionVerifier error: {0}")]
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
+    #[error("Changing tx index state is not implemented for existing DB")]
+    TxIndexConfigError,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

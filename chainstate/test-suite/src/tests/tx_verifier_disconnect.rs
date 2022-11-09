@@ -27,6 +27,7 @@ use common::{
     },
     primitives::{Amount, Idable},
 };
+use tx_verifier::transaction_verifier::TransactionVerifierConfig;
 use tx_verifier::transaction_verifier::{
     TransactionSource, TransactionSourceForConnect, TransactionVerifier,
 };
@@ -52,7 +53,11 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
         let genesis_id = tf.genesis().get_id();
         tf.create_chain(&genesis_id.into(), num_blocks, &mut rng).unwrap();
 
-        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
+        let mut verifier = TransactionVerifier::new(
+            &storage,
+            &chain_config,
+            TransactionVerifierConfig::default(),
+        );
 
         for height in 1..num_blocks {
             let block_id = match tf.block_id(height as u64).classify(&chain_config) {
@@ -127,7 +132,11 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
+        let mut verifier = TransactionVerifier::new(
+            &storage,
+            &chain_config,
+            TransactionVerifierConfig::default(),
+        );
         let tx_source = TransactionSourceForConnect::Mempool {
             current_best: &best_block,
         };

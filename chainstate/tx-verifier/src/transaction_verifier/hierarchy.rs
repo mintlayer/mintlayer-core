@@ -60,7 +60,10 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
         &self,
         tx_id: &OutPointSourceId,
     ) -> Result<Option<TxMainChainIndex>, TransactionVerifierStorageError> {
-        match self.tx_index_cache.get_from_cached(tx_id) {
+        let tx_index_cache = self
+            .get_tx_cache_ref()
+            .ok_or(TransactionVerifierStorageError::IndexNotAvailable)?;
+        match tx_index_cache.get_from_cached(tx_id) {
             Some(v) => match v {
                 CachedInputsOperation::Write(idx) => Ok(Some(idx.clone())),
                 CachedInputsOperation::Read(idx) => Ok(Some(idx.clone())),
@@ -113,7 +116,10 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageMut
         tx_id: &OutPointSourceId,
         tx_index: &TxMainChainIndex,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.tx_index_cache
+        let tx_index_cache = self
+            .get_tx_cache_mut()
+            .ok_or(TransactionVerifierStorageError::IndexNotAvailable)?;
+        tx_index_cache
             .set_tx_index(tx_id, tx_index.clone())
             .map_err(TransactionVerifierStorageError::TxIndexError)
     }
@@ -122,7 +128,10 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageMut
         &mut self,
         tx_id: &OutPointSourceId,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.tx_index_cache
+        let tx_index_cache = self
+            .get_tx_cache_mut()
+            .ok_or(TransactionVerifierStorageError::IndexNotAvailable)?;
+        tx_index_cache
             .remove_tx_index_by_id(tx_id.clone())
             .map_err(TransactionVerifierStorageError::TxIndexError)
     }

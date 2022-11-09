@@ -28,6 +28,7 @@ make_config_setting!(
         DEFAULT_MAX_IMPORT_BUFFER_SIZE,
     )
 );
+make_config_setting!(TxIndexEnabled, bool, true);
 
 /// The chainstate subsystem configuration.
 #[derive(Debug, Clone, Default)]
@@ -39,6 +40,7 @@ pub struct ChainstateConfig {
     /// When importing bootstrap file, this controls the buffer sizes (min, max)
     /// (see bootstrap import function for more information)
     pub min_max_bootstrap_import_buffer_sizes: MinMaxBootstrapImportBufferSizes,
+    pub tx_index_enabled: TxIndexEnabled,
 }
 
 impl ChainstateConfig {

@@ -56,6 +56,8 @@ pub trait BlockchainStorageRead: UtxosStorageRead {
     /// Get block by its hash
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
 
+    fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>>;
+
     /// Get outputs state for given transaction in the mainchain
     fn get_mainchain_tx_index(
         &self,
@@ -97,6 +99,9 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead + UtxosStorageWrite {
 
     /// Remove block from the database
     fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
+
+    /// Change tx indexing state flag
+    fn set_is_mainchain_tx_index_enabled(&mut self, enabled: bool) -> crate::Result<()>;
 
     /// Set state of the outputs of given transaction
     fn set_mainchain_tx_index(

@@ -63,7 +63,8 @@ fn hierarchy_test_utxo(#[case] seed: Seed) {
         .return_const(Ok(None));
 
     let verifier1 = {
-        let mut verifier = TransactionVerifier::new(&store, &chain_config);
+        let mut verifier =
+            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::default());
         verifier.utxo_cache.add_utxo(&outpoint1, utxo1.clone(), false).unwrap();
         verifier
     };
@@ -159,7 +160,8 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
         .return_const(Ok(None));
 
     let verifier1 = {
-        let mut verifier = TransactionVerifier::new(&store, &chain_config);
+        let mut verifier =
+            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::default());
         verifier.utxo_block_undo.insert(
             TransactionSource::Chain(block_undo_id_1),
             BlockUndoEntry {
@@ -247,7 +249,8 @@ fn hierarchy_test_tx_index(#[case] seed: Seed) {
         .return_const(Ok(None));
 
     let verifier1 = {
-        let mut verifier = TransactionVerifier::new(&store, &chain_config);
+        let mut verifier =
+            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::default());
         verifier.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
             outpoint1.clone(),
             CachedInputsOperation::Read(tx_index_1.clone()),
@@ -346,7 +349,8 @@ fn hierarchy_test_tokens(#[case] seed: Seed) {
         .return_const(Ok(None));
 
     let verifier1 = {
-        let mut verifier = TransactionVerifier::new(&store, &chain_config);
+        let mut verifier =
+            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::default());
         verifier.token_issuance_cache = TokenIssuanceCache::new_for_test(
             BTreeMap::from([(token_id_1, CachedAuxDataOp::Write(token_data_1.clone()))]),
             BTreeMap::from([(
@@ -455,7 +459,8 @@ fn hierarchy_test_block_index(#[case] seed: Seed) {
         .times(2)
         .return_const(Ok(Some(block_index)));
 
-    let verifier1 = TransactionVerifier::new(&store, &chain_config);
+    let verifier1 =
+        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::default());
     verifier1.get_gen_block_index(&block_id.into()).unwrap();
 
     let verifier2 = verifier1.derive_child();
