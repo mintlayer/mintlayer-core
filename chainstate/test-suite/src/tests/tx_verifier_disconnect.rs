@@ -34,13 +34,7 @@ use tx_verifier::transaction_verifier::{
 
 fn setup() -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();
-    let tf = TestFramework::builder()
-        .with_chainstate_config(chainstate::ChainstateConfig {
-            tx_index_enabled: true.into(),
-            ..Default::default()
-        })
-        .with_storage(storage.clone())
-        .build();
+    let tf = TestFramework::builder().with_storage(storage.clone()).build();
 
     let chain_config = ConfigBuilder::test_chain().build();
     let storage = InMemoryStorageWrapper::new(storage, chain_config.clone());

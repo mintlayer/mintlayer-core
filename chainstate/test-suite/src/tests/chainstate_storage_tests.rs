@@ -36,13 +36,7 @@ use utxo::UtxosStorageRead;
 fn store_coin(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
-        let mut tf = TestFramework::builder()
-            .with_chainstate_config(chainstate::ChainstateConfig {
-                tx_index_enabled: true.into(),
-                ..Default::default()
-            })
-            .with_storage(storage.clone())
-            .build();
+        let mut tf = TestFramework::builder().with_storage(storage.clone()).build();
         let mut rng = make_seedable_rng(seed);
 
         let tx_output = TxOutput::new(
@@ -113,13 +107,7 @@ fn store_coin(#[case] seed: Seed) {
 fn store_token(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
-        let mut tf = TestFramework::builder()
-            .with_chainstate_config(chainstate::ChainstateConfig {
-                tx_index_enabled: true.into(),
-                ..Default::default()
-            })
-            .with_storage(storage.clone())
-            .build();
+        let mut tf = TestFramework::builder().with_storage(storage.clone()).build();
         let mut rng = make_seedable_rng(seed);
 
         // issue a token
@@ -199,13 +187,7 @@ fn store_token(#[case] seed: Seed) {
 fn reorg_store_coin(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
-        let mut tf = TestFramework::builder()
-            .with_chainstate_config(chainstate::ChainstateConfig {
-                tx_index_enabled: true.into(),
-                ..Default::default()
-            })
-            .with_storage(storage.clone())
-            .build();
+        let mut tf = TestFramework::builder().with_storage(storage.clone()).build();
         let genesis_id = tf.genesis().get_id();
         let mut rng = make_seedable_rng(seed);
 
@@ -358,13 +340,7 @@ fn reorg_store_coin(#[case] seed: Seed) {
 fn reorg_store_token(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
-        let mut tf = TestFramework::builder()
-            .with_chainstate_config(chainstate::ChainstateConfig {
-                tx_index_enabled: true.into(),
-                ..Default::default()
-            })
-            .with_storage(storage.clone())
-            .build();
+        let mut tf = TestFramework::builder().with_storage(storage.clone()).build();
         let genesis_id = tf.genesis().get_id();
         let mut rng = make_seedable_rng(seed);
 

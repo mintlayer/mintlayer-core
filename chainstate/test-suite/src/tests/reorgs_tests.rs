@@ -81,12 +81,7 @@ fn reorg_simple(#[case] seed: Seed) {
 fn test_very_long_reorgs(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder()
-            .with_chainstate_config(chainstate::ChainstateConfig {
-                tx_index_enabled: true.into(),
-                ..Default::default()
-            })
-            .build();
+        let mut tf = TestFramework::builder().build();
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
         subscribe_to_events(&mut tf, &events);
 
