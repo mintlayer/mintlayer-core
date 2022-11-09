@@ -16,7 +16,7 @@
 //! Support for memory map reallocation
 
 use logging::log;
-use utils::tap_error_log::LogError;
+use utils::{sync, tap_error_log::LogError};
 
 /// Represents LMDB memory map size
 #[derive(Eq, PartialEq, PartialOrd, Ord, Clone, Copy, Debug)]
@@ -38,12 +38,19 @@ impl MemSize {
         Self::from_kilobytes(1024 * megabytes)
     }
 
-    /// Convert to raw byte count
+    /// Get raw byte count as u64
+    pub fn as_bytes_u64(self) -> u64 {
+        self.0
+    }
+
+    /// Get raw byte count in native representation
     pub fn as_bytes(self) -> usize {
         self.0.try_into().expect("Ran out of address space")
     }
 
+    /// Division, rounding up
     pub fn div_ceil(self, rhs: Self) -> u64 {
+        // TODO: Use u64::div_ceil once stable
         self.0 / rhs.0 + (self.0 % rhs.0 > 0) as u64
     }
 }
@@ -81,7 +88,7 @@ impl MemMapToken {
 }
 
 /// A proof of having acquired the memory map resource exclusively
-pub type ExclusiveMemMapToken<'a> = std::sync::RwLockWriteGuard<'a, MemMapToken>;
+pub type ExclusiveMemMapToken<'a> = sync::RwLockWriteGuard<'a, MemMapToken>;
 
 /// Memory remapping procedure. Ensure at least `headroom` free space is available
 pub fn remap(

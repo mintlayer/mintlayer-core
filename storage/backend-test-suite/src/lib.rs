@@ -25,8 +25,16 @@ pub mod model;
 // Test modules
 mod basic;
 mod concurrent;
+
 #[cfg(not(loom))]
 mod property;
+#[cfg(loom)]
+mod property {
+    // No property tests with loom for now
+    pub fn tests<F>(_backend_fn: F) -> impl Iterator<Item = libtest_mimic::Trial> {
+        std::iter::empty()
+    }
+}
 
 use prelude::*;
 
