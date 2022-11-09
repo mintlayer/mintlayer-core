@@ -20,31 +20,31 @@ use utils::tap_error_log::LogError;
 
 /// Represents LMDB memory map size
 #[derive(Eq, PartialEq, PartialOrd, Ord, Clone, Copy, Debug)]
-pub struct MemSize(usize);
+pub struct MemSize(u64);
 
 impl MemSize {
     /// Specify in the number of bytes
-    pub const fn from_bytes(bytes: usize) -> Self {
+    pub const fn from_bytes(bytes: u64) -> Self {
         Self(bytes)
     }
 
     /// Specify in the number of kilobytes
-    pub const fn from_kilobytes(kilobytes: usize) -> Self {
+    pub const fn from_kilobytes(kilobytes: u64) -> Self {
         Self::from_bytes(1024 * kilobytes)
     }
 
     /// Specify in the number of megabytes
-    pub const fn from_megabytes(megabytes: usize) -> Self {
+    pub const fn from_megabytes(megabytes: u64) -> Self {
         Self::from_kilobytes(1024 * megabytes)
     }
 
     /// Convert to raw byte count
-    pub const fn as_bytes(self) -> usize {
-        self.0
+    pub fn as_bytes(self) -> usize {
+        self.0.try_into().expect("Ran out of address space")
     }
 
-    pub fn div_ceil(self, rhs: Self) -> usize {
-        self.0 / rhs.0 + (self.0 % rhs.0 > 0) as usize
+    pub fn div_ceil(self, rhs: Self) -> u64 {
+        self.0 / rhs.0 + (self.0 % rhs.0 > 0) as u64
     }
 }
 
@@ -62,7 +62,7 @@ impl std::ops::Add for MemSize {
     }
 }
 
-impl std::ops::Mul<MemSize> for usize {
+impl std::ops::Mul<MemSize> for u64 {
     type Output = MemSize;
 
     fn mul(self, rhs: MemSize) -> Self::Output {
@@ -92,15 +92,15 @@ pub fn remap(
     // Get page size
     let page_size = {
         let stat = env.stat().or_else(crate::error::process_with_err)?;
-        MemSize::from_bytes(stat.page_size() as usize)
+        MemSize::from_bytes(stat.page_size() as u64)
     };
 
     // Get current occupancy info
     let info = env.info().or_else(crate::error::process_with_err)?;
-    let current_size = MemSize::from_bytes(info.map_size());
+    let current_size = MemSize::from_bytes(info.map_size() as u64);
     let current_pages = current_size.div_ceil(page_size);
-    let used_pages = info.last_pgno() + 1;
-    let freelist_pages = env.freelist().or_else(crate::error::process_with_err)?;
+    let used_pages = (info.last_pgno() + 1) as u64;
+    let freelist_pages = env.freelist().or_else(crate::error::process_with_err)? as u64;
     let free_pages = (current_pages - used_pages) + freelist_pages;
 
     // Get map size requirements
