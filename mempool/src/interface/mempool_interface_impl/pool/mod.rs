@@ -470,12 +470,6 @@ where
     ) -> Result<Amount, TxValidationError> {
         let minimum_fee_rate = self.get_update_min_fee_rate();
         log::debug!("minimum fee rate {:?}", minimum_fee_rate);
-        /*log::debug!(
-            "tx_size: {:?}, tx_fee {:?}",
-            tx.encoded_size(),
-            self.try_get_fee(tx)?
-        );
-        */
         let res = minimum_fee_rate.compute_fee(tx.encoded_size());
         log::debug!("minimum_mempool_fee for tx: {:?}", res);
         res
