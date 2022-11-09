@@ -28,7 +28,7 @@ make_config_setting!(
         DEFAULT_MAX_IMPORT_BUFFER_SIZE,
     )
 );
-make_config_setting!(TxIndexEnabled, bool, true);
+make_config_setting!(TxIndexEnabled, bool, false);
 
 /// The chainstate subsystem configuration.
 #[derive(Debug, Clone, Default)]

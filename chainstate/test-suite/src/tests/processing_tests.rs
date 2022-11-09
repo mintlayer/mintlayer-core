@@ -303,7 +303,12 @@ fn orphans_chains(#[case] seed: Seed) {
 fn spend_inputs_simple(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder()
+            .with_chainstate_config(chainstate::ChainstateConfig {
+                tx_index_enabled: true.into(),
+                ..Default::default()
+            })
+            .build();
 
         // Check that genesis utxos are present in the utxo set
         let genesis_id = tf.genesis().get_id();
