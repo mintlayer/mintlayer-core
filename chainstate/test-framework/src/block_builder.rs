@@ -30,7 +30,7 @@ use common::{
     },
     primitives::{Id, H256},
 };
-use crypto::random::Rng;
+use crypto::random::{CryptoRng, Rng};
 use itertools::Itertools;
 
 /// The block builder that allows construction and processing of a block.
@@ -81,7 +81,7 @@ impl<'f> BlockBuilder<'f> {
     }
 
     /// Adds a transaction that uses random utxos
-    pub fn add_test_transaction(mut self, rng: &mut impl Rng) -> Self {
+    pub fn add_test_transaction(mut self, rng: &mut (impl Rng + CryptoRng)) -> Self {
         let utxo_set = self.framework.storage.read_utxo_set().unwrap();
 
         if !utxo_set.is_empty() {

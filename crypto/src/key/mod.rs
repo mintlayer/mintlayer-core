@@ -23,6 +23,7 @@ use serialization::{Decode, Encode};
 use crate::key::rschnorr::{MLRistrettoPrivateKey, MLRistrettoPublicKey, RistrettoSignatureError};
 use crate::key::Signature::RistrettoSchnorr;
 use crate::random::make_true_rng;
+use crate::random::{CryptoRng, Rng};
 pub use signature::Signature;
 
 use self::hdkd::child_number::ChildNumber;
@@ -64,10 +65,16 @@ impl From<RistrettoSignatureError> for SignatureError {
 
 impl PrivateKey {
     pub fn new(key_kind: KeyKind) -> (PrivateKey, PublicKey) {
-        let mut rng = make_true_rng();
+        Self::new_from_rng(&mut make_true_rng(), key_kind)
+    }
+
+    pub fn new_from_rng(
+        rng: &mut (impl Rng + CryptoRng),
+        key_kind: KeyKind,
+    ) -> (PrivateKey, PublicKey) {
         match key_kind {
             KeyKind::RistrettoSchnorr => {
-                let k = MLRistrettoPrivateKey::new(&mut rng);
+                let k = MLRistrettoPrivateKey::new(rng);
                 (
                     PrivateKey {
                         key: PrivateKeyHolder::RistrettoSchnorr(k.0),

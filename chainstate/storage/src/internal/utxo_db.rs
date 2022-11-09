@@ -22,14 +22,18 @@ mod test {
     };
     use common::primitives::{Amount, BlockHeight, Id, H256};
     use crypto::key::{KeyKind, PrivateKey};
-    use crypto::random::Rng;
+    use crypto::random::{CryptoRng, Rng};
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
     use utxo::{Utxo, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
 
-    fn create_utxo(rng: &mut impl Rng, block_height: u64, output_value: u128) -> (Utxo, OutPoint) {
+    fn create_utxo(
+        rng: &mut (impl Rng + CryptoRng),
+        block_height: u64,
+        output_value: u128,
+    ) -> (Utxo, OutPoint) {
         // just a random value generated, and also a random `is_block_reward` value.
-        let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
         let output = TxOutput::new(
             OutputValue::Coin(Amount::from_atoms(output_value)),
             OutputPurpose::Transfer(Destination::PublicKey(pub_key)),

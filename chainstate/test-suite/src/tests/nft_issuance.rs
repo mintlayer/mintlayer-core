@@ -28,7 +28,7 @@ use common::chain::{
     Destination, OutputPurpose, TxInput, TxOutput,
 };
 use common::primitives::Idable;
-use crypto::random::Rng;
+use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{
@@ -61,7 +61,7 @@ fn nft_name_too_long(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         NftIssuance {
                             metadata: Metadata {
-                                creator: Some(random_creator()),
+                                creator: Some(random_creator(&mut rng)),
                                 name: random_string(
                                     &mut rng,
                                     max_name_len + 1..max_name_len + 1000,
@@ -117,7 +117,7 @@ fn nft_empty_name(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         NftIssuance {
                             metadata: Metadata {
-                                creator: Some(random_creator()),
+                                creator: Some(random_creator(&mut rng)),
                                 name: vec![],
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -180,7 +180,7 @@ fn nft_invalid_name(#[case] seed: Seed) {
                         .add_output(TxOutput::new(
                             NftIssuance {
                                 metadata: Metadata {
-                                    creator: Some(random_creator()),
+                                    creator: Some(random_creator(&mut rng)),
                                     name,
                                     description: random_string(&mut rng, 1..max_desc_len)
                                         .into_bytes(),
@@ -236,7 +236,7 @@ fn nft_ticker_too_long(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         NftIssuance {
                             metadata: Metadata {
-                                creator: Some(random_creator()),
+                                creator: Some(random_creator(&mut rng)),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(
@@ -293,7 +293,7 @@ fn nft_empty_ticker(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         NftIssuance {
                             metadata: Metadata {
-                                creator: Some(random_creator()),
+                                creator: Some(random_creator(&mut rng)),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: vec![],
@@ -356,7 +356,7 @@ fn nft_invalid_ticker(#[case] seed: Seed) {
                         .add_output(TxOutput::new(
                             NftIssuance {
                                 metadata: Metadata {
-                                    creator: Some(random_creator()),
+                                    creator: Some(random_creator(&mut rng)),
                                     name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                     description: random_string(&mut rng, 1..max_desc_len)
                                         .into_bytes(),
@@ -412,7 +412,7 @@ fn nft_description_too_long(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         NftIssuance {
                             metadata: Metadata {
-                                creator: Some(random_creator()),
+                                creator: Some(random_creator(&mut rng)),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(
                                     &mut rng,
@@ -469,7 +469,7 @@ fn nft_empty_description(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         NftIssuance {
                             metadata: Metadata {
-                                creator: Some(random_creator()),
+                                creator: Some(random_creator(&mut rng)),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: vec![],
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -532,7 +532,7 @@ fn nft_invalid_description(#[case] seed: Seed) {
                         .add_output(TxOutput::new(
                             NftIssuance {
                                 metadata: Metadata {
-                                    creator: Some(random_creator()),
+                                    creator: Some(random_creator(&mut rng)),
                                     name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                     description,
                                     ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -587,7 +587,7 @@ fn nft_icon_uri_too_long(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         NftIssuance {
                             metadata: Metadata {
-                                creator: Some(random_creator()),
+                                creator: Some(random_creator(&mut rng)),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -637,7 +637,7 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
 
         let output_value: OutputValue = TokenData::from(NftIssuance {
             metadata: Metadata {
-                creator: Some(random_creator()),
+                creator: Some(random_creator(&mut rng)),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -719,7 +719,7 @@ fn nft_icon_uri_invalid(#[case] seed: Seed) {
                         .add_output(TxOutput::new(
                             NftIssuance {
                                 metadata: Metadata {
-                                    creator: Some(random_creator()),
+                                    creator: Some(random_creator(&mut rng)),
                                     name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                     description: random_string(&mut rng, 1..max_desc_len)
                                         .into_bytes(),
@@ -776,7 +776,7 @@ fn nft_metadata_uri_too_long(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         NftIssuance {
                             metadata: Metadata {
-                                creator: Some(random_creator()),
+                                creator: Some(random_creator(&mut rng)),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -825,7 +825,7 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         let output_value: OutputValue = TokenData::from(NftIssuance {
             metadata: Metadata {
-                creator: Some(random_creator()),
+                creator: Some(random_creator(&mut rng)),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -907,7 +907,7 @@ fn nft_metadata_uri_invalid(#[case] seed: Seed) {
                         .add_output(TxOutput::new(
                             NftIssuance {
                                 metadata: Metadata {
-                                    creator: Some(random_creator()),
+                                    creator: Some(random_creator(&mut rng)),
                                     name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                     description: random_string(&mut rng, 1..max_desc_len)
                                         .into_bytes(),
@@ -964,7 +964,7 @@ fn nft_media_uri_too_long(#[case] seed: Seed) {
                     .add_output(TxOutput::new(
                         NftIssuance {
                             metadata: Metadata {
-                                creator: Some(random_creator()),
+                                creator: Some(random_creator(&mut rng)),
                                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -1014,7 +1014,7 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         let output_value: OutputValue = TokenData::from(NftIssuance {
             metadata: Metadata {
-                creator: Some(random_creator()),
+                creator: Some(random_creator(&mut rng)),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -1097,7 +1097,7 @@ fn nft_media_uri_invalid(#[case] seed: Seed) {
                         .add_output(TxOutput::new(
                             NftIssuance {
                                 metadata: Metadata {
-                                    creator: Some(random_creator()),
+                                    creator: Some(random_creator(&mut rng)),
                                     name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                                     description: random_string(&mut rng, 1..max_desc_len)
                                         .into_bytes(),
@@ -1130,7 +1130,7 @@ fn nft_media_uri_invalid(#[case] seed: Seed) {
 }
 
 fn new_block_with_media_hash(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
     input_source_id: &OutPointSourceId,
     media_hash: Vec<u8>,
@@ -1155,7 +1155,7 @@ fn new_block_with_media_hash(
                 .add_output(TxOutput::new(
                     NftIssuance {
                         metadata: Metadata {
-                            creator: Some(random_creator()),
+                            creator: Some(random_creator(rng)),
                             name,
                             description,
                             ticker,
@@ -1303,7 +1303,7 @@ fn nft_valid_case(#[case] seed: Seed) {
 
         let output_value = NftIssuance {
             metadata: Metadata {
-                creator: Some(random_creator()),
+                creator: Some(random_creator(&mut rng)),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),

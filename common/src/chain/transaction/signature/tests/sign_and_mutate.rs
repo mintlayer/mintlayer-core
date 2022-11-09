@@ -49,7 +49,7 @@ const INVALID_INPUT: usize = 1235466;
 fn test_mutate_tx_internal_data(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
-    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
 
     let test_data = [
         (0, 31, Ok(())),
@@ -102,7 +102,7 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
 fn modify_and_verify(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
-    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
 
     {
@@ -171,7 +171,7 @@ fn modify_and_verify(#[case] seed: Seed) {
 fn mutate_all(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
-    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
     let tx = generate_and_sign_tx(
@@ -212,7 +212,7 @@ fn mutate_all(#[case] seed: Seed) {
 fn mutate_all_anyonecanpay(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
-    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
     let tx = generate_and_sign_tx(
@@ -258,7 +258,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
 fn mutate_none(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
-    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
     let tx = generate_and_sign_tx(
@@ -302,7 +302,7 @@ fn mutate_none(#[case] seed: Seed) {
 fn mutate_none_anyonecanpay(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
-    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
@@ -349,7 +349,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
 fn mutate_single(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
-    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
     let tx = generate_and_sign_tx(
@@ -429,7 +429,7 @@ fn mutate_single(#[case] seed: Seed) {
 fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
-    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();

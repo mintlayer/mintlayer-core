@@ -23,14 +23,12 @@ use common::{
     },
     primitives::Amount,
 };
-use crypto::{
-    key::{KeyKind, PrivateKey},
-    random::Rng,
-};
+use crypto::key::{KeyKind, PrivateKey};
+use crypto::random::{CryptoRng, Rng};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 
-pub fn random_creator() -> TokenCreator {
-    let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+pub fn random_creator(rng: &mut (impl Rng + CryptoRng)) -> TokenCreator {
+    let (_, public_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
     TokenCreator::from(public_key)
 }
 
@@ -47,14 +45,17 @@ pub fn random_token_issuance(chain_config: Arc<ChainConfig>, rng: &mut impl Rng)
     }
 }
 
-pub fn random_nft_issuance(chain_config: Arc<ChainConfig>, rng: &mut impl Rng) -> NftIssuance {
+pub fn random_nft_issuance(
+    chain_config: Arc<ChainConfig>,
+    rng: &mut (impl Rng + CryptoRng),
+) -> NftIssuance {
     let max_desc_len = chain_config.token_max_description_len();
     let max_name_len = chain_config.token_max_name_len();
     let max_ticker_len = chain_config.token_max_ticker_len();
 
     NftIssuance {
         metadata: Metadata {
-            creator: Some(random_creator()),
+            creator: Some(random_creator(rng)),
             name: random_string(rng, 1..max_name_len).into_bytes(),
             description: random_string(rng, 1..max_desc_len).into_bytes(),
             ticker: random_string(rng, 1..max_ticker_len).into_bytes(),

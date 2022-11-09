@@ -28,14 +28,14 @@ use common::{
     },
     primitives::{BlockHeight, Id, Idable, H256},
 };
-use crypto::random::Rng;
+use crypto::random::{CryptoRng, Rng};
 use itertools::Itertools;
 use rstest::rstest;
 use std::collections::BTreeMap;
 use test_utils::random::{make_seedable_rng, Seed};
 
 fn create_transactions(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     inputs: Vec<TxInput>,
     max_num_of_outputs: usize,
     num_of_txs: usize,
@@ -69,7 +69,7 @@ fn create_transactions(
 }
 
 fn create_block(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     prev_block_id: Id<GenBlock>,
     inputs: Vec<TxInput>,
     max_num_of_outputs: usize,
@@ -82,7 +82,10 @@ fn create_block(
 
 /// populate the db with random values, for testing.
 /// returns a tuple of the best block id and the outpoints (for spending)
-fn initialize_db(rng: &mut impl Rng, tx_outputs_size: u32) -> (UtxosDBInMemoryImpl, Vec<OutPoint>) {
+fn initialize_db(
+    rng: &mut (impl Rng + CryptoRng),
+    tx_outputs_size: u32,
+) -> (UtxosDBInMemoryImpl, Vec<OutPoint>) {
     let best_block_id: Id<GenBlock> = Id::new(H256::random_using(rng));
     let mut db_interface = UtxosDBInMemoryImpl::new(best_block_id, Default::default());
 
@@ -105,7 +108,10 @@ fn initialize_db(rng: &mut impl Rng, tx_outputs_size: u32) -> (UtxosDBInMemoryIm
     (db_interface, outpoints)
 }
 
-fn create_utxo_entries(rng: &mut impl Rng, num_of_utxos: u8) -> BTreeMap<OutPoint, UtxoEntry> {
+fn create_utxo_entries(
+    rng: &mut (impl Rng + CryptoRng),
+    num_of_utxos: u8,
+) -> BTreeMap<OutPoint, UtxoEntry> {
     let mut map = BTreeMap::new();
     for _ in 0..num_of_utxos {
         let (utxo, outpoint) = create_utxo(rng, 0);
