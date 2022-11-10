@@ -58,7 +58,7 @@ pub struct TestFrameworkBuilder {
 
 impl TestFrameworkBuilder {
     /// Constructs a builder instance with values appropriate for most of the tests.
-    pub fn new(_rng: &mut (impl Rng + CryptoRng)) -> Self {
+    pub fn new(rng: &mut (impl Rng + CryptoRng)) -> Self {
         let chain_config = ChainConfigBuilder::new(ChainType::Mainnet)
             .net_upgrades(NetUpgrades::unit_tests())
             .genesis_unittest(Destination::AnyoneCanSpend)
@@ -67,7 +67,7 @@ impl TestFrameworkBuilder {
             max_db_commit_attempts: Default::default(),
             max_orphan_blocks: Default::default(),
             min_max_bootstrap_import_buffer_sizes: Default::default(),
-            tx_index_enabled: true.into(),
+            tx_index_enabled: rng.gen_bool(0.5).into(),
         };
         let chainstate_storage = TestStore::new_empty().unwrap();
         let time_getter = None;

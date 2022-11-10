@@ -43,8 +43,12 @@ fn coins_homomorphism(#[case] seed: Seed) {
             .with_tx_verification_strategy(TxVerificationStrategy::Default)
             .build();
 
+        // Sync randomized `tx_index_enabled` value between two TestFrameworks
+        let chainstate_config = tf.chainstate.get_chainstate_config();
+
         let storage2 = TestStore::new_empty().unwrap();
         let mut tf2 = TestFramework::builder(&mut rng)
+            .with_chainstate_config(chainstate_config)
             .with_storage(storage2.clone())
             .with_tx_verification_strategy(TxVerificationStrategy::Disposable)
             .build();
@@ -124,8 +128,12 @@ fn tokens_homomorphism(#[case] seed: Seed) {
             .with_tx_verification_strategy(TxVerificationStrategy::Default)
             .build();
 
+        // Sync randomized `tx_index_enabled` value between two TestFrameworks
+        let chainstate_config = tf.chainstate.get_chainstate_config();
+
         let storage2 = TestStore::new_empty().unwrap();
         let mut tf2 = TestFramework::builder(&mut rng)
+            .with_chainstate_config(chainstate_config)
             .with_storage(storage2.clone())
             .with_tx_verification_strategy(TxVerificationStrategy::Disposable)
             .build();

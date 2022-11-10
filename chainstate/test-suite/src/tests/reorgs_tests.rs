@@ -460,10 +460,14 @@ fn spent_status(
 fn check_spend_status(tf: &TestFramework, tx: &Transaction, spend_status: &TestSpentStatus) {
     for (output_index, _) in tx.outputs().iter().enumerate() {
         let status = spent_status(tf, &tx.get_id(), output_index as u32);
-        if spend_status == &TestSpentStatus::Spent {
-            assert_ne!(status, Some(OutputSpentState::Unspent));
+        if *tf.chainstate.get_chainstate_config().tx_index_enabled {
+            if spend_status == &TestSpentStatus::Spent {
+                assert_ne!(status, Some(OutputSpentState::Unspent));
+            } else {
+                assert_eq!(status, Some(OutputSpentState::Unspent));
+            }
         } else {
-            assert_eq!(status, Some(OutputSpentState::Unspent));
+            assert!(status.is_none());
         }
     }
 }

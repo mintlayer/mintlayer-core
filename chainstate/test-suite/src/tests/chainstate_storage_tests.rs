@@ -74,19 +74,21 @@ fn store_coin(#[case] seed: Seed) {
             Id::<GenBlock>::from(block_id)
         );
 
-        // tx index is stored
-        let tx_index = db_tx
-            .get_mainchain_tx_index(&tx_utxo_outpoint.tx_id())
-            .expect("ok")
-            .expect("some");
-        let tx_pos = match tx_index.position() {
-            SpendablePosition::Transaction(tx_pos) => tx_pos,
-            SpendablePosition::BlockReward(_) => unreachable!(),
-        };
-        assert_eq!(
-            db_tx.get_mainchain_tx_by_position(tx_pos).expect("ok").expect("some").get_id(),
-            tx_id
-        );
+        if *tf.chainstate.get_chainstate_config().tx_index_enabled {
+            // tx index is stored
+            let tx_index = db_tx
+                .get_mainchain_tx_index(&tx_utxo_outpoint.tx_id())
+                .expect("ok")
+                .expect("some");
+            let tx_pos = match tx_index.position() {
+                SpendablePosition::Transaction(tx_pos) => tx_pos,
+                SpendablePosition::BlockReward(_) => unreachable!(),
+            };
+            assert_eq!(
+                db_tx.get_mainchain_tx_by_position(tx_pos).expect("ok").expect("some").get_id(),
+                tx_id
+            );
+        }
 
         // utxo is stored
         assert_eq!(
@@ -154,17 +156,19 @@ fn store_token(#[case] seed: Seed) {
             Id::<GenBlock>::from(block_id)
         );
 
-        // tx index is stored
-        let tx_index =
-            db_tx.get_mainchain_tx_index(&tx_outpoint.tx_id()).expect("ok").expect("some");
-        let tx_pos = match tx_index.position() {
-            SpendablePosition::Transaction(tx_pos) => tx_pos,
-            SpendablePosition::BlockReward(_) => unreachable!(),
-        };
-        assert_eq!(
-            db_tx.get_mainchain_tx_by_position(tx_pos).expect("ok").expect("some").get_id(),
-            tx_id
-        );
+        if *tf.chainstate.get_chainstate_config().tx_index_enabled {
+            // tx index is stored
+            let tx_index =
+                db_tx.get_mainchain_tx_index(&tx_outpoint.tx_id()).expect("ok").expect("some");
+            let tx_pos = match tx_index.position() {
+                SpendablePosition::Transaction(tx_pos) => tx_pos,
+                SpendablePosition::BlockReward(_) => unreachable!(),
+            };
+            assert_eq!(
+                db_tx.get_mainchain_tx_by_position(tx_pos).expect("ok").expect("some").get_id(),
+                tx_id
+            );
+        }
 
         // token info is stored
         assert_eq!(
@@ -269,45 +273,60 @@ fn reorg_store_coin(#[case] seed: Seed) {
             Id::<GenBlock>::from(block_3_id)
         );
 
-        // tx index from block_1 was deleted
-        assert_eq!(
-            db_tx.get_mainchain_tx_index(&tx_1_utxo_outpoint.tx_id()).expect("ok"),
-            None
-        );
-        // tx index from block_2 is stored
-        let tx_2_index = db_tx
-            .get_mainchain_tx_index(&tx_2_utxo_outpoint.tx_id())
-            .expect("ok")
-            .expect("some");
-        let tx_2_pos = match tx_2_index.position() {
-            SpendablePosition::Transaction(tx_pos) => tx_pos,
-            SpendablePosition::BlockReward(_) => unreachable!(),
-        };
-        assert_eq!(
-            db_tx
-                .get_mainchain_tx_by_position(tx_2_pos)
+        if *tf.chainstate.get_chainstate_config().tx_index_enabled {
+            // tx index from block_1 was deleted
+            assert_eq!(
+                db_tx.get_mainchain_tx_index(&tx_1_utxo_outpoint.tx_id()).expect("ok"),
+                None
+            );
+            // tx index from block_2 is stored
+            let tx_2_index = db_tx
+                .get_mainchain_tx_index(&tx_2_utxo_outpoint.tx_id())
                 .expect("ok")
-                .expect("some")
-                .get_id(),
-            tx_2_id
-        );
-        // tx index from block_3 is stored
-        let tx_3_index = db_tx
-            .get_mainchain_tx_index(&tx_3_utxo_outpoint.tx_id())
-            .expect("ok")
-            .expect("some");
-        let tx_3_pos = match tx_3_index.position() {
-            SpendablePosition::Transaction(tx_pos) => tx_pos,
-            SpendablePosition::BlockReward(_) => unreachable!(),
-        };
-        assert_eq!(
-            db_tx
-                .get_mainchain_tx_by_position(tx_3_pos)
+                .expect("some");
+            let tx_2_pos = match tx_2_index.position() {
+                SpendablePosition::Transaction(tx_pos) => tx_pos,
+                SpendablePosition::BlockReward(_) => unreachable!(),
+            };
+            assert_eq!(
+                db_tx
+                    .get_mainchain_tx_by_position(tx_2_pos)
+                    .expect("ok")
+                    .expect("some")
+                    .get_id(),
+                tx_2_id
+            );
+            // tx index from block_3 is stored
+            let tx_3_index = db_tx
+                .get_mainchain_tx_index(&tx_3_utxo_outpoint.tx_id())
                 .expect("ok")
-                .expect("some")
-                .get_id(),
-            tx_3_id
-        );
+                .expect("some");
+            let tx_3_pos = match tx_3_index.position() {
+                SpendablePosition::Transaction(tx_pos) => tx_pos,
+                SpendablePosition::BlockReward(_) => unreachable!(),
+            };
+            assert_eq!(
+                db_tx
+                    .get_mainchain_tx_by_position(tx_3_pos)
+                    .expect("ok")
+                    .expect("some")
+                    .get_id(),
+                tx_3_id
+            );
+        } else {
+            assert_eq!(
+                db_tx.get_mainchain_tx_index(&tx_1_utxo_outpoint.tx_id()).expect("ok"),
+                None
+            );
+            assert_eq!(
+                db_tx.get_mainchain_tx_index(&tx_2_utxo_outpoint.tx_id()).expect("ok"),
+                None
+            );
+            assert_eq!(
+                db_tx.get_mainchain_tx_index(&tx_3_utxo_outpoint.tx_id()).expect("ok"),
+                None
+            );
+        }
 
         // utxo from block_1 was deleted
         assert_eq!(db_tx.get_utxo(&tx_1_utxo_outpoint).expect("ok"), None);
@@ -453,41 +472,43 @@ fn reorg_store_token(#[case] seed: Seed) {
             Id::<GenBlock>::from(block_3_id)
         );
 
-        // tx index from block_1 was deleted
-        assert_eq!(
-            db_tx.get_mainchain_tx_index(&tx_1_outpoint.tx_id()).expect("ok"),
-            None
-        );
-        // tx index from block_2 is stored
-        let tx_2_index =
-            db_tx.get_mainchain_tx_index(&tx_2_outpoint.tx_id()).expect("ok").expect("some");
-        let tx_2_pos = match tx_2_index.position() {
-            SpendablePosition::Transaction(tx_pos) => tx_pos,
-            SpendablePosition::BlockReward(_) => unreachable!(),
-        };
-        assert_eq!(
-            db_tx
-                .get_mainchain_tx_by_position(tx_2_pos)
-                .expect("ok")
-                .expect("some")
-                .get_id(),
-            tx_2_id
-        );
-        // tx index from block_3 is stored
-        let tx_3_index =
-            db_tx.get_mainchain_tx_index(&tx_3_outpoint.tx_id()).expect("ok").expect("some");
-        let tx_3_pos = match tx_3_index.position() {
-            SpendablePosition::Transaction(tx_pos) => tx_pos,
-            SpendablePosition::BlockReward(_) => unreachable!(),
-        };
-        assert_eq!(
-            db_tx
-                .get_mainchain_tx_by_position(tx_3_pos)
-                .expect("ok")
-                .expect("some")
-                .get_id(),
-            tx_3_id
-        );
+        if *tf.chainstate.get_chainstate_config().tx_index_enabled {
+            // tx index from block_1 was deleted
+            assert_eq!(
+                db_tx.get_mainchain_tx_index(&tx_1_outpoint.tx_id()).expect("ok"),
+                None
+            );
+            // tx index from block_2 is stored
+            let tx_2_index =
+                db_tx.get_mainchain_tx_index(&tx_2_outpoint.tx_id()).expect("ok").expect("some");
+            let tx_2_pos = match tx_2_index.position() {
+                SpendablePosition::Transaction(tx_pos) => tx_pos,
+                SpendablePosition::BlockReward(_) => unreachable!(),
+            };
+            assert_eq!(
+                db_tx
+                    .get_mainchain_tx_by_position(tx_2_pos)
+                    .expect("ok")
+                    .expect("some")
+                    .get_id(),
+                tx_2_id
+            );
+            // tx index from block_3 is stored
+            let tx_3_index =
+                db_tx.get_mainchain_tx_index(&tx_3_outpoint.tx_id()).expect("ok").expect("some");
+            let tx_3_pos = match tx_3_index.position() {
+                SpendablePosition::Transaction(tx_pos) => tx_pos,
+                SpendablePosition::BlockReward(_) => unreachable!(),
+            };
+            assert_eq!(
+                db_tx
+                    .get_mainchain_tx_by_position(tx_3_pos)
+                    .expect("ok")
+                    .expect("some")
+                    .get_id(),
+                tx_3_id
+            );
+        }
 
         // token info for block_1 is deleted
         assert_eq!(db_tx.get_token_id(&tx_1_id).expect("ok"), None);
