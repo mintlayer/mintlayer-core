@@ -379,8 +379,12 @@ where
             }
         }
 
-        self.state = SyncState::Done;
-        self.peer_sync_handle.subscribe(&[PubSubTopic::Blocks]).await
+        if self.state != SyncState::Done {
+            self.peer_sync_handle.subscribe(&[PubSubTopic::Blocks]).await?;
+            self.state = SyncState::Done;
+        }
+
+        Ok(())
     }
 
     pub async fn process_error(

@@ -126,48 +126,34 @@ where
         .await
         .unwrap();
 
-    // TODO: FIXME:
-    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-
-    // Add a block.
-    let block = p2p_test_utils::create_block(
-        Arc::clone(&config),
-        TestBlockInfo::from_tip(&chainstate_handle, &config).await,
-    );
-    p2p_test_utils::import_blocks(&chainstate_handle, vec![block.clone()]).await;
-
-    // Check the original announcement.
-    match sync3.poll_next().await.unwrap() {
-        SyncingEvent::Announcement {
-            peer_id,
-            message_id: _,
-            announcement,
-        } => {
-            assert!(!announcement.is_propagated());
-            assert_eq!(&peer_id, conn1.peer_id());
-
-            match announcement.announcement() {
-                AnnouncementType::Block(b) => assert_eq!(b, &block),
-            }
+    // Produce blocks.
+    tokio::spawn(async move {
+        loop {
+            let block = p2p_test_utils::create_block(
+                Arc::clone(&config),
+                TestBlockInfo::from_tip(&chainstate_handle, &config).await,
+            );
+            p2p_test_utils::import_blocks(&chainstate_handle, vec![block.clone()]).await;
         }
-        e => panic!("Unexpected event: {e:?}"),
-    }
+    });
 
-    // And the propagated one.
-    match sync3.poll_next().await.unwrap() {
-        SyncingEvent::Announcement {
-            peer_id,
-            message_id: _,
-            announcement,
-        } => {
-            assert!(announcement.is_propagated());
-            assert_eq!(&peer_id, conn2.peer_id());
-
-            match announcement.announcement() {
-                AnnouncementType::Block(b) => assert_eq!(b, &block),
+    // Check that third peer receives propagated announcement.
+    loop {
+        match sync3.poll_next().await.unwrap() {
+            SyncingEvent::Announcement {
+                peer_id,
+                message_id: _,
+                announcement,
+            } => {
+                let is_propagated = &peer_id == conn2.peer_id();
+                assert_eq!(is_propagated, announcement.is_propagated());
+                match announcement.announcement() {
+                    AnnouncementType::Block(_) => {}
+                }
+                break;
             }
+            e => panic!("Unexpected event: {e:?}"),
         }
-        e => panic!("Unexpected event: {e:?}"),
     }
 }
 
