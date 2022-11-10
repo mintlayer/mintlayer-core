@@ -315,7 +315,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
             .add_output(TxOutput::new(
                 NftIssuance {
                     metadata: Metadata {
-                        creator: Some(random_creator()),
+                        creator: Some(random_creator(&mut rng)),
                         name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                         description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                         ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),

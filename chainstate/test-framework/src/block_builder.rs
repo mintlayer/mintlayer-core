@@ -20,7 +20,7 @@ use crate::utils::{create_multiple_utxo_data, create_new_outputs, outputs_from_b
 use crate::TestFramework;
 use chainstate::{BlockSource, ChainstateError};
 use chainstate_types::BlockIndex;
-use common::chain::OutPoint;
+use common::chain::{OutPoint, OutPointSourceId};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
@@ -112,6 +112,19 @@ impl<'f> BlockBuilder<'f> {
         self
     }
 
+    /// Returns regular transaction output(s) if any, otherwise returns block reward outputs
+    fn get_regular_block_outputs(outputs: BlockOutputs) -> BlockOutputs {
+        let has_tx_outputs = outputs
+            .iter()
+            .any(|(output, _)| matches!(output, OutPointSourceId::Transaction(_)));
+        outputs
+            .into_iter()
+            .filter(|(output, _)| {
+                matches!(output, OutPointSourceId::Transaction(_)) == has_tx_outputs
+            })
+            .collect()
+    }
+
     /// Adds a transaction that uses the transactions from the best block as inputs and
     /// produces new outputs.
     pub fn add_test_transaction_from_best_block(self, rng: &mut impl Rng) -> Self {
@@ -125,8 +138,10 @@ impl<'f> BlockBuilder<'f> {
         parent: Id<GenBlock>,
         rng: &mut impl Rng,
     ) -> Self {
-        let (witnesses, inputs, outputs) =
-            self.make_test_inputs_outputs(self.framework.outputs_from_genblock(parent), rng);
+        let (witnesses, inputs, outputs) = self.make_test_inputs_outputs(
+            Self::get_regular_block_outputs(self.framework.outputs_from_genblock(parent)),
+            rng,
+        );
         self.add_transaction(
             SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
                 .expect("invalid witness count"),
@@ -135,8 +150,10 @@ impl<'f> BlockBuilder<'f> {
 
     /// Same as `add_test_transaction_with_parent`, but uses reference to a block.
     pub fn add_test_transaction_from_block(self, parent: &Block, rng: &mut impl Rng) -> Self {
-        let (witnesses, inputs, outputs) =
-            self.make_test_inputs_outputs(outputs_from_block(parent), rng);
+        let (witnesses, inputs, outputs) = self.make_test_inputs_outputs(
+            Self::get_regular_block_outputs(outputs_from_block(parent)),
+            rng,
+        );
         self.add_transaction(
             SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
                 .expect("invalid witness count"),
