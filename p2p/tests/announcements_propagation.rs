@@ -15,10 +15,13 @@
 
 use std::{fmt::Debug, sync::Arc};
 
-use tokio::sync::mpsc::unbounded_channel;
+use tokio::{
+    sync::mpsc::unbounded_channel,
+    time::{self, Duration},
+};
 
 use p2p::{
-    message::{AnnouncementType, HeaderListResponse, Request, Response},
+    message::{HeaderListResponse, Request, Response},
     net::{
         libp2p::Libp2pService,
         mock::{
@@ -129,6 +132,7 @@ where
     // Produce blocks.
     tokio::spawn(async move {
         loop {
+            time::sleep(Duration::from_millis(1)).await;
             let block = p2p_test_utils::create_block(
                 Arc::clone(&config),
                 TestBlockInfo::from_tip(&chainstate_handle, &config).await,
@@ -145,12 +149,12 @@ where
                 message_id: _,
                 announcement,
             } => {
-                let is_propagated = &peer_id == conn2.peer_id();
-                assert_eq!(is_propagated, announcement.is_propagated());
-                match announcement.announcement() {
-                    AnnouncementType::Block(_) => {}
+                let should_be_propagated = &peer_id == conn2.peer_id();
+                assert_eq!(should_be_propagated, announcement.is_propagated());
+
+                if should_be_propagated {
+                    break;
                 }
-                break;
             }
             e => panic!("Unexpected event: {e:?}"),
         }
