@@ -68,7 +68,7 @@ impl<'tx, C: lmdb::Cursor<'tx>> Iterator for PrefixIter<'tx, C> {
 pub struct DbTx<'m, Tx> {
     tx: Tx,
     dbs: &'m DbList,
-    _map_token: RwLockReadGuard<'m, remap::MemMapToken>,
+    _map_token: RwLockReadGuard<'m, remap::MemMapController>,
 }
 
 type DbTxRo<'a> = DbTx<'a, lmdb::RoTransaction<'a>>;
@@ -132,7 +132,7 @@ pub struct LmdbImpl {
     ///
     /// * Shared (read) lock is required for running transactions, both read-only and read-write.
     /// * Exclusive (write) lock is required to reallocate the memory map
-    map_token: Arc<RwLock<remap::MemMapToken>>,
+    map_token: Arc<RwLock<remap::MemMapController>>,
 
     /// Size required to write a transaction
     tx_size: MemSize,
@@ -240,13 +240,12 @@ impl backend::Backend for Lmdb {
         std::fs::create_dir_all(&self.path).map_err(error::process_io_error)?;
 
         // Set up LMDB environment
-        let environment = {
-            let mut env_builder = lmdb::Environment::new();
-            env_builder.set_max_dbs(desc.len() as u32);
-            env_builder.set_flags(self.flags);
-            env_builder.set_map_size(self.map_size.as_bytes());
-            env_builder.open(&self.path).or_else(error::process_with_err)?
-        };
+        let environment = lmdb::Environment::new()
+            .set_max_dbs(desc.len() as u32)
+            .set_flags(self.flags)
+            .set_map_size(self.map_size.as_bytes())
+            .open(&self.path)
+            .or_else(error::process_with_err)?;
 
         // Set up all the databases
         let dbs = desc
@@ -258,7 +257,7 @@ impl backend::Backend for Lmdb {
         Ok(LmdbImpl {
             env: Arc::new(environment),
             dbs,
-            map_token: Arc::new(RwLock::new(remap::MemMapToken::new())),
+            map_token: Arc::new(RwLock::new(remap::MemMapController::new())),
             tx_size: self.tx_size,
         })
     }

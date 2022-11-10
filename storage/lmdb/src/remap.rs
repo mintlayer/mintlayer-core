@@ -79,21 +79,21 @@ impl std::ops::Mul<MemSize> for u64 {
 
 /// Token representing acquisition of the memory map resource
 #[derive(Debug)]
-pub struct MemMapToken();
+pub struct MemMapController();
 
-impl MemMapToken {
+impl MemMapController {
     pub fn new() -> Self {
         Self()
     }
 }
 
 /// A proof of having acquired the memory map resource exclusively
-pub type ExclusiveMemMapToken<'a> = sync::RwLockWriteGuard<'a, MemMapToken>;
+pub type ExclusiveMemMapController<'a> = sync::RwLockWriteGuard<'a, MemMapController>;
 
 /// Memory remapping procedure. Ensure at least `headroom` free space is available
 pub fn remap(
     env: &lmdb::Environment,
-    _map_token: ExclusiveMemMapToken<'_>,
+    _map_token: ExclusiveMemMapController<'_>,
     headroom: MemSize,
 ) -> storage_core::Result<()> {
     // Get page size
@@ -126,8 +126,8 @@ pub fn remap(
 
     // Ensure there is enough space
     if required_size > current_size {
-        // Remap with double the size but or the required size, whichever is larger
-        let new_size = std::cmp::max(2 * current_size, required_size);
+        // Remap with double of the required size
+        let new_size = 2 * required_size;
         log::info!(
             "Resizing LMDB memory map from {} to {}",
             current_size,
@@ -137,6 +137,11 @@ pub fn remap(
             .or_else(crate::error::process_with_err)
             .log_err()?;
     }
+
+    debug_assert!(
+        MemSize::from_bytes(env.info().expect("Map size query").map_size() as u64) >= required_size,
+        "Memory map still not big enough",
+    );
 
     Ok(())
 }

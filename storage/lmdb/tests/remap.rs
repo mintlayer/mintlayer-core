@@ -91,7 +91,7 @@ fn tx_size_too_small() {
     perform_writes(
         "tx_size_too_small",
         MemSize::from_kilobytes(200),
-        MemSize::from_megabytes(30),
+        MemSize::from_megabytes(20),
         [MemSize::from_megabytes(50)].as_ref(),
     );
 }
