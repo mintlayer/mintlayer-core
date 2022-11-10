@@ -4265,6 +4265,7 @@ name = "storage-lmdb"
 version = "0.1.0"
 dependencies = [
  "lmdb-mintlayer",
+ "logging",
  "storage-backend-test-suite",
  "storage-core",
  "test-utils",
