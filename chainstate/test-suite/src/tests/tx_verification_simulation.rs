@@ -31,7 +31,9 @@ fn simulation(
         let mut tf = TestFramework::builder()
             .with_chainstate_config(chainstate::ChainstateConfig {
                 tx_index_enabled: tx_index_enabled.into(),
-                ..Default::default()
+                max_db_commit_attempts: Default::default(),
+                max_orphan_blocks: Default::default(),
+                min_max_bootstrap_import_buffer_sizes: Default::default(),
             })
             .with_tx_verification_strategy(TxVerificationStrategy::Randomized(seed))
             .build();
