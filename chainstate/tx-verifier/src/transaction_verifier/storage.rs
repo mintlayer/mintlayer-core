@@ -47,8 +47,8 @@ pub enum TransactionVerifierStorageError {
     TxIndexError(#[from] TxIndexError),
     #[error("BlockUndo error: {0}")]
     BlockUndoError(#[from] BlockUndoError),
-    #[error("Index is not available")]
-    IndexNotAvailable,
+    #[error("Transaction index has been disabled")]
+    TransactionIndexDisabled,
 }
 
 pub trait TransactionVerifierStorageRef: UtxosStorageRead {

@@ -111,7 +111,7 @@ impl BanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::UtxoError(err) => err.ban_score(),
             TransactionVerifierStorageError::TxIndexError(err) => err.ban_score(),
             TransactionVerifierStorageError::BlockUndoError(_) => 100,
-            TransactionVerifierStorageError::IndexNotAvailable => 0,
+            TransactionVerifierStorageError::TransactionIndexDisabled => 0,
         }
     }
 }
