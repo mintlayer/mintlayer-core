@@ -15,7 +15,7 @@
 
 use common::{
     chain::{signed_transaction::SignedTransaction, tokens::OutputValue},
-    primitives::Amount,
+    primitives::{Amount, Idable},
 };
 
 use crate::{error::TxValidationError, get_memory_usage::GetMemoryUsage};
@@ -36,6 +36,10 @@ where
     async fn try_get_fee(&self, tx: &SignedTransaction) -> Result<Amount, TxValidationError> {
         eprintln!("try_get_fee");
         let tx_clone = tx.clone();
+
+        // Outputs in this vec are:
+        //     Some(Amount) if the outpoint was found in the mainchain
+        //     None         if the outpoint wasn't found in the mainchain (maybe it's in the mempool?)
         let chainstate_input_values = self
             .chainstate_handle
             .call(move |this| this.get_inputs_outpoints_values(tx_clone.transaction()))
@@ -50,6 +54,7 @@ where
             } else {
                 eprintln!("else");
                 let value = self.store.get_unconfirmed_outpoint_value(
+                    &tx.transaction().get_id(),
                     tx.transaction().inputs().get(i).expect("index").outpoint(),
                 )?;
                 input_values.push(value);

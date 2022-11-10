@@ -122,26 +122,28 @@ impl MempoolStore {
             Some(entry) if entry.tx.transaction().outputs().len() > outpoint.output_index() as usize)
     }
 
+    /// unconfirmed means: The outpoint comes from a transaction in the mempool
     pub(super) fn get_unconfirmed_outpoint_value(
         &self,
+        spending_tx_id_for_error_msg: &Id<Transaction>,
         outpoint: &OutPoint,
     ) -> Result<Amount, TxValidationError> {
         eprintln!("get_unconfirmed_outpoint_value: {:?}", outpoint);
-        let tx_id = *outpoint.tx_id().get_tx_id().expect("Not coinbase");
-        let err = || TxValidationError::OutPointNotFound {
+        let make_err = || TxValidationError::OutPointNotFound {
             outpoint: outpoint.clone(),
-            tx_id,
+            spending_tx_id: *spending_tx_id_for_error_msg,
         };
+        let tx_id = *outpoint.tx_id().get_tx_id().ok_or_else(make_err)?;
         self.txs_by_id
             .get(&tx_id)
-            .ok_or_else(err)
+            .ok_or_else(make_err)
             .and_then(|entry| {
                 entry
                     .tx
                     .transaction()
                     .outputs()
                     .get(outpoint.output_index() as usize)
-                    .ok_or_else(err)
+                    .ok_or_else(make_err)
             })
             .map(|output| match output.value() {
                 OutputValue::Coin(coin) => *coin,

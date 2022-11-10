@@ -440,7 +440,7 @@ where
                 |input| {
                     Err(TxValidationError::OutPointNotFound {
                         outpoint: input.outpoint().clone(),
-                        tx_id: tx.transaction().get_id(),
+                        spending_tx_id: tx.transaction().get_id(),
                     })
                 },
             )
