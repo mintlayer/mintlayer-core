@@ -64,24 +64,24 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
             },
         };
 
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(genesis_outpoint_id, 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                output_value.clone().into(),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(token_min_issuance_fee),
+                OutputPurpose::Burn,
+            ))
+            .build();
+        let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
         let block_index = tf
             .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::new(
-                        output_value.clone().into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(token_min_issuance_fee),
-                        OutputPurpose::Burn,
-                    ))
-                    .build(),
-            )
+            .add_transaction(tx)
             .build_and_process()
             .unwrap()
             .unwrap();
@@ -90,8 +90,9 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
             block.transactions()[0].outputs()[0].value(),
             &output_value.into()
         );
-        let issuance_outpoint_id =
-            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
+        assert!(tf
+            .outputs_from_genblock(block.get_id().into())
+            .contains_key(&issuance_outpoint_id));
 
         // Try to transfer NFT with wrong ID
         let result = tf
@@ -151,35 +152,31 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
             },
         };
 
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(genesis_outpoint_id, 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                output_value.clone().into(),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(token_min_issuance_fee),
+                OutputPurpose::Burn,
+            ))
+            .build();
+        let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
         let block_index = tf
             .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::new(
-                        output_value.clone().into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(token_min_issuance_fee),
-                        OutputPurpose::Burn,
-                    ))
-                    .build(),
-            )
+            .add_transaction(tx.clone())
             .build_and_process()
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
-        assert_eq!(
-            block.transactions()[0].outputs()[0].value(),
-            &output_value.into()
-        );
-        let issuance_outpoint_id =
-            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
+        assert_eq!(block.transactions()[0], tx);
+        assert_eq!(tx.outputs()[0].value(), &output_value.into());
 
         // Try to transfer 0 NFT
         let result = tf
@@ -268,91 +265,87 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
         }
         .into();
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(genesis_outpoint_id, 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                output_value,
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin((token_min_issuance_fee * 2).unwrap()),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(token_min_issuance_fee),
+                OutputPurpose::Burn,
+            ))
+            .build();
+        let first_issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
         let block_index = tf
             .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::new(
-                        output_value,
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin((token_min_issuance_fee * 2).unwrap()),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(token_min_issuance_fee),
-                        OutputPurpose::Burn,
-                    ))
-                    .build(),
-            )
+            .add_transaction(tx)
             .build_and_process()
             .unwrap()
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let first_issuance_outpoint_id =
-            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
         let first_token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(first_issuance_outpoint_id.clone(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::new(first_issuance_outpoint_id, 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                TokenData::TokenTransfer(TokenTransfer {
+                    token_id: first_token_id,
+                    amount: Amount::from_atoms(1),
+                })
+                .into(),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .add_output(TxOutput::new(
+                NftIssuance {
+                    metadata: Metadata {
+                        creator: Some(random_creator()),
+                        name: random_string(&mut rng, 1..max_name_len).into_bytes(),
+                        description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
+                        ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
+                        icon_uri: DataOrNoVec::from(None),
+                        additional_metadata_uri: DataOrNoVec::from(None),
+                        media_uri: DataOrNoVec::from(None),
+                        media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
+                    },
+                }
+                .into(),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(token_min_issuance_fee),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(token_min_issuance_fee),
+                OutputPurpose::Burn,
+            ))
+            .build();
+        let second_issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
         let block_index = tf
             .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::new(first_issuance_outpoint_id.clone(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::new(first_issuance_outpoint_id, 1),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::new(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id: first_token_id,
-                            amount: Amount::from_atoms(1),
-                        })
-                        .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .add_output(TxOutput::new(
-                        NftIssuance {
-                            metadata: Metadata {
-                                creator: Some(random_creator(&mut rng)),
-                                name: random_string(&mut rng, 1..max_name_len).into_bytes(),
-                                description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
-                                ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
-                                icon_uri: DataOrNoVec::from(None),
-                                additional_metadata_uri: DataOrNoVec::from(None),
-                                media_uri: DataOrNoVec::from(None),
-                                media_hash: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0],
-                            },
-                        }
-                        .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(token_min_issuance_fee),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(token_min_issuance_fee),
-                        OutputPurpose::Burn,
-                    ))
-                    .build(),
-            )
+            .add_transaction(tx)
             .build_and_process()
             .unwrap()
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let second_issuance_outpoint_id =
-            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
         let _ = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Try to spend 2 NFTs but use one ID
@@ -427,24 +420,24 @@ fn nft_valid_transfer(#[case] seed: Seed) {
             },
         };
 
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(genesis_outpoint_id, 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                output_value.clone().into(),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(token_min_issuance_fee),
+                OutputPurpose::Burn,
+            ))
+            .build();
+        let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
         let block_index = tf
             .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::new(
-                        output_value.clone().into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(token_min_issuance_fee),
-                        OutputPurpose::Burn,
-                    ))
-                    .build(),
-            )
+            .add_transaction(tx)
             .build_and_process()
             .unwrap()
             .unwrap();
@@ -454,8 +447,6 @@ fn nft_valid_transfer(#[case] seed: Seed) {
             block.transactions()[0].outputs()[0].value(),
             &output_value.into()
         );
-        let issuance_outpoint_id =
-            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
 
         // Valid case
         let transfer_value = TokenData::TokenTransfer(TokenTransfer {

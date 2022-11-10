@@ -230,113 +230,98 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .clone();
 
         // Second chain - B2
+        let tx_2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(issuance_outpoint_id, 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                TokenData::TokenTransfer(TokenTransfer {
+                    token_id,
+                    amount: Amount::from_atoms(1),
+                })
+                .into(),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(123454)),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .build();
+        let b2_outpoint_id: OutPointSourceId = tx_2.transaction().get_id().into();
         let block_b2 = tf
             .make_block_builder()
             .with_parent(issuance_block.get_id().into())
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::new(issuance_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::new(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: Amount::from_atoms(1),
-                        })
-                        .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(Amount::from_atoms(123454)),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .build(),
-            )
+            .add_transaction(tx_2)
             .build();
-        let b2_outpoint_id = chainstate_test_framework::outputs_from_block(&block_b2)
-            .keys()
-            .next()
-            .unwrap()
-            .clone();
         assert!(
             tf.process_block(block_b2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
         );
 
         // C2 - burn NFT in a second chain
+        let tx_2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(b2_outpoint_id.clone(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::new(b2_outpoint_id, 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                TokenTransfer {
+                    token_id,
+                    amount: Amount::from_atoms(1),
+                }
+                .into(),
+                OutputPurpose::Burn,
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(123454)),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .build();
+        let c2_outpoint_id: OutPointSourceId = tx_2.transaction().get_id().into();
         let block_c2 = tf
             .make_block_builder()
             .with_parent(issuance_block.get_id().into())
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::new(b2_outpoint_id.clone(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::new(b2_outpoint_id, 1),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::new(
-                        TokenTransfer {
-                            token_id,
-                            amount: Amount::from_atoms(1),
-                        }
-                        .into(),
-                        OutputPurpose::Burn,
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(Amount::from_atoms(123454)),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .build(),
-            )
+            .add_transaction(tx_2)
             .build();
-        let c2_outpoint_id = chainstate_test_framework::outputs_from_block(&block_c2)
-            .keys()
-            .next()
-            .unwrap()
-            .clone();
         assert!(
             tf.process_block(block_c2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
         );
 
         // Now D2 trying to spend NFT from mainchain
+        let tx_2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(c2_outpoint_id.clone(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::new(c2_outpoint_id, 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                TokenTransfer {
+                    token_id,
+                    amount: Amount::from_atoms(1),
+                }
+                .into(),
+                OutputPurpose::Burn,
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(123454)),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .build();
+        let d2_outpoint_id: OutPointSourceId = tx_2.transaction().get_id().into();
         let block_d2 = tf
             .make_block_builder()
             .with_parent(issuance_block.get_id().into())
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::new(c2_outpoint_id.clone(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::new(c2_outpoint_id, 1),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::new(
-                        TokenTransfer {
-                            token_id,
-                            amount: Amount::from_atoms(1),
-                        }
-                        .into(),
-                        OutputPurpose::Burn,
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(Amount::from_atoms(123454)),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .build(),
-            )
+            .add_transaction(tx_2)
             .build();
-        let d2_outpoint_id = chainstate_test_framework::outputs_from_block(&block_d2)
-            .keys()
-            .next()
-            .unwrap()
-            .clone();
         assert!(
             tf.process_block(block_d2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"

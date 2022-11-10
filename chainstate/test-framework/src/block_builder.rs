@@ -16,8 +16,8 @@
 use std::collections::BTreeSet;
 
 use crate::framework::BlockOutputs;
-use crate::utils::{create_multiple_utxo_data, create_new_outputs};
-use crate::{outputs_from_block, TestFramework};
+use crate::utils::{create_multiple_utxo_data, create_new_outputs, outputs_from_block};
+use crate::TestFramework;
 use chainstate::{BlockSource, ChainstateError};
 use chainstate_types::BlockIndex;
 use common::chain::OutPoint;
