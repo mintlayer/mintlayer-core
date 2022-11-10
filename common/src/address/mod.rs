@@ -106,11 +106,16 @@ mod tests {
     use super::*;
     use crate::chain::config::create_mainnet;
     use crypto::key::{KeyKind, PrivateKey};
+    use rstest::rstest;
+    use test_utils::random::Seed;
 
-    #[test]
-    fn basic() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn basic(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
         let cfg = create_mainnet();
-        let (_priv_key, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (_priv_key, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let public_key_hash = PublicKeyHash::from(&pub_key);
         let address = Address::from_public_key_hash(&cfg, &public_key_hash)
             .expect("Address from pubkeyhash failed");
@@ -121,10 +126,13 @@ mod tests {
         assert_eq!(public_key_hash_restored, public_key_hash);
     }
 
-    #[test]
-    fn ensure_cfg_and_with_hrp_compatiblity() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn ensure_cfg_and_with_hrp_compatiblity(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
         let cfg = create_mainnet();
-        let (_priv_key, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (_priv_key, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let public_key_hash = PublicKeyHash::from(&pub_key);
         let hrp = cfg.address_prefix();
         let address1 = Address::new(&cfg, public_key_hash.encode());

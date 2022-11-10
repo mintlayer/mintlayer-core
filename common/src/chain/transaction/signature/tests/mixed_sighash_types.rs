@@ -31,7 +31,7 @@ use crate::chain::{signature::inputsig::InputWitness, Destination};
 fn mixed_sighash_types(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
-    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
 
     // Test all combinations of signature hash types in every position.

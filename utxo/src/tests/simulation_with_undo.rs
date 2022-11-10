@@ -19,7 +19,7 @@ use common::{
     chain::{block::BlockReward, OutPoint, OutPointSourceId, Transaction, TxInput},
     primitives::{BlockHeight, Id, Idable, H256},
 };
-use crypto::random::Rng;
+use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
 use std::collections::BTreeMap;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -76,7 +76,7 @@ fn cache_simulation_with_undo(
 // Each step a new cache is created based on parent. Then it is randomly modified and passed to the
 // next step as a parent. After recursion stops the resulting cache is returned and flushed to the base.
 fn simulation_step<'a>(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     result: &mut ResultWithUndo,
     parent: &'a UtxosCache,
     iterations_per_cache: usize,
@@ -103,7 +103,7 @@ fn simulation_step<'a>(
 }
 
 fn populate_cache_with_undo(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     cache: &mut UtxosCache,
     iterations_count: usize,
     prev_result: &mut ResultWithUndo,

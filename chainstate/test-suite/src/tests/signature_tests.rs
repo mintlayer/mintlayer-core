@@ -30,13 +30,19 @@ use crypto::key::{KeyKind, PrivateKey};
 
 use chainstate_test_framework::TestFramework;
 use chainstate_test_framework::TransactionBuilder;
+use rstest::rstest;
+use test_utils::random::Seed;
 
-#[test]
-fn signed_tx() {
-    utils::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn signed_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
         let mut tf = TestFramework::default();
+        let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (private_key, public_key) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
 
         // The first transaction uses the `AnyoneCanSpend` output of the transaction from the
         // genesis block.

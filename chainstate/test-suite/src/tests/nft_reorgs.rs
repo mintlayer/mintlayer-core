@@ -59,7 +59,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let issuance_data = NftIssuance {
             metadata: Metadata {
-                creator: Some(random_creator()),
+                creator: Some(random_creator(&mut rng)),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -389,7 +389,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         // Issue a new NFT
         let issuance_value = NftIssuance {
             metadata: Metadata {
-                creator: Some(random_creator()),
+                creator: Some(random_creator(&mut rng)),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),

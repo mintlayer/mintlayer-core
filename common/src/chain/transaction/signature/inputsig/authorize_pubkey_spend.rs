@@ -90,7 +90,8 @@ mod test {
     fn invalid_input_index(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (private_key, public_key) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let destination = Destination::PublicKey(public_key);
         let tx = generate_unsigned_tx(&mut rng, &destination, 1, 2).unwrap();
 
@@ -113,7 +114,8 @@ mod test {
     fn wrong_destination_type(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (private_key, public_key) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let destination = Destination::Address(PublicKeyHash::from(&public_key));
         let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
 
@@ -141,7 +143,8 @@ mod test {
     fn invalid_signature_type(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (private_key, public_key) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let destination = Destination::PublicKey(public_key);
         let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
 
@@ -175,7 +178,8 @@ mod test {
     fn test_verify_public_key_spending(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (private_key, public_key) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let destination = Destination::PublicKey(public_key.clone());
         let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
 
@@ -203,7 +207,8 @@ mod test {
     fn test_sign_pubkey_spending(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (private_key, public_key) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let destination = Destination::PublicKey(public_key.clone());
         let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
 

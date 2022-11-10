@@ -16,7 +16,7 @@
 use super::{empty_test_utxos_view, test_helper::create_utxo};
 use crate::{FlushableUtxoView, UtxosCache, UtxosView};
 use common::{chain::OutPoint, primitives::H256};
-use crypto::random::Rng;
+use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
@@ -60,7 +60,7 @@ fn cache_simulation_test(
 // Each step a new cache is created based on parent. Then it is randomly modified and passed to the
 // next step as a parent. After recursion stops the resulting cache is returned and flushed to the base.
 fn simulation_step<'a>(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     result: &mut Vec<OutPoint>,
     parent: &'a UtxosCache,
     iterations_per_cache: usize,
@@ -87,7 +87,7 @@ fn simulation_step<'a>(
 
 // Perform random modification on a cache (add new, spend existing, uncache), tracking the coverage
 fn populate_cache(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     cache: &mut UtxosCache,
     iterations_count: usize,
     prev_result: &[OutPoint],

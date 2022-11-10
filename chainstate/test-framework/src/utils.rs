@@ -23,7 +23,7 @@ use common::{
     },
     primitives::{Amount, Idable},
 };
-use crypto::random::Rng;
+use crypto::random::{CryptoRng, Rng};
 use test_utils::nft_utils::*;
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
@@ -95,7 +95,7 @@ pub fn create_multiple_utxo_data(
     outsrc: OutPointSourceId,
     index: usize,
     output: &TxOutput,
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
 ) -> Option<(InputWitness, TxInput, Vec<TxOutput>)> {
     let num_outputs = rng.gen_range(1..10);
     let new_outputs = match output.value() {

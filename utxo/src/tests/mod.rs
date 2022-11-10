@@ -69,7 +69,7 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
 };
-use crypto::random::{seq, Rng};
+use crypto::random::{seq, CryptoRng, Rng};
 use itertools::Itertools;
 use rstest::rstest;
 use std::collections::BTreeMap;
@@ -83,7 +83,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 /// `result_flags` - the result ( dirty/not, fresh/not ) after calling the `add_utxo` method.
 /// `op_result` - the result of calling `add_utxo` method, whether it succeeded or not.
 fn check_add_utxo(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     cache_presence: Presence,
     cache_flags: Option<(IsFresh, IsDirty)>,
     possible_overwrite: bool,
@@ -116,7 +116,7 @@ fn check_add_utxo(
 /// `cache_flags` - The flags of a utxo entry in a cache.
 /// `result_flags` - the result ( dirty/not, fresh/not ) after performing `spend_utxo`.
 fn check_spend_utxo(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     parent_presence: Presence,
     cache_presence: Presence,
     cache_flags: Option<(IsFresh, IsDirty)>,
@@ -176,7 +176,7 @@ fn check_spend_utxo(
 /// `result` - The result of the parent after performing the `batch_write`.
 /// `result_flags` - the pair of `result`, indicating whether it is dirty/not, fresh/not or nothing at all.
 fn check_write_utxo(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     parent_presence: Presence,
     child_presence: Presence,
     result: Result<Presence, Error>,
@@ -238,7 +238,7 @@ fn check_write_utxo(
 
 /// Checks the `get_mut_utxo` method behavior.
 fn check_get_mut_utxo(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     parent_presence: Presence,
     cache_presence: Presence,
     result_presence: Presence,

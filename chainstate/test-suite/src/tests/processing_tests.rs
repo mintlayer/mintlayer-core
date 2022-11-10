@@ -63,7 +63,8 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
 
         let coins = OutputValue::Coin(Amount::from_atoms(10));
-        let destination = Destination::PublicKey(PrivateKey::new(KeyKind::RistrettoSchnorr).1);
+        let destination =
+            Destination::PublicKey(PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr).1);
 
         // Case 1: reward is a simple transfer
         let block = tf
@@ -749,7 +750,7 @@ fn consensus_type(#[case] seed: Seed) {
 
     // Mine blocks 5-9 with minimal difficulty, as expected by net upgrades
     for i in 5..10 {
-        let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let prev_block = tf.block(*tf.index_at(i - 1).block_id());
         let mut mined_block = tf
             .make_block_builder()
@@ -818,7 +819,7 @@ fn consensus_type(#[case] seed: Seed) {
 
     // Mining should work
     for i in 15..20 {
-        let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let prev_block = tf.block(*tf.index_at(i - 1).block_id());
         let mut mined_block = tf
             .make_block_builder()
@@ -879,7 +880,7 @@ fn pow(#[case] seed: Seed) {
 
     // Let's create a block with random (invalid) PoW data and see that it fails the consensus
     // checks
-    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let mut random_invalid_block = tf
         .make_block_builder()
         .with_reward(vec![TxOutput::new(
@@ -952,7 +953,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
     let expected_block_reward = (0..block_reward_output_count)
         .map(|_| {
             let amount = Amount::from_atoms(rng.gen::<u128>() % 50);
-            let pub_key = PrivateKey::new(KeyKind::RistrettoSchnorr).1;
+            let pub_key = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr).1;
             TxOutput::new(
                 OutputValue::Coin(amount),
                 OutputPurpose::LockThenTransfer(

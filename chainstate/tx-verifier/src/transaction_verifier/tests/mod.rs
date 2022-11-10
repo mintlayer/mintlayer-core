@@ -24,15 +24,15 @@ use common::{
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
-    random::Rng,
+    random::{CryptoRng, Rng},
 };
 
-fn create_utxo(rng: &mut impl Rng, value: UnsignedIntType) -> (OutPoint, Utxo) {
+fn create_utxo(rng: &mut (impl Rng + CryptoRng), value: UnsignedIntType) -> (OutPoint, Utxo) {
     let outpoint = OutPoint::new(
         OutPointSourceId::Transaction(Id::new(H256::random_using(rng))),
         0,
     );
-    let (_, pub_key1) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (_, pub_key1) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
     let output1 = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(value)),
         OutputPurpose::Transfer(Destination::PublicKey(pub_key1)),

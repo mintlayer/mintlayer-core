@@ -23,6 +23,7 @@ use serialization::{Decode, Encode};
 use crate::key::rschnorr::{MLRistrettoPrivateKey, MLRistrettoPublicKey, RistrettoSignatureError};
 use crate::key::Signature::RistrettoSchnorr;
 use crate::random::make_true_rng;
+use crate::random::{CryptoRng, Rng};
 pub use signature::Signature;
 
 use self::hdkd::child_number::ChildNumber;
@@ -63,11 +64,17 @@ impl From<RistrettoSignatureError> for SignatureError {
 }
 
 impl PrivateKey {
-    pub fn new(key_kind: KeyKind) -> (PrivateKey, PublicKey) {
-        let mut rng = make_true_rng();
+    pub fn new_from_entropy(key_kind: KeyKind) -> (PrivateKey, PublicKey) {
+        Self::new_from_rng(&mut make_true_rng(), key_kind)
+    }
+
+    pub fn new_from_rng(
+        rng: &mut (impl Rng + CryptoRng),
+        key_kind: KeyKind,
+    ) -> (PrivateKey, PublicKey) {
         match key_kind {
             KeyKind::RistrettoSchnorr => {
-                let k = MLRistrettoPrivateKey::new(&mut rng);
+                let k = MLRistrettoPrivateKey::new(rng);
                 (
                     PrivateKey {
                         key: PrivateKeyHolder::RistrettoSchnorr(k.0),
@@ -143,11 +150,17 @@ impl PublicKey {
 mod test {
     use super::*;
     use crate::key::hdkd::derivation_path::DerivationPath;
+    use rstest::rstest;
     use std::str::FromStr;
+    use test_utils::random::make_seedable_rng;
+    use test_utils::random::Seed;
 
-    #[test]
-    fn sign_and_verify() {
-        let (sk, pk) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn sign_and_verify(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let (sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         assert_eq!(sk.kind(), KeyKind::RistrettoSchnorr);
         let msg_size = 1 + rand::random::<usize>() % 10000;
         let msg: Vec<u8> = (0..msg_size).map(|_| rand::random::<u8>()).collect();
@@ -155,9 +168,12 @@ mod test {
         assert!(pk.verify_message(&sig, &msg));
     }
 
-    #[test]
-    fn derive() {
-        let (sk, _) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn derive(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let (sk, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let sk1 = sk
             .clone()
             .derive_child(ChildNumber::from_hardened(123.try_into().unwrap()).unwrap())
