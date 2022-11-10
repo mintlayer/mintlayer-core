@@ -471,7 +471,9 @@ async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
             .await??;
         let input_value = match chainstate_outpoint_value.first().unwrap() {
             Some(input_value) => *input_value,
-            None => mempool.store.get_unconfirmed_outpoint_value(&outpoint)?,
+            None => {
+                mempool.store.get_unconfirmed_outpoint_value(&H256::zero().into(), &outpoint)?
+            }
         };
         input_values.push(input_value)
     }

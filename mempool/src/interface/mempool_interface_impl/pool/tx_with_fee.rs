@@ -13,27 +13,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::TxInput;
+use common::{chain::signed_transaction::SignedTransaction, primitives::Amount};
 
-use crate::get_memory_usage::GetMemoryUsage;
+use crate::{error::TxValidationError, get_memory_usage::GetMemoryUsage};
 
+use super::try_get_fee::TryGetFee;
 use super::Mempool;
 
-pub trait SpendsUnconfirmed<M>
-where
-    M: GetMemoryUsage + Send + Sync,
-{
-    fn spends_unconfirmed(&self, mempool: &Mempool<M>) -> bool;
+pub struct TxWithFee {
+    tx: SignedTransaction,
+    fee: Amount,
 }
 
-impl<M> SpendsUnconfirmed<M> for TxInput
-where
-    M: GetMemoryUsage + Send + Sync,
-{
-    fn spends_unconfirmed(&self, mempool: &Mempool<M>) -> bool {
-        let outpoint_id = self.outpoint().tx_id().get_tx_id().cloned();
-        outpoint_id.is_some()
-            && mempool
-                .contains_transaction(self.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
+impl TxWithFee {
+    pub async fn new<M: GetMemoryUsage + Sync + Send>(
+        mempool: &Mempool<M>,
+        tx: SignedTransaction,
+    ) -> Result<Self, TxValidationError> {
+        let fee = mempool.try_get_fee(&tx).await?;
+        Ok(Self { tx, fee })
+    }
+
+    pub fn tx(&self) -> &SignedTransaction {
+        &self.tx
+    }
+
+    pub fn fee(&self) -> Amount {
+        self.fee
     }
 }
