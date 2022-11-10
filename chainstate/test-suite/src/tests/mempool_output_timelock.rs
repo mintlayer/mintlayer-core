@@ -25,7 +25,9 @@ use common::{
     },
     primitives::{time, BlockHeight},
 };
-use tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifier};
+use tx_verifier::transaction_verifier::{
+    TransactionSourceForConnect, TransactionVerifier, TransactionVerifierConfig,
+};
 
 fn setup() -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();
@@ -41,7 +43,11 @@ fn setup() -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
 fn output_lock_until_height() {
     utils::concurrency::model(|| {
         let (chain_config, storage, mut tf) = setup();
-        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
+        let mut verifier = TransactionVerifier::new(
+            &storage,
+            &chain_config,
+            TransactionVerifierConfig::new(true),
+        );
 
         let block_height_that_unlocks = 10;
 
@@ -103,7 +109,11 @@ fn output_lock_until_height() {
 fn output_lock_for_block_count() {
     utils::concurrency::model(|| {
         let (chain_config, storage, mut tf) = setup();
-        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
+        let mut verifier = TransactionVerifier::new(
+            &storage,
+            &chain_config,
+            TransactionVerifierConfig::new(true),
+        );
 
         let block_count_that_unlocks = 20;
         let block_height_with_locked_output = 1;
@@ -170,7 +180,11 @@ fn output_lock_for_block_count() {
 fn output_lock_until_time() {
     utils::concurrency::model(|| {
         let (chain_config, storage, mut tf) = setup();
-        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
+        let mut verifier = TransactionVerifier::new(
+            &storage,
+            &chain_config,
+            TransactionVerifierConfig::new(true),
+        );
 
         let genesis_timestamp = tf.genesis().timestamp();
         let lock_time = genesis_timestamp.as_int_seconds() + 4;
@@ -259,7 +273,11 @@ fn output_lock_until_time() {
 fn output_lock_for_seconds() {
     utils::concurrency::model(|| {
         let (chain_config, storage, mut tf) = setup();
-        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
+        let mut verifier = TransactionVerifier::new(
+            &storage,
+            &chain_config,
+            TransactionVerifierConfig::new(true),
+        );
 
         let genesis_timestamp = tf.genesis().timestamp();
         let block_times: Vec<_> = itertools::iterate(genesis_timestamp.as_int_seconds(), |t| t + 1)

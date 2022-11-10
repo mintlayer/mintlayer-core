@@ -81,7 +81,7 @@ fn reorg_simple(#[case] seed: Seed) {
 fn test_very_long_reorgs(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder().build();
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
         subscribe_to_events(&mut tf, &events);
 

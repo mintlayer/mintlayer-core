@@ -26,7 +26,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 use tx_verifier::transaction_verifier::{
     error::ConnectTransactionError, flush::flush_to_storage,
     storage::TransactionVerifierStorageRef, BlockTransactableRef, Fee, Subsidy,
-    TransactionVerifier, TransactionVerifierDelta,
+    TransactionVerifier, TransactionVerifierConfig, TransactionVerifierDelta,
 };
 use utils::tap_error_log::LogError;
 
@@ -63,13 +63,14 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         block_index_handle: &'a H,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
+        verifier_config: TransactionVerifierConfig,
         block_index: &'a BlockIndex,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<'a, S>, BlockError>
     where
         H: BlockIndexHandle,
         S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>,
+        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S>,
     {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past =
@@ -80,6 +81,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
                 tx_verifier_maker,
                 storage_backend,
                 chain_config,
+                verifier_config,
                 block_index,
                 block,
                 &median_time_past,
@@ -101,14 +103,20 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         tx_verifier_maker: M,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
+        verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<'a, S>, BlockError>
     where
         S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>,
+        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S>,
     {
-        let mut tx_verifier =
-            self.disconnect_with_base(tx_verifier_maker, storage_backend, chain_config, block)?;
+        let mut tx_verifier = self.disconnect_with_base(
+            tx_verifier_maker,
+            storage_backend,
+            chain_config,
+            verifier_config,
+            block,
+        )?;
 
         tx_verifier.set_best_block(block.prev_block_id());
 
@@ -117,20 +125,22 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
 }
 
 impl RandomizedTransactionVerificationStrategy {
+    #[allow(clippy::too_many_arguments)]
     fn connect_with_base<'a, S, M>(
         &self,
         tx_verifier_maker: M,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
+        verifier_config: TransactionVerifierConfig,
         block_index: &'a BlockIndex,
         block: &WithId<Block>,
         median_time_past: &BlockTimestamp,
     ) -> Result<(TransactionVerifier<'a, S>, Amount), ConnectTransactionError>
     where
         S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>,
+        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S>,
     {
-        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config);
+        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
 
         let reward_fees = tx_verifier
             .connect_transactable(
@@ -214,13 +224,14 @@ impl RandomizedTransactionVerificationStrategy {
         tx_verifier_maker: M,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
+        verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<'a, S>, ConnectTransactionError>
     where
         S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>,
+        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S>,
     {
-        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config);
+        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
         let mut tx_num = i32::try_from(block.transactions().len()).unwrap() - 1;
         while tx_num >= 0 {
             if self.rng.borrow_mut().gen::<bool>() {

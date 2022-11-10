@@ -35,7 +35,7 @@ use common::{
 };
 use consensus::TransactionIndexHandle;
 use logging::log;
-use tx_verifier::transaction_verifier::TransactionVerifier;
+use tx_verifier::transaction_verifier::{TransactionVerifier, TransactionVerifierConfig};
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosDB, UtxosView};
 
@@ -56,7 +56,7 @@ mod tx_verifier_storage;
 
 pub(crate) struct ChainstateRef<'a, S, O, V> {
     chain_config: &'a ChainConfig,
-    _chainstate_config: &'a ChainstateConfig,
+    chainstate_config: &'a ChainstateConfig,
     tx_verification_strategy: &'a V,
     db_tx: S,
     orphan_blocks: O,
@@ -134,7 +134,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
     ) -> ChainstateRef<'a, S, O, V> {
         ChainstateRef {
             chain_config,
-            _chainstate_config: chainstate_config,
+            chainstate_config,
             db_tx,
             tx_verification_strategy,
             orphan_blocks,
@@ -152,7 +152,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
     ) -> ChainstateRef<'a, S, O, V> {
         ChainstateRef {
             chain_config,
-            _chainstate_config: chainstate_config,
+            chainstate_config,
             db_tx,
             tx_verification_strategy,
             orphan_blocks,
@@ -774,6 +774,9 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         block_index: &BlockIndex,
         block: &WithId<Block>,
     ) -> Result<(), BlockError> {
+        let verifier_config = TransactionVerifierConfig {
+            tx_index_enabled: *self.chainstate_config.tx_index_enabled,
+        };
         let connected_txs = self
             .tx_verification_strategy
             .connect_block(
@@ -781,6 +784,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
                 self,
                 self,
                 self.chain_config,
+                verifier_config,
                 block_index,
                 block,
             )
@@ -793,10 +797,14 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
     }
 
     fn disconnect_transactions(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
+        let verifier_config = TransactionVerifierConfig {
+            tx_index_enabled: *self.chainstate_config.tx_index_enabled,
+        };
         let cached_inputs = self.tx_verification_strategy.disconnect_block(
             TransactionVerifier::new,
             self,
             self.chain_config,
+            verifier_config,
             block,
         )?;
         let cached_inputs = cached_inputs.consume()?;

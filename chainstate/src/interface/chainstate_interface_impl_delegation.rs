@@ -298,6 +298,7 @@ mod tests {
                 max_db_commit_attempts: 10.into(),
                 max_orphan_blocks: 0.into(),
                 min_max_bootstrap_import_buffer_sizes: Default::default(),
+                tx_index_enabled: Default::default(),
             };
             let chainstate_storage = Store::new_empty().unwrap();
 

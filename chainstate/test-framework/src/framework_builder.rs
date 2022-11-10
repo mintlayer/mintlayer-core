@@ -62,7 +62,12 @@ impl TestFrameworkBuilder {
             .net_upgrades(NetUpgrades::unit_tests())
             .genesis_unittest(Destination::AnyoneCanSpend)
             .build();
-        let chainstate_config = ChainstateConfig::default();
+        let chainstate_config = chainstate::ChainstateConfig {
+            max_db_commit_attempts: Default::default(),
+            max_orphan_blocks: Default::default(),
+            min_max_bootstrap_import_buffer_sizes: Default::default(),
+            tx_index_enabled: true.into(),
+        };
         let chainstate_storage = TestStore::new_empty().unwrap();
         let time_getter = None;
         let tx_verification_strategy = TxVerificationStrategy::Default;

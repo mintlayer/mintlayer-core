@@ -97,6 +97,7 @@ fn read_config_override_values() {
     let options = RunOptions {
         max_db_commit_attempts: Some(max_db_commit_attempts),
         max_orphan_blocks: Some(max_orphan_blocks),
+        tx_index_enabled: Some(false),
         p2p_addr: Some(p2p_addr.into()),
         p2p_ban_threshold: Some(p2p_ban_threshold),
         p2p_outbound_connection_timeout: Some(p2p_timeout),
@@ -121,6 +122,10 @@ fn read_config_override_values() {
     assert_eq!(
         config.chainstate.chainstate_config.max_orphan_blocks,
         Some(max_orphan_blocks)
+    );
+    assert_eq!(
+        config.chainstate.chainstate_config.tx_index_enabled,
+        Some(false)
     );
 
     assert_eq!(config.p2p.bind_address, Some(p2p_addr.into()));
@@ -185,6 +190,7 @@ fn default_run_options() -> RunOptions {
     RunOptions {
         max_db_commit_attempts: None,
         max_orphan_blocks: None,
+        tx_index_enabled: None,
         p2p_addr: None,
         p2p_ban_threshold: None,
         p2p_outbound_connection_timeout: None,

@@ -22,7 +22,7 @@ use common::{
 };
 use tx_verifier::transaction_verifier::{
     error::ConnectTransactionError, storage::TransactionVerifierStorageRef, BlockTransactableRef,
-    Fee, Subsidy, TransactionVerifier,
+    Fee, Subsidy, TransactionVerifier, TransactionVerifierConfig,
 };
 use utils::tap_error_log::LogError;
 
@@ -47,19 +47,20 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         block_index_handle: &'a H,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
+        verifier_config: TransactionVerifierConfig,
         block_index: &'a BlockIndex,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<'a, S>, BlockError>
     where
         H: BlockIndexHandle,
         S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>,
+        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S>,
     {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past =
             calculate_median_time_past(block_index_handle, &block.prev_block_id());
 
-        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config);
+        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
 
         let reward_fees = tx_verifier
             .connect_transactable(
@@ -103,13 +104,14 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         tx_verifier_maker: M,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
+        verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<'a, S>, BlockError>
     where
         S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>,
+        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S>,
     {
-        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config);
+        let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
 
         // TODO: add a test that checks the order in which txs are disconnected
         block

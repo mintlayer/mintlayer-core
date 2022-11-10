@@ -24,7 +24,7 @@ use common::{
     primitives::id::WithId,
 };
 use tx_verifier::transaction_verifier::{
-    storage::TransactionVerifierStorageRef, TransactionVerifier,
+    storage::TransactionVerifierStorageRef, TransactionVerifier, TransactionVerifierConfig,
 };
 
 /// A trait that specifies how a block will be verified
@@ -35,19 +35,21 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     /// Notice that this doesn't modify the internal database/storage
     /// state. It just returns a TransactionVerifier that can be
     /// used to update the database/storage state.
+    #[allow(clippy::too_many_arguments)]
     fn connect_block<'a, H, S, M>(
         &self,
         tx_verifier_maker: M,
         block_index_handle: &'a H,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
+        verifier_config: TransactionVerifierConfig,
         block_index: &'a BlockIndex,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<'a, S>, BlockError>
     where
         H: BlockIndexHandle,
         S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>;
+        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S>;
 
     /// Disconnect the transactions given by block and block_index,
     /// and return a TransactionVerifier with an internal state
@@ -60,9 +62,10 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         tx_verifier_maker: M,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
+        verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
     ) -> Result<TransactionVerifier<'a, S>, BlockError>
     where
         S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>;
+        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S>;
 }

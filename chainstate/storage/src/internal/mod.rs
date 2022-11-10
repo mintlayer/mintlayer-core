@@ -59,6 +59,7 @@ mod well_known {
     declare_entry!(StoreVersion: u32);
     declare_entry!(BestBlockId: Id<GenBlock>);
     declare_entry!(UtxosBestBlockId: Id<GenBlock>);
+    declare_entry!(TxIndexEnabled: bool);
 }
 
 /// Store for blockchain data, parametrized over the backend B
@@ -156,6 +157,7 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
 
+        fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>>;
         fn get_mainchain_tx_index(
             &self,
             tx_id: &OutPointSourceId,
@@ -197,12 +199,12 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
 
+        fn set_is_mainchain_tx_index_enabled(&mut self, enabled: bool) -> crate::Result<()>;
         fn set_mainchain_tx_index(
             &mut self,
             tx_id: &OutPointSourceId,
             tx_index: &TxMainChainIndex,
         ) -> crate::Result<()>;
-
         fn del_mainchain_tx_index(&mut self, tx_id: &OutPointSourceId) -> crate::Result<()>;
 
         fn set_block_id_at_height(
@@ -277,6 +279,10 @@ macro_rules! impl_read_ops {
                         Ok(Some(block_reward))
                     }
                 }
+            }
+
+            fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>> {
+                self.read_value::<well_known::TxIndexEnabled>()
             }
 
             fn get_mainchain_tx_index(
@@ -403,6 +409,10 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()> {
         self.write::<db::DBBlockIndex, _, _, _>(block_index.block_id(), block_index)
+    }
+
+    fn set_is_mainchain_tx_index_enabled(&mut self, enabled: bool) -> crate::Result<()> {
+        self.write_value::<well_known::TxIndexEnabled>(&enabled)
     }
 
     fn set_mainchain_tx_index(
