@@ -56,7 +56,7 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
         let mut verifier = TransactionVerifier::new(
             &storage,
             &chain_config,
-            TransactionVerifierConfig::default(),
+            TransactionVerifierConfig::new(true),
         );
 
         for height in 1..num_blocks {
@@ -135,7 +135,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
         let mut verifier = TransactionVerifier::new(
             &storage,
             &chain_config,
-            TransactionVerifierConfig::default(),
+            TransactionVerifierConfig::new(true),
         );
         let tx_source = TransactionSourceForConnect::Mempool {
             current_best: &best_block,

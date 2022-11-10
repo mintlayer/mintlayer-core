@@ -133,11 +133,9 @@ pub struct TransactionVerifierConfig {
     pub tx_index_enabled: bool,
 }
 
-impl Default for TransactionVerifierConfig {
-    fn default() -> Self {
-        Self {
-            tx_index_enabled: true,
-        }
+impl TransactionVerifierConfig {
+    pub fn new(tx_index_enabled: bool) -> Self {
+        Self { tx_index_enabled }
     }
 }
 

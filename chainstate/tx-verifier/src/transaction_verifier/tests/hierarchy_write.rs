@@ -92,7 +92,7 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
         .return_const(Ok(()));
 
     let mut verifier1 =
-        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::default());
+        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     verifier1.utxo_cache.add_utxo(&outpoint1, utxo1, false).unwrap();
     verifier1.utxo_block_undo.insert(
         TransactionSource::Chain(block_1_id),
@@ -162,7 +162,7 @@ fn tx_index_set_hierarchy(#[case] seed: Seed) {
         .return_const(Ok(()));
 
     let mut verifier1 =
-        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::default());
+        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     verifier1.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
         outpoint1,
         CachedInputsOperation::Write(tx_index_1),
@@ -238,7 +238,7 @@ fn tokens_set_hierarchy(#[case] seed: Seed) {
         .return_const(Ok(()));
 
     let mut verifier1 =
-        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::default());
+        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     verifier1.token_issuance_cache = TokenIssuanceCache::new_for_test(
         BTreeMap::from([(token_id_1, CachedAuxDataOp::Write(token_data_1.clone()))]),
         BTreeMap::from([(
@@ -317,7 +317,7 @@ fn utxo_del_from_chain_hierarchy(#[case] seed: Seed) {
     store.expect_batch_write().times(1).return_const(Ok(()));
 
     let mut verifier1 =
-        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::default());
+        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     verifier1.utxo_cache.spend_utxo(&outpoint1).unwrap();
     verifier1.utxo_block_undo.insert(
         TransactionSource::Chain(block_1_id),
@@ -382,7 +382,7 @@ fn tx_index_del_hierarchy(#[case] seed: Seed) {
         .return_const(Ok(()));
 
     let mut verifier1 =
-        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::default());
+        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     verifier1.tx_index_cache =
         TxIndexCache::new_for_test(BTreeMap::from([(outpoint1, CachedInputsOperation::Erase)]));
 
@@ -439,7 +439,7 @@ fn tokens_del_hierarchy(#[case] seed: Seed) {
     store.expect_del_token_id().with(eq(tx_id_2)).times(1).return_const(Ok(()));
 
     let mut verifier1 =
-        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::default());
+        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     verifier1.token_issuance_cache = TokenIssuanceCache::new_for_test(
         BTreeMap::from([(token_id_1, CachedAuxDataOp::Erase)]),
         BTreeMap::from([(tx_id_1, CachedTokenIndexOp::Erase)]),
@@ -486,7 +486,7 @@ fn utxo_conflict_hierarchy(#[case] seed: Seed) {
     store.expect_batch_write().times(1).return_const(Ok(()));
 
     let mut verifier1 =
-        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::default());
+        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     verifier1.utxo_cache.add_utxo(&outpoint1, utxo1, false).unwrap();
 
     let verifier2 = {
@@ -561,7 +561,7 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
     store.expect_batch_write().times(1).return_const(Ok(()));
 
     let mut verifier1 =
-        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::default());
+        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     verifier1.utxo_block_undo.insert(
         TransactionSource::Chain(block_id),
         BlockUndoEntry {
@@ -623,7 +623,7 @@ fn tx_index_conflict_hierarchy(#[case] seed: Seed) {
         .return_const(Ok(()));
 
     let mut verifier1 =
-        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::default());
+        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     verifier1.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
         outpoint1.clone(),
         CachedInputsOperation::Write(tx_index_1),
@@ -688,7 +688,7 @@ fn tokens_conflict_hierarchy(#[case] seed: Seed) {
         .return_const(Ok(()));
 
     let mut verifier1 =
-        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::default());
+        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     verifier1.token_issuance_cache = TokenIssuanceCache::new_for_test(
         BTreeMap::from([(token_id_1, CachedAuxDataOp::Write(token_data_1.clone()))]),
         BTreeMap::from([(

@@ -46,7 +46,7 @@ fn output_lock_until_height() {
         let mut verifier = TransactionVerifier::new(
             &storage,
             &chain_config,
-            TransactionVerifierConfig::default(),
+            TransactionVerifierConfig::new(true),
         );
 
         let block_height_that_unlocks = 10;
@@ -112,7 +112,7 @@ fn output_lock_for_block_count() {
         let mut verifier = TransactionVerifier::new(
             &storage,
             &chain_config,
-            TransactionVerifierConfig::default(),
+            TransactionVerifierConfig::new(true),
         );
 
         let block_count_that_unlocks = 20;
@@ -183,7 +183,7 @@ fn output_lock_until_time() {
         let mut verifier = TransactionVerifier::new(
             &storage,
             &chain_config,
-            TransactionVerifierConfig::default(),
+            TransactionVerifierConfig::new(true),
         );
 
         let genesis_timestamp = tf.genesis().timestamp();
@@ -276,7 +276,7 @@ fn output_lock_for_seconds() {
         let mut verifier = TransactionVerifier::new(
             &storage,
             &chain_config,
-            TransactionVerifierConfig::default(),
+            TransactionVerifierConfig::new(true),
         );
 
         let genesis_timestamp = tf.genesis().timestamp();
