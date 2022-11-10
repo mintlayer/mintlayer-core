@@ -110,7 +110,7 @@ fn modify_and_verify(#[case] seed: Seed) {
         let tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &destination);
         check_insert_input(&mut rng, &tx, &destination, true);
         check_mutate_input(&mut rng, &tx, &destination, true);
-        check_insert_output(&tx, &destination, true);
+        check_insert_output(&mut rng, &tx, &destination, true);
         check_mutate_output(&tx, &destination, true);
     }
 
@@ -120,7 +120,7 @@ fn modify_and_verify(#[case] seed: Seed) {
         let tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &destination);
         check_insert_input(&mut rng, &tx, &destination, false);
         check_mutate_input(&mut rng, &tx, &destination, true);
-        check_insert_output(&tx, &destination, true);
+        check_insert_output(&mut rng, &tx, &destination, true);
         check_mutate_output(&tx, &destination, true);
     }
 
@@ -129,7 +129,7 @@ fn modify_and_verify(#[case] seed: Seed) {
         let tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &destination);
         check_insert_input(&mut rng, &tx, &destination, true);
         check_mutate_input(&mut rng, &tx, &destination, true);
-        check_insert_output(&tx, &destination, false);
+        check_insert_output(&mut rng, &tx, &destination, false);
         check_mutate_output(&tx, &destination, false);
     }
 
@@ -139,7 +139,7 @@ fn modify_and_verify(#[case] seed: Seed) {
         let tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &destination);
         check_insert_input(&mut rng, &tx, &destination, false);
         check_mutate_input(&mut rng, &tx, &destination, true);
-        check_insert_output(&tx, &destination, false);
+        check_insert_output(&mut rng, &tx, &destination, false);
         check_mutate_output(&tx, &destination, false);
     }
 
@@ -148,7 +148,7 @@ fn modify_and_verify(#[case] seed: Seed) {
         let tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &destination);
         check_insert_input(&mut rng, &tx, &destination, true);
         check_mutate_input(&mut rng, &tx, &destination, true);
-        check_insert_output(&tx, &destination, false);
+        check_insert_output(&mut rng, &tx, &destination, false);
         check_mutate_output(&tx, &destination, true);
     }
 
@@ -158,7 +158,7 @@ fn modify_and_verify(#[case] seed: Seed) {
         let tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &destination);
         check_insert_input(&mut rng, &tx, &destination, false);
         check_mutate_input(&mut rng, &tx, &destination, true);
-        check_insert_output(&tx, &destination, false);
+        check_insert_output(&mut rng, &tx, &destination, false);
         check_mutate_output(&tx, &destination, true);
     }
 }

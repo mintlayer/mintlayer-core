@@ -90,10 +90,16 @@ mod test {
     use super::*;
     use crate::key::{KeyKind, PrivateKey, PublicKey};
     use hex::FromHex;
+    use rstest::rstest;
+    use test_utils::random::make_seedable_rng;
+    use test_utils::random::Seed;
 
-    #[test]
-    fn serialize() {
-        let (sk, pk) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn serialize(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let (sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let msg = b"abc";
         let sig = sk.sign_message(msg).unwrap();
         assert!(pk.verify_message(&sig, msg));

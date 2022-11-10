@@ -32,8 +32,11 @@ use crate::{
     },
     primitives::{Amount, Id, H256},
 };
-use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::Rng;
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    random::CryptoRng,
+};
 use test_utils::random::Seed;
 
 mod mixed_sighash_types;
@@ -185,7 +188,7 @@ fn mutate_all(#[case] seed: Seed) {
 
     check_insert_input(&mut rng, &original_tx, &outpoint_dest, true);
     check_mutate_input(&mut rng, &original_tx, &outpoint_dest, true);
-    check_insert_output(&original_tx, &outpoint_dest, true);
+    check_insert_output(&mut rng, &original_tx, &outpoint_dest, true);
     check_mutate_output(&original_tx, &outpoint_dest, true);
 }
 
@@ -203,7 +206,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
 
     check_insert_input(&mut rng, &original_tx, &outpoint_dest, false);
     check_mutate_input(&mut rng, &original_tx, &outpoint_dest, true);
-    check_insert_output(&original_tx, &outpoint_dest, true);
+    check_insert_output(&mut rng, &original_tx, &outpoint_dest, true);
     check_mutate_output(&original_tx, &outpoint_dest, true);
 }
 
@@ -221,7 +224,7 @@ fn mutate_none(#[case] seed: Seed) {
 
     check_insert_input(&mut rng, &original_tx, &outpoint_dest, true);
     check_mutate_input(&mut rng, &original_tx, &outpoint_dest, true);
-    check_insert_output(&original_tx, &outpoint_dest, false);
+    check_insert_output(&mut rng, &original_tx, &outpoint_dest, false);
     check_mutate_output(&original_tx, &outpoint_dest, false);
 }
 
@@ -240,7 +243,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
 
     check_insert_input(&mut rng, &original_tx, &outpoint_dest, false);
     check_mutate_input(&mut rng, &original_tx, &outpoint_dest, true);
-    check_insert_output(&original_tx, &outpoint_dest, false);
+    check_insert_output(&mut rng, &original_tx, &outpoint_dest, false);
     check_mutate_output(&original_tx, &outpoint_dest, false);
 }
 
@@ -258,7 +261,7 @@ fn mutate_single(#[case] seed: Seed) {
 
     check_insert_input(&mut rng, &original_tx, &outpoint_dest, true);
     check_mutate_input(&mut rng, &original_tx, &outpoint_dest, true);
-    check_insert_output(&original_tx, &outpoint_dest, false);
+    check_insert_output(&mut rng, &original_tx, &outpoint_dest, false);
     check_mutate_output(&original_tx, &outpoint_dest, true);
 }
 
@@ -277,7 +280,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
 
     check_insert_input(&mut rng, &original_tx, &outpoint_dest, false);
     check_mutate_input(&mut rng, &original_tx, &outpoint_dest, true);
-    check_insert_output(&original_tx, &outpoint_dest, false);
+    check_insert_output(&mut rng, &original_tx, &outpoint_dest, false);
     check_mutate_output(&original_tx, &outpoint_dest, true);
 }
 
@@ -365,12 +368,13 @@ fn check_mutate_witness(original_tx: &SignedTransaction, outpoint_dest: &Destina
 }
 
 fn check_insert_output(
+    rng: &mut (impl Rng + CryptoRng),
     original_tx: &SignedTransaction,
     destination: &Destination,
     should_fail: bool,
 ) {
     let mut tx_updater = MutableTransaction::from(original_tx);
-    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
     tx_updater.outputs.push(TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(1234567890)),
         OutputPurpose::Transfer(Destination::PublicKey(pub_key)),

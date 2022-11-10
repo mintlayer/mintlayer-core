@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crypto::key::{KeyKind, PrivateKey};
-use crypto::random::RngCore;
+use crypto::random::{CryptoRng, Rng};
 
 use super::*;
 use crate::chain::block::timestamp::BlockTimestamp;
@@ -32,7 +32,10 @@ use crate::{
     },
     primitives::{Amount, H256},
 };
+use rstest::rstest;
 use std::str::FromStr;
+use test_utils::random::make_seedable_rng;
+use test_utils::random::Seed;
 
 #[test]
 fn invalid_output_count_for_transaction() {
@@ -202,29 +205,26 @@ fn basic_spending() {
     );
 }
 
-fn generate_random_h256(g: &mut impl crypto::random::Rng) -> H256 {
+fn generate_random_h256(rng: &mut impl Rng) -> H256 {
     let mut bytes = [0u8; 32];
-    g.fill_bytes(&mut bytes);
+    rng.fill_bytes(&mut bytes);
     H256::from(bytes)
 }
 
-fn generate_random_bytes(g: &mut impl crypto::random::Rng, length: usize) -> Vec<u8> {
+fn generate_random_bytes(rng: &mut impl Rng, length: usize) -> Vec<u8> {
     let mut bytes = Vec::new();
     bytes.resize(length, 0);
-    g.fill_bytes(&mut bytes);
+    rng.fill_bytes(&mut bytes);
     bytes
 }
 
-fn generate_random_invalid_witness(
-    count: usize,
-    g: &mut impl crypto::random::Rng,
-) -> Vec<InputWitness> {
+fn generate_random_invalid_witness(count: usize, rng: &mut impl Rng) -> Vec<InputWitness> {
     (0..count)
         .into_iter()
         .map(|_| {
-            let witness_size = g.next_u32();
+            let witness_size = rng.next_u32();
             let witness_size = 1 + witness_size % 1000;
-            let witness = generate_random_bytes(g, witness_size as usize);
+            let witness = generate_random_bytes(rng, witness_size as usize);
             InputWitness::Standard(StandardInputSignature::new(
                 SigHashType::try_from(SigHashType::ALL).unwrap(),
                 witness,
@@ -233,25 +233,25 @@ fn generate_random_invalid_witness(
         .collect::<Vec<_>>()
 }
 
-fn generate_random_invalid_input(g: &mut impl crypto::random::Rng) -> TxInput {
-    let outpoint = if g.next_u32() % 2 == 0 {
-        OutPointSourceId::Transaction(Id::new(generate_random_h256(g)))
+fn generate_random_invalid_input(rng: &mut impl Rng) -> TxInput {
+    let outpoint = if rng.next_u32() % 2 == 0 {
+        OutPointSourceId::Transaction(Id::new(generate_random_h256(rng)))
     } else {
-        OutPointSourceId::BlockReward(Id::new(generate_random_h256(g)))
+        OutPointSourceId::BlockReward(Id::new(generate_random_h256(rng)))
     };
 
-    TxInput::new(outpoint, g.next_u32())
+    TxInput::new(outpoint, rng.next_u32())
 }
 
-fn generate_random_invalid_output(g: &mut impl crypto::random::Rng) -> TxOutput {
-    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+fn generate_random_invalid_output(rng: &mut (impl Rng + CryptoRng)) -> TxOutput {
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
     TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(g.next_u64() as u128)),
+        OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128)),
         OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
     )
 }
 
-fn generate_random_invalid_transaction(rng: &mut impl crypto::random::Rng) -> Transaction {
+fn generate_random_invalid_transaction(rng: &mut (impl Rng + CryptoRng)) -> Transaction {
     let inputs = {
         let input_count = 1 + (rng.next_u32() as usize) % 10;
         (0..input_count)
@@ -274,26 +274,24 @@ fn generate_random_invalid_transaction(rng: &mut impl crypto::random::Rng) -> Tr
     Transaction::new(flags, inputs, outputs, lock_time).expect("Creating tx caused fail")
 }
 
-fn generate_random_invalid_block() -> Block {
-    let mut rng = crypto::random::make_pseudo_rng();
-
+fn generate_random_invalid_block(rng: &mut (impl Rng + CryptoRng)) -> Block {
     let transactions = {
         let transaction_count = rng.next_u32() % 20;
         (0..transaction_count)
             .into_iter()
-            .map(|_| generate_random_invalid_transaction(&mut rng))
+            .map(|_| generate_random_invalid_transaction(rng))
             .collect::<Vec<_>>()
     };
     let transactions = transactions
         .into_iter()
         .map(|tx| {
             let inputs_count = tx.inputs().len();
-            SignedTransaction::new(tx, generate_random_invalid_witness(inputs_count, &mut rng))
+            SignedTransaction::new(tx, generate_random_invalid_witness(inputs_count, rng))
         })
         .collect::<Result<Vec<_>, _>>()
         .expect("invalid witness count");
     let time = rng.next_u64();
-    let prev_id = Id::new(generate_random_h256(&mut rng));
+    let prev_id = Id::new(generate_random_h256(rng));
     let reward = BlockReward::new(Vec::new());
 
     Block::new(
@@ -306,9 +304,12 @@ fn generate_random_invalid_block() -> Block {
     .expect("Creating block caused fail")
 }
 
-#[test]
-fn test_indices_calculations() {
-    let block = generate_random_invalid_block();
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_indices_calculations(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let block = generate_random_invalid_block(&mut rng);
     let serialized_block = block.encode();
     let serialized_header = block.header().encode();
     let serialized_transactions = block.transactions().encode();
