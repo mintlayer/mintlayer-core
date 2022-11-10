@@ -82,29 +82,17 @@ where
     connect_services::<S>(&mut conn1, &mut conn3).await;
     connect_services::<S>(&mut conn2, &mut conn3).await;
 
-    // Start first sync manager.
-    {
-        let peer2 = *conn2.peer_id();
-        let peer3 = *conn3.peer_id();
-        tokio::spawn(async move {
-            sync1.register_peer(peer2).await.unwrap();
-            sync1.register_peer(peer3).await.unwrap();
-            sync1.run().await
-        });
-    }
+    sync1.register_peer(*conn2.peer_id()).await.unwrap();
+    sync1.register_peer(*conn3.peer_id()).await.unwrap();
 
-    // Start second sync manager.
-    {
-        let peer1 = *conn1.peer_id();
-        let peer3 = *conn3.peer_id();
-        tokio::spawn(async move {
-            sync2.register_peer(peer1).await.unwrap();
-            sync2.register_peer(peer3).await.unwrap();
-            sync2.run().await
-        });
-    }
+    sync2.register_peer(*conn1.peer_id()).await.unwrap();
+    sync2.register_peer(*conn3.peer_id()).await.unwrap();
 
     sync3.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
+
+    // Start sync managers.
+    tokio::spawn(async move { sync1.run().await });
+    tokio::spawn(async move { sync2.run().await });
 
     // Respond with HeaderListResponse to both managers.
     let request_id = match sync3.poll_next().await.unwrap() {
@@ -137,6 +125,9 @@ where
         )
         .await
         .unwrap();
+
+    // TODO: FIXME:
+    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
     // Add a block.
     let block = p2p_test_utils::create_block(
