@@ -103,7 +103,7 @@ where
         } => match announcement.announcement() {
             AnnouncementType::Block(block) => block.clone(),
         },
-        _ => panic!("Unexpected event"),
+        e => panic!("Unexpected event: {e:?}"),
     };
     assert_eq!(block.timestamp().as_int_seconds(), 1337u64);
     sync2
@@ -131,7 +131,7 @@ where
         } => match announcement.announcement() {
             AnnouncementType::Block(block) => block.clone(),
         },
-        _ => panic!("Unexpected event"),
+        e => panic!("Unexpected event: {e:?}"),
     };
     assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));
 }

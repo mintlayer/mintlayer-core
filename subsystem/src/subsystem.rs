@@ -108,7 +108,7 @@ impl<T> Clone for Handle<T> {
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
 pub enum CallError {
-    #[error("Callee subsysytem has terminated")]
+    #[error("Callee subsystem has terminated")]
     SubsystemDead,
 }
 

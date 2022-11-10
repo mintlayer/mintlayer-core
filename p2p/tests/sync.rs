@@ -1250,7 +1250,7 @@ async fn two_remote_nodes_same_chains_new_blocks_mock_channels() {
 // // connect two nodes, they are in sync so no blocks are downloaded
 // // then disconnect them, add more blocks to remote chains and reconnect the nodes
 // // verify that local node downloads the blocks and after that they are in sync
-async fn test_connect_disconnect_resyncing<A, T>()
+async fn connect_disconnect_resyncing<A, T>()
 where
     A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
@@ -1368,17 +1368,16 @@ where
 }
 
 #[tokio::test]
-async fn test_connect_disconnect_resyncing_libp2p() {
-    test_connect_disconnect_resyncing::<MakeP2pAddress, Libp2pService>().await;
+async fn connect_disconnect_resyncing_libp2p() {
+    connect_disconnect_resyncing::<MakeP2pAddress, Libp2pService>().await;
 }
 
 #[tokio::test]
-async fn test_connect_disconnect_resyncing_mock_tcp() {
-    test_connect_disconnect_resyncing::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+async fn connect_disconnect_resyncing_mock_tcp() {
+    connect_disconnect_resyncing::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
 #[tokio::test]
-async fn test_connect_disconnect_resyncing_mock_channels() {
-    test_connect_disconnect_resyncing::<MakeChannelAddress, MockService<ChannelMockTransport>>()
-        .await;
+async fn connect_disconnect_resyncing_mock_channels() {
+    connect_disconnect_resyncing::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
 }
