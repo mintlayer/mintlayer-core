@@ -29,6 +29,7 @@ use common::{
     },
     time_getter::{TimeGetter, TimeGetterFn},
 };
+use crypto::random::{CryptoRng, Rng};
 use test_utils::random::Seed;
 
 use crate::{
@@ -57,7 +58,7 @@ pub struct TestFrameworkBuilder {
 
 impl TestFrameworkBuilder {
     /// Constructs a builder instance with values appropriate for most of the tests.
-    pub fn new() -> Self {
+    pub fn new(_rng: &mut (impl Rng + CryptoRng)) -> Self {
         let chain_config = ChainConfigBuilder::new(ChainType::Mainnet)
             .net_upgrades(NetUpgrades::unit_tests())
             .genesis_unittest(Destination::AnyoneCanSpend)

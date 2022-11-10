@@ -28,7 +28,7 @@ fn simulation(
 ) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder()
+        let mut tf = TestFramework::builder(&mut rng)
             .with_chainstate_config(chainstate::ChainstateConfig {
                 tx_index_enabled: tx_index_enabled.into(),
                 max_db_commit_attempts: Default::default(),

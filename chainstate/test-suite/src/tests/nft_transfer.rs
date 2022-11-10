@@ -41,7 +41,8 @@ use test_utils::{
 #[case(Seed::from_entropy())]
 fn nft_transfer_wrong_id(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let mut rng = make_seedable_rng(seed);
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
@@ -128,7 +129,8 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_invalid_transfer(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let mut rng = make_seedable_rng(seed);
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
@@ -246,7 +248,8 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let mut rng = make_seedable_rng(seed);
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -404,7 +407,8 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_valid_transfer(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let mut rng = make_seedable_rng(seed);
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 

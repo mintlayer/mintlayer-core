@@ -36,8 +36,8 @@ use utxo::UtxosStorageRead;
 fn store_coin(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
-        let mut tf = TestFramework::builder().with_storage(storage.clone()).build();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
 
         let tx_output = TxOutput::new(
             OutputValue::Coin(Amount::from_atoms(100)),
@@ -107,8 +107,8 @@ fn store_coin(#[case] seed: Seed) {
 fn store_token(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
-        let mut tf = TestFramework::builder().with_storage(storage.clone()).build();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
 
         // issue a token
         let tx = TransactionBuilder::new()
@@ -187,9 +187,9 @@ fn store_token(#[case] seed: Seed) {
 fn reorg_store_coin(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
-        let mut tf = TestFramework::builder().with_storage(storage.clone()).build();
-        let genesis_id = tf.genesis().get_id();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
+        let genesis_id = tf.genesis().get_id();
 
         // create block
         let tx_1_output = TxOutput::new(
@@ -340,9 +340,9 @@ fn reorg_store_coin(#[case] seed: Seed) {
 fn reorg_store_token(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
-        let mut tf = TestFramework::builder().with_storage(storage.clone()).build();
-        let genesis_id = tf.genesis().get_id();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
+        let genesis_id = tf.genesis().get_id();
 
         // create block
         let tx_1 = TransactionBuilder::new()
@@ -517,6 +517,7 @@ fn reorg_store_token(#[case] seed: Seed) {
 fn reorg_store_coin_no_tx_index(#[case] seed: Seed, #[case] tx_index_enabled: bool) {
     utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
+        let mut rng = make_seedable_rng(seed);
 
         {
             let config = chainstate::ChainstateConfig {
@@ -524,12 +525,11 @@ fn reorg_store_coin_no_tx_index(#[case] seed: Seed, #[case] tx_index_enabled: bo
                 ..Default::default()
             };
 
-            let mut tf = TestFramework::builder()
+            let mut tf = TestFramework::builder(&mut rng)
                 .with_chainstate_config(config)
                 .with_storage(storage.clone())
                 .build();
             let genesis_id = tf.genesis().get_id();
-            let mut rng = make_seedable_rng(seed);
 
             // create block
             let tx_1_output = TxOutput::new(
@@ -664,10 +664,12 @@ fn reorg_store_coin_no_tx_index(#[case] seed: Seed, #[case] tx_index_enabled: bo
 
             let config_new = chainstate::ChainstateConfig {
                 tx_index_enabled: (!tx_index_enabled).into(),
-                ..Default::default()
+                max_db_commit_attempts: Default::default(),
+                max_orphan_blocks: Default::default(),
+                min_max_bootstrap_import_buffer_sizes: Default::default(),
             };
 
-            let tf_build_error = TestFramework::builder()
+            let tf_build_error = TestFramework::builder(&mut rng)
                 .with_chainstate_config(config_new)
                 .with_storage(storage)
                 .try_build()

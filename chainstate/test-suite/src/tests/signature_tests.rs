@@ -38,8 +38,8 @@ use test_utils::random::Seed;
 #[case(Seed::from_entropy())]
 fn signed_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let (private_key, public_key) =
             PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);

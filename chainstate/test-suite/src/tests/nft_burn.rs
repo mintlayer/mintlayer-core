@@ -38,8 +38,8 @@ use test_utils::{
 #[case(Seed::from_entropy())]
 fn nft_burn_invalid_amount(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 
         let chain_config = tf.chainstate.get_chain_config();
@@ -138,7 +138,8 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_burn_valid_case(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let mut rng = make_seedable_rng(seed);
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
 

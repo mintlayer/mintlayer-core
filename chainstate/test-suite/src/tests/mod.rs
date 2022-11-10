@@ -63,7 +63,7 @@ type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
 #[case(Seed::from_entropy())]
 fn generate_blocks_for_functional_tests(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut tf = TestFramework::builder().with_chain_config(create_regtest()).build();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(create_regtest()).build();
     let difficulty =
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);
 

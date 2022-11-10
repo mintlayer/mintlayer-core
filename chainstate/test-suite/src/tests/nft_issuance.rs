@@ -43,7 +43,8 @@ use test_utils::{
 #[case(Seed::from_entropy())]
 fn nft_name_too_long(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -100,7 +101,8 @@ fn nft_name_too_long(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_empty_name(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -152,7 +154,8 @@ fn nft_empty_name(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_invalid_name(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -217,7 +220,8 @@ fn nft_invalid_name(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_ticker_too_long(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -275,7 +279,8 @@ fn nft_ticker_too_long(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_empty_ticker(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -328,7 +333,8 @@ fn nft_empty_ticker(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_invalid_ticker(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -393,7 +399,8 @@ fn nft_invalid_ticker(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_description_too_long(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -451,7 +458,8 @@ fn nft_description_too_long(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_empty_description(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -504,7 +512,8 @@ fn nft_empty_description(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_invalid_description(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -568,7 +577,8 @@ fn nft_invalid_description(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_icon_uri_too_long(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -625,7 +635,8 @@ fn nft_icon_uri_too_long(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_icon_uri_empty(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -689,7 +700,8 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_icon_uri_invalid(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -756,7 +768,8 @@ fn nft_icon_uri_invalid(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_metadata_uri_too_long(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -814,7 +827,8 @@ fn nft_metadata_uri_too_long(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_metadata_uri_empty(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
@@ -877,7 +891,8 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_metadata_uri_invalid(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -944,7 +959,8 @@ fn nft_metadata_uri_invalid(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_media_uri_too_long(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -1002,7 +1018,8 @@ fn nft_media_uri_too_long(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_media_uri_empty(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -1067,7 +1084,8 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_media_uri_invalid(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -1182,7 +1200,8 @@ fn new_block_with_media_hash(
 #[case(Seed::from_entropy())]
 fn nft_media_hash_too_short(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
         let min_hash_len = tf.chainstate.get_chain_config().min_hash_len();
@@ -1212,7 +1231,8 @@ fn nft_media_hash_too_short(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_media_hash_too_long(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
         let max_hash_len = tf.chainstate.get_chain_config().max_hash_len();
@@ -1242,7 +1262,8 @@ fn nft_media_hash_too_long(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_media_hash_valid(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
@@ -1290,7 +1311,8 @@ fn nft_media_hash_valid(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn nft_valid_case(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 

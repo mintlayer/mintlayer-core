@@ -60,7 +60,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         let chain_config = ConfigBuilder::test_chain()
             .empty_consensus_reward_maturity_distance(50.into())
             .build();
-        let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
         let coins = OutputValue::Coin(Amount::from_atoms(10));
         let destination =
@@ -249,7 +249,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
 fn orphans_chains(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder(&mut rng).build();
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
 
         // Prepare, but not process the block.
@@ -304,7 +304,7 @@ fn orphans_chains(#[case] seed: Seed) {
 fn spend_inputs_simple(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder().build();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         // Check that genesis utxos are present in the utxo set
         let genesis_id = tf.genesis().get_id();
@@ -369,7 +369,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
 fn transaction_processing_order(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         // Transaction that spends the genesis reward
         let tx1 = SignedTransaction::new(
@@ -423,7 +423,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
 fn straight_chain(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let genesis_index = tf
             .chainstate
@@ -471,7 +471,7 @@ fn straight_chain(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn get_ancestor_invalid_height(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut tf = TestFramework::default();
+    let mut tf = TestFramework::builder(&mut rng).build();
     let height = 1;
     tf.create_chain(&tf.genesis().get_id().into(), height, &mut rng).unwrap();
 
@@ -497,7 +497,7 @@ fn get_ancestor_invalid_height(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn get_ancestor(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut tf = TestFramework::default();
+    let mut tf = TestFramework::builder(&mut rng).build();
 
     // We will create two chains that split at height 100
     const SPLIT_HEIGHT: usize = 100;
@@ -603,7 +603,7 @@ fn get_ancestor(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn last_common_ancestor(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut tf = TestFramework::default();
+    let mut tf = TestFramework::builder(&mut rng).build();
 
     const SPLIT_HEIGHT: usize = 100;
     const FIRST_CHAIN_HEIGHT: usize = 500;
@@ -706,7 +706,7 @@ fn consensus_type(#[case] seed: Seed) {
     // create the genesis_block, and this function creates a genesis block with
     // ConsensusData::None, which agrees with the net_upgrades we defined above.
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
-    let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let reward_lock_distance: i64 = tf
         .chainstate
@@ -869,7 +869,7 @@ fn pow(#[case] seed: Seed) {
     // create the genesis_block, and this function creates a genesis block with
     // ConsensusData::None, which agrees with the net_upgrades we defined above.
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
-    let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let reward_lock_distance: i64 = tf
         .chainstate
@@ -940,7 +940,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
     // create the genesis_block, and this function creates a genesis block with
     // ConsensusData::None, which agrees with the net_upgrades we defined above.
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
-    let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let reward_lock_distance: i64 = tf
         .chainstate
@@ -1001,9 +1001,13 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
     }
 }
 
-#[test]
-fn blocks_from_the_future() {
-    utils::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn blocks_from_the_future(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+
         // In this test, processing a few correct blocks in a single chain
         let config = create_unit_test_config();
 
@@ -1015,7 +1019,7 @@ fn blocks_from_the_future() {
         let time_getter = TimeGetter::new(Arc::new(move || {
             Duration::from_secs(chainstate_current_time.load(Ordering::SeqCst))
         }));
-        let mut tf = TestFramework::builder()
+        let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(config)
             .with_time_getter(time_getter)
             .build();
@@ -1100,10 +1104,13 @@ fn mainnet_initialization() {
     .unwrap();
 }
 
-#[test]
-fn empty_inputs_in_tx() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn empty_inputs_in_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let first_tx = TransactionBuilder::new().build();
         let first_tx_id = first_tx.transaction().get_id();
@@ -1125,10 +1132,13 @@ fn empty_inputs_in_tx() {
     });
 }
 
-#[test]
-fn empty_outputs_in_tx() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn empty_outputs_in_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let first_tx = TransactionBuilder::new()
             .add_output(TxOutput::new(
@@ -1160,9 +1170,9 @@ fn empty_outputs_in_tx() {
 #[case(Seed::from_entropy())]
 fn burn_inputs_in_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
-
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
         let first_tx = TransactionBuilder::new()
             .add_input(
                 TxInput::new(

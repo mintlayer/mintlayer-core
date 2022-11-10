@@ -32,6 +32,7 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
+use rstest::rstest;
 
 use super::helpers::add_block_with_locked_output;
 use chainstate::BlockError;
@@ -40,11 +41,15 @@ use chainstate::ConnectTransactionError;
 use chainstate_test_framework::anyonecanspend_address;
 use chainstate_test_framework::TestFramework;
 use chainstate_test_framework::TransactionBuilder;
+use test_utils::random::{make_seedable_rng, Seed};
 
-#[test]
-fn output_lock_until_height() {
-    utils::concurrency::model(|| {
-        let mut tf = TestFramework::default();
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn output_lock_until_height(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let block_height_that_unlocks = 10;
 
@@ -146,10 +151,13 @@ fn output_lock_until_height() {
     });
 }
 
-#[test]
-fn output_lock_until_height_but_spend_at_same_block() {
-    utils::concurrency::model(|| {
-        let mut tf = TestFramework::default();
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn output_lock_until_height_but_spend_at_same_block(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let block_height_that_unlocks = 10;
 
@@ -194,10 +202,13 @@ fn output_lock_until_height_but_spend_at_same_block() {
     });
 }
 
-#[test]
-fn output_lock_for_block_count() {
-    utils::concurrency::model(|| {
-        let mut tf = TestFramework::default();
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn output_lock_for_block_count(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let block_count_that_unlocks = 20;
         let block_height_with_locked_output = 1;
@@ -296,10 +307,13 @@ fn output_lock_for_block_count() {
     });
 }
 
-#[test]
-fn output_lock_for_block_count_but_spend_at_same_block() {
-    utils::concurrency::model(|| {
-        let mut tf = TestFramework::default();
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn output_lock_for_block_count_but_spend_at_same_block(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let block_count_that_unlocks = 10;
 
@@ -341,10 +355,13 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
     });
 }
 
-#[test]
-fn output_lock_for_block_count_attempted_overflow() {
-    utils::concurrency::model(|| {
-        let mut tf = TestFramework::default();
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn output_lock_for_block_count_attempted_overflow(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let block_count_that_unlocks = u64::MAX;
 
@@ -375,15 +392,18 @@ fn output_lock_for_block_count_attempted_overflow() {
     });
 }
 
-#[test]
-fn output_lock_until_time() {
-    utils::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn output_lock_until_time(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
         let current_time = Arc::new(AtomicU64::new(1));
         let current_time_ = Arc::clone(&current_time);
         let time_getter = TimeGetter::new(Arc::new(move || {
             Duration::from_secs(current_time_.load(Ordering::SeqCst))
         }));
-        let mut tf = TestFramework::builder().with_time_getter(time_getter).build();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).with_time_getter(time_getter).build();
 
         let genesis_timestamp = tf.genesis().timestamp();
         let lock_time = genesis_timestamp.as_int_seconds() + 4;
@@ -472,10 +492,13 @@ fn output_lock_until_time() {
     });
 }
 
-#[test]
-fn output_lock_until_time_but_spend_at_same_block() {
-    utils::concurrency::model(|| {
-        let mut tf = TestFramework::default();
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn output_lock_until_time_but_spend_at_same_block(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let genesis_timestamp = tf.genesis().timestamp();
         let lock_time = genesis_timestamp.as_int_seconds() + 3;
@@ -520,15 +543,18 @@ fn output_lock_until_time_but_spend_at_same_block() {
     });
 }
 
-#[test]
-fn output_lock_for_seconds() {
-    utils::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn output_lock_for_seconds(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
         let current_time = Arc::new(AtomicU64::new(1));
         let current_time_ = Arc::clone(&current_time);
         let time_getter = TimeGetter::new(Arc::new(move || {
             Duration::from_secs(current_time_.load(Ordering::SeqCst))
         }));
-        let mut tf = TestFramework::builder().with_time_getter(time_getter).build();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).with_time_getter(time_getter).build();
 
         let genesis_timestamp = tf.genesis().timestamp();
         let block_times: Vec<_> = itertools::iterate(genesis_timestamp.as_int_seconds(), |t| t + 1)
@@ -619,10 +645,13 @@ fn output_lock_for_seconds() {
     });
 }
 
-#[test]
-fn output_lock_for_seconds_but_spend_at_same_block() {
-    utils::concurrency::model(|| {
-        let mut tf = TestFramework::default();
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn output_lock_for_seconds_but_spend_at_same_block(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         // create the first block, with a locked output
         let tx1 = TransactionBuilder::new()
@@ -664,10 +693,13 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
     });
 }
 
-#[test]
-fn output_lock_for_seconds_attempted_overflow() {
-    utils::concurrency::model(|| {
-        let mut tf = TestFramework::default();
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn output_lock_for_seconds_attempted_overflow(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         // create the first block, with a locked output
         let current_time = tf.current_time();
