@@ -17,7 +17,7 @@ use super::emission_schedule::{self, *};
 use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, ChainType};
 
 use crate::chain::{
-    ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoWChainConfig, UpgradeVersion,
+    ConsensusUpgrade, Destination, Genesis, Mlt, NetUpgrades, PoWChainConfig, UpgradeVersion,
 };
 use crate::primitives::{id::WithId, semver::SemVer, BlockHeight};
 use crate::primitives::{Amount, BlockDistance};

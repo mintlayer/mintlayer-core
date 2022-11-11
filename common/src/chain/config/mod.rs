@@ -16,7 +16,7 @@
 mod builder;
 pub mod emission_schedule;
 pub use builder::Builder;
-pub use emission_schedule::{EmissionSchedule, EmissionScheduleTabular, Mlt};
+pub use emission_schedule::{EmissionSchedule, EmissionScheduleTabular};
 
 use hex::FromHex;
 
