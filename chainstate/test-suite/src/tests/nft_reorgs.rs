@@ -48,7 +48,8 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
     // B1, check that output is spent.
 
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let mut rng = make_seedable_rng(seed);
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -378,7 +379,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
 fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();

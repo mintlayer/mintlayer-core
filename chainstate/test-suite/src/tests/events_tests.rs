@@ -43,7 +43,7 @@ type ErrorList = Arc<Mutex<Vec<BlockError>>>;
 fn simple_subscribe(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder(&mut rng).build();
         let events = subscribe(&mut tf.chainstate, 1);
 
         // Produce and process a block.
@@ -86,7 +86,7 @@ fn simple_subscribe(#[case] seed: Seed) {
 fn several_subscribers(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let subscribers = rng.gen_range(8..256);
         let events = subscribe(&mut tf.chainstate, subscribers);
@@ -112,7 +112,7 @@ fn several_subscribers(#[case] seed: Seed) {
 fn several_subscribers_several_events(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let subscribers = rng.gen_range(4..16);
         let blocks = rng.gen_range(8..128);
@@ -144,7 +144,9 @@ fn orphan_block(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (orphan_error_hook, errors) = orphan_error_hook();
-        let mut tf = TestFramework::builder().with_orphan_error_hook(orphan_error_hook).build();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_orphan_error_hook(orphan_error_hook)
+            .build();
 
         let events = subscribe(&mut tf.chainstate, 1);
         assert!(!tf.chainstate.subscribers().is_empty());
@@ -169,7 +171,9 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (orphan_error_hook, errors) = orphan_error_hook();
-        let mut tf = TestFramework::builder().with_orphan_error_hook(orphan_error_hook).build();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_orphan_error_hook(orphan_error_hook)
+            .build();
 
         let events = subscribe(&mut tf.chainstate, 1);
         assert!(!tf.chainstate.subscribers().is_empty());

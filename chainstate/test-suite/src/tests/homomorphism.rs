@@ -38,13 +38,13 @@ fn coins_homomorphism(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let storage1 = TestStore::new_empty().unwrap();
-        let mut tf = TestFramework::builder()
+        let mut tf = TestFramework::builder(&mut rng)
             .with_storage(storage1.clone())
             .with_tx_verification_strategy(TxVerificationStrategy::Default)
             .build();
 
         let storage2 = TestStore::new_empty().unwrap();
-        let mut tf2 = TestFramework::builder()
+        let mut tf2 = TestFramework::builder(&mut rng)
             .with_storage(storage2.clone())
             .with_tx_verification_strategy(TxVerificationStrategy::Disposable)
             .build();
@@ -119,13 +119,13 @@ fn tokens_homomorphism(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let storage1 = TestStore::new_empty().unwrap();
-        let mut tf = TestFramework::builder()
+        let mut tf = TestFramework::builder(&mut rng)
             .with_storage(storage1.clone())
             .with_tx_verification_strategy(TxVerificationStrategy::Default)
             .build();
 
         let storage2 = TestStore::new_empty().unwrap();
-        let mut tf2 = TestFramework::builder()
+        let mut tf2 = TestFramework::builder(&mut rng)
             .with_storage(storage2.clone())
             .with_tx_verification_strategy(TxVerificationStrategy::Disposable)
             .build();

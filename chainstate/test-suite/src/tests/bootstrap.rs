@@ -47,7 +47,7 @@ fn check_height_order<C: ChainstateInterface>(blocks: &Vec<Id<Block>>, chainstat
 fn bootstrap_tests(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf1 = TestFramework::default();
+        let mut tf1 = TestFramework::builder(&mut rng).build();
         let genesis_id = tf1.genesis().get_id();
 
         let chain1 = {
@@ -195,7 +195,7 @@ fn bootstrap_tests(#[case] seed: Seed) {
 
         // test importing all blocks with orphans
         {
-            let mut tf2 = TestFramework::builder()
+            let mut tf2 = TestFramework::builder(&mut rng)
                 .with_chainstate_config(
                     ChainstateConfig::new()
                         .with_max_orphan_blocks(0)
@@ -216,7 +216,7 @@ fn bootstrap_tests(#[case] seed: Seed) {
 
         // test importing all blocks with no orphans
         {
-            let mut tf3 = TestFramework::builder()
+            let mut tf3 = TestFramework::builder(&mut rng)
                 .with_chainstate_config(
                     ChainstateConfig::new()
                         .with_max_orphan_blocks(0)
@@ -237,7 +237,7 @@ fn bootstrap_tests(#[case] seed: Seed) {
 
         // test importing all blocks with orphans with default buffer size
         {
-            let mut tf4 = TestFramework::builder()
+            let mut tf4 = TestFramework::builder(&mut rng)
                 .with_chainstate_config(ChainstateConfig::new().with_max_orphan_blocks(0))
                 .build();
 
@@ -254,7 +254,7 @@ fn bootstrap_tests(#[case] seed: Seed) {
 
         // test importing all blocks with orphans with huge buffers
         {
-            let mut tf5 = TestFramework::builder()
+            let mut tf5 = TestFramework::builder(&mut rng)
                 .with_chainstate_config(
                     ChainstateConfig::new()
                         .with_max_orphan_blocks(0)

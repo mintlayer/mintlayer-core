@@ -61,4 +61,9 @@ impl ChainstateConfig {
         self.min_max_bootstrap_import_buffer_sizes = min_max_bootstrap_import_buffer_sizes.into();
         self
     }
+
+    pub fn with_whether_tx_index_enabled(mut self, tx_index_enabled: bool) -> Self {
+        self.tx_index_enabled = tx_index_enabled.into();
+        self
+    }
 }

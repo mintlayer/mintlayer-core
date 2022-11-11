@@ -24,7 +24,8 @@ use common::{
     primitives::{id::WithId, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
-use crypto::random::Rng;
+use crypto::random::{CryptoRng, Rng};
+use rstest::rstest;
 use std::{
     collections::BTreeMap,
     sync::{atomic::AtomicU64, Arc},
@@ -45,13 +46,13 @@ pub struct TestFramework {
 pub type BlockOutputs = BTreeMap<OutPointSourceId, Vec<TxOutput>>;
 
 impl TestFramework {
-    pub fn chainstate(self) -> super::TestChainstate {
-        self.chainstate
+    /// Creates a new test framework instance using a builder api.
+    pub fn builder(rng: &mut (impl Rng + CryptoRng)) -> TestFrameworkBuilder {
+        TestFrameworkBuilder::new(rng)
     }
 
-    /// Creates a new test framework instance using a builder api.
-    pub fn builder() -> TestFrameworkBuilder {
-        TestFrameworkBuilder::new()
+    pub fn chainstate(self) -> super::TestChainstate {
+        self.chainstate
     }
 
     /// Returns a block builder instance that can be used for a block construction and processing.
@@ -182,14 +183,10 @@ impl TestFramework {
     }
 }
 
-impl Default for TestFramework {
-    fn default() -> Self {
-        Self::builder().build()
-    }
-}
-
-#[test]
-fn build_test_framework() {
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+fn build_test_framework(#[case] seed: test_utils::random::Seed) {
     use chainstate::ChainstateConfig;
     use common::chain::{
         config::{Builder as ChainConfigBuilder, ChainType},
@@ -199,7 +196,9 @@ fn build_test_framework() {
     let chain_type = ChainType::Mainnet;
     let max_db_commit_attempts = 10;
 
-    let tf = TestFramework::builder()
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let tf = TestFramework::builder(&mut rng)
         .with_chain_config(
             ChainConfigBuilder::new(chain_type)
                 .net_upgrades(NetUpgrades::unit_tests())
@@ -220,8 +219,10 @@ fn build_test_framework() {
     assert_eq!(tf.chainstate.get_chain_config().chain_type(), &chain_type);
 }
 
-#[test]
-fn process_block() {
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+fn process_block(#[case] seed: test_utils::random::Seed) {
     use crate::TransactionBuilder;
     use common::{
         chain::{
@@ -231,7 +232,9 @@ fn process_block() {
         primitives::{Amount, Id, Idable},
     };
 
-    let mut tf = TestFramework::default();
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let mut tf = TestFramework::builder(&mut rng).build();
     let gen_block_id = tf.genesis().get_id();
     tf.make_block_builder()
         .add_transaction(

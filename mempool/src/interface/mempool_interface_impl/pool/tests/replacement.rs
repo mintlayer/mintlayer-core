@@ -14,16 +14,21 @@
 // limitations under the License.
 
 use common::chain::tokens::OutputValue;
+use crypto::random::{CryptoRng, Rng};
 
 use super::*;
 
-async fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Result<(), Error> {
+async fn test_replace_tx(
+    rng: &mut (impl Rng + CryptoRng),
+    original_fee: Amount,
+    replacement_fee: Amount,
+) -> Result<(), Error> {
     log::debug!(
         "tx_replace_tx: original_fee: {:?}, replacement_fee {:?}",
         original_fee,
         replacement_fee
     );
-    let tf = TestFramework::default();
+    let tf = TestFramework::builder(rng).build();
     let genesis = tf.genesis();
 
     let outpoint_source_id = OutPointSourceId::BlockReward(genesis.get_id().into());
@@ -72,9 +77,13 @@ async fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Resul
     Ok(())
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn try_replace_irreplaceable() -> anyhow::Result<()> {
-    let tf = TestFramework::default();
+async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
+    let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let outpoint_source_id = OutPointSourceId::BlockReward(genesis.get_id().into());
 
@@ -122,26 +131,30 @@ async fn try_replace_irreplaceable() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn tx_replace() -> anyhow::Result<()> {
+async fn tx_replace(#[case] seed: Seed) -> anyhow::Result<()> {
+    let mut rng = make_seedable_rng(seed);
     let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
     let replacement_fee = Amount::from_atoms(relay_fee + 100);
-    test_replace_tx(Amount::from_atoms(100), replacement_fee).await?;
-    let res = test_replace_tx(Amount::from_atoms(300), replacement_fee).await;
+    test_replace_tx(&mut rng, Amount::from_atoms(100), replacement_fee).await?;
+    let res = test_replace_tx(&mut rng, Amount::from_atoms(300), replacement_fee).await;
     assert!(matches!(
         res,
         Err(Error::TxValidationError(
             TxValidationError::InsufficientFeesToRelayRBF
         ))
     ));
-    let res = test_replace_tx(Amount::from_atoms(100), Amount::from_atoms(100)).await;
+    let res = test_replace_tx(&mut rng, Amount::from_atoms(100), Amount::from_atoms(100)).await;
     assert!(matches!(
         res,
         Err(Error::TxValidationError(
             TxValidationError::ReplacementFeeLowerThanOriginal { .. }
         ))
     ));
-    let res = test_replace_tx(Amount::from_atoms(100), Amount::from_atoms(90)).await;
+    let res = test_replace_tx(&mut rng, Amount::from_atoms(100), Amount::from_atoms(90)).await;
     assert!(matches!(
         res,
         Err(Error::TxValidationError(
@@ -156,8 +169,8 @@ async fn tx_replace() -> anyhow::Result<()> {
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
-    let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let tx = TransactionBuilder::new()
         .add_input(
@@ -211,8 +224,8 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow::Result<()> {
-    let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let tx = TransactionBuilder::new()
         .add_input(

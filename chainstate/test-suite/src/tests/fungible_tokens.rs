@@ -45,9 +45,9 @@ use test_utils::{
 #[case(Seed::from_entropy())]
 fn token_issue_test(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
-        let outpoint_source_id: OutPointSourceId = tf.genesis().get_id().into();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let outpoint_source_id: OutPointSourceId = tf.genesis().get_id().into();
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
@@ -391,8 +391,8 @@ fn token_issue_test(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn token_transfer_test(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         // To have possibility to send exceed tokens amount than we have, let's limit the max issuance tokens amount
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX - 1));
         let genesis_outpoint_id: OutPointSourceId = tf.genesis().get_id().into();
@@ -577,8 +577,8 @@ fn token_transfer_test(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         let genesis_outpoint_id: OutPointSourceId = tf.genesis().get_id().into();
 
@@ -658,8 +658,8 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
         let coins_value = (tf.genesis().utxos()[0].value().clone().coin_amount().unwrap()
@@ -744,8 +744,8 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         // Due to transfer a piece of funds, let's limit the start range value
         let total_funds = Amount::from_atoms(rng.gen_range(4..u128::MAX - 1));
         let quarter_funds = (total_funds / 4).unwrap();
@@ -853,8 +853,8 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn burn_tokens(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         // Due to burn a piece of funds, let's limit the start range value
         let total_funds = Amount::from_atoms(rng.gen_range(4..u128::MAX - 1));
         // Round down
@@ -1066,8 +1066,8 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
     // B1, check that output is spent.
 
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         // Issue a new token
         let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
@@ -1359,8 +1359,8 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         // To avoid CoinOrTokenOverflow, random value can't be more than u128::MAX / 2
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX / 2));
 
@@ -1460,8 +1460,8 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         // To avoid CoinOrTokenOverflow, random value can't be more than u128::MAX / 2
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX / 2));
 
@@ -1569,8 +1569,8 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         // To have possibility to send exceed tokens amount than we have, let's limit the max issuance tokens amount
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX - 1));
         // Issuance a few different tokens
@@ -1714,7 +1714,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
 fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
@@ -1809,8 +1809,8 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn token_issuance_in_block_reward(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         let (_, pub_key) =
             crypto::key::PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::RistrettoSchnorr);
@@ -1941,8 +1941,8 @@ fn chosen_hashes_for_token_data() {
 #[case(Seed::from_entropy())]
 fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
 
