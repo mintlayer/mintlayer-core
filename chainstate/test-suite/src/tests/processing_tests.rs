@@ -338,26 +338,34 @@ fn spend_inputs_simple(#[case] seed: Seed) {
             // All inputs must spend a corresponding output
             for tx_in in tx.transaction().inputs() {
                 let outpoint = tx_in.outpoint();
-                let prev_out_tx_index =
-                    tf.chainstate.get_mainchain_tx_index(&outpoint.tx_id()).unwrap().unwrap();
-                assert_eq!(
-                    prev_out_tx_index.get_spent_state(outpoint.output_index()).unwrap(),
-                    OutputSpentState::SpentBy(tx_id.into())
-                );
+                if *tf.chainstate.get_chainstate_config().tx_index_enabled {
+                    let prev_out_tx_index =
+                        tf.chainstate.get_mainchain_tx_index(&outpoint.tx_id()).unwrap().unwrap();
+                    assert_eq!(
+                        prev_out_tx_index.get_spent_state(outpoint.output_index()).unwrap(),
+                        OutputSpentState::SpentBy(tx_id.into())
+                    );
+                }
                 assert_eq!(tf.chainstate.utxo(outpoint), Ok(None))
             }
             // All the outputs of this transaction should be unspent
-            let tx_index = tf.chainstate.get_mainchain_tx_index(&tx_id.into()).unwrap().unwrap();
-            for (idx, txo) in tx.transaction().outputs().iter().enumerate() {
-                let idx = idx as u32;
-                assert_eq!(
-                    tx_index.get_spent_state(idx).unwrap(),
-                    OutputSpentState::Unspent
-                );
-                let utxo = tf.chainstate.utxo(&OutPoint::new(tx_id.into(), idx)).unwrap().unwrap();
-                assert!(!utxo.is_block_reward());
-                assert_eq!(utxo.output(), txo);
-                assert_eq!(utxo.source(), &UtxoSource::Blockchain(BlockHeight::new(1)));
+            let tx_index = tf.chainstate.get_mainchain_tx_index(&tx_id.into()).unwrap();
+            if *tf.chainstate.get_chainstate_config().tx_index_enabled {
+                let tx_index = tx_index.unwrap();
+                for (idx, txo) in tx.transaction().outputs().iter().enumerate() {
+                    let idx = idx as u32;
+                    assert_eq!(
+                        tx_index.get_spent_state(idx).unwrap(),
+                        OutputSpentState::Unspent
+                    );
+                    let utxo =
+                        tf.chainstate.utxo(&OutPoint::new(tx_id.into(), idx)).unwrap().unwrap();
+                    assert!(!utxo.is_block_reward());
+                    assert_eq!(utxo.output(), txo);
+                    assert_eq!(utxo.source(), &UtxoSource::Blockchain(BlockHeight::new(1)));
+                }
+            } else {
+                assert!(tx_index.is_none());
             }
         }
     });

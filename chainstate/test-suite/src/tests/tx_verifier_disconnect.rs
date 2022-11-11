@@ -57,7 +57,7 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
         let mut verifier = TransactionVerifier::new(
             &storage,
             &chain_config,
-            TransactionVerifierConfig::new(true),
+            TransactionVerifierConfig::new(*tf.chainstate.get_chainstate_config().tx_index_enabled),
         );
 
         for height in 1..num_blocks {
