@@ -37,7 +37,7 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     /// state. It just returns a TransactionVerifier that can be
     /// used to update the database/storage state.
     #[allow(clippy::too_many_arguments)]
-    fn connect_block<'a, H, S, M, P>(
+    fn connect_block<'a, H, S, M, U>(
         &self,
         tx_verifier_maker: M,
         block_index_handle: &'a H,
@@ -46,12 +46,12 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         verifier_config: TransactionVerifierConfig,
         block_index: &'a BlockIndex,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S, P>, BlockError>
+    ) -> Result<TransactionVerifier<'a, S, U>, BlockError>
     where
         H: BlockIndexHandle,
         S: TransactionVerifierStorageRef,
-        P: UtxosView,
-        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, P>;
+        U: UtxosView,
+        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>;
 
     /// Disconnect the transactions given by block and block_index,
     /// and return a TransactionVerifier with an internal state
@@ -59,16 +59,16 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     /// Notice that this doesn't modify the internal database/storage
     /// state. It just returns a TransactionVerifier that can be
     /// used to update the database/storage state.
-    fn disconnect_block<'a, S, M, P>(
+    fn disconnect_block<'a, S, M, U>(
         &self,
         tx_verifier_maker: M,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S, P>, BlockError>
+    ) -> Result<TransactionVerifier<'a, S, U>, BlockError>
     where
         S: TransactionVerifierStorageRef,
-        P: UtxosView,
-        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, P>;
+        U: UtxosView,
+        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>;
 }

@@ -140,12 +140,12 @@ impl TransactionVerifierConfig {
 }
 
 /// The tool used to verify transaction and cache their updated states in memory
-pub struct TransactionVerifier<'a, S, P> {
+pub struct TransactionVerifier<'a, S, U> {
     chain_config: &'a ChainConfig,
     storage_ref: &'a S,
     verifier_config: TransactionVerifierConfig,
     tx_index_cache: TxIndexCache,
-    utxo_cache: UtxosCache<'a, P>,
+    utxo_cache: UtxosCache<'a, U>,
     utxo_block_undo: BTreeMap<TransactionSource, BlockUndoEntry>,
     token_issuance_cache: TokenIssuanceCache,
     best_block: Id<GenBlock>,
@@ -173,13 +173,13 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S, UtxosDB<'a
     }
 }
 
-impl<'a, S: TransactionVerifierStorageRef, P: UtxosView + Send + Sync>
-    TransactionVerifier<'a, S, P>
+impl<'a, S: TransactionVerifierStorageRef, U: UtxosView + Send + Sync>
+    TransactionVerifier<'a, S, U>
 {
     pub fn new_from_handle(
         storage_ref: &'a S,
         chain_config: &'a ChainConfig,
-        utxos: P, // TODO: Replace this parameter with handle
+        utxos: U, // TODO: Replace this parameter with handle
         verifier_config: TransactionVerifierConfig,
     ) -> Self {
         Self {
@@ -198,8 +198,8 @@ impl<'a, S: TransactionVerifierStorageRef, P: UtxosView + Send + Sync>
     }
 }
 
-impl<'a, S: TransactionVerifierStorageRef, P: UtxosView> TransactionVerifier<'a, S, P> {
-    pub fn derive_child(&'a self) -> TransactionVerifier<'a, Self, UtxosCache<P>> {
+impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a, S, U> {
+    pub fn derive_child(&'a self) -> TransactionVerifier<'a, Self, UtxosCache<U>> {
         TransactionVerifier {
             storage_ref: self,
             chain_config: self.chain_config,
@@ -213,7 +213,7 @@ impl<'a, S: TransactionVerifierStorageRef, P: UtxosView> TransactionVerifier<'a,
     }
 }
 
-impl<'a, S: TransactionVerifierStorageRef, P: UtxosView> TransactionVerifier<'a, S, P> {
+impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a, S, U> {
     fn amount_from_outpoint(
         &self,
         tx_id: OutPointSourceId,
