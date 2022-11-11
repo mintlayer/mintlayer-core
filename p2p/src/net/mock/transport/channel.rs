@@ -64,6 +64,12 @@ impl MockTransport for ChannelMockTransport {
             address
         };
 
+        if connections.contains_key(&address) {
+            return Err(P2pError::DialError(DialError::IoError(
+                std::io::ErrorKind::AddrInUse,
+            )));
+        }
+
         let (sender, receiver) = unbounded_channel();
         assert!(connections.insert(address, sender).is_none());
 

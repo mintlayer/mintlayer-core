@@ -91,8 +91,6 @@ async fn connect_address_in_use_mock_tcp() {
     connect_address_in_use::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
-// TODO: FIXME: Investigate and fix SIGABRT!
-#[ignore]
 #[tokio::test]
 async fn connect_address_in_use_mock_channels() {
     connect_address_in_use::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
