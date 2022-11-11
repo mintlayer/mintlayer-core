@@ -671,6 +671,7 @@ dependencies = [
  "test-utils",
  "tx-verifier",
  "utils",
+ "utxo",
 ]
 
 [[package]]

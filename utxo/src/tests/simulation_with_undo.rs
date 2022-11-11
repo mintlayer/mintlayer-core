@@ -14,7 +14,9 @@
 // limitations under the License.
 
 use super::test_helper::create_tx_outputs;
-use crate::{FlushableUtxoView, TxUndoWithSources, UtxoSource, UtxosCache, UtxosView};
+use crate::{
+    ConsumedUtxoCache, FlushableUtxoView, TxUndoWithSources, UtxoSource, UtxosCache, UtxosView,
+};
 use common::{
     chain::{block::BlockReward, OutPoint, OutPointSourceId, Transaction, TxInput},
     primitives::{BlockHeight, Id, Idable, H256},
@@ -50,18 +52,18 @@ fn cache_simulation_with_undo(
 ) {
     let mut rng = make_seedable_rng(seed);
     let mut result: ResultWithUndo = Default::default();
-    let test_view = super::empty_test_utxos_view();
-    let mut base = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+    let test_view = super::empty_test_utxos_view(H256::zero().into());
+    let mut base = UtxosCache::from_owned_parent(test_view);
 
-    let new_cache = simulation_step(
+    let new_consumed_cache = simulation_step(
         &mut rng,
         &mut result,
         &base,
         iterations_per_cache,
         nested_level,
     );
-    let consumed_cache = new_cache.unwrap().consume();
-    base.batch_write(consumed_cache).expect("batch write must succeed");
+    let new_consumed_cache = new_consumed_cache.unwrap();
+    base.batch_write(new_consumed_cache).expect("batch write must succeed");
 
     for outpoint in &result.utxo_outpoints {
         let has_utxo = base.has_utxo(outpoint);
@@ -73,38 +75,59 @@ fn cache_simulation_with_undo(
     }
 }
 
-// Each step a new cache is created based on parent. Then it is randomly modified and passed to the
-// next step as a parent. After recursion stops the resulting cache is returned and flushed to the base.
-fn simulation_step<'a>(
+/// Recursive function that hierarchically filles a cache, consumes it and returns it, recursively
+/// In every call:
+/// 1. Create a "current cache" from the given parent (current as in "this level")
+/// 2. Populate the cache with with arbitrary outputs (in populate_...())
+/// 3. Add all these new outputs to a global list of all outputs (all_outputs)
+/// 4. Create a child from current cache by calling this function again (recursion)
+/// 5. Flush the child into current cache
+/// 6. Consume the current cache, and return it
+fn simulation_step<P: UtxosView>(
     rng: &mut (impl Rng + CryptoRng),
-    result: &mut ResultWithUndo,
-    parent: &'a UtxosCache,
+    all_outputs: &mut ResultWithUndo,
+    parent_cache: &UtxosCache<P>,
     iterations_per_cache: usize,
     nested_level: usize,
-) -> Option<UtxosCache<'a>> {
+) -> Option<ConsumedUtxoCache> {
     if nested_level == 0 {
         return None;
     }
 
-    let mut cache = UtxosCache::from_borrowed_parent(parent);
-    let mut new_cache_res = populate_cache_with_undo(rng, &mut cache, iterations_per_cache, result);
-    result.utxo_outpoints.append(&mut new_cache_res.utxo_outpoints);
-    result.outpoints_with_undo.append(&mut new_cache_res.outpoints_with_undo);
+    // notice that we're using a reference of a reference
+    let parent: &dyn UtxosView = parent_cache;
+    let mut current_cache = UtxosCache::from_borrowed_parent(&parent);
 
-    let new_cache = simulation_step(rng, result, &cache, iterations_per_cache, nested_level - 1);
+    // fill a global list of outputs
+    let mut current_cache_outputs =
+        populate_cache_with_undo(rng, &mut current_cache, iterations_per_cache, all_outputs);
+    all_outputs.utxo_outpoints.append(&mut current_cache_outputs.utxo_outpoints);
+    all_outputs
+        .outpoints_with_undo
+        .append(&mut current_cache_outputs.outpoints_with_undo);
 
-    let consumed_cache_op = new_cache.map(|c| c.consume());
+    // create the child
+    let child_cache_op = simulation_step(
+        rng,
+        all_outputs,
+        &current_cache,
+        iterations_per_cache,
+        nested_level - 1,
+    );
 
-    if let Some(consumed_cache) = consumed_cache_op {
-        cache.batch_write(consumed_cache).expect("batch write must succeed");
+    // flush child into current cache
+    if let Some(child_cache) = child_cache_op {
+        current_cache.batch_write(child_cache).expect("batch write must succeed");
     }
 
-    Some(cache)
+    // return the consumed cache
+    let consumed_cache = current_cache.consume();
+    Some(consumed_cache)
 }
 
-fn populate_cache_with_undo(
+fn populate_cache_with_undo<P: UtxosView>(
     rng: &mut (impl Rng + CryptoRng),
-    cache: &mut UtxosCache,
+    cache: &mut UtxosCache<P>,
     iterations_count: usize,
     prev_result: &mut ResultWithUndo,
 ) -> ResultWithUndo {

@@ -31,8 +31,6 @@ pub trait UtxosView {
 
     /// Estimated size of the whole view (None if not implemented)
     fn estimated_size(&self) -> Option<usize>;
-
-    fn derive_cache(&self) -> UtxosCache;
 }
 
 pub trait FlushableUtxoView {
@@ -42,7 +40,10 @@ pub trait FlushableUtxoView {
 
 /// Flush the cache into the provided base. This will consume the cache and throw it away.
 /// It uses the batch_write function since it's available in different kinds of views.
-pub fn flush_to_base<T: FlushableUtxoView>(cache: UtxosCache, base: &mut T) -> Result<(), Error> {
+pub fn flush_to_base<T: FlushableUtxoView, P: UtxosView>(
+    cache: UtxosCache<P>,
+    base: &mut T,
+) -> Result<(), Error> {
     let consumed_cache = cache.consume();
     base.batch_write(consumed_cache)
 }

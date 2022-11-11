@@ -152,7 +152,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
     // test the spend
     let (block, block_undo) = {
         // create a cache based on the db.
-        let mut cache = db.derive_cache();
+        let mut cache = UtxosCache::from_borrowed_parent(&db);
 
         // create a new block to spend.
         let block = create_block(
@@ -242,7 +242,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         assert_eq!(block_undo.tx_undos().len(), expected_tx_inputs.len());
 
         // let's create a view.
-        let mut cache = db.derive_cache();
+        let mut cache = UtxosCache::from_borrowed_parent(&db);
 
         // get the block tx inputs, and add them to the view.
         block.transactions().iter().enumerate().for_each(|(_idx, tx)| {
@@ -301,7 +301,7 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
 
     // Create a block with 1 tx and 0 outputs in txs
     let block = create_block(&mut rng, id, tx_inputs, 0, num_of_txs as usize);
-    let mut view = db.derive_cache();
+    let mut view = UtxosCache::from_borrowed_parent(&db);
     let tx = block.transactions().get(0).unwrap();
 
     assert_eq!(
