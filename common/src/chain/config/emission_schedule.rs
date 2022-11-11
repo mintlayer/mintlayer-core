@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::chain::mlt::Mlt;
+pub use crate::chain::mlt::Mlt;
 use crate::primitives::BlockHeight;
 use std::collections::BTreeMap;
 use std::str::FromStr;
