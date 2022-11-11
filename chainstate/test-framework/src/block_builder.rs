@@ -113,7 +113,7 @@ impl<'f> BlockBuilder<'f> {
     }
 
     /// Returns regular transaction output(s) if any, otherwise returns block reward outputs
-    fn get_regular_block_outputs(outputs: BlockOutputs) -> BlockOutputs {
+    fn filter_outputs(outputs: BlockOutputs) -> BlockOutputs {
         let has_tx_outputs = outputs
             .iter()
             .any(|(output, _)| matches!(output, OutPointSourceId::Transaction(_)));
@@ -139,7 +139,7 @@ impl<'f> BlockBuilder<'f> {
         rng: &mut impl Rng,
     ) -> Self {
         let (witnesses, inputs, outputs) = self.make_test_inputs_outputs(
-            Self::get_regular_block_outputs(self.framework.outputs_from_genblock(parent)),
+            Self::filter_outputs(self.framework.outputs_from_genblock(parent)),
             rng,
         );
         self.add_transaction(
@@ -150,10 +150,8 @@ impl<'f> BlockBuilder<'f> {
 
     /// Same as `add_test_transaction_with_parent`, but uses reference to a block.
     pub fn add_test_transaction_from_block(self, parent: &Block, rng: &mut impl Rng) -> Self {
-        let (witnesses, inputs, outputs) = self.make_test_inputs_outputs(
-            Self::get_regular_block_outputs(outputs_from_block(parent)),
-            rng,
-        );
+        let (witnesses, inputs, outputs) =
+            self.make_test_inputs_outputs(Self::filter_outputs(outputs_from_block(parent)), rng);
         self.add_transaction(
             SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
                 .expect("invalid witness count"),
