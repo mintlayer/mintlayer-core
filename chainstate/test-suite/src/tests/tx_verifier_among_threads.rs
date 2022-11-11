@@ -19,6 +19,8 @@ use common::{
     chain::OutPoint,
     primitives::{Id, H256},
 };
+use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
 use tx_verifier::transaction_verifier::{TransactionVerifier, TransactionVerifierConfig};
 use utxo::{Utxo, UtxosView};
 
@@ -45,11 +47,14 @@ impl UtxosView for EmptyUtxosView {
 }
 
 /// This test proves that a transaction verifier with this structure can be moved among threads
-#[test]
-fn transfer_tx_verifier_to_thread() {
-    utils::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn transfer_tx_verifier_to_thread(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
         let storage = TestStore::new_empty().unwrap();
-        let _tf = TestFramework::builder().with_storage(storage.clone()).build();
+        let mut rng = make_seedable_rng(seed);
+        let _tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
 
         let chain_config = ConfigBuilder::test_chain().build();
         let storage = InMemoryStorageWrapper::new(storage, chain_config.clone());

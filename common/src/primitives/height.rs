@@ -36,7 +36,7 @@ type DistanceIntType = i64;
 )]
 pub struct BlockHeight(#[codec(compact)] HeightIntType);
 
-// Display should be defined for thiserr crate
+// Display should be defined for thiserror crate
 impl fmt::Display for BlockHeight {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -171,7 +171,7 @@ impl BlockDistance {
     }
 }
 
-// Display should be defined for thiserr crate
+// Display should be defined for thiserror crate
 impl fmt::Display for BlockDistance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -215,7 +215,7 @@ mod tests {
         assert_eq!(BlockHeight::max() - BlockDistance::new(1), None);
         assert_eq!(BlockHeight::max() + BlockDistance::new(0), None);
         assert_eq!(BlockHeight::max() + BlockDistance::new(1), None);
-        //TODO: Add similiar asserts but with BlockHeight::new(DistanceIntType::MAX as HeightIntType) in place of BlockHeight::max().
+        //TODO: Add similar asserts but with BlockHeight::new(DistanceIntType::MAX as HeightIntType) in place of BlockHeight::max().
         //      It's the boundary at which the block height arithmetic breaks down.
     }
 

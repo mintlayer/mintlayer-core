@@ -272,7 +272,7 @@ fn stream_signature_hash<T: Signable>(
     outputs.signature_hash(stream, mode, target_input, target_input_num)?;
 
     // TODO: consider doing just like taproot, and hash in all outputs that come from the outpoints of inputs,
-    //       this would be a good solution to avoid having to download full trasactions to verify inputs
+    //       this would be a good solution to avoid having to download full transactions to verify inputs
 
     // TODO: for P2SH add OP_CODESEPARATOR position
     hash_encoded_to(&u32::MAX, stream);
