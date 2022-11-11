@@ -40,7 +40,7 @@ pub struct MempoolInterfaceImpl {
 }
 
 impl MempoolInterfaceImpl {
-    pub async fn new<M: GetMemoryUsage + Sync + Send + 'static>(
+    pub fn new<M: GetMemoryUsage + Sync + Send + 'static>(
         chain_config: Arc<ChainConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         time_getter: TimeGetter,
@@ -55,8 +55,7 @@ impl MempoolInterfaceImpl {
             memory_usage_estimator,
             receiver,
         )
-        .run()
-        .await?;
+        .run()?;
 
         Ok(Self { sender })
     }

@@ -148,7 +148,7 @@ where
         }
     }
 
-    pub async fn run(mut self) -> Result<(), Error> {
+    pub fn run(mut self) -> Result<(), Error> {
         tokio::spawn(async move {
             let event_receiver =
                 self.subscribe_to_chainstate_events().await.log_err().expect("chainstate dead");
