@@ -269,7 +269,7 @@ async fn local_and_remote_in_sync_mock_channels() {
 // local and remote nodes are in the same chain but remote is ahead 7 blocks
 //
 // this the remote node is synced first and as it's ahead of local node,
-// no blocks are downloaded whereas loca node downloads the 7 new blocks from remote
+// no blocks are downloaded whereas local node downloads the 7 new blocks from remote
 async fn remote_ahead_by_7_blocks<A, T>()
 where
     A: MakeTestAddress<Address = T::Address>,
