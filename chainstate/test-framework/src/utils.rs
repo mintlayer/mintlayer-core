@@ -275,14 +275,10 @@ pub fn outputs_from_genesis(genesis: &Genesis) -> BlockOutputs {
 }
 
 pub fn outputs_from_block(blk: &Block) -> BlockOutputs {
-    // This copied from TestBlockInfo which did not copy reward outputs before.
-    // Adding them now breaks tests::processing_tests::consensus_type::case_1.
-    // TODO(Pavel): Revert reward outputs and fix chainstate-test-suite.
     std::iter::once((
         OutPointSourceId::BlockReward(blk.get_id().into()),
         blk.block_reward().outputs().to_vec(),
     ))
-    .skip(1)
     .chain(blk.transactions().iter().map(|tx| {
         (
             OutPointSourceId::Transaction(tx.transaction().get_id()),

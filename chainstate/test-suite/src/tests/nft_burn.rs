@@ -46,31 +46,29 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
         let token_min_issuance_fee = chain_config.token_min_issuance_fee();
 
         // Issuance
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(genesis_outpoint_id, 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                random_nft_issuance(chain_config, &mut rng).into(),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(token_min_issuance_fee),
+                OutputPurpose::Burn,
+            ))
+            .build();
+        let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
         let block_index = tf
             .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::new(
-                        random_nft_issuance(chain_config, &mut rng).into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(token_min_issuance_fee),
-                        OutputPurpose::Burn,
-                    ))
-                    .build(),
-            )
+            .add_transaction(tx)
             .build_and_process()
             .unwrap()
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id =
-            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Burn more NFT than we have
@@ -147,58 +145,57 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
         let token_min_issuance_fee = chain_config.token_min_issuance_fee();
 
         // Issuance
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(genesis_outpoint_id, 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                random_nft_issuance(chain_config, &mut rng).into(),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(token_min_issuance_fee),
+                OutputPurpose::Burn,
+            ))
+            .build();
+        let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
         let block_index = tf
             .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::new(
-                        random_nft_issuance(chain_config, &mut rng).into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(token_min_issuance_fee),
-                        OutputPurpose::Burn,
-                    ))
-                    .build(),
-            )
+            .add_transaction(tx)
             .build_and_process()
             .unwrap()
             .unwrap();
 
         let block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id =
-            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
 
         // Burn
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(issuance_outpoint_id, 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                TokenTransfer {
+                    token_id,
+                    amount: Amount::from_atoms(1),
+                }
+                .into(),
+                OutputPurpose::Burn,
+            ))
+            .build();
+        let first_burn_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
         let block_index = tf
             .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::new(issuance_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::new(
-                        TokenTransfer {
-                            token_id,
-                            amount: Amount::from_atoms(1),
-                        }
-                        .into(),
-                        OutputPurpose::Burn,
-                    ))
-                    .build(),
-            )
+            .add_transaction(tx)
             .build_and_process()
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
-        let first_burn_outpoint_id =
-            tf.outputs_from_genblock(block.get_id().into()).keys().next().unwrap().clone();
+        assert!(tf
+            .outputs_from_genblock(block.get_id().into())
+            .contains_key(&first_burn_outpoint_id));
 
         // Try to transfer burned tokens
         let result = tf
