@@ -14,12 +14,12 @@
 // limitations under the License.
 
 use chainstate::{BlockError, BlockSource, ChainstateError, ConnectTransactionError};
-use chainstate_test_framework::{TestBlockInfo, TestFramework, TransactionBuilder};
+use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
         signature::inputsig::InputWitness,
         tokens::{token_id, Metadata, NftIssuance, OutputValue, TokenData, TokenTransfer},
-        Destination, OutputPurpose, TxInput, TxOutput,
+        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
@@ -48,7 +48,8 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
     // B1, check that output is spent.
 
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
         let mut rng = make_seedable_rng(seed);
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
@@ -56,10 +57,10 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
         let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
         // Issue a new NFT
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let issuance_data = NftIssuance {
             metadata: Metadata {
-                creator: Some(random_creator()),
+                creator: Some(random_creator(&mut rng)),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -99,7 +100,12 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .unwrap();
 
         let issuance_block = tf.block(*block_index.block_id());
-        let issuance_outpoint_id = TestBlockInfo::from_block(&issuance_block).txns[0].0.clone();
+        let issuance_outpoint_id = tf
+            .outputs_from_genblock(issuance_block.get_id().into())
+            .keys()
+            .next()
+            .unwrap()
+            .clone();
         let token_id = token_id(issuance_block.transactions()[0].transaction()).unwrap();
 
         // B1 - burn NFT in mainchain
@@ -133,7 +139,12 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block_b1 = tf.block(*block_index.block_id());
-        let b1_outpoint_id = TestBlockInfo::from_block(&block_b1).txns[0].0.clone();
+        let b1_outpoint_id = tf
+            .outputs_from_genblock(block_b1.get_id().into())
+            .keys()
+            .next()
+            .unwrap()
+            .clone();
 
         // Try to transfer burnt NFT
         let result = tf
@@ -187,7 +198,12 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block_c1 = tf.block(*block_index.block_id());
-        let c1_outpoint_id = TestBlockInfo::from_block(&block_c1).txns[0].0.clone();
+        let c1_outpoint_id = tf
+            .outputs_from_genblock(block_c1.get_id().into())
+            .keys()
+            .next()
+            .unwrap()
+            .clone();
         // Let's add D1
         let block_index = tf
             .make_block_builder()
@@ -207,104 +223,106 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
         let block_d1 = tf.block(*block_index.block_id());
-        let _ = TestBlockInfo::from_block(&block_d1).txns[0].0.clone();
+        let _ = tf
+            .outputs_from_genblock(block_d1.get_id().into())
+            .keys()
+            .next()
+            .unwrap()
+            .clone();
 
         // Second chain - B2
+        let tx_2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(issuance_outpoint_id, 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                TokenData::TokenTransfer(TokenTransfer {
+                    token_id,
+                    amount: Amount::from_atoms(1),
+                })
+                .into(),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(123454)),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .build();
+        let b2_outpoint_id: OutPointSourceId = tx_2.transaction().get_id().into();
         let block_b2 = tf
             .make_block_builder()
             .with_parent(issuance_block.get_id().into())
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::new(issuance_outpoint_id, 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::new(
-                        TokenData::TokenTransfer(TokenTransfer {
-                            token_id,
-                            amount: Amount::from_atoms(1),
-                        })
-                        .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(Amount::from_atoms(123454)),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .build(),
-            )
+            .add_transaction(tx_2)
             .build();
-        let b2_outpoint_id = TestBlockInfo::from_block(&block_b2).txns[0].0.clone();
         assert!(
             tf.process_block(block_b2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
         );
 
         // C2 - burn NFT in a second chain
+        let tx_2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(b2_outpoint_id.clone(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::new(b2_outpoint_id, 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                TokenTransfer {
+                    token_id,
+                    amount: Amount::from_atoms(1),
+                }
+                .into(),
+                OutputPurpose::Burn,
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(123454)),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .build();
+        let c2_outpoint_id: OutPointSourceId = tx_2.transaction().get_id().into();
         let block_c2 = tf
             .make_block_builder()
             .with_parent(issuance_block.get_id().into())
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::new(b2_outpoint_id.clone(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::new(b2_outpoint_id, 1),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::new(
-                        TokenTransfer {
-                            token_id,
-                            amount: Amount::from_atoms(1),
-                        }
-                        .into(),
-                        OutputPurpose::Burn,
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(Amount::from_atoms(123454)),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .build(),
-            )
+            .add_transaction(tx_2)
             .build();
-        let c2_outpoint_id = TestBlockInfo::from_block(&block_c2).txns[0].0.clone();
         assert!(
             tf.process_block(block_c2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
         );
 
         // Now D2 trying to spend NFT from mainchain
+        let tx_2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(c2_outpoint_id.clone(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::new(c2_outpoint_id, 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                TokenTransfer {
+                    token_id,
+                    amount: Amount::from_atoms(1),
+                }
+                .into(),
+                OutputPurpose::Burn,
+            ))
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(123454)),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .build();
+        let d2_outpoint_id: OutPointSourceId = tx_2.transaction().get_id().into();
         let block_d2 = tf
             .make_block_builder()
             .with_parent(issuance_block.get_id().into())
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::new(c2_outpoint_id.clone(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::new(c2_outpoint_id, 1),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::new(
-                        TokenTransfer {
-                            token_id,
-                            amount: Amount::from_atoms(1),
-                        }
-                        .into(),
-                        OutputPurpose::Burn,
-                    ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(Amount::from_atoms(123454)),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                    ))
-                    .build(),
-            )
+            .add_transaction(tx_2)
             .build();
-        let d2_outpoint_id = TestBlockInfo::from_block(&block_d2).txns[0].0.clone();
         assert!(
             tf.process_block(block_d2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
@@ -346,7 +364,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
 fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let max_desc_len = tf.chainstate.get_chain_config().token_max_description_len();
         let max_name_len = tf.chainstate.get_chain_config().token_max_name_len();
@@ -357,7 +375,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         // Issue a new NFT
         let issuance_value = NftIssuance {
             metadata: Metadata {
-                creator: Some(random_creator()),
+                creator: Some(random_creator(&mut rng)),
                 name: random_string(&mut rng, 1..max_name_len).into_bytes(),
                 description: random_string(&mut rng, 1..max_desc_len).into_bytes(),
                 ticker: random_string(&mut rng, 1..max_ticker_len).into_bytes(),
@@ -368,7 +386,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
             },
         };
         let genesis_id = tf.genesis().get_id();
-        let genesis_outpoint_id = TestBlockInfo::from_genesis(&tf.genesis()).txns[0].0.clone();
+        let genesis_outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let block_index = tf
             .make_block_builder()
             .with_parent(genesis_id.into())

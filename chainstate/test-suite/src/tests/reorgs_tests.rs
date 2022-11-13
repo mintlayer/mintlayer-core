@@ -44,7 +44,7 @@ use test_utils::random::Seed;
 fn reorg_simple(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_id = tf.genesis().get_id();
         assert_eq!(tf.best_block_id(), genesis_id);
 
@@ -81,7 +81,7 @@ fn reorg_simple(#[case] seed: Seed) {
 fn test_very_long_reorgs(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder(&mut rng).build();
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
         subscribe_to_events(&mut tf, &events);
 
@@ -460,10 +460,14 @@ fn spent_status(
 fn check_spend_status(tf: &TestFramework, tx: &Transaction, spend_status: &TestSpentStatus) {
     for (output_index, _) in tx.outputs().iter().enumerate() {
         let status = spent_status(tf, &tx.get_id(), output_index as u32);
-        if spend_status == &TestSpentStatus::Spent {
-            assert_ne!(status, Some(OutputSpentState::Unspent));
+        if *tf.chainstate.get_chainstate_config().tx_index_enabled {
+            if spend_status == &TestSpentStatus::Spent {
+                assert_ne!(status, Some(OutputSpentState::Unspent));
+            } else {
+                assert_eq!(status, Some(OutputSpentState::Unspent));
+            }
         } else {
-            assert_eq!(status, Some(OutputSpentState::Unspent));
+            assert!(status.is_none());
         }
     }
 }

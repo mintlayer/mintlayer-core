@@ -47,22 +47,19 @@ pub type MempoolHandle = subsystem::Handle<Box<dyn MempoolInterface>>;
 
 pub type Result<T> = core::result::Result<T, MempoolError>;
 
-pub async fn make_mempool<M>(
+pub fn make_mempool<M>(
     chain_config: Arc<ChainConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     time_getter: TimeGetter,
     memory_usage_estimator: M,
 ) -> crate::Result<Box<dyn MempoolInterface>>
 where
-    M: GetMemoryUsage + 'static + Send + std::marker::Sync,
+    M: GetMemoryUsage + 'static + Send + Sync,
 {
-    Ok(Box::new(
-        MempoolInterfaceImpl::new(
-            chain_config,
-            chainstate_handle,
-            time_getter,
-            memory_usage_estimator,
-        )
-        .await?,
-    ))
+    Ok(Box::new(MempoolInterfaceImpl::new(
+        chain_config,
+        chainstate_handle,
+        time_getter,
+        memory_usage_estimator,
+    )?))
 }

@@ -54,7 +54,7 @@ where
 
     swarm.connect(remote_addr).await.unwrap();
 
-    assert!(std::matches!(
+    assert!(matches!(
         swarm.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionError {
             address: _,
@@ -641,4 +641,27 @@ async fn connection_timeout_rpc_notified_mock_channels() {
         9999,
     )
     .await;
+}
+
+// Only libp2p addresses can contain no IP address.
+#[tokio::test]
+async fn connect_no_ip_in_address_libp2p() {
+    let config = Arc::new(config::create_mainnet());
+    let bind_address = MakeP2pAddress::make_address();
+    let mut swarm = make_peer_manager::<Libp2pService>(bind_address, config).await;
+
+    let no_ip_addresses = [
+        Multiaddr::empty(),
+        "/p2p/QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N".parse().unwrap(),
+        "/tcp/4242/p2p/QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N".parse().unwrap(),
+    ];
+
+    for address in no_ip_addresses {
+        assert_eq!(
+            swarm.connect(address.clone()).await.unwrap_err(),
+            P2pError::ProtocolError(ProtocolError::UnableToConvertAddressToBannable(format!(
+                "{address:?}"
+            )))
+        );
+    }
 }

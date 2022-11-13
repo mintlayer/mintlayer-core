@@ -31,6 +31,7 @@ use common::{
 use std::{
     collections::BTreeMap,
     fmt::{Debug, Formatter},
+    ops::Deref,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -39,15 +40,36 @@ pub struct ConsumedUtxoCache {
     pub(crate) best_block: Id<GenBlock>,
 }
 
+impl<'a, T> UtxosView for T
+where
+    T: Deref<Target = dyn UtxosView + 'a>,
+{
+    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
+        self.deref().utxo(outpoint)
+    }
+
+    fn has_utxo(&self, outpoint: &OutPoint) -> bool {
+        self.deref().has_utxo(outpoint)
+    }
+
+    fn best_block_hash(&self) -> Id<GenBlock> {
+        self.deref().best_block_hash()
+    }
+
+    fn estimated_size(&self) -> Option<usize> {
+        self.deref().estimated_size()
+    }
+}
+
 // We don't use std::borrow::Cow because that requires ToOwned to be implemented,
 // and we don't use MaybeOwned crate because that doesn't offer the ?Sized trait,
 // which means that trait objects won't work with it
-pub enum UtxosViewCow<'a> {
-    Borrowed(&'a dyn UtxosView),
-    Owned(Box<dyn UtxosView + 'a>),
+pub enum UtxosViewCow<'a, P> {
+    Borrowed(&'a P),
+    Owned(P),
 }
 
-impl<'a> UtxosView for UtxosViewCow<'a> {
+impl<'a, P: UtxosView> UtxosView for UtxosViewCow<'a, P> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
         self.as_bounded_ref().utxo(outpoint)
     }
@@ -63,23 +85,19 @@ impl<'a> UtxosView for UtxosViewCow<'a> {
     fn estimated_size(&self) -> Option<usize> {
         self.as_bounded_ref().estimated_size()
     }
-
-    fn derive_cache(&self) -> UtxosCache {
-        self.as_bounded_ref().derive_cache()
-    }
 }
 
-impl<'a> UtxosViewCow<'a> {
-    pub fn as_bounded_ref(&self) -> &dyn UtxosView {
+impl<'a, P: UtxosView> UtxosViewCow<'a, P> {
+    pub fn as_bounded_ref(&self) -> &P {
         match self {
-            UtxosViewCow::Borrowed(r) => *r,
-            UtxosViewCow::Owned(o) => o.as_ref(),
+            UtxosViewCow::Borrowed(r) => r,
+            UtxosViewCow::Owned(o) => o,
         }
     }
 }
 
-pub struct UtxosCache<'a> {
-    parent: UtxosViewCow<'a>,
+pub struct UtxosCache<'a, P> {
+    parent: UtxosViewCow<'a, P>,
     current_block_hash: Id<GenBlock>,
     // pub(crate) visibility is required for tests that are in a different mod
     pub(crate) utxos: BTreeMap<OutPoint, UtxoEntry>,
@@ -88,17 +106,7 @@ pub struct UtxosCache<'a> {
     memory_usage: usize,
 }
 
-impl<'a> UtxosCache<'a> {
-    #[cfg(test)]
-    pub fn new_for_test(best_block: Id<GenBlock>, view: &'a dyn UtxosView) -> Self {
-        Self {
-            parent: UtxosViewCow::Borrowed(view),
-            current_block_hash: best_block,
-            utxos: Default::default(),
-            memory_usage: 0,
-        }
-    }
-
+impl<'a, P: UtxosView> UtxosCache<'a, P> {
     /// Returns a UtxoEntry, given the outpoint.
     // the reason why it's not a `&UtxoEntry`, is because the flags are bound to change esp.
     // when the utxo was actually retrieved from the parent.
@@ -123,7 +131,7 @@ impl<'a> UtxosCache<'a> {
         }
     }
 
-    pub fn from_borrowed_parent(parent: &'a dyn UtxosView) -> Self {
+    pub fn from_borrowed_parent(parent: &'a P) -> Self {
         UtxosCache {
             parent: UtxosViewCow::Borrowed(parent),
             current_block_hash: parent.best_block_hash(),
@@ -132,7 +140,7 @@ impl<'a> UtxosCache<'a> {
         }
     }
 
-    pub fn from_owned_parent(parent: Box<dyn UtxosView + 'a>) -> Self {
+    pub fn from_owned_parent(parent: P) -> Self {
         UtxosCache {
             current_block_hash: parent.best_block_hash(),
             parent: UtxosViewCow::Owned(parent),
@@ -404,7 +412,7 @@ impl<'a> UtxosCache<'a> {
     }
 }
 
-impl<'a> Debug for UtxosCache<'a> {
+impl<'a, P> Debug for UtxosCache<'a, P> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UtxosCache")
             // we wouldn't want to display the parent's children; only to check whether it has a parent.
@@ -414,7 +422,7 @@ impl<'a> Debug for UtxosCache<'a> {
     }
 }
 
-impl<'a> UtxosView for UtxosCache<'a> {
+impl<'a, P: UtxosView> UtxosView for UtxosCache<'a, P> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
         let key = outpoint;
         if let Some(res) = self.utxos.get(key) {
@@ -436,13 +444,9 @@ impl<'a> UtxosView for UtxosCache<'a> {
     fn estimated_size(&self) -> Option<usize> {
         None
     }
-
-    fn derive_cache(&self) -> UtxosCache {
-        UtxosCache::from_borrowed_parent(self)
-    }
 }
 
-impl<'a> FlushableUtxoView for UtxosCache<'a> {
+impl<'a, P> FlushableUtxoView for UtxosCache<'a, P> {
     fn batch_write(&mut self, utxo_entries: ConsumedUtxoCache) -> Result<(), Error> {
         for (key, entry) in utxo_entries.container {
             // Ignore non-dirty entries (optimization).
@@ -522,8 +526,8 @@ mod unit_test {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let expected_best_block_id: Id<GenBlock> = H256::random_using(&mut rng).into();
-        let test_view = empty_test_utxos_view();
-        let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+        let test_view = empty_test_utxos_view(H256::zero().into());
+        let mut cache = UtxosCache::from_borrowed_parent(&test_view);
         cache.set_best_block(expected_best_block_id);
         assert_eq!(expected_best_block_id, cache.best_block_hash());
     }
@@ -533,8 +537,8 @@ mod unit_test {
     #[case(Seed::from_entropy())]
     fn uncache_absent(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let test_view = empty_test_utxos_view();
-        let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+        let test_view = empty_test_utxos_view(H256::zero().into());
+        let mut cache = UtxosCache::from_borrowed_parent(&test_view);
 
         // when the outpoint does not exist.
         let (_, outp) = insert_single_entry(&mut rng, &mut cache, Presence::Absent, None, None);
@@ -547,8 +551,8 @@ mod unit_test {
     #[case(Seed::from_entropy())]
     fn uncache_not_fresh_not_dirty(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let test_view = empty_test_utxos_view();
-        let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+        let test_view = empty_test_utxos_view(H256::zero().into());
+        let mut cache = UtxosCache::from_borrowed_parent(&test_view);
 
         // when the entry is not dirty and not fresh
         let (_, outp) = insert_single_entry(
@@ -567,8 +571,8 @@ mod unit_test {
     #[case(Seed::from_entropy())]
     fn uncache_dirty_not_fresh(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let test_view = empty_test_utxos_view();
-        let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+        let test_view = empty_test_utxos_view(H256::zero().into());
+        let mut cache = UtxosCache::from_borrowed_parent(&test_view);
 
         // when the entry is dirty, entry cannot be removed.
         let (_, outp) = insert_single_entry(
@@ -586,8 +590,8 @@ mod unit_test {
     #[case(Seed::from_entropy())]
     fn uncache_fresh_and_dirty(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let test_view = empty_test_utxos_view();
-        let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+        let test_view = empty_test_utxos_view(H256::zero().into());
+        let mut cache = UtxosCache::from_borrowed_parent(&test_view);
 
         // when the entry is both fresh and dirty, entry cannot be removed.
         let (_, outp) = insert_single_entry(
@@ -605,8 +609,8 @@ mod unit_test {
     #[case(Seed::from_entropy())]
     fn fetch_an_entry(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let test_view = empty_test_utxos_view();
-        let mut cache1 = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+        let test_view = empty_test_utxos_view(H256::zero().into());
+        let mut cache1 = UtxosCache::from_borrowed_parent(&test_view);
         let (_, outpoint) = insert_single_entry(
             &mut rng,
             &mut cache1,

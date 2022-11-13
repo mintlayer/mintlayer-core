@@ -17,7 +17,9 @@ pub mod simulation;
 pub mod simulation_with_undo;
 pub mod test_helper;
 
-pub struct EmptyUtxosView;
+pub struct EmptyUtxosView {
+    best_block_hash: Id<GenBlock>,
+}
 
 impl UtxosView for EmptyUtxosView {
     fn utxo(&self, _outpoint: &OutPoint) -> Option<Utxo> {
@@ -28,21 +30,17 @@ impl UtxosView for EmptyUtxosView {
         false
     }
 
-    fn best_block_hash(&self) -> Id<common::chain::GenBlock> {
-        H256::zero().into()
+    fn best_block_hash(&self) -> Id<GenBlock> {
+        self.best_block_hash
     }
 
     fn estimated_size(&self) -> Option<usize> {
         None
     }
-
-    fn derive_cache(&self) -> UtxosCache {
-        UtxosCache::from_borrowed_parent(self)
-    }
 }
 
-pub fn empty_test_utxos_view() -> Box<dyn UtxosView> {
-    Box::new(EmptyUtxosView {})
+pub fn empty_test_utxos_view(best_block_hash: Id<GenBlock>) -> Box<dyn UtxosView> {
+    Box::new(EmptyUtxosView { best_block_hash })
 }
 
 use crate::{
@@ -65,11 +63,12 @@ use common::{
         },
         signature::inputsig::InputWitness,
         tokens::OutputValue,
-        Destination, OutPoint, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
+        Destination, GenBlock, OutPoint, OutPointSourceId, OutputPurpose, Transaction, TxInput,
+        TxOutput,
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
 };
-use crypto::random::{seq, Rng};
+use crypto::random::{seq, CryptoRng, Rng};
 use itertools::Itertools;
 use rstest::rstest;
 use std::collections::BTreeMap;
@@ -83,15 +82,15 @@ use test_utils::random::{make_seedable_rng, Seed};
 /// `result_flags` - the result ( dirty/not, fresh/not ) after calling the `add_utxo` method.
 /// `op_result` - the result of calling `add_utxo` method, whether it succeeded or not.
 fn check_add_utxo(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     cache_presence: Presence,
     cache_flags: Option<(IsFresh, IsDirty)>,
     possible_overwrite: bool,
     result_flags: Option<(IsFresh, IsDirty)>,
     op_result: Result<(), Error>,
 ) {
-    let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random_using(rng).into(), &*test_view);
+    let test_view = empty_test_utxos_view(H256::zero().into());
+    let mut cache = UtxosCache::from_borrowed_parent(&test_view);
     let (_, outpoint) =
         test_helper::insert_single_entry(rng, &mut cache, cache_presence, cache_flags, None);
 
@@ -116,7 +115,7 @@ fn check_add_utxo(
 /// `cache_flags` - The flags of a utxo entry in a cache.
 /// `result_flags` - the result ( dirty/not, fresh/not ) after performing `spend_utxo`.
 fn check_spend_utxo(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     parent_presence: Presence,
     cache_presence: Presence,
     cache_flags: Option<(IsFresh, IsDirty)>,
@@ -124,8 +123,7 @@ fn check_spend_utxo(
     result_flags: Option<(IsFresh, IsDirty)>,
 ) {
     // initialize the parent cache.
-    let test_view = empty_test_utxos_view();
-    let mut parent = UtxosCache::new_for_test(H256::random_using(rng).into(), &*test_view);
+    let mut parent = UtxosCache::from_owned_parent(empty_test_utxos_view(H256::zero().into()));
     let (_, parent_outpoint) = test_helper::insert_single_entry(
         rng,
         &mut parent,
@@ -137,8 +135,11 @@ fn check_spend_utxo(
 
     // initialize the child cache
     let mut child = match parent_presence {
-        Absent => UtxosCache::new_for_test(H256::random_using(rng).into(), &*test_view),
-        _ => UtxosCache::from_borrowed_parent(&parent),
+        Absent => UtxosCache::from_owned_parent(empty_test_utxos_view(H256::zero().into())),
+        _ => {
+            let parent: Box<dyn UtxosView> = Box::new(parent);
+            UtxosCache::from_owned_parent(parent)
+        }
     };
 
     let (_, child_outpoint) = test_helper::insert_single_entry(
@@ -176,7 +177,7 @@ fn check_spend_utxo(
 /// `result` - The result of the parent after performing the `batch_write`.
 /// `result_flags` - the pair of `result`, indicating whether it is dirty/not, fresh/not or nothing at all.
 fn check_write_utxo(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     parent_presence: Presence,
     child_presence: Presence,
     result: Result<Presence, Error>,
@@ -185,8 +186,8 @@ fn check_write_utxo(
     result_flags: Option<(IsFresh, IsDirty)>,
 ) {
     //initialize the parent cache
-    let test_view = empty_test_utxos_view();
-    let mut parent = UtxosCache::new_for_test(H256::random_using(rng).into(), &*test_view);
+    let test_view = empty_test_utxos_view(H256::zero().into());
+    let mut parent = UtxosCache::from_borrowed_parent(&test_view);
     let (_, outpoint) =
         test_helper::insert_single_entry(rng, &mut parent, parent_presence, parent_flags, None);
     let key = &outpoint;
@@ -238,15 +239,14 @@ fn check_write_utxo(
 
 /// Checks the `get_mut_utxo` method behavior.
 fn check_get_mut_utxo(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     parent_presence: Presence,
     cache_presence: Presence,
     result_presence: Presence,
     cache_flags: Option<(IsFresh, IsDirty)>,
     result_flags: Option<(IsFresh, IsDirty)>,
 ) {
-    let test_view = empty_test_utxos_view();
-    let mut parent = UtxosCache::new_for_test(H256::random_using(rng).into(), &*test_view);
+    let mut parent = UtxosCache::from_owned_parent(empty_test_utxos_view(H256::zero().into()));
     let (parent_utxo, parent_outpoint) = test_helper::insert_single_entry(
         rng,
         &mut parent,
@@ -257,8 +257,11 @@ fn check_get_mut_utxo(
     );
 
     let mut child = match parent_presence {
-        Absent => UtxosCache::new_for_test(H256::random_using(rng).into(), &*test_view),
-        _ => UtxosCache::from_borrowed_parent(&parent),
+        Absent => UtxosCache::from_owned_parent(empty_test_utxos_view(H256::zero().into())),
+        _ => {
+            let parent: Box<dyn UtxosView> = Box::new(parent);
+            UtxosCache::from_owned_parent(parent)
+        }
     };
     let (child_utxo, child_outpoint) = test_helper::insert_single_entry(
         rng,
@@ -453,8 +456,8 @@ fn access_utxo_test(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn derive_cache_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+    let test_view = empty_test_utxos_view(H256::zero().into());
+    let mut cache = UtxosCache::from_borrowed_parent(&test_view);
 
     let (utxo, outpoint_1) = test_helper::create_utxo(&mut rng, 10);
     assert!(cache.add_utxo(&outpoint_1, utxo, false).is_ok());
@@ -462,7 +465,7 @@ fn derive_cache_test(#[case] seed: Seed) {
     let (utxo, outpoint_2) = test_helper::create_utxo(&mut rng, 20);
     assert!(cache.add_utxo(&outpoint_2, utxo, false).is_ok());
 
-    let mut extra_cache = cache.derive_cache();
+    let mut extra_cache = UtxosCache::from_borrowed_parent(&cache);
     assert!(extra_cache.utxos.is_empty());
 
     assert!(extra_cache.has_utxo(&outpoint_1));
@@ -479,8 +482,8 @@ fn derive_cache_test(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn blockchain_or_mempool_utxo_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+    let test_view = empty_test_utxos_view(H256::zero().into());
+    let mut cache = UtxosCache::from_borrowed_parent(&test_view);
 
     let (utxo, outpoint_1) = test_helper::create_utxo(&mut rng, 10);
     assert!(cache.add_utxo(&outpoint_1, utxo, false).is_ok());
@@ -497,8 +500,8 @@ fn blockchain_or_mempool_utxo_test(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn multiple_update_utxos_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+    let test_view = empty_test_utxos_view(H256::zero().into());
+    let mut cache = UtxosCache::from_borrowed_parent(&test_view);
 
     // let's test `add_utxos`
     let tx = Transaction::new(
@@ -555,11 +558,11 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn check_best_block_after_flush(#[case] seed: Seed) {
-    let mut rng = test_utils::random::make_seedable_rng(seed);
-
-    let test_view = empty_test_utxos_view();
-    let mut cache1 = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
-    let cache2 = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+    let mut rng = make_seedable_rng(seed);
+    let test_view1 = empty_test_utxos_view(H256::random_using(&mut rng).into());
+    let test_view2 = empty_test_utxos_view(H256::random_using(&mut rng).into());
+    let mut cache1 = UtxosCache::from_borrowed_parent(&test_view1);
+    let cache2 = UtxosCache::from_borrowed_parent(&test_view2);
     assert_ne!(cache1.best_block_hash(), cache2.best_block_hash());
     let expected_hash = cache2.best_block_hash();
     assert!(flush_to_base(cache2, &mut cache1).is_ok());
@@ -571,8 +574,8 @@ fn check_best_block_after_flush(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn check_add_utxos_from_block_reward(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+    let test_view = empty_test_utxos_view(H256::zero().into());
+    let mut cache = UtxosCache::from_borrowed_parent(&test_view);
 
     let block_reward = BlockReward::new(test_helper::create_tx_outputs(&mut rng, 10));
 
@@ -598,8 +601,8 @@ fn check_add_utxos_from_block_reward(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn check_tx_spend_undo_spend(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+    let test_view = empty_test_utxos_view(H256::zero().into());
+    let mut cache = UtxosCache::from_borrowed_parent(&test_view);
 
     // add 1 utxo to the utxo set
     let (utxo, outpoint) = test_helper::create_utxo(&mut rng, 1);
@@ -629,8 +632,8 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn check_burn_spend_undo_spend(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+    let test_view = empty_test_utxos_view(H256::zero().into());
+    let mut cache = UtxosCache::from_borrowed_parent(&test_view);
 
     // add 1 utxo to the utxo set
     let (u, outpoint) = test_helper::create_utxo(&mut rng, 1);
@@ -664,8 +667,8 @@ fn check_burn_spend_undo_spend(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+    let test_view = empty_test_utxos_view(H256::zero().into());
+    let mut cache = UtxosCache::from_borrowed_parent(&test_view);
 
     // add 1 utxo to the utxo set
     let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
@@ -716,8 +719,8 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn check_pow_reward_spend_undo_spend(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+    let test_view = empty_test_utxos_view(H256::zero().into());
+    let mut cache = UtxosCache::from_borrowed_parent(&test_view);
 
     let block = Block::new(
         vec![],
@@ -756,8 +759,8 @@ fn check_pow_reward_spend_undo_spend(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn check_missing_reward_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+    let test_view = empty_test_utxos_view(H256::zero().into());
+    let mut cache = UtxosCache::from_borrowed_parent(&test_view);
 
     // add 1 utxo to the utxo set
     let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
@@ -801,8 +804,8 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn check_burn_output_in_block_reward(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+    let test_view = empty_test_utxos_view(H256::zero().into());
+    let mut cache = UtxosCache::from_borrowed_parent(&test_view);
 
     // add 1 utxo to the utxo set
     let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
@@ -845,8 +848,8 @@ fn check_burn_output_in_block_reward(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn check_burn_output_indexing(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let test_view = empty_test_utxos_view();
-    let mut cache = UtxosCache::new_for_test(H256::random_using(&mut rng).into(), &*test_view);
+    let test_view = empty_test_utxos_view(H256::zero().into());
+    let mut cache = UtxosCache::from_borrowed_parent(&test_view);
 
     // add 1 utxo to the utxo set
     let (u, outpoint) = test_helper::create_utxo(&mut rng, 1);

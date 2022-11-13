@@ -5,10 +5,11 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
+logging = { path = '../../logging' }
 storage-core = { path = '../core' }
 utils = { path = '../../utils' }
 
-lmdb-mintlayer = { git = 'https://github.com/mintlayer/lmdb-rs-mintlayer.git', tag = 'v0.15.0' }
+lmdb-mintlayer = { git = 'https://github.com/mintlayer/lmdb-rs-mintlayer.git', tag = 'v0.15.3' }
 
 [dev-dependencies]
 storage-backend-test-suite = { path = "../backend-test-suite" }

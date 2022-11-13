@@ -48,7 +48,7 @@ pub enum TxValidationError {
     #[error("Outpoint not found: {outpoint:?}")]
     OutPointNotFound {
         outpoint: OutPoint,
-        tx_id: Id<Transaction>,
+        spending_tx_id: Id<Transaction>,
     },
     #[error("Transaction exceeds the maximum block size.")]
     ExceedsMaxBlockSize,

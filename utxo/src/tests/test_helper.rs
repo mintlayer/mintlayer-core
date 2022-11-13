@@ -26,7 +26,7 @@ use common::{
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
-    random::{seq, Rng},
+    random::{seq, CryptoRng, Rng},
 };
 use itertools::Itertools;
 
@@ -37,11 +37,11 @@ pub enum Presence {
     Spent,
 }
 
-pub fn create_tx_outputs(rng: &mut impl Rng, size: u32) -> Vec<TxOutput> {
+pub fn create_tx_outputs(rng: &mut (impl Rng + CryptoRng), size: u32) -> Vec<TxOutput> {
     let mut tx_outputs = vec![];
     for _ in 0..size {
         let random_amt = rng.gen_range(1..u128::MAX);
-        let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
         tx_outputs.push(TxOutput::new(
             OutputValue::Coin(Amount::from_atoms(random_amt)),
             OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
@@ -78,31 +78,34 @@ pub fn convert_to_utxo(
     (outpoint, utxo)
 }
 
-pub fn create_utxo(rng: &mut impl Rng, block_height: u64) -> (Utxo, OutPoint) {
+pub fn create_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utxo, OutPoint) {
     let random_value = rng.gen_range(0..u128::MAX);
     let is_block_reward = random_value % 3 == 0;
     inner_create_utxo(rng, is_block_reward, Some(block_height))
 }
 
-pub fn create_utxo_for_mempool(rng: &mut impl Rng) -> (Utxo, OutPoint) {
+pub fn create_utxo_for_mempool(rng: &mut (impl Rng + CryptoRng)) -> (Utxo, OutPoint) {
     let random_value = rng.gen_range(0..u128::MAX);
     let is_block_reward = random_value % 3 == 0;
     inner_create_utxo(rng, is_block_reward, None)
 }
 
-pub fn create_utxo_from_reward(rng: &mut impl Rng, block_height: u64) -> (Utxo, OutPoint) {
+pub fn create_utxo_from_reward(
+    rng: &mut (impl Rng + CryptoRng),
+    block_height: u64,
+) -> (Utxo, OutPoint) {
     inner_create_utxo(rng, true, Some(block_height))
 }
 
 /// returns a tuple of utxo and outpoint, for testing.
 fn inner_create_utxo(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     is_block_reward: bool,
     block_height: Option<u64>,
 ) -> (Utxo, OutPoint) {
     // just a random value generated, and also a random `is_block_reward` value.
     let output_value = rng.gen_range(0..u128::MAX);
-    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
     let output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(output_value)),
         OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
@@ -137,9 +140,9 @@ fn inner_create_utxo(
 /// `cache_presence` - sets the initial state of the cache.
 /// `cache_flags` - sets the entry of the utxo (fresh/not, dirty/not)
 /// `outpoint` - optional key to be used, rather than a randomly generated one.
-pub fn insert_single_entry(
-    rng: &mut impl Rng,
-    cache: &mut UtxosCache,
+pub fn insert_single_entry<P>(
+    rng: &mut (impl Rng + CryptoRng),
+    cache: &mut UtxosCache<P>,
     cache_presence: Presence,
     cache_flags: Option<(IsFresh, IsDirty)>,
     outpoint: Option<OutPoint>,

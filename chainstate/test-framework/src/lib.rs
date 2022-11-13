@@ -18,7 +18,6 @@
 mod block_builder;
 mod framework;
 mod framework_builder;
-mod test_block_info;
 mod transaction_builder;
 mod tx_verification_strategy;
 mod utils;
@@ -34,6 +33,5 @@ pub use {
     block_builder::BlockBuilder,
     framework::TestFramework,
     framework_builder::{OrphanErrorHandler, TestFrameworkBuilder, TxVerificationStrategy},
-    test_block_info::TestBlockInfo,
     transaction_builder::TransactionBuilder,
 };

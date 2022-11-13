@@ -16,6 +16,7 @@
 pub mod default_strategy;
 
 pub use default_strategy::DefaultTransactionVerificationStrategy;
+use utxo::UtxosView;
 
 use crate::BlockError;
 use chainstate_types::{BlockIndex, BlockIndexHandle};
@@ -24,7 +25,7 @@ use common::{
     primitives::id::WithId,
 };
 use tx_verifier::transaction_verifier::{
-    storage::TransactionVerifierStorageRef, TransactionVerifier,
+    storage::TransactionVerifierStorageRef, TransactionVerifier, TransactionVerifierConfig,
 };
 
 /// A trait that specifies how a block will be verified
@@ -35,19 +36,22 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     /// Notice that this doesn't modify the internal database/storage
     /// state. It just returns a TransactionVerifier that can be
     /// used to update the database/storage state.
-    fn connect_block<'a, H, S, M>(
+    #[allow(clippy::too_many_arguments)]
+    fn connect_block<'a, H, S, M, U>(
         &self,
         tx_verifier_maker: M,
         block_index_handle: &'a H,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
+        verifier_config: TransactionVerifierConfig,
         block_index: &'a BlockIndex,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S>, BlockError>
+    ) -> Result<TransactionVerifier<'a, S, U>, BlockError>
     where
         H: BlockIndexHandle,
         S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>;
+        U: UtxosView,
+        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>;
 
     /// Disconnect the transactions given by block and block_index,
     /// and return a TransactionVerifier with an internal state
@@ -55,14 +59,16 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     /// Notice that this doesn't modify the internal database/storage
     /// state. It just returns a TransactionVerifier that can be
     /// used to update the database/storage state.
-    fn disconnect_block<'a, S, M>(
+    fn disconnect_block<'a, S, M, U>(
         &self,
         tx_verifier_maker: M,
         storage_backend: &'a S,
         chain_config: &'a ChainConfig,
+        verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S>, BlockError>
+    ) -> Result<TransactionVerifier<'a, S, U>, BlockError>
     where
         S: TransactionVerifierStorageRef,
-        M: Fn(&'a S, &'a ChainConfig) -> TransactionVerifier<'a, S>;
+        U: UtxosView,
+        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>;
 }

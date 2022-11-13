@@ -111,16 +111,19 @@ fn chainstate_config(
         max_db_commit_attempts,
         max_orphan_blocks,
         min_max_bootstrap_import_buffer_sizes,
+        tx_index_enabled,
     } = chainstate_config;
 
     let storage_backend = options.storage_backend.clone().unwrap_or(storage_backend);
     let max_db_commit_attempts = options.max_db_commit_attempts.or(max_db_commit_attempts);
     let max_orphan_blocks = options.max_orphan_blocks.or(max_orphan_blocks);
+    let tx_index_enabled = options.tx_index_enabled.or(tx_index_enabled);
 
     let chainstate_config = ChainstateConfigFile {
         max_db_commit_attempts,
         max_orphan_blocks,
         min_max_bootstrap_import_buffer_sizes,
+        tx_index_enabled,
     };
     ChainstateLauncherConfigFile {
         storage_backend,

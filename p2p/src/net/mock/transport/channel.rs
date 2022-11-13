@@ -24,9 +24,12 @@ use tokio::sync::{
 
 use crate::{
     error::DialError,
-    net::mock::{
-        transport::{MockListener, MockStream, MockTransport},
-        types::Message,
+    net::{
+        mock::{
+            transport::{MockListener, MockStream, MockTransport},
+            types::Message,
+        },
+        AsBannableAddress, IsBannableAddress,
     },
     P2pError, Result,
 };
@@ -48,6 +51,7 @@ pub struct ChannelMockTransport {}
 #[async_trait]
 impl MockTransport for ChannelMockTransport {
     type Address = Address;
+    type BannableAddress = Address;
     type Listener = ChannelMockListener;
     type Stream = ChannelMockStream;
 
@@ -145,6 +149,20 @@ impl MockStream for ChannelMockStream {
             .await
             .ok_or_else(|| io::Error::from(io::ErrorKind::UnexpectedEof).into())
             .map(Some)
+    }
+}
+
+impl AsBannableAddress for Address {
+    type BannableAddress = Address;
+
+    fn as_bannable(&self) -> Self::BannableAddress {
+        *self
+    }
+}
+
+impl IsBannableAddress for Address {
+    fn is_bannable(&self) -> bool {
+        true
     }
 }
 

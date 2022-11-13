@@ -49,6 +49,7 @@ mod reorgs_tests;
 mod signature_tests;
 mod syncing_tests;
 mod tx_verification_simulation;
+mod tx_verifier_among_threads;
 mod tx_verifier_disconnect;
 
 mod helpers;
@@ -63,7 +64,7 @@ type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
 #[case(Seed::from_entropy())]
 fn generate_blocks_for_functional_tests(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut tf = TestFramework::builder().with_chain_config(create_regtest()).build();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(create_regtest()).build();
     let difficulty =
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);
 

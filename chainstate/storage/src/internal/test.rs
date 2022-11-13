@@ -19,7 +19,7 @@ use common::chain::transaction::signed_transaction::SignedTransaction;
 use common::chain::{Destination, OutputPurpose, TxOutput};
 use common::primitives::{Amount, H256};
 use crypto::key::{KeyKind, PrivateKey};
-use crypto::random::Rng;
+use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use utxo::{BlockRewardUndo, BlockUndo, TxUndoWithSources};
@@ -247,10 +247,10 @@ fn test_storage_transactions_with_result_check() {
 }
 
 /// returns a tuple of utxo and outpoint, for testing.
-fn create_rand_utxo(rng: &mut impl Rng, block_height: u64) -> Utxo {
+fn create_rand_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> Utxo {
     // just a random value generated, and also a random `is_block_reward` value.
     let random_value = rng.gen_range(0..(u128::MAX - 1));
-    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
     let output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(random_value)),
         OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
@@ -267,7 +267,7 @@ fn create_rand_utxo(rng: &mut impl Rng, block_height: u64) -> Utxo {
 /// `max_lim_of_utxos` - sets the maximum limit of utxos of a random TxUndo.
 /// `max_lim_of_tx_undos` - the maximum limit of TxUndos in the BlockUndo.
 pub fn create_rand_block_undo(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     max_lim_of_utxos: u8,
     max_lim_of_tx_undos: u8,
 ) -> BlockUndo {

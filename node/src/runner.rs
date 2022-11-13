@@ -67,8 +67,7 @@ pub async fn initialize(
             chainstate.clone(),
             Default::default(),
             mempool::SystemUsageEstimator {},
-        )
-        .await?,
+        )?,
     );
 
     // P2P subsystem

@@ -46,7 +46,7 @@ use crate::{
     net::{
         self,
         types::{Protocol, ProtocolType},
-        ConnectivityService, NetworkingService,
+        AsBannableAddress, ConnectivityService, IsBannableAddress, NetworkingService,
     },
 };
 
@@ -117,16 +117,6 @@ where
     /// Update the list of known peers or known peer's list of addresses
     fn peer_expired(&mut self, peers: &[net::types::AddrInfo<T>]) {
         self.peerdb.expire_peers(peers)
-    }
-
-    /// Check is the IP address banned
-    fn validate_address(&self, address: &T::Address) -> bool {
-        !self.peerdb.is_address_banned(address)
-    }
-
-    /// Check is the peer ID banned
-    fn validate_peer_id(&self, peer_id: &T::PeerId) -> bool {
-        !self.peerdb.is_id_banned(peer_id)
     }
 
     /// Verifies the protocols compatibility.
@@ -234,13 +224,17 @@ where
             !self.peerdb.is_active_peer(&info.peer_id),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
+
+        // TODO: This can and should be removed after getting rid if libp2p.
+        if !address.is_bannable() {
+            return Err(P2pError::ProtocolError(
+                ProtocolError::UnableToConvertAddressToBannable(format!("{address:?}")),
+            ));
+        }
+        let bannable_address = address.as_bannable();
         ensure!(
-            self.validate_address(&address),
+            !self.peerdb.is_address_banned(&bannable_address),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
-        );
-        ensure!(
-            self.validate_peer_id(&info.peer_id),
-            P2pError::PeerError(PeerError::BannedPeer(info.peer_id.to_string())),
         );
 
         // if the maximum number of connections is reached, the connection cannot be
@@ -311,8 +305,17 @@ where
             !self.pending.contains_key(&address),
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
+
+        // TODO: This can and should be removed after getting rid if libp2p.
+        if !address.is_bannable() {
+            return Err(P2pError::ProtocolError(
+                ProtocolError::UnableToConvertAddressToBannable(format!("{address:?}")),
+            ));
+        }
+
+        let bannable_address = address.as_bannable();
         ensure!(
-            self.validate_address(&address),
+            !self.peerdb.is_address_banned(&bannable_address),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 

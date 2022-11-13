@@ -30,7 +30,7 @@ use crate::{
             MockService,
         },
         types::{Protocol, ProtocolType},
-        ConnectivityService, NetworkingService,
+        AsBannableAddress, ConnectivityService, NetworkingService,
     },
     peer_manager::tests::{connect_services, default_protocols, make_peer_manager},
 };
@@ -60,7 +60,14 @@ where
 
     let peer_id = *swarm1.peer_connectivity_handle.peer_id();
     assert_eq!(swarm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
-    assert!(!swarm2.validate_peer_id(&peer_id));
+    let addr1 = swarm1
+        .peer_connectivity_handle
+        .local_addr()
+        .await
+        .unwrap()
+        .unwrap()
+        .as_bannable();
+    assert!(swarm2.peerdb.is_address_banned(&addr1));
     assert!(std::matches!(
         swarm2.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
@@ -74,8 +81,7 @@ async fn ban_connected_peer_libp2p() {
 
 #[tokio::test]
 async fn ban_connected_peer_mock_tcp() {
-    // TODO: implement `ban_peer()`
-    // ban_connected_peer::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    ban_connected_peer::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
 #[tokio::test]
@@ -108,7 +114,14 @@ where
 
     let peer_id = *swarm1.peer_connectivity_handle.peer_id();
     assert_eq!(swarm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
-    assert!(!swarm2.validate_peer_id(&peer_id));
+    let addr1 = swarm1
+        .peer_connectivity_handle
+        .local_addr()
+        .await
+        .unwrap()
+        .unwrap()
+        .as_bannable();
+    assert!(swarm2.peerdb.is_address_banned(&addr1));
     assert!(std::matches!(
         swarm2.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
@@ -168,7 +181,14 @@ where
 
     let peer_id = *swarm1.peer_connectivity_handle.peer_id();
     assert_eq!(swarm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
-    assert!(!swarm2.validate_peer_id(&peer_id));
+    let addr1 = swarm1
+        .peer_connectivity_handle
+        .local_addr()
+        .await
+        .unwrap()
+        .unwrap()
+        .as_bannable();
+    assert!(swarm2.peerdb.is_address_banned(&addr1));
     assert!(std::matches!(
         swarm2.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
@@ -221,8 +241,10 @@ async fn validate_invalid_outbound_connection() {
 
     // valid connection
     let peer_id = libp2p::PeerId::random();
+    let address: Multiaddr = "/ip4/175.69.140.46".parse().unwrap();
+    let bannable_address = address.as_bannable();
     let res = swarm.accept_connection(
-        Multiaddr::empty(),
+        address,
         net::types::PeerInfo::<Libp2pService> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
@@ -232,12 +254,14 @@ async fn validate_invalid_outbound_connection() {
         },
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(!swarm.peerdb.is_id_banned(&peer_id));
+    assert!(swarm.peerdb.is_active_peer(&peer_id));
+    assert!(!swarm.peerdb.is_address_banned(&bannable_address));
 
     // invalid magic bytes
     let peer_id = libp2p::PeerId::random();
+    let address: Multiaddr = "/ip4/59.176.127.176".parse().unwrap();
     let res = swarm.accept_connection(
-        Multiaddr::empty(),
+        address,
         net::types::PeerInfo::<Libp2pService> {
             peer_id,
             magic_bytes: [1, 2, 3, 4],
@@ -247,12 +271,13 @@ async fn validate_invalid_outbound_connection() {
         },
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(swarm.peerdb.is_id_banned(&peer_id));
+    assert!(!swarm.peerdb.is_active_peer(&peer_id));
 
     // invalid version
     let peer_id = libp2p::PeerId::random();
+    let address: Multiaddr = "/ip4/181.117.202.208".parse().unwrap();
     let res = swarm.accept_connection(
-        Multiaddr::empty(),
+        address,
         net::types::PeerInfo::<Libp2pService> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
@@ -262,12 +287,13 @@ async fn validate_invalid_outbound_connection() {
         },
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(swarm.peerdb.is_id_banned(&peer_id));
+    assert!(!swarm.peerdb.is_active_peer(&peer_id));
 
     // protocol missing
     let peer_id = libp2p::PeerId::random();
+    let address: Multiaddr = "/ip4/196.102.132.83".parse().unwrap();
     let res = swarm.accept_connection(
-        Multiaddr::empty(),
+        address,
         net::types::PeerInfo::<Libp2pService> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
@@ -283,7 +309,7 @@ async fn validate_invalid_outbound_connection() {
         },
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(swarm.peerdb.is_id_banned(&peer_id));
+    assert!(!swarm.peerdb.is_active_peer(&peer_id));
 }
 
 #[tokio::test]
@@ -295,8 +321,10 @@ async fn validate_invalid_inbound_connection() {
 
     // valid connection
     let peer_id = libp2p::PeerId::random();
+    let address: Multiaddr = "/ip4/114.212.230.173".parse().unwrap();
+    let bannable_address = address.as_bannable();
     let res = swarm.accept_inbound_connection(
-        Multiaddr::empty(),
+        address,
         net::types::PeerInfo::<Libp2pService> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
@@ -306,12 +334,13 @@ async fn validate_invalid_inbound_connection() {
         },
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(!swarm.peerdb.is_id_banned(&peer_id));
+    assert!(!swarm.peerdb.is_address_banned(&bannable_address));
 
     // invalid magic bytes
     let peer_id = libp2p::PeerId::random();
+    let address: Multiaddr = "/ip4/179.123.143.96".parse().unwrap();
     let res = swarm.accept_inbound_connection(
-        Multiaddr::empty(),
+        address,
         net::types::PeerInfo::<Libp2pService> {
             peer_id,
             magic_bytes: [1, 2, 3, 4],
@@ -321,12 +350,13 @@ async fn validate_invalid_inbound_connection() {
         },
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(swarm.peerdb.is_id_banned(&peer_id));
+    assert!(!swarm.peerdb.is_active_peer(&peer_id));
 
     // invalid version
     let peer_id = libp2p::PeerId::random();
+    let address: Multiaddr = "/ip4/61.247.77.9".parse().unwrap();
     let res = swarm.accept_inbound_connection(
-        Multiaddr::empty(),
+        address,
         net::types::PeerInfo::<Libp2pService> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
@@ -336,12 +366,13 @@ async fn validate_invalid_inbound_connection() {
         },
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(swarm.peerdb.is_id_banned(&peer_id));
+    assert!(!swarm.peerdb.is_active_peer(&peer_id));
 
     // protocol missing
     let peer_id = libp2p::PeerId::random();
+    let address: Multiaddr = "/ip4/58.52.214.119".parse().unwrap();
     let res = swarm.accept_inbound_connection(
-        Multiaddr::empty(),
+        address,
         net::types::PeerInfo::<Libp2pService> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
@@ -357,7 +388,7 @@ async fn validate_invalid_inbound_connection() {
         },
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(swarm.peerdb.is_id_banned(&peer_id));
+    assert!(!swarm.peerdb.is_active_peer(&peer_id));
 }
 
 async fn inbound_connection_invalid_magic<A, T>()

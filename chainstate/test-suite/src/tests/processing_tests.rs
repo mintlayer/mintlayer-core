@@ -23,8 +23,7 @@ use chainstate::{
     OrphanCheckError,
 };
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestBlockInfo, TestFramework, TestStore,
-    TransactionBuilder,
+    anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
 };
 use chainstate_types::{GenBlockIndex, GetAncestorError, PropertyQueryError};
 use common::chain::OutPoint;
@@ -61,10 +60,11 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         let chain_config = ConfigBuilder::test_chain()
             .empty_consensus_reward_maturity_distance(50.into())
             .build();
-        let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
         let coins = OutputValue::Coin(Amount::from_atoms(10));
-        let destination = Destination::PublicKey(PrivateKey::new(KeyKind::RistrettoSchnorr).1);
+        let destination =
+            Destination::PublicKey(PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr).1);
 
         // Case 1: reward is a simple transfer
         let block = tf
@@ -249,7 +249,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
 fn orphans_chains(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder(&mut rng).build();
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
 
         // Prepare, but not process the block.
@@ -304,7 +304,7 @@ fn orphans_chains(#[case] seed: Seed) {
 fn spend_inputs_simple(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         // Check that genesis utxos are present in the utxo set
         let genesis_id = tf.genesis().get_id();
@@ -338,26 +338,34 @@ fn spend_inputs_simple(#[case] seed: Seed) {
             // All inputs must spend a corresponding output
             for tx_in in tx.transaction().inputs() {
                 let outpoint = tx_in.outpoint();
-                let prev_out_tx_index =
-                    tf.chainstate.get_mainchain_tx_index(&outpoint.tx_id()).unwrap().unwrap();
-                assert_eq!(
-                    prev_out_tx_index.get_spent_state(outpoint.output_index()).unwrap(),
-                    OutputSpentState::SpentBy(tx_id.into())
-                );
+                if *tf.chainstate.get_chainstate_config().tx_index_enabled {
+                    let prev_out_tx_index =
+                        tf.chainstate.get_mainchain_tx_index(&outpoint.tx_id()).unwrap().unwrap();
+                    assert_eq!(
+                        prev_out_tx_index.get_spent_state(outpoint.output_index()).unwrap(),
+                        OutputSpentState::SpentBy(tx_id.into())
+                    );
+                }
                 assert_eq!(tf.chainstate.utxo(outpoint), Ok(None))
             }
             // All the outputs of this transaction should be unspent
-            let tx_index = tf.chainstate.get_mainchain_tx_index(&tx_id.into()).unwrap().unwrap();
-            for (idx, txo) in tx.transaction().outputs().iter().enumerate() {
-                let idx = idx as u32;
-                assert_eq!(
-                    tx_index.get_spent_state(idx).unwrap(),
-                    OutputSpentState::Unspent
-                );
-                let utxo = tf.chainstate.utxo(&OutPoint::new(tx_id.into(), idx)).unwrap().unwrap();
-                assert!(!utxo.is_block_reward());
-                assert_eq!(utxo.output(), txo);
-                assert_eq!(utxo.source(), &UtxoSource::Blockchain(BlockHeight::new(1)));
+            let tx_index = tf.chainstate.get_mainchain_tx_index(&tx_id.into()).unwrap();
+            if *tf.chainstate.get_chainstate_config().tx_index_enabled {
+                let tx_index = tx_index.unwrap();
+                for (idx, txo) in tx.transaction().outputs().iter().enumerate() {
+                    let idx = idx as u32;
+                    assert_eq!(
+                        tx_index.get_spent_state(idx).unwrap(),
+                        OutputSpentState::Unspent
+                    );
+                    let utxo =
+                        tf.chainstate.utxo(&OutPoint::new(tx_id.into(), idx)).unwrap().unwrap();
+                    assert!(!utxo.is_block_reward());
+                    assert_eq!(utxo.output(), txo);
+                    assert_eq!(utxo.source(), &UtxoSource::Blockchain(BlockHeight::new(1)));
+                }
+            } else {
+                assert!(tx_index.is_none());
             }
         }
     });
@@ -369,7 +377,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
 fn transaction_processing_order(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         // Transaction that spends the genesis reward
         let tx1 = SignedTransaction::new(
@@ -423,7 +431,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
 fn straight_chain(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::default();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let genesis_index = tf
             .chainstate
@@ -438,17 +446,17 @@ fn straight_chain(#[case] seed: Seed) {
         let chain_config_clone = tf.chainstate.get_chain_config();
         let mut block_index =
             GenBlockIndex::Genesis(Arc::clone(chain_config_clone.genesis_block()));
-        let mut prev_block = TestBlockInfo::from_genesis(&tf.genesis());
+        let mut prev_blk_id: Id<GenBlock> = tf.genesis().get_id().into();
 
         for _ in 0..rng.gen_range(100..200) {
-            assert_eq!(tf.chainstate.get_best_block_id().unwrap(), prev_block.id);
+            assert_eq!(tf.chainstate.get_best_block_id().unwrap(), prev_blk_id);
             let prev_block_id = block_index.block_id();
             let best_block_id = tf.best_block_id();
             assert_eq!(best_block_id, block_index.block_id());
             let new_block = tf
                 .make_block_builder()
-                .with_parent(prev_block.id)
-                .add_test_transaction_with_parent(prev_block.id, &mut rng)
+                .with_parent(prev_block_id)
+                .add_test_transaction_with_parent(prev_block_id, &mut rng)
                 .build();
             let new_block_index =
                 tf.process_block(new_block.clone(), BlockSource::Peer).unwrap().unwrap();
@@ -461,7 +469,7 @@ fn straight_chain(#[case] seed: Seed) {
             );
 
             block_index = GenBlockIndex::Block(new_block_index);
-            prev_block = TestBlockInfo::from_block(&new_block);
+            prev_blk_id = new_block.get_id().into();
         }
     });
 }
@@ -471,7 +479,7 @@ fn straight_chain(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn get_ancestor_invalid_height(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut tf = TestFramework::default();
+    let mut tf = TestFramework::builder(&mut rng).build();
     let height = 1;
     tf.create_chain(&tf.genesis().get_id().into(), height, &mut rng).unwrap();
 
@@ -497,7 +505,7 @@ fn get_ancestor_invalid_height(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn get_ancestor(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut tf = TestFramework::default();
+    let mut tf = TestFramework::builder(&mut rng).build();
 
     // We will create two chains that split at height 100
     const SPLIT_HEIGHT: usize = 100;
@@ -603,7 +611,7 @@ fn get_ancestor(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn last_common_ancestor(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut tf = TestFramework::default();
+    let mut tf = TestFramework::builder(&mut rng).build();
 
     const SPLIT_HEIGHT: usize = 100;
     const FIRST_CHAIN_HEIGHT: usize = 500;
@@ -706,7 +714,7 @@ fn consensus_type(#[case] seed: Seed) {
     // create the genesis_block, and this function creates a genesis block with
     // ConsensusData::None, which agrees with the net_upgrades we defined above.
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
-    let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let reward_lock_distance: i64 = tf
         .chainstate
@@ -750,7 +758,7 @@ fn consensus_type(#[case] seed: Seed) {
 
     // Mine blocks 5-9 with minimal difficulty, as expected by net upgrades
     for i in 5..10 {
-        let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let prev_block = tf.block(*tf.index_at(i - 1).block_id());
         let mut mined_block = tf
             .make_block_builder()
@@ -819,7 +827,7 @@ fn consensus_type(#[case] seed: Seed) {
 
     // Mining should work
     for i in 15..20 {
-        let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let prev_block = tf.block(*tf.index_at(i - 1).block_id());
         let mut mined_block = tf
             .make_block_builder()
@@ -869,7 +877,7 @@ fn pow(#[case] seed: Seed) {
     // create the genesis_block, and this function creates a genesis block with
     // ConsensusData::None, which agrees with the net_upgrades we defined above.
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
-    let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let reward_lock_distance: i64 = tf
         .chainstate
@@ -880,7 +888,7 @@ fn pow(#[case] seed: Seed) {
 
     // Let's create a block with random (invalid) PoW data and see that it fails the consensus
     // checks
-    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let mut random_invalid_block = tf
         .make_block_builder()
         .with_reward(vec![TxOutput::new(
@@ -940,7 +948,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
     // create the genesis_block, and this function creates a genesis block with
     // ConsensusData::None, which agrees with the net_upgrades we defined above.
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
-    let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let reward_lock_distance: i64 = tf
         .chainstate
@@ -953,7 +961,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
     let expected_block_reward = (0..block_reward_output_count)
         .map(|_| {
             let amount = Amount::from_atoms(rng.gen::<u128>() % 50);
-            let pub_key = PrivateKey::new(KeyKind::RistrettoSchnorr).1;
+            let pub_key = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr).1;
             TxOutput::new(
                 OutputValue::Coin(amount),
                 OutputPurpose::LockThenTransfer(
@@ -1001,9 +1009,13 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
     }
 }
 
-#[test]
-fn blocks_from_the_future() {
-    utils::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn blocks_from_the_future(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+
         // In this test, processing a few correct blocks in a single chain
         let config = create_unit_test_config();
 
@@ -1015,7 +1027,7 @@ fn blocks_from_the_future() {
         let time_getter = TimeGetter::new(Arc::new(move || {
             Duration::from_secs(chainstate_current_time.load(Ordering::SeqCst))
         }));
-        let mut tf = TestFramework::builder()
+        let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(config)
             .with_time_getter(time_getter)
             .build();
@@ -1100,10 +1112,13 @@ fn mainnet_initialization() {
     .unwrap();
 }
 
-#[test]
-fn empty_inputs_in_tx() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn empty_inputs_in_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let first_tx = TransactionBuilder::new().build();
         let first_tx_id = first_tx.transaction().get_id();
@@ -1125,10 +1140,13 @@ fn empty_inputs_in_tx() {
     });
 }
 
-#[test]
-fn empty_outputs_in_tx() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn empty_outputs_in_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let first_tx = TransactionBuilder::new()
             .add_output(TxOutput::new(
@@ -1160,9 +1178,9 @@ fn empty_outputs_in_tx() {
 #[case(Seed::from_entropy())]
 fn burn_inputs_in_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
-
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
         let first_tx = TransactionBuilder::new()
             .add_input(
                 TxInput::new(

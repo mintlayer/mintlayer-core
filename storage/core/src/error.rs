@@ -44,8 +44,8 @@ pub enum Fatal {
     OutOfSpace,
     #[error("Database has been corrupted")]
     DatabaseCorrupted,
-    #[error("Database internal error")]
-    InternalError,
+    #[error("Database internal error: {0}")]
+    InternalError(String),
     #[error("Database schema does not match database settings or contents")]
     SchemaMismatch,
     #[error("Fatal I/O error: {1}")]

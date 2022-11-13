@@ -50,6 +50,8 @@ fn process_genesis_block() {
             time_getter,
         );
 
+        chainstate.process_tx_index_enabled_flag().unwrap();
+
         chainstate.process_genesis().unwrap();
         let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
 

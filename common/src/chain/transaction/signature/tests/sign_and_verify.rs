@@ -43,7 +43,7 @@ fn sign_and_verify_all_and_none(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let test_data = [(0, 31), (31, 0), (20, 3), (3, 20)];
-    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
 
     for ((destination, sighash_type), (inputs, outputs)) in destinations(&mut rng, public_key)
         .cartesian_product(sig_hash_types().filter(|t| t.outputs_mode() != OutputsMode::Single))
@@ -75,7 +75,7 @@ fn sign_and_verify_all_and_none(#[case] seed: Seed) {
 fn sign_and_verify_single(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
-    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let test_data = [
         // SigHashType::SINGLE. Destination = PubKey.
         (

@@ -69,8 +69,8 @@ fn dummy_size() {
 #[case(Seed::from_entropy())]
 #[test]
 fn real_size(#[case] seed: Seed) -> anyhow::Result<()> {
-    let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new().add_input(
         TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
@@ -141,8 +141,8 @@ async fn add_single_tx() -> anyhow::Result<()> {
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
-    let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     let target_txs = 10;
@@ -260,8 +260,8 @@ pub async fn start_chainstate(
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn tx_no_outputs(#[case] seed: Seed) -> anyhow::Result<()> {
-    let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let tx = TransactionBuilder::new()
         .add_input(
@@ -348,9 +348,13 @@ async fn tx_already_in_mempool() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn outpoint_not_found() -> anyhow::Result<()> {
-    let tf = TestFramework::default();
+async fn outpoint_not_found(#[case] seed: Seed) -> anyhow::Result<()> {
+    let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let chainstate = tf.chainstate();
     let mut mempool = setup_with_chainstate(chainstate).await;
 
@@ -398,8 +402,8 @@ async fn outpoint_not_found() -> anyhow::Result<()> {
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn tx_too_big(#[case] seed: Seed) -> anyhow::Result<()> {
-    let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
 
     let single_output_size = TxOutput::new(
@@ -471,7 +475,9 @@ async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
             .await??;
         let input_value = match chainstate_outpoint_value.first().unwrap() {
             Some(input_value) => *input_value,
-            None => mempool.store.get_unconfirmed_outpoint_value(&outpoint)?,
+            None => {
+                mempool.store.get_unconfirmed_outpoint_value(&H256::zero().into(), &outpoint)?
+            }
         };
         input_values.push(input_value)
     }
@@ -522,8 +528,8 @@ async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> anyhow::Result<()> {
-    let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new().add_input(
         TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
@@ -743,8 +749,8 @@ async fn test_bip125_max_replacements(
     seed: Seed,
     num_potential_replacements: usize,
 ) -> anyhow::Result<()> {
-    let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new()
         .add_input(
@@ -838,8 +844,8 @@ async fn not_too_many_conflicts(#[case] seed: Seed) -> anyhow::Result<()> {
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
-    let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new()
         .add_input(
@@ -925,8 +931,8 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     // After removing one entry, cause the code to exit the loop by showing a small usage
     mock_usage.expect_get_memory_usage().return_const(0usize);
 
-    let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new()
         .add_input(
@@ -1184,9 +1190,9 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
 async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
     use std::time::Instant;
 
-    let mut tf = TestFramework::default();
-    let genesis = tf.genesis();
     let mut rng = make_seedable_rng(seed);
+    let mut tf = TestFramework::builder(&mut rng).build();
+    let genesis = tf.genesis();
 
     let mut tx_builder = TransactionBuilder::new().add_input(
         TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
@@ -1257,9 +1263,9 @@ async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
-    let tf = TestFramework::default();
-    let genesis = tf.genesis();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
+    let genesis = tf.genesis();
 
     let tx = TransactionBuilder::new()
         .add_input(
@@ -1411,9 +1417,9 @@ fn check_txs_sorted_by_ancestor_score(mempool: &Mempool<SystemUsageEstimator>) {
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
-    let tf = TestFramework::default();
-    let genesis = tf.genesis();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
+    let genesis = tf.genesis();
 
     let tx = TransactionBuilder::new()
         .add_input(
@@ -1535,8 +1541,8 @@ fn check_txs_sorted_by_descendant_sore(mempool: &Mempool<SystemUsageEstimator>) 
 async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
     logging::init_logging::<&str>(None);
 
-    let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
 
     let mut mock_usage = MockGetMemoryUsage::new();
@@ -1585,8 +1591,8 @@ async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
-    let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new().add_input(
         TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
@@ -1646,8 +1652,8 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
-    let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
 

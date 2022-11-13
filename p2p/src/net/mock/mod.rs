@@ -113,6 +113,7 @@ where
     T: MockTransport,
 {
     type Address = T::Address;
+    type BannableAddress = T::BannableAddress;
     type PeerId = MockPeerId;
     type SyncingPeerRequestId = MockRequestId;
     type SyncingMessageId = MockMessageId;
@@ -423,8 +424,9 @@ mod tests {
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     agent: None,
                     protocols: [
-                        Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
-                        Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
                     ]
                     .into_iter()
                     .collect(),
@@ -485,8 +487,9 @@ mod tests {
                 assert_eq!(
                     peer_info.protocols,
                     [
-                        Protocol::new(ProtocolType::PubSub, SemVer::new(0, 1, 0)),
-                        Protocol::new(ProtocolType::Ping, SemVer::new(0, 1, 0)),
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
                     ]
                     .into_iter()
                     .collect()

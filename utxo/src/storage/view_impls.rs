@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::{UtxosDB, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
-use crate::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosCache, UtxosView};
+use crate::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosView};
 use common::{
     chain::{GenBlock, OutPoint},
     primitives::Id,
@@ -44,12 +44,6 @@ mod utxosdb_utxosview_impls {
     pub fn estimated_size<S: UtxosStorageRead>(_db: &S) -> Option<usize> {
         None
     }
-
-    pub fn derive_cache<S: UtxosStorageRead + UtxosView>(db: &S) -> UtxosCache {
-        let mut cache = UtxosCache::from_borrowed_parent(db);
-        cache.set_best_block(db.best_block_hash());
-        cache
-    }
 }
 
 impl<'a, S: UtxosStorageRead> UtxosView for UtxosDB<'a, S> {
@@ -68,10 +62,6 @@ impl<'a, S: UtxosStorageRead> UtxosView for UtxosDB<'a, S> {
     fn estimated_size(&self) -> Option<usize> {
         utxosdb_utxosview_impls::estimated_size(self)
     }
-
-    fn derive_cache(&self) -> UtxosCache {
-        utxosdb_utxosview_impls::derive_cache(self)
-    }
 }
 
 impl<'a, S: UtxosStorageWrite> UtxosView for UtxosDBMut<'a, S> {
@@ -89,10 +79,6 @@ impl<'a, S: UtxosStorageWrite> UtxosView for UtxosDBMut<'a, S> {
 
     fn estimated_size(&self) -> Option<usize> {
         utxosdb_utxosview_impls::estimated_size(self)
-    }
-
-    fn derive_cache(&self) -> UtxosCache {
-        utxosdb_utxosview_impls::derive_cache(self)
     }
 }
 

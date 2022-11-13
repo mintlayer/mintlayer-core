@@ -27,13 +27,15 @@ use common::{
     },
     primitives::{Amount, Idable},
 };
+use crypto::random::CryptoRng;
+use tx_verifier::transaction_verifier::TransactionVerifierConfig;
 use tx_verifier::transaction_verifier::{
     TransactionSource, TransactionSourceForConnect, TransactionVerifier,
 };
 
-fn setup() -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
+fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();
-    let tf = TestFramework::builder().with_storage(storage.clone()).build();
+    let tf = TestFramework::builder(rng).with_storage(storage.clone()).build();
 
     let chain_config = ConfigBuilder::test_chain().build();
     let storage = InMemoryStorageWrapper::new(storage, chain_config.clone());
@@ -47,12 +49,16 @@ fn setup() -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
 fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: usize) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let (chain_config, storage, mut tf) = setup();
+        let (chain_config, storage, mut tf) = setup(&mut rng);
 
         let genesis_id = tf.genesis().get_id();
         tf.create_chain(&genesis_id.into(), num_blocks, &mut rng).unwrap();
 
-        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
+        let mut verifier = TransactionVerifier::new(
+            &storage,
+            &chain_config,
+            TransactionVerifierConfig::new(*tf.chainstate.get_chainstate_config().tx_index_enabled),
+        );
 
         for height in 1..num_blocks {
             let block_id = match tf.block_id(height as u64).classify(&chain_config) {
@@ -102,7 +108,7 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
 fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let (chain_config, storage, mut tf) = setup();
+        let (chain_config, storage, mut tf) = setup(&mut rng);
 
         // create a block with a single tx based on genesis
         let tx0 = TransactionBuilder::new()
@@ -127,7 +133,11 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
 
-        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
+        let mut verifier = TransactionVerifier::new(
+            &storage,
+            &chain_config,
+            TransactionVerifierConfig::new(true),
+        );
         let tx_source = TransactionSourceForConnect::Mempool {
             current_best: &best_block,
         };

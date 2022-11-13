@@ -18,6 +18,8 @@ use std::collections::BTreeMap;
 use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
 use common::primitives::{signed_amount::SignedAmount, Amount, H256};
 use crypto::key::{KeyKind, PrivateKey};
+use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
     pool::{
@@ -38,12 +40,15 @@ fn new_delegation_id(v: u64) -> DelegationId {
     DelegationId::new(H256::from_low_u64_be(v))
 }
 
-#[test]
-fn check_merge_deltas() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_merge_deltas(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
     let db = PoSAccountingDBMut::new_empty(&mut storage);
 
-    let (_, pub_key1) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let data1 = PoSAccountingDeltaData {
         pool_data: DeltaDataCollection::from_iter(
             [(
@@ -90,7 +95,7 @@ fn check_merge_deltas() {
     let mut delta1 = PoSAccountingDelta::from_data(&db, data1);
     let delta1_origin_data = delta1.data().clone();
 
-    let (_, pub_key2) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let data2 = PoSAccountingDeltaData {
         pool_data: DeltaDataCollection::from_iter(
             [
@@ -182,10 +187,13 @@ fn check_merge_deltas() {
     assert_eq!(delta1.data(), &delta1_origin_data);
 }
 
-#[test]
-fn check_merge_values_with_deltas() {
-    let (_, pub_key1) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    let (_, pub_key2) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_merge_values_with_deltas(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
 
     let mut storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([(

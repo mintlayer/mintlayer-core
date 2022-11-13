@@ -188,8 +188,8 @@ mod test {
     fn produce_signature_address_missmatch(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let (private_key, _) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (private_key, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (_, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let destination = Destination::Address(PublicKeyHash::from(&public_key));
         let tx = generate_unsigned_tx(&mut rng, &destination, 1, 2).unwrap();
 
@@ -214,8 +214,8 @@ mod test {
     fn produce_signature_key_missmatch(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let (private_key, _) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (private_key, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (_, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let destination = Destination::PublicKey(public_key);
         let tx = generate_unsigned_tx(&mut rng, &destination, 1, 2).unwrap();
 
@@ -240,7 +240,8 @@ mod test {
     fn produce_and_verify(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (private_key, public_key) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let outpoints = [
             Destination::Address(PublicKeyHash::from(&public_key)),
             Destination::PublicKey(public_key),

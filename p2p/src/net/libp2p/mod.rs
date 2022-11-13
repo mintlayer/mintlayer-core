@@ -23,7 +23,7 @@ mod backend;
 mod tests;
 mod types;
 
-use std::sync::Arc;
+use std::{net::IpAddr, sync::Arc};
 
 use async_trait::async_trait;
 use libp2p::{
@@ -43,7 +43,9 @@ use logging::log;
 use crate::{
     config,
     error::{DialError, P2pError},
-    net::{libp2p::backend::Libp2pBackend, NetworkingService},
+    net::{
+        libp2p::backend::Libp2pBackend, AsBannableAddress, IsBannableAddress, NetworkingService,
+    },
 };
 
 #[derive(Debug)]
@@ -67,6 +69,7 @@ fn make_libp2p_keys() -> (
 #[async_trait]
 impl NetworkingService for Libp2pService {
     type Address = Multiaddr;
+    type BannableAddress = IpAddr;
     type PeerId = PeerId;
     type SyncingPeerRequestId = RequestId;
     type SyncingMessageId = MessageId;
@@ -129,4 +132,31 @@ impl NetworkingService for Libp2pService {
             Self::SyncingMessagingHandle::new(cmd_tx, sync_rx),
         ))
     }
+}
+
+impl AsBannableAddress for Multiaddr {
+    type BannableAddress = IpAddr;
+
+    fn as_bannable(&self) -> Self::BannableAddress {
+        get_ip(self)
+            .unwrap_or_else(|| panic!("Failed to get bannable address from address {self:?}"))
+    }
+}
+
+impl IsBannableAddress for Multiaddr {
+    fn is_bannable(&self) -> bool {
+        get_ip(self).is_some()
+    }
+}
+
+fn get_ip(address: &Multiaddr) -> Option<IpAddr> {
+    // TODO: using a loop is wrong here. There should be a function that extracts the address from Multiaddr
+    for component in address.iter() {
+        match component {
+            libp2p::multiaddr::Protocol::Ip4(a) => return Some(a.into()),
+            libp2p::multiaddr::Protocol::Ip6(a) => return Some(a.into()),
+            _ => continue,
+        }
+    }
+    None
 }

@@ -19,7 +19,7 @@ use common::{
 };
 use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
-    random::Rng,
+    random::{CryptoRng, Rng},
 };
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -39,11 +39,11 @@ use crate::{
 };
 
 fn create_pool(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     op: &mut impl PoSAccountingOperatorWrite,
     pledged_amount: Amount,
 ) -> Result<(PoolId, PublicKey, PoSAccountingUndo), Error> {
-    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
     let outpoint = OutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
         0,
@@ -53,11 +53,11 @@ fn create_pool(
 }
 
 fn create_delegation_id(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     op: &mut impl PoSAccountingOperatorWrite,
     target_pool: PoolId,
 ) -> Result<(DelegationId, PublicKey, PoSAccountingUndo), Error> {
-    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
     let outpoint = OutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
         0,
@@ -90,7 +90,7 @@ fn check_create_pool_delta(#[case] seed: Seed) {
 }
 
 fn check_create_pool(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingView),
 ) {
     let pledged_amount = Amount::from_atoms(100);
@@ -147,7 +147,7 @@ fn check_decommission_pool_delta(#[case] seed: Seed) {
 }
 
 fn check_decommission_pool(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingView),
 ) {
     let pledged_amount = Amount::from_atoms(100);
@@ -206,7 +206,7 @@ fn check_delegation_id_delta(#[case] seed: Seed) {
 }
 
 fn check_delegation_id(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingView),
 ) {
     let pledged_amount = Amount::from_atoms(100);
@@ -278,7 +278,7 @@ fn check_delegate_staking_delta(#[case] seed: Seed) {
 }
 
 fn check_delegate_staking(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingView),
 ) {
     let pledged_amount = Amount::from_atoms(100);
@@ -357,7 +357,7 @@ fn check_spend_share_delta(#[case] seed: Seed) {
 }
 
 fn check_spend_share(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     op: &mut (impl PoSAccountingOperatorWrite + PoSAccountingView),
 ) {
     let pledged_amount = Amount::from_atoms(100);

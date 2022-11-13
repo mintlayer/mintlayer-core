@@ -47,6 +47,7 @@ impl BanScore for BlockError {
             BlockError::DatabaseCommitError(_, _, _) => 0,
             BlockError::BlockProofCalculationError(_) => 100,
             BlockError::TransactionVerifierError(err) => err.ban_score(),
+            BlockError::TxIndexConfigError => 0,
         }
     }
 }
@@ -110,6 +111,7 @@ impl BanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::UtxoError(err) => err.ban_score(),
             TransactionVerifierStorageError::TxIndexError(err) => err.ban_score(),
             TransactionVerifierStorageError::BlockUndoError(_) => 100,
+            TransactionVerifierStorageError::TransactionIndexDisabled => 0,
         }
     }
 }

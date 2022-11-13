@@ -29,6 +29,7 @@ use common::{
     },
     time_getter::{TimeGetter, TimeGetterFn},
 };
+use crypto::random::{CryptoRng, Rng};
 use test_utils::random::Seed;
 
 use crate::{
@@ -57,12 +58,17 @@ pub struct TestFrameworkBuilder {
 
 impl TestFrameworkBuilder {
     /// Constructs a builder instance with values appropriate for most of the tests.
-    pub fn new() -> Self {
+    pub fn new(rng: &mut (impl Rng + CryptoRng)) -> Self {
         let chain_config = ChainConfigBuilder::new(ChainType::Mainnet)
             .net_upgrades(NetUpgrades::unit_tests())
             .genesis_unittest(Destination::AnyoneCanSpend)
             .build();
-        let chainstate_config = ChainstateConfig::default();
+        let chainstate_config = chainstate::ChainstateConfig {
+            max_db_commit_attempts: Default::default(),
+            max_orphan_blocks: Default::default(),
+            min_max_bootstrap_import_buffer_sizes: Default::default(),
+            tx_index_enabled: rng.gen::<bool>().into(),
+        };
         let chainstate_storage = TestStore::new_empty().unwrap();
         let time_getter = None;
         let tx_verification_strategy = TxVerificationStrategy::Default;

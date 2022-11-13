@@ -49,9 +49,9 @@ use crypto::random::SliceRandom;
 #[case(Seed::from_entropy())]
 fn spend_output_in_the_same_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
-
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
         let tx1_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
@@ -82,9 +82,9 @@ fn spend_output_in_the_same_block(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
-
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
         let tx1_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
@@ -123,9 +123,9 @@ fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn double_spend_tx_in_the_same_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
-
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
         let tx1_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
@@ -170,9 +170,9 @@ fn double_spend_tx_in_the_same_block(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn double_spend_tx_in_another_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
-
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
         let tx1_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
         let first_block = tf.make_block_builder().add_transaction(first_tx).build();
@@ -210,9 +210,9 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn overspend_single_output(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
-
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
         let tx1_output_value = rng.gen_range(1000..2000);
         let tx2_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
@@ -241,8 +241,8 @@ fn overspend_single_output(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn overspend_multiple_outputs(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let tx1_output_value = rng.gen_range(1000..2000);
         let tx1 = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
@@ -294,9 +294,9 @@ fn overspend_multiple_outputs(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn duplicate_input_in_the_same_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
-
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
         let tx1_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
 
@@ -347,9 +347,9 @@ fn duplicate_input_in_the_same_tx(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn same_input_diff_sig_in_the_same_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
-
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
         let tx1_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, tx1_output_value);
 
@@ -405,9 +405,9 @@ fn same_input_diff_sig_in_the_same_tx(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn duplicate_tx_in_the_same_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
-
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, 1);
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
@@ -435,9 +435,9 @@ fn duplicate_tx_in_the_same_block(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn duplicate_odd_tx_in_the_same_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
-
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
         let first_tx = tx_from_genesis(&tf.genesis(), &mut rng, 1);
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
         let third_tx = tx_from_tx(&second_tx, rng.gen_range(1000..2000));
@@ -466,8 +466,8 @@ fn duplicate_odd_tx_in_the_same_block(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn try_spend_burned_output_same_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let first_tx = TransactionBuilder::new()
             .add_input(
@@ -501,8 +501,8 @@ fn try_spend_burned_output_same_block(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn try_spend_burned_output_different_blocks(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut tf = TestFramework::default();
         let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let first_tx = TransactionBuilder::new()
             .add_input(

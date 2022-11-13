@@ -25,11 +25,16 @@ use common::{
     },
     primitives::{time, BlockHeight},
 };
-use tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifier};
+use crypto::random::{CryptoRng, Rng};
+use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
+use tx_verifier::transaction_verifier::{
+    TransactionSourceForConnect, TransactionVerifier, TransactionVerifierConfig,
+};
 
-fn setup() -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
+fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     let storage = TestStore::new_empty().unwrap();
-    let tf = TestFramework::builder().with_storage(storage.clone()).build();
+    let tf = TestFramework::builder(rng).with_storage(storage.clone()).build();
 
     let chain_config = ConfigBuilder::test_chain().build();
     let storage = InMemoryStorageWrapper::new(storage, chain_config.clone());
@@ -37,11 +42,18 @@ fn setup() -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {
     (chain_config, storage, tf)
 }
 
-#[test]
-fn output_lock_until_height() {
-    utils::concurrency::model(|| {
-        let (chain_config, storage, mut tf) = setup();
-        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn output_lock_until_height(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let (chain_config, storage, mut tf) = setup(&mut rng);
+        let mut verifier = TransactionVerifier::new(
+            &storage,
+            &chain_config,
+            TransactionVerifierConfig::new(true),
+        );
 
         let block_height_that_unlocks = 10;
 
@@ -99,11 +111,18 @@ fn output_lock_until_height() {
     });
 }
 
-#[test]
-fn output_lock_for_block_count() {
-    utils::concurrency::model(|| {
-        let (chain_config, storage, mut tf) = setup();
-        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn output_lock_for_block_count(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let (chain_config, storage, mut tf) = setup(&mut rng);
+        let mut verifier = TransactionVerifier::new(
+            &storage,
+            &chain_config,
+            TransactionVerifierConfig::new(true),
+        );
 
         let block_count_that_unlocks = 20;
         let block_height_with_locked_output = 1;
@@ -166,11 +185,18 @@ fn output_lock_for_block_count() {
     });
 }
 
-#[test]
-fn output_lock_until_time() {
-    utils::concurrency::model(|| {
-        let (chain_config, storage, mut tf) = setup();
-        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn output_lock_until_time(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let (chain_config, storage, mut tf) = setup(&mut rng);
+        let mut verifier = TransactionVerifier::new(
+            &storage,
+            &chain_config,
+            TransactionVerifierConfig::new(true),
+        );
 
         let genesis_timestamp = tf.genesis().timestamp();
         let lock_time = genesis_timestamp.as_int_seconds() + 4;
@@ -255,11 +281,18 @@ fn output_lock_until_time() {
     });
 }
 
-#[test]
-fn output_lock_for_seconds() {
-    utils::concurrency::model(|| {
-        let (chain_config, storage, mut tf) = setup();
-        let mut verifier = TransactionVerifier::new(&storage, &chain_config);
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn output_lock_for_seconds(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let (chain_config, storage, mut tf) = setup(&mut rng);
+        let mut verifier = TransactionVerifier::new(
+            &storage,
+            &chain_config,
+            TransactionVerifierConfig::new(true),
+        );
 
         let genesis_timestamp = tf.genesis().timestamp();
         let block_times: Vec<_> = itertools::iterate(genesis_timestamp.as_int_seconds(), |t| t + 1)

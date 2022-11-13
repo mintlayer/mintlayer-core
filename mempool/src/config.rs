@@ -18,7 +18,7 @@ use std::time::Duration;
 pub(crate) type Time = Duration;
 
 pub(crate) const ROLLING_FEE_BASE_HALFLIFE: Time = Duration::new(60 * 60 * 12, 1);
-// TODO this willbe defined elsewhere (some of limits.rs file)
+// TODO this will be defined elsewhere (some of limits.rs file)
 pub(crate) const MAX_BLOCK_SIZE_BYTES: usize = 1_000_000;
 
 pub(crate) const MAX_BIP125_REPLACEMENT_CANDIDATES: usize = 100;

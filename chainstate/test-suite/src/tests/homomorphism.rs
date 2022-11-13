@@ -38,13 +38,17 @@ fn coins_homomorphism(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let storage1 = TestStore::new_empty().unwrap();
-        let mut tf = TestFramework::builder()
+        let mut tf = TestFramework::builder(&mut rng)
             .with_storage(storage1.clone())
             .with_tx_verification_strategy(TxVerificationStrategy::Default)
             .build();
 
+        // Sync randomized `tx_index_enabled` value between two TestFrameworks
+        let chainstate_config = tf.chainstate.get_chainstate_config();
+
         let storage2 = TestStore::new_empty().unwrap();
-        let mut tf2 = TestFramework::builder()
+        let mut tf2 = TestFramework::builder(&mut rng)
+            .with_chainstate_config(chainstate_config)
             .with_storage(storage2.clone())
             .with_tx_verification_strategy(TxVerificationStrategy::Disposable)
             .build();
@@ -119,13 +123,17 @@ fn tokens_homomorphism(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let storage1 = TestStore::new_empty().unwrap();
-        let mut tf = TestFramework::builder()
+        let mut tf = TestFramework::builder(&mut rng)
             .with_storage(storage1.clone())
             .with_tx_verification_strategy(TxVerificationStrategy::Default)
             .build();
 
+        // Sync randomized `tx_index_enabled` value between two TestFrameworks
+        let chainstate_config = tf.chainstate.get_chainstate_config();
+
         let storage2 = TestStore::new_empty().unwrap();
-        let mut tf2 = TestFramework::builder()
+        let mut tf2 = TestFramework::builder(&mut rng)
+            .with_chainstate_config(chainstate_config)
             .with_storage(storage2.clone())
             .with_tx_verification_strategy(TxVerificationStrategy::Disposable)
             .build();

@@ -13,17 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::TestChainstate;
+use crate::{framework::BlockOutputs, TestChainstate};
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{
         signature::inputsig::InputWitness,
         tokens::{OutputValue, TokenData, TokenTransfer},
-        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
+        Block, Destination, Genesis, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
-    primitives::Amount,
+    primitives::{Amount, Idable},
 };
-use crypto::random::Rng;
+use crypto::random::{CryptoRng, Rng};
 use test_utils::nft_utils::*;
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
@@ -95,7 +95,7 @@ pub fn create_multiple_utxo_data(
     outsrc: OutPointSourceId,
     index: usize,
     output: &TxOutput,
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
 ) -> Option<(InputWitness, TxInput, Vec<TxOutput>)> {
     let num_outputs = rng.gen_range(1..10);
     let new_outputs = match output.value() {
@@ -263,4 +263,27 @@ fn new_token_burn_output(
         .into(),
         OutputPurpose::Burn,
     )
+}
+
+pub fn outputs_from_genesis(genesis: &Genesis) -> BlockOutputs {
+    [(
+        OutPointSourceId::BlockReward(genesis.get_id().into()),
+        genesis.utxos().to_vec(),
+    )]
+    .into_iter()
+    .collect()
+}
+
+pub fn outputs_from_block(blk: &Block) -> BlockOutputs {
+    std::iter::once((
+        OutPointSourceId::BlockReward(blk.get_id().into()),
+        blk.block_reward().outputs().to_vec(),
+    ))
+    .chain(blk.transactions().iter().map(|tx| {
+        (
+            OutPointSourceId::Transaction(tx.transaction().get_id()),
+            tx.transaction().outputs().clone(),
+        )
+    }))
+    .collect()
 }

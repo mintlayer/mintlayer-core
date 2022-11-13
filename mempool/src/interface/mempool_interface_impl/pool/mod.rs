@@ -57,6 +57,7 @@ use store::MempoolRemovalReason;
 use store::MempoolStore;
 use store::TxMempoolEntry;
 use try_get_fee::TryGetFee;
+use tx_with_fee::TxWithFee;
 
 pub use crate::interface::mempool_interface::MempoolInterface;
 
@@ -67,6 +68,7 @@ mod rolling_fee_rate;
 mod spends_unconfirmed;
 mod store;
 mod try_get_fee;
+mod tx_with_fee;
 
 fn get_relay_fee(tx: &SignedTransaction) -> Amount {
     // TODO we should never reach the expect, but should this be an error anyway?
@@ -88,7 +90,7 @@ newtype! {
     struct Conflicts(BTreeSet<Id<Transaction>>);
 }
 
-pub struct Mempool<M: GetMemoryUsage + 'static + Send + std::marker::Sync> {
+pub struct Mempool<M: GetMemoryUsage + 'static + Send + Sync> {
     #[allow(unused)]
     chain_config: Arc<ChainConfig>,
     store: MempoolStore,
@@ -104,16 +106,25 @@ pub struct Mempool<M: GetMemoryUsage + 'static + Send + std::marker::Sync> {
 
 impl<M> std::fmt::Debug for Mempool<M>
 where
-    M: GetMemoryUsage + 'static + Send + std::marker::Sync,
+    M: GetMemoryUsage + 'static + Send + Sync,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.store)
     }
 }
 
+impl<M> GetMemoryUsage for Mempool<M>
+where
+    M: GetMemoryUsage + Send + Sync,
+{
+    fn get_memory_usage(&self) -> usize {
+        self.memory_usage_estimator.get_memory_usage()
+    }
+}
+
 impl<M> Mempool<M>
 where
-    M: GetMemoryUsage + Send + std::marker::Sync,
+    M: GetMemoryUsage + Send + Sync,
 {
     pub fn new(
         chain_config: Arc<ChainConfig>,
@@ -134,6 +145,66 @@ where
             memory_usage_estimator,
             events_controller: Default::default(),
             receiver,
+        }
+    }
+
+    pub fn run(mut self) -> Result<(), Error> {
+        tokio::spawn(async move {
+            let event_receiver =
+                self.subscribe_to_chainstate_events().await.log_err().expect("chainstate dead");
+            self.mempool_event_loop(event_receiver).await
+        });
+        Ok(())
+    }
+
+    pub async fn mempool_event_loop(
+        mut self,
+        mut chainstate_event_receiver: mpsc::UnboundedReceiver<(Id<Block>, BlockHeight)>,
+    ) {
+        loop {
+            tokio::select! {
+                Some((block_id, block_height)) = chainstate_event_receiver.recv() =>{
+                    self.new_tip_set(block_id, block_height)
+                },
+                Some(method_call) = self.receiver.recv() => self.handle_mempool_method_call(method_call).await
+            }
+        }
+    }
+
+    pub async fn handle_mempool_method_call(&mut self, method_call: MempoolMethodCall) {
+        match method_call {
+            MempoolMethodCall::AddTransaction { tx, rtx } => {
+                if let Err(e) = rtx.send(self.add_transaction(tx).await) {
+                    logging::log::error!("AddTransaction: Error sending response: {:?}", e);
+                }
+            }
+            MempoolMethodCall::GetAll { rtx } => {
+                if let Err(e) = rtx.send(self.get_all()) {
+                    logging::log::error!("GetAll: Error sending response: {:?}", e);
+                }
+            }
+            MempoolMethodCall::CollectTxs {
+                tx_accumulator,
+                rtx,
+            } => {
+                if let Err(e) = rtx.send(self.collect_txs(tx_accumulator)) {
+                    logging::log::error!(
+                        "CollectTxs: Error sending response: {:?}",
+                        e.transactions()
+                    );
+                }
+            }
+            MempoolMethodCall::ContainsTransaction { tx_id, rtx } => {
+                if let Err(e) = rtx.send(self.contains_transaction(&tx_id)) {
+                    logging::log::error!("ContainsTransaction: Error sending response: {:?}", e);
+                }
+            }
+            MempoolMethodCall::SubscribeToEvents { handler, rtx } => {
+                self.subscribe_to_events(handler);
+                if let Err(e) = rtx.send(()) {
+                    logging::log::error!("SubscribeToEvents: Error sending response: {:?}", e);
+                }
+            }
         }
     }
 
@@ -163,19 +234,13 @@ where
             .map_err(|_| crate::error::Error::SubsystemFailure)?;
         Ok(rx)
     }
+}
 
-    pub fn new_tip_set(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
-        log::info!(
-            "new tip with block_id {:?} and block_height {:?}",
-            block_id,
-            block_height
-        );
-        // TODO(Roy) handle the new tip
-        let mut rolling_fee_rate = self.rolling_fee_rate.write();
-        (*rolling_fee_rate).set_block_since_last_rolling_fee_bump(true);
-    }
-    //
-
+// Rolling-fee-related methods
+impl<M> Mempool<M>
+where
+    M: GetMemoryUsage + Send + Sync,
+{
     fn rolling_fee_halflife(&self) -> Time {
         let mem_usage = self.get_memory_usage();
         if mem_usage < self.max_size / 4 {
@@ -185,10 +250,6 @@ where
         } else {
             ROLLING_FEE_BASE_HALFLIFE
         }
-    }
-
-    fn get_memory_usage(&self) -> usize {
-        self.memory_usage_estimator.get_memory_usage()
     }
 
     fn update_min_fee_rate(&self, rate: FeeRate) {
@@ -239,34 +300,13 @@ where
         let mut rolling_fee_rate = self.rolling_fee_rate.write();
         *rolling_fee_rate = (*rolling_fee_rate).decay_fee(halflife, time);
     }
+}
 
-    async fn verify_inputs_available(
-        &self,
-        tx: &SignedTransaction,
-    ) -> Result<(), TxValidationError> {
-        let tx_clone = tx.clone();
-        let chainstate_inputs = self
-            .chainstate_handle
-            .call(move |this| this.available_inputs(tx_clone.transaction()))
-            .await??;
-        tx.transaction()
-            .inputs()
-            .iter()
-            .find(|input| {
-                !chainstate_inputs.contains(&Some((*input).clone()))
-                    && !self.store.contains_outpoint(input.outpoint())
-            })
-            .map_or_else(
-                || Ok(()),
-                |input| {
-                    Err(TxValidationError::OutPointNotFound {
-                        outpoint: input.outpoint().clone(),
-                        tx_id: tx.transaction().get_id(),
-                    })
-                },
-            )
-    }
-
+// Entry Creation
+impl<M> Mempool<M>
+where
+    M: GetMemoryUsage + Send + Sync,
+{
     async fn create_entry(
         &self,
         tx: SignedTransaction,
@@ -292,24 +332,13 @@ where
         let time = self.clock.get_time();
         TxMempoolEntry::new(tx, fee, parents, ancestors, time)
     }
+}
 
-    fn get_update_minimum_mempool_fee(
-        &self,
-        tx: &SignedTransaction,
-    ) -> Result<Amount, TxValidationError> {
-        let minimum_fee_rate = self.get_update_min_fee_rate();
-        log::debug!("minimum fee rate {:?}", minimum_fee_rate);
-        /*log::debug!(
-            "tx_size: {:?}, tx_fee {:?}",
-            tx.encoded_size(),
-            self.try_get_fee(tx)?
-        );
-        */
-        let res = minimum_fee_rate.compute_fee(tx.encoded_size());
-        log::debug!("minimum_mempool_fee for tx: {:?}", res);
-        res
-    }
-
+// Transaction Validation
+impl<M> Mempool<M>
+where
+    M: GetMemoryUsage + Send + Sync,
+{
     async fn validate_transaction(
         &self,
         tx: &SignedTransaction,
@@ -378,23 +407,48 @@ where
             return Err(TxValidationError::TransactionAlreadyInMempool);
         }
 
-        let conflicts = self.rbf_checks(tx).await?;
+        let tx = TxWithFee::new(self, tx.clone()).await?;
+        let conflicts = self.rbf_checks(&tx)?;
 
-        self.verify_inputs_available(tx).await?;
+        self.verify_inputs_available(tx.tx()).await?;
 
-        self.pays_minimum_relay_fees(tx).await?;
+        self.pays_minimum_relay_fees(&tx)?;
 
-        self.pays_minimum_mempool_fee(tx).await?;
+        self.pays_minimum_mempool_fee(&tx)?;
 
         Ok(conflicts)
     }
 
-    async fn pays_minimum_mempool_fee(
+    async fn verify_inputs_available(
         &self,
         tx: &SignedTransaction,
     ) -> Result<(), TxValidationError> {
-        let tx_fee = self.try_get_fee(tx).await?;
-        let minimum_fee = self.get_update_minimum_mempool_fee(tx)?;
+        let tx_clone = tx.clone();
+        let chainstate_inputs = self
+            .chainstate_handle
+            .call(move |this| this.available_inputs(tx_clone.transaction()))
+            .await??;
+        tx.transaction()
+            .inputs()
+            .iter()
+            .find(|input| {
+                !chainstate_inputs.contains(&Some((*input).clone()))
+                    && !self.store.contains_outpoint(input.outpoint())
+            })
+            .map_or_else(
+                || Ok(()),
+                |input| {
+                    Err(TxValidationError::OutPointNotFound {
+                        outpoint: input.outpoint().clone(),
+                        spending_tx_id: tx.transaction().get_id(),
+                    })
+                },
+            )
+    }
+
+    fn pays_minimum_mempool_fee(&self, tx: &TxWithFee) -> Result<(), TxValidationError> {
+        let tx_fee = tx.fee();
+        let minimum_fee = self.get_update_minimum_mempool_fee(tx.tx())?;
         log::debug!(
             "pays_minimum_mempool_fee tx_fee = {:?}, minimum_fee = {:?}",
             tx_fee,
@@ -410,12 +464,20 @@ where
         Ok(())
     }
 
-    async fn pays_minimum_relay_fees(
+    fn get_update_minimum_mempool_fee(
         &self,
         tx: &SignedTransaction,
-    ) -> Result<(), TxValidationError> {
-        let tx_fee = self.try_get_fee(tx).await?;
-        let relay_fee = get_relay_fee(tx);
+    ) -> Result<Amount, TxValidationError> {
+        let minimum_fee_rate = self.get_update_min_fee_rate();
+        log::debug!("minimum fee rate {:?}", minimum_fee_rate);
+        let res = minimum_fee_rate.compute_fee(tx.encoded_size());
+        log::debug!("minimum_mempool_fee for tx: {:?}", res);
+        res
+    }
+
+    fn pays_minimum_relay_fees(&self, tx: &TxWithFee) -> Result<(), TxValidationError> {
+        let tx_fee = tx.fee();
+        let relay_fee = get_relay_fee(tx.tx());
         log::debug!("tx_fee: {:?}, relay_fee: {:?}", tx_fee, relay_fee);
         ensure!(
             tx_fee >= relay_fee,
@@ -423,9 +485,16 @@ where
         );
         Ok(())
     }
+}
 
-    async fn rbf_checks(&self, tx: &SignedTransaction) -> Result<Conflicts, TxValidationError> {
+// RBF checks
+impl<M> Mempool<M>
+where
+    M: GetMemoryUsage + Send + Sync,
+{
+    fn rbf_checks(&self, tx: &TxWithFee) -> Result<Conflicts, TxValidationError> {
         let conflicts = tx
+            .tx()
             .transaction()
             .inputs()
             .iter()
@@ -436,13 +505,13 @@ where
         if conflicts.is_empty() {
             Ok(Conflicts(BTreeSet::new()))
         } else {
-            self.do_rbf_checks(tx, &conflicts).await
+            self.do_rbf_checks(tx, &conflicts)
         }
     }
 
-    async fn do_rbf_checks(
+    fn do_rbf_checks(
         &self,
-        tx: &SignedTransaction,
+        tx: &TxWithFee,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<Conflicts, TxValidationError> {
         for entry in conflicts {
@@ -459,32 +528,28 @@ where
         // more economically rational to mine. Before we go digging through the mempool for all
         // transactions that would need to be removed (direct conflicts and all descendants), check
         // that the replacement transaction pays more than its direct conflicts.
-        self.pays_more_than_direct_conflicts(tx, conflicts).await?;
+        self.pays_more_than_direct_conflicts(tx, conflicts)?;
         // Enforce BIP125 Rule #2.
         self.spends_no_new_unconfirmed_outputs(tx, conflicts)?;
         // Enforce BIP125 Rule #5.
         let conflicts_with_descendants = self.potential_replacements_within_limit(conflicts)?;
         // Enforce BIP125 Rule #3.
-        let total_conflict_fees = self
-            .pays_more_than_conflicts_with_descendants(tx, &conflicts_with_descendants)
-            .await?;
+        let total_conflict_fees =
+            self.pays_more_than_conflicts_with_descendants(tx, &conflicts_with_descendants)?;
         // Enforce BIP125 Rule #4.
-        self.pays_for_bandwidth(tx, total_conflict_fees).await?;
+        self.pays_for_bandwidth(tx, total_conflict_fees)?;
         Ok(Conflicts::from(conflicts_with_descendants))
     }
 
-    async fn pays_for_bandwidth(
+    fn pays_for_bandwidth(
         &self,
-        tx: &SignedTransaction,
+        tx: &TxWithFee,
         total_conflict_fees: Amount,
     ) -> Result<(), TxValidationError> {
-        log::debug!(
-            "pays_for_bandwidth: tx fee is {:?}",
-            self.try_get_fee(tx).await?
-        );
-        let additional_fees = (self.try_get_fee(tx).await? - total_conflict_fees)
-            .ok_or(TxValidationError::AdditionalFeesUnderflow)?;
-        let relay_fee = get_relay_fee(tx);
+        log::debug!("pays_for_bandwidth: tx fee is {:?}", tx.fee(),);
+        let additional_fees =
+            (tx.fee() - total_conflict_fees).ok_or(TxValidationError::AdditionalFeesUnderflow)?;
+        let relay_fee = get_relay_fee(tx.tx());
         log::debug!(
             "conflict fees: {:?}, additional fee: {:?}, relay_fee {:?}",
             total_conflict_fees,
@@ -498,9 +563,9 @@ where
         Ok(())
     }
 
-    async fn pays_more_than_conflicts_with_descendants(
+    fn pays_more_than_conflicts_with_descendants(
         &self,
-        tx: &SignedTransaction,
+        tx: &TxWithFee,
         conflicts_with_descendants: &BTreeSet<Id<Transaction>>,
     ) -> Result<Amount, TxValidationError> {
         let conflicts_with_descendants = conflicts_with_descendants.iter().map(|conflict_id| {
@@ -512,7 +577,7 @@ where
             .sum::<Option<Amount>>()
             .ok_or(TxValidationError::ConflictsFeeOverflow)?;
 
-        let replacement_fee = self.try_get_fee(tx).await?;
+        let replacement_fee = tx.fee();
         ensure!(
             replacement_fee > total_conflict_fees,
             TxValidationError::TransactionFeeLowerThanConflictsWithDescendants
@@ -522,7 +587,7 @@ where
 
     fn spends_no_new_unconfirmed_outputs(
         &self,
-        tx: &SignedTransaction,
+        tx: &TxWithFee,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), TxValidationError> {
         let outpoints_spent_by_conflicts = conflicts
@@ -532,7 +597,8 @@ where
             })
             .collect::<BTreeSet<_>>();
 
-        tx.transaction()
+        tx.tx()
+            .transaction()
             .inputs()
             .iter()
             .find(|input| {
@@ -546,17 +612,17 @@ where
             })
     }
 
-    async fn pays_more_than_direct_conflicts(
+    fn pays_more_than_direct_conflicts(
         &self,
-        tx: &SignedTransaction,
+        tx: &TxWithFee,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), TxValidationError> {
-        let replacement_fee = self.try_get_fee(tx).await?;
+        let replacement_fee = tx.fee();
         conflicts.iter().find(|conflict| conflict.fee() >= replacement_fee).map_or_else(
             || Ok(()),
             |conflict| {
                 Err(TxValidationError::ReplacementFeeLowerThanOriginal {
-                    replacement_tx: tx.transaction().get_id().get(),
+                    replacement_tx: tx.tx().transaction().get_id().get(),
                     replacement_fee,
                     original_fee: conflict.fee(),
                     original_tx: conflict.tx_id().get(),
@@ -584,7 +650,13 @@ where
 
         Ok(replacements_with_descendants)
     }
+}
 
+// Transaction Finalization
+impl<M> Mempool<M>
+where
+    M: GetMemoryUsage + Send + Sync,
+{
     async fn finalize_tx(&mut self, tx: SignedTransaction) -> Result<(), Error> {
         let entry = self.create_entry(tx).await?;
         let id = entry.tx_id();
@@ -674,67 +746,13 @@ where
         }
         Ok(removed_fees)
     }
+}
 
-    pub async fn run(mut self) -> Result<(), Error> {
-        tokio::spawn(async move {
-            let event_receiver =
-                self.subscribe_to_chainstate_events().await.log_err().expect("chainstate dead");
-            self.mempool_event_loop(event_receiver).await
-        });
-        Ok(())
-    }
-
-    pub async fn mempool_event_loop(
-        mut self,
-        mut chainstate_event_receiver: mpsc::UnboundedReceiver<(Id<Block>, BlockHeight)>,
-    ) {
-        loop {
-            tokio::select! {
-                Some((block_id, block_height)) = chainstate_event_receiver.recv() =>{
-                    self.new_tip_set(block_id, block_height)
-                },
-                Some(method_call) = self.receiver.recv() => self.handle_mempool_method_call(method_call).await
-            }
-        }
-    }
-
-    pub async fn handle_mempool_method_call(&mut self, method_call: MempoolMethodCall) {
-        match method_call {
-            MempoolMethodCall::AddTransaction { tx, rtx } => {
-                if let Err(e) = rtx.send(self.add_transaction(tx).await) {
-                    logging::log::error!("AddTransaction: Error sending response: {:?}", e);
-                }
-            }
-            MempoolMethodCall::GetAll { rtx } => {
-                if let Err(e) = rtx.send(self.get_all()) {
-                    logging::log::error!("GetAll: Error sending response: {:?}", e);
-                }
-            }
-            MempoolMethodCall::CollectTxs {
-                tx_accumulator,
-                rtx,
-            } => {
-                if let Err(e) = rtx.send(self.collect_txs(tx_accumulator)) {
-                    logging::log::error!(
-                        "CollectTxs: Error sending response: {:?}",
-                        e.transactions()
-                    );
-                }
-            }
-            MempoolMethodCall::ContainsTransaction { tx_id, rtx } => {
-                if let Err(e) = rtx.send(self.contains_transaction(&tx_id)) {
-                    logging::log::error!("ContainsTransaction: Error sending response: {:?}", e);
-                }
-            }
-            MempoolMethodCall::SubscribeToEvents { handler, rtx } => {
-                self.subscribe_to_events(handler);
-                if let Err(e) = rtx.send(()) {
-                    logging::log::error!("SubscribeToEvents: Error sending response: {:?}", e);
-                }
-            }
-        }
-    }
-
+// Mempool Interface and Event Reactions
+impl<M> Mempool<M>
+where
+    M: GetMemoryUsage + Send + Sync,
+{
     pub async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
         let conflicts = self.validate_transaction(&tx).await?;
         self.store.drop_conflicts(conflicts);
@@ -788,6 +806,17 @@ where
 
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
         self.events_controller.subscribe_to_events(handler)
+    }
+
+    pub fn new_tip_set(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
+        log::info!(
+            "new tip with block_id {:?} and block_height {:?}",
+            block_id,
+            block_height
+        );
+        // TODO(Roy) handle the new tip
+        let mut rolling_fee_rate = self.rolling_fee_rate.write();
+        (*rolling_fee_rate).set_block_since_last_rolling_fee_bump(true);
     }
 }
 

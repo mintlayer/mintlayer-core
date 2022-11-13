@@ -30,9 +30,9 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     }));
     logging::init_logging::<&str>(None);
 
-    let tf = TestFramework::default();
-    let genesis = tf.genesis();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
+    let genesis = tf.genesis();
 
     let parent = TransactionBuilder::new()
         .add_input(
@@ -95,8 +95,8 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> {
-    let tf = TestFramework::default();
     let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let num_outputs = 2;
     let mut tx_builder = TransactionBuilder::new().add_input(

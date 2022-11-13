@@ -275,7 +275,7 @@ where
         panic!("invalid message received");
     };
 
-    // try to poll the to other gossipsubs and verify that as `peer1` hasn't registered
+    // try to poll the other gossipsubs and verify that as `peer1` hasn't registered
     // the message as valid, it is not forwarded and the code instead timeouts
     // if the message would've been forward to `peer2` and `peer3`, the messages would
     // be received instantaneously and the cod wouldn't timeout

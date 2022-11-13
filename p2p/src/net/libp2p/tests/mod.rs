@@ -349,3 +349,39 @@ pub fn make_ping(
             ),
     )
 }
+
+#[test]
+fn bannable_address() {
+    use crate::net::{AsBannableAddress, IsBannableAddress};
+
+    let addresses = [
+        (Multiaddr::empty(), false),
+        (
+            "/p2p/QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N".parse().unwrap(),
+            false,
+        ),
+        (
+            "/tcp/4242/p2p/QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N".parse().unwrap(),
+            false,
+        ),
+        (
+            "/ip4/127.0.0.1/tcp/4242/p2p/QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N"
+                .parse()
+                .unwrap(),
+            true,
+        ),
+        (
+            "/ip6/684D:1111:222:3333:4444:5555:6:77/tcp/4242/p2p/QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N"
+                .parse()
+                .unwrap(),
+            true,
+        ),
+    ];
+
+    for (address, is_bannable) in addresses {
+        assert_eq!(is_bannable, address.is_bannable());
+        if is_bannable {
+            address.as_bannable();
+        }
+    }
+}

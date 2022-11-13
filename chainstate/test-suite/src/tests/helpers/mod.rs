@@ -17,9 +17,10 @@ use chainstate_test_framework::{anyonecanspend_address, TestFramework, Transacti
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, signature::inputsig::InputWitness,
-        timelock::OutputTimeLock, tokens::OutputValue, OutputPurpose, TxInput, TxOutput,
+        timelock::OutputTimeLock, tokens::OutputValue, OutputPurpose, Transaction, TxInput,
+        TxOutput,
     },
-    primitives::{Amount, BlockDistance},
+    primitives::{Amount, BlockDistance, Id, Idable},
 };
 
 pub mod in_memory_storage_wrapper;
@@ -29,25 +30,25 @@ pub fn add_block_with_locked_output(
     tf: &mut TestFramework,
     output_time_lock: OutputTimeLock,
     timestamp: BlockTimestamp,
-) -> (InputWitness, TxInput) {
+) -> (InputWitness, TxInput, Id<Transaction>) {
     // Find the last block.
     let current_height = tf.best_block_index().block_height();
-    let prev_block_info = tf.block_info(current_height.into());
+    let prev_block_outputs = tf.outputs_from_genblock(tf.block_id(current_height.into()));
 
-    tf.make_block_builder()
-        .add_transaction(
-            TransactionBuilder::new()
-                .add_input(
-                    TxInput::new(prev_block_info.txns[0].0.clone(), 0),
-                    InputWitness::NoSignature(None),
-                )
-                .add_anyone_can_spend_output(10000)
-                .add_output(TxOutput::new(
-                    OutputValue::Coin(Amount::from_atoms(100000)),
-                    OutputPurpose::LockThenTransfer(anyonecanspend_address(), output_time_lock),
-                ))
-                .build(),
+    let tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::new(prev_block_outputs.keys().next().unwrap().clone(), 0),
+            InputWitness::NoSignature(None),
         )
+        .add_anyone_can_spend_output(10000)
+        .add_output(TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(100000)),
+            OutputPurpose::LockThenTransfer(anyonecanspend_address(), output_time_lock),
+        ))
+        .build();
+    let tx_id = tx.transaction().get_id();
+    tf.make_block_builder()
+        .add_transaction(tx)
         .with_timestamp(timestamp)
         .build_and_process()
         .unwrap();
@@ -55,9 +56,11 @@ pub fn add_block_with_locked_output(
     let new_height = (current_height + BlockDistance::new(1)).unwrap();
     assert_eq!(tf.best_block_index().block_height(), new_height);
 
-    let block_info = tf.block_info(new_height.into());
+    let block_outputs = tf.outputs_from_genblock(tf.block_id(new_height.into()));
+    assert!(block_outputs.contains_key(&tx_id.into()));
     (
         InputWitness::NoSignature(None),
-        TxInput::new(block_info.txns[0].0.clone(), 1),
+        TxInput::new(tx_id.into(), 1),
+        tx_id,
     )
 }

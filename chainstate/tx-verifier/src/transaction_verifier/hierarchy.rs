@@ -32,8 +32,8 @@ use common::{
 };
 use utxo::{BlockUndo, ConsumedUtxoCache, FlushableUtxoView, UtxosStorageRead, UtxosView};
 
-impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
-    for TransactionVerifier<'a, S>
+impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStorageRef
+    for TransactionVerifier<'a, S, U>
 {
     fn get_token_id_from_issuance_tx(
         &self,
@@ -60,7 +60,10 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
         &self,
         tx_id: &OutPointSourceId,
     ) -> Result<Option<TxMainChainIndex>, TransactionVerifierStorageError> {
-        match self.tx_index_cache.get_from_cached(tx_id) {
+        let tx_index_cache = self
+            .get_tx_cache_ref()
+            .ok_or(TransactionVerifierStorageError::TransactionIndexDisabled)?;
+        match tx_index_cache.get_from_cached(tx_id) {
             Some(v) => match v {
                 CachedInputsOperation::Write(idx) => Ok(Some(idx.clone())),
                 CachedInputsOperation::Read(idx) => Ok(Some(idx.clone())),
@@ -85,7 +88,9 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageRef
     }
 }
 
-impl<'a, S: TransactionVerifierStorageRef> UtxosStorageRead for TransactionVerifier<'a, S> {
+impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> UtxosStorageRead
+    for TransactionVerifier<'a, S, U>
+{
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<utxo::Utxo>, storage_result::Error> {
         Ok(self.utxo_cache.utxo(outpoint))
     }
@@ -105,15 +110,18 @@ impl<'a, S: TransactionVerifierStorageRef> UtxosStorageRead for TransactionVerif
     }
 }
 
-impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageMut
-    for TransactionVerifier<'a, S>
+impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStorageMut
+    for TransactionVerifier<'a, S, U>
 {
     fn set_mainchain_tx_index(
         &mut self,
         tx_id: &OutPointSourceId,
         tx_index: &TxMainChainIndex,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.tx_index_cache
+        let tx_index_cache = self
+            .get_tx_cache_mut()
+            .ok_or(TransactionVerifierStorageError::TransactionIndexDisabled)?;
+        tx_index_cache
             .set_tx_index(tx_id, tx_index.clone())
             .map_err(TransactionVerifierStorageError::TxIndexError)
     }
@@ -122,7 +130,10 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageMut
         &mut self,
         tx_id: &OutPointSourceId,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.tx_index_cache
+        let tx_index_cache = self
+            .get_tx_cache_mut()
+            .ok_or(TransactionVerifierStorageError::TransactionIndexDisabled)?;
+        tx_index_cache
             .remove_tx_index_by_id(tx_id.clone())
             .map_err(TransactionVerifierStorageError::TxIndexError)
     }
@@ -203,7 +214,9 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifierStorageMut
     }
 }
 
-impl<'a, S: TransactionVerifierStorageRef> FlushableUtxoView for TransactionVerifier<'a, S> {
+impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> FlushableUtxoView
+    for TransactionVerifier<'a, S, U>
+{
     fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error> {
         self.utxo_cache.batch_write(utxos)
     }
