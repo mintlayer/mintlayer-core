@@ -14,14 +14,13 @@
 // limitations under the License.
 
 mod error;
-mod remap;
-
-use remap::MapResizeInfo;
-pub use remap::MemSize;
+mod map_resize;
 
 use std::path::PathBuf;
 
 use lmdb::Cursor;
+pub use map_resize::memsize::MemSize;
+use map_resize::resize_info::MapResizeInfo;
 use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
     info::{DbDesc, MapDesc},
@@ -69,7 +68,7 @@ impl<'tx, C: lmdb::Cursor<'tx>> Iterator for PrefixIter<'tx, C> {
 pub struct DbTx<'m, Tx> {
     tx: Tx,
     dbs: &'m DbList,
-    _map_token: RwLockReadGuard<'m, remap::MemMapController>,
+    _map_token: RwLockReadGuard<'m, map_resize::MemMapController>,
 }
 
 type DbTxRo<'a> = DbTx<'a, lmdb::RoTransaction<'a>>;
@@ -133,7 +132,7 @@ pub struct LmdbImpl {
     ///
     /// * Shared (read) lock is required for running transactions, both read-only and read-write.
     /// * Exclusive (write) lock is required to reallocate the memory map
-    map_token: Arc<RwLock<remap::MemMapController>>,
+    map_token: Arc<RwLock<map_resize::MemMapController>>,
 
     /// Size required to write a transaction
     tx_size: MemSize,
@@ -169,7 +168,7 @@ impl<'tx> TransactionalRw<'tx> for LmdbImpl {
     fn transaction_rw<'st: 'tx>(&'st self) -> storage_core::Result<Self::TxRw> {
         let resize_info = MapResizeInfo::from_resize_headroom(&self.env, self.tx_size, false)?;
         if resize_info.should_resize_map() {
-            remap::remap(
+            map_resize::remap(
                 &self.env,
                 // Acquire exclusive memory map token to make sure no transactions are active for
                 // the duration of memory remapping.
@@ -262,7 +261,7 @@ impl backend::Backend for Lmdb {
         Ok(LmdbImpl {
             env: Arc::new(environment),
             dbs,
-            map_token: Arc::new(RwLock::new(remap::MemMapController::new())),
+            map_token: Arc::new(RwLock::new(map_resize::MemMapController::new())),
             tx_size: self.tx_size,
         })
     }
