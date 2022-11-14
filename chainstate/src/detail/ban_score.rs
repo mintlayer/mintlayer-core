@@ -281,45 +281,41 @@ impl BanScore for utxo::Error {
 impl BanScore for pos_accounting::Error {
     fn ban_score(&self) -> u32 {
         match self {
-            pos_accounting::Error::StorageError(_) => todo!(),
-            pos_accounting::Error::AccountingError(_) => todo!(),
-            pos_accounting::Error::InvariantErrorPoolBalanceAlreadyExists => todo!(),
-            pos_accounting::Error::InvariantErrorPoolDataAlreadyExists => todo!(),
-            pos_accounting::Error::AttemptedDecommissionNonexistingPoolBalance => todo!(),
-            pos_accounting::Error::AttemptedDecommissionNonexistingPoolData => todo!(),
-            pos_accounting::Error::DelegationCreationFailedPoolDoesNotExist => todo!(),
-            pos_accounting::Error::InvariantErrorDelegationCreationFailedIdAlreadyExists => todo!(),
-            pos_accounting::Error::DelegateToNonexistingId => todo!(),
-            pos_accounting::Error::DelegateToNonexistingPool => todo!(),
-            pos_accounting::Error::AdditionError => todo!(),
-            pos_accounting::Error::SubError => todo!(),
-            pos_accounting::Error::DelegationBalanceAdditionError => todo!(),
-            pos_accounting::Error::DelegationBalanceSubtractionError => todo!(),
-            pos_accounting::Error::PoolBalanceAdditionError => todo!(),
-            pos_accounting::Error::PoolBalanceSubtractionError => todo!(),
-            pos_accounting::Error::DelegationSharesAdditionError => todo!(),
-            pos_accounting::Error::DelegationSharesSubtractionError => todo!(),
-            pos_accounting::Error::InvariantErrorPoolCreationReversalFailedBalanceNotFound => {
-                todo!()
-            }
-            pos_accounting::Error::InvariantErrorPoolCreationReversalFailedDataNotFound => todo!(),
-            pos_accounting::Error::InvariantErrorPoolCreationReversalFailedAmountChanged => todo!(),
+            pos_accounting::Error::StorageError(_) => 0,
+            pos_accounting::Error::AccountingError(_) => 100,
+            pos_accounting::Error::InvariantErrorPoolBalanceAlreadyExists => 100,
+            pos_accounting::Error::InvariantErrorPoolDataAlreadyExists => 100,
+            pos_accounting::Error::AttemptedDecommissionNonexistingPoolBalance => 100,
+            pos_accounting::Error::AttemptedDecommissionNonexistingPoolData => 100,
+            pos_accounting::Error::DelegationCreationFailedPoolDoesNotExist => 100,
+            pos_accounting::Error::InvariantErrorDelegationCreationFailedIdAlreadyExists => 100,
+            pos_accounting::Error::DelegateToNonexistingId => 100,
+            pos_accounting::Error::DelegateToNonexistingPool => 100,
+            pos_accounting::Error::AdditionError => 100,
+            pos_accounting::Error::SubError => 100,
+            pos_accounting::Error::DelegationBalanceAdditionError => 100,
+            pos_accounting::Error::DelegationBalanceSubtractionError => 100,
+            pos_accounting::Error::PoolBalanceAdditionError => 100,
+            pos_accounting::Error::PoolBalanceSubtractionError => 100,
+            pos_accounting::Error::DelegationSharesAdditionError => 100,
+            pos_accounting::Error::DelegationSharesSubtractionError => 100,
+            pos_accounting::Error::InvariantErrorPoolCreationReversalFailedBalanceNotFound => 100,
+            pos_accounting::Error::InvariantErrorPoolCreationReversalFailedDataNotFound => 100,
+            pos_accounting::Error::InvariantErrorPoolCreationReversalFailedAmountChanged => 100,
             pos_accounting::Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists => {
-                todo!()
+                100
             }
-            pos_accounting::Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists => {
-                todo!()
-            }
-            pos_accounting::Error::InvariantErrorDelegationIdUndoFailedNotFound => todo!(),
-            pos_accounting::Error::InvariantErrorDelegationIdUndoFailedDataConflict => todo!(),
-            pos_accounting::Error::InvariantErrorDelegationBalanceAdditionUndoError => todo!(),
-            pos_accounting::Error::InvariantErrorPoolBalanceAdditionUndoError => todo!(),
-            pos_accounting::Error::InvariantErrorDelegationSharesAdditionUndoError => todo!(),
-            pos_accounting::Error::InvariantErrorDelegationShareNotFound => todo!(),
-            pos_accounting::Error::PledgeValueToSignedError => todo!(),
-            pos_accounting::Error::InvariantErrorDelegationUndoFailedDataNotFound => todo!(),
-            pos_accounting::Error::DuplicatesInDeltaAndUndo => todo!(),
-            pos_accounting::Error::FailedToCreateDeltaUndo => todo!(),
+            pos_accounting::Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists => 100,
+            pos_accounting::Error::InvariantErrorDelegationIdUndoFailedNotFound => 100,
+            pos_accounting::Error::InvariantErrorDelegationIdUndoFailedDataConflict => 100,
+            pos_accounting::Error::InvariantErrorDelegationBalanceAdditionUndoError => 100,
+            pos_accounting::Error::InvariantErrorPoolBalanceAdditionUndoError => 100,
+            pos_accounting::Error::InvariantErrorDelegationSharesAdditionUndoError => 100,
+            pos_accounting::Error::InvariantErrorDelegationShareNotFound => 100,
+            pos_accounting::Error::PledgeValueToSignedError => 100,
+            pos_accounting::Error::InvariantErrorDelegationUndoFailedDataNotFound => 100,
+            pos_accounting::Error::DuplicatesInDeltaAndUndo => 100,
+            pos_accounting::Error::FailedToCreateDeltaUndo => 100,
         }
     }
 }
