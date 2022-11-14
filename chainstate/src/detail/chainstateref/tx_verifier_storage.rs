@@ -34,8 +34,8 @@ use common::{
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    DelegationData, DelegationId, FlushablePoSAccountingView, PoSAccountingDeltaData,
-    PoSAccountingView, PoolData, PoolId,
+    DelegationData, DelegationId, FlushablePoSAccountingView, PoSAccountingDBMut,
+    PoSAccountingDeltaData, PoSAccountingView, PoolData, PoolId,
 };
 use tx_verifier::transaction_verifier::TransactionSource;
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDB, UtxosStorageRead};
@@ -77,10 +77,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
 
     fn get_accounting_undo(
         &self,
-        _id: Id<Block>,
+        id: Id<Block>,
     ) -> Result<Option<pos_accounting::BlockUndo>, TransactionVerifierStorageError> {
-        //FIXME: impl
-        Ok(None)
+        self.db_tx
+            .get_accounting_undo(id)
+            .map_err(TransactionVerifierStorageError::from)
     }
 }
 
@@ -222,76 +223,102 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
 
     fn set_accounting_undo_data(
         &mut self,
-        _tx_source: TransactionSource,
-        _undo: &pos_accounting::BlockUndo,
+        tx_source: TransactionSource,
+        undo: &pos_accounting::BlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
-        //FIXME:impl
-        Ok(())
+        match tx_source {
+            TransactionSource::Chain(id) => self
+                .db_tx
+                .set_accounting_undo_data(id, undo)
+                .map_err(TransactionVerifierStorageError::from),
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
     }
 
     fn del_accounting_undo_data(
         &mut self,
-        _tx_source: TransactionSource,
+        tx_source: TransactionSource,
     ) -> Result<(), TransactionVerifierStorageError> {
-        //FIXME:impl
-        Ok(())
+        match tx_source {
+            TransactionSource::Chain(id) => self
+                .db_tx
+                .del_accounting_undo_data(id)
+                .map_err(TransactionVerifierStorageError::from),
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
     }
 }
 
-// FIXME: impl
 impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
     PoSAccountingView for ChainstateRef<'a, S, O, V>
 {
-    fn pool_exists(&self, _pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
-        Ok(false)
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
+        self.db_tx
+            .get_pool_data(pool_id)
+            .map(|v| v.is_some())
+            .map_err(pos_accounting::Error::StorageError)
     }
 
-    fn get_pool_balance(&self, _pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error> {
-        Ok(None)
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error> {
+        self.db_tx
+            .get_pool_balance(pool_id)
+            .map_err(pos_accounting::Error::StorageError)
     }
 
-    fn get_pool_data(&self, _pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error> {
-        Ok(None)
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error> {
+        self.db_tx.get_pool_data(pool_id).map_err(pos_accounting::Error::StorageError)
     }
 
     fn get_delegation_balance(
         &self,
-        _delegation_id: DelegationId,
+        delegation_id: DelegationId,
     ) -> Result<Option<Amount>, pos_accounting::Error> {
-        Ok(None)
+        self.db_tx
+            .get_delegation_balance(delegation_id)
+            .map_err(pos_accounting::Error::StorageError)
     }
 
     fn get_delegation_data(
         &self,
-        _delegation_id: DelegationId,
+        delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, pos_accounting::Error> {
-        Ok(None)
+        self.db_tx
+            .get_delegation_data(delegation_id)
+            .map_err(pos_accounting::Error::StorageError)
     }
 
     fn get_pool_delegations_shares(
         &self,
-        _pool_id: PoolId,
+        pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, pos_accounting::Error> {
-        Ok(None)
+        self.db_tx
+            .get_pool_delegations_shares(pool_id)
+            .map_err(pos_accounting::Error::StorageError)
     }
 
     fn get_pool_delegation_share(
         &self,
-        _pool_id: PoolId,
-        _delegation_id: DelegationId,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
     ) -> Result<Option<Amount>, pos_accounting::Error> {
-        Ok(None)
+        self.db_tx
+            .get_pool_delegation_share(pool_id, delegation_id)
+            .map_err(pos_accounting::Error::StorageError)
     }
 }
 
-// FIXME: impl
 impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationStrategy>
     FlushablePoSAccountingView for ChainstateRef<'a, S, O, V>
 {
     fn batch_write_delta(
         &mut self,
-        _data: PoSAccountingDeltaData,
+        data: PoSAccountingDeltaData,
     ) -> Result<(), pos_accounting::Error> {
-        Ok(())
+        let mut db = PoSAccountingDBMut::new(&mut self.db_tx);
+        db.batch_write_delta(data)
     }
 }

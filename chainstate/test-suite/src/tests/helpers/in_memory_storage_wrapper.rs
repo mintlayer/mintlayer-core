@@ -27,7 +27,9 @@ use common::{
     },
     primitives::{Amount, Id},
 };
-use pos_accounting::{DelegationData, DelegationId, PoSAccountingView, PoolData, PoolId};
+use pos_accounting::{
+    DelegationData, DelegationId, PoSAccountingStorageRead, PoSAccountingView, PoolData, PoolId,
+};
 use utxo::UtxosStorageRead;
 
 pub struct InMemoryStorageWrapper {
@@ -86,10 +88,11 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
 
     fn get_accounting_undo(
         &self,
-        _id: Id<Block>,
+        id: Id<Block>,
     ) -> Result<Option<pos_accounting::BlockUndo>, TransactionVerifierStorageError> {
-        //FIXME: impl
-        Ok(None)
+        self.storage
+            .get_accounting_undo(id)
+            .map_err(TransactionVerifierStorageError::from)
     }
 }
 
@@ -116,44 +119,57 @@ impl UtxosStorageRead for InMemoryStorageWrapper {
 }
 
 impl PoSAccountingView for InMemoryStorageWrapper {
-    fn pool_exists(&self, _pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
-        todo!()
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
+        self.storage
+            .get_pool_data(pool_id)
+            .map(|v| v.is_some())
+            .map_err(pos_accounting::Error::StorageError)
     }
 
-    fn get_pool_balance(&self, _pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error> {
-        todo!()
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error> {
+        self.storage
+            .get_pool_balance(pool_id)
+            .map_err(pos_accounting::Error::StorageError)
     }
 
-    fn get_pool_data(&self, _pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error> {
-        todo!()
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error> {
+        self.storage.get_pool_data(pool_id).map_err(pos_accounting::Error::StorageError)
     }
 
     fn get_delegation_balance(
         &self,
-        _delegation_id: DelegationId,
+        delegation_id: DelegationId,
     ) -> Result<Option<Amount>, pos_accounting::Error> {
-        todo!()
+        self.storage
+            .get_delegation_balance(delegation_id)
+            .map_err(pos_accounting::Error::StorageError)
     }
 
     fn get_delegation_data(
         &self,
-        _delegation_id: DelegationId,
+        delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, pos_accounting::Error> {
-        todo!()
+        self.storage
+            .get_delegation_data(delegation_id)
+            .map_err(pos_accounting::Error::StorageError)
     }
 
     fn get_pool_delegations_shares(
         &self,
-        _pool_id: PoolId,
+        pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, pos_accounting::Error> {
-        todo!()
+        self.storage
+            .get_pool_delegations_shares(pool_id)
+            .map_err(pos_accounting::Error::StorageError)
     }
 
     fn get_pool_delegation_share(
         &self,
-        _pool_id: PoolId,
-        _delegation_id: DelegationId,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
     ) -> Result<Option<Amount>, pos_accounting::Error> {
-        todo!()
+        self.storage
+            .get_pool_delegation_share(pool_id, delegation_id)
+            .map_err(pos_accounting::Error::StorageError)
     }
 }

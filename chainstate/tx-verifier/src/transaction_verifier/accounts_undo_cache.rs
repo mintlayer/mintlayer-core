@@ -15,8 +15,9 @@
 
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use super::{error::ConnectTransactionError, TransactionSource};
-use chainstate_types::storage_result;
+use super::{
+    error::ConnectTransactionError, storage::TransactionVerifierStorageError, TransactionSource,
+};
 use common::{
     chain::{Block, Transaction},
     primitives::Id,
@@ -66,7 +67,7 @@ impl AccountsBlockUndoCache {
         fetcher_func: F,
     ) -> Result<&mut BlockUndo, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<BlockUndo>, storage_result::Error>,
+        F: Fn(Id<Block>) -> Result<Option<BlockUndo>, TransactionVerifierStorageError>,
     {
         match self.data.entry(*tx_source) {
             Entry::Occupied(entry) => Ok(&mut entry.into_mut().undo),
@@ -93,7 +94,7 @@ impl AccountsBlockUndoCache {
         fetcher_func: F,
     ) -> Result<TxUndo, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<BlockUndo>, storage_result::Error>,
+        F: Fn(Id<Block>) -> Result<Option<BlockUndo>, TransactionVerifierStorageError>,
     {
         let block_undo = self.fetch_block_undo(tx_source, fetcher_func)?;
 

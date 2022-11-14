@@ -23,7 +23,11 @@ use common::{
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
         Block, GenBlock, OutPoint, OutPointSourceId,
     },
-    primitives::{BlockHeight, Id, Idable},
+    primitives::{Amount, BlockHeight, Id, Idable, H256},
+};
+use pos_accounting::{
+    DelegationData, DelegationId, PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData,
+    PoolId,
 };
 use serialization::{Codec, Decode, DecodeAll, Encode, EncodeLike};
 use std::collections::BTreeMap;
@@ -180,6 +184,11 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
         fn get_block_tree_by_height(
             &self,
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
+
+        fn get_accounting_undo(
+            &self,
+            id: Id<Block>,
+        ) -> crate::Result<Option<pos_accounting::BlockUndo>>;
     }
 }
 
@@ -188,6 +197,24 @@ impl<B: storage::Backend> UtxosStorageRead for Store<B> {
         fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
+    }
+}
+
+impl<B: storage::Backend> PoSAccountingStorageRead for Store<B> {
+    delegate_to_transaction! {
+        fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
+        fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>>;
+        fn get_delegation_balance(&self, delegation_id: DelegationId) -> crate::Result<Option<Amount>>;
+        fn get_delegation_data(&self, delegation_id: DelegationId) -> crate::Result<Option<DelegationData>>;
+        fn get_pool_delegations_shares(
+            &self,
+            pool_id: PoolId,
+        ) -> crate::Result<Option<BTreeMap<DelegationId, Amount>>>;
+        fn get_pool_delegation_share(
+            &self,
+            pool_id: PoolId,
+            delegation_id: DelegationId,
+        ) -> crate::Result<Option<Amount>>;
     }
 }
 
@@ -222,6 +249,13 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
         fn set_token_id(&mut self, issuance_tx_id: &Id<Transaction>, token_id: &TokenId) -> crate::Result<()>;
 
         fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()>;
+
+        fn set_accounting_undo_data(
+            &mut self,
+            id: Id<Block>,
+            undo: &pos_accounting::BlockUndo,
+        ) -> crate::Result<()>;
+        fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 }
 
@@ -232,6 +266,51 @@ impl<B: storage::Backend> UtxosStorageWrite for Store<B> {
         fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
         fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
         fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+    }
+}
+
+impl<B: storage::Backend> PoSAccountingStorageWrite for Store<B> {
+    delegate_to_transaction! {
+        fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()>;
+        fn del_pool_balance(&mut self, pool_id: PoolId) -> crate::Result<()>;
+
+        fn set_pool_data(&mut self, pool_id: PoolId, pool_data: &PoolData) -> crate::Result<()>;
+        fn del_pool_data(&mut self, pool_id: PoolId) -> crate::Result<()>;
+
+        fn set_delegation_balance(
+            &mut self,
+            delegation_target: DelegationId,
+            amount: Amount,
+        ) -> crate::Result<()>;
+
+        fn del_delegation_balance(
+            &mut self,
+            delegation_target: DelegationId,
+        ) -> crate::Result<()>;
+
+        fn set_delegation_data(
+            &mut self,
+            delegation_id: DelegationId,
+            delegation_data: &DelegationData,
+        ) -> crate::Result<()>;
+
+        fn del_delegation_data(
+            &mut self,
+            delegation_id: DelegationId,
+        ) -> crate::Result<()>;
+
+        fn set_pool_delegation_share(
+            &mut self,
+            pool_id: PoolId,
+            delegation_id: DelegationId,
+            amount: Amount,
+        ) -> crate::Result<()>;
+
+        fn del_pool_delegation_share(
+            &mut self,
+            pool_id: PoolId,
+            delegation_id: DelegationId,
+        ) -> crate::Result<()>;
     }
 }
 
@@ -346,6 +425,13 @@ macro_rules! impl_read_ops {
 
                 Ok(result)
             }
+
+            fn get_accounting_undo(
+                &self,
+                id: Id<Block>,
+            ) -> crate::Result<Option<pos_accounting::BlockUndo>> {
+                self.read::<db::DBAccountsBlockUndo, _, _>(id)
+            }
         }
 
         impl<'st, B: storage::Backend> UtxosStorageRead for $TxType<'st, B> {
@@ -359,6 +445,63 @@ macro_rules! impl_read_ops {
 
             fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>> {
                 self.read::<db::DBBlockUndo, _, _>(id)
+            }
+        }
+
+        impl<'st, B: storage::Backend> PoSAccountingStorageRead for $TxType<'st, B> {
+            fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
+                self.read::<db::DBAccountsPoolBalances, _, _>(pool_id)
+            }
+
+            fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>> {
+                self.read::<db::DBAccountsPoolData, _, _>(pool_id)
+            }
+
+            fn get_delegation_balance(
+                &self,
+                delegation_id: DelegationId,
+            ) -> crate::Result<Option<Amount>> {
+                self.read::<db::DBAccountsDelegationBalances, _, _>(delegation_id)
+            }
+
+            fn get_delegation_data(
+                &self,
+                delegation_id: DelegationId,
+            ) -> crate::Result<Option<DelegationData>> {
+                self.read::<db::DBAccountsDelegationData, _, _>(delegation_id)
+            }
+
+            fn get_pool_delegations_shares(
+                &self,
+                pool_id: PoolId,
+            ) -> crate::Result<Option<BTreeMap<DelegationId, Amount>>> {
+                let all_shares = self
+                    .0
+                    .get::<db::DBAccountsPoolDelegationShares, _>()
+                    .prefix_iter(&())?
+                    .map(|(k, v)| {
+                        crate::Result::<((PoolId, DelegationId), Amount)>::Ok((k, v.decode()))
+                    })
+                    .collect::<Result<BTreeMap<(PoolId, DelegationId), Amount>, _>>()?;
+
+                let range_start = (pool_id, DelegationId::new(H256::zero()));
+                let range_end = (pool_id, DelegationId::new(H256::repeat_byte(0xFF)));
+                let range = all_shares.range(range_start..=range_end);
+                let result =
+                    range.map(|((_pool_id, del_id), v)| (*del_id, *v)).collect::<BTreeMap<_, _>>();
+                if result.is_empty() {
+                    Ok(None)
+                } else {
+                    Ok(Some(result))
+                }
+            }
+
+            fn get_pool_delegation_share(
+                &self,
+                pool_id: PoolId,
+                delegation_id: DelegationId,
+            ) -> crate::Result<Option<Amount>> {
+                self.read::<db::DBAccountsPoolDelegationShares, _, _>((pool_id, delegation_id))
             }
         }
 
@@ -465,6 +608,18 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
             .del(&issuance_tx_id)
             .map_err(Into::into)
     }
+
+    fn set_accounting_undo_data(
+        &mut self,
+        id: Id<Block>,
+        undo: &pos_accounting::BlockUndo,
+    ) -> crate::Result<()> {
+        self.write::<db::DBAccountsBlockUndo, _, _, _>(id, undo)
+    }
+
+    fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
+        self.0.get_mut::<db::DBAccountsBlockUndo, _>().del(id).map_err(Into::into)
+    }
 }
 
 impl<'st, B: storage::Backend> UtxosStorageWrite for StoreTxRw<'st, B> {
@@ -486,6 +641,77 @@ impl<'st, B: storage::Backend> UtxosStorageWrite for StoreTxRw<'st, B> {
 
     fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
         self.0.get_mut::<db::DBBlockUndo, _>().del(id).map_err(Into::into)
+    }
+}
+
+impl<'st, B: storage::Backend> PoSAccountingStorageWrite for StoreTxRw<'st, B> {
+    fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()> {
+        self.write::<db::DBAccountsPoolBalances, _, _, _>(pool_id, amount)
+    }
+
+    fn del_pool_balance(&mut self, pool_id: PoolId) -> crate::Result<()> {
+        self.0
+            .get_mut::<db::DBAccountsPoolBalances, _>()
+            .del(pool_id)
+            .map_err(Into::into)
+    }
+
+    fn set_pool_data(&mut self, pool_id: PoolId, pool_data: &PoolData) -> crate::Result<()> {
+        self.write::<db::DBAccountsPoolData, _, _, _>(pool_id, pool_data)
+    }
+
+    fn del_pool_data(&mut self, pool_id: PoolId) -> crate::Result<()> {
+        self.0.get_mut::<db::DBAccountsPoolData, _>().del(pool_id).map_err(Into::into)
+    }
+
+    fn set_delegation_balance(
+        &mut self,
+        delegation_target: DelegationId,
+        amount: Amount,
+    ) -> crate::Result<()> {
+        self.write::<db::DBAccountsDelegationBalances, _, _, _>(delegation_target, amount)
+    }
+
+    fn del_delegation_balance(&mut self, delegation_target: DelegationId) -> crate::Result<()> {
+        self.0
+            .get_mut::<db::DBAccountsDelegationBalances, _>()
+            .del(delegation_target)
+            .map_err(Into::into)
+    }
+
+    fn set_delegation_data(
+        &mut self,
+        delegation_id: DelegationId,
+        delegation_data: &DelegationData,
+    ) -> crate::Result<()> {
+        self.write::<db::DBAccountsDelegationData, _, _, _>(delegation_id, delegation_data)
+    }
+
+    fn del_delegation_data(&mut self, delegation_id: DelegationId) -> crate::Result<()> {
+        self.0
+            .get_mut::<db::DBAccountsDelegationData, _>()
+            .del(delegation_id)
+            .map_err(Into::into)
+    }
+
+    fn set_pool_delegation_share(
+        &mut self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+        amount: Amount,
+    ) -> crate::Result<()> {
+        self.write::<db::DBAccountsPoolDelegationShares, _, _, _>((pool_id, delegation_id), amount)
+    }
+
+    fn del_pool_delegation_share(
+        &mut self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> crate::Result<()> {
+        self.0
+            .get_mut::<db::DBAccountsPoolDelegationShares, _>()
+            .del((pool_id, delegation_id))
+            .map_err(Into::into)
     }
 }
 
