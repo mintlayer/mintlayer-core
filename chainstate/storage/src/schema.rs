@@ -21,8 +21,9 @@ use common::{
         tokens::{TokenAuxiliaryData, TokenId},
         Block, GenBlock, OutPoint, OutPointSourceId, Transaction, TxMainChainIndex,
     },
-    primitives::{BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
+use pos_accounting::{DelegationData, DelegationId, PoolData, PoolId};
 use utxo::Utxo;
 
 storage::decl_schema! {
@@ -46,5 +47,14 @@ storage::decl_schema! {
         pub DBTokensAuxData: Map<TokenId, TokenAuxiliaryData>,
         /// Store of issuance tx id vs token id
         pub DBIssuanceTxVsTokenId: Map<Id<Transaction>, TokenId>,
+
+        /// Store for accounts BlockUndo
+        pub DBAccountsBlockUndo: Map<Id<Block>, pos_accounting::BlockUndo>,
+
+        pub DBAccountsPoolData: Map<PoolId, PoolData>,
+        pub DBAccountsPoolBalances: Map<PoolId, Amount>,
+        pub DBAccountsDelegationData: Map<DelegationId, DelegationData>,
+        pub DBAccountsDelegationBalances: Map<DelegationId, Amount>,
+        pub DBAccountsPoolDelegationShares: Map<(PoolId, DelegationId), Amount>,
     }
 }

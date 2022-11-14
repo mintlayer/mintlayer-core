@@ -46,7 +46,7 @@ use self::{
 };
 
 use ::utils::ensure;
-use chainstate_types::{block_index_ancestor_getter, storage_result, BlockIndex, GenBlockIndex};
+use chainstate_types::{block_index_ancestor_getter, BlockIndex, GenBlockIndex};
 use common::{
     amount_sum,
     chain::{
@@ -572,7 +572,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
                                 total_inputs.len() == 1,
                                 ConnectTransactionError::TokenInputForPoSAccountingOperation(tx_id)
                             );
-                            // FIXME: check StakePoolData fields
+                            // TODO: check StakePoolData fields
 
                             let input0 = tx.inputs().get(0).expect("must be some");
                             let delegation_amount = output.value().coin_amount().ok_or(
@@ -613,10 +613,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
     ) -> Result<(), ConnectTransactionError> {
         tx.outputs().iter().try_for_each(|output| match output.purpose() {
             OutputPurpose::StakePool(_) => {
-                let block_undo_fetcher = |_id: Id<Block>| -> Result<
-                    Option<pos_accounting::BlockUndo>,
-                    storage_result::Error,
-                > { Ok(None) }; // FIXME: impl
+                let block_undo_fetcher = |id: Id<Block>| self.storage_ref.get_accounting_undo(id);
                 self.accounting_delta_undo
                     .take_tx_undo(&tx_source, &tx.get_id(), block_undo_fetcher)?
                     .into_inner()

@@ -51,7 +51,7 @@ impl OutputPurpose {
         match self {
             OutputPurpose::Transfer(d) => Some(d),
             OutputPurpose::LockThenTransfer(d, _) => Some(d),
-            OutputPurpose::StakePool(d) => Some(d.staker()), //FIXME:staker?
+            OutputPurpose::StakePool(d) => Some(d.staker()),
             OutputPurpose::Burn => None,
         }
     }
