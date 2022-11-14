@@ -16,6 +16,7 @@
 mod error;
 mod remap;
 
+use remap::MapResizeInfo;
 pub use remap::MemSize;
 
 use std::path::PathBuf;
@@ -166,13 +167,17 @@ impl<'tx> TransactionalRw<'tx> for LmdbImpl {
     type TxRw = DbTxRw<'tx>;
 
     fn transaction_rw<'st: 'tx>(&'st self) -> storage_core::Result<Self::TxRw> {
-        remap::remap(
-            &self.env,
-            // Acquire exclusive memory map token to make sure no transactions are active for
-            // the duration of memory remapping.
-            self.map_token.write().expect("mmap lock to be alive"),
-            self.tx_size,
-        )?;
+        let resize_info = MapResizeInfo::from_resize_headroom(&self.env, self.tx_size, false)?;
+        if resize_info.should_resize_map() {
+            remap::remap(
+                &self.env,
+                // Acquire exclusive memory map token to make sure no transactions are active for
+                // the duration of memory remapping.
+                self.map_token.write().expect("mmap lock to be alive"),
+                self.tx_size,
+            )?;
+        }
+
         self.start_transaction(lmdb::Environment::begin_rw_txn)
     }
 }
