@@ -33,7 +33,7 @@ fn perform_writes(
         let test_root = std::sync::Arc::clone(&test_root);
         let write_sizes = write_sizes.to_vec();
         move || {
-            // Open a new datbase with given map size
+            // Open a new database with given map size
             let dir = test_root.fresh_test_dir(name).as_ref().to_owned();
             let lmdb = Lmdb::new(dir)
                 .with_map_size(initial_size)
@@ -105,7 +105,7 @@ fn two_concurrent_writers() {
     concurrency::model({
         let test_root = std::sync::Arc::clone(&test_root);
         move || {
-            // Open a new datbase with initial map size 500kB, with 500kB transactions
+            // Open a new database with initial map size 500kB, with 500kB transactions
             let dir = test_root.fresh_test_dir("two_concurrent_writes").as_ref().to_owned();
             let storage = Lmdb::new(dir)
                 .with_map_size(MemSize::from_kilobytes(500))
