@@ -144,7 +144,6 @@ async fn banned_peer_attempts_to_connect_libp2p() {
     banned_peer_attempts_to_connect::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: FIXME: The banning works differently in the libp2p and mock backends.
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_mock_tcp() {
     // TODO: implement proper peer banning
@@ -317,7 +316,6 @@ async fn validate_invalid_outbound_connection_libp2p() {
     .await;
 }
 
-// TODO: FIXME: Investigate why different backends handle non-connected peers differently.
 #[tokio::test]
 async fn validate_invalid_outbound_connection_mock_tcp() {
     validate_invalid_outbound_connection::<MakeTcpAddress, MockService<TcpMockTransport>>(
@@ -327,7 +325,6 @@ async fn validate_invalid_outbound_connection_mock_tcp() {
     .await;
 }
 
-// TODO: FIXME: Investigate why different backends handle non-connected peers differently.
 #[tokio::test]
 async fn validate_invalid_outbound_connection_mock_channels() {
     validate_invalid_outbound_connection::<MakeChannelAddress, MockService<ChannelMockTransport>>(
@@ -420,7 +417,6 @@ async fn validate_invalid_inbound_connection_libp2p() {
     .await;
 }
 
-// TODO: FIXME: Investigate why different backends handle non-connected peers differently.
 #[tokio::test]
 async fn validate_invalid_inbound_connection_mock_tcp() {
     validate_invalid_inbound_connection::<MakeTcpAddress, MockService<TcpMockTransport>>(
@@ -430,7 +426,6 @@ async fn validate_invalid_inbound_connection_mock_tcp() {
     .await;
 }
 
-// TODO: FIXME: Investigate why different backends handle non-connected peers differently.
 #[tokio::test]
 async fn validate_invalid_inbound_connection_mock_channels() {
     validate_invalid_inbound_connection::<MakeChannelAddress, MockService<ChannelMockTransport>>(
@@ -483,13 +478,11 @@ async fn inbound_connection_invalid_magic_libp2p() {
     inbound_connection_invalid_magic::<MakeP2pAddress, Libp2pService>().await;
 }
 
-// TODO: FIXME: Investigate why different backends handle non-connected peers differently.
 #[tokio::test]
 async fn inbound_connection_invalid_magic_mock_tcp() {
     inbound_connection_invalid_magic::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
-// TODO: FIXME: Investigate why different backends handle non-connected peers differently.
 #[tokio::test]
 async fn inbound_connection_invalid_magic_mock_channels() {
     inbound_connection_invalid_magic::<MakeChannelAddress, MockService<ChannelMockTransport>>()
