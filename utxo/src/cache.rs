@@ -64,7 +64,7 @@ where
 // We don't use std::borrow::Cow because that requires ToOwned to be implemented,
 // and we don't use MaybeOwned crate because that doesn't offer the ?Sized trait,
 // which means that trait objects won't work with it
-pub enum UtxosViewCow<'a, P> {
+enum UtxosViewCow<'a, P> {
     Borrowed(&'a P),
     Owned(P),
 }
@@ -88,7 +88,7 @@ impl<'a, P: UtxosView> UtxosView for UtxosViewCow<'a, P> {
 }
 
 impl<'a, P: UtxosView> UtxosViewCow<'a, P> {
-    pub fn as_bounded_ref(&self) -> &P {
+    fn as_bounded_ref(&self) -> &P {
         match self {
             UtxosViewCow::Borrowed(r) => r,
             UtxosViewCow::Owned(o) => o,

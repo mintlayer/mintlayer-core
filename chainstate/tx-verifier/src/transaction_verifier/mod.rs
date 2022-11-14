@@ -544,6 +544,22 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
         Ok(())
     }
 
+    fn get_tx_cache_ref(&self) -> Option<&TxIndexCache> {
+        if self.verifier_config.tx_index_enabled {
+            Some(&self.tx_index_cache)
+        } else {
+            None
+        }
+    }
+
+    fn get_tx_cache_mut(&mut self) -> Option<&mut TxIndexCache> {
+        if self.verifier_config.tx_index_enabled {
+            Some(&mut self.tx_index_cache)
+        } else {
+            None
+        }
+    }
+
     pub fn connect_pos_accounting_outputs(
         &mut self,
         tx_source: TransactionSource,
@@ -628,22 +644,6 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
             | OutputPurpose::LockThenTransfer(_, _)
             | OutputPurpose::Burn => Ok(()),
         })
-    }
-
-    fn get_tx_cache_ref(&self) -> Option<&TxIndexCache> {
-        if self.verifier_config.tx_index_enabled {
-            Some(&self.tx_index_cache)
-        } else {
-            None
-        }
-    }
-
-    fn get_tx_cache_mut(&mut self) -> Option<&mut TxIndexCache> {
-        if self.verifier_config.tx_index_enabled {
-            Some(&mut self.tx_index_cache)
-        } else {
-            None
-        }
     }
 
     pub fn connect_transaction(
