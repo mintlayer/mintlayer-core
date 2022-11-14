@@ -33,26 +33,44 @@ use utils::newtype;
 use crate::error::Error;
 use crate::error::TxValidationError;
 
-use super::Ancestors;
-use super::Conflicts;
-use super::Descendants;
 use super::Time;
 
 newtype! {
-    #[derive(Debug, PartialEq, Eq, Ord, PartialOrd)]
-    pub(super) struct DescendantScore(Amount);
+    #[derive(Debug)]
+    pub struct Ancestors(BTreeSet<Id<Transaction>>);
+}
+
+impl Ancestors {
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+newtype! {
+    #[derive(Debug)]
+    pub struct Descendants(BTreeSet<Id<Transaction>>);
+}
+
+newtype! {
+    #[derive(Debug)]
+    pub struct Conflicts(BTreeSet<Id<Transaction>>);
 }
 
 newtype! {
     #[derive(Debug, PartialEq, Eq, Ord, PartialOrd)]
-    pub(super) struct AncestorScore(Amount);
+    pub struct DescendantScore(Amount);
+}
+
+newtype! {
+    #[derive(Debug, PartialEq, Eq, Ord, PartialOrd)]
+    pub struct AncestorScore(Amount);
 }
 
 #[derive(Debug)]
 pub struct MempoolStore {
     // This is the "main" data structure storing Mempool entries. All other structures in the
     // MempoolStore contain ids (hashes) of entries, sorted according to some order of interest.
-    pub(super) txs_by_id: BTreeMap<Id<Transaction>, TxMempoolEntry>,
+    pub txs_by_id: BTreeMap<Id<Transaction>, TxMempoolEntry>,
 
     // Mempool entries sorted by descendant score.
     // We keep this index so that when the mempool grows full, we know which transactions are the
@@ -64,25 +82,25 @@ pub struct MempoolStore {
     //  max(fee/size of entry's tx, fee/size with all descendants).
     //  TODO if we wish to follow Bitcoin Bore, "size" is not simply the encoded size, but
     // rather a value that takes into account witness and sigop data (see CTxMemPoolEntry::GetTxSize).
-    pub(super) txs_by_descendant_score: BTreeMap<DescendantScore, BTreeSet<Id<Transaction>>>,
+    pub txs_by_descendant_score: BTreeMap<DescendantScore, BTreeSet<Id<Transaction>>>,
 
     // Mempool entries sorted by ancestor score.
     // This is used to select the most economically attractive transactions for block production.
     // The ancestor score of an entry is defined as
     //  min(score/size of entry's tx, score/size with all ancestors).
-    pub(super) txs_by_ancestor_score: BTreeMap<AncestorScore, BTreeSet<Id<Transaction>>>,
+    pub txs_by_ancestor_score: BTreeMap<AncestorScore, BTreeSet<Id<Transaction>>>,
 
     // Entries that have remained in the mempool for a long time (see DEFAULT_MEMPOOL_EXPIRY) are
     // evicted. To efficiently know which entries to evict, we store the mempool entries sorted by
     // their creation time, from earliest to latest.
-    pub(super) txs_by_creation_time: BTreeMap<Time, BTreeSet<Id<Transaction>>>,
+    pub txs_by_creation_time: BTreeMap<Time, BTreeSet<Id<Transaction>>>,
 
     // TODO add txs_by_ancestor_score index, which will be used by the block production subsystem
     // to select the best transactions for the next block
     //
     // We keep the information of which outpoints are spent by entries currently in the mempool.
     // This allows us to recognize conflicts (double-spends) and handle them
-    pub(super) spender_txs: BTreeMap<OutPoint, Id<Transaction>>,
+    pub spender_txs: BTreeMap<OutPoint, Id<Transaction>>,
 }
 
 // If a transaction is removed from the mempool for any reason other than inclusion in a block,
@@ -93,7 +111,7 @@ pub struct MempoolStore {
 // the mempool because they conflict with transactions in a new incoming block, and the wallet
 // handles this variant differently from the others.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum MempoolRemovalReason {
+pub enum MempoolRemovalReason {
     Block,
     Expiry,
     SizeLimit,
@@ -101,7 +119,7 @@ pub(super) enum MempoolRemovalReason {
 }
 
 impl MempoolStore {
-    pub(super) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             txs_by_descendant_score: BTreeMap::new(),
             txs_by_ancestor_score: BTreeMap::new(),
@@ -111,19 +129,19 @@ impl MempoolStore {
         }
     }
 
-    pub(super) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.txs_by_id.is_empty()
     }
 
     // Checks whether the outpoint is to be created by an unconfirmed tx
-    pub(super) fn contains_outpoint(&self, outpoint: &OutPoint) -> bool {
+    pub fn contains_outpoint(&self, outpoint: &OutPoint) -> bool {
         outpoint.tx_id().get_tx_id().is_some()
             && matches!(self.txs_by_id.get(outpoint.tx_id().get_tx_id().expect("Not a block reward outpoint")),
             Some(entry) if entry.tx.transaction().outputs().len() > outpoint.output_index() as usize)
     }
 
     /// unconfirmed means: The outpoint comes from a transaction in the mempool
-    pub(super) fn get_unconfirmed_outpoint_value(
+    pub fn get_unconfirmed_outpoint_value(
         &self,
         spending_tx_id_for_error_msg: &Id<Transaction>,
         outpoint: &OutPoint,
@@ -151,11 +169,11 @@ impl MempoolStore {
             })
     }
 
-    pub(super) fn get_entry(&self, id: &Id<Transaction>) -> Option<&TxMempoolEntry> {
+    pub fn get_entry(&self, id: &Id<Transaction>) -> Option<&TxMempoolEntry> {
         self.txs_by_id.get(id)
     }
 
-    pub(super) fn assert_valid(&self) {
+    pub fn assert_valid(&self) {
         #[cfg(test)]
         self.assert_valid_inner()
     }
@@ -238,7 +256,7 @@ impl MempoolStore {
         self.spender_txs.retain(|_, id| *id != entry.tx_id())
     }
 
-    pub(super) fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), Error> {
+    pub fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), Error> {
         self.append_to_parents(&entry);
         self.update_ancestor_state_for_add(&entry)?;
         self.mark_outpoints_as_spent(&entry);
@@ -319,7 +337,7 @@ impl MempoolStore {
         }
     }
 
-    pub(super) fn remove_tx(&mut self, tx_id: &Id<Transaction>, reason: MempoolRemovalReason) {
+    pub fn remove_tx(&mut self, tx_id: &Id<Transaction>, reason: MempoolRemovalReason) {
         log::info!("remove_tx: {}", tx_id.get());
         if let Some(entry) = self.txs_by_id.remove(tx_id) {
             self.update_ancestor_state_for_drop(&entry);
@@ -392,13 +410,13 @@ impl MempoolStore {
         }
     }
 
-    pub(super) fn drop_conflicts(&mut self, conflicts: Conflicts) {
+    pub fn drop_conflicts(&mut self, conflicts: Conflicts) {
         for conflict in conflicts.0 {
             self.remove_tx(&conflict, MempoolRemovalReason::Replaced)
         }
     }
 
-    pub(super) fn drop_tx_and_descendants(
+    pub fn drop_tx_and_descendants(
         &mut self,
         tx_id: Id<Transaction>,
         reason: MempoolRemovalReason,
@@ -420,15 +438,15 @@ impl MempoolStore {
         }
     }
 
-    pub(super) fn find_conflicting_tx(&self, outpoint: &OutPoint) -> Option<Id<Transaction>> {
+    pub fn find_conflicting_tx(&self, outpoint: &OutPoint) -> Option<Id<Transaction>> {
         self.spender_txs.get(outpoint).cloned()
     }
 }
 
 #[derive(Debug, Eq, Clone)]
-pub(super) struct TxMempoolEntry {
-    pub(super) tx: SignedTransaction,
-    pub(super) fee: Amount,
+pub struct TxMempoolEntry {
+    tx: SignedTransaction,
+    fee: Amount,
     parents: BTreeSet<Id<Transaction>>,
     children: BTreeSet<Id<Transaction>>,
     count_with_descendants: usize,
@@ -441,7 +459,7 @@ pub(super) struct TxMempoolEntry {
 }
 
 impl TxMempoolEntry {
-    pub(super) fn new(
+    pub fn new(
         tx: SignedTransaction,
         fee: Amount,
         parents: BTreeSet<Id<Transaction>>,
@@ -473,29 +491,29 @@ impl TxMempoolEntry {
         })
     }
 
-    pub(super) fn tx(&self) -> &SignedTransaction {
+    pub fn tx(&self) -> &SignedTransaction {
         &self.tx
     }
 
-    pub(super) fn fee(&self) -> Amount {
+    pub fn fee(&self) -> Amount {
         self.fee
     }
 
-    pub(super) fn count_with_descendants(&self) -> usize {
+    pub fn count_with_descendants(&self) -> usize {
         self.count_with_descendants
     }
 
     #[cfg(test)]
-    pub(super) fn fees_with_descendants(&self) -> Amount {
+    pub fn fees_with_descendants(&self) -> Amount {
         self.fees_with_descendants
     }
 
     #[cfg(test)]
-    pub(super) fn fees_with_ancestors(&self) -> Amount {
+    pub fn fees_with_ancestors(&self) -> Amount {
         self.fees_with_ancestors
     }
 
-    pub(super) fn descendant_score(&self) -> DescendantScore {
+    pub fn descendant_score(&self) -> DescendantScore {
         std::cmp::max(
             (self.fees_with_descendants
                 / u128::try_from(self.size_with_descendants).expect("conversion"))
@@ -506,7 +524,7 @@ impl TxMempoolEntry {
         .into()
     }
 
-    pub(super) fn ancestor_score(&self) -> AncestorScore {
+    pub fn ancestor_score(&self) -> AncestorScore {
         log::debug!("ancestor score for {:?}", self.tx_id());
         log::debug!(
             "fees with ancestors: {:?}, size_with_ancestors: {}, fee: {:?}, size: {}",
@@ -525,16 +543,16 @@ impl TxMempoolEntry {
         .into()
     }
 
-    pub(super) fn tx_id(&self) -> Id<Transaction> {
+    pub fn tx_id(&self) -> Id<Transaction> {
         self.tx.transaction().get_id()
     }
 
-    pub(super) fn size(&self) -> usize {
+    pub fn size(&self) -> usize {
         // TODO(Roy) this should follow Bitcoin's GetTxSize, which weighs in sigops, etc.
         self.tx.encoded_size()
     }
 
-    pub(super) fn creation_time(&self) -> Time {
+    pub fn creation_time(&self) -> Time {
         self.creation_time
     }
 
@@ -554,20 +572,20 @@ impl TxMempoolEntry {
         &mut self.parents
     }
 
-    pub(super) fn is_replaceable(&self, store: &MempoolStore) -> bool {
+    pub fn is_replaceable(&self, store: &MempoolStore) -> bool {
         self.tx.transaction().is_replaceable()
             || self.unconfirmed_ancestors(store).0.iter().any(|ancestor| {
                 store.get_entry(ancestor).expect("entry").tx.transaction().is_replaceable()
             })
     }
 
-    pub(super) fn unconfirmed_ancestors(&self, store: &MempoolStore) -> Ancestors {
+    pub fn unconfirmed_ancestors(&self, store: &MempoolStore) -> Ancestors {
         let mut visited = Ancestors(BTreeSet::new());
         self.unconfirmed_ancestors_inner(&mut visited, store);
         visited
     }
 
-    pub(super) fn unconfirmed_ancestors_from_parents(
+    pub fn unconfirmed_ancestors_from_parents(
         parents: BTreeSet<Id<Transaction>>,
         store: &MempoolStore,
     ) -> Result<Ancestors, TxValidationError> {
@@ -592,7 +610,7 @@ impl TxMempoolEntry {
         }
     }
 
-    pub(super) fn unconfirmed_descendants(&self, store: &MempoolStore) -> Descendants {
+    pub fn unconfirmed_descendants(&self, store: &MempoolStore) -> Descendants {
         let mut visited = Descendants(BTreeSet::new());
         self.unconfirmed_descendants_inner(&mut visited, store);
         visited
