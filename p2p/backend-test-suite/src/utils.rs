@@ -22,7 +22,9 @@ macro_rules! tests {
             S::ConnectivityHandle: p2p::net::ConnectivityService<S> + std::fmt::Debug,
             S::SyncingMessagingHandle: p2p::net::SyncingMessagingService<S> + std::fmt::Debug,
         {
-            [$(libtest_mimic::Trial::test(
+            [
+                $($(#[$meta])*
+                libtest_mimic::Trial::test(
                 concat!(module_path!(), "::", stringify!($name)),
                 || {
                     tokio::runtime::Builder::new_current_thread()
