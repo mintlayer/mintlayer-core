@@ -52,7 +52,7 @@ use crate::{
     utxo_entry::{IsDirty, IsFresh, UtxoEntry},
     ConsumedUtxoCache,
     Error::{self, *},
-    FlushableUtxoView, TxUndo, Utxo, UtxoSource, UtxosCache, UtxosView,
+    FlushableUtxoView, Utxo, UtxoSource, UtxosCache, UtxosTxUndo, UtxosView,
 };
 use common::{
     chain::{
@@ -617,7 +617,7 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
 
     //undo spending
     cache
-        .disconnect_transaction(&tx, TxUndo::new(undo1.utxos().to_owned()))
+        .disconnect_transaction(&tx, UtxosTxUndo::new(undo1.utxos().to_owned()))
         .unwrap();
     assert!(cache.has_utxo_in_cache(&outpoint));
 
@@ -652,7 +652,7 @@ fn check_burn_spend_undo_spend(#[case] seed: Seed) {
 
     //undo spending
     cache
-        .disconnect_transaction(&tx, TxUndo::new(undo1.utxos().to_owned()))
+        .disconnect_transaction(&tx, UtxosTxUndo::new(undo1.utxos().to_owned()))
         .unwrap();
     assert!(cache.has_utxo_in_cache(&outpoint));
 
@@ -873,7 +873,7 @@ fn check_burn_output_indexing(#[case] seed: Seed) {
 
     //undo spending
     cache
-        .disconnect_transaction(&tx, TxUndo::new(undo1.utxos().to_owned()))
+        .disconnect_transaction(&tx, UtxosTxUndo::new(undo1.utxos().to_owned()))
         .unwrap();
     assert!(cache.has_utxo_in_cache(&outpoint));
 

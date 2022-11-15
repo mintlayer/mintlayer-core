@@ -618,7 +618,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
 
         self.accounting_delta_undo
             .get_or_create_block_undo(&tx_source)
-            .insert_tx_undo(tx.get_id(), pos_accounting::TxUndo::new(tx_undo))
+            .insert_tx_undo(tx.get_id(), pos_accounting::AccountingTxUndo::new(tx_undo))
             .map_err(ConnectTransactionError::AccountingBlockUndoError)
     }
 

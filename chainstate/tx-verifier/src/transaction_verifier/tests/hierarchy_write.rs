@@ -24,9 +24,10 @@ use common::chain::{
     TxMainChainPosition,
 };
 use mockall::predicate::eq;
+use pos_accounting::{AccountingBlockUndo, AccountingTxUndo};
 use rstest::rstest;
 use test_utils::random::Seed;
-use utxo::{BlockRewardUndo, BlockUndo, TxUndoWithSources};
+use utxo::{UtxosBlockRewardUndo, UtxosBlockUndo, UtxosTxUndoWithSources};
 
 // TODO: ConsumedUtxoCache is not checked in these tests, think how to expose it from utxo crate
 
@@ -48,11 +49,11 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
     let (outpoint1, utxo1) = create_utxo(&mut rng, 1000);
     let block_1_id: Id<Block> = Id::new(H256::random_using(&mut rng));
     let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
-    let block_1_undo = BlockUndo::new(
+    let block_1_undo = UtxosBlockUndo::new(
         None,
         BTreeMap::from([(
             tx_1_id,
-            TxUndoWithSources::new(vec![create_utxo(&mut rng, 100).1], vec![]),
+            UtxosTxUndoWithSources::new(vec![create_utxo(&mut rng, 100).1], vec![]),
         )]),
     )
     .unwrap();
@@ -60,11 +61,11 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
     let (outpoint2, utxo2) = create_utxo(&mut rng, 2000);
     let block_2_id: Id<Block> = Id::new(H256::random_using(&mut rng));
     let tx_2_id: Id<Transaction> = H256::from_low_u64_be(2).into();
-    let block_2_undo = BlockUndo::new(
+    let block_2_undo = UtxosBlockUndo::new(
         None,
         BTreeMap::from([(
             tx_2_id,
-            TxUndoWithSources::new(vec![create_utxo(&mut rng, 100).1], vec![]),
+            UtxosTxUndoWithSources::new(vec![create_utxo(&mut rng, 100).1], vec![]),
         )]),
     )
     .unwrap();
@@ -286,11 +287,11 @@ fn utxo_del_from_chain_hierarchy(#[case] seed: Seed) {
 
     let (outpoint1, utxo1) = create_utxo(&mut rng, 1000);
     let block_1_id: Id<Block> = Id::new(H256::random_using(&mut rng));
-    let block_1_undo: BlockUndo = Default::default();
+    let block_1_undo: UtxosBlockUndo = Default::default();
 
     let (outpoint2, utxo2) = create_utxo(&mut rng, 2000);
     let block_2_id: Id<Block> = Id::new(H256::random_using(&mut rng));
-    let block_2_undo: BlockUndo = Default::default();
+    let block_2_undo: UtxosBlockUndo = Default::default();
 
     let mut store = mock::MockStore::new();
     store
@@ -533,22 +534,28 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
     let (_, utxo4) = create_utxo(&mut rng, 4000);
     let block_id: Id<Block> = Id::new(H256::random_using(&mut rng));
     let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
-    let block_undo_1 = BlockUndo::new(
-        Some(BlockRewardUndo::new(vec![utxo1.clone()])),
-        BTreeMap::from([(tx_1_id, TxUndoWithSources::new(vec![utxo2.clone()], vec![]))]),
+    let block_undo_1 = UtxosBlockUndo::new(
+        Some(UtxosBlockRewardUndo::new(vec![utxo1.clone()])),
+        BTreeMap::from([(
+            tx_1_id,
+            UtxosTxUndoWithSources::new(vec![utxo2.clone()], vec![]),
+        )]),
     )
     .unwrap();
     let tx_2_id: Id<Transaction> = H256::from_low_u64_be(2).into();
-    let block_undo_2 = BlockUndo::new(
-        Some(BlockRewardUndo::new(vec![utxo3.clone()])),
-        BTreeMap::from([(tx_2_id, TxUndoWithSources::new(vec![utxo4.clone()], vec![]))]),
+    let block_undo_2 = UtxosBlockUndo::new(
+        Some(UtxosBlockRewardUndo::new(vec![utxo3.clone()])),
+        BTreeMap::from([(
+            tx_2_id,
+            UtxosTxUndoWithSources::new(vec![utxo4.clone()], vec![]),
+        )]),
     )
     .unwrap();
-    let expected_block_undo = BlockUndo::new(
-        Some(BlockRewardUndo::new(vec![utxo1, utxo3])),
+    let expected_block_undo = UtxosBlockUndo::new(
+        Some(UtxosBlockRewardUndo::new(vec![utxo1, utxo3])),
         BTreeMap::from([
-            (tx_1_id, TxUndoWithSources::new(vec![utxo2], vec![])),
-            (tx_2_id, TxUndoWithSources::new(vec![utxo4], vec![])),
+            (tx_1_id, UtxosTxUndoWithSources::new(vec![utxo2], vec![])),
+            (tx_2_id, UtxosTxUndoWithSources::new(vec![utxo4], vec![])),
         ]),
     )
     .unwrap();
@@ -840,10 +847,8 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo = pos_accounting::BlockUndo::new(BTreeMap::from([(
-            tx_id,
-            pos_accounting::TxUndo::new(vec![undo]),
-        )]));
+        let block_undo =
+            AccountingBlockUndo::new(BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]));
 
         verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_undo_id_1),
@@ -863,10 +868,8 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo = pos_accounting::BlockUndo::new(BTreeMap::from([(
-            tx_id,
-            pos_accounting::TxUndo::new(vec![undo]),
-        )]));
+        let block_undo =
+            AccountingBlockUndo::new(BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]));
 
         verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_undo_id_2),

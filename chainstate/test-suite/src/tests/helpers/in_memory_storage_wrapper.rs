@@ -89,7 +89,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
     fn get_accounting_undo(
         &self,
         id: Id<Block>,
-    ) -> Result<Option<pos_accounting::BlockUndo>, TransactionVerifierStorageError> {
+    ) -> Result<Option<pos_accounting::AccountingBlockUndo>, TransactionVerifierStorageError> {
         self.storage
             .get_accounting_undo(id)
             .map_err(TransactionVerifierStorageError::from)
@@ -113,7 +113,7 @@ impl UtxosStorageRead for InMemoryStorageWrapper {
     fn get_undo_data(
         &self,
         id: Id<Block>,
-    ) -> Result<Option<utxo::BlockUndo>, chainstate_types::storage_result::Error> {
+    ) -> Result<Option<utxo::UtxosBlockUndo>, chainstate_types::storage_result::Error> {
         self.storage.get_undo_data(id)
     }
 }

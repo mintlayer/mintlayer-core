@@ -23,8 +23,8 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id},
 };
-use pos_accounting::{DelegationData, DelegationId, PoolData, PoolId};
-use utxo::Utxo;
+use pos_accounting::{AccountingBlockUndo, DelegationData, DelegationId, PoolData, PoolId};
+use utxo::{Utxo, UtxosBlockUndo};
 
 storage::decl_schema! {
     /// Database schema for blockchain storage
@@ -42,14 +42,14 @@ storage::decl_schema! {
         /// Store for Utxo Entries
         pub DBUtxo: Map<OutPoint, Utxo>,
         /// Store for utxo BlockUndo
-        pub DBBlockUndo: Map<Id<Block>, utxo::BlockUndo>,
+        pub DBBlockUndo: Map<Id<Block>, UtxosBlockUndo>,
         /// Store for token's info; created on issuance
         pub DBTokensAuxData: Map<TokenId, TokenAuxiliaryData>,
         /// Store of issuance tx id vs token id
         pub DBIssuanceTxVsTokenId: Map<Id<Transaction>, TokenId>,
 
         /// Store for accounts BlockUndo
-        pub DBAccountsBlockUndo: Map<Id<Block>, pos_accounting::BlockUndo>,
+        pub DBAccountsBlockUndo: Map<Id<Block>, AccountingBlockUndo>,
         /// Store for accounts pool data
         pub DBAccountsPoolData: Map<PoolId, PoolData>,
         /// Store for accounts pool balances

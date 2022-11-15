@@ -22,15 +22,15 @@ use serialization::{Decode, Encode};
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum BlockUndoError {
+pub enum AccountingBlockUndoError {
     #[error("Attempted to insert a transaction in undo that already exists: `{0}`")]
     UndoAlreadyExists(Id<Transaction>),
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub struct TxUndo(Vec<PoSAccountingUndo>);
+pub struct AccountingTxUndo(Vec<PoSAccountingUndo>);
 
-impl TxUndo {
+impl AccountingTxUndo {
     pub fn new(undos: Vec<PoSAccountingUndo>) -> Self {
         Self(undos)
     }
@@ -45,12 +45,12 @@ impl TxUndo {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Encode, Decode)]
-pub struct BlockUndo {
-    tx_undos: BTreeMap<Id<Transaction>, TxUndo>,
+pub struct AccountingBlockUndo {
+    tx_undos: BTreeMap<Id<Transaction>, AccountingTxUndo>,
 }
 
-impl BlockUndo {
-    pub fn new(tx_undos: BTreeMap<Id<Transaction>, TxUndo>) -> Self {
+impl AccountingBlockUndo {
+    pub fn new(tx_undos: BTreeMap<Id<Transaction>, AccountingTxUndo>) -> Self {
         Self { tx_undos }
     }
 
@@ -58,29 +58,29 @@ impl BlockUndo {
         self.tx_undos.is_empty()
     }
 
-    pub fn tx_undos(&self) -> &BTreeMap<Id<Transaction>, TxUndo> {
+    pub fn tx_undos(&self) -> &BTreeMap<Id<Transaction>, AccountingTxUndo> {
         &self.tx_undos
     }
 
     pub fn insert_tx_undo(
         &mut self,
         tx_id: Id<Transaction>,
-        tx_undo: TxUndo,
-    ) -> Result<(), BlockUndoError> {
+        tx_undo: AccountingTxUndo,
+    ) -> Result<(), AccountingBlockUndoError> {
         match self.tx_undos.entry(tx_id) {
             Entry::Vacant(e) => {
                 e.insert(tx_undo);
                 Ok(())
             }
-            Entry::Occupied(_) => Err(BlockUndoError::UndoAlreadyExists(tx_id)),
+            Entry::Occupied(_) => Err(AccountingBlockUndoError::UndoAlreadyExists(tx_id)),
         }
     }
 
-    pub fn take_tx_undo(&mut self, tx_id: &Id<Transaction>) -> Option<TxUndo> {
+    pub fn take_tx_undo(&mut self, tx_id: &Id<Transaction>) -> Option<AccountingTxUndo> {
         self.tx_undos.remove(tx_id)
     }
 
-    pub fn combine(&mut self, other: BlockUndo) -> Result<(), BlockUndoError> {
+    pub fn combine(&mut self, other: AccountingBlockUndo) -> Result<(), AccountingBlockUndoError> {
         other
             .tx_undos
             .into_iter()
@@ -89,7 +89,7 @@ impl BlockUndo {
                     e.insert(u);
                     Ok(())
                 }
-                Entry::Occupied(_) => Err(BlockUndoError::UndoAlreadyExists(id)),
+                Entry::Occupied(_) => Err(AccountingBlockUndoError::UndoAlreadyExists(id)),
             })
     }
 }

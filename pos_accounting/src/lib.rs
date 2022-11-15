@@ -31,7 +31,7 @@ pub type DelegationId = Id<Delegation>;
 pub use crate::{
     error::Error,
     pool::{
-        block_undo::{BlockUndo, BlockUndoError, TxUndo},
+        block_undo::{AccountingBlockUndo, AccountingBlockUndoError, AccountingTxUndo},
         delegation::DelegationData,
         delta::{data::PoSAccountingDeltaData, PoSAccountingDelta},
         helpers::make_pool_id,

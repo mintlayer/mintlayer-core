@@ -21,7 +21,7 @@ use common::{
     },
     primitives::Id,
 };
-use pos_accounting::{FlushablePoSAccountingView, PoSAccountingView};
+use pos_accounting::{AccountingBlockUndo, FlushablePoSAccountingView, PoSAccountingView};
 use thiserror::Error;
 use utxo::{FlushableUtxoView, UtxosStorageRead};
 
@@ -47,13 +47,13 @@ pub enum TransactionVerifierStorageError {
     #[error("Tx index error: {0}")]
     TxIndexError(#[from] TxIndexError),
     #[error("BlockUndo error: {0}")]
-    UtxoBlockUndoError(#[from] utxo::BlockUndoError),
+    UtxoBlockUndoError(#[from] utxo::UtxosBlockUndoError),
     #[error("Transaction index has been disabled")]
     TransactionIndexDisabled,
     #[error("PoS accounting error: {0}")]
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("Accounting BlockUndo error: {0}")]
-    AccountingBlockUndoError(#[from] pos_accounting::BlockUndoError),
+    AccountingBlockUndoError(#[from] pos_accounting::AccountingBlockUndoError),
 }
 
 pub trait TransactionVerifierStorageRef: UtxosStorageRead + PoSAccountingView {
@@ -85,7 +85,7 @@ pub trait TransactionVerifierStorageRef: UtxosStorageRead + PoSAccountingView {
     fn get_accounting_undo(
         &self,
         id: Id<Block>,
-    ) -> Result<Option<pos_accounting::BlockUndo>, TransactionVerifierStorageError>;
+    ) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError>;
 }
 
 pub trait TransactionVerifierStorageMut:
@@ -127,7 +127,7 @@ pub trait TransactionVerifierStorageMut:
     fn set_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &utxo::BlockUndo,
+        undo: &utxo::UtxosBlockUndo,
     ) -> Result<(), TransactionVerifierStorageError>;
 
     fn del_utxo_undo_data(
@@ -138,7 +138,7 @@ pub trait TransactionVerifierStorageMut:
     fn set_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &pos_accounting::BlockUndo,
+        undo: &AccountingBlockUndo,
     ) -> Result<(), TransactionVerifierStorageError>;
 
     fn del_accounting_undo_data(

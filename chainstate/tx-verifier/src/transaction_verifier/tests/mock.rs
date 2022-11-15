@@ -61,7 +61,7 @@ mockall::mock! {
         fn get_accounting_undo(
             &self,
             id: Id<Block>,
-        ) -> Result<Option<pos_accounting::BlockUndo>, TransactionVerifierStorageError>;
+        ) -> Result<Option<pos_accounting::AccountingBlockUndo>, TransactionVerifierStorageError>;
     }
 
     impl TransactionVerifierStorageMut for Store {
@@ -98,13 +98,13 @@ mockall::mock! {
             issuance_tx_id: &Id<Transaction>,
         ) -> Result<(), TransactionVerifierStorageError>;
 
-        fn set_utxo_undo_data(&mut self, tx_source: TransactionSource, undo: &utxo::BlockUndo) -> Result<(), TransactionVerifierStorageError>;
+        fn set_utxo_undo_data(&mut self, tx_source: TransactionSource, undo: &utxo::UtxosBlockUndo) -> Result<(), TransactionVerifierStorageError>;
         fn del_utxo_undo_data(&mut self, tx_source: TransactionSource) -> Result<(), TransactionVerifierStorageError>;
 
         fn set_accounting_undo_data(
             &mut self,
             tx_source: TransactionSource,
-            undo: &pos_accounting::BlockUndo,
+            undo: &pos_accounting::AccountingBlockUndo,
         ) -> Result<(), TransactionVerifierStorageError>;
 
         fn del_accounting_undo_data(
@@ -116,7 +116,7 @@ mockall::mock! {
     impl UtxosStorageRead for Store {
         fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, storage_result::Error>;
         fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>,storage_result::Error>;
-        fn get_undo_data(&self, id: Id<Block>) -> Result<Option<utxo::BlockUndo>, storage_result::Error>;
+        fn get_undo_data(&self, id: Id<Block>) -> Result<Option<utxo::UtxosBlockUndo>, storage_result::Error>;
     }
 
     impl FlushableUtxoView for Store {

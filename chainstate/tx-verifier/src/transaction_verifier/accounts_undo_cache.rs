@@ -22,7 +22,9 @@ use common::{
     chain::{Block, Transaction},
     primitives::Id,
 };
-use pos_accounting::{BlockUndo, PoSAccountingUndo, TxUndo};
+use pos_accounting::{
+    AccountingBlockUndo, AccountingBlockUndoError, AccountingTxUndo, PoSAccountingUndo,
+};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct AccountsBlockUndo {
@@ -31,7 +33,7 @@ pub struct AccountsBlockUndo {
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct AccountsBlockUndoEntry {
-    pub undo: BlockUndo,
+    pub undo: AccountingBlockUndo,
     // indicates whether this BlockUndo was fetched from the db or it's new
     pub is_fresh: bool,
 }
@@ -65,9 +67,9 @@ impl AccountsBlockUndoCache {
         &mut self,
         tx_source: &TransactionSource,
         fetcher_func: F,
-    ) -> Result<&mut BlockUndo, ConnectTransactionError>
+    ) -> Result<&mut AccountingBlockUndo, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<BlockUndo>, TransactionVerifierStorageError>,
+        F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError>,
     {
         match self.data.entry(*tx_source) {
             Entry::Occupied(entry) => Ok(&mut entry.into_mut().undo),
@@ -92,9 +94,9 @@ impl AccountsBlockUndoCache {
         tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
         fetcher_func: F,
-    ) -> Result<TxUndo, ConnectTransactionError>
+    ) -> Result<AccountingTxUndo, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<BlockUndo>, TransactionVerifierStorageError>,
+        F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError>,
     {
         let block_undo = self.fetch_block_undo(tx_source, fetcher_func)?;
 
@@ -103,7 +105,10 @@ impl AccountsBlockUndoCache {
             .ok_or(ConnectTransactionError::MissingPoSAccountingUndo(*tx_id))
     }
 
-    pub fn get_or_create_block_undo(&mut self, tx_source: &TransactionSource) -> &mut BlockUndo {
+    pub fn get_or_create_block_undo(
+        &mut self,
+        tx_source: &TransactionSource,
+    ) -> &mut AccountingBlockUndo {
         &mut self
             .data
             .entry(*tx_source)
@@ -117,8 +122,8 @@ impl AccountsBlockUndoCache {
     pub fn set_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &BlockUndo,
-    ) -> Result<(), pos_accounting::BlockUndoError> {
+        new_undo: &AccountingBlockUndo,
+    ) -> Result<(), AccountingBlockUndoError> {
         match self.data.entry(tx_source) {
             Entry::Vacant(e) => {
                 e.insert(AccountsBlockUndoEntry {
@@ -136,7 +141,7 @@ impl AccountsBlockUndoCache {
     pub fn del_undo_data(
         &mut self,
         tx_source: TransactionSource,
-    ) -> Result<(), pos_accounting::BlockUndoError> {
+    ) -> Result<(), AccountingBlockUndoError> {
         // delete undo from current cache
         if self.data.remove(&tx_source).is_none() {
             // if current cache doesn't have such data - insert empty undo to be flushed to the parent

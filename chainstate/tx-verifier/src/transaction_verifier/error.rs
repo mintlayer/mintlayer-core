@@ -82,9 +82,9 @@ pub enum ConnectTransactionError {
     #[error("Error from TransactionVerifierStorage: {0}")]
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("utxo BlockUndo error: {0}")]
-    UtxoBlockUndoError(#[from] utxo::BlockUndoError),
+    UtxoBlockUndoError(#[from] utxo::UtxosBlockUndoError),
     #[error("accounting BlockUndo error: {0}")]
-    AccountingBlockUndoError(#[from] pos_accounting::BlockUndoError),
+    AccountingBlockUndoError(#[from] pos_accounting::AccountingBlockUndoError),
     #[error("Failed to sum amounts of burns in transaction: {0}")]
     BurnAmountSumError(Id<Transaction>),
     #[error("Attempt to spend burned amount in transaction")]

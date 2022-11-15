@@ -15,7 +15,7 @@
 
 use super::test_helper::create_tx_outputs;
 use crate::{
-    ConsumedUtxoCache, FlushableUtxoView, TxUndoWithSources, UtxoSource, UtxosCache, UtxosView,
+    ConsumedUtxoCache, FlushableUtxoView, UtxoSource, UtxosCache, UtxosTxUndoWithSources, UtxosView,
 };
 use common::{
     chain::{block::BlockReward, OutPoint, OutPointSourceId, Transaction, TxInput},
@@ -35,7 +35,7 @@ struct ResultWithUndo {
 
 struct UndoInfo {
     prev_outpoint: OutPoint,
-    tx_undo: TxUndoWithSources,
+    tx_undo: UtxosTxUndoWithSources,
 }
 
 // This test creates an arbitrary long chain of caches.

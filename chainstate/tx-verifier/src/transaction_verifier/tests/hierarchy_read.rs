@@ -26,10 +26,10 @@ use common::{
     primitives::H256,
 };
 use mockall::predicate::eq;
-use pos_accounting::{PoSAccountingView, PoolData};
+use pos_accounting::{AccountingBlockUndo, AccountingTxUndo, PoSAccountingView, PoolData};
 use rstest::rstest;
 use test_utils::random::Seed;
-use utxo::{BlockUndo, TxUndoWithSources, UtxosStorageRead};
+use utxo::{UtxosBlockUndo, UtxosStorageRead, UtxosTxUndoWithSources};
 
 // Create the following hierarchy:
 //
@@ -114,33 +114,33 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
 
     let block_undo_id_0: Id<Block> = Id::new(H256::random_using(&mut rng));
     let (_, utxo0_undo) = create_utxo(&mut rng, 100);
-    let block_undo_0 = BlockUndo::new(
+    let block_undo_0 = UtxosBlockUndo::new(
         None,
         BTreeMap::from([(
             H256::random_using(&mut rng).into(),
-            TxUndoWithSources::new(vec![utxo0_undo], vec![]),
+            UtxosTxUndoWithSources::new(vec![utxo0_undo], vec![]),
         )]),
     )
     .unwrap();
 
     let block_undo_id_1: Id<Block> = Id::new(H256::random_using(&mut rng));
     let (_, utxo1_undo) = create_utxo(&mut rng, 100);
-    let block_undo_1 = BlockUndo::new(
+    let block_undo_1 = UtxosBlockUndo::new(
         None,
         BTreeMap::from([(
             H256::random_using(&mut rng).into(),
-            TxUndoWithSources::new(vec![utxo1_undo], vec![]),
+            UtxosTxUndoWithSources::new(vec![utxo1_undo], vec![]),
         )]),
     )
     .unwrap();
 
     let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
     let (_, utxo2_undo) = create_utxo(&mut rng, 100);
-    let block_undo_2 = BlockUndo::new(
+    let block_undo_2 = UtxosBlockUndo::new(
         None,
         BTreeMap::from([(
             H256::random_using(&mut rng).into(),
-            TxUndoWithSources::new(vec![utxo2_undo], vec![]),
+            UtxosTxUndoWithSources::new(vec![utxo2_undo], vec![]),
         )]),
     )
     .unwrap();
@@ -553,10 +553,8 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo = pos_accounting::BlockUndo::new(BTreeMap::from([(
-            tx_id,
-            pos_accounting::TxUndo::new(vec![undo]),
-        )]));
+        let block_undo =
+            AccountingBlockUndo::new(BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]));
 
         verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_undo_id_1),
@@ -576,10 +574,8 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo = pos_accounting::BlockUndo::new(BTreeMap::from([(
-            tx_id,
-            pos_accounting::TxUndo::new(vec![undo]),
-        )]));
+        let block_undo =
+            AccountingBlockUndo::new(BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]));
 
         verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
             TransactionSource::Chain(block_undo_id_2),
