@@ -30,6 +30,17 @@ use tx_verifier::transaction_verifier::{
     config::TransactionVerifierConfig, storage::TransactionVerifierStorageRef, TransactionVerifier,
 };
 
+// TODO: replace with triat_alias when stabilized
+pub trait TransactionVerifierMakerFn<'a, S: 'a, U: 'a, A: 'a>:
+    Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U, A>
+{
+}
+
+impl<'a, S: 'a, U: 'a, A: 'a, T: 'a> TransactionVerifierMakerFn<'a, S, U, A> for T where
+    T: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U, A>
+{
+}
+
 /// A trait that specifies how a block will be verified
 pub trait TransactionVerificationStrategy: Sized + Send {
     /// Connect the transactions given by block and block_index,
@@ -54,11 +65,7 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         S: TransactionVerifierStorageRef,
         U: UtxosView,
         A: PoSAccountingView,
-        M: Fn(
-            &'a S,
-            &'a ChainConfig,
-            TransactionVerifierConfig,
-        ) -> TransactionVerifier<'a, S, U, A>;
+        M: TransactionVerifierMakerFn<'a, S, U, A>;
 
     /// Disconnect the transactions given by block and block_index,
     /// and return a TransactionVerifier with an internal state
@@ -78,9 +85,5 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         S: TransactionVerifierStorageRef,
         U: UtxosView,
         A: PoSAccountingView,
-        M: Fn(
-            &'a S,
-            &'a ChainConfig,
-            TransactionVerifierConfig,
-        ) -> TransactionVerifier<'a, S, U, A>;
+        M: TransactionVerifierMakerFn<'a, S, U, A>;
 }

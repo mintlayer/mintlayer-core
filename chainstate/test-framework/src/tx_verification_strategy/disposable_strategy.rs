@@ -18,7 +18,7 @@ use chainstate::{
     tx_verification_strategy_utils::{
         construct_reward_tx_indices, construct_tx_indices, take_front_tx_index,
     },
-    BlockError, TransactionVerificationStrategy,
+    BlockError, TransactionVerificationStrategy, TransactionVerifierMakerFn,
 };
 use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
@@ -67,11 +67,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         S: TransactionVerifierStorageRef,
         U: UtxosView,
         A: PoSAccountingView,
-        M: Fn(
-            &'a S,
-            &'a ChainConfig,
-            TransactionVerifierConfig,
-        ) -> TransactionVerifier<'a, S, U, A>,
+        M: TransactionVerifierMakerFn<'a, S, U, A>,
     {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past =
@@ -145,11 +141,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         S: TransactionVerifierStorageRef,
         U: UtxosView,
         A: PoSAccountingView,
-        M: Fn(
-            &'a S,
-            &'a ChainConfig,
-            TransactionVerifierConfig,
-        ) -> TransactionVerifier<'a, S, U, A>,
+        M: TransactionVerifierMakerFn<'a, S, U, A>,
     {
         let mut base_tx_verifier =
             tx_verifier_maker(storage_backend, chain_config, verifier_config);
