@@ -17,12 +17,14 @@ use super::TransactionVerificationStrategy;
 use crate::{calculate_median_time_past, BlockError};
 use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
-    chain::{Block, ChainConfig},
+    chain::{calculate_tx_offsets_in_block, Block, ChainConfig},
     primitives::{id::WithId, Amount, Idable},
 };
 use tx_verifier::transaction_verifier::{
-    error::ConnectTransactionError, storage::TransactionVerifierStorageRef, BlockTransactableRef,
-    Fee, Subsidy, TransactionVerifier, TransactionVerifierConfig,
+    error::{ConnectTransactionError, TxIndexError},
+    storage::TransactionVerifierStorageRef,
+    BlockTransactableRef, BlockTransactableWithIndexRef, Fee, Subsidy, TransactionVerifier,
+    TransactionVerifierConfig,
 };
 use utils::tap_error_log::LogError;
 use utxo::UtxosView;
@@ -64,10 +66,14 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
 
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
 
+        let tx_indices = calculate_tx_offsets_in_block(block)
+            .map_err(TxIndexError::from)
+            .map_err(ConnectTransactionError::from)?;
+
         let reward_fees = tx_verifier
             .connect_transactable(
                 block_index,
-                BlockTransactableRef::BlockReward(block),
+                BlockTransactableWithIndexRef::BlockReward(block),
                 &median_time_past,
             )
             .log_err()?;
@@ -81,7 +87,11 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
                 let fee = tx_verifier
                     .connect_transactable(
                         block_index,
-                        BlockTransactableRef::Transaction(block, tx_num),
+                        BlockTransactableWithIndexRef::Transaction(
+                            block,
+                            tx_num,
+                            &tx_indices[tx_num],
+                        ),
                         &median_time_past,
                     )
                     .log_err()?;

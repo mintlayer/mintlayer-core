@@ -41,7 +41,7 @@ use common::{
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, OutPointSourceId, OutputPurpose, Transaction, TxInput,
-        TxOutput,
+        TxMainChainIndex, TxOutput,
     },
     primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable, H256},
 };
@@ -83,6 +83,26 @@ pub enum CachedOperation<T> {
 pub enum BlockTransactableRef<'a> {
     Transaction(&'a WithId<Block>, usize),
     BlockReward(&'a WithId<Block>),
+}
+
+/// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum BlockTransactableWithIndexRef<'a> {
+    Transaction(&'a WithId<Block>, usize, &'a TxMainChainIndex),
+    BlockReward(&'a WithId<Block>),
+}
+
+impl<'a> From<BlockTransactableWithIndexRef<'a>> for BlockTransactableRef<'a> {
+    fn from(value: BlockTransactableWithIndexRef<'a>) -> Self {
+        match value {
+            BlockTransactableWithIndexRef::Transaction(block, index, _) => {
+                BlockTransactableRef::Transaction(block, index)
+            }
+            BlockTransactableWithIndexRef::BlockReward(block) => {
+                BlockTransactableRef::BlockReward(block)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -700,11 +720,11 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
     pub fn connect_transactable(
         &mut self,
         block_index: &BlockIndex,
-        spend_ref: BlockTransactableRef,
+        spend_ref: BlockTransactableWithIndexRef,
         median_time_past: &BlockTimestamp,
     ) -> Result<Option<Fee>, ConnectTransactionError> {
         let fee = match spend_ref {
-            BlockTransactableRef::Transaction(block, tx_num) => {
+            BlockTransactableWithIndexRef::Transaction(block, tx_num, _tx_index) => {
                 let block_id = block.get_id();
                 let tx = block.transactions().get(tx_num).ok_or(
                     ConnectTransactionError::TxNumWrongInBlockOnConnect(tx_num, block_id),
@@ -718,7 +738,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
                     median_time_past,
                 )?
             }
-            BlockTransactableRef::BlockReward(block) => {
+            BlockTransactableWithIndexRef::BlockReward(block) => {
                 self.connect_block_reward(block_index, block.block_reward_transactable())?;
                 None
             }

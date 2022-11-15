@@ -15,18 +15,20 @@
 
 use std::cell::RefCell;
 
-use chainstate::{calculate_median_time_past, BlockError, TransactionVerificationStrategy};
+use chainstate::{
+    calculate_median_time_past, BlockError, TransactionVerificationStrategy, TxIndexError,
+};
 use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig},
+    chain::{block::timestamp::BlockTimestamp, calculate_tx_offsets_in_block, Block, ChainConfig},
     primitives::{id::WithId, Amount, Idable},
 };
 use crypto::random::{Rng, RngCore};
 use test_utils::random::{make_seedable_rng, Seed};
 use tx_verifier::transaction_verifier::{
     error::ConnectTransactionError, flush::flush_to_storage,
-    storage::TransactionVerifierStorageRef, BlockTransactableRef, Fee, Subsidy,
-    TransactionVerifier, TransactionVerifierConfig, TransactionVerifierDelta,
+    storage::TransactionVerifierStorageRef, BlockTransactableRef, BlockTransactableWithIndexRef,
+    Fee, Subsidy, TransactionVerifier, TransactionVerifierConfig, TransactionVerifierDelta,
 };
 use utils::tap_error_log::LogError;
 use utxo::UtxosView;
@@ -146,10 +148,14 @@ impl RandomizedTransactionVerificationStrategy {
     {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
 
+        let tx_indices = calculate_tx_offsets_in_block(block)
+            .map_err(TxIndexError::from)
+            .map_err(ConnectTransactionError::from)?;
+
         let reward_fees = tx_verifier
             .connect_transactable(
                 block_index,
-                BlockTransactableRef::BlockReward(block),
+                BlockTransactableWithIndexRef::BlockReward(block),
                 median_time_past,
             )
             .log_err()?;
@@ -179,7 +185,7 @@ impl RandomizedTransactionVerificationStrategy {
                 // connect transactable using current verifier
                 tx_verifier.connect_transactable(
                     block_index,
-                    BlockTransactableRef::Transaction(block, tx_num),
+                    BlockTransactableWithIndexRef::Transaction(block, tx_num, &tx_indices[tx_num]),
                     median_time_past,
                 )?;
                 tx_num += 1;
@@ -200,6 +206,10 @@ impl RandomizedTransactionVerificationStrategy {
         U: UtxosView,
         S: TransactionVerifierStorageRef,
     {
+        let tx_indices = calculate_tx_offsets_in_block(block)
+            .map_err(TxIndexError::from)
+            .map_err(ConnectTransactionError::from)?;
+
         let mut tx_verifier = base_tx_verifier.derive_child();
         let mut total_fee = Amount::ZERO;
         while tx_num < block.transactions().len() {
@@ -210,7 +220,7 @@ impl RandomizedTransactionVerificationStrategy {
                 // connect transactable using current verifier
                 let fee = tx_verifier.connect_transactable(
                     block_index,
-                    BlockTransactableRef::Transaction(block, tx_num),
+                    BlockTransactableWithIndexRef::Transaction(block, tx_num, &tx_indices[tx_num]),
                     median_time_past,
                 )?;
 

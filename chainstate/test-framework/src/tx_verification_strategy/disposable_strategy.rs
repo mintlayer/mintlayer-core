@@ -13,16 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::{calculate_median_time_past, BlockError, TransactionVerificationStrategy};
+use chainstate::{
+    calculate_median_time_past, BlockError, TransactionVerificationStrategy, TxIndexError,
+};
 use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
-    chain::{Block, ChainConfig},
+    chain::{calculate_tx_offsets_in_block, Block, ChainConfig},
     primitives::{id::WithId, Amount, Idable},
 };
 use tx_verifier::transaction_verifier::{
     error::ConnectTransactionError, flush::flush_to_storage,
-    storage::TransactionVerifierStorageRef, BlockTransactableRef, Fee, Subsidy,
-    TransactionVerifier, TransactionVerifierConfig,
+    storage::TransactionVerifierStorageRef, BlockTransactableRef, BlockTransactableWithIndexRef,
+    Fee, Subsidy, TransactionVerifier, TransactionVerifierConfig,
 };
 use utils::tap_error_log::LogError;
 use utxo::UtxosView;
@@ -68,10 +70,14 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         let mut base_tx_verifier =
             tx_verifier_maker(storage_backend, chain_config, verifier_config);
 
+        let tx_indices = calculate_tx_offsets_in_block(block)
+            .map_err(TxIndexError::from)
+            .map_err(ConnectTransactionError::from)?;
+
         let reward_fees = base_tx_verifier
             .connect_transactable(
                 block_index,
-                BlockTransactableRef::BlockReward(block),
+                BlockTransactableWithIndexRef::BlockReward(block),
                 &median_time_past,
             )
             .log_err()?;
@@ -86,7 +92,11 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                 let fee = tx_verifier
                     .connect_transactable(
                         block_index,
-                        BlockTransactableRef::Transaction(block, tx_num),
+                        BlockTransactableWithIndexRef::Transaction(
+                            block,
+                            tx_num,
+                            &tx_indices[tx_num],
+                        ),
                         &median_time_past,
                     )
                     .map_err(BlockError::StateUpdateFailed)

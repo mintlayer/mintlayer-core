@@ -310,6 +310,14 @@ fn generate_random_invalid_block(rng: &mut (impl Rng + CryptoRng)) -> Block {
 fn test_indices_calculations(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let block = generate_random_invalid_block(&mut rng);
+
+    let tested = || ();
+
+    match &block {
+        Block::V1(_) => tested(),
+        // If this is triggering an error, that means you have to add a test for the new Block version; don't ignore it!
+    };
+
     let serialized_block = block.encode();
     let serialized_header = block.header().encode();
     let serialized_transactions = block.transactions().encode();
@@ -319,9 +327,11 @@ fn test_indices_calculations(#[case] seed: Seed) {
         serialized_header.len() + serialized_transactions.len() + serialized_reward.len(),
         serialized_block.len(),
     );
-    // TODO: calculate block reward position
-    for (tx_num, tx) in block.transactions().iter().enumerate() {
-        let tx_index = calculate_tx_index_from_block(&block, tx_num).unwrap();
+
+    let tx_offsets = calculate_tx_offsets_in_block(&block).unwrap();
+    assert_eq!(tx_offsets.len(), block.transactions().len());
+
+    for (tx, tx_index) in block.transactions().iter().zip(tx_offsets.iter()) {
         assert!(!tx_index.all_outputs_spent());
         assert_eq!(tx_index.output_count(), tx.outputs().len() as u32);
 
