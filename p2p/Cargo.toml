@@ -34,6 +34,18 @@ tokio-util = {version = "0.7", default-features = false, features = ["codec"] }
 chainstate-storage = { path = "../chainstate/storage" }
 crypto = { path = "../crypto/" }
 p2p-test-utils = { path = "p2p-test-utils" }
+p2p-backend-test-suite = { path = "backend-test-suite" }
 
 portpicker = "0.1"
 
+[[test]]
+name = "backend_libp2p"
+harness = false
+
+[[test]]
+name = "backend_mock_tcp"
+harness = false
+
+[[test]]
+name = "backend_mock_channels"
+harness = false

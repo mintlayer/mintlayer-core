@@ -83,11 +83,12 @@ async fn ban_connected_peer_mock_tcp() {
     ban_connected_peer::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
+#[ignore]
 #[tokio::test]
 async fn ban_connected_peer_mock_channels() {
     // TODO: Currently in the channels backend peer receives a new address everytime it connects.
     // For the banning to work properly the addresses must be persistent.
-    // ban_connected_peer::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    ban_connected_peer::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
 }
 
 async fn banned_peer_attempts_to_connect<A, T>()
@@ -144,16 +145,19 @@ async fn banned_peer_attempts_to_connect_libp2p() {
     banned_peer_attempts_to_connect::<MakeP2pAddress, Libp2pService>().await;
 }
 
+#[ignore]
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_mock_tcp() {
     // TODO: implement proper peer banning
-    // banned_peer_attempts_to_connect::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    banned_peer_attempts_to_connect::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
+#[ignore]
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_mock_channel() {
     // TODO: implement proper peer banning
-    // banned_peer_attempts_to_connect::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    banned_peer_attempts_to_connect::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+        .await;
 }
 
 // attempt to connect to banned peer
@@ -225,11 +229,12 @@ async fn connect_to_banned_peer_mock_tcp() {
     connect_to_banned_peer::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
+#[ignore]
 #[tokio::test]
 async fn connect_to_banned_peer_mock_channels() {
     // TODO: Currently in the channels backend peer receives a new address everytime it connects.
     // For the banning to work properly the addresses must be persistent.
-    // connect_to_banned_peer::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    connect_to_banned_peer::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
 }
 
 async fn validate_invalid_outbound_connection<A, S>(peer_address: S::Address, peer_id: S::PeerId)

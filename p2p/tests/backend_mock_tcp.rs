@@ -12,3 +12,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use p2p::net::mock::{transport::TcpMockTransport, MockService};
+use p2p_test_utils::MakeTcpAddress;
+
+fn main() {
+    p2p_backend_test_suite::run::<MakeTcpAddress, MockService<TcpMockTransport>>();
+}

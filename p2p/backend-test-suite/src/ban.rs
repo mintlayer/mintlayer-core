@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::mpsc;
 
@@ -22,42 +22,34 @@ use p2p::{
     event::SwarmEvent,
     message::{Announcement, HeaderListResponse, Request, Response},
     net::{
-        self,
-        libp2p::Libp2pService,
-        mock::{
-            transport::{ChannelMockTransport, TcpMockTransport},
-            MockService,
-        },
-        types::SyncingEvent,
-        ConnectivityService, NetworkingService, SyncingMessagingService,
+        self, types::SyncingEvent, ConnectivityService, NetworkingService, SyncingMessagingService,
     },
     sync::BlockSyncManager,
 };
-use p2p_test_utils::{
-    connect_services, MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress,
-    TestBlockInfo,
-};
+use p2p_test_utils::{connect_services, MakeTestAddress, TestBlockInfo};
 
-// start two libp2p services, spawn a `SyncMessageHandler` for the first service,
-// publish an invalid block from the first service and verify that the `SyncManager`
-// of the first service receives a `AdjustPeerScore` event which bans the peer of
-// the second service.
-#[tokio::test]
-async fn invalid_pubsub_block() {
+tests![invalid_pubsub_block, invalid_sync_block,];
+
+// Start two network services, spawn a `SyncMessageHandler` for the first service, publish an
+// invalid block from the first service and verify that the `SyncManager` of the first service
+// receives a `AdjustPeerScore` event which bans the peer of the second service.
+async fn invalid_pubsub_block<A, S>()
+where
+    A: MakeTestAddress<Address = S::Address>,
+    S: NetworkingService + Debug + 'static,
+    S::ConnectivityHandle: ConnectivityService<S>,
+    S::SyncingMessagingHandle: SyncingMessagingService<S>,
+{
     let (_tx_sync, rx_sync) = mpsc::unbounded_channel();
     let (tx_swarm, mut rx_swarm) = mpsc::unbounded_channel();
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
-    let (mut conn1, sync1) = Libp2pService::start(
-        MakeP2pAddress::make_address(),
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
+    let (mut conn1, sync1) = S::start(A::make_address(), Arc::clone(&config), Default::default())
+        .await
+        .unwrap();
 
-    let mut sync1 = BlockSyncManager::<Libp2pService>::new(
+    let mut sync1 = BlockSyncManager::<S>::new(
         Arc::clone(&config),
         sync1,
         handle.clone(),
@@ -65,17 +57,12 @@ async fn invalid_pubsub_block() {
         tx_swarm,
     );
 
-    let (mut conn2, mut sync2) = Libp2pService::start(
-        MakeP2pAddress::make_address(),
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
+    let (mut conn2, mut sync2) =
+        S::start(A::make_address(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
 
-    // connect the services together, spawn `sync1` into the background
-    // and subscriber to events
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    connect_services::<S>(&mut conn1, &mut conn2).await;
 
     // create few blocks so `sync2` has something to send to `sync1`
     let best_block = TestBlockInfo::from_genesis(config.genesis_block());
@@ -130,31 +117,28 @@ async fn invalid_pubsub_block() {
     }
 }
 
-// start two networking services and give an invalid block, verify that `PeerManager` is informed
-async fn invalid_sync_block<A, T>()
+// Start two networking services and give an invalid block, verify that `PeerManager` is informed.
+async fn invalid_sync_block<A, S>()
 where
-    A: MakeTestAddress<Address = T::Address>,
-    T: NetworkingService + std::fmt::Debug + 'static,
-    T::ConnectivityHandle: ConnectivityService<T>,
-    T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+    A: MakeTestAddress<Address = S::Address>,
+    S: NetworkingService + Debug + 'static,
+    S::ConnectivityHandle: ConnectivityService<S>,
+    S::SyncingMessagingHandle: SyncingMessagingService<S>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
-
     let (_tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
     let (tx_swarm, mut rx_swarm) = mpsc::unbounded_channel();
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
-    let (mut conn1, sync1) =
-        T::start(addr1, Arc::clone(&config), Default::default()).await.unwrap();
+    let (mut conn1, sync1) = S::start(A::make_address(), Arc::clone(&config), Default::default())
+        .await
+        .unwrap();
 
-    let (mut conn2, _sync2) =
-        T::start(addr2, Arc::clone(&config), Default::default()).await.unwrap();
+    let (mut conn2, _sync2) = S::start(A::make_address(), Arc::clone(&config), Default::default())
+        .await
+        .unwrap();
 
-    let mut sync1 = BlockSyncManager::<T>::new(
+    let mut sync1 = BlockSyncManager::<S>::new(
         Arc::clone(&config),
         sync1,
         handle.clone(),
@@ -162,7 +146,7 @@ where
         tx_swarm,
     );
 
-    connect_services::<T>(&mut conn1, &mut conn2).await;
+    connect_services::<S>(&mut conn1, &mut conn2).await;
 
     // create few blocks and offer an orphan block to the `SyncManager`
     let best_block = TestBlockInfo::from_genesis(config.genesis_block());
@@ -182,19 +166,4 @@ where
         assert_eq!(remote_id, peer_id);
         assert_eq!(score, 100);
     }
-}
-
-#[tokio::test]
-async fn invalid_sync_block_libp2p() {
-    invalid_sync_block::<MakeP2pAddress, Libp2pService>().await;
-}
-
-#[tokio::test]
-async fn invalid_sync_block_mock_tcp() {
-    invalid_sync_block::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
-}
-
-#[tokio::test]
-async fn invalid_sync_block_mock_channels() {
-    invalid_sync_block::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
 }

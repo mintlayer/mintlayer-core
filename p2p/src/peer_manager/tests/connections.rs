@@ -294,14 +294,12 @@ async fn connect_inbound_same_network_libp2p() {
 
 #[tokio::test]
 async fn connect_inbound_same_network_mock_tcp() {
-    // TODO: fix protocol ids to work
-    // connect_inbound_same_network::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    connect_inbound_same_network::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
 #[tokio::test]
 async fn connect_inbound_same_network_mock_channel() {
-    // TODO: fix protocol ids to work
-    // connect_inbound_same_network::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    connect_inbound_same_network::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
 }
 
 async fn connect_inbound_different_network<A, T>()

@@ -34,6 +34,7 @@ use crate::{
     },
 };
 
+#[derive(Debug)]
 pub struct Libp2pSyncHandle<T: NetworkingService> {
     /// Channel for sending commands to libp2p backend
     cmd_tx: mpsc::UnboundedSender<Command>,
