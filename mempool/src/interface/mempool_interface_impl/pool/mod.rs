@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
-use std::fmt::Debug;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
@@ -39,7 +38,6 @@ use logging::log;
 
 use utils::ensure;
 use utils::eventhandler::EventsController;
-use utils::newtype;
 use utils::tap_error_log::LogError;
 
 use crate::error::Error;
@@ -53,6 +51,7 @@ use feerate::INCREMENTAL_RELAY_FEE_RATE;
 use feerate::INCREMENTAL_RELAY_THRESHOLD;
 use rolling_fee_rate::RollingFeeRate;
 use spends_unconfirmed::SpendsUnconfirmed;
+use store::Conflicts;
 use store::MempoolRemovalReason;
 use store::MempoolStore;
 use store::TxMempoolEntry;
@@ -73,21 +72,6 @@ mod tx_with_fee;
 fn get_relay_fee(tx: &SignedTransaction) -> Amount {
     // TODO we should never reach the expect, but should this be an error anyway?
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
-}
-
-newtype! {
-    #[derive(Debug)]
-    struct Ancestors(BTreeSet<Id<Transaction>>);
-}
-
-newtype! {
-    #[derive(Debug)]
-    struct Descendants(BTreeSet<Id<Transaction>>);
-}
-
-newtype! {
-    #[derive(Debug)]
-    struct Conflicts(BTreeSet<Id<Transaction>>);
 }
 
 pub struct Mempool<M: GetMemoryUsage + 'static + Send + Sync> {
@@ -321,8 +305,7 @@ where
             .collect::<BTreeSet<_>>();
         let ancestor_ids =
             TxMempoolEntry::unconfirmed_ancestors_from_parents(parents.clone(), &self.store)?;
-        let ancestors = ancestor_ids
-            .0
+        let ancestors = BTreeSet::from(ancestor_ids)
             .into_iter()
             .map(|id| self.store.get_entry(&id).expect("ancestors to exist"))
             .cloned()
@@ -503,7 +486,7 @@ where
             .collect::<Vec<_>>();
 
         if conflicts.is_empty() {
-            Ok(Conflicts(BTreeSet::new()))
+            Ok(BTreeSet::new().into())
         } else {
             self.do_rbf_checks(tx, &conflicts)
         }
@@ -644,7 +627,7 @@ where
         }
         let replacements_with_descendants = conflicts
             .iter()
-            .flat_map(|conflict| conflict.unconfirmed_descendants(&self.store).0)
+            .flat_map(|conflict| BTreeSet::from(conflict.unconfirmed_descendants(&self.store)))
             .chain(conflicts.iter().map(|conflict| conflict.tx_id()))
             .collect();
 

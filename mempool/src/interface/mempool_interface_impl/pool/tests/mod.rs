@@ -728,12 +728,12 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     let entry4 = mempool.store.get_entry(ids.get(3).expect("index")).expect("entry");
     let entry5 = mempool.store.get_entry(ids.get(4).expect("index")).expect("entry");
     let entry6 = mempool.store.get_entry(ids.get(5).expect("index")).expect("entry");
-    assert_eq!(entry1.unconfirmed_ancestors(&mempool.store).0.len(), 0);
-    assert_eq!(entry2.unconfirmed_ancestors(&mempool.store).0.len(), 0);
-    assert_eq!(entry3.unconfirmed_ancestors(&mempool.store).0.len(), 2);
-    assert_eq!(entry4.unconfirmed_ancestors(&mempool.store).0.len(), 3);
-    assert_eq!(entry5.unconfirmed_ancestors(&mempool.store).0.len(), 3);
-    assert_eq!(entry6.unconfirmed_ancestors(&mempool.store).0.len(), 5);
+    assert_eq!(entry1.unconfirmed_ancestors(&mempool.store).len(), 0);
+    assert_eq!(entry2.unconfirmed_ancestors(&mempool.store).len(), 0);
+    assert_eq!(entry3.unconfirmed_ancestors(&mempool.store).len(), 2);
+    assert_eq!(entry4.unconfirmed_ancestors(&mempool.store).len(), 3);
+    assert_eq!(entry5.unconfirmed_ancestors(&mempool.store).len(), 3);
+    assert_eq!(entry6.unconfirmed_ancestors(&mempool.store).len(), 5);
 
     assert_eq!(entry1.count_with_descendants(), 5);
     assert_eq!(entry2.count_with_descendants(), 5);
