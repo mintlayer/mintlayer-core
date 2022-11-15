@@ -179,10 +179,10 @@ fn test_scale_structures() {
         field_vector_bytes: vec![0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64, 0x20, 0x6d, 0x79, 0x20, 0x6d, 0x61, 0x6e],
         field_btree_map_string,
         field_btree_map_bytes,
-        field_nested_stuct: None,
+        field_nested_struct: None,
     };
     let mut test_main = test.clone();
-    test_main.field_nested_stuct = Some(Box::new(test));
+    test_main.field_nested_struct = Some(Box::new(test));
 
     let enc = SimpleWrapper::encode(&SimpleWrapper(test_main.clone()));
     assert!(!enc.is_empty());
