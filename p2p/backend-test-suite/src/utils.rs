@@ -14,7 +14,7 @@
 // limitations under the License.
 
 macro_rules! tests {
-    ($($name:ident),* $(,)?) => {
+    ($($(#[$meta:meta])* $name:ident,)+) => {
         pub fn tests<A, S>() -> impl Iterator<Item = libtest_mimic::Trial>
         where
             A: p2p_test_utils::MakeTestAddress<Address = S::Address>,
