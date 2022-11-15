@@ -33,10 +33,10 @@ use common::{
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    DelegationData, DelegationId, FlushablePoSAccountingView, PoSAccountingDeltaData,
-    PoSAccountingView, PoolData, PoolId,
+    AccountingBlockUndo, DelegationData, DelegationId, FlushablePoSAccountingView,
+    PoSAccountingDeltaData, PoSAccountingView, PoolData, PoolId,
 };
-use utxo::{BlockUndo, ConsumedUtxoCache, FlushableUtxoView, UtxosStorageRead, UtxosView};
+use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosStorageRead, UtxosView};
 
 impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
     TransactionVerifierStorageRef for TransactionVerifier<'a, S, U, A>
@@ -96,7 +96,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
     fn get_accounting_undo(
         &self,
         id: Id<Block>,
-    ) -> Result<Option<pos_accounting::BlockUndo>, TransactionVerifierStorageError> {
+    ) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError> {
         match self.accounting_delta_undo.data().get(&TransactionSource::Chain(id)) {
             Some(v) => Ok(Some(v.undo.clone())),
             None => self.storage_ref.get_accounting_undo(id),
@@ -118,7 +118,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> U
     fn get_undo_data(
         &self,
         id: Id<Block>,
-    ) -> Result<Option<utxo::BlockUndo>, storage_result::Error> {
+    ) -> Result<Option<UtxosBlockUndo>, storage_result::Error> {
         match self.utxo_block_undo.data().get(&TransactionSource::Chain(id)) {
             Some(v) => Ok(Some(v.undo.clone())),
             None => self.storage_ref.get_undo_data(id),
@@ -195,7 +195,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
     fn set_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &BlockUndo,
+        new_undo: &UtxosBlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
         self.utxo_block_undo
             .set_undo_data(tx_source, new_undo)
@@ -214,7 +214,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
     fn set_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &pos_accounting::BlockUndo,
+        new_undo: &AccountingBlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
         self.accounting_delta_undo
             .set_undo_data(tx_source, new_undo)

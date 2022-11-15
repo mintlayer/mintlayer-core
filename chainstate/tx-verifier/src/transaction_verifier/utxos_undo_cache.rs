@@ -21,11 +21,11 @@ use common::{
     chain::{Block, Transaction},
     primitives::Id,
 };
-use utxo::{BlockRewardUndo, BlockUndo, TxUndo};
+use utxo::{UtxosBlockRewardUndo, UtxosBlockUndo, UtxosTxUndo};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct UtxosBlockUndoEntry {
-    pub undo: BlockUndo,
+    pub undo: UtxosBlockUndo,
     // indicates whether this BlockUndo was fetched from the db or it's new
     pub is_fresh: bool,
 }
@@ -59,9 +59,9 @@ impl UtxosBlockUndoCache {
         &self,
         tx_source: &TransactionSource,
         fetcher_func: F,
-    ) -> Result<BlockUndo, ConnectTransactionError>
+    ) -> Result<UtxosBlockUndo, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<BlockUndo>, storage_result::Error>,
+        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, storage_result::Error>,
     {
         match self.data.get(tx_source) {
             Some(entry) => Ok(entry.undo.clone()),
@@ -80,9 +80,9 @@ impl UtxosBlockUndoCache {
         &mut self,
         tx_source: &TransactionSource,
         fetcher_func: F,
-    ) -> Result<&mut BlockUndo, ConnectTransactionError>
+    ) -> Result<&mut UtxosBlockUndo, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<BlockUndo>, storage_result::Error>,
+        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, storage_result::Error>,
     {
         match self.data.entry(*tx_source) {
             Entry::Occupied(entry) => Ok(&mut entry.into_mut().undo),
@@ -107,9 +107,9 @@ impl UtxosBlockUndoCache {
         tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
         fetcher_func: F,
-    ) -> Result<TxUndo, ConnectTransactionError>
+    ) -> Result<UtxosTxUndo, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<BlockUndo>, storage_result::Error>,
+        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, storage_result::Error>,
     {
         let block_undo = self.fetch_block_undo(tx_source, fetcher_func)?;
 
@@ -126,14 +126,17 @@ impl UtxosBlockUndoCache {
         &mut self,
         tx_source: &TransactionSource,
         fetcher_func: F,
-    ) -> Result<Option<BlockRewardUndo>, ConnectTransactionError>
+    ) -> Result<Option<UtxosBlockRewardUndo>, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<BlockUndo>, storage_result::Error>,
+        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, storage_result::Error>,
     {
         Ok(self.fetch_block_undo(tx_source, fetcher_func)?.take_block_reward_undo())
     }
 
-    pub fn get_or_create_block_undo(&mut self, tx_source: &TransactionSource) -> &mut BlockUndo {
+    pub fn get_or_create_block_undo(
+        &mut self,
+        tx_source: &TransactionSource,
+    ) -> &mut UtxosBlockUndo {
         &mut self
             .data
             .entry(*tx_source)
@@ -147,8 +150,8 @@ impl UtxosBlockUndoCache {
     pub fn set_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &BlockUndo,
-    ) -> Result<(), utxo::BlockUndoError> {
+        new_undo: &UtxosBlockUndo,
+    ) -> Result<(), utxo::UtxosBlockUndoError> {
         match self.data.entry(tx_source) {
             Entry::Vacant(e) => {
                 e.insert(UtxosBlockUndoEntry {
@@ -166,7 +169,7 @@ impl UtxosBlockUndoCache {
     pub fn del_undo_data(
         &mut self,
         tx_source: TransactionSource,
-    ) -> Result<(), utxo::BlockUndoError> {
+    ) -> Result<(), utxo::UtxosBlockUndoError> {
         // delete undo from current cache
         if self.data.remove(&tx_source).is_none() {
             // if current cache doesn't have such data - insert empty undo to be flushed to the parent

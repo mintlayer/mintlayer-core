@@ -25,7 +25,10 @@ pub use crate::{
     cache::{ConsumedUtxoCache, UtxosCache},
     error::Error,
     storage::{UtxosDB, UtxosStorageRead, UtxosStorageWrite},
-    undo::{BlockRewardUndo, BlockUndo, BlockUndoError, TxUndo, TxUndoWithSources},
+    undo::{
+        UtxosBlockRewardUndo, UtxosBlockUndo, UtxosBlockUndoError, UtxosTxUndo,
+        UtxosTxUndoWithSources,
+    },
     utxo::{Utxo, UtxoSource},
     view::{flush_to_base, FlushableUtxoView, UtxosView},
 };

@@ -31,7 +31,7 @@ use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::{Block, GenBlock, OutPointSourceId};
 use common::primitives::{BlockHeight, Id};
-use pos_accounting::{PoSAccountingStorageRead, PoSAccountingStorageWrite};
+use pos_accounting::{AccountingBlockUndo, PoSAccountingStorageRead, PoSAccountingStorageWrite};
 use utxo::{UtxosStorageRead, UtxosStorageWrite};
 
 /// Possibly failing result of blockchain storage query
@@ -84,10 +84,7 @@ pub trait BlockchainStorageRead: UtxosStorageRead + PoSAccountingStorageRead {
     fn get_block_tree_by_height(&self) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
     /// Get accounting undo for specific block
-    fn get_accounting_undo(
-        &self,
-        id: Id<Block>,
-    ) -> crate::Result<Option<pos_accounting::BlockUndo>>;
+    fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
 }
 
 /// Modifying operations on persistent blockchain data
@@ -156,7 +153,7 @@ pub trait BlockchainStorageWrite:
     fn set_accounting_undo_data(
         &mut self,
         id: Id<Block>,
-        undo: &pos_accounting::BlockUndo,
+        undo: &AccountingBlockUndo,
     ) -> crate::Result<()>;
 
     // Remove accounting block undo data for specific block

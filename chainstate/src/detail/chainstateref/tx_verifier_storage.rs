@@ -34,11 +34,11 @@ use common::{
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    DelegationData, DelegationId, FlushablePoSAccountingView, PoSAccountingDBMut,
-    PoSAccountingDeltaData, PoSAccountingView, PoolData, PoolId,
+    AccountingBlockUndo, DelegationData, DelegationId, FlushablePoSAccountingView,
+    PoSAccountingDBMut, PoSAccountingDeltaData, PoSAccountingView, PoolData, PoolId,
 };
 use tx_verifier::transaction_verifier::TransactionSource;
-use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDB, UtxosStorageRead};
+use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosDB, UtxosStorageRead};
 
 impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
     TransactionVerifierStorageRef for ChainstateRef<'a, S, O, V>
@@ -78,7 +78,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
     fn get_accounting_undo(
         &self,
         id: Id<Block>,
-    ) -> Result<Option<pos_accounting::BlockUndo>, TransactionVerifierStorageError> {
+    ) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError> {
         self.db_tx
             .get_accounting_undo(id)
             .map_err(TransactionVerifierStorageError::from)
@@ -117,7 +117,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
     fn get_undo_data(
         &self,
         id: Id<Block>,
-    ) -> Result<Option<utxo::BlockUndo>, storage_result::Error> {
+    ) -> Result<Option<UtxosBlockUndo>, storage_result::Error> {
         self.db_tx.get_undo_data(id)
     }
 }
@@ -194,7 +194,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
     fn set_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &utxo::BlockUndo,
+        undo: &UtxosBlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
         match tx_source {
             TransactionSource::Chain(id) => self
@@ -224,7 +224,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
     fn set_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &pos_accounting::BlockUndo,
+        undo: &AccountingBlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
         match tx_source {
             TransactionSource::Chain(id) => self

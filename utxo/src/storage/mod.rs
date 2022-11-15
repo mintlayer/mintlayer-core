@@ -16,7 +16,7 @@
 mod rw_impls;
 mod view_impls;
 
-use crate::{BlockUndo, FlushableUtxoView, Utxo, UtxosCache};
+use crate::{FlushableUtxoView, Utxo, UtxosBlockUndo, UtxosCache};
 use chainstate_types::storage_result;
 use common::{
     chain::{Block, ChainConfig, GenBlock, OutPoint},
@@ -27,7 +27,8 @@ use std::ops::{Deref, DerefMut};
 pub trait UtxosStorageRead {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, storage_result::Error>;
     fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, storage_result::Error>;
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, storage_result::Error>;
+    fn get_undo_data(&self, id: Id<Block>)
+        -> Result<Option<UtxosBlockUndo>, storage_result::Error>;
 }
 
 pub trait UtxosStorageWrite: UtxosStorageRead {
@@ -42,7 +43,7 @@ pub trait UtxosStorageWrite: UtxosStorageRead {
     fn set_undo_data(
         &mut self,
         id: Id<Block>,
-        undo: &BlockUndo,
+        undo: &UtxosBlockUndo,
     ) -> Result<(), storage_result::Error>;
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), storage_result::Error>;
 }
@@ -107,7 +108,10 @@ where
         self.deref().get_best_block_for_utxos()
     }
 
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, storage_result::Error> {
+    fn get_undo_data(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<UtxosBlockUndo>, storage_result::Error> {
         self.deref().get_undo_data(id)
     }
 }
@@ -135,7 +139,7 @@ where
     fn set_undo_data(
         &mut self,
         id: Id<Block>,
-        undo: &BlockUndo,
+        undo: &UtxosBlockUndo,
     ) -> Result<(), storage_result::Error> {
         self.deref_mut().set_undo_data(id, undo)
     }

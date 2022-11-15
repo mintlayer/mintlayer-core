@@ -16,8 +16,8 @@
 use crate::{
     utxo_entry::{IsDirty, IsFresh, UtxoEntry},
     {
-        BlockRewardUndo, Error, FlushableUtxoView, TxUndo, TxUndoWithSources, Utxo, UtxoSource,
-        UtxosView,
+        Error, FlushableUtxoView, Utxo, UtxoSource, UtxosBlockRewardUndo, UtxosTxUndo,
+        UtxosTxUndoWithSources, UtxosView,
     },
 };
 use common::{
@@ -164,7 +164,7 @@ impl<P: UtxosView> UtxosCache<P> {
         &mut self,
         tx: &Transaction,
         height: BlockHeight,
-    ) -> Result<TxUndoWithSources, Error> {
+    ) -> Result<UtxosTxUndoWithSources, Error> {
         let (sources, utxos) = tx
             .inputs()
             .iter()
@@ -178,14 +178,14 @@ impl<P: UtxosView> UtxosCache<P> {
 
         self.add_utxos_from_tx(tx, UtxoSource::Blockchain(height), false)?;
 
-        Ok(TxUndoWithSources::new(utxos, sources))
+        Ok(UtxosTxUndoWithSources::new(utxos, sources))
     }
 
     // Marks outputs of a transaction as spent and inputs as unspent
     pub fn disconnect_transaction(
         &mut self,
         tx: &Transaction,
-        tx_undo: TxUndo,
+        tx_undo: UtxosTxUndo,
     ) -> Result<(), Error> {
         for (i, output) in tx.outputs().iter().enumerate() {
             let tx_outpoint = OutPoint::new(OutPointSourceId::from(tx.get_id()), i as u32);
@@ -210,12 +210,12 @@ impl<P: UtxosView> UtxosCache<P> {
         reward_transactable: &BlockRewardTransactable,
         block_id: &Id<GenBlock>,
         height: BlockHeight,
-    ) -> Result<Option<BlockRewardUndo>, Error> {
-        let mut reward_undo: Option<BlockRewardUndo> = None;
+    ) -> Result<Option<UtxosBlockRewardUndo>, Error> {
+        let mut reward_undo: Option<UtxosBlockRewardUndo> = None;
         if let Some(inputs) = reward_transactable.inputs() {
             let utxos: Result<Vec<Utxo>, Error> =
                 inputs.iter().map(|tx_in| self.spend_utxo(tx_in.outpoint())).collect();
-            reward_undo = utxos.map(|utxos| Some(BlockRewardUndo::new(utxos)))?;
+            reward_undo = utxos.map(|utxos| Some(UtxosBlockRewardUndo::new(utxos)))?;
         }
 
         if let Some(outputs) = reward_transactable.outputs() {
@@ -237,7 +237,7 @@ impl<P: UtxosView> UtxosCache<P> {
         &mut self,
         reward_transactable: &BlockRewardTransactable,
         block_id: &Id<GenBlock>,
-        reward_undo: Option<BlockRewardUndo>,
+        reward_undo: Option<UtxosBlockRewardUndo>,
     ) -> Result<(), Error> {
         if let Some(outputs) = reward_transactable.outputs() {
             for (i, _) in outputs.iter().enumerate() {

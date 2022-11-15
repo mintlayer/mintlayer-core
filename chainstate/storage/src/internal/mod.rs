@@ -26,13 +26,13 @@ use common::{
     primitives::{Amount, BlockHeight, Id, Idable, H256},
 };
 use pos_accounting::{
-    DelegationData, DelegationId, PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData,
-    PoolId,
+    AccountingBlockUndo, DelegationData, DelegationId, PoSAccountingStorageRead,
+    PoSAccountingStorageWrite, PoolData, PoolId,
 };
 use serialization::{Codec, Decode, DecodeAll, Encode, EncodeLike};
 use std::collections::BTreeMap;
 use storage::schema;
-use utxo::{BlockUndo, Utxo, UtxosStorageRead, UtxosStorageWrite};
+use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
 use crate::{
     schema::{self as db, Schema},
@@ -188,7 +188,7 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
         fn get_accounting_undo(
             &self,
             id: Id<Block>,
-        ) -> crate::Result<Option<pos_accounting::BlockUndo>>;
+        ) -> crate::Result<Option<AccountingBlockUndo>>;
     }
 }
 
@@ -196,7 +196,7 @@ impl<B: storage::Backend> UtxosStorageRead for Store<B> {
     delegate_to_transaction! {
         fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
-        fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
+        fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
     }
 }
 
@@ -253,7 +253,7 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
         fn set_accounting_undo_data(
             &mut self,
             id: Id<Block>,
-            undo: &pos_accounting::BlockUndo,
+            undo: &AccountingBlockUndo,
         ) -> crate::Result<()>;
         fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
@@ -264,7 +264,7 @@ impl<B: storage::Backend> UtxosStorageWrite for Store<B> {
         fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
         fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
         fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
-        fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
+        fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
         fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 }
@@ -429,7 +429,7 @@ macro_rules! impl_read_ops {
             fn get_accounting_undo(
                 &self,
                 id: Id<Block>,
-            ) -> crate::Result<Option<pos_accounting::BlockUndo>> {
+            ) -> crate::Result<Option<AccountingBlockUndo>> {
                 self.read::<db::DBAccountsBlockUndo, _, _>(id)
             }
         }
@@ -443,7 +443,7 @@ macro_rules! impl_read_ops {
                 self.read_value::<well_known::UtxosBestBlockId>()
             }
 
-            fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>> {
+            fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
                 self.read::<db::DBBlockUndo, _, _>(id)
             }
         }
@@ -612,7 +612,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     fn set_accounting_undo_data(
         &mut self,
         id: Id<Block>,
-        undo: &pos_accounting::BlockUndo,
+        undo: &AccountingBlockUndo,
     ) -> crate::Result<()> {
         self.write::<db::DBAccountsBlockUndo, _, _, _>(id, undo)
     }
@@ -635,7 +635,7 @@ impl<'st, B: storage::Backend> UtxosStorageWrite for StoreTxRw<'st, B> {
         self.write_value::<well_known::UtxosBestBlockId>(block_id)
     }
 
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()> {
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()> {
         self.write::<db::DBBlockUndo, _, _, _>(id, undo)
     }
 
