@@ -568,58 +568,53 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
         let tx_undo = tx
             .outputs()
             .iter()
-            .filter(|output| match output.purpose() {
-                OutputPurpose::StakePool(_) => true,
+            .filter_map(|output| match output.purpose() {
+                OutputPurpose::StakePool(data) => Some((data, output.value())),
                 OutputPurpose::Transfer(_)
                 | OutputPurpose::LockThenTransfer(_, _)
-                | OutputPurpose::Burn => false,
+                | OutputPurpose::Burn => None,
             })
             .map(
-                |output| -> Result<PoSAccountingUndo, ConnectTransactionError> {
-                    match output.purpose() {
-                        OutputPurpose::StakePool(data) => {
-                            let tx_id = tx.get_id();
-                            let total_inputs = self.calculate_total_inputs(tx.inputs())?;
-                            ensure!(
-                                total_inputs.contains_key(&CoinOrTokenId::Coin),
-                                ConnectTransactionError::MissingCoinOutputToStake
-                            );
-                            ensure!(
-                                total_inputs.len() == 1,
-                                ConnectTransactionError::TokenInputForPoSAccountingOperation(tx_id)
-                            );
-                            // TODO: check StakePoolData fields
+                |(pool_data, output_value)| -> Result<PoSAccountingUndo, ConnectTransactionError> {
+                    let tx_id = tx.get_id();
+                    let total_inputs = self.calculate_total_inputs(tx.inputs())?;
+                    ensure!(
+                        total_inputs.contains_key(&CoinOrTokenId::Coin),
+                        ConnectTransactionError::MissingCoinOutputToStake
+                    );
+                    ensure!(
+                        total_inputs.len() == 1,
+                        ConnectTransactionError::TokenInputForPoSAccountingOperation(tx_id)
+                    );
+                    // TODO: check StakePoolData fields
 
-                            let input0 = tx.inputs().get(0).expect("must be some");
-                            let delegation_amount = output.value().coin_amount().ok_or(
-                                ConnectTransactionError::TokenOutputForPoSAccountingOperation(
-                                    tx_id,
-                                ),
-                            )?;
+                    let input0 = tx.inputs().get(0).expect("must be some");
+                    let delegation_amount = output_value.coin_amount().ok_or(
+                        ConnectTransactionError::TokenOutputForPoSAccountingOperation(tx_id),
+                    )?;
 
-                            let (_, undo) = self
-                                .accounting_delta
-                                .create_pool(
-                                    input0.outpoint(),
-                                    delegation_amount,
-                                    data.decommission_key().clone(),
-                                )
-                                .map_err(ConnectTransactionError::PoSAccountingError)?;
+                    let (_, undo) = self
+                        .accounting_delta
+                        .create_pool(
+                            input0.outpoint(),
+                            delegation_amount,
+                            pool_data.decommission_key().clone(),
+                        )
+                        .map_err(ConnectTransactionError::PoSAccountingError)?;
 
-                            Ok(undo)
-                        }
-                        OutputPurpose::Transfer(_)
-                        | OutputPurpose::LockThenTransfer(_, _)
-                        | OutputPurpose::Burn => unreachable!(),
-                    }
+                    Ok(undo)
                 },
             )
             .collect::<Result<Vec<_>, _>>()?;
 
-        self.accounting_delta_undo
-            .get_or_create_block_undo(&tx_source)
-            .insert_tx_undo(tx.get_id(), pos_accounting::AccountingTxUndo::new(tx_undo))
-            .map_err(ConnectTransactionError::AccountingBlockUndoError)
+        if !tx_undo.is_empty() {
+            self.accounting_delta_undo
+                .get_or_create_block_undo(&tx_source)
+                .insert_tx_undo(tx.get_id(), pos_accounting::AccountingTxUndo::new(tx_undo))
+                .map_err(ConnectTransactionError::AccountingBlockUndoError)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn disconnect_pos_accounting_outputs(
