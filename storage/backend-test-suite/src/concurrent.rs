@@ -96,7 +96,6 @@ fn commutative_read_modify_write<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
     assert_eq!(dbtx.get(IDX.0, TEST_KEY), Ok(Some([8].as_ref())));
 }
 
-#[allow(clippy::redundant_clone)] // This is necessary because we want the lmdb env to shutdown in main thread
 fn threaded_reads_consistent<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     let val = [0x77, 0x88, 0x99].as_ref();
     let store = setup(backend_fn(), val.to_vec());
@@ -114,7 +113,6 @@ fn threaded_reads_consistent<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
         }
     });
     let thr1 = thread::spawn({
-        let store = store.clone();
         move || {
             store
                 .transaction_ro()
