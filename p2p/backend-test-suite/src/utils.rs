@@ -35,24 +35,6 @@ macro_rules! tests {
                     Ok(())
                 }
             ),)*].into_iter()
-
-
-
-            // [$((concat!(module_path!(), "::", stringify!($name)), $name as fn()),)*]
-            // .into_iter()
-            // .map(|(name, test)| {
-            //     let test_fn = move || {
-            //         tokio::runtime::Builder::new_current_thread()
-            //             .enable_all()
-            //             .build()
-            //             .unwrap()
-            //             .block_on(async {
-            //                 test();
-            //             });
-            //         Ok(())
-            //     };
-            //     libtest_mimic::Trial::test(name, test_fn)
-            // })
         }
     }
 }

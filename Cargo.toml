@@ -22,7 +22,7 @@ members = [
   "logging",                      # Logging engine and its interfaces.
   "mempool",                      # Mempool interface and implementation.
   "p2p",                          # P2p communication interfaces and protocols.
-  "p2p/backend-test-suite",   # P2p backend agnostic tests.
+  "p2p/backend-test-suite",       # P2p backend agnostic tests.
   "rpc",                          # Rpc abstraction and implementation.
   "serialization",                # Full featured serialization interfaces and implementations.
   "serialization/core",           # Serialization core tools.
