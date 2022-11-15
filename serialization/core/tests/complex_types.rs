@@ -93,7 +93,7 @@ fn test_scale_structures() {
         field_vector_bytes: Vec<u8>,
         field_btree_map_string: BTreeMap<u128, String>,
         field_btree_map_bytes: BTreeMap<u128, Vec<u8>>,
-        field_nested_stuct: Option<Box<Self>>,
+        field_nested_struct: Option<Box<Self>>,
     }
 
     let mut btree_map = BTreeMap::new();

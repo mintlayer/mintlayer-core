@@ -114,7 +114,7 @@ pub mod testcontext {
 
     /// Test context.
     ///
-    /// The Context implementation for testing. The transaction hash (just 4 bytes for tesing) has
+    /// The Context implementation for testing. The transaction hash (just 4 bytes for testing) has
     /// to be provided explicitly as a byte string. Signature scheme is very simple: The bitwise xor
     /// of transaction hash, signature and public key has to be equal to zero. Not recommended for
     /// production.

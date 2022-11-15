@@ -46,12 +46,12 @@ pub trait WriteOps {
 
 /// Read-only transaction
 ///
-/// If a clenup is required when the transaction closes, [Drop] should be implemented too.
+/// If a cleanup is required when the transaction closes, [Drop] should be implemented too.
 pub trait TxRo: ReadOps {}
 
 /// Read-write transaction
 ///
-/// If a clenup is required when the transaction closes, [Drop] should be implemented too.
+/// If a cleanup is required when the transaction closes, [Drop] should be implemented too.
 pub trait TxRw: ReadOps + WriteOps {
     /// Commit changes from this transaction
     fn commit(self) -> crate::Result<()>;

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Various uncategorised utilities
+//! Various uncategorized utilities
 
 /// Implements standard indexing methods for a given wrapper type
 macro_rules! impl_index_newtype {

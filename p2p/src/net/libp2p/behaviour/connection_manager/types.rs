@@ -127,7 +127,7 @@ impl Connection {
         self.peer_info = peer_info;
     }
 
-    /// Is the connection still pending (either respose or `IdentifyInfo`)
+    /// Is the connection still pending (either response or `IdentifyInfo`)
     pub fn is_pending(&self) -> bool {
         std::matches!(
             self.state,
