@@ -23,7 +23,7 @@ use libp2p::swarm::SwarmEvent;
 use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 use tokio::sync::oneshot;
 
-// try to send request to an uknown peer and verify that the request is not rejected
+// try to send request to an unknown peer and verify that the request is not rejected
 #[tokio::test]
 async fn request_sent_directly_but_peer_not_part_of_swarm() {
     let (mut backend, _cmd, _conn_rx, _sync_rx) = make_libp2p(

@@ -85,7 +85,7 @@ async fn dial_then_disconnect() {
 }
 
 #[tokio::test]
-async fn diconnect_closing_connection() {
+async fn disconnect_closing_connection() {
     let (_peer_id1, mut swarm1) = make_dummy_swarm();
     let (peer_id2, mut swarm2) = make_dummy_swarm();
 

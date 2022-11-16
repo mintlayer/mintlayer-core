@@ -18,7 +18,7 @@
 use crate::Data;
 use std::collections::BTreeMap;
 
-/// Iterator over entries of a [BTreeMap] with keas starting with given prefix
+/// Iterator over entries of a [BTreeMap] with keys starting with given prefix
 pub struct PrefixIter<'m, T> {
     inner: std::collections::btree_map::Range<'m, Data, T>,
     prefix: Data,

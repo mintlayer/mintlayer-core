@@ -92,7 +92,7 @@ mod tests {
             .attach(b"rx42", TranscriptComponent::U64(424242))
             .finalize();
 
-        // build a random number generator using each transcript and ensure they both arribe to the same values
+        // build a random number generator using each transcript and ensure they both arrive to the same values
         let mut g1 = manual_transcript.build_rng().finalize(&mut ChaChaRng::from_seed([0u8; 32]));
         let mut g2 = assembled_transcript
             .0

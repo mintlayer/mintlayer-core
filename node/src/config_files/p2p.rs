@@ -117,13 +117,13 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn mdsn_disabled_but_query_interval_specified() {
+    fn mdns_disabled_but_query_interval_specified() {
         MdnsConfigFile::from_options(Some(false), Some(200), None);
     }
 
     #[test]
     #[should_panic]
-    fn mdsn_disabled_but_ipv6_enabled() {
+    fn mdns_disabled_but_ipv6_enabled() {
         MdnsConfigFile::from_options(Some(false), None, Some(true));
     }
 }

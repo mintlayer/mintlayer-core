@@ -142,7 +142,7 @@ impl<T: CoreOps + Sync + Send + 'static> backend::BackendImpl for TransactionLoc
 
 /// Add lock-based transactions to given bare backend implementation.
 ///
-/// Given a type `T` implementig core database operations [CoreOps], this creates a full-featured
+/// Given a type `T` implementing core database operations [CoreOps], this creates a full-featured
 /// backend by adding the transaction capability. It uses a combination of locking and change
 /// tracking to implement the transaction functionality.
 pub struct Locking<T: Construct>(T::From);
