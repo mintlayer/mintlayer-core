@@ -30,7 +30,7 @@ use tx_verifier::transaction_verifier::{
     config::TransactionVerifierConfig, storage::TransactionVerifierStorageRef, TransactionVerifier,
 };
 
-// TODO: replace with triat_alias when stabilized
+// TODO: replace with trait_alias when stabilized
 pub trait TransactionVerifierMakerFn<'a, S: 'a, U: 'a, A: 'a>:
     Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U, A>
 {
