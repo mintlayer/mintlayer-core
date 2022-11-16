@@ -54,9 +54,7 @@ pub fn check_transferred_amount(
 ) -> Result<(), ConnectTransactionError> {
     for (coin_or_token_id, outputs_total) in outputs_total_map {
         // Does coin or token exist in inputs?
-        let inputs_total = inputs_total_map
-            .get(coin_or_token_id)
-            .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+        let inputs_total = inputs_total_map.get(coin_or_token_id).unwrap_or(&Amount::ZERO);
 
         // Do the outputs exceed inputs?
         if outputs_total > inputs_total {

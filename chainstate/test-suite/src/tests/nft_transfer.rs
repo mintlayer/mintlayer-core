@@ -119,7 +119,7 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::AttemptToPrintMoney(Amount::ZERO, Amount::from_atoms(1))
             ))
         );
     })
