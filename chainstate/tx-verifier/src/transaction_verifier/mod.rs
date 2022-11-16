@@ -560,7 +560,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
         }
     }
 
-    pub fn connect_pos_accounting_outputs(
+    fn connect_pos_accounting_outputs(
         &mut self,
         tx_source: TransactionSource,
         tx: &Transaction,
@@ -576,21 +576,11 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
             })
             .map(
                 |(pool_data, output_value)| -> Result<PoSAccountingUndo, ConnectTransactionError> {
-                    let tx_id = tx.get_id();
-                    let total_inputs = self.calculate_total_inputs(tx.inputs())?;
-                    ensure!(
-                        total_inputs.contains_key(&CoinOrTokenId::Coin),
-                        ConnectTransactionError::MissingCoinOutputToStake
-                    );
-                    ensure!(
-                        total_inputs.len() == 1,
-                        ConnectTransactionError::TokenInputForPoSAccountingOperation(tx_id)
-                    );
                     // TODO: check StakePoolData fields
-
-                    let input0 = tx.inputs().get(0).expect("must be some");
+                    let input0 =
+                        tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
                     let delegation_amount = output_value.coin_amount().ok_or(
-                        ConnectTransactionError::TokenOutputForPoSAccountingOperation(tx_id),
+                        ConnectTransactionError::TokenOutputForPoSAccountingOperation(tx.get_id()),
                     )?;
 
                     let (_, undo) = self
@@ -617,7 +607,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
         }
     }
 
-    pub fn disconnect_pos_accounting_outputs(
+    fn disconnect_pos_accounting_outputs(
         &mut self,
         tx_source: TransactionSource,
         tx: &Transaction,

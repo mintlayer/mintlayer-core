@@ -56,6 +56,8 @@ pub enum TransactionVerifierStorageError {
     AccountingBlockUndoError(#[from] pos_accounting::AccountingBlockUndoError),
 }
 
+// TODO(Gosha): PoSAccountingView should be replaced with PoSAccountingStorageRead in which the
+//              return error type can handle both storage_result::Error and pos_accounting::Error
 pub trait TransactionVerifierStorageRef: UtxosStorageRead + PoSAccountingView {
     fn get_token_id_from_issuance_tx(
         &self,
