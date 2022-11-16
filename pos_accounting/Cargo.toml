@@ -1,0 +1,23 @@
+[package]
+name = "pos_accounting"
+license = "MIT"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+accounting = {path = '../accounting'}
+common = {path = '../common'}
+crypto = {path = '../crypto'}
+chainstate-types = { path = '../chainstate/types' }
+serialization = {path = "../serialization"}
+typename = { path = "../utils/typename" }
+
+thiserror = "1.0"
+parity-scale-codec = "3.1"
+
+[dev-dependencies]
+test-utils = { path = "../test-utils" }
+
+rstest = "0.15"

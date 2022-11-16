@@ -162,7 +162,7 @@ fn test_scale_version_compatibility_struct() {
         field_vector_bytes: Vec<u8>,
         field_btree_map_string: BTreeMap<u128, String>,
         field_btree_map_bytes: BTreeMap<u128, Vec<u8>>,
-        field_nested_stuct: Option<Box<Self>>,
+        field_nested_struct: Option<Box<Self>>,
     }
 
     let mut btree_map = BTreeMap::new();
@@ -227,10 +227,10 @@ fn test_scale_version_compatibility_struct() {
         field_vector_bytes: hex!("48656c6c6f20776f726c64206d79206d616e").to_vec(),
         field_btree_map_string,
         field_btree_map_bytes,
-        field_nested_stuct: None,
+        field_nested_struct: None,
     };
     let mut test_main = test.clone();
-    test_main.field_nested_stuct = Some(Box::new(test));
+    test_main.field_nested_struct = Some(Box::new(test));
 
     let bytes_representation = hex!(
         "0081ff0180ffff01000080ffffffff0100000000000080ffffffffffffffff0100000000000000000000000000

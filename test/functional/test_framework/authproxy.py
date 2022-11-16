@@ -106,7 +106,7 @@ class AuthServiceProxy():
 
     def _request(self, method, path, postdata):
         '''
-        Do a HTTP request, with retry if we get disconnected (e.g. due to a timeout).
+        Do an HTTP request, with retry if we get disconnected (e.g. due to a timeout).
         This is a workaround for https://bugs.python.org/issue3566 which is fixed in Python 3.5.
         '''
         headers = {'Host': self.__url.hostname,

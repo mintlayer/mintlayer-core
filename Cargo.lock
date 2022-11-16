@@ -3206,6 +3206,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pos_accounting"
+version = "0.1.0"
+dependencies = [
+ "accounting",
+ "chainstate-types",
+ "common",
+ "crypto",
+ "parity-scale-codec",
+ "rstest",
+ "serialization",
+ "test-utils",
+ "thiserror",
+ "typename",
+]
+
+[[package]]
 name = "positioned-io"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

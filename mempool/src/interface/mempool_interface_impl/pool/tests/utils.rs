@@ -20,9 +20,9 @@ use common::primitives::H256;
 use super::*;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub(in crate::interface::mempool_interface_impl::pool::tests) struct ValuedOutPoint {
-    pub(in crate::interface::mempool_interface_impl::pool::tests) outpoint: OutPoint,
-    pub(in crate::interface::mempool_interface_impl::pool::tests) value: Amount,
+pub struct ValuedOutPoint {
+    pub outpoint: OutPoint,
+    pub value: Amount,
 }
 
 impl std::cmp::PartialOrd for ValuedOutPoint {
@@ -54,10 +54,7 @@ fn dummy_output() -> TxOutput {
     TxOutput::new(OutputValue::Coin(value), purpose)
 }
 
-pub(in crate::interface::mempool_interface_impl::pool::tests) fn estimate_tx_size(
-    num_inputs: usize,
-    num_outputs: usize,
-) -> usize {
+pub fn estimate_tx_size(num_inputs: usize, num_outputs: usize) -> usize {
     let witnesses: Vec<InputWitness> =
         (0..num_inputs).into_iter().map(|_| dummy_witness()).collect();
     let inputs = (0..num_inputs).into_iter().map(|_| dummy_input()).collect();

@@ -23,6 +23,7 @@ members = [
   "mempool",                      # Mempool interface and implementation.
   "p2p",                          # P2p communication interfaces and protocols.
   "p2p/backend-test-suite",       # P2p backend agnostic tests.
+  "pos_accounting",               # PoS accounting and balances abstractions
   "rpc",                          # Rpc abstraction and implementation.
   "serialization",                # Full featured serialization interfaces and implementations.
   "serialization/core",           # Serialization core tools.

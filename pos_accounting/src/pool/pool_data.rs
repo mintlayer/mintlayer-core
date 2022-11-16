@@ -13,21 +13,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use common::primitives::Amount;
+use crypto::key::PublicKey;
+use serialization::{Decode, Encode};
 
-pub type Time = Duration;
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+pub struct PoolData {
+    decommission_public_key: PublicKey,
+    pledge_amount: Amount,
+}
 
-pub const ROLLING_FEE_BASE_HALFLIFE: Time = Duration::new(60 * 60 * 12, 1);
-// TODO this will be defined elsewhere (some of limits.rs file)
-pub const MAX_BLOCK_SIZE_BYTES: usize = 1_000_000;
+impl PoolData {
+    pub fn new(decommission_public_key: PublicKey, pledge_amount: Amount) -> Self {
+        Self {
+            decommission_public_key,
+            pledge_amount,
+        }
+    }
 
-pub const MAX_BIP125_REPLACEMENT_CANDIDATES: usize = 100;
+    pub fn decommission_key(&self) -> &PublicKey {
+        &self.decommission_public_key
+    }
 
-// TODO this should really be taken from some global node settings
-pub const RELAY_FEE_PER_BYTE: usize = 1;
-
-pub const MAX_MEMPOOL_SIZE_BYTES: usize = 300_000_000;
-
-pub const DEFAULT_MEMPOOL_EXPIRY: Duration = Duration::new(336 * 60 * 60, 0);
-
-pub const ROLLING_FEE_DECAY_INTERVAL: Time = Duration::new(10, 0);
+    pub fn pledge_amount(&self) -> Amount {
+        self.pledge_amount
+    }
+}

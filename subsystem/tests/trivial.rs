@@ -41,7 +41,7 @@ fn shortlived() {
     });
 }
 
-// Test a trivial subsystem sartup/shutdown
+// Test a trivial subsystem startup/shutdown
 #[test]
 fn trivial() {
     let rt = helpers::init_test_runtime();

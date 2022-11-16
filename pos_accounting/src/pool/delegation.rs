@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 RBB S.r.l
+// Copyright (c) 2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,17 +13,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod delta;
-mod error;
+use crypto::key::PublicKey;
+use serialization::{Decode, Encode};
 
-pub use crate::{
-    delta::{
-        combine::{combine_amount_delta, combine_data_with_delta},
-        delta_amount_collection::DeltaAmountCollection,
-        delta_data_collection::{
-            undo::{DataDeltaUndoOp, DeltaDataUndoCollection},
-            DataDelta, DeltaDataCollection,
-        },
-    },
-    error::Error,
-};
+use crate::PoolId;
+
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+pub struct DelegationData {
+    spend_key: PublicKey,
+    source_pool: PoolId,
+}
+
+impl DelegationData {
+    pub fn new(source_pool: PoolId, spend_key: PublicKey) -> Self {
+        Self {
+            spend_key,
+            source_pool,
+        }
+    }
+
+    pub fn spend_public_key(&self) -> &PublicKey {
+        &self.spend_key
+    }
+
+    pub fn source_pool(&self) -> &PoolId {
+        &self.source_pool
+    }
+}
