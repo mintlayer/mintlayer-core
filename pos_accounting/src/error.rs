@@ -53,7 +53,7 @@ pub enum Error {
     DelegationSharesSubtractionError,
     #[error("Pool creation undo failed; pool balance cannot be found")]
     InvariantErrorPoolCreationReversalFailedBalanceNotFound,
-    #[error("Pool creation undo failed; pool balance cannot be found")]
+    #[error("Pool creation undo failed; pool data cannot be found")]
     InvariantErrorPoolCreationReversalFailedDataNotFound,
     #[error("Pledge amount has changed while reversal being done")]
     InvariantErrorPoolCreationReversalFailedAmountChanged,
