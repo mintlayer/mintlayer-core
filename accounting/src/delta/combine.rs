@@ -20,17 +20,17 @@ use crate::error::Error;
 use super::delta_data_collection::DataDelta;
 
 pub fn combine_data_with_delta<T: Clone>(
-    parent_data: Option<T>,
-    local_data: Option<&DataDelta<T>>,
+    lhs: Option<&T>,
+    rhs: Option<&DataDelta<T>>,
 ) -> Result<Option<T>, Error> {
-    match (parent_data, local_data) {
+    match (lhs, rhs) {
         (None, None) => Ok(None),
         (None, Some(d)) => match d {
             DataDelta::Create(d) => Ok(Some(*d.clone())),
             DataDelta::Modify(_) => Err(Error::ModifyNonexistingData),
             DataDelta::Delete => Err(Error::RemoveNonexistingData),
         },
-        (Some(p), None) => Ok(Some(p)),
+        (Some(p), None) => Ok(Some(p.clone())),
         (Some(_), Some(d)) => match d {
             DataDelta::Create(_) => Err(Error::DataCreatedMultipleTimes),
             DataDelta::Modify(d) => Ok(Some(*d.clone())),
@@ -75,14 +75,14 @@ pub mod test {
         let some_data_create = Some(DataDelta::Create(Box::new('b')));
         let some_data_modify = Some(DataDelta::Modify(Box::new('b')));
 
-        assert_eq!(combine_data_with_delta::<i32>(None,   None),                      Ok(None));
-        assert_eq!(combine_data_with_delta(None,          some_data_create.as_ref()), Ok(Some('b')));
-        assert_eq!(combine_data_with_delta(None,          some_data_modify.as_ref()), Err(Error::ModifyNonexistingData));
-        assert_eq!(combine_data_with_delta::<i32>(None,   Some(&DataDelta::Delete)),  Err(Error::RemoveNonexistingData));
-        assert_eq!(combine_data_with_delta(Some('a'),     None),                      Ok(Some('a')));
-        assert_eq!(combine_data_with_delta(Some('a'),     some_data_create.as_ref()), Err(Error::DataCreatedMultipleTimes));
-        assert_eq!(combine_data_with_delta(Some('a'),     some_data_modify.as_ref()), Ok(Some('b')));
-        assert_eq!(combine_data_with_delta(Some('a'),     Some(&DataDelta::Delete)),  Ok(None));
+        assert_eq!(combine_data_with_delta::<i32>(None,    None),                      Ok(None));
+        assert_eq!(combine_data_with_delta(None,           some_data_create.as_ref()), Ok(Some('b')));
+        assert_eq!(combine_data_with_delta(None,           some_data_modify.as_ref()), Err(Error::ModifyNonexistingData));
+        assert_eq!(combine_data_with_delta::<i32>(None,    Some(&DataDelta::Delete)),  Err(Error::RemoveNonexistingData));
+        assert_eq!(combine_data_with_delta(Some(&'a'),     None),                      Ok(Some('a')));
+        assert_eq!(combine_data_with_delta(Some(&'a'),     some_data_create.as_ref()), Err(Error::DataCreatedMultipleTimes));
+        assert_eq!(combine_data_with_delta(Some(&'a'),     some_data_modify.as_ref()), Ok(Some('b')));
+        assert_eq!(combine_data_with_delta(Some(&'a'),     Some(&DataDelta::Delete)),  Ok(None));
     }
 
     #[test]

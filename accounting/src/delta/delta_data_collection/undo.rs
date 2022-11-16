@@ -18,10 +18,12 @@ use std::collections::BTreeMap;
 use super::DataDelta;
 
 /// The operations we have to do in order to undo a delta
-pub enum DataDeltaUndoOp<T> {
+pub(super) enum DataDeltaUndoOpInternal<T> {
     Write(DataDelta<T>),
     Erase,
 }
+
+pub struct DataDeltaUndoOp<T>(pub(super) DataDeltaUndoOpInternal<T>);
 
 pub struct DeltaDataUndoCollection<K: Ord, T> {
     data: BTreeMap<K, DataDeltaUndoOp<T>>,

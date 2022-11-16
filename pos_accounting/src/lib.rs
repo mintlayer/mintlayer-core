@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 RBB S.r.l
+// Copyright (c) 2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,17 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod delta;
-mod error;
+use common::primitives::Id;
+use typename::TypeName;
 
-pub use crate::{
-    delta::{
-        combine::{combine_amount_delta, combine_data_with_delta},
-        delta_amount_collection::DeltaAmountCollection,
-        delta_data_collection::{
-            undo::{DataDeltaUndoOp, DeltaDataUndoCollection},
-            DataDelta, DeltaDataCollection,
-        },
-    },
-    error::Error,
-};
+pub mod error;
+pub mod pool;
+pub mod storage;
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, TypeName)]
+pub struct Pool;
+type PoolId = Id<Pool>;
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, TypeName)]
+pub struct Delegation;
+type DelegationId = Id<Delegation>;
