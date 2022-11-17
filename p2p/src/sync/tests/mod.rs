@@ -13,20 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
-
 use libp2p::PeerId;
-use tokio::time::timeout;
 
 use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
 
 use super::*;
 use crate::{
     event::{SwarmEvent, SyncControlEvent},
-    net::{
-        libp2p::Libp2pService, mock::types::MockPeerId, types::ConnectivityEvent,
-        ConnectivityService,
-    },
+    net::{libp2p::Libp2pService, mock::types::MockPeerId, ConnectivityService},
 };
 
 mod block_response;
@@ -76,37 +70,6 @@ where
         tx_p2p_sync,
         rx_swarm,
     )
-}
-
-pub async fn connect_services<T>(
-    conn1: &mut T::ConnectivityHandle,
-    conn2: &mut T::ConnectivityHandle,
-) where
-    T: NetworkingService + std::fmt::Debug + 'static,
-    T::ConnectivityHandle: ConnectivityService<T>,
-{
-    let addr = timeout(Duration::from_secs(5), conn2.local_addr())
-        .await
-        .expect("local address fetch not to timeout")
-        .unwrap()
-        .unwrap();
-    conn1.connect(addr).await.expect("dial to succeed");
-
-    match timeout(Duration::from_secs(5), conn2.poll_next()).await {
-        Ok(event) => match event.unwrap() {
-            ConnectivityEvent::InboundAccepted { .. } => {}
-            event => panic!("expected `InboundAccepted`, got {event:?}"),
-        },
-        Err(_err) => panic!("did not receive `InboundAccepted` in time"),
-    }
-
-    match timeout(Duration::from_secs(5), conn1.poll_next()).await {
-        Ok(event) => match event.unwrap() {
-            ConnectivityEvent::OutboundAccepted { .. } => {}
-            event => panic!("expected `OutboundAccepted`, got {event:?}"),
-        },
-        Err(_err) => panic!("did not receive `OutboundAccepted` in time"),
-    }
 }
 
 async fn register_peer<T>(mgr: &mut BlockSyncManager<T>, peer_id: T::PeerId)

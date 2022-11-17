@@ -24,6 +24,7 @@ use crate::{
         transport::{ChannelMockTransport, TcpMockTransport},
         MockService,
     },
+    peer_manager::helpers::connect_services,
 };
 use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress};
 

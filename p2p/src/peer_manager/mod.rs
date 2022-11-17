@@ -21,6 +21,7 @@
 
 #![allow(rustdoc::private_intra_doc_links)]
 
+pub mod helpers;
 pub mod peerdb;
 
 use std::{

@@ -31,7 +31,8 @@ use crate::{
         types::{Protocol, ProtocolType},
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
-    peer_manager::tests::{connect_services, default_protocols, make_peer_manager},
+    peer_manager::helpers::connect_services,
+    peer_manager::tests::{default_protocols, make_peer_manager},
 };
 
 // ban peer whose connected to us
