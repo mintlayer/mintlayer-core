@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod default_strategy;
+pub mod tx_verification_strategy_utils;
 
 pub use default_strategy::DefaultTransactionVerificationStrategy;
 use utxo::UtxosView;

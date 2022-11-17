@@ -14,11 +14,15 @@
 // limitations under the License.
 
 use chainstate::{
-    calculate_median_time_past, BlockError, TransactionVerificationStrategy, TxIndexError,
+    calculate_median_time_past,
+    tx_verification_strategy_utils::{
+        construct_reward_tx_indices, construct_tx_indices, take_tx_index,
+    },
+    BlockError, TransactionVerificationStrategy,
 };
 use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
-    chain::{calculate_tx_offsets_in_block, Block, ChainConfig},
+    chain::{Block, ChainConfig},
     primitives::{id::WithId, Amount, Idable},
 };
 use tx_verifier::transaction_verifier::{
@@ -67,17 +71,16 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         let median_time_past =
             calculate_median_time_past(block_index_handle, &block.prev_block_id());
 
+        let mut tx_indices = construct_tx_indices(&verifier_config, block)?;
+        let block_reward_tx_index = construct_reward_tx_indices(&verifier_config, block)?;
+
         let mut base_tx_verifier =
             tx_verifier_maker(storage_backend, chain_config, verifier_config);
-
-        let tx_indices = calculate_tx_offsets_in_block(block)
-            .map_err(TxIndexError::from)
-            .map_err(ConnectTransactionError::from)?;
 
         let reward_fees = base_tx_verifier
             .connect_transactable(
                 block_index,
-                BlockTransactableWithIndexRef::BlockReward(block),
+                BlockTransactableWithIndexRef::BlockReward(block, block_reward_tx_index),
                 &median_time_past,
             )
             .log_err()?;
@@ -95,7 +98,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                         BlockTransactableWithIndexRef::Transaction(
                             block,
                             tx_num,
-                            &tx_indices[tx_num],
+                            take_tx_index(&mut tx_indices),
                         ),
                         &median_time_past,
                     )

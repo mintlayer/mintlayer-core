@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
+
 use super::Transaction;
 use crate::{
     chain::{Block, GenBlock},
@@ -127,11 +129,10 @@ impl SpendablePosition {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(thiserror::Error, Clone, Debug, PartialEq, Eq)]
 pub enum TxMainChainIndexError {
+    #[error("Output length is either zero or too high")]
     InvalidOutputCount,
-    SerializationInvariantError(Id<Block>),
-    InvalidTxNumberForBlock(usize, Id<Block>),
 }
 
 /// Assuming a transaction is in the mainchain, its index contains two things:
@@ -146,10 +147,10 @@ pub struct TxMainChainIndex {
 
 pub fn calculate_tx_offsets_in_block(
     block: &Block,
-) -> Result<Vec<TxMainChainIndex>, TxMainChainIndexError> {
+) -> Result<VecDeque<TxMainChainIndex>, TxMainChainIndexError> {
     let offsets = match block {
         Block::V1(_) => {
-            let mut result = Vec::new();
+            let mut result = VecDeque::new();
             result.resize(block.transactions().len(), 0);
             // Transactions serialized last in block
             let mut offset = u32::try_from(block.encoded_size()).expect("must not fail");

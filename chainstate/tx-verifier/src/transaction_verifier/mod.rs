@@ -86,21 +86,28 @@ pub enum BlockTransactableRef<'a> {
 }
 
 /// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum BlockTransactableWithIndexRef<'a> {
-    Transaction(&'a WithId<Block>, usize, &'a TxMainChainIndex),
-    BlockReward(&'a WithId<Block>),
+    Transaction(&'a WithId<Block>, usize, Option<TxMainChainIndex>),
+    BlockReward(&'a WithId<Block>, Option<TxMainChainIndex>),
 }
 
-impl<'a> From<BlockTransactableWithIndexRef<'a>> for BlockTransactableRef<'a> {
-    fn from(value: BlockTransactableWithIndexRef<'a>) -> Self {
-        match value {
+impl<'a> BlockTransactableWithIndexRef<'a> {
+    pub fn without_tx_index(&self) -> BlockTransactableRef<'a> {
+        match self {
             BlockTransactableWithIndexRef::Transaction(block, index, _) => {
-                BlockTransactableRef::Transaction(block, index)
+                BlockTransactableRef::Transaction(block, *index)
             }
-            BlockTransactableWithIndexRef::BlockReward(block) => {
+            BlockTransactableWithIndexRef::BlockReward(block, _) => {
                 BlockTransactableRef::BlockReward(block)
             }
+        }
+    }
+
+    pub fn take_tx_index(self) -> Option<TxMainChainIndex> {
+        match self {
+            BlockTransactableWithIndexRef::Transaction(_, _, idx) => idx,
+            BlockTransactableWithIndexRef::BlockReward(_, idx) => idx,
         }
     }
 }
@@ -156,6 +163,13 @@ pub struct TransactionVerifierConfig {
 impl TransactionVerifierConfig {
     pub fn new(tx_index_enabled: bool) -> Self {
         Self { tx_index_enabled }
+    }
+
+    pub fn if_tx_index_enabled<F, T, E>(&self, f: F) -> Result<Option<T>, E>
+    where
+        F: FnOnce() -> Result<T, E>,
+    {
+        self.tx_index_enabled.then(f).transpose()
     }
 }
 
@@ -724,7 +738,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
         median_time_past: &BlockTimestamp,
     ) -> Result<Option<Fee>, ConnectTransactionError> {
         let fee = match spend_ref {
-            BlockTransactableWithIndexRef::Transaction(block, tx_num, _tx_index) => {
+            BlockTransactableWithIndexRef::Transaction(block, tx_num, ref _tx_index) => {
                 let block_id = block.get_id();
                 let tx = block.transactions().get(tx_num).ok_or(
                     ConnectTransactionError::TxNumWrongInBlockOnConnect(tx_num, block_id),
@@ -738,15 +752,18 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
                     median_time_past,
                 )?
             }
-            BlockTransactableWithIndexRef::BlockReward(block) => {
+            BlockTransactableWithIndexRef::BlockReward(block, _) => {
                 self.connect_block_reward(block_index, block.block_reward_transactable())?;
                 None
             }
         };
         // add tx index to the cache
-        if let Some(tx_index_cache) = self.get_tx_cache_mut() {
-            tx_index_cache.add_tx_index(spend_ref)?;
-        }
+        self.verifier_config.if_tx_index_enabled(|| {
+            self.tx_index_cache.add_tx_index(
+                spend_ref.without_tx_index(),
+                spend_ref.take_tx_index().expect("Guaranteed by verifier_config"),
+            )
+        })?;
 
         Ok(fee)
     }
