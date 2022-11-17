@@ -21,7 +21,7 @@ use common::{
 };
 use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, error::TxIndexError};
 
-pub fn take_tx_index(
+pub fn take_front_tx_index(
     tx_indices: &mut Option<VecDeque<TxMainChainIndex>>,
 ) -> Option<TxMainChainIndex> {
     match tx_indices {

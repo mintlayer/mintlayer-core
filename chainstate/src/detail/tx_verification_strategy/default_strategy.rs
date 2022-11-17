@@ -17,7 +17,7 @@ use super::TransactionVerificationStrategy;
 use crate::{
     calculate_median_time_past,
     tx_verification_strategy_utils::{
-        construct_reward_tx_indices, construct_tx_indices, take_tx_index,
+        construct_reward_tx_indices, construct_tx_indices, take_front_tx_index,
     },
     BlockError,
 };
@@ -94,7 +94,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
                         BlockTransactableWithIndexRef::Transaction(
                             block,
                             tx_num,
-                            take_tx_index(&mut tx_indices),
+                            take_front_tx_index(&mut tx_indices),
                         ),
                         &median_time_past,
                     )
