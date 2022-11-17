@@ -197,7 +197,7 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
             ))
             .build();
         let tx0_id = tx0.transaction().get_id();
-        let token_id = common::chain::tokens::token_id(&tx0.transaction()).unwrap();
+        let token_id = common::chain::tokens::token_id(tx0.transaction()).unwrap();
 
         let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let (_, vrf_pub_key) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
@@ -281,7 +281,7 @@ fn stake_pool_with_tokens_as_input_value(#[case] seed: Seed) {
             ))
             .build();
         let tx0_id = tx0.transaction().get_id();
-        let token_id = common::chain::tokens::token_id(&tx0.transaction()).unwrap();
+        let token_id = common::chain::tokens::token_id(tx0.transaction()).unwrap();
 
         let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let (_, vrf_pub_key) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);

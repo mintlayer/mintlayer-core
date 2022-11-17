@@ -579,9 +579,9 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
                     // TODO: check StakePoolData fields
                     let input0 =
                         tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
-                    let delegation_amount = output_value.coin_amount().ok_or(
-                        ConnectTransactionError::TokenOutputForPoSAccountingOperation(tx.get_id()),
-                    )?;
+                    let delegation_amount = output_value.coin_amount().ok_or_else(|| {
+                        ConnectTransactionError::TokenOutputForPoSAccountingOperation(tx.get_id())
+                    })?;
 
                     let (_, undo) = self
                         .accounting_delta

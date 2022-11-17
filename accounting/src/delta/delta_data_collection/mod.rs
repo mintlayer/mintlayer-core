@@ -101,10 +101,10 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
         &mut self,
         undo_data: DeltaDataUndoCollection<K, T>,
     ) -> Result<(), Error> {
-        for (key, data) in undo_data.consume().into_iter() {
-            self.undo_merge_delta_data_element(key, data)?
-        }
-        Ok(())
+        undo_data
+            .consume()
+            .into_iter()
+            .try_for_each(|(key, data)| self.undo_merge_delta_data_element(key, data))
     }
 
     pub fn undo_merge_delta_data_element(
@@ -113,10 +113,14 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
         data: DataDeltaUndoOp<T>,
     ) -> Result<(), Error> {
         match data.0 {
-            DataDeltaUndoOpInternal::Write(undo) => self.data.insert(key, undo),
-            DataDeltaUndoOpInternal::Erase => self.data.remove(&key),
-        };
-        Ok(())
+            DataDeltaUndoOpInternal::Write(undo) => {
+                self.data.insert(key, undo);
+                Ok(())
+            }
+            DataDeltaUndoOpInternal::Erase => {
+                self.data.remove(&key).ok_or(Error::RemoveNonexistingData).map(|_| ())
+            }
+        }
     }
 
     pub fn data(&self) -> &BTreeMap<K, DataDelta<T>> {
@@ -228,6 +232,47 @@ pub mod test {
 
         collection1.undo_merge_delta_data(undo_data).unwrap();
         assert_eq!(collection1.data, collection1_origin.data);
+    }
+
+    #[test]
+    fn test_undo_nonexisting_data() {
+        let mut collection: DeltaDataCollection<i32, char> = DeltaDataCollection::new();
+
+        assert_eq!(
+            collection
+                .undo_merge_delta_data_element(1, DataDeltaUndoOp(DataDeltaUndoOpInternal::Erase))
+                .unwrap_err(),
+            Error::RemoveNonexistingData
+        );
+        assert_eq!(collection.data().len(), 0);
+
+        collection
+            .undo_merge_delta_data_element(
+                1,
+                DataDeltaUndoOp(DataDeltaUndoOpInternal::Write(DataDelta::Create(Box::new(
+                    'a',
+                )))),
+            )
+            .unwrap();
+        assert_eq!(collection.data().len(), 1);
+
+        collection
+            .undo_merge_delta_data_element(
+                2,
+                DataDeltaUndoOp(DataDeltaUndoOpInternal::Write(DataDelta::Modify(Box::new(
+                    'a',
+                )))),
+            )
+            .unwrap();
+        assert_eq!(collection.data().len(), 2);
+
+        collection
+            .undo_merge_delta_data_element(
+                3,
+                DataDeltaUndoOp(DataDeltaUndoOpInternal::Write(DataDelta::Delete)),
+            )
+            .unwrap();
+        assert_eq!(collection.data().len(), 3);
     }
 
     // TODO: increase test coverage (consider using proptest)

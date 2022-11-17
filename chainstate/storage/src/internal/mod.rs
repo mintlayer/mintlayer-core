@@ -94,6 +94,49 @@ impl<B: storage::Backend> Store<B> {
 
         Ok(res)
     }
+
+    /// Collect and return all accounting data from storage
+    pub fn read_accounting_data(&self) -> crate::Result<pos_accounting::PoSAccountingData> {
+        let db = self.transaction_ro()?;
+        let pool_data =
+            db.0.get::<db::DBAccountsPoolData, _>()
+                .prefix_iter(&())?
+                .map(|(k, v)| crate::Result::<(PoolId, PoolData)>::Ok((k, v.decode())))
+                .collect::<Result<BTreeMap<_, _>, _>>()?;
+
+        let pool_balances =
+            db.0.get::<db::DBAccountsPoolBalances, _>()
+                .prefix_iter(&())?
+                .map(|(k, v)| crate::Result::<(PoolId, Amount)>::Ok((k, v.decode())))
+                .collect::<Result<BTreeMap<_, _>, _>>()?;
+
+        let delegation_data =
+            db.0.get::<db::DBAccountsDelegationData, _>()
+                .prefix_iter(&())?
+                .map(|(k, v)| crate::Result::<(DelegationId, DelegationData)>::Ok((k, v.decode())))
+                .collect::<Result<BTreeMap<_, _>, _>>()?;
+
+        let delegation_balances =
+            db.0.get::<db::DBAccountsDelegationBalances, _>()
+                .prefix_iter(&())?
+                .map(|(k, v)| crate::Result::<(DelegationId, Amount)>::Ok((k, v.decode())))
+                .collect::<Result<BTreeMap<_, _>, _>>()?;
+
+        let pool_delegation_shares = db
+            .0
+            .get::<db::DBAccountsPoolDelegationShares, _>()
+            .prefix_iter(&())?
+            .map(|(k, v)| crate::Result::<((PoolId, DelegationId), Amount)>::Ok((k, v.decode())))
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+
+        Ok(pos_accounting::PoSAccountingData {
+            pool_data,
+            pool_balances,
+            pool_delegation_shares,
+            delegation_balances,
+            delegation_data,
+        })
+    }
 }
 
 impl<B: Default + storage::Backend> Store<B> {
