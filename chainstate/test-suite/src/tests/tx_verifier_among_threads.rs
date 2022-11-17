@@ -47,9 +47,9 @@ impl UtxosView for EmptyUtxosView {
     }
 }
 
-pub struct EmptyAccountsView;
+pub struct EmptyAccountingView;
 
-impl PoSAccountingView for EmptyAccountsView {
+impl PoSAccountingView for EmptyAccountingView {
     fn pool_exists(&self, _pool_id: pos_accounting::PoolId) -> Result<bool, pos_accounting::Error> {
         Ok(false)
     }
@@ -117,13 +117,13 @@ fn transfer_tx_verifier_to_thread(#[case] seed: Seed) {
         let storage = InMemoryStorageWrapper::new(storage, chain_config.clone());
 
         let utxos = EmptyUtxosView {};
-        let accounts = EmptyAccountsView {};
+        let accounting = EmptyAccountingView {};
 
         let verifier = TransactionVerifier::new_from_handle(
             &storage,
             &chain_config,
             utxos,
-            accounts,
+            accounting,
             TransactionVerifierConfig::new(false),
         );
 

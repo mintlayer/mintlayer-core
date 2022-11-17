@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod accounts_undo_cache;
+mod accounting_undo_cache;
 mod amounts_map;
 mod cached_operation;
 mod token_issuance_cache;
@@ -30,7 +30,7 @@ pub mod storage;
 use std::collections::BTreeMap;
 
 use self::{
-    accounts_undo_cache::{AccountsBlockUndoCache, AccountsBlockUndoEntry},
+    accounting_undo_cache::{AccountingBlockUndoCache, AccountingBlockUndoEntry},
     amounts_map::AmountsMap,
     cached_operation::CachedInputsOperation,
     config::TransactionVerifierConfig,
@@ -166,7 +166,7 @@ pub struct TransactionVerifierDelta {
     utxo_block_undo: BTreeMap<TransactionSource, UtxosBlockUndoEntry>,
     token_issuance_cache: ConsumedTokenIssuanceCache,
     accounting_delta: PoSAccountingDeltaData,
-    accounting_delta_undo: BTreeMap<TransactionSource, AccountsBlockUndoEntry>,
+    accounting_delta_undo: BTreeMap<TransactionSource, AccountingBlockUndoEntry>,
 }
 
 /// The tool used to verify transaction and cache their updated states in memory
@@ -183,7 +183,7 @@ pub struct TransactionVerifier<'a, S, U, A> {
     utxo_block_undo: UtxosBlockUndoCache,
 
     accounting_delta: PoSAccountingDelta<'a, A>,
-    accounting_delta_undo: AccountsBlockUndoCache,
+    accounting_delta_undo: AccountingBlockUndoCache,
 }
 
 impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S, UtxosDB<&'a S>, S> {
@@ -201,7 +201,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S, UtxosDB<&'
             utxo_block_undo: UtxosBlockUndoCache::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
             accounting_delta: PoSAccountingDelta::from_borrowed_parent(storage_ref),
-            accounting_delta_undo: AccountsBlockUndoCache::new(),
+            accounting_delta_undo: AccountingBlockUndoCache::new(),
             best_block: storage_ref
                 .get_best_block_for_utxos()
                 .expect("Database error while reading utxos best block")
@@ -219,8 +219,8 @@ where
     pub fn new_from_handle(
         storage_ref: &'a S,
         chain_config: &'a ChainConfig,
-        utxos: U,    // TODO: Replace this parameter with handle
-        accounts: A, // TODO: Replace this parameter with handle
+        utxos: U,      // TODO: Replace this parameter with handle
+        accounting: A, // TODO: Replace this parameter with handle
         verifier_config: TransactionVerifierConfig,
     ) -> Self {
         Self {
@@ -230,8 +230,8 @@ where
             utxo_cache: UtxosCache::new(utxos), // TODO: take utxos from handle
             utxo_block_undo: UtxosBlockUndoCache::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
-            accounting_delta: PoSAccountingDelta::from_owned_parent(accounts),
-            accounting_delta_undo: AccountsBlockUndoCache::new(),
+            accounting_delta: PoSAccountingDelta::from_owned_parent(accounting),
+            accounting_delta_undo: AccountingBlockUndoCache::new(),
             best_block: storage_ref
                 .get_best_block_for_utxos()
                 .expect("Database error while reading utxos best block")
@@ -256,7 +256,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
             utxo_block_undo: UtxosBlockUndoCache::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
             accounting_delta: PoSAccountingDelta::from_borrowed_parent(&self.accounting_delta),
-            accounting_delta_undo: AccountsBlockUndoCache::new(),
+            accounting_delta_undo: AccountingBlockUndoCache::new(),
             best_block: self.best_block,
         }
     }

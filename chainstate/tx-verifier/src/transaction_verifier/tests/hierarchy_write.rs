@@ -850,13 +850,14 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
         let block_undo =
             AccountingBlockUndo::new(BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]));
 
-        verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
-            TransactionSource::Chain(block_undo_id_1),
-            AccountsBlockUndoEntry {
-                undo: block_undo,
-                is_fresh: true,
-            },
-        )]));
+        verifier.accounting_delta_undo =
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+                TransactionSource::Chain(block_undo_id_1),
+                AccountingBlockUndoEntry {
+                    undo: block_undo,
+                    is_fresh: true,
+                },
+            )]));
         verifier
     };
 
@@ -871,13 +872,14 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
         let block_undo =
             AccountingBlockUndo::new(BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]));
 
-        verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
-            TransactionSource::Chain(block_undo_id_2),
-            AccountsBlockUndoEntry {
-                undo: block_undo,
-                is_fresh: true,
-            },
-        )]));
+        verifier.accounting_delta_undo =
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+                TransactionSource::Chain(block_undo_id_2),
+                AccountingBlockUndoEntry {
+                    undo: block_undo,
+                    is_fresh: true,
+                },
+            )]));
         verifier
     };
 
@@ -923,26 +925,28 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
         let mut verifier =
             TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
 
-        verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
-            TransactionSource::Chain(block_undo_id_1),
-            AccountsBlockUndoEntry {
-                undo: Default::default(),
-                is_fresh: false,
-            },
-        )]));
+        verifier.accounting_delta_undo =
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+                TransactionSource::Chain(block_undo_id_1),
+                AccountingBlockUndoEntry {
+                    undo: Default::default(),
+                    is_fresh: false,
+                },
+            )]));
         verifier
     };
 
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
 
-        verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
-            TransactionSource::Chain(block_undo_id_2),
-            AccountsBlockUndoEntry {
-                undo: Default::default(),
-                is_fresh: false,
-            },
-        )]));
+        verifier.accounting_delta_undo =
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+                TransactionSource::Chain(block_undo_id_2),
+                AccountingBlockUndoEntry {
+                    undo: Default::default(),
+                    is_fresh: false,
+                },
+            )]));
         verifier
     };
 
