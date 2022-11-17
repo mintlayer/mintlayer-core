@@ -2939,6 +2939,7 @@ dependencies = [
  "logging",
  "mempool",
  "once_cell",
+ "p2p-backend-test-suite",
  "p2p-test-utils",
  "parity-scale-codec",
  "portpicker",
@@ -2952,6 +2953,22 @@ dependencies = [
  "tokio-util",
  "utils",
  "void",
+]
+
+[[package]]
+name = "p2p-backend-test-suite"
+version = "0.1.0"
+dependencies = [
+ "chainstate",
+ "common",
+ "futures",
+ "libtest-mimic",
+ "logging",
+ "p2p",
+ "p2p-test-utils",
+ "serialization",
+ "subsystem",
+ "tokio",
 ]
 
 [[package]]

@@ -22,7 +22,6 @@ use crate::{
             service::connectivity::{parse_discovered_addr, parse_peers},
             Libp2pService,
         },
-        types::ConnectivityEvent,
         ConnectivityService, NetworkingService,
     },
 };
@@ -36,72 +35,6 @@ use tokio::net::TcpListener;
 struct Transaction {
     hash: u64,
     value: u128,
-}
-
-#[tokio::test]
-async fn test_connect_new() {
-    let config = Arc::new(common::chain::config::create_mainnet());
-    let service =
-        Libp2pService::start(MakeP2pAddress::make_address(), config, Default::default()).await;
-    assert!(service.is_ok());
-}
-
-// verify that binding to the same interface twice is not possible
-#[ignore]
-#[tokio::test]
-async fn test_connect_new_addrinuse() {
-    let config = Arc::new(common::chain::config::create_mainnet());
-    let service = Libp2pService::start(
-        MakeP2pAddress::make_address(),
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await;
-    assert!(service.is_ok());
-
-    let service =
-        Libp2pService::start(MakeP2pAddress::make_address(), config, Default::default()).await;
-
-    match service {
-        Err(e) => {
-            assert_eq!(
-                e,
-                P2pError::DialError(DialError::IoError(std::io::ErrorKind::AddrInUse))
-            );
-        }
-        Ok(_) => panic!("address is not in use"),
-    }
-}
-
-// try to connect two nodes together by having `service1` listen for network events
-// and having `service2` trying to connect to `service1`
-#[tokio::test]
-async fn test_connect_accept() {
-    let config = Arc::new(common::chain::config::create_mainnet());
-    let service1 = Libp2pService::start(
-        MakeP2pAddress::make_address(),
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await;
-    let service2 = Libp2pService::start(
-        MakeP2pAddress::make_address(),
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await;
-    assert!(service1.is_ok());
-    assert!(service2.is_ok());
-
-    let (mut service1, _) = service1.unwrap();
-    let (mut service2, _) = service2.unwrap();
-    let conn_addr = service1.local_addr().await.unwrap().unwrap();
-
-    let (res1, res2): (crate::Result<ConnectivityEvent<Libp2pService>>, _) =
-        tokio::join!(service1.poll_next(), service2.connect(conn_addr));
-
-    assert!(res2.is_ok());
-    assert!(res1.is_ok());
 }
 
 // try to connect to a remote peer with a multi-address that's missing the peerid

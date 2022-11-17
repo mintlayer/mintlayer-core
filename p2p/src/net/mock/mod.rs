@@ -47,6 +47,7 @@ use crate::{
 #[derive(Debug)]
 pub struct MockService<T: MockTransport>(PhantomData<T>);
 
+#[derive(Debug)]
 pub struct MockConnectivityHandle<S: NetworkingService, T: MockTransport> {
     /// The local address of a network service provider.
     local_addr: S::Address,
@@ -77,6 +78,7 @@ where
     _marker: PhantomData<fn() -> S>,
 }
 
+#[derive(Debug)]
 pub struct MockSyncingMessagingHandle<S, T>
 where
     S: NetworkingService,

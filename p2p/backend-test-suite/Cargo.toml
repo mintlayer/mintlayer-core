@@ -1,0 +1,18 @@
+[package]
+name = "p2p-backend-test-suite"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+common = { path = "../../common" }
+p2p = { path = "../../p2p" }
+p2p-test-utils = { path = "../p2p-test-utils" }
+logging = { path = "../../logging" }
+serialization = { path = "../../serialization" }
+chainstate = { path = "../../chainstate/" }
+subsystem = { path = "../../subsystem/" }
+
+tokio = { version = "1", default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
+futures = "0.3"
+libtest-mimic = "0.5"

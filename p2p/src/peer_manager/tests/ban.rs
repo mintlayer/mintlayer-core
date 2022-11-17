@@ -15,8 +15,6 @@
 
 use std::sync::Arc;
 
-use libp2p::Multiaddr;
-
 use common::{chain::config, primitives::semver::SemVer};
 use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress};
 
@@ -27,6 +25,7 @@ use crate::{
         libp2p::Libp2pService,
         mock::{
             transport::{ChannelMockTransport, TcpMockTransport},
+            types::MockPeerId,
             MockService,
         },
         types::{Protocol, ProtocolType},
@@ -84,10 +83,12 @@ async fn ban_connected_peer_mock_tcp() {
     ban_connected_peer::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
+#[ignore]
 #[tokio::test]
 async fn ban_connected_peer_mock_channels() {
-    // TODO: implement `ban_peer()`
-    // ban_connected_peer::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    // TODO: Currently in the channels backend peer receives a new address everytime it connects.
+    // For the banning to work properly the addresses must be persistent.
+    ban_connected_peer::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
 }
 
 async fn banned_peer_attempts_to_connect<A, T>()
@@ -144,16 +145,19 @@ async fn banned_peer_attempts_to_connect_libp2p() {
     banned_peer_attempts_to_connect::<MakeP2pAddress, Libp2pService>().await;
 }
 
+#[ignore]
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_mock_tcp() {
     // TODO: implement proper peer banning
-    // banned_peer_attempts_to_connect::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    banned_peer_attempts_to_connect::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
+#[ignore]
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_mock_channel() {
     // TODO: implement proper peer banning
-    // banned_peer_attempts_to_connect::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    banned_peer_attempts_to_connect::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+        .await;
 }
 
 // attempt to connect to banned peer
@@ -222,30 +226,32 @@ async fn connect_to_banned_peer_libp2p() {
 
 #[tokio::test]
 async fn connect_to_banned_peer_mock_tcp() {
-    // TODO: implement proper peer banning
-    // connect_to_banned_peer::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    connect_to_banned_peer::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
+#[ignore]
 #[tokio::test]
 async fn connect_to_banned_peer_mock_channels() {
-    // TODO: implement proper peer banning
-    // connect_to_banned_peer::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    // TODO: Currently in the channels backend peer receives a new address everytime it connects.
+    // For the banning to work properly the addresses must be persistent.
+    connect_to_banned_peer::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
 }
 
-#[tokio::test]
-async fn validate_invalid_outbound_connection() {
+async fn validate_invalid_outbound_connection<A, S>(peer_address: S::Address, peer_id: S::PeerId)
+where
+    A: MakeTestAddress<Address = S::Address>,
+    S: NetworkingService + 'static + std::fmt::Debug,
+    S::ConnectivityHandle: ConnectivityService<S>,
+    <S as net::NetworkingService>::Address: std::str::FromStr,
+    <<S as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+{
     let config = Arc::new(config::create_mainnet());
-    let mut swarm =
-        make_peer_manager::<Libp2pService>(MakeP2pAddress::make_address(), Arc::clone(&config))
-            .await;
+    let mut swarm = make_peer_manager::<S>(A::make_address(), Arc::clone(&config)).await;
 
     // valid connection
-    let peer_id = libp2p::PeerId::random();
-    let address: Multiaddr = "/ip4/175.69.140.46".parse().unwrap();
-    let bannable_address = address.as_bannable();
     let res = swarm.accept_connection(
-        address,
-        net::types::PeerInfo::<Libp2pService> {
+        peer_address.clone(),
+        net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
             version: common::primitives::semver::SemVer::new(0, 1, 0),
@@ -255,14 +261,12 @@ async fn validate_invalid_outbound_connection() {
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(swarm.peerdb.is_active_peer(&peer_id));
-    assert!(!swarm.peerdb.is_address_banned(&bannable_address));
+    assert!(!swarm.peerdb.is_address_banned(&peer_address.as_bannable()));
 
     // invalid magic bytes
-    let peer_id = libp2p::PeerId::random();
-    let address: Multiaddr = "/ip4/59.176.127.176".parse().unwrap();
     let res = swarm.accept_connection(
-        address,
-        net::types::PeerInfo::<Libp2pService> {
+        peer_address.clone(),
+        net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: [1, 2, 3, 4],
             version: common::primitives::semver::SemVer::new(0, 1, 0),
@@ -274,11 +278,9 @@ async fn validate_invalid_outbound_connection() {
     assert!(!swarm.peerdb.is_active_peer(&peer_id));
 
     // invalid version
-    let peer_id = libp2p::PeerId::random();
-    let address: Multiaddr = "/ip4/181.117.202.208".parse().unwrap();
     let res = swarm.accept_connection(
-        address,
-        net::types::PeerInfo::<Libp2pService> {
+        peer_address.clone(),
+        net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
             version: common::primitives::semver::SemVer::new(1, 1, 1),
@@ -290,11 +292,9 @@ async fn validate_invalid_outbound_connection() {
     assert!(!swarm.peerdb.is_active_peer(&peer_id));
 
     // protocol missing
-    let peer_id = libp2p::PeerId::random();
-    let address: Multiaddr = "/ip4/196.102.132.83".parse().unwrap();
     let res = swarm.accept_connection(
-        address,
-        net::types::PeerInfo::<Libp2pService> {
+        peer_address,
+        net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
             version: common::primitives::semver::SemVer::new(0, 1, 0),
@@ -313,35 +313,47 @@ async fn validate_invalid_outbound_connection() {
 }
 
 #[tokio::test]
-async fn validate_invalid_inbound_connection() {
-    let config = Arc::new(config::create_mainnet());
-    let mut swarm =
-        make_peer_manager::<Libp2pService>(MakeP2pAddress::make_address(), Arc::clone(&config))
-            .await;
+async fn validate_invalid_outbound_connection_libp2p() {
+    validate_invalid_outbound_connection::<MakeP2pAddress, Libp2pService>(
+        "/ip4/175.69.140.46".parse().unwrap(),
+        libp2p::PeerId::random(),
+    )
+    .await;
+}
 
-    // valid connection
-    let peer_id = libp2p::PeerId::random();
-    let address: Multiaddr = "/ip4/114.212.230.173".parse().unwrap();
-    let bannable_address = address.as_bannable();
-    let res = swarm.accept_inbound_connection(
-        address,
-        net::types::PeerInfo::<Libp2pService> {
-            peer_id,
-            magic_bytes: *config.magic_bytes(),
-            version: common::primitives::semver::SemVer::new(0, 1, 0),
-            agent: None,
-            protocols: default_protocols(),
-        },
-    );
-    assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(!swarm.peerdb.is_address_banned(&bannable_address));
+#[tokio::test]
+async fn validate_invalid_outbound_connection_mock_tcp() {
+    validate_invalid_outbound_connection::<MakeTcpAddress, MockService<TcpMockTransport>>(
+        "210.113.67.107:2525".parse().unwrap(),
+        MockPeerId::random(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn validate_invalid_outbound_connection_mock_channels() {
+    validate_invalid_outbound_connection::<MakeChannelAddress, MockService<ChannelMockTransport>>(
+        1,
+        MockPeerId::random(),
+    )
+    .await;
+}
+
+async fn validate_invalid_inbound_connection<A, S>(peer_address: S::Address, peer_id: S::PeerId)
+where
+    A: MakeTestAddress<Address = S::Address>,
+    S: NetworkingService + 'static + std::fmt::Debug,
+    S::ConnectivityHandle: ConnectivityService<S>,
+    <S as net::NetworkingService>::Address: std::str::FromStr,
+    <<S as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+{
+    let config = Arc::new(config::create_mainnet());
+    let mut swarm = make_peer_manager::<S>(A::make_address(), Arc::clone(&config)).await;
 
     // invalid magic bytes
-    let peer_id = libp2p::PeerId::random();
-    let address: Multiaddr = "/ip4/179.123.143.96".parse().unwrap();
     let res = swarm.accept_inbound_connection(
-        address,
-        net::types::PeerInfo::<Libp2pService> {
+        peer_address.clone(),
+        net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: [1, 2, 3, 4],
             version: common::primitives::semver::SemVer::new(0, 1, 0),
@@ -353,11 +365,9 @@ async fn validate_invalid_inbound_connection() {
     assert!(!swarm.peerdb.is_active_peer(&peer_id));
 
     // invalid version
-    let peer_id = libp2p::PeerId::random();
-    let address: Multiaddr = "/ip4/61.247.77.9".parse().unwrap();
     let res = swarm.accept_inbound_connection(
-        address,
-        net::types::PeerInfo::<Libp2pService> {
+        peer_address.clone(),
+        net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
             version: common::primitives::semver::SemVer::new(1, 1, 1),
@@ -369,11 +379,9 @@ async fn validate_invalid_inbound_connection() {
     assert!(!swarm.peerdb.is_active_peer(&peer_id));
 
     // protocol missing
-    let peer_id = libp2p::PeerId::random();
-    let address: Multiaddr = "/ip4/58.52.214.119".parse().unwrap();
     let res = swarm.accept_inbound_connection(
-        address,
-        net::types::PeerInfo::<Libp2pService> {
+        peer_address.clone(),
+        net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
             version: common::primitives::semver::SemVer::new(0, 1, 0),
@@ -389,6 +397,47 @@ async fn validate_invalid_inbound_connection() {
     );
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(!swarm.peerdb.is_active_peer(&peer_id));
+
+    // valid connection
+    let res = swarm.accept_inbound_connection(
+        peer_address.clone(),
+        net::types::PeerInfo::<S> {
+            peer_id,
+            magic_bytes: *config.magic_bytes(),
+            version: common::primitives::semver::SemVer::new(0, 1, 0),
+            agent: None,
+            protocols: default_protocols(),
+        },
+    );
+    assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
+    assert!(!swarm.peerdb.is_address_banned(&peer_address.as_bannable()));
+}
+
+#[tokio::test]
+async fn validate_invalid_inbound_connection_libp2p() {
+    validate_invalid_inbound_connection::<MakeP2pAddress, Libp2pService>(
+        "/ip4/175.69.140.46".parse().unwrap(),
+        libp2p::PeerId::random(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn validate_invalid_inbound_connection_mock_tcp() {
+    validate_invalid_inbound_connection::<MakeTcpAddress, MockService<TcpMockTransport>>(
+        "210.113.67.107:2525".parse().unwrap(),
+        MockPeerId::random(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn validate_invalid_inbound_connection_mock_channels() {
+    validate_invalid_inbound_connection::<MakeChannelAddress, MockService<ChannelMockTransport>>(
+        1,
+        MockPeerId::random(),
+    )
+    .await;
 }
 
 async fn inbound_connection_invalid_magic<A, T>()

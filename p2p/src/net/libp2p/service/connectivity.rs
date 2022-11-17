@@ -35,6 +35,7 @@ use crate::{
 };
 
 /// Connectivity handle for libp2p
+#[derive(Debug)]
 pub struct Libp2pConnectivityHandle<T: NetworkingService> {
     /// Peer Id of the local node
     peer_id: PeerId,

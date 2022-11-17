@@ -199,13 +199,13 @@ where
     /// Disconnect remote peer
     async fn disconnect_peer(&mut self, peer_id: &MockPeerId) -> crate::Result<()> {
         self.request_mgr.unregister_peer(peer_id);
-        self.peers
-            .remove(peer_id)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
-            .tx
-            .send(MockEvent::Disconnect)
-            .await
-            .map_err(P2pError::from)
+        if let Some(context) = self.peers.remove(peer_id) {
+            context.tx.send(MockEvent::Disconnect).await.map_err(P2pError::from)
+        } else {
+            // TODO: Think about error handling. Currently we simply follow the libp2p behaviour.
+            log::error!("{peer_id} peer doesn't exist");
+            Ok(())
+        }
     }
 
     /// Send request to remote peer

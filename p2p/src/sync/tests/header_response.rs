@@ -101,7 +101,6 @@ async fn empty_response_mock_tcp() {
     empty_response::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 async fn empty_response_mock_channels() {
     empty_response::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>().await;
@@ -201,7 +200,6 @@ async fn header_doesnt_attach_to_local_chain_mock_tcp() {
     .await;
 }
 
-// TODO: fix https://github.com/mintlayer/mintlayer-core/issues/375
 #[tokio::test]
 async fn header_doesnt_attach_to_local_chain_mock_channel() {
     header_doesnt_attach_to_local_chain::<
