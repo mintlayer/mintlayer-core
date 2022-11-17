@@ -44,6 +44,7 @@ mod nft_issuance;
 mod nft_reorgs;
 mod nft_transfer;
 mod output_timelock;
+mod pos_accounting_reorg;
 mod processing_tests;
 mod reorgs_tests;
 mod signature_tests;

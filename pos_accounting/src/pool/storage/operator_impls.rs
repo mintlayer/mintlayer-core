@@ -169,7 +169,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
 
         let data_undo = match undo.data_undo {
             PoolDataUndo::Data(v) => v,
-            PoolDataUndo::DataDelta(_) => unreachable!("incompatible PoolDataUndo supplied"),
+            PoolDataUndo::DataDelta(_) => panic!("incompatible PoolDataUndo supplied"),
         };
 
         match amount {
@@ -194,7 +194,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
     fn undo_decommission_pool(&mut self, undo: DecommissionPoolUndo) -> Result<(), Error> {
         let data_undo = match undo.data_undo {
             PoolDataUndo::Data(v) => v,
-            PoolDataUndo::DataDelta(_) => unreachable!("incompatible PoolDataUndo supplied"),
+            PoolDataUndo::DataDelta(_) => panic!("incompatible PoolDataUndo supplied"),
         };
 
         if self.store.get_pool_balance(undo.pool_id)?.is_some() {
@@ -215,7 +215,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         let data_undo = match undo.data_undo {
             DelegationDataUndo::Data(v) => v,
             DelegationDataUndo::DataDelta(_) => {
-                unreachable!("incompatible DelegationDataUndo supplied")
+                panic!("incompatible DelegationDataUndo supplied")
             }
         };
 

@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use super::*;
 use chainstate_storage::{inmemory::Store, BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
@@ -32,7 +34,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use pos_accounting::PoSAccountingStorageRead;
+use pos_accounting::PoolData;
 use utxo::UtxosStorageRead;
 
 // Process a tx with a coin. Check that new utxo and tx index are stored, best block is updated.
@@ -772,24 +774,17 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
             1
         );
 
-        // accounting info
-        assert_eq!(
-            db_tx.get_accounting_undo(block_id).expect("ok").expect("some").tx_undos().len(),
-            1
-        );
+        let expected_storage_data = pos_accounting::PoSAccountingData {
+            pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, amount_to_stake))]),
+            pool_balances: BTreeMap::from([(pool_id, amount_to_stake)]),
+            delegation_balances: Default::default(),
+            delegation_data: Default::default(),
+            pool_delegation_shares: Default::default(),
+        };
 
         assert_eq!(
-            db_tx.get_pool_balance(pool_id).expect("ok").expect("some"),
-            amount_to_stake
-        );
-
-        assert_eq!(
-            db_tx.get_pool_data(pool_id).expect("ok").expect("some").decommission_key(),
-            &pub_key
-        );
-        assert_eq!(
-            db_tx.get_pool_data(pool_id).expect("ok").expect("some").pledge_amount(),
-            amount_to_stake
+            storage.read_accounting_data().unwrap(),
+            expected_storage_data
         );
     });
 }

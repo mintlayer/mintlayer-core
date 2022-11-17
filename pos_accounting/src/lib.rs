@@ -16,6 +16,7 @@
 use common::primitives::Id;
 use typename::TypeName;
 
+mod data;
 mod error;
 mod pool;
 mod storage;
@@ -29,6 +30,7 @@ pub struct Delegation;
 pub type DelegationId = Id<Delegation>;
 
 pub use crate::{
+    data::PoSAccountingData,
     error::Error,
     pool::{
         block_undo::{AccountingBlockUndo, AccountingBlockUndoError, AccountingTxUndo},

@@ -190,7 +190,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingDelta<'a, P> {
     fn undo_create_pool(&mut self, undo: CreatePoolUndo) -> Result<(), Error> {
         let (pledge_amount, undo_data) = match undo.data_undo {
             PoolDataUndo::DataDelta(v) => *v,
-            PoolDataUndo::Data(_) => unreachable!("incompatible PoolDataUndo supplied"),
+            PoolDataUndo::Data(_) => panic!("incompatible PoolDataUndo supplied"),
         };
         let amount = self.get_pool_balance(undo.pool_id)?;
 
@@ -205,18 +205,29 @@ impl<'a, P: PoSAccountingView> PoSAccountingDelta<'a, P> {
 
         self.data.pool_balances.sub_unsigned(undo.pool_id, pledge_amount)?;
 
-        self.get_pool_data(undo.pool_id)?
+        let last_data = self
+            .get_pool_data(undo.pool_id)?
             .ok_or(Error::InvariantErrorPoolCreationReversalFailedDataNotFound)?;
 
-        self.data.pool_data.undo_merge_delta_data_element(undo.pool_id, undo_data)?;
+        // If pool_data is in the current cache then perform undo.
+        // Otherwise it's from parent so add `Delete` to the current cache,
+        // which effectively will perform undo for the parent on flush
+        match self.data.pool_data.data().get(&undo.pool_id) {
+            Some(_) => self.data.pool_data.undo_merge_delta_data_element(undo.pool_id, undo_data),
+            None => self
+                .data
+                .pool_data
+                .merge_delta_data_element(undo.pool_id, DataDelta::Delete(Box::new(last_data)))
+                .map(|_| ()),
+        }?;
 
         Ok(())
     }
 
     fn undo_decommission_pool(&mut self, undo: DecommissionPoolUndo) -> Result<(), Error> {
         let (last_amount, undo_data) = match undo.data_undo {
-            PoolDataUndo::DataDelta(v) => *v,
-            PoolDataUndo::Data(_) => unreachable!("incompatible PoolDataUndo supplied"),
+            PoolDataUndo::DataDelta(v) => v,
+            PoolDataUndo::Data(_) => panic!("incompatible PoolDataUndo supplied"),
         };
 
         if self.get_pool_balance(undo.pool_id)?.is_some() {
@@ -236,15 +247,30 @@ impl<'a, P: PoSAccountingView> PoSAccountingDelta<'a, P> {
     fn undo_create_delegation_id(&mut self, undo: CreateDelegationIdUndo) -> Result<(), Error> {
         let undo_data = match undo.data_undo {
             DelegationDataUndo::DataDelta(v) => v,
-            DelegationDataUndo::Data(_) => unreachable!("incompatible DelegationDataUndo supplied"),
+            DelegationDataUndo::Data(_) => panic!("incompatible DelegationDataUndo supplied"),
         };
 
-        self.get_delegation_data(undo.delegation_id)?
+        let last_data = self
+            .get_delegation_data(undo.delegation_id)?
             .ok_or(Error::InvariantErrorDelegationIdUndoFailedNotFound)?;
 
-        self.data
-            .delegation_data
-            .undo_merge_delta_data_element(undo.delegation_id, *undo_data)?;
+        // If delegation_data is in the current cache then perform undo.
+        // Otherwise it's from parent so add `Delete` to the current cache,
+        // which effectively will perform undo for the parent on flush
+        match self.data.delegation_data.data().get(&undo.delegation_id) {
+            Some(_) => self
+                .data
+                .delegation_data
+                .undo_merge_delta_data_element(undo.delegation_id, undo_data),
+            None => self
+                .data
+                .delegation_data
+                .merge_delta_data_element(
+                    undo.delegation_id,
+                    DataDelta::Delete(Box::new(last_data)),
+                )
+                .map(|_| ()),
+        }?;
 
         Ok(())
     }
