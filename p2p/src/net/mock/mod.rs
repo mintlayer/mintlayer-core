@@ -14,12 +14,11 @@
 // limitations under the License.
 
 pub mod backend;
+pub mod constants;
 pub mod peer;
 pub mod request_manager;
 pub mod transport;
 pub mod types;
-
-mod constants;
 
 use std::{marker::PhantomData, sync::Arc};
 
