@@ -15,6 +15,8 @@
 
 //! A test suite for p2p backends.
 
+#![allow(clippy::unwrap_used)]
+
 #[macro_use]
 mod utils;
 mod ban;
