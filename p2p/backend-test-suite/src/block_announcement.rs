@@ -20,8 +20,13 @@ use tokio::{pin, select, time::Duration};
 use common::{
     chain::{
         block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
+        signature::{
+            inputsig::{InputWitness, StandardInputSignature},
+            sighashtype,
+        },
         transaction::signed_transaction::SignedTransaction,
         transaction::Transaction,
+        TxInput,
     },
     primitives::{Id, H256},
 };
@@ -183,12 +188,18 @@ where
     sync1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
     sync2.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
 
-    let txs = (0..200_000)
-        .map(|_| {
-            SignedTransaction::new(Transaction::new(0, vec![], vec![], 0).unwrap(), vec![])
-                .expect("invalid witness count")
-        })
-        .collect::<Vec<_>>();
+    let input = TxInput::new(config.genesis_block_id().into(), 0);
+    let signature = (0..=MAXIMUM_SIZE).into_iter().map(|_| 0).collect::<Vec<u8>>();
+    let signatures = vec![InputWitness::Standard(StandardInputSignature::new(
+        sighashtype::SigHashType::try_from(sighashtype::SigHashType::ALL).unwrap(),
+        signature,
+    ))];
+    let txs = vec![SignedTransaction::new(
+        Transaction::new(0, vec![input], vec![], 0).unwrap(),
+        signatures,
+    )
+    .expect("invalid witness count")];
+
     let message = Announcement::Block(
         Block::new(
             txs,
