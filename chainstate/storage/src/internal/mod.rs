@@ -99,32 +99,32 @@ impl<B: storage::Backend> Store<B> {
     pub fn read_accounting_data(&self) -> crate::Result<pos_accounting::PoSAccountingData> {
         let db = self.transaction_ro()?;
         let pool_data =
-            db.0.get::<db::DBAccountsPoolData, _>()
+            db.0.get::<db::DBAccountingPoolData, _>()
                 .prefix_iter(&())?
                 .map(|(k, v)| crate::Result::<(PoolId, PoolData)>::Ok((k, v.decode())))
                 .collect::<Result<BTreeMap<_, _>, _>>()?;
 
         let pool_balances =
-            db.0.get::<db::DBAccountsPoolBalances, _>()
+            db.0.get::<db::DBAccountingPoolBalances, _>()
                 .prefix_iter(&())?
                 .map(|(k, v)| crate::Result::<(PoolId, Amount)>::Ok((k, v.decode())))
                 .collect::<Result<BTreeMap<_, _>, _>>()?;
 
         let delegation_data =
-            db.0.get::<db::DBAccountsDelegationData, _>()
+            db.0.get::<db::DBAccountingDelegationData, _>()
                 .prefix_iter(&())?
                 .map(|(k, v)| crate::Result::<(DelegationId, DelegationData)>::Ok((k, v.decode())))
                 .collect::<Result<BTreeMap<_, _>, _>>()?;
 
         let delegation_balances =
-            db.0.get::<db::DBAccountsDelegationBalances, _>()
+            db.0.get::<db::DBAccountingDelegationBalances, _>()
                 .prefix_iter(&())?
                 .map(|(k, v)| crate::Result::<(DelegationId, Amount)>::Ok((k, v.decode())))
                 .collect::<Result<BTreeMap<_, _>, _>>()?;
 
         let pool_delegation_shares = db
             .0
-            .get::<db::DBAccountsPoolDelegationShares, _>()
+            .get::<db::DBAccountingPoolDelegationShares, _>()
             .prefix_iter(&())?
             .map(|(k, v)| crate::Result::<((PoolId, DelegationId), Amount)>::Ok((k, v.decode())))
             .collect::<Result<BTreeMap<_, _>, _>>()?;
@@ -473,7 +473,7 @@ macro_rules! impl_read_ops {
                 &self,
                 id: Id<Block>,
             ) -> crate::Result<Option<AccountingBlockUndo>> {
-                self.read::<db::DBAccountsBlockUndo, _, _>(id)
+                self.read::<db::DBAccountingBlockUndo, _, _>(id)
             }
         }
 
@@ -493,25 +493,25 @@ macro_rules! impl_read_ops {
 
         impl<'st, B: storage::Backend> PoSAccountingStorageRead for $TxType<'st, B> {
             fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
-                self.read::<db::DBAccountsPoolBalances, _, _>(pool_id)
+                self.read::<db::DBAccountingPoolBalances, _, _>(pool_id)
             }
 
             fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>> {
-                self.read::<db::DBAccountsPoolData, _, _>(pool_id)
+                self.read::<db::DBAccountingPoolData, _, _>(pool_id)
             }
 
             fn get_delegation_balance(
                 &self,
                 delegation_id: DelegationId,
             ) -> crate::Result<Option<Amount>> {
-                self.read::<db::DBAccountsDelegationBalances, _, _>(delegation_id)
+                self.read::<db::DBAccountingDelegationBalances, _, _>(delegation_id)
             }
 
             fn get_delegation_data(
                 &self,
                 delegation_id: DelegationId,
             ) -> crate::Result<Option<DelegationData>> {
-                self.read::<db::DBAccountsDelegationData, _, _>(delegation_id)
+                self.read::<db::DBAccountingDelegationData, _, _>(delegation_id)
             }
 
             fn get_pool_delegations_shares(
@@ -520,7 +520,7 @@ macro_rules! impl_read_ops {
             ) -> crate::Result<Option<BTreeMap<DelegationId, Amount>>> {
                 let all_shares = self
                     .0
-                    .get::<db::DBAccountsPoolDelegationShares, _>()
+                    .get::<db::DBAccountingPoolDelegationShares, _>()
                     .prefix_iter(&())?
                     .map(|(k, v)| {
                         crate::Result::<((PoolId, DelegationId), Amount)>::Ok((k, v.decode()))
@@ -544,7 +544,7 @@ macro_rules! impl_read_ops {
                 pool_id: PoolId,
                 delegation_id: DelegationId,
             ) -> crate::Result<Option<Amount>> {
-                self.read::<db::DBAccountsPoolDelegationShares, _, _>((pool_id, delegation_id))
+                self.read::<db::DBAccountingPoolDelegationShares, _, _>((pool_id, delegation_id))
             }
         }
 
@@ -657,11 +657,11 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         id: Id<Block>,
         undo: &AccountingBlockUndo,
     ) -> crate::Result<()> {
-        self.write::<db::DBAccountsBlockUndo, _, _, _>(id, undo)
+        self.write::<db::DBAccountingBlockUndo, _, _, _>(id, undo)
     }
 
     fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
-        self.0.get_mut::<db::DBAccountsBlockUndo, _>().del(id).map_err(Into::into)
+        self.0.get_mut::<db::DBAccountingBlockUndo, _>().del(id).map_err(Into::into)
     }
 }
 
@@ -689,22 +689,22 @@ impl<'st, B: storage::Backend> UtxosStorageWrite for StoreTxRw<'st, B> {
 
 impl<'st, B: storage::Backend> PoSAccountingStorageWrite for StoreTxRw<'st, B> {
     fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()> {
-        self.write::<db::DBAccountsPoolBalances, _, _, _>(pool_id, amount)
+        self.write::<db::DBAccountingPoolBalances, _, _, _>(pool_id, amount)
     }
 
     fn del_pool_balance(&mut self, pool_id: PoolId) -> crate::Result<()> {
         self.0
-            .get_mut::<db::DBAccountsPoolBalances, _>()
+            .get_mut::<db::DBAccountingPoolBalances, _>()
             .del(pool_id)
             .map_err(Into::into)
     }
 
     fn set_pool_data(&mut self, pool_id: PoolId, pool_data: &PoolData) -> crate::Result<()> {
-        self.write::<db::DBAccountsPoolData, _, _, _>(pool_id, pool_data)
+        self.write::<db::DBAccountingPoolData, _, _, _>(pool_id, pool_data)
     }
 
     fn del_pool_data(&mut self, pool_id: PoolId) -> crate::Result<()> {
-        self.0.get_mut::<db::DBAccountsPoolData, _>().del(pool_id).map_err(Into::into)
+        self.0.get_mut::<db::DBAccountingPoolData, _>().del(pool_id).map_err(Into::into)
     }
 
     fn set_delegation_balance(
@@ -712,12 +712,12 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite for StoreTxRw<'st, B> {
         delegation_target: DelegationId,
         amount: Amount,
     ) -> crate::Result<()> {
-        self.write::<db::DBAccountsDelegationBalances, _, _, _>(delegation_target, amount)
+        self.write::<db::DBAccountingDelegationBalances, _, _, _>(delegation_target, amount)
     }
 
     fn del_delegation_balance(&mut self, delegation_target: DelegationId) -> crate::Result<()> {
         self.0
-            .get_mut::<db::DBAccountsDelegationBalances, _>()
+            .get_mut::<db::DBAccountingDelegationBalances, _>()
             .del(delegation_target)
             .map_err(Into::into)
     }
@@ -727,12 +727,12 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite for StoreTxRw<'st, B> {
         delegation_id: DelegationId,
         delegation_data: &DelegationData,
     ) -> crate::Result<()> {
-        self.write::<db::DBAccountsDelegationData, _, _, _>(delegation_id, delegation_data)
+        self.write::<db::DBAccountingDelegationData, _, _, _>(delegation_id, delegation_data)
     }
 
     fn del_delegation_data(&mut self, delegation_id: DelegationId) -> crate::Result<()> {
         self.0
-            .get_mut::<db::DBAccountsDelegationData, _>()
+            .get_mut::<db::DBAccountingDelegationData, _>()
             .del(delegation_id)
             .map_err(Into::into)
     }
@@ -743,7 +743,10 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite for StoreTxRw<'st, B> {
         delegation_id: DelegationId,
         amount: Amount,
     ) -> crate::Result<()> {
-        self.write::<db::DBAccountsPoolDelegationShares, _, _, _>((pool_id, delegation_id), amount)
+        self.write::<db::DBAccountingPoolDelegationShares, _, _, _>(
+            (pool_id, delegation_id),
+            amount,
+        )
     }
 
     fn del_pool_delegation_share(
@@ -752,7 +755,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite for StoreTxRw<'st, B> {
         delegation_id: DelegationId,
     ) -> crate::Result<()> {
         self.0
-            .get_mut::<db::DBAccountsPoolDelegationShares, _>()
+            .get_mut::<db::DBAccountingPoolDelegationShares, _>()
             .del((pool_id, delegation_id))
             .map_err(Into::into)
     }

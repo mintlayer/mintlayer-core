@@ -48,17 +48,17 @@ storage::decl_schema! {
         /// Store of issuance tx id vs token id
         pub DBIssuanceTxVsTokenId: Map<Id<Transaction>, TokenId>,
 
-        /// Store for accounts BlockUndo
-        pub DBAccountsBlockUndo: Map<Id<Block>, AccountingBlockUndo>,
-        /// Store for accounts pool data
-        pub DBAccountsPoolData: Map<PoolId, PoolData>,
-        /// Store for accounts pool balances
-        pub DBAccountsPoolBalances: Map<PoolId, Amount>,
-        /// Store for accounts delegation data
-        pub DBAccountsDelegationData: Map<DelegationId, DelegationData>,
-        /// Store for accounts delegation data
-        pub DBAccountsDelegationBalances: Map<DelegationId, Amount>,
-        /// Store for accounts pool delegations balances
-        pub DBAccountsPoolDelegationShares: Map<(PoolId, DelegationId), Amount>,
+        /// Store for accounting BlockUndo
+        pub DBAccountingBlockUndo: Map<Id<Block>, AccountingBlockUndo>,
+        /// Store for accounting pool data
+        pub DBAccountingPoolData: Map<PoolId, PoolData>,
+        /// Store for accounting pool balances
+        pub DBAccountingPoolBalances: Map<PoolId, Amount>,
+        /// Store for accounting delegation data
+        pub DBAccountingDelegationData: Map<DelegationId, DelegationData>,
+        /// Store for accounting delegation data
+        pub DBAccountingDelegationBalances: Map<DelegationId, Amount>,
+        /// Store for accounting pool delegations balances
+        pub DBAccountingPoolDelegationShares: Map<(PoolId, DelegationId), Amount>,
     }
 }

@@ -22,28 +22,21 @@ use common::{
     chain::{Block, Transaction},
     primitives::Id,
 };
-use pos_accounting::{
-    AccountingBlockUndo, AccountingBlockUndoError, AccountingTxUndo, PoSAccountingUndo,
-};
+use pos_accounting::{AccountingBlockUndo, AccountingBlockUndoError, AccountingTxUndo};
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct AccountsBlockUndo {
-    tx_undos: BTreeMap<Id<Transaction>, PoSAccountingUndo>,
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct AccountsBlockUndoEntry {
+pub struct AccountingBlockUndoEntry {
     pub undo: AccountingBlockUndo,
     // indicates whether this BlockUndo was fetched from the db or it's new
     pub is_fresh: bool,
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct AccountsBlockUndoCache {
-    data: BTreeMap<TransactionSource, AccountsBlockUndoEntry>,
+pub struct AccountingBlockUndoCache {
+    data: BTreeMap<TransactionSource, AccountingBlockUndoEntry>,
 }
 
-impl AccountsBlockUndoCache {
+impl AccountingBlockUndoCache {
     pub fn new() -> Self {
         Self {
             data: BTreeMap::new(),
@@ -51,15 +44,15 @@ impl AccountsBlockUndoCache {
     }
 
     #[cfg(test)]
-    pub fn new_for_test(data: BTreeMap<TransactionSource, AccountsBlockUndoEntry>) -> Self {
+    pub fn new_for_test(data: BTreeMap<TransactionSource, AccountingBlockUndoEntry>) -> Self {
         Self { data }
     }
 
-    pub fn data(&self) -> &BTreeMap<TransactionSource, AccountsBlockUndoEntry> {
+    pub fn data(&self) -> &BTreeMap<TransactionSource, AccountingBlockUndoEntry> {
         &self.data
     }
 
-    pub fn consume(self) -> BTreeMap<TransactionSource, AccountsBlockUndoEntry> {
+    pub fn consume(self) -> BTreeMap<TransactionSource, AccountingBlockUndoEntry> {
         self.data
     }
 
@@ -78,7 +71,7 @@ impl AccountsBlockUndoCache {
                     let block_undo = fetcher_func(*block_id)?
                         .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
                     Ok(&mut entry
-                        .insert(AccountsBlockUndoEntry {
+                        .insert(AccountingBlockUndoEntry {
                             undo: block_undo,
                             is_fresh: false,
                         })
@@ -112,7 +105,7 @@ impl AccountsBlockUndoCache {
         &mut self
             .data
             .entry(*tx_source)
-            .or_insert(AccountsBlockUndoEntry {
+            .or_insert(AccountingBlockUndoEntry {
                 is_fresh: true,
                 undo: Default::default(),
             })
@@ -126,7 +119,7 @@ impl AccountsBlockUndoCache {
     ) -> Result<(), AccountingBlockUndoError> {
         match self.data.entry(tx_source) {
             Entry::Vacant(e) => {
-                e.insert(AccountsBlockUndoEntry {
+                e.insert(AccountingBlockUndoEntry {
                     undo: new_undo.clone(),
                     is_fresh: true,
                 });
@@ -147,7 +140,7 @@ impl AccountsBlockUndoCache {
             // if current cache doesn't have such data - insert empty undo to be flushed to the parent
             self.data.insert(
                 tx_source,
-                AccountsBlockUndoEntry {
+                AccountingBlockUndoEntry {
                     undo: Default::default(),
                     is_fresh: false,
                 },

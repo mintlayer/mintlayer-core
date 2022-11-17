@@ -556,13 +556,14 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
         let block_undo =
             AccountingBlockUndo::new(BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]));
 
-        verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
-            TransactionSource::Chain(block_undo_id_1),
-            AccountsBlockUndoEntry {
-                undo: block_undo,
-                is_fresh: true,
-            },
-        )]));
+        verifier.accounting_delta_undo =
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+                TransactionSource::Chain(block_undo_id_1),
+                AccountingBlockUndoEntry {
+                    undo: block_undo,
+                    is_fresh: true,
+                },
+            )]));
         verifier
     };
 
@@ -577,13 +578,14 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
         let block_undo =
             AccountingBlockUndo::new(BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]));
 
-        verifier.accounting_delta_undo = AccountsBlockUndoCache::new_for_test(BTreeMap::from([(
-            TransactionSource::Chain(block_undo_id_2),
-            AccountsBlockUndoEntry {
-                undo: block_undo,
-                is_fresh: true,
-            },
-        )]));
+        verifier.accounting_delta_undo =
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+                TransactionSource::Chain(block_undo_id_2),
+                AccountingBlockUndoEntry {
+                    undo: block_undo,
+                    is_fresh: true,
+                },
+            )]));
         verifier
     };
 
