@@ -35,7 +35,7 @@ use common::{
 };
 use consensus::TransactionIndexHandle;
 use logging::log;
-use tx_verifier::transaction_verifier::{TransactionVerifier, TransactionVerifierConfig};
+use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosDB, UtxosView};
 

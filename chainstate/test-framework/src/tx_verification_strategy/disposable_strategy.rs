@@ -26,9 +26,9 @@ use common::{
     primitives::{id::WithId, Amount, Idable},
 };
 use tx_verifier::transaction_verifier::{
-    error::ConnectTransactionError, flush::flush_to_storage,
+    config::TransactionVerifierConfig, error::ConnectTransactionError, flush::flush_to_storage,
     storage::TransactionVerifierStorageRef, BlockTransactableRef, BlockTransactableWithIndexRef,
-    Fee, Subsidy, TransactionVerifier, TransactionVerifierConfig,
+    Fee, Subsidy, TransactionVerifier,
 };
 use utils::tap_error_log::LogError;
 use utxo::UtxosView;

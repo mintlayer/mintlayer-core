@@ -19,7 +19,7 @@ use common::{
     chain::{calculate_tx_offsets_in_block, Block, TxMainChainIndex, TxMainChainIndexError},
     primitives::Idable,
 };
-use tx_verifier::transaction_verifier::{error::TxIndexError, TransactionVerifierConfig};
+use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, error::TxIndexError};
 
 pub fn take_tx_index(
     tx_indices: &mut Option<VecDeque<TxMainChainIndex>>,

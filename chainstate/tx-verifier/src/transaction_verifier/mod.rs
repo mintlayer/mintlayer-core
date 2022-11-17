@@ -15,6 +15,7 @@
 
 mod amounts_map;
 mod cached_operation;
+pub mod config;
 pub mod error;
 pub mod flush;
 pub mod hierarchy;
@@ -22,6 +23,7 @@ pub mod storage;
 mod tx_index_cache;
 use self::{
     amounts_map::AmountsMap,
+    config::TransactionVerifierConfig,
     error::{ConnectTransactionError, TokensError},
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{CoinOrTokenId, ConsumedTokenIssuanceCache},
@@ -153,24 +155,6 @@ pub struct TransactionVerifierDelta {
     utxo_cache: ConsumedUtxoCache,
     utxo_block_undo: BTreeMap<TransactionSource, BlockUndoEntry>,
     token_issuance_cache: ConsumedTokenIssuanceCache,
-}
-
-#[derive(Clone)]
-pub struct TransactionVerifierConfig {
-    pub tx_index_enabled: bool,
-}
-
-impl TransactionVerifierConfig {
-    pub fn new(tx_index_enabled: bool) -> Self {
-        Self { tx_index_enabled }
-    }
-
-    pub fn if_tx_index_enabled<F, T, E>(&self, f: F) -> Result<Option<T>, E>
-    where
-        F: FnOnce() -> Result<T, E>,
-    {
-        self.tx_index_enabled.then(f).transpose()
-    }
 }
 
 /// The tool used to verify transaction and cache their updated states in memory

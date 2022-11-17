@@ -28,9 +28,10 @@ use common::{
     primitives::{Amount, Idable},
 };
 use crypto::random::CryptoRng;
-use tx_verifier::transaction_verifier::TransactionVerifierConfig;
+
 use tx_verifier::transaction_verifier::{
-    TransactionSource, TransactionSourceForConnect, TransactionVerifier,
+    config::TransactionVerifierConfig, TransactionSource, TransactionSourceForConnect,
+    TransactionVerifier,
 };
 
 fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {

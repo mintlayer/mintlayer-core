@@ -26,7 +26,7 @@ use common::{
     primitives::id::WithId,
 };
 use tx_verifier::transaction_verifier::{
-    storage::TransactionVerifierStorageRef, TransactionVerifier, TransactionVerifierConfig,
+    config::TransactionVerifierConfig, storage::TransactionVerifierStorageRef, TransactionVerifier,
 };
 
 /// A trait that specifies how a block will be verified
