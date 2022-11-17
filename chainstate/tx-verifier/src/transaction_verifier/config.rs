@@ -23,6 +23,9 @@ impl TransactionVerifierConfig {
         Self { tx_index_enabled }
     }
 
+    /// If transaction index is enabled, the function f is called, otherwise Ok(None) is returned
+    /// This function returns Result<Option<T>, E> instead of Option<Result<T,E>> for convenience,
+    /// since error handling should happen before knowing the result
     pub fn if_tx_index_enabled<F, T, E>(&self, f: F) -> Result<Option<T>, E>
     where
         F: FnOnce() -> Result<T, E>,
