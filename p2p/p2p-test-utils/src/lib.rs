@@ -15,13 +15,10 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::{fmt::Debug, net::SocketAddr, sync::Arc, time::Duration};
+use std::{fmt::Debug, net::SocketAddr, sync::Arc};
 
 use libp2p::Multiaddr;
-use tokio::{
-    net::{TcpListener, TcpStream},
-    time::timeout,
-};
+use tokio::net::{TcpListener, TcpStream};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, BlockSource, ChainstateConfig,
@@ -41,7 +38,6 @@ use common::{
     primitives::{time, Amount, Id, Idable},
 };
 use crypto::random::SliceRandom;
-use p2p::net::{types::ConnectivityEvent, ConnectivityService, NetworkingService};
 
 pub async fn get_tcp_socket() -> TcpStream {
     let port: u16 = portpicker::pick_unused_port().expect("No ports free");
@@ -55,37 +51,6 @@ pub async fn get_tcp_socket() -> TcpStream {
     });
 
     TcpStream::connect(addr).await.unwrap()
-}
-
-pub async fn connect_services<T>(
-    conn1: &mut T::ConnectivityHandle,
-    conn2: &mut T::ConnectivityHandle,
-) where
-    T: NetworkingService + std::fmt::Debug,
-    T::ConnectivityHandle: ConnectivityService<T>,
-{
-    let addr = timeout(Duration::from_secs(5), conn2.local_addr())
-        .await
-        .expect("local address fetch not to timeout")
-        .unwrap()
-        .unwrap();
-    conn1.connect(addr).await.expect("dial to succeed");
-
-    match timeout(Duration::from_secs(5), conn2.poll_next()).await {
-        Ok(event) => match event.unwrap() {
-            ConnectivityEvent::InboundAccepted { .. } => {}
-            event => panic!("expected `InboundAccepted`, got {event:?}"),
-        },
-        Err(_err) => panic!("did not receive `InboundAccepted` in time"),
-    }
-
-    match timeout(Duration::from_secs(5), conn1.poll_next()).await {
-        Ok(event) => match event.unwrap() {
-            ConnectivityEvent::OutboundAccepted { .. } => {}
-            event => panic!("expected `OutboundAccepted`, got {event:?}"),
-        },
-        Err(_err) => panic!("did not receive `OutboundAccepted` in time"),
-    }
 }
 
 pub type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface + 'static>>;

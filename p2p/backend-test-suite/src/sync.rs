@@ -34,10 +34,11 @@ use p2p::{
         types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
+    peer_manager::helpers::connect_services,
     sync::BlockSyncManager,
     sync::SyncState,
 };
-use p2p_test_utils::{connect_services, MakeTestAddress, TestBlockInfo};
+use p2p_test_utils::{MakeTestAddress, TestBlockInfo};
 
 tests![
     local_and_remote_in_sync,

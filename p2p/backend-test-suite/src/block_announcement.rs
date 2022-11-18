@@ -40,8 +40,9 @@ use p2p::{
         types::{PubSubTopic, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
+    peer_manager::helpers::connect_services,
 };
-use p2p_test_utils::{connect_services, MakeTestAddress};
+use p2p_test_utils::MakeTestAddress;
 
 tests![
     block_announcement,

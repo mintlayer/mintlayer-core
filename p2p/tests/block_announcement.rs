@@ -32,10 +32,9 @@ use p2p::{
         types::{PubSubTopic, SyncingEvent, ValidationResult},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
+    peer_manager::helpers::connect_services,
 };
-use p2p_test_utils::{
-    connect_services, MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress,
-};
+use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress};
 
 // Test announcements with multiple peers and verify that the message validation is done and peers
 // don't automatically forward the messages.

@@ -24,9 +24,10 @@ use p2p::{
     net::{
         self, types::SyncingEvent, ConnectivityService, NetworkingService, SyncingMessagingService,
     },
+    peer_manager::helpers::connect_services,
     sync::BlockSyncManager,
 };
-use p2p_test_utils::{connect_services, MakeTestAddress, TestBlockInfo};
+use p2p_test_utils::{MakeTestAddress, TestBlockInfo};
 
 tests![invalid_pubsub_block, invalid_sync_block,];
 

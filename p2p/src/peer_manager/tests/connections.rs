@@ -37,7 +37,8 @@ use crate::{
     },
     peer_manager::{
         self,
-        tests::{connect_services, default_protocols, make_peer_manager},
+        helpers::connect_services,
+        tests::{default_protocols, make_peer_manager},
     },
 };
 
