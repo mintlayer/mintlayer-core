@@ -27,6 +27,7 @@ use common::{
 };
 use consensus::ConsensusVerificationError;
 use thiserror::Error;
+use tx_verifier::transaction_verifier::error::TxIndexError;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockError {
@@ -56,6 +57,8 @@ pub enum BlockError {
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("Changing tx index state is not implemented for existing DB")]
     TxIndexConfigError,
+    #[error("Transaction index construction error: {0}")]
+    TxIndexConstructionError(#[from] TxIndexError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

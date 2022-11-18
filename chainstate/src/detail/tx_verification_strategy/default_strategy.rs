@@ -14,15 +14,22 @@
 // limitations under the License.
 
 use super::TransactionVerificationStrategy;
-use crate::{calculate_median_time_past, BlockError};
+use crate::{
+    calculate_median_time_past,
+    tx_verification_strategy_utils::{
+        construct_reward_tx_indices, construct_tx_indices, take_front_tx_index,
+    },
+    BlockError,
+};
 use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
     chain::{Block, ChainConfig},
     primitives::{id::WithId, Amount, Idable},
 };
 use tx_verifier::transaction_verifier::{
-    error::ConnectTransactionError, storage::TransactionVerifierStorageRef, BlockTransactableRef,
-    Fee, Subsidy, TransactionVerifier, TransactionVerifierConfig,
+    config::TransactionVerifierConfig, error::ConnectTransactionError,
+    storage::TransactionVerifierStorageRef, BlockTransactableRef, BlockTransactableWithIndexRef,
+    Fee, Subsidy, TransactionVerifier,
 };
 use utils::tap_error_log::LogError;
 use utxo::UtxosView;
@@ -62,12 +69,15 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         let median_time_past =
             calculate_median_time_past(block_index_handle, &block.prev_block_id());
 
+        let mut tx_indices = construct_tx_indices(&verifier_config, block)?;
+        let block_reward_tx_index = construct_reward_tx_indices(&verifier_config, block)?;
+
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
 
         let reward_fees = tx_verifier
             .connect_transactable(
                 block_index,
-                BlockTransactableRef::BlockReward(block),
+                BlockTransactableWithIndexRef::BlockReward(block, block_reward_tx_index),
                 &median_time_past,
             )
             .log_err()?;
@@ -81,7 +91,11 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
                 let fee = tx_verifier
                     .connect_transactable(
                         block_index,
-                        BlockTransactableRef::Transaction(block, tx_num),
+                        BlockTransactableWithIndexRef::Transaction(
+                            block,
+                            tx_num,
+                            take_front_tx_index(&mut tx_indices),
+                        ),
                         &median_time_past,
                     )
                     .log_err()?;

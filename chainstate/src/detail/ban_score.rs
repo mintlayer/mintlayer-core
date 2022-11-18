@@ -48,6 +48,7 @@ impl BanScore for BlockError {
             BlockError::BlockProofCalculationError(_) => 100,
             BlockError::TransactionVerifierError(err) => err.ban_score(),
             BlockError::TxIndexConfigError => 0,
+            BlockError::TxIndexConstructionError(_) => 100,
         }
     }
 }

@@ -21,7 +21,7 @@ use common::{
 };
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
-use tx_verifier::transaction_verifier::{TransactionVerifier, TransactionVerifierConfig};
+use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
 use utxo::{Utxo, UtxosView};
 
 use super::helpers::in_memory_storage_wrapper::InMemoryStorageWrapper;

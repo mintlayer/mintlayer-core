@@ -29,7 +29,7 @@ use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tx_verifier::transaction_verifier::{
-    TransactionSourceForConnect, TransactionVerifier, TransactionVerifierConfig,
+    config::TransactionVerifierConfig, TransactionSourceForConnect, TransactionVerifier,
 };
 
 fn setup(rng: &mut (impl Rng + CryptoRng)) -> (ChainConfig, InMemoryStorageWrapper, TestFramework) {

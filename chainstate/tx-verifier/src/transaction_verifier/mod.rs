@@ -15,6 +15,7 @@
 
 mod amounts_map;
 mod cached_operation;
+pub mod config;
 pub mod error;
 pub mod flush;
 pub mod hierarchy;
@@ -22,6 +23,7 @@ pub mod storage;
 mod tx_index_cache;
 use self::{
     amounts_map::AmountsMap,
+    config::TransactionVerifierConfig,
     error::{ConnectTransactionError, TokensError},
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{CoinOrTokenId, ConsumedTokenIssuanceCache},
@@ -41,7 +43,7 @@ use common::{
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, OutPointSourceId, OutputPurpose, Transaction, TxInput,
-        TxOutput,
+        TxMainChainIndex, TxOutput,
     },
     primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable, H256},
 };
@@ -85,6 +87,33 @@ pub enum BlockTransactableRef<'a> {
     BlockReward(&'a WithId<Block>),
 }
 
+/// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum BlockTransactableWithIndexRef<'a> {
+    Transaction(&'a WithId<Block>, usize, Option<TxMainChainIndex>),
+    BlockReward(&'a WithId<Block>, Option<TxMainChainIndex>),
+}
+
+impl<'a> BlockTransactableWithIndexRef<'a> {
+    pub fn without_tx_index(&self) -> BlockTransactableRef<'a> {
+        match self {
+            BlockTransactableWithIndexRef::Transaction(block, index, _) => {
+                BlockTransactableRef::Transaction(block, *index)
+            }
+            BlockTransactableWithIndexRef::BlockReward(block, _) => {
+                BlockTransactableRef::BlockReward(block)
+            }
+        }
+    }
+
+    pub fn take_tx_index(self) -> Option<TxMainChainIndex> {
+        match self {
+            BlockTransactableWithIndexRef::Transaction(_, _, idx) => idx,
+            BlockTransactableWithIndexRef::BlockReward(_, idx) => idx,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum TransactionSource {
     Chain(Id<Block>),
@@ -126,17 +155,6 @@ pub struct TransactionVerifierDelta {
     utxo_cache: ConsumedUtxoCache,
     utxo_block_undo: BTreeMap<TransactionSource, BlockUndoEntry>,
     token_issuance_cache: ConsumedTokenIssuanceCache,
-}
-
-#[derive(Clone)]
-pub struct TransactionVerifierConfig {
-    pub tx_index_enabled: bool,
-}
-
-impl TransactionVerifierConfig {
-    pub fn new(tx_index_enabled: bool) -> Self {
-        Self { tx_index_enabled }
-    }
 }
 
 /// The tool used to verify transaction and cache their updated states in memory
@@ -700,11 +718,11 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
     pub fn connect_transactable(
         &mut self,
         block_index: &BlockIndex,
-        spend_ref: BlockTransactableRef,
+        spend_ref: BlockTransactableWithIndexRef,
         median_time_past: &BlockTimestamp,
     ) -> Result<Option<Fee>, ConnectTransactionError> {
         let fee = match spend_ref {
-            BlockTransactableRef::Transaction(block, tx_num) => {
+            BlockTransactableWithIndexRef::Transaction(block, tx_num, ref _tx_index) => {
                 let block_id = block.get_id();
                 let tx = block.transactions().get(tx_num).ok_or(
                     ConnectTransactionError::TxNumWrongInBlockOnConnect(tx_num, block_id),
@@ -718,15 +736,18 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
                     median_time_past,
                 )?
             }
-            BlockTransactableRef::BlockReward(block) => {
+            BlockTransactableWithIndexRef::BlockReward(block, _) => {
                 self.connect_block_reward(block_index, block.block_reward_transactable())?;
                 None
             }
         };
         // add tx index to the cache
-        if let Some(tx_index_cache) = self.get_tx_cache_mut() {
-            tx_index_cache.add_tx_index(spend_ref)?;
-        }
+        self.verifier_config.if_tx_index_enabled(|| {
+            self.tx_index_cache.add_tx_index(
+                spend_ref.without_tx_index(),
+                spend_ref.take_tx_index().expect("Guaranteed by verifier_config"),
+            )
+        })?;
 
         Ok(fee)
     }

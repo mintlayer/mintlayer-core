@@ -145,12 +145,6 @@ impl From<TxMainChainIndexError> for TxIndexError {
     fn from(err: TxMainChainIndexError) -> Self {
         match err {
             TxMainChainIndexError::InvalidOutputCount => TxIndexError::InvalidOutputCount,
-            TxMainChainIndexError::SerializationInvariantError(block_id) => {
-                TxIndexError::SerializationInvariantError(block_id)
-            }
-            TxMainChainIndexError::InvalidTxNumberForBlock(tx_num, block_id) => {
-                TxIndexError::InvariantErrorTxNumWrongInBlock(tx_num, block_id)
-            }
         }
     }
 }

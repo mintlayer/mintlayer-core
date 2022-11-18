@@ -21,10 +21,7 @@ use super::{
     {cached_operation::CachedInputsOperation, BlockTransactableRef},
 };
 use common::{
-    chain::{
-        calculate_tx_index_from_block, signature::Signable, OutPointSourceId, Spender, TxInput,
-        TxMainChainIndex,
-    },
+    chain::{signature::Signable, OutPointSourceId, Spender, TxInput, TxMainChainIndex},
     primitives::Idable,
 };
 
@@ -48,10 +45,16 @@ impl TxIndexCache {
         self.data
     }
 
-    pub fn add_tx_index(&mut self, spend_ref: BlockTransactableRef) -> Result<(), TxIndexError> {
+    pub fn add_tx_index(
+        &mut self,
+        spend_ref: BlockTransactableRef,
+        tx_index: TxMainChainIndex,
+    ) -> Result<(), TxIndexError> {
+        let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(&spend_ref)?;
+
         let tx_index = match spend_ref {
-            BlockTransactableRef::Transaction(block, tx_num) => {
-                CachedInputsOperation::Write(calculate_tx_index_from_block(block, tx_num)?)
+            BlockTransactableRef::Transaction(_block, _tx_num) => {
+                CachedInputsOperation::Write(tx_index)
             }
             BlockTransactableRef::BlockReward(block) => {
                 match block.block_reward_transactable().outputs() {
@@ -64,7 +67,6 @@ impl TxIndexCache {
             }
         };
 
-        let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
         match self.data.entry(outpoint_source_id) {
             Entry::Occupied(_) => {
                 return Err(TxIndexError::OutputAlreadyPresentInInputsCache);
@@ -78,7 +80,7 @@ impl TxIndexCache {
     }
 
     pub fn remove_tx_index(&mut self, spend_ref: BlockTransactableRef) -> Result<(), TxIndexError> {
-        let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
+        let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(&spend_ref)?;
         self.remove_tx_index_by_id(outpoint_source_id)
     }
 
@@ -99,12 +101,12 @@ impl TxIndexCache {
     }
 
     fn outpoint_source_id_from_spend_ref(
-        spend_ref: BlockTransactableRef,
+        spend_ref: &BlockTransactableRef,
     ) -> Result<OutPointSourceId, TxIndexError> {
         let outpoint_source_id = match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
-                let tx = block.transactions().get(tx_num).ok_or_else(|| {
-                    TxIndexError::InvariantErrorTxNumWrongInBlock(tx_num, block.get_id())
+                let tx = block.transactions().get(*tx_num).ok_or_else(|| {
+                    TxIndexError::InvariantErrorTxNumWrongInBlock(*tx_num, block.get_id())
                 })?;
                 let tx_id = tx.transaction().get_id();
                 OutPointSourceId::from(tx_id)

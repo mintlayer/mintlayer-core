@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod default_strategy;
+pub mod tx_verification_strategy_utils;
 
 pub use default_strategy::DefaultTransactionVerificationStrategy;
 use utxo::UtxosView;
@@ -25,7 +26,7 @@ use common::{
     primitives::id::WithId,
 };
 use tx_verifier::transaction_verifier::{
-    storage::TransactionVerifierStorageRef, TransactionVerifier, TransactionVerifierConfig,
+    config::TransactionVerifierConfig, storage::TransactionVerifierStorageRef, TransactionVerifier,
 };
 
 /// A trait that specifies how a block will be verified

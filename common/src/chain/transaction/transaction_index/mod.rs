@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
+
 use super::Transaction;
 use crate::{
     chain::{Block, GenBlock},
@@ -127,11 +129,10 @@ impl SpendablePosition {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(thiserror::Error, Clone, Debug, PartialEq, Eq)]
 pub enum TxMainChainIndexError {
+    #[error("Output length is either zero or too high")]
     InvalidOutputCount,
-    SerializationInvariantError(Id<Block>),
-    InvalidTxNumberForBlock(usize, Id<Block>),
 }
 
 /// Assuming a transaction is in the mainchain, its index contains two things:
@@ -144,40 +145,39 @@ pub struct TxMainChainIndex {
     spent: Vec<OutputSpentState>,
 }
 
-// TODO: This function should probably operate on the whole block at once.
-//  I.e. take a block in and return a sequence of transaction positions.
-//  This way, we have to ask for each transaction separately and every time
-//  the whole block is encoded, giving O(N^2) complexity in number of transactions
-//  which rather unpleasant. Also the implementation could be improved by
-//  only asking about offsets, leveraging Encode::encoded_size method, since
-//  we are only interested in offsets in the encoded stream, not the contents.
-pub fn calculate_tx_index_from_block(
+pub fn calculate_tx_offsets_in_block(
     block: &Block,
-    tx_num: usize,
-) -> Result<TxMainChainIndex, TxMainChainIndexError> {
-    let tx = block
+) -> Result<VecDeque<TxMainChainIndex>, TxMainChainIndexError> {
+    let offsets = match block {
+        Block::V1(_) => {
+            let mut result = VecDeque::new();
+            result.resize(block.transactions().len(), 0);
+            // Transactions serialized last in block
+            let mut offset = u32::try_from(block.encoded_size()).expect("must not fail");
+            for (index, tx) in block.transactions().iter().enumerate().rev() {
+                let tx_size = u32::try_from(tx.encoded_size()).expect("must not fail");
+                offset -= tx_size;
+                result[index] = offset;
+            }
+            result
+        }
+    };
+
+    debug_assert_eq!(block.transactions().len(), offsets.len());
+
+    block
         .transactions()
-        .get(tx_num)
-        .ok_or_else(|| TxMainChainIndexError::InvalidTxNumberForBlock(tx_num, block.get_id()))?;
-    let enc_block = block.encode();
-    let enc_tx = tx.encode();
-    let offset_tx = enc_block
-        .windows(enc_tx.len())
-        .enumerate()
-        .find_map(|(window_num, enc_data)| (enc_data == enc_tx).then_some(window_num))
-        .ok_or_else(|| TxMainChainIndexError::SerializationInvariantError(block.get_id()))?
-        .try_into()
-        .expect("Number conversion from usize to u32 should not fail here (1)");
+        .iter()
+        .zip(offsets.into_iter())
+        .map(|(tx, offset)| {
+            let tx_position = TxMainChainPosition::new(block.get_id(), offset);
 
-    let tx_position = TxMainChainPosition::new(block.get_id(), offset_tx);
-
-    TxMainChainIndex::new(
-        SpendablePosition::from(tx_position),
-        tx.outputs()
-            .len()
-            .try_into()
-            .expect("Number conversion from usize to u32 should not fail here (3)"),
-    )
+            TxMainChainIndex::new(
+                SpendablePosition::from(tx_position),
+                tx.outputs().len().try_into().expect("must not fail"),
+            )
+        })
+        .collect::<Result<_, _>>()
 }
 
 impl TxMainChainIndex {
