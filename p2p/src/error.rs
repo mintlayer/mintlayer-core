@@ -254,8 +254,8 @@ impl From<libp2p::swarm::DialError> for P2pError {
     }
 }
 
-impl<T> From<libp2p::swarm::handler::ConnectionHandlerUpgrErr<T>> for P2pError {
-    fn from(err: libp2p::swarm::handler::ConnectionHandlerUpgrErr<T>) -> P2pError {
+impl<T> From<ConnectionHandlerUpgrErr<T>> for P2pError {
+    fn from(err: ConnectionHandlerUpgrErr<T>) -> P2pError {
         match err {
             ConnectionHandlerUpgrErr::Timeout => {
                 P2pError::ConnectionError(ConnectionError::Timeout)

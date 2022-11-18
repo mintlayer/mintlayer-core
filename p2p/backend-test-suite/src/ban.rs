@@ -19,7 +19,7 @@ use tokio::sync::mpsc;
 
 use p2p::{
     error::{P2pError, PublishError},
-    event::SwarmEvent,
+    event::PeerManagerEvent,
     message::{Announcement, HeaderListResponse, Request, Response},
     net::{
         self, types::SyncingEvent, ConnectivityService, NetworkingService, SyncingMessagingService,
@@ -42,7 +42,7 @@ where
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
 {
     let (_tx_sync, rx_sync) = mpsc::unbounded_channel();
-    let (tx_swarm, mut rx_swarm) = mpsc::unbounded_channel();
+    let (tx_peer_manager, mut rx_peer_manager) = mpsc::unbounded_channel();
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
@@ -55,7 +55,7 @@ where
         sync1,
         handle.clone(),
         rx_sync,
-        tx_swarm,
+        tx_peer_manager,
     );
 
     let (mut conn2, mut sync2) =
@@ -109,8 +109,8 @@ where
         }
     });
 
-    match rx_swarm.recv().await {
-        Some(SwarmEvent::AdjustPeerScore(peer_id, score, _)) => {
+    match rx_peer_manager.recv().await {
+        Some(PeerManagerEvent::AdjustPeerScore(peer_id, score, _)) => {
             assert_eq!(&peer_id, conn2.peer_id());
             assert_eq!(score, 100);
         }
@@ -127,7 +127,7 @@ where
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
 {
     let (_tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
-    let (tx_swarm, mut rx_swarm) = mpsc::unbounded_channel();
+    let (tx_peer_manager, mut rx_peer_manager) = mpsc::unbounded_channel();
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
@@ -144,7 +144,7 @@ where
         sync1,
         handle.clone(),
         rx_p2p_sync,
-        tx_swarm,
+        tx_peer_manager,
     );
 
     connect_services::<S>(&mut conn1, &mut conn2).await;
@@ -163,7 +163,8 @@ where
         sync1.handle_error(remote_id, res).await.unwrap();
     });
 
-    if let Some(SwarmEvent::AdjustPeerScore(peer_id, score, _)) = rx_swarm.recv().await {
+    if let Some(PeerManagerEvent::AdjustPeerScore(peer_id, score, _)) = rx_peer_manager.recv().await
+    {
         assert_eq!(remote_id, peer_id);
         assert_eq!(score, 100);
     }

@@ -38,6 +38,7 @@ use mempool::MempoolInterface;
 use crate::{
     config::P2pConfig,
     error::{ConversionError, P2pError},
+    event::{PeerManagerEvent, SyncEvent},
     net::{ConnectivityService, NetworkingService, SyncingMessagingService},
 };
 
@@ -46,11 +47,11 @@ pub type Result<T> = core::result::Result<T, P2pError>;
 
 struct P2p<T: NetworkingService> {
     // TODO: add abstraction for channels
-    /// TX channel for sending swarm control events
-    pub tx_swarm: mpsc::UnboundedSender<event::SwarmEvent<T>>,
+    /// A sender for the peer manager events.
+    pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
 
     /// TX channel for sending syncing/pubsub events
-    pub _tx_sync: mpsc::UnboundedSender<event::SyncEvent>,
+    pub _tx_sync: mpsc::UnboundedSender<SyncEvent>,
 }
 
 impl<T> P2p<T>
@@ -92,7 +93,7 @@ where
         //
         // The difference between these types is that enums that contain the events *can* have
         // a `oneshot::channel` object that must be used to send the response.
-        let (tx_swarm, rx_swarm) = mpsc::unbounded_channel();
+        let (tx_peer_manager, rx_peer_manager) = mpsc::unbounded_channel();
         let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
         let (_tx_sync, _rx_sync) = mpsc::unbounded_channel();
 
@@ -103,7 +104,7 @@ where
                     chain_config,
                     Arc::clone(&p2p_config),
                     conn,
-                    rx_swarm,
+                    rx_peer_manager,
                     tx_p2p_sync,
                 )
                 .run()
@@ -113,7 +114,7 @@ where
         }
         {
             let chainstate_handle = chainstate_handle.clone();
-            let tx_swarm = tx_swarm.clone();
+            let tx_peer_manager = tx_peer_manager.clone();
             let chain_config = Arc::clone(&chain_config);
 
             tokio::spawn(async move {
@@ -122,7 +123,7 @@ where
                     sync,
                     chainstate_handle,
                     rx_p2p_sync,
-                    tx_swarm,
+                    tx_peer_manager,
                 )
                 .run()
                 .await
@@ -130,7 +131,10 @@ where
             });
         }
 
-        Ok(Self { tx_swarm, _tx_sync })
+        Ok(Self {
+            tx_peer_manager,
+            _tx_sync,
+        })
     }
 }
 

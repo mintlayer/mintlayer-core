@@ -23,7 +23,7 @@ use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTes
 
 use crate::{
     error::{DialError, P2pError, ProtocolError},
-    event::SwarmEvent,
+    event::PeerManagerEvent,
     net::{
         self,
         libp2p::Libp2pService,
@@ -43,20 +43,22 @@ use crate::{
 };
 
 // try to connect to an address that no one listening on and verify it fails
-async fn test_swarm_connect<T: NetworkingService>(bind_addr: T::Address, remote_addr: T::Address)
-where
+async fn test_peer_manager_connect<T: NetworkingService>(
+    bind_addr: T::Address,
+    remote_addr: T::Address,
+) where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let config = Arc::new(config::create_mainnet());
-    let mut swarm = make_peer_manager::<T>(bind_addr, config).await;
+    let mut peer_manager = make_peer_manager::<T>(bind_addr, config).await;
 
-    swarm.connect(remote_addr).await.unwrap();
+    peer_manager.connect(remote_addr).await.unwrap();
 
     assert!(matches!(
-        swarm.peer_connectivity_handle.poll_next().await,
+        peer_manager.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionError {
             address: _,
             error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut)
@@ -65,22 +67,22 @@ where
 }
 
 #[tokio::test]
-async fn test_swarm_connect_mock() {
+async fn test_peer_manager_connect_mock() {
     let bind_addr = MakeTcpAddress::make_address();
     let remote_addr: SocketAddr = "[::1]:1".parse().unwrap();
 
-    test_swarm_connect::<MockService<TcpMockTransport>>(bind_addr, remote_addr).await;
+    test_peer_manager_connect::<MockService<TcpMockTransport>>(bind_addr, remote_addr).await;
 }
 
 #[tokio::test]
-async fn test_swarm_connect_libp2p() {
+async fn test_peer_manager_connect_libp2p() {
     let bind_addr = MakeP2pAddress::make_address();
     let remote_addr: Multiaddr =
         "/ip6/::1/tcp/6666/p2p/12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ"
             .parse()
             .unwrap();
 
-    test_swarm_connect::<Libp2pService>(bind_addr, remote_addr).await;
+    test_peer_manager_connect::<Libp2pService>(bind_addr, remote_addr).await;
 }
 
 // verify that the auto-connect functionality works if the number of active connections
@@ -97,29 +99,29 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
-    let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
+    let mut pm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
+    let mut pm2 = make_peer_manager::<T>(addr2, config).await;
 
-    let addr = swarm2.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
-    let peer_id = *swarm2.peer_connectivity_handle.peer_id();
+    let addr = pm2.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
+    let peer_id = *pm2.peer_connectivity_handle.peer_id();
 
     tokio::spawn(async move {
         loop {
-            assert!(swarm2.peer_connectivity_handle.poll_next().await.is_ok());
+            assert!(pm2.peer_connectivity_handle.poll_next().await.is_ok());
         }
     });
 
     // "discover" the other networking service
-    swarm1.peer_discovered(&[net::types::AddrInfo {
+    pm1.peer_discovered(&[net::types::AddrInfo {
         peer_id,
         ip4: vec![],
         ip6: vec![addr],
     }]);
-    swarm1.heartbeat().await.unwrap();
+    pm1.heartbeat().await.unwrap();
 
-    assert_eq!(swarm1.pending.len(), 1);
+    assert_eq!(pm1.pending.len(), 1);
     assert!(std::matches!(
-        swarm1.peer_connectivity_handle.poll_next().await,
+        pm1.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::OutboundAccepted { .. })
     ));
 }
@@ -151,12 +153,12 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
-    let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
+    let mut pm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
+    let mut pm2 = make_peer_manager::<T>(addr2, config).await;
 
     connect_services::<T>(
-        &mut swarm1.peer_connectivity_handle,
-        &mut swarm2.peer_connectivity_handle,
+        &mut pm1.peer_connectivity_handle,
+        &mut pm2.peer_connectivity_handle,
     )
     .await;
 }
@@ -179,13 +181,14 @@ async fn connect_outbound_same_network_mock_channels() {
 #[tokio::test]
 async fn test_validate_supported_protocols() {
     let config = Arc::new(config::create_mainnet());
-    let swarm = make_peer_manager::<Libp2pService>(MakeP2pAddress::make_address(), config).await;
+    let peer_manager =
+        make_peer_manager::<Libp2pService>(MakeP2pAddress::make_address(), config).await;
 
     // all needed protocols
-    assert!(swarm.validate_supported_protocols(&default_protocols()));
+    assert!(peer_manager.validate_supported_protocols(&default_protocols()));
 
     // all needed protocols + 2 extra
-    assert!(swarm.validate_supported_protocols(
+    assert!(peer_manager.validate_supported_protocols(
         &[
             Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
             Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
@@ -199,7 +202,7 @@ async fn test_validate_supported_protocols() {
     ));
 
     // all needed protocols but wrong version for sync
-    assert!(!swarm.validate_supported_protocols(
+    assert!(!peer_manager.validate_supported_protocols(
         &[
             Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
             Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
@@ -211,7 +214,7 @@ async fn test_validate_supported_protocols() {
     ));
 
     // ping protocol missing
-    assert!(!swarm.validate_supported_protocols(
+    assert!(!peer_manager.validate_supported_protocols(
         &[
             Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
             Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
@@ -234,16 +237,16 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
-    let mut swarm2 = make_peer_manager::<T>(
+    let mut pm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
+    let mut pm2 = make_peer_manager::<T>(
         addr2,
         Arc::new(common::chain::config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
     )
     .await;
 
     let (_address, peer_info) = connect_services::<T>(
-        &mut swarm2.peer_connectivity_handle,
-        &mut swarm1.peer_connectivity_handle,
+        &mut pm2.peer_connectivity_handle,
+        &mut pm1.peer_connectivity_handle,
     )
     .await;
     assert_ne!(peer_info.magic_bytes, *config.magic_bytes());
@@ -277,15 +280,15 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
-    let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
+    let mut pm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
+    let mut pm2 = make_peer_manager::<T>(addr2, config).await;
 
     let (address, peer_info) = connect_services::<T>(
-        &mut swarm1.peer_connectivity_handle,
-        &mut swarm2.peer_connectivity_handle,
+        &mut pm1.peer_connectivity_handle,
+        &mut pm2.peer_connectivity_handle,
     )
     .await;
-    assert_eq!(swarm2.accept_inbound_connection(address, peer_info), Ok(()));
+    assert_eq!(pm2.accept_inbound_connection(address, peer_info), Ok(()));
 }
 
 #[tokio::test]
@@ -314,21 +317,21 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::new(config::create_mainnet())).await;
-    let mut swarm2 = make_peer_manager::<T>(
+    let mut pm1 = make_peer_manager::<T>(addr1, Arc::new(config::create_mainnet())).await;
+    let mut pm2 = make_peer_manager::<T>(
         addr2,
         Arc::new(common::chain::config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
     )
     .await;
 
     let (address, peer_info) = connect_services::<T>(
-        &mut swarm1.peer_connectivity_handle,
-        &mut swarm2.peer_connectivity_handle,
+        &mut pm1.peer_connectivity_handle,
+        &mut pm2.peer_connectivity_handle,
     )
     .await;
 
     assert_eq!(
-        swarm2.accept_inbound_connection(address, peer_info),
+        pm2.accept_inbound_connection(address, peer_info),
         Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
             [1, 2, 3, 4],
             *config::create_mainnet().magic_bytes(),
@@ -363,24 +366,23 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::new(config::create_mainnet())).await;
-    let mut swarm2 = make_peer_manager::<T>(addr2, Arc::new(config::create_mainnet())).await;
+    let mut pm1 = make_peer_manager::<T>(addr1, Arc::new(config::create_mainnet())).await;
+    let mut pm2 = make_peer_manager::<T>(addr2, Arc::new(config::create_mainnet())).await;
 
     let (_address, _peer_info) = connect_services::<T>(
-        &mut swarm1.peer_connectivity_handle,
-        &mut swarm2.peer_connectivity_handle,
+        &mut pm1.peer_connectivity_handle,
+        &mut pm2.peer_connectivity_handle,
     )
     .await;
 
     assert_eq!(
-        swarm2
-            .peer_connectivity_handle
-            .disconnect(*swarm1.peer_connectivity_handle.peer_id())
+        pm2.peer_connectivity_handle
+            .disconnect(*pm1.peer_connectivity_handle.peer_id())
             .await,
         Ok(())
     );
     assert!(std::matches!(
-        swarm1.peer_connectivity_handle.poll_next().await,
+        pm1.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
 }
@@ -413,32 +415,32 @@ where
     let default_addr = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
-    let mut swarm2 = make_peer_manager::<T>(addr2, Arc::clone(&config)).await;
+    let mut pm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
+    let mut pm2 = make_peer_manager::<T>(addr2, Arc::clone(&config)).await;
 
     peers.into_iter().for_each(|info| {
-        swarm1.peerdb.peer_connected(default_addr.clone(), info);
+        pm1.peerdb.peer_connected(default_addr.clone(), info);
     });
     assert_eq!(
-        swarm1.peerdb.active_peer_count(),
+        pm1.peerdb.active_peer_count(),
         peer_manager::MAX_ACTIVE_CONNECTIONS
     );
 
     let (_address, _peer_info) = connect_services::<T>(
-        &mut swarm1.peer_connectivity_handle,
-        &mut swarm2.peer_connectivity_handle,
+        &mut pm1.peer_connectivity_handle,
+        &mut pm2.peer_connectivity_handle,
     )
     .await;
-    let swarm1_id = *swarm1.peer_connectivity_handle.peer_id();
+    let pm1_id = *pm1.peer_connectivity_handle.peer_id();
 
     // run the first peer manager in the background and poll events from the peer manager
     // that tries to connect to the first manager
-    tokio::spawn(async move { swarm1.run().await });
+    tokio::spawn(async move { pm1.run().await });
 
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) =
-        swarm2.peer_connectivity_handle.poll_next().await
+        pm2.peer_connectivity_handle.poll_next().await
     {
-        assert_eq!(peer_id, swarm1_id);
+        assert_eq!(peer_id, pm1_id);
     } else {
         panic!("invalid event received");
     }
@@ -515,13 +517,13 @@ where
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let config = Arc::new(config::create_mainnet());
-    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
+    let mut pm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
 
-    swarm1.peer_connectivity_handle.connect(addr2).await.expect("dial to succeed");
+    pm1.peer_connectivity_handle.connect(addr2).await.expect("dial to succeed");
 
     match timeout(
-        Duration::from_secs(*swarm1._p2p_config.outbound_connection_timeout),
-        swarm1.peer_connectivity_handle.poll_next(),
+        Duration::from_secs(*pm1._p2p_config.outbound_connection_timeout),
+        pm1.peer_connectivity_handle.poll_next(),
     )
     .await
     {
@@ -579,7 +581,7 @@ where
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
 
-    let mut swarm = peer_manager::PeerManager::<T>::new(
+    let mut peer_manager = peer_manager::PeerManager::<T>::new(
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         conn,
@@ -593,11 +595,11 @@ where
         }
     });
     tokio::spawn(async move {
-        swarm.run().await.unwrap();
+        peer_manager.run().await.unwrap();
     });
 
     let (rtx, rrx) = oneshot::channel();
-    tx.send(SwarmEvent::Connect(addr2, rtx)).unwrap();
+    tx.send(PeerManagerEvent::Connect(addr2, rtx)).unwrap();
 
     match timeout(
         Duration::from_secs(*p2p_config.outbound_connection_timeout),
@@ -647,7 +649,7 @@ async fn connection_timeout_rpc_notified_mock_channels() {
 async fn connect_no_ip_in_address_libp2p() {
     let config = Arc::new(config::create_mainnet());
     let bind_address = MakeP2pAddress::make_address();
-    let mut swarm = make_peer_manager::<Libp2pService>(bind_address, config).await;
+    let mut peer_manager = make_peer_manager::<Libp2pService>(bind_address, config).await;
 
     let no_ip_addresses = [
         Multiaddr::empty(),
@@ -657,7 +659,7 @@ async fn connect_no_ip_in_address_libp2p() {
 
     for address in no_ip_addresses {
         assert_eq!(
-            swarm.connect(address.clone()).await.unwrap_err(),
+            peer_manager.connect(address.clone()).await.unwrap_err(),
             P2pError::ProtocolError(ProtocolError::UnableToConvertAddressToBannable(format!(
                 "{address:?}"
             )))

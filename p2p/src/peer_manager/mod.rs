@@ -43,7 +43,7 @@ use utils::ensure;
 use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
-    event,
+    event::{PeerManagerEvent, SyncControlEvent},
     net::{
         self,
         types::{Protocol, ProtocolType},
@@ -71,10 +71,10 @@ where
     peer_connectivity_handle: T::ConnectivityHandle,
 
     /// RX channel for receiving control events
-    rx_swarm: mpsc::UnboundedReceiver<event::SwarmEvent<T>>,
+    rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
 
     /// TX channel for sending events to SyncManager
-    tx_sync: mpsc::UnboundedSender<event::SyncControlEvent<T>>,
+    tx_sync: mpsc::UnboundedSender<SyncControlEvent<T>>,
 
     /// Hashmap of pending outbound connections
     pending: HashMap<T::Address, Option<oneshot::Sender<crate::Result<()>>>>,
@@ -94,12 +94,12 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
-        rx_swarm: mpsc::UnboundedReceiver<event::SwarmEvent<T>>,
-        tx_sync: mpsc::UnboundedSender<event::SyncControlEvent<T>>,
+        rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
+        tx_sync: mpsc::UnboundedSender<SyncControlEvent<T>>,
     ) -> Self {
         Self {
             peer_connectivity_handle: handle,
-            rx_swarm,
+            rx_peer_manager,
             tx_sync,
             peerdb: peerdb::PeerDb::new(Arc::clone(&p2p_config)),
             pending: HashMap::new(),
@@ -167,7 +167,7 @@ where
     ///
     /// The event is received from the networking backend and it's either a result of an incoming
     /// connection from a remote peer or a response to an outbound connection that was initiated
-    /// by the node as result of swarm maintenance.
+    /// by the node as result of the peer manager maintenance.
     fn accept_connection(
         &mut self,
         address: T::Address,
@@ -200,9 +200,7 @@ where
         );
 
         self.peerdb.peer_connected(address, info);
-        self.tx_sync
-            .send(event::SyncControlEvent::Connected(peer_id))
-            .map_err(P2pError::from)
+        self.tx_sync.send(SyncControlEvent::Connected(peer_id)).map_err(P2pError::from)
     }
 
     /// Validate inbound peer connection
@@ -258,7 +256,7 @@ where
     fn close_connection(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
         log::debug!("connection closed for peer {peer_id}");
 
-        self.tx_sync.send(event::SyncControlEvent::Disconnected(peer_id))?;
+        self.tx_sync.send(SyncControlEvent::Disconnected(peer_id))?;
         self.peerdb.peer_disconnected(&peer_id);
         Ok(())
     }
@@ -284,8 +282,8 @@ where
     /// (at all or in time) or it didn't support the handshaking which forced the connection closed.
     ///
     /// If the connection was initiated by the user via RPC, inform them that the connection failed.
-    /// Inform the [`crate::swarm::peerdb::PeerDb`] about the address failure so it knows to update its
-    /// own records.
+    /// Inform the [`crate::peer_manager::peerdb::PeerDb`] about the address failure so it knows to
+    /// update its own records.
     fn handle_outbound_error(&mut self, address: T::Address, error: P2pError) -> crate::Result<()> {
         if let Some(Some(channel)) = self.pending.remove(&address) {
             channel.send(Err(error)).map_err(|_| P2pError::ChannelClosed)?;
@@ -323,16 +321,16 @@ where
         self.peer_connectivity_handle.connect(address).await
     }
 
-    /// Maintain the swarm state
+    /// Maintains the peer manager state.
     ///
     /// `PeerManager::heartbeat()` is called every time a network/control event is received
-    /// or the heartbeat timer of the event loop expires. In other words, the swarm state
+    /// or the heartbeat timer of the event loop expires. In other words, the peer manager state
     /// is checked and updated at least once every 30 seconds. In high-traffic scenarios the
     /// update interval is clamped to a sensible lower bound. `PeerManager` will keep track of
     /// when it last update its own state and if the time since last update is less than the
     /// configured lower bound, it exits early from the function.
     ///
-    /// This function maintains the overall connectivity state of the swarm by culling
+    /// This function maintains the overall connectivity state of peers by culling
     /// low-reputation peers and establishing new connections with peers that have higher
     /// reputation. It also updates peer scores and forgets those peers that are no longer needed.
     ///
@@ -409,7 +407,7 @@ where
         }
     }
 
-    /// Run the `PeerManager` event loop
+    /// Runs the `PeerManager` event loop.
     ///
     /// The event loop has three main responsibilities:
     /// - listening to and handling control events from [`crate::sync::SyncManager`]/
@@ -419,18 +417,18 @@ where
     ///
     /// After handling an event from one of the aforementioned sources, the event loop
     /// handles the error (if any) and runs the [`PeerManager::heartbeat()`] function
-    /// to perform swarm maintenance. If the `PeerManager` doesn't receive any events,
+    /// to perform the peer manager maintenance. If the `PeerManager` doesn't receive any events,
     /// [`PEER_MGR_HEARTBEAT_INTERVAL`] defines how often the heartbeat function is called.
     /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
     /// have any events.
     pub async fn run(&mut self) -> crate::Result<void::Void> {
         loop {
             tokio::select! {
-                event = self.rx_swarm.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
+                event = self.rx_peer_manager.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     //
                     // Handle events from an outside controller (rpc, for example) that sets/gets values for PeerManager
                     //
-                    event::SwarmEvent::Connect(addr, response) => {
+                    PeerManagerEvent::Connect(addr, response) => {
                         log::debug!("try to establish outbound connection to peer at address {addr:?}");
 
                         let res = self.connect(addr.clone()).await.map(|_| {
@@ -438,33 +436,33 @@ where
                         });
                         self.handle_result(None, res).await?;
                     }
-                    event::SwarmEvent::Disconnect(peer_id, response) => {
-                        log::debug!("disconnect peer {peer_id} from the swarm");
+                    PeerManagerEvent::Disconnect(peer_id, response) => {
+                        log::debug!("disconnect peer {peer_id}");
 
                         response
                             .send(self.peer_connectivity_handle.disconnect(peer_id).await)
                             .map_err(|_| P2pError::ChannelClosed)?;
                     }
-                    event::SwarmEvent::AdjustPeerScore(peer_id, score, response) => {
+                    PeerManagerEvent::AdjustPeerScore(peer_id, score, response) => {
                         log::debug!("adjust peer {peer_id} score: {score}");
 
                         response
                             .send(self.adjust_peer_score(peer_id, score).await)
                             .map_err(|_| P2pError::ChannelClosed)?;
                     }
-                    event::SwarmEvent::GetPeerCount(response) => {
+                    PeerManagerEvent::GetPeerCount(response) => {
                         response.send(self.peerdb.active_peer_count()).map_err(|_| P2pError::ChannelClosed)?;
                     }
-                    event::SwarmEvent::GetBindAddress(response) => {
+                    PeerManagerEvent::GetBindAddress(response) => {
                         let addr = self.peer_connectivity_handle.local_addr();
                         // TODO: change the return to Option<String> and avoid using special values for None
                         let addr = addr.await?.map_or("<unavailable>".to_string(), |addr| addr.to_string());
                         response.send(addr).map_err(|_| P2pError::ChannelClosed)?;
                     }
-                    event::SwarmEvent::GetPeerId(response) => response
+                    PeerManagerEvent::GetPeerId(response) => response
                         .send(self.peer_connectivity_handle.peer_id().to_string())
                         .map_err(|_| P2pError::ChannelClosed)?,
-                    event::SwarmEvent::GetConnectedPeers(response) => {
+                    PeerManagerEvent::GetConnectedPeers(response) => {
                         let peers = self.peerdb
                             .active_peers()
                             .iter()

@@ -28,7 +28,7 @@ use common::{
 };
 use p2p::{
     error::P2pError,
-    event::{SwarmEvent, SyncControlEvent},
+    event::{PeerManagerEvent, SyncControlEvent},
     message::{BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response},
     net::{
         types::{ConnectivityEvent, SyncingEvent},
@@ -1063,7 +1063,7 @@ async fn make_sync_manager<T>(
     BlockSyncManager<T>,
     T::ConnectivityHandle,
     mpsc::UnboundedSender<SyncControlEvent<T>>,
-    mpsc::UnboundedReceiver<SwarmEvent<T>>,
+    mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
 )
 where
     T: NetworkingService,
@@ -1071,16 +1071,22 @@ where
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
-    let (tx_swarm, rx_swarm) = mpsc::unbounded_channel();
+    let (tx_peer_manager, rx_peer_manager) = mpsc::unbounded_channel();
 
     let config = Arc::new(common::chain::config::create_mainnet());
     let (conn, sync) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
 
     (
-        BlockSyncManager::<T>::new(Arc::clone(&config), sync, handle, rx_p2p_sync, tx_swarm),
+        BlockSyncManager::<T>::new(
+            Arc::clone(&config),
+            sync,
+            handle,
+            rx_p2p_sync,
+            tx_peer_manager,
+        ),
         conn,
         tx_p2p_sync,
-        rx_swarm,
+        rx_peer_manager,
     )
 }
 

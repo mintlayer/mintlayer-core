@@ -38,8 +38,8 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let (mut mgr1, mut conn1, _sync1, _swarm1) = make_sync_manager::<T>(addr1).await;
-    let (mut mgr2, mut conn2, _sync2, _swarm2) = make_sync_manager::<T>(addr2).await;
+    let (mut mgr1, mut conn1, _sync1, _pm1) = make_sync_manager::<T>(addr1).await;
+    let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(addr2).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<T>(&mut conn1, &mut conn2).await;
@@ -100,8 +100,8 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let (mut mgr1, mut conn1, _sync1, _swarm1) = make_sync_manager::<T>(addr1).await;
-    let (mut mgr2, mut conn2, _sync2, _swarm2) = make_sync_manager::<T>(addr2).await;
+    let (mut mgr1, mut conn1, _sync1, _pm1) = make_sync_manager::<T>(addr1).await;
+    let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(addr2).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<T>(&mut conn1, &mut conn2).await;
@@ -178,8 +178,8 @@ async fn test_multiple_requests_and_responses_mock_channels() {
         .await;
 }
 
-// receive getheaders before receiving `Connected` event from swarm manager
-// which makes the request to be rejected and to time out in the sender end
+// Receive getheaders before receiving the `Connected` event from the peer manager which makes the
+// request be rejected and time out in the sender's end.
 async fn test_request_timeout_error<A, T>()
 where
     A: MakeTestAddress<Address = T::Address>,
@@ -190,8 +190,8 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let (mut mgr1, mut conn1, _sync1, _swarm1) = make_sync_manager::<T>(addr1).await;
-    let (mut mgr2, mut conn2, _sync2, _swarm2) = make_sync_manager::<T>(addr2).await;
+    let (mut mgr1, mut conn1, _sync1, _pm1) = make_sync_manager::<T>(addr1).await;
+    let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(addr2).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<T>(&mut conn1, &mut conn2).await;
@@ -269,8 +269,8 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let (mut mgr1, mut conn1, _sync1, mut swarm_rx) = make_sync_manager::<T>(addr1).await;
-    let (mut mgr2, mut conn2, _sync2, _swarm2) = make_sync_manager::<T>(addr2).await;
+    let (mut mgr1, mut conn1, _sync1, mut pm_rx) = make_sync_manager::<T>(addr1).await;
+    let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(addr2).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<T>(&mut conn1, &mut conn2).await;
@@ -295,8 +295,8 @@ where
 
         let (_tx, rx) = oneshot::channel();
         assert!(std::matches!(
-            swarm_rx.try_recv(),
-            Ok(SwarmEvent::Disconnect(_peer2_id, _tx))
+            pm_rx.try_recv(),
+            Ok(PeerManagerEvent::Disconnect(_peer2_id, _tx))
         ));
         assert_eq!(rx.await, Ok(()));
     });
