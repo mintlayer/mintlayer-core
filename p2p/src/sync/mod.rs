@@ -39,7 +39,7 @@ use utils::ensure;
 
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
-    event,
+    event::{PeerManagerEvent, SyncControlEvent},
     message::{self, Announcement},
     net::{
         self,
@@ -89,10 +89,10 @@ pub struct BlockSyncManager<T: NetworkingService> {
     peer_sync_handle: T::SyncingMessagingHandle,
 
     /// RX channel for receiving control events
-    rx_sync: mpsc::UnboundedReceiver<event::SyncControlEvent<T>>,
+    rx_sync: mpsc::UnboundedReceiver<SyncControlEvent<T>>,
 
-    /// TX channel for sending control events to swarm
-    tx_swarm: mpsc::UnboundedSender<event::SwarmEvent<T>>,
+    /// A sender for the peer manager events.
+    tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
 
     /// Hashmap of connected peers
     peers: HashMap<T::PeerId, peer::PeerContext<T>>,
@@ -114,14 +114,14 @@ where
         config: Arc<ChainConfig>,
         handle: T::SyncingMessagingHandle,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-        rx_sync: mpsc::UnboundedReceiver<event::SyncControlEvent<T>>,
-        tx_swarm: mpsc::UnboundedSender<event::SwarmEvent<T>>,
+        rx_sync: mpsc::UnboundedReceiver<SyncControlEvent<T>>,
+        tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
     ) -> Self {
         Self {
             config,
             peer_sync_handle: handle,
             rx_sync,
-            tx_swarm,
+            tx_peer_manager,
             chainstate_handle,
             peers: Default::default(),
             requests: HashMap::new(),
@@ -401,8 +401,8 @@ where
                         self.unregister_peer(peer_id);
                         // TODO: global event system
                         let (tx, rx) = oneshot::channel();
-                        self.tx_swarm
-                            .send(event::SwarmEvent::Disconnect(peer_id, tx))
+                        self.tx_peer_manager
+                            .send(PeerManagerEvent::Disconnect(peer_id, tx))
                             .map_err(P2pError::from)?;
                         return rx.await.map_err(P2pError::from)?;
                     }
@@ -460,8 +460,8 @@ where
                 log::error!("Peer {peer_id} committed a protocol error: {err}");
 
                 let (tx, rx) = oneshot::channel();
-                self.tx_swarm
-                    .send(event::SwarmEvent::AdjustPeerScore(
+                self.tx_peer_manager
+                    .send(PeerManagerEvent::AdjustPeerScore(
                         peer_id,
                         err.ban_score(),
                         tx,
@@ -473,8 +473,8 @@ where
                 ChainstateError::ProcessBlockError(err) => {
                     if err.ban_score() > 0 {
                         let (tx, rx) = oneshot::channel();
-                        self.tx_swarm
-                            .send(event::SwarmEvent::AdjustPeerScore(
+                        self.tx_peer_manager
+                            .send(PeerManagerEvent::AdjustPeerScore(
                                 peer_id,
                                 err.ban_score(),
                                 tx,
@@ -500,8 +500,8 @@ where
                 if err.ban_score() > 0 {
                     // TODO: better abstraction over channels
                     let (tx, rx) = oneshot::channel();
-                    self.tx_swarm
-                        .send(event::SwarmEvent::AdjustPeerScore(
+                    self.tx_peer_manager
+                        .send(PeerManagerEvent::AdjustPeerScore(
                             peer_id,
                             err.ban_score(),
                             tx,
@@ -589,12 +589,12 @@ where
                     }
                 },
                 event = self.rx_sync.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
-                    event::SyncControlEvent::Connected(peer_id) => {
+                    SyncControlEvent::Connected(peer_id) => {
                         log::debug!("register peer {peer_id} to sync manager");
                         let result = self.register_peer(peer_id).await;
                         self.handle_error(peer_id, result).await?;
                     }
-                    event::SyncControlEvent::Disconnected(peer_id) => {
+                    SyncControlEvent::Disconnected(peer_id) => {
                         log::debug!("unregister peer {peer_id} from sync manager");
                         self.unregister_peer(peer_id)
                     }
@@ -670,8 +670,8 @@ where
         if score > 0 {
             // TODO: better abstraction over channels
             let (tx, rx) = oneshot::channel();
-            self.tx_swarm
-                .send(event::SwarmEvent::AdjustPeerScore(peer_id, score, tx))
+            self.tx_peer_manager
+                .send(PeerManagerEvent::AdjustPeerScore(peer_id, score, tx))
                 .map_err(P2pError::from)?;
             let _ = rx.await.map_err(P2pError::from)?;
         }

@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::net::NetworkingService;
-use common::chain::block::Block;
 use tokio::sync::oneshot;
 
+use common::chain::block::Block;
+
+use crate::net::NetworkingService;
+
 #[derive(Debug)]
-pub enum SwarmEvent<T: NetworkingService> {
+pub enum PeerManagerEvent<T: NetworkingService> {
     /// Try to establish connection with a remote peer
     Connect(T::Address, oneshot::Sender<crate::Result<()>>),
 
