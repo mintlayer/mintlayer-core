@@ -61,7 +61,7 @@ fn basic_reorg(#[case] seed: Seed) {
             ))
             .build();
 
-        //prepare tx_b
+        // prepare tx_b
         let tx_b = TransactionBuilder::new()
             .add_input(
                 TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
@@ -144,7 +144,10 @@ fn basic_reorg(#[case] seed: Seed) {
         // Construct fresh `genesis -> b -> c` chain as a reference
         let expected_accounting_data = {
             let storage = Store::new_empty().unwrap();
-            let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
+            let mut tf = TestFramework::builder(&mut rng)
+                .with_storage(storage.clone())
+                .with_chainstate_config(tf.chainstate().get_chainstate_config())
+                .build();
 
             let block_b = tf
                 .make_block_builder()

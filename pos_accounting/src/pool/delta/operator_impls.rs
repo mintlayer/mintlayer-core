@@ -209,6 +209,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingDelta<'a, P> {
             .get_pool_data(undo.pool_id)?
             .ok_or(Error::InvariantErrorPoolCreationReversalFailedDataNotFound)?;
 
+        // TODO: find better solution
         // If pool_data is in the current cache then perform undo.
         // Otherwise it's from parent so add `Delete` to the current cache,
         // which effectively will perform undo for the parent on flush
@@ -254,6 +255,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingDelta<'a, P> {
             .get_delegation_data(undo.delegation_id)?
             .ok_or(Error::InvariantErrorDelegationIdUndoFailedNotFound)?;
 
+        // TODO: find better solution
         // If delegation_data is in the current cache then perform undo.
         // Otherwise it's from parent so add `Delete` to the current cache,
         // which effectively will perform undo for the parent on flush
