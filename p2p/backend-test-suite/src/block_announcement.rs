@@ -190,7 +190,7 @@ where
     sync2.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
 
     let input = TxInput::new(config.genesis_block_id().into(), 0);
-    let signature = (0..=MAXIMUM_SIZE).into_iter().map(|_| 0).collect::<Vec<u8>>();
+    let signature = (0..ANNOUNCEMENT_MAX_SIZE).into_iter().map(|_| 0).collect::<Vec<u8>>();
     let signatures = vec![InputWitness::Standard(StandardInputSignature::new(
         sighashtype::SigHashType::try_from(sighashtype::SigHashType::ALL).unwrap(),
         signature,
