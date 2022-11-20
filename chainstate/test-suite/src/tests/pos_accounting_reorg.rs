@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::*;
-use chainstate_storage::inmemory::Store;
+use chainstate_storage::{inmemory::Store, BlockchainStorageWrite, TransactionRw, Transactional};
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
@@ -98,15 +98,11 @@ fn basic_reorg(#[case] seed: Seed) {
             .build();
 
         // create block a
-        let block_a = tf
-            .make_block_builder()
-            .add_transaction(tx_a)
-            .build_and_process()
-            .unwrap()
-            .unwrap();
+        let block_a = tf.make_block_builder().add_transaction(tx_a).build();
+        let block_a_index = tf.process_block(block_a.clone(), BlockSource::Local).unwrap().unwrap();
         assert_eq!(
             tf.best_block_id(),
-            Id::<GenBlock>::from(*block_a.block_id())
+            Id::<GenBlock>::from(*block_a_index.block_id())
         );
 
         // create block b
@@ -121,7 +117,7 @@ fn basic_reorg(#[case] seed: Seed) {
         // no reorg here
         assert_eq!(
             tf.best_block_id(),
-            Id::<GenBlock>::from(*block_a.block_id())
+            Id::<GenBlock>::from(*block_a_index.block_id())
         );
 
         // create block c
@@ -149,6 +145,14 @@ fn basic_reorg(#[case] seed: Seed) {
                 .with_chainstate_config(tf.chainstate().get_chainstate_config())
                 .build();
 
+            {
+                // manually add block_a info
+                let mut db_tx = storage.transaction_rw().unwrap();
+                db_tx.set_block_index(&block_a_index).unwrap();
+                db_tx.add_block(&block_a).unwrap();
+                db_tx.commit().unwrap();
+            }
+
             let block_b = tf
                 .make_block_builder()
                 .with_parent(genesis_id.into())
@@ -163,9 +167,9 @@ fn basic_reorg(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap();
 
-            storage.read_accounting_data()
+            storage.dump_raw()
         };
 
-        assert_eq!(storage.read_accounting_data(), expected_accounting_data);
+        assert_eq!(storage.dump_raw(), expected_accounting_data);
     });
 }
