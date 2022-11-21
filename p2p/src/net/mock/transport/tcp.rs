@@ -92,6 +92,7 @@ impl MockStream for TcpMockStream {
         let mut buf = bytes::BytesMut::new();
         EncoderDecoder {}.encode(msg, &mut buf)?;
         self.stream.write_all(&buf).await?;
+        self.stream.flush().await?;
         Ok(())
     }
 
