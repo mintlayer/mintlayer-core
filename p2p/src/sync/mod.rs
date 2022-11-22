@@ -42,7 +42,6 @@ use crate::{
     event::{PeerManagerEvent, SyncControlEvent},
     message::{self, Announcement},
     net::{
-        self,
         types::{PubSubTopic, SyncingEvent, ValidationResult},
         NetworkingService, SyncingMessagingService,
     },
@@ -50,9 +49,6 @@ use crate::{
 
 // TODO: from config? global constant?
 const HEADER_LIMIT: usize = 2000;
-
-// TODO: this comes from spec?
-const RETRY_LIMIT: usize = 3;
 
 // TODO: add more tests
 // TODO: cache locator and invalidate it when `NewTip` event is received
@@ -99,9 +95,6 @@ pub struct BlockSyncManager<T: NetworkingService> {
 
     /// Subsystem handle to Chainstate
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-
-    /// Pending requests
-    requests: HashMap<T::SyncingPeerRequestId, request::RequestState<T>>,
 }
 
 /// Syncing manager
@@ -124,7 +117,6 @@ where
             tx_peer_manager,
             chainstate_handle,
             peers: Default::default(),
-            requests: HashMap::new(),
             state: SyncState::Uninitialized,
         }
     }
@@ -154,8 +146,6 @@ where
         self.send_request(
             peer_id,
             message::Request::HeaderListRequest(message::HeaderListRequest::new(locator.clone())),
-            request::RequestType::GetHeaders,
-            0,
         )
         .await
         .map(|_| {
@@ -282,7 +272,7 @@ where
         headers: Vec<BlockHeader>,
     ) -> crate::Result<()> {
         match self.validate_header_response(&peer_id, headers).await {
-            Ok(Some(header)) => self.send_block_request(peer_id, header.get_id(), 0).await,
+            Ok(Some(header)) => self.send_block_request(peer_id, header.get_id()).await,
             Ok(None) => {
                 self.peers
                     .get_mut(&peer_id)
@@ -343,11 +333,11 @@ where
         );
 
         match self.validate_block_response(&peer_id, blocks).await {
-            Ok(Some(next_block)) => self.send_block_request(peer_id, next_block.get_id(), 0).await,
+            Ok(Some(next_block)) => self.send_block_request(peer_id, next_block.get_id()).await,
             Ok(None) => {
                 // last block from peer received, ask if peer knows of any new headers
                 let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
-                self.send_header_request(peer_id, locator, 0).await
+                self.send_header_request(peer_id, locator).await
             }
             Err(err) => Err(err),
         }
@@ -381,54 +371,6 @@ where
 
         self.state = SyncState::Done;
         self.peer_sync_handle.subscribe(&[PubSubTopic::Blocks]).await
-    }
-
-    pub async fn process_error(
-        &mut self,
-        peer_id: T::PeerId,
-        request_id: T::SyncingPeerRequestId,
-        error: net::types::RequestResponseError,
-    ) -> crate::Result<()> {
-        match error {
-            net::types::RequestResponseError::Timeout => {
-                if let Some(request) = self.requests.remove(&request_id) {
-                    log::warn!("outbound request {request_id:?} for peer {peer_id} timed out");
-
-                    if request.retry_count == RETRY_LIMIT {
-                        log::error!(
-                            "peer {peer_id} failed to respond to request, close connection"
-                        );
-                        self.unregister_peer(peer_id);
-                        // TODO: global event system
-                        let (tx, rx) = oneshot::channel();
-                        self.tx_peer_manager
-                            .send(PeerManagerEvent::Disconnect(peer_id, tx))
-                            .map_err(P2pError::from)?;
-                        return rx.await.map_err(P2pError::from)?;
-                    }
-
-                    match request.request_type {
-                        request::RequestType::GetHeaders => {
-                            let locator =
-                                self.chainstate_handle.call(|this| this.get_locator()).await??;
-                            self.send_header_request(peer_id, locator, request.retry_count + 1)
-                                .await?;
-                        }
-                        request::RequestType::GetBlocks(block_ids) => {
-                            assert_eq!(block_ids.len(), 1);
-                            self.send_block_request(
-                                peer_id,
-                                *block_ids.get(0).expect("block id to exist"),
-                                request.retry_count + 1,
-                            )
-                            .await?;
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(())
     }
 
     pub async fn process_announcement(
@@ -575,14 +517,6 @@ where
                             let result = self.process_block_response(peer_id, response.into_blocks()).await;
                             self.handle_error(peer_id, result).await?;
                         }
-                    },
-                    SyncingEvent::Error {
-                        peer_id,
-                        request_id,
-                        error,
-                    } => {
-                        let result = self.process_error(peer_id, request_id, error).await;
-                        self.handle_error(peer_id, result).await?;
                     },
                     SyncingEvent::Announcement{ peer_id, message_id, announcement } => {
                         self.process_announcement(peer_id, message_id, announcement).await?;

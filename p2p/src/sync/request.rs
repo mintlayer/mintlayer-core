@@ -15,60 +15,34 @@
 
 //! Utility functions for sending header/block requests/responses
 
-use super::*;
+use chainstate::Locator;
+use common::{
+    chain::{block::BlockHeader, Block},
+    primitives::Id,
+};
+use logging::log;
+use utils::ensure;
 
-/// Request type
-pub enum RequestType {
-    /// Header request
-    GetHeaders,
-
-    /// Block request
-    GetBlocks(Vec<Id<Block>>),
-}
-
-/// Request state
-pub struct RequestState<T: NetworkingService> {
-    /// Unique ID of the remote peer
-    pub(super) _peer_id: T::PeerId,
-
-    /// Request type
-    pub(super) request_type: RequestType,
-
-    /// How many times the request has been sent
-    pub(super) retry_count: usize,
-}
+use crate::{
+    error::{P2pError, PeerError},
+    message,
+    sync::{peer::PeerSyncState, BlockSyncManager},
+    NetworkingService, SyncingMessagingService,
+};
 
 impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
-    /// Make a block request message
-    ///
-    /// Return `GetBlocks` message and an associated `GetBlocks` request type entry
-    /// that is used to track the progress of the request.
-    ///
-    /// # Arguments
-    /// * `block_ids` - IDs of the blocks that are requested
-    pub fn make_block_request(&self, block_ids: Vec<Id<Block>>) -> (message::Request, RequestType) {
-        (
-            message::Request::BlockListRequest(message::BlockListRequest::new(block_ids.clone())),
-            RequestType::GetBlocks(block_ids),
-        )
+    /// Creates a blocks request message.
+    pub fn make_block_request(&self, block_ids: Vec<Id<Block>>) -> message::Request {
+        message::Request::BlockListRequest(message::BlockListRequest::new(block_ids.clone()))
     }
 
-    /// Make header request message
-    ///
-    /// Return `GetHeaders` message and an associated `GetHeaders` request type entry
-    /// that is used to track the progress of the request.
-    ///
-    /// # Arguments
-    /// * `locator` - locator object that shows the state of the local node
-    pub fn make_header_request(&self, locator: Locator) -> (message::Request, RequestType) {
-        (
-            message::Request::HeaderListRequest(message::HeaderListRequest::new(locator)),
-            RequestType::GetHeaders,
-        )
+    /// Creates a headers request message with the given locator.
+    pub fn make_header_request(&self, locator: Locator) -> message::Request {
+        message::Request::HeaderListRequest(message::HeaderListRequest::new(locator))
     }
 
     /// Make header response
@@ -87,33 +61,13 @@ where
         message::Response::BlockListResponse(message::BlockListResponse::new(blocks))
     }
 
-    /// Helper function for sending a request to remote
-    ///
-    /// Send request to remote and create [`RequestState`] entry which tracks how many
-    /// times the request has failed. If the number of resends is more than the configured
-    /// limit, the request is deemed failed and connection to the peer is closed.
-    ///
-    /// # Arguments
-    /// * `peer_id` - peer ID of the remote node
-    /// * `request` - [`crate::message::Request`] containing the request
-    /// * `request_type` - [`RequestType`] indicating the type, used for tracking progress
-    /// * `retry_count` - how many times the request has been resent
+    /// Sends a request to the given peer.
     pub async fn send_request(
         &mut self,
         peer_id: T::PeerId,
         request: message::Request,
-        request_type: RequestType,
-        retry_count: usize,
     ) -> crate::Result<()> {
-        let request_id = self.peer_sync_handle.send_request(peer_id, request).await?;
-        self.requests.insert(
-            request_id,
-            RequestState {
-                _peer_id: peer_id,
-                request_type,
-                retry_count,
-            },
-        );
+        self.peer_sync_handle.send_request(peer_id, request).await?;
         Ok(())
     }
 
@@ -130,25 +84,22 @@ where
         &mut self,
         peer_id: T::PeerId,
         block_id: Id<Block>,
-        retry_count: usize,
     ) -> crate::Result<()> {
         ensure!(
             self.peers.contains_key(&peer_id),
             P2pError::PeerError(PeerError::PeerDoesntExist),
         );
 
-        log::trace!(
-            "send block request to {peer_id}, retry count {retry_count}, block id {block_id}"
-        );
+        log::trace!("send block request to {peer_id}, block id {block_id}");
 
         // send request to remote peer and start tracking its progress
-        let (wanted_blocks, request_type) = self.make_block_request(vec![block_id]);
-        self.send_request(peer_id, wanted_blocks, request_type, retry_count).await?;
+        let wanted_blocks = self.make_block_request(vec![block_id]);
+        self.send_request(peer_id, wanted_blocks).await?;
 
         self.peers
             .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
-            .set_state(peer::PeerSyncState::UploadingBlocks(block_id));
+            .set_state(PeerSyncState::UploadingBlocks(block_id));
         Ok(())
     }
 
@@ -165,23 +116,22 @@ where
         &mut self,
         peer_id: T::PeerId,
         locator: Locator,
-        retry_count: usize,
     ) -> crate::Result<()> {
         ensure!(
             self.peers.contains_key(&peer_id),
             P2pError::PeerError(PeerError::PeerDoesntExist),
         );
 
-        log::trace!("send header request to {peer_id}, retry count {retry_count}");
+        log::trace!("send header request to {peer_id}");
 
         // send header request and start tracking its progress
-        let (wanted_headers, request_type) = self.make_header_request(locator.clone());
-        self.send_request(peer_id, wanted_headers, request_type, retry_count).await?;
+        let wanted_headers = self.make_header_request(locator.clone());
+        self.send_request(peer_id, wanted_headers).await?;
 
         self.peers
             .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
-            .set_state(peer::PeerSyncState::UploadingHeaders(locator));
+            .set_state(PeerSyncState::UploadingHeaders(locator));
         Ok(())
     }
 

@@ -184,15 +184,6 @@ where
                     response,
                 })
             }
-            P2pSyncingEvent::Error {
-                peer_id,
-                request_id,
-                error,
-            } => Ok(SyncingEvent::Error {
-                peer_id,
-                request_id,
-                error,
-            }),
             P2pSyncingEvent::Announcement {
                 peer_id,
                 message_id,

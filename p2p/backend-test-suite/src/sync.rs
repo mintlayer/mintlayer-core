@@ -1207,13 +1207,6 @@ where
                 mgr.process_block_response(peer_id, response.into_blocks()).await?;
             }
         },
-        SyncingEvent::Error {
-            peer_id,
-            request_id,
-            error,
-        } => {
-            mgr.process_error(peer_id, request_id, error).await?;
-        }
         SyncingEvent::Announcement {
             peer_id,
             message_id,
