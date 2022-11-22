@@ -18,7 +18,7 @@ use std::{
     net::{IpAddr, SocketAddr},
 };
 
-mod encryption;
+mod adapter;
 
 use async_trait::async_trait;
 use bytes::{Buf, BytesMut};
@@ -42,16 +42,16 @@ use crate::{
     P2pError, Result,
 };
 
-use self::encryption::{Encryption, NoiseEncryption};
+use self::adapter::{noise::NoiseEncryptionAdapter, StreamAdapter};
 
 #[derive(Debug)]
-pub struct TcpMockTransportBase<E: Encryption>(std::marker::PhantomData<E>);
+pub struct TcpMockTransportBase<E: StreamAdapter>(std::marker::PhantomData<E>);
 
 // By default the transport uses Noise protocol encryption
-pub type TcpMockTransport = TcpMockTransportBase<NoiseEncryption>;
+pub type TcpMockTransport = TcpMockTransportBase<NoiseEncryptionAdapter>;
 
 #[async_trait]
-impl<E: Encryption + 'static> MockTransport for TcpMockTransportBase<E> {
+impl<E: StreamAdapter + 'static> MockTransport for TcpMockTransportBase<E> {
     type Address = SocketAddr;
     type BannableAddress = IpAddr;
     type Listener = TcpMockListener<E>;
@@ -69,10 +69,10 @@ impl<E: Encryption + 'static> MockTransport for TcpMockTransportBase<E> {
     }
 }
 
-pub struct TcpMockListener<E: Encryption>(TcpListener, std::marker::PhantomData<E>);
+pub struct TcpMockListener<E: StreamAdapter>(TcpListener, std::marker::PhantomData<E>);
 
 #[async_trait]
-impl<E: Encryption> MockListener<TcpMockStream<E>, SocketAddr> for TcpMockListener<E> {
+impl<E: StreamAdapter> MockListener<TcpMockStream<E>, SocketAddr> for TcpMockListener<E> {
     async fn accept(&mut self) -> Result<(TcpMockStream<E>, SocketAddr)> {
         let (tcp_stream, address) = TcpListener::accept(&self.0).await?;
         let noise_stream = TcpMockStream::new(tcp_stream, Side::Inbound).await?;
@@ -84,7 +84,7 @@ impl<E: Encryption> MockListener<TcpMockStream<E>, SocketAddr> for TcpMockListen
     }
 }
 
-pub struct TcpMockStream<E: Encryption> {
+pub struct TcpMockStream<E: StreamAdapter> {
     stream: E::Stream,
     buffer: BytesMut,
 }
@@ -94,7 +94,7 @@ pub enum Side {
     Outbound,
 }
 
-impl<E: Encryption> TcpMockStream<E> {
+impl<E: StreamAdapter> TcpMockStream<E> {
     async fn new(base: TcpStream, side: Side) -> Result<Self> {
         let stream = E::handshake(base, side).await?;
         Ok(Self {
@@ -105,7 +105,7 @@ impl<E: Encryption> TcpMockStream<E> {
 }
 
 #[async_trait]
-impl<E: Encryption> MockStream for TcpMockStream<E> {
+impl<E: StreamAdapter> MockStream for TcpMockStream<E> {
     async fn send(&mut self, msg: Message) -> Result<()> {
         let mut buf = bytes::BytesMut::new();
         EncoderDecoder {}.encode(msg, &mut buf)?;
