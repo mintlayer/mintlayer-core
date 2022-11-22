@@ -37,7 +37,7 @@ impl StreamAdapter for NoiseEncryptionAdapter {
 
         let stream = NoiseStream::handshake(base, state)
             .await
-            .map_err(|_err| P2pError::NoiseHandshakeError)?;
+            .map_err(|err| P2pError::NoiseHandshakeError(err.to_string()))?;
 
         // Remote peer public key is available after handshake
         assert!(stream.get_state().get_remote_static().is_some());
