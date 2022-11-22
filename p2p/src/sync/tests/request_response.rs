@@ -21,7 +21,9 @@ use super::*;
 use crate::{
     message::*,
     net::mock::{
-        transport::{ChannelMockTransport, TcpMockTransport},
+        transport::{
+            ChannelMockTransport, IdentityStreamAdapter, NoiseEncryptionAdapter, TcpMockTransport,
+        },
         MockService,
     },
     peer_manager::helpers::connect_services,
@@ -81,8 +83,16 @@ async fn test_request_response_libp2p() {
 }
 
 #[tokio::test]
-async fn test_request_response_mock_tcp() {
-    test_request_response::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+async fn test_request_response_mock_tcp_cleartext() {
+    test_request_response::<MakeTcpAddress, MockService<TcpMockTransport<IdentityStreamAdapter>>>()
+        .await;
+}
+
+#[tokio::test]
+async fn test_request_response_mock_tcp_noise() {
+    test_request_response::<MakeTcpAddress, MockService<TcpMockTransport<NoiseEncryptionAdapter>>>(
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -168,8 +178,21 @@ async fn test_multiple_requests_and_responses_libp2p() {
 }
 
 #[tokio::test]
-async fn test_multiple_requests_and_responses_mock_tcp() {
-    test_multiple_requests_and_responses::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+async fn test_multiple_requests_and_responses_mock_tcp_cleartext() {
+    test_multiple_requests_and_responses::<
+        MakeTcpAddress,
+        MockService<TcpMockTransport<IdentityStreamAdapter>>,
+    >()
+    .await;
+}
+
+#[tokio::test]
+async fn test_multiple_requests_and_responses_mock_tcp_noise() {
+    test_multiple_requests_and_responses::<
+        MakeTcpAddress,
+        MockService<TcpMockTransport<NoiseEncryptionAdapter>>,
+    >()
+    .await;
 }
 
 #[tokio::test]
@@ -245,8 +268,22 @@ async fn test_request_timeout_error_libp2p() {
 
 #[tokio::test]
 #[ignore]
-async fn test_request_timeout_error_mock_tcp() {
-    test_request_timeout_error::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+async fn test_request_timeout_error_mock_tcp_cleartext() {
+    test_request_timeout_error::<
+        MakeTcpAddress,
+        MockService<TcpMockTransport<IdentityStreamAdapter>>,
+    >()
+    .await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_request_timeout_error_mock_tcp_noise() {
+    test_request_timeout_error::<
+        MakeTcpAddress,
+        MockService<TcpMockTransport<NoiseEncryptionAdapter>>,
+    >()
+    .await;
 }
 
 #[tokio::test]
@@ -317,8 +354,15 @@ async fn request_timeout_libp2p() {
 
 #[tokio::test]
 #[ignore]
-async fn request_timeout_mock_tcp() {
-    request_timeout::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+async fn request_timeout_mock_tcp_cleartext() {
+    request_timeout::<MakeTcpAddress, MockService<TcpMockTransport<IdentityStreamAdapter>>>().await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn request_timeout_mock_tcp_noise() {
+    request_timeout::<MakeTcpAddress, MockService<TcpMockTransport<NoiseEncryptionAdapter>>>()
+        .await;
 }
 
 #[tokio::test]

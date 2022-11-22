@@ -376,7 +376,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        transport::{IdentityStreamAdapter, NoiseEncryptionAdapter},
+        *,
+    };
     use crate::net::{
         self,
         mock::transport::{ChannelMockTransport, TcpMockTransport},
@@ -439,8 +442,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn connect_to_remote_tcp() {
-        connect_to_remote::<MakeTcpAddress, TcpMockTransport>().await;
+    async fn connect_to_remote_tcp_cleartext() {
+        connect_to_remote::<MakeTcpAddress, TcpMockTransport<IdentityStreamAdapter>>().await;
+    }
+
+    #[tokio::test]
+    async fn connect_to_remote_tcp_noise() {
+        connect_to_remote::<MakeTcpAddress, TcpMockTransport<NoiseEncryptionAdapter>>().await;
     }
 
     #[tokio::test]
@@ -501,8 +509,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn accept_incoming_tcp() {
-        accept_incoming::<MakeTcpAddress, TcpMockTransport>().await;
+    async fn accept_incoming_tcp_cleartext() {
+        accept_incoming::<MakeTcpAddress, TcpMockTransport<IdentityStreamAdapter>>().await;
+    }
+
+    #[tokio::test]
+    async fn accept_incoming_tcp_noise() {
+        accept_incoming::<MakeTcpAddress, TcpMockTransport<NoiseEncryptionAdapter>>().await;
     }
 
     #[tokio::test]
@@ -545,8 +558,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn disconnect_tcp() {
-        disconnect::<MakeTcpAddress, TcpMockTransport>().await;
+    async fn disconnect_tcp_cleartext() {
+        disconnect::<MakeTcpAddress, TcpMockTransport<IdentityStreamAdapter>>().await;
+    }
+
+    #[tokio::test]
+    async fn disconnect_tcp_noise() {
+        disconnect::<MakeTcpAddress, TcpMockTransport<NoiseEncryptionAdapter>>().await;
     }
 
     #[tokio::test]

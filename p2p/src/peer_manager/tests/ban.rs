@@ -24,7 +24,10 @@ use crate::{
         self,
         libp2p::Libp2pService,
         mock::{
-            transport::{ChannelMockTransport, TcpMockTransport},
+            transport::{
+                ChannelMockTransport, IdentityStreamAdapter, NoiseEncryptionAdapter,
+                TcpMockTransport,
+            },
             types::MockPeerId,
             MockService,
         },
@@ -74,8 +77,15 @@ async fn ban_connected_peer_libp2p() {
 }
 
 #[tokio::test]
-async fn ban_connected_peer_mock_tcp() {
-    ban_connected_peer::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+async fn ban_connected_peer_mock_tcp_cleartext() {
+    ban_connected_peer::<MakeTcpAddress, MockService<TcpMockTransport<IdentityStreamAdapter>>>()
+        .await;
+}
+
+#[tokio::test]
+async fn ban_connected_peer_mock_tcp_noise() {
+    ban_connected_peer::<MakeTcpAddress, MockService<TcpMockTransport<NoiseEncryptionAdapter>>>()
+        .await;
 }
 
 #[ignore]
@@ -136,9 +146,24 @@ async fn banned_peer_attempts_to_connect_libp2p() {
 
 #[ignore]
 #[tokio::test]
-async fn banned_peer_attempts_to_connect_mock_tcp() {
+async fn banned_peer_attempts_to_connect_mock_tcp_cleartext() {
     // TODO: implement proper peer banning
-    banned_peer_attempts_to_connect::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    banned_peer_attempts_to_connect::<
+        MakeTcpAddress,
+        MockService<TcpMockTransport<IdentityStreamAdapter>>,
+    >()
+    .await;
+}
+
+#[ignore]
+#[tokio::test]
+async fn banned_peer_attempts_to_connect_mock_tcp_noise() {
+    // TODO: implement proper peer banning
+    banned_peer_attempts_to_connect::<
+        MakeTcpAddress,
+        MockService<TcpMockTransport<NoiseEncryptionAdapter>>,
+    >()
+    .await;
 }
 
 #[ignore]
@@ -208,8 +233,17 @@ async fn connect_to_banned_peer_libp2p() {
 }
 
 #[tokio::test]
-async fn connect_to_banned_peer_mock_tcp() {
-    connect_to_banned_peer::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+async fn connect_to_banned_peer_mock_tcp_cleartext() {
+    connect_to_banned_peer::<MakeTcpAddress, MockService<TcpMockTransport<IdentityStreamAdapter>>>(
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn connect_to_banned_peer_mock_tcp_noise() {
+    connect_to_banned_peer::<MakeTcpAddress, MockService<TcpMockTransport<NoiseEncryptionAdapter>>>(
+    )
+    .await;
 }
 
 #[ignore]
@@ -305,11 +339,20 @@ async fn validate_invalid_outbound_connection_libp2p() {
 }
 
 #[tokio::test]
-async fn validate_invalid_outbound_connection_mock_tcp() {
-    validate_invalid_outbound_connection::<MakeTcpAddress, MockService<TcpMockTransport>>(
-        "210.113.67.107:2525".parse().unwrap(),
-        MockPeerId::random(),
-    )
+async fn validate_invalid_outbound_connection_mock_tcp_cleartext() {
+    validate_invalid_outbound_connection::<
+        MakeTcpAddress,
+        MockService<TcpMockTransport<IdentityStreamAdapter>>,
+    >("210.113.67.107:2525".parse().unwrap(), MockPeerId::random())
+    .await;
+}
+
+#[tokio::test]
+async fn validate_invalid_outbound_connection_mock_tcp_noise() {
+    validate_invalid_outbound_connection::<
+        MakeTcpAddress,
+        MockService<TcpMockTransport<NoiseEncryptionAdapter>>,
+    >("210.113.67.107:2525".parse().unwrap(), MockPeerId::random())
     .await;
 }
 
@@ -406,11 +449,20 @@ async fn validate_invalid_inbound_connection_libp2p() {
 }
 
 #[tokio::test]
-async fn validate_invalid_inbound_connection_mock_tcp() {
-    validate_invalid_inbound_connection::<MakeTcpAddress, MockService<TcpMockTransport>>(
-        "210.113.67.107:2525".parse().unwrap(),
-        MockPeerId::random(),
-    )
+async fn validate_invalid_inbound_connection_mock_tcp_cleartext() {
+    validate_invalid_inbound_connection::<
+        MakeTcpAddress,
+        MockService<TcpMockTransport<IdentityStreamAdapter>>,
+    >("210.113.67.107:2525".parse().unwrap(), MockPeerId::random())
+    .await;
+}
+
+#[tokio::test]
+async fn validate_invalid_inbound_connection_mock_tcp_noise() {
+    validate_invalid_inbound_connection::<
+        MakeTcpAddress,
+        MockService<TcpMockTransport<NoiseEncryptionAdapter>>,
+    >("210.113.67.107:2525".parse().unwrap(), MockPeerId::random())
     .await;
 }
 
@@ -467,8 +519,21 @@ async fn inbound_connection_invalid_magic_libp2p() {
 }
 
 #[tokio::test]
-async fn inbound_connection_invalid_magic_mock_tcp() {
-    inbound_connection_invalid_magic::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+async fn inbound_connection_invalid_magic_mock_tcp_cleartext() {
+    inbound_connection_invalid_magic::<
+        MakeTcpAddress,
+        MockService<TcpMockTransport<IdentityStreamAdapter>>,
+    >()
+    .await;
+}
+
+#[tokio::test]
+async fn inbound_connection_invalid_magic_mock_tcp_noise() {
+    inbound_connection_invalid_magic::<
+        MakeTcpAddress,
+        MockService<TcpMockTransport<NoiseEncryptionAdapter>>,
+    >()
+    .await;
 }
 
 #[tokio::test]

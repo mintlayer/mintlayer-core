@@ -15,7 +15,9 @@
 
 use super::*;
 use crate::net::mock::{
-    transport::{ChannelMockTransport, TcpMockTransport},
+    transport::{
+        ChannelMockTransport, IdentityStreamAdapter, NoiseEncryptionAdapter, TcpMockTransport,
+    },
     types::MockPeerId,
     MockService,
 };
@@ -61,8 +63,23 @@ async fn too_many_headers_libp2p() {
 }
 
 #[tokio::test]
-async fn too_many_headers_mock_tcp() {
-    too_many_headers::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+async fn too_many_headers_mock_tcp_cleartext() {
+    too_many_headers::<
+        MakeTcpAddress,
+        MockPeerId,
+        MockService<TcpMockTransport<IdentityStreamAdapter>>,
+    >()
+    .await;
+}
+
+#[tokio::test]
+async fn too_many_headers_mock_tcp_noise() {
+    too_many_headers::<
+        MakeTcpAddress,
+        MockPeerId,
+        MockService<TcpMockTransport<NoiseEncryptionAdapter>>,
+    >()
+    .await;
 }
 
 #[tokio::test]
@@ -97,8 +114,23 @@ async fn empty_response_libp2p() {
 }
 
 #[tokio::test]
-async fn empty_response_mock_tcp() {
-    empty_response::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+async fn empty_response_mock_tcp_cleartext() {
+    empty_response::<
+        MakeTcpAddress,
+        MockPeerId,
+        MockService<TcpMockTransport<IdentityStreamAdapter>>,
+    >()
+    .await;
+}
+
+#[tokio::test]
+async fn empty_response_mock_tcp_noise() {
+    empty_response::<
+        MakeTcpAddress,
+        MockPeerId,
+        MockService<TcpMockTransport<NoiseEncryptionAdapter>>,
+    >()
+    .await;
 }
 
 #[tokio::test]
@@ -146,8 +178,23 @@ async fn valid_response_libp2p() {
 }
 
 #[tokio::test]
-async fn valid_response_mock_tcp() {
-    valid_response::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+async fn valid_response_mock_tcp_cleartext() {
+    valid_response::<
+        MakeTcpAddress,
+        MockPeerId,
+        MockService<TcpMockTransport<IdentityStreamAdapter>>,
+    >()
+    .await;
+}
+
+#[tokio::test]
+async fn valid_response_mock_tcp_noise() {
+    valid_response::<
+        MakeTcpAddress,
+        MockPeerId,
+        MockService<TcpMockTransport<NoiseEncryptionAdapter>>,
+    >()
+    .await;
 }
 
 #[tokio::test]
@@ -194,9 +241,22 @@ async fn header_doesnt_attach_to_local_chain_libp2p() {
 }
 
 #[tokio::test]
-async fn header_doesnt_attach_to_local_chain_mock_tcp() {
-    header_doesnt_attach_to_local_chain::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>(
-    )
+async fn header_doesnt_attach_to_local_chain_mock_tcp_cleartext() {
+    header_doesnt_attach_to_local_chain::<
+        MakeTcpAddress,
+        MockPeerId,
+        MockService<TcpMockTransport<IdentityStreamAdapter>>,
+    >()
+    .await;
+}
+
+#[tokio::test]
+async fn header_doesnt_attach_to_local_chain_mock_tcp_noise() {
+    header_doesnt_attach_to_local_chain::<
+        MakeTcpAddress,
+        MockPeerId,
+        MockService<TcpMockTransport<NoiseEncryptionAdapter>>,
+    >()
     .await;
 }
 
@@ -250,8 +310,23 @@ async fn headers_not_in_order_libp2p() {
 }
 
 #[tokio::test]
-async fn headers_not_in_order_mock_tcp() {
-    headers_not_in_order::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+async fn headers_not_in_order_mock_tcp_cleartext() {
+    headers_not_in_order::<
+        MakeTcpAddress,
+        MockPeerId,
+        MockService<TcpMockTransport<IdentityStreamAdapter>>,
+    >()
+    .await;
+}
+
+#[tokio::test]
+async fn headers_not_in_order_mock_tcp_noise() {
+    headers_not_in_order::<
+        MakeTcpAddress,
+        MockPeerId,
+        MockService<TcpMockTransport<NoiseEncryptionAdapter>>,
+    >()
+    .await;
 }
 
 #[tokio::test]
@@ -301,8 +376,18 @@ async fn invalid_state_libp2p() {
 }
 
 #[tokio::test]
-async fn invalid_state_mock_tcp() {
-    invalid_state::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+async fn invalid_state_mock_tcp_cleartext() {
+    invalid_state::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport<IdentityStreamAdapter>>>().await;
+}
+
+#[tokio::test]
+async fn invalid_state_mock_tcp_noise() {
+    invalid_state::<
+        MakeTcpAddress,
+        MockPeerId,
+        MockService<TcpMockTransport<NoiseEncryptionAdapter>>,
+    >()
+    .await;
 }
 
 #[tokio::test]
@@ -336,8 +421,23 @@ async fn peer_doesnt_exist_libp2p() {
 }
 
 #[tokio::test]
-async fn peer_doesnt_exist_mock_tcp() {
-    peer_doesnt_exist::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+async fn peer_doesnt_exist_mock_tcp_cleartext() {
+    peer_doesnt_exist::<
+        MakeTcpAddress,
+        MockPeerId,
+        MockService<TcpMockTransport<IdentityStreamAdapter>>,
+    >()
+    .await;
+}
+
+#[tokio::test]
+async fn peer_doesnt_exist_mock_tcp_noise() {
+    peer_doesnt_exist::<
+        MakeTcpAddress,
+        MockPeerId,
+        MockService<TcpMockTransport<NoiseEncryptionAdapter>>,
+    >()
+    .await;
 }
 
 #[tokio::test]

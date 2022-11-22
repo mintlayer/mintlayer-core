@@ -232,7 +232,10 @@ mod tests {
     use crate::{
         message,
         net::mock::{
-            transport::{ChannelMockTransport, MockListener, TcpMockTransport},
+            transport::{
+                ChannelMockTransport, IdentityStreamAdapter, MockListener, NoiseEncryptionAdapter,
+                TcpMockTransport,
+            },
             types,
         },
     };
@@ -308,8 +311,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn handshake_inbound_tcp() {
-        handshake_inbound::<MakeTcpAddress, TcpMockTransport>().await;
+    async fn handshake_inbound_tcp_cleartext() {
+        handshake_inbound::<MakeTcpAddress, TcpMockTransport<IdentityStreamAdapter>>().await;
+    }
+
+    #[tokio::test]
+    async fn handshake_inbound_tcp_noise() {
+        handshake_inbound::<MakeTcpAddress, TcpMockTransport<NoiseEncryptionAdapter>>().await;
     }
 
     #[tokio::test]
@@ -387,8 +395,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn handshake_outbound_tcp() {
-        handshake_outbound::<MakeTcpAddress, TcpMockTransport>().await;
+    async fn handshake_outbound_tcp_cleartext() {
+        handshake_outbound::<MakeTcpAddress, TcpMockTransport<IdentityStreamAdapter>>().await;
+    }
+
+    #[tokio::test]
+    async fn handshake_outbound_tcp_noise() {
+        handshake_outbound::<MakeTcpAddress, TcpMockTransport<NoiseEncryptionAdapter>>().await;
     }
 
     #[tokio::test]
@@ -442,8 +455,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn handshake_different_network_tcp() {
-        handshake_different_network::<MakeTcpAddress, TcpMockTransport>().await;
+    async fn handshake_different_network_tcp_cleartext() {
+        handshake_different_network::<MakeTcpAddress, TcpMockTransport<IdentityStreamAdapter>>()
+            .await;
+    }
+
+    #[tokio::test]
+    async fn handshake_different_network_tcp_noise() {
+        handshake_different_network::<MakeTcpAddress, TcpMockTransport<NoiseEncryptionAdapter>>()
+            .await;
     }
 
     #[tokio::test]
@@ -493,8 +513,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn invalid_handshake_message_tcp() {
-        invalid_handshake_message::<MakeTcpAddress, TcpMockTransport>().await;
+    async fn invalid_handshake_message_tcp_cleartext() {
+        invalid_handshake_message::<MakeTcpAddress, TcpMockTransport<IdentityStreamAdapter>>()
+            .await;
+    }
+
+    #[tokio::test]
+    async fn invalid_handshake_message_tcp_noise() {
+        invalid_handshake_message::<MakeTcpAddress, TcpMockTransport<NoiseEncryptionAdapter>>()
+            .await;
     }
 
     #[tokio::test]

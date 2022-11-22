@@ -120,28 +120,61 @@ impl<T: NetworkingService> PeerContext<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::mock::{transport::TcpMockTransport, types, MockService};
+    use crate::net::mock::{
+        transport::{
+            IdentityStreamAdapter, NoiseEncryptionAdapter, StreamAdapter, TcpMockTransport,
+        },
+        types, MockService,
+    };
     use common::chain::block::{
         consensus_data::ConsensusData, timestamp::BlockTimestamp, BlockReward,
     };
     use std::net::SocketAddr;
 
-    fn new_mock_peersyncstate() -> PeerContext<MockService<TcpMockTransport>> {
+    fn new_mock_peersyncstate<E: StreamAdapter>(
+    ) -> PeerContext<MockService<TcpMockTransport<IdentityStreamAdapter>>> {
         let addr: SocketAddr = "[::1]:8888".parse().unwrap();
-        PeerContext::<MockService<TcpMockTransport>>::new(types::MockPeerId::from_socket_address::<
-            TcpMockTransport,
-        >(&addr))
+        PeerContext::<MockService<TcpMockTransport<IdentityStreamAdapter>>>::new(
+            types::MockPeerId::from_socket_address::<TcpMockTransport<IdentityStreamAdapter>>(
+                &addr,
+            ),
+        )
     }
 
     #[test]
-    fn create_new_peersyncstate() {
-        let peer = new_mock_peersyncstate();
+    fn create_new_peersyncstate_cleartext() {
+        let peer = new_mock_peersyncstate::<IdentityStreamAdapter>();
         assert_eq!(peer.state, PeerSyncState::Unknown);
     }
 
     #[test]
-    fn test_set_state() {
-        let mut peer = new_mock_peersyncstate();
+    fn create_new_peersyncstate_noise() {
+        let peer = new_mock_peersyncstate::<NoiseEncryptionAdapter>();
+        assert_eq!(peer.state, PeerSyncState::Unknown);
+    }
+
+    #[test]
+    fn test_set_state_cleartext() {
+        let mut peer = new_mock_peersyncstate::<IdentityStreamAdapter>();
+        let header = Block::new(
+            vec![],
+            Id::new(common::primitives::H256([0x07; 32])),
+            BlockTimestamp::from_int_seconds(1337u64),
+            ConsensusData::None,
+            BlockReward::new(Vec::new()),
+        )
+        .unwrap()
+        .header()
+        .clone();
+
+        assert_eq!(peer.state, PeerSyncState::Unknown);
+        peer.set_state(PeerSyncState::UploadingBlocks(header.get_id()));
+        assert_eq!(peer.state, PeerSyncState::UploadingBlocks(header.get_id()));
+    }
+
+    #[test]
+    fn test_set_state_noise() {
+        let mut peer = new_mock_peersyncstate::<NoiseEncryptionAdapter>();
         let header = Block::new(
             vec![],
             Id::new(common::primitives::H256([0x07; 32])),

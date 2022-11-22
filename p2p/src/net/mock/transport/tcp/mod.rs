@@ -18,7 +18,7 @@ use std::{
     net::{IpAddr, SocketAddr},
 };
 
-mod adapter;
+pub mod adapter;
 
 use async_trait::async_trait;
 use bytes::{Buf, BytesMut};
@@ -43,16 +43,13 @@ use crate::{
     P2pError, Result,
 };
 
-use self::adapter::{noise::NoiseEncryptionAdapter, StreamAdapter};
+use self::adapter::StreamAdapter;
 
 #[derive(Debug)]
-pub struct TcpMockTransportBase<E: StreamAdapter>(std::marker::PhantomData<E>);
-
-// By default the transport uses Noise protocol encryption
-pub type TcpMockTransport = TcpMockTransportBase<NoiseEncryptionAdapter>;
+pub struct TcpMockTransport<E: StreamAdapter>(std::marker::PhantomData<E>);
 
 #[async_trait]
-impl<E: StreamAdapter + 'static> MockTransport for TcpMockTransportBase<E> {
+impl<E: StreamAdapter + 'static> MockTransport for TcpMockTransport<E> {
     type Address = SocketAddr;
     type BannableAddress = IpAddr;
     type Listener = TcpMockListener<E>;
@@ -209,17 +206,18 @@ impl IsBannableAddress for SocketAddr {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use adapter::IdentityStreamAdapter;
+
+    use super::{adapter::noise::NoiseEncryptionAdapter, *};
     use crate::net::{
         message::{BlockListRequest, Request},
         mock::types::MockRequestId,
     };
 
-    #[tokio::test]
-    async fn send_recv() {
+    async fn test_send_recv<E: StreamAdapter + 'static>() {
         let address = "[::1]:0".parse().unwrap();
-        let mut server = TcpMockTransport::bind(address).await.unwrap();
-        let peer_fut = TcpMockTransport::connect(server.local_address().unwrap());
+        let mut server = TcpMockTransport::<E>::bind(address).await.unwrap();
+        let peer_fut = TcpMockTransport::<E>::connect(server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let mut server_stream = server_res.unwrap().0;
@@ -245,10 +243,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn send_2_reqs() {
+    async fn send_recv_cleartext() {
+        test_send_recv::<IdentityStreamAdapter>().await;
+    }
+
+    #[tokio::test]
+    async fn send_recv_noise() {
+        test_send_recv::<NoiseEncryptionAdapter>().await;
+    }
+
+    async fn test_send_2_reqs<E: StreamAdapter + 'static>() {
         let address = "[::1]:0".parse().unwrap();
-        let mut server = TcpMockTransport::bind(address).await.unwrap();
-        let peer_fut = TcpMockTransport::connect(server.local_address().unwrap());
+        let mut server = TcpMockTransport::<E>::bind(address).await.unwrap();
+        let peer_fut = TcpMockTransport::<E>::connect(server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let mut server_stream = server_res.unwrap().0;
@@ -287,5 +294,15 @@ mod tests {
                 request,
             }
         );
+    }
+
+    #[tokio::test]
+    async fn send_2_reqs_cleartext() {
+        test_send_2_reqs::<IdentityStreamAdapter>().await;
+    }
+
+    #[tokio::test]
+    async fn send_2_reqs_noise() {
+        test_send_2_reqs::<NoiseEncryptionAdapter>().await;
     }
 }
