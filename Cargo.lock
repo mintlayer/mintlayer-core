@@ -2945,6 +2945,7 @@ dependencies = [
  "portpicker",
  "rpc",
  "serialization",
+ "snowstorm",
  "sscanf",
  "subsystem",
  "tap",
@@ -4185,6 +4186,22 @@ dependencies = [
  "rustc_version 0.4.0",
  "sha2 0.10.6",
  "subtle",
+]
+
+[[package]]
+name = "snowstorm"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d594c1d69c0a1d316829b8241ce930d651196df03ba15e1eceaf7df71f70ee58"
+dependencies = [
+ "bytes",
+ "futures-util",
+ "log",
+ "pin-project",
+ "rand 0.8.5",
+ "snow",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]

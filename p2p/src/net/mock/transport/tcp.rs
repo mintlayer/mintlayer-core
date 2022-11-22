@@ -18,6 +18,8 @@ use std::{
     net::{IpAddr, SocketAddr},
 };
 
+mod encryption;
+
 use async_trait::async_trait;
 use bytes::{Buf, BytesMut};
 use tokio::{
@@ -40,54 +42,70 @@ use crate::{
     P2pError, Result,
 };
 
+use self::encryption::{Encryption, NoiseEncryption};
+
 #[derive(Debug)]
-pub struct TcpMockTransport {}
+pub struct TcpMockTransportBase<E: Encryption>(std::marker::PhantomData<E>);
+
+// By default the transport uses Noise protocol encryption
+pub type TcpMockTransport = TcpMockTransportBase<NoiseEncryption>;
 
 #[async_trait]
-impl MockTransport for TcpMockTransport {
+impl<E: Encryption + 'static> MockTransport for TcpMockTransportBase<E> {
     type Address = SocketAddr;
     type BannableAddress = IpAddr;
-    type Listener = TcpListener;
-    type Stream = TcpMockStream;
+    type Listener = TcpMockListener<E>;
+    type Stream = TcpMockStream<E>;
 
     async fn bind(address: Self::Address) -> Result<Self::Listener> {
-        TcpListener::bind(address).await.map_err(Into::into)
+        let listener = TcpListener::bind(address).await?;
+        Ok(TcpMockListener(listener, Default::default()))
     }
 
     async fn connect(address: Self::Address) -> Result<Self::Stream> {
-        let stream = TcpStream::connect(address).await?;
-        Ok(TcpMockStream::new(stream))
+        let tcp_stream = TcpStream::connect(address).await?;
+        let noise_stream = TcpMockStream::new(tcp_stream, Side::Outbound).await?;
+        Ok(noise_stream)
     }
 }
 
+pub struct TcpMockListener<E: Encryption>(TcpListener, std::marker::PhantomData<E>);
+
 #[async_trait]
-impl MockListener<TcpMockStream, SocketAddr> for TcpListener {
-    async fn accept(&mut self) -> Result<(TcpMockStream, SocketAddr)> {
-        let (stream, address) = TcpListener::accept(self).await?;
-        Ok((TcpMockStream::new(stream), address))
+impl<E: Encryption> MockListener<TcpMockStream<E>, SocketAddr> for TcpMockListener<E> {
+    async fn accept(&mut self) -> Result<(TcpMockStream<E>, SocketAddr)> {
+        let (tcp_stream, address) = TcpListener::accept(&self.0).await?;
+        let noise_stream = TcpMockStream::new(tcp_stream, Side::Inbound).await?;
+        Ok((noise_stream, address))
     }
 
     fn local_address(&self) -> Result<SocketAddr> {
-        self.local_addr().map_err(Into::into)
+        self.0.local_addr().map_err(Into::into)
     }
 }
 
-pub struct TcpMockStream {
-    stream: TcpStream,
+pub struct TcpMockStream<E: Encryption> {
+    stream: E::Stream,
     buffer: BytesMut,
 }
 
-impl TcpMockStream {
-    fn new(stream: TcpStream) -> Self {
-        Self {
+pub enum Side {
+    Inbound,
+    Outbound,
+}
+
+impl<E: Encryption> TcpMockStream<E> {
+    async fn new(base: TcpStream, side: Side) -> Result<Self> {
+        let stream = E::handshake(base, side).await?;
+        Ok(Self {
             stream,
             buffer: BytesMut::new(),
-        }
+        })
     }
 }
 
 #[async_trait]
-impl MockStream for TcpMockStream {
+impl<E: Encryption> MockStream for TcpMockStream<E> {
     async fn send(&mut self, msg: Message) -> Result<()> {
         let mut buf = bytes::BytesMut::new();
         EncoderDecoder {}.encode(msg, &mut buf)?;
@@ -207,7 +225,7 @@ mod tests {
         let mut server = TcpMockTransport::bind(address).await.unwrap();
         let peer_fut = TcpMockTransport::connect(server.local_address().unwrap());
 
-        let (server_res, peer_res) = tokio::join!(MockListener::accept(&mut server), peer_fut);
+        let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let mut server_stream = server_res.unwrap().0;
         let mut peer_stream = peer_res.unwrap();
 
@@ -236,7 +254,7 @@ mod tests {
         let mut server = TcpMockTransport::bind(address).await.unwrap();
         let peer_fut = TcpMockTransport::connect(server.local_address().unwrap());
 
-        let (server_res, peer_res) = tokio::join!(MockListener::accept(&mut server), peer_fut);
+        let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let mut server_stream = server_res.unwrap().0;
         let mut peer_stream = peer_res.unwrap();
 
