@@ -29,6 +29,7 @@ pub(super) enum DataDeltaUndoOpInternal<T> {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct DataDeltaUndoOp<T>(pub(super) DataDeltaUndoOpInternal<T>);
 
+#[must_use]
 pub struct DeltaDataUndoCollection<K: Ord, T> {
     data: BTreeMap<K, DataDeltaUndoOp<T>>,
 }

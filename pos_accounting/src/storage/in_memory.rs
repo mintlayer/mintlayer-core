@@ -20,7 +20,7 @@ use common::primitives::{Amount, H256};
 
 use crate::{
     pool::{delegation::DelegationData, pool_data::PoolData},
-    DelegationId, PoolId,
+    DelegationId, PoSAccountingData, PoolId,
 };
 
 use super::{PoSAccountingStorageRead, PoSAccountingStorageWrite};
@@ -57,6 +57,16 @@ impl InMemoryPoSAccounting {
             pool_delegation_shares,
             delegation_balances,
             delegation_data,
+        }
+    }
+
+    pub fn dump(self) -> PoSAccountingData {
+        PoSAccountingData {
+            pool_data: self.pool_data,
+            pool_balances: self.pool_balances,
+            pool_delegation_shares: self.pool_delegation_shares,
+            delegation_balances: self.delegation_balances,
+            delegation_data: self.delegation_data,
         }
     }
 }

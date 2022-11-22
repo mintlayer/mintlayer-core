@@ -14,4 +14,5 @@
 // limitations under the License.
 
 mod delta_tests;
+mod operations_tests;
 mod undo_tests;

@@ -39,6 +39,7 @@ pub enum DataDelta<T> {
     Delete,
 }
 
+#[must_use]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub struct DeltaDataCollection<K: Ord, T> {
     data: BTreeMap<K, DataDelta<T>>,
@@ -115,12 +116,20 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
         match data.0 {
             DataDeltaUndoOpInternal::Write(undo) => {
                 self.data.insert(key, undo);
-                Ok(())
             }
-            DataDeltaUndoOpInternal::Erase => {
-                self.data.remove(&key).ok_or(Error::RemoveNonexistingData).map(|_| ())
-            }
-        }
+            // FIXME we shouldn't remove information from the collection.
+            // Some kind of combine is required here
+            DataDeltaUndoOpInternal::Erase => match self.data.remove(&key) {
+                Some(_) => { /* do nothing */ }
+                None => {
+                    // It's OK to undo delta that is not present.
+                    // It can be later found in another collection.
+                    // Therefore to avoid data loss just insert explicit `Delete`.
+                    self.data.insert(key, DataDelta::Delete);
+                }
+            },
+        };
+        Ok(())
     }
 
     pub fn data(&self) -> &BTreeMap<K, DataDelta<T>> {
@@ -196,12 +205,31 @@ pub mod test {
 
     #[test]
     fn test_merge_collections() {
+        // This test check all valid combinations:
+        //    collection1 - collection2
+        //    -------------------------
+        //         Create - Modify
+        //         Create - Delete
+        //         Modify - Modify
+        //         Modify - Delete
+        //         Delete - Create
+        //         Create - None
+        //         Modify - None
+        //         Delete - None
+        //         None   - Create
+        //         None   - Modify
+        //         None   - Delete
+
         let mut collection1 = DeltaDataCollection::from_iter(
             [
                 (1, DataDelta::Create(Box::new('a'))),
-                (2, DataDelta::Modify(Box::new('b'))),
-                (3, DataDelta::Delete),
-                (4, DataDelta::Create(Box::new('d'))),
+                (2, DataDelta::Create(Box::new('b'))),
+                (3, DataDelta::Modify(Box::new('c'))),
+                (4, DataDelta::Modify(Box::new('d'))),
+                (5, DataDelta::Delete),
+                (6, DataDelta::Create(Box::new('e'))),
+                (7, DataDelta::Modify(Box::new('f'))),
+                (8, DataDelta::Delete),
             ]
             .into_iter(),
         );
@@ -209,20 +237,31 @@ pub mod test {
 
         let collection2 = DeltaDataCollection::from_iter(
             [
-                (1, DataDelta::Modify(Box::new('f'))),
-                (2, DataDelta::Modify(Box::new('g'))),
+                (1, DataDelta::Modify(Box::new('g'))),
+                (2, DataDelta::Delete),
+                (3, DataDelta::Modify(Box::new('h'))),
                 (4, DataDelta::Delete),
-                (5, DataDelta::Delete),
+                (5, DataDelta::Create(Box::new('i'))),
+                (9, DataDelta::Create(Box::new('j'))),
+                (10, DataDelta::Modify(Box::new('k'))),
+                (11, DataDelta::Delete),
             ]
             .into_iter(),
         );
 
         let expected_data = BTreeMap::from_iter(
             [
-                (1, DataDelta::Create(Box::new('f'))),
-                (2, DataDelta::Modify(Box::new('g'))),
-                (3, DataDelta::Delete),
-                (5, DataDelta::Delete),
+                (1, DataDelta::Create(Box::new('g'))),
+                // 2 was deleted
+                (3, DataDelta::Modify(Box::new('h'))),
+                // 4 was deleted
+                (5, DataDelta::Create(Box::new('i'))),
+                (6, DataDelta::Create(Box::new('e'))),
+                (7, DataDelta::Modify(Box::new('f'))),
+                (8, DataDelta::Delete),
+                (9, DataDelta::Create(Box::new('j'))),
+                (10, DataDelta::Modify(Box::new('k'))),
+                (11, DataDelta::Delete),
             ]
             .into_iter(),
         );
@@ -235,16 +274,13 @@ pub mod test {
     }
 
     #[test]
-    fn test_undo_nonexisting_data() {
+    fn test_undo_nonexisting_delta() {
         let mut collection: DeltaDataCollection<i32, char> = DeltaDataCollection::new();
 
-        assert_eq!(
-            collection
-                .undo_merge_delta_data_element(1, DataDeltaUndoOp(DataDeltaUndoOpInternal::Erase))
-                .unwrap_err(),
-            Error::RemoveNonexistingData
-        );
-        assert_eq!(collection.data().len(), 0);
+        collection
+            .undo_merge_delta_data_element(0, DataDeltaUndoOp(DataDeltaUndoOpInternal::Erase))
+            .unwrap();
+        assert_eq!(collection.data().len(), 1);
 
         collection
             .undo_merge_delta_data_element(
@@ -254,7 +290,7 @@ pub mod test {
                 )))),
             )
             .unwrap();
-        assert_eq!(collection.data().len(), 1);
+        assert_eq!(collection.data().len(), 2);
 
         collection
             .undo_merge_delta_data_element(
@@ -264,7 +300,7 @@ pub mod test {
                 )))),
             )
             .unwrap();
-        assert_eq!(collection.data().len(), 2);
+        assert_eq!(collection.data().len(), 3);
 
         collection
             .undo_merge_delta_data_element(
@@ -272,8 +308,25 @@ pub mod test {
                 DataDeltaUndoOp(DataDeltaUndoOpInternal::Write(DataDelta::Delete)),
             )
             .unwrap();
-        assert_eq!(collection.data().len(), 3);
+        assert_eq!(collection.data().len(), 4);
     }
 
     // TODO: increase test coverage (consider using proptest)
+
+    #[test]
+    fn create_delete_undo() {
+        let mut collection1 =
+            DeltaDataCollection::from_iter([(1, DataDelta::Create(Box::new('a')))].into_iter());
+        let collection1_origin = collection1.clone();
+
+        let mut collection2 = DeltaDataCollection::new();
+        let undo_op = collection2.merge_delta_data_element(1, DataDelta::Delete).unwrap();
+
+        let mut collection3 = DeltaDataCollection::new();
+        collection3.undo_merge_delta_data_element(1, undo_op).unwrap();
+
+        collection2.merge_delta_data(collection3).unwrap();
+        collection1.merge_delta_data(collection2).unwrap();
+        assert_eq!(collection1.data, collection1_origin.data);
+    }
 }

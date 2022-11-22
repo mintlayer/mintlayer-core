@@ -198,18 +198,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingDelta<'a, P> {
         self.get_pool_data(undo.pool_id)?
             .ok_or(Error::InvariantErrorPoolCreationReversalFailedDataNotFound)?;
 
-        // TODO: find better solution
-        // If pool_data is in the current cache then perform undo.
-        // Otherwise it's from parent so add `Delete` to the current cache,
-        // which effectively will perform undo for the parent on flush
-        match self.data.pool_data.data().get(&undo.pool_id) {
-            Some(_) => self.data.pool_data.undo_merge_delta_data_element(undo.pool_id, undo_data),
-            None => self
-                .data
-                .pool_data
-                .merge_delta_data_element(undo.pool_id, DataDelta::Delete)
-                .map(|_| ()),
-        }?;
+        self.data.pool_data.undo_merge_delta_data_element(undo.pool_id, undo_data)?;
 
         Ok(())
     }
@@ -220,7 +209,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingDelta<'a, P> {
             PoolDataUndo::Data(_) => panic!("incompatible PoolDataUndo supplied"),
         };
 
-        if self.get_pool_balance(undo.pool_id)?.is_some() {
+        if self.get_pool_balance(undo.pool_id)?.unwrap_or(Amount::ZERO) != Amount::ZERO {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists);
         }
 
@@ -243,21 +232,9 @@ impl<'a, P: PoSAccountingView> PoSAccountingDelta<'a, P> {
         self.get_delegation_data(undo.delegation_id)?
             .ok_or(Error::InvariantErrorDelegationIdUndoFailedNotFound)?;
 
-        // TODO: find better solution
-        // If delegation_data is in the current cache then perform undo.
-        // Otherwise it's from parent so add `Delete` to the current cache,
-        // which effectively will perform undo for the parent on flush
-        match self.data.delegation_data.data().get(&undo.delegation_id) {
-            Some(_) => self
-                .data
-                .delegation_data
-                .undo_merge_delta_data_element(undo.delegation_id, undo_data),
-            None => self
-                .data
-                .delegation_data
-                .merge_delta_data_element(undo.delegation_id, DataDelta::Delete)
-                .map(|_| ()),
-        }?;
+        self.data
+            .delegation_data
+            .undo_merge_delta_data_element(undo.delegation_id, undo_data)?;
 
         Ok(())
     }

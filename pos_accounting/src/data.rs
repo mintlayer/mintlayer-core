@@ -28,3 +28,15 @@ pub struct PoSAccountingData {
     pub delegation_balances: BTreeMap<DelegationId, Amount>,
     pub delegation_data: BTreeMap<DelegationId, DelegationData>,
 }
+
+impl PoSAccountingData {
+    pub fn new() -> Self {
+        Self {
+            pool_data: BTreeMap::new(),
+            pool_balances: BTreeMap::new(),
+            pool_delegation_shares: BTreeMap::new(),
+            delegation_balances: BTreeMap::new(),
+            delegation_data: BTreeMap::new(),
+        }
+    }
+}
