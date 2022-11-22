@@ -37,7 +37,7 @@ where
 {
     /// Creates a blocks request message.
     pub fn make_block_request(&self, block_ids: Vec<Id<Block>>) -> message::Request {
-        message::Request::BlockListRequest(message::BlockListRequest::new(block_ids.clone()))
+        message::Request::BlockListRequest(message::BlockListRequest::new(block_ids))
     }
 
     /// Creates a headers request message with the given locator.
