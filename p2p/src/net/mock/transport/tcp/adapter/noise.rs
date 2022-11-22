@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use snowstorm::NoiseStream;
 use tokio::net::TcpStream;
 
-use crate::{error::P2pError, net::mock::transport::tcp::Side};
+use crate::{error::P2pError, net::mock::peer::Role};
 
 use super::StreamAdapter;
 
@@ -18,18 +18,18 @@ pub struct NoiseEncryptionAdapter {}
 impl StreamAdapter for NoiseEncryptionAdapter {
     type Stream = snowstorm::NoiseStream<TcpStream>;
 
-    async fn handshake(base: TcpStream, side: Side) -> crate::Result<Self::Stream> {
+    async fn handshake(base: TcpStream, role: Role) -> crate::Result<Self::Stream> {
         // TODO: Check the data directory first, and use keys from there if available
         let local_key = snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
             .generate_keypair()
             .expect("key generation must succeed");
 
-        let state = match side {
-            Side::Outbound => snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
+        let state = match role {
+            Role::Outbound => snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
                 .local_private_key(&local_key.private)
                 .build_initiator()
                 .expect("snowstorm builder must succeed"),
-            Side::Inbound => snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
+            Role::Inbound => snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
                 .local_private_key(&local_key.private)
                 .build_responder()
                 .expect("snowstorm builder must succeed"),

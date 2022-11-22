@@ -34,6 +34,7 @@ use crate::{
     constants::MAX_MESSAGE_SIZE,
     net::{
         mock::{
+            peer::Role,
             transport::{MockListener, MockStream, MockTransport},
             types::Message,
         },
@@ -64,7 +65,7 @@ impl<E: StreamAdapter + 'static> MockTransport for TcpMockTransportBase<E> {
 
     async fn connect(address: Self::Address) -> Result<Self::Stream> {
         let tcp_stream = TcpStream::connect(address).await?;
-        let noise_stream = TcpMockStream::new(tcp_stream, Side::Outbound).await?;
+        let noise_stream = TcpMockStream::new(tcp_stream, Role::Outbound).await?;
         Ok(noise_stream)
     }
 }
@@ -75,7 +76,7 @@ pub struct TcpMockListener<E: StreamAdapter>(TcpListener, std::marker::PhantomDa
 impl<E: StreamAdapter> MockListener<TcpMockStream<E>, SocketAddr> for TcpMockListener<E> {
     async fn accept(&mut self) -> Result<(TcpMockStream<E>, SocketAddr)> {
         let (tcp_stream, address) = TcpListener::accept(&self.0).await?;
-        let noise_stream = TcpMockStream::new(tcp_stream, Side::Inbound).await?;
+        let noise_stream = TcpMockStream::new(tcp_stream, Role::Inbound).await?;
         Ok((noise_stream, address))
     }
 
@@ -89,14 +90,9 @@ pub struct TcpMockStream<E: StreamAdapter> {
     buffer: BytesMut,
 }
 
-pub enum Side {
-    Inbound,
-    Outbound,
-}
-
 impl<E: StreamAdapter> TcpMockStream<E> {
-    async fn new(base: TcpStream, side: Side) -> Result<Self> {
-        let stream = E::handshake(base, side).await?;
+    async fn new(base: TcpStream, role: Role) -> Result<Self> {
+        let stream = E::handshake(base, role).await?;
         Ok(Self {
             stream,
             buffer: BytesMut::new(),

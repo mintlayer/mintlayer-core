@@ -21,15 +21,14 @@ use tokio::{
     net::TcpStream,
 };
 
-use super::Side;
-use crate::Result;
+use crate::{net::mock::peer::Role, Result};
 
 #[async_trait]
 pub trait StreamAdapter: Send {
     type Stream: AsyncRead + AsyncWrite + Send + Unpin;
 
     /// Wraps base async TcpStream into AsyncRead/AsyncWrite stream that implements encryption.
-    async fn handshake(base: TcpStream, side: Side) -> Result<Self::Stream>;
+    async fn handshake(base: TcpStream, role: Role) -> Result<Self::Stream>;
 }
 
 #[derive(Debug)]
@@ -39,7 +38,7 @@ pub struct IdentityStreamAdapter {}
 impl StreamAdapter for IdentityStreamAdapter {
     type Stream = TcpStream;
 
-    async fn handshake(base: TcpStream, _side: Side) -> Result<Self::Stream> {
+    async fn handshake(base: TcpStream, _role: Role) -> Result<Self::Stream> {
         Ok(base)
     }
 }
