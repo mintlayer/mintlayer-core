@@ -15,9 +15,9 @@
 
 use std::sync::Arc;
 
-use super::mempool_interface_impl::mempool_method_call::MempoolMethodCall;
 use crate::error::Error;
 use crate::get_memory_usage::GetMemoryUsage;
+use crate::method_call::MempoolMethodCall;
 use crate::tx_accumulator::TransactionAccumulator;
 use crate::MempoolEvent;
 use crate::MempoolInterface;
@@ -29,11 +29,8 @@ use common::primitives::Id;
 use common::time_getter::TimeGetter;
 use tokio::sync::mpsc;
 
+use crate::pool::Mempool;
 pub use crate::SystemUsageEstimator;
-use pool::Mempool;
-
-mod mempool_method_call;
-mod pool;
 
 pub struct MempoolInterfaceImpl {
     sender: mpsc::UnboundedSender<MempoolMethodCall>,

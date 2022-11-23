@@ -33,6 +33,8 @@ mod config;
 pub mod error;
 mod get_memory_usage;
 mod interface;
+mod method_call;
+mod pool;
 pub mod rpc;
 pub mod tx_accumulator;
 
