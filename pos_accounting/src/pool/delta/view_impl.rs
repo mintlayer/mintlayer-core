@@ -92,7 +92,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<'a, P> {
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
-        let local_data = self.data.pool_data.data().get(&pool_id);
+        let local_data = self.data.pool_data.get_data_delta(&pool_id);
         match local_data {
             Some(d) => match d {
                 DataDelta::Create(d) => Ok(Some(*d.clone())),
@@ -132,7 +132,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<'a, P> {
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, Error> {
-        let local_data = self.data.delegation_data.data().get(&delegation_id);
+        let local_data = self.data.delegation_data.get_data_delta(&delegation_id);
         match local_data {
             Some(d) => match d {
                 DataDelta::Create(d) => Ok(Some(*d.clone())),
@@ -158,5 +158,6 @@ impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<'a, P> {
 impl<'a, P: PoSAccountingView> FlushablePoSAccountingView for PoSAccountingDelta<'a, P> {
     fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<(), Error> {
         self.merge_with_delta(data).map(|_| ())
+        //FIXME must use
     }
 }

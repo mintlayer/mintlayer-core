@@ -54,6 +54,7 @@ impl<'a, S> PoSAccountingDBMut<'a, S> {
     }
 }
 
+#[must_use]
 pub struct DataMergeUndo {
     pool_data_undo: BTreeMap<PoolId, Option<PoolData>>,
     delegation_data_undo: BTreeMap<DelegationId, Option<DelegationData>>,
@@ -208,8 +209,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
     {
         let mut store = BorrowedStorageValue::new(self.store, getter, setter, deleter);
         delta
-            .data()
-            .iter()
+            .data_iter()
             .map(|(id, delta)| -> Result<_, Error> {
                 let data = store.get(*id)?;
                 match combine_data_with_delta(data.as_ref(), Some(delta))? {
