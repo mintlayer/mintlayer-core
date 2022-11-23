@@ -34,7 +34,7 @@ use common::{
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, FlushablePoSAccountingView,
+    AccountingBlockUndo, BatchWriteUndo, DelegationData, DelegationId, FlushablePoSAccountingView,
     PoSAccountingDBMut, PoSAccountingDeltaData, PoSAccountingView, PoolData, PoolId,
 };
 use tx_verifier::transaction_verifier::TransactionSource;
@@ -317,7 +317,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
     fn batch_write_delta(
         &mut self,
         data: PoSAccountingDeltaData,
-    ) -> Result<(), pos_accounting::Error> {
+    ) -> Result<BatchWriteUndo, pos_accounting::Error> {
         let mut db = PoSAccountingDBMut::new(&mut self.db_tx);
         db.batch_write_delta(data)
     }

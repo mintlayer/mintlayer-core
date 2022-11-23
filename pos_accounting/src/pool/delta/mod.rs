@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use accounting::DeltaDataUndoCollection;
+use accounting::{DeltaAmountCollection, DeltaDataUndoCollection};
 use common::primitives::{signed_amount::SignedAmount, Amount, H256};
 
 use crate::{error::Error, DelegationId, PoolId};
@@ -52,6 +52,10 @@ pub struct PoSAccountingDelta<'a, P> {
 pub struct DeltaMergeUndo {
     pool_data_undo: DeltaDataUndoCollection<PoolId, PoolData>,
     delegation_data_undo: DeltaDataUndoCollection<DelegationId, DelegationData>,
+
+    pool_balances_undo: DeltaAmountCollection<PoolId>,
+    pool_delegation_shares_undo: DeltaAmountCollection<(PoolId, DelegationId)>,
+    delegation_balances_undo: DeltaAmountCollection<DelegationId>,
 }
 
 impl<'a, P: PoSAccountingView> PoSAccountingDelta<'a, P> {
@@ -100,20 +104,16 @@ impl<'a, P: PoSAccountingView> PoSAccountingDelta<'a, P> {
         }
     }
 
-    pub fn undo_delta_merge(
-        &mut self,
-        already_merged: PoSAccountingDeltaData,
-        undo_data: DeltaMergeUndo,
-    ) -> Result<(), Error> {
-        self.data.pool_balances.undo_merge_delta_amounts(already_merged.pool_balances)?;
+    pub fn undo_delta_merge(&mut self, undo_data: DeltaMergeUndo) -> Result<(), Error> {
+        self.data.pool_balances.undo_merge_delta_amounts(undo_data.pool_balances_undo)?;
 
         self.data
             .pool_delegation_shares
-            .undo_merge_delta_amounts(already_merged.pool_delegation_shares)?;
+            .undo_merge_delta_amounts(undo_data.pool_delegation_shares_undo)?;
 
         self.data
             .delegation_balances
-            .undo_merge_delta_amounts(already_merged.delegation_balances)?;
+            .undo_merge_delta_amounts(undo_data.delegation_balances_undo)?;
 
         self.data.pool_data.undo_merge_delta_data(undo_data.pool_data_undo)?;
 
@@ -128,12 +128,15 @@ impl<'a, P: PoSAccountingView> PoSAccountingDelta<'a, P> {
         &mut self,
         other: PoSAccountingDeltaData,
     ) -> Result<DeltaMergeUndo, Error> {
+        let pool_balances_undo = other.pool_balances.clone();
         self.data.pool_balances.merge_delta_amounts(other.pool_balances)?;
 
+        let pool_delegation_shares_undo = other.pool_delegation_shares.clone();
         self.data
             .pool_delegation_shares
             .merge_delta_amounts(other.pool_delegation_shares)?;
 
+        let delegation_balances_undo = other.delegation_balances.clone();
         self.data.delegation_balances.merge_delta_amounts(other.delegation_balances)?;
 
         let pool_data_undo = self.data.pool_data.merge_delta_data(other.pool_data)?;
@@ -144,6 +147,9 @@ impl<'a, P: PoSAccountingView> PoSAccountingDelta<'a, P> {
         Ok(DeltaMergeUndo {
             pool_data_undo,
             delegation_data_undo,
+            pool_balances_undo,
+            pool_delegation_shares_undo,
+            delegation_balances_undo,
         })
     }
 

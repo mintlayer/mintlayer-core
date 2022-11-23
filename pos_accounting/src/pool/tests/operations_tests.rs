@@ -54,8 +54,8 @@ fn create_pool_decomission_pool_undo(#[case] seed: Seed) {
     let mut delta2 = PoSAccountingDelta::from_borrowed_parent(&delta1);
     delta2.undo(undo).unwrap();
 
-    delta1.batch_write_delta(delta2.consume()).unwrap();
-    db.batch_write_delta(delta1.consume()).unwrap();
+    let _ = delta1.batch_write_delta(delta2.consume()).unwrap();
+    let _ = db.batch_write_delta(delta1.consume()).unwrap();
 
     let expected_data = PoSAccountingData {
         pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, pledge_amount))]),

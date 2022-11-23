@@ -23,7 +23,7 @@ use crate::{
     pool::{
         delegation::DelegationData,
         pool_data::PoolData,
-        view::{FlushablePoSAccountingView, PoSAccountingView},
+        view::{BatchWriteUndo, FlushablePoSAccountingView, PoSAccountingView},
     },
     DelegationId, PoolId,
 };
@@ -156,8 +156,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<'a, P> {
 }
 
 impl<'a, P: PoSAccountingView> FlushablePoSAccountingView for PoSAccountingDelta<'a, P> {
-    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<(), Error> {
-        self.merge_with_delta(data).map(|_| ())
-        //FIXME must use
+    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<BatchWriteUndo, Error> {
+        self.merge_with_delta(data).map(|d| BatchWriteUndo::Delta(d))
     }
 }

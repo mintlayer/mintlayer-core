@@ -40,7 +40,7 @@ pub use crate::{
         operations::{PoSAccountingOperations, PoSAccountingUndo},
         pool_data::PoolData,
         storage::{PoSAccountingDB, PoSAccountingDBMut},
-        view::{FlushablePoSAccountingView, PoSAccountingView},
+        view::{BatchWriteUndo, FlushablePoSAccountingView, PoSAccountingView},
     },
     storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
 };

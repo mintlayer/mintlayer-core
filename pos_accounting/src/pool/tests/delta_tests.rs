@@ -142,7 +142,6 @@ fn check_merge_deltas(#[case] seed: Seed) {
         ),
     };
     let delta2 = PoSAccountingDelta::from_data(&db, data2);
-    let delta2_origin_data = delta2.data().clone();
 
     let expected_data = PoSAccountingDeltaData {
         pool_data: DeltaDataCollection::from_iter(
@@ -183,7 +182,7 @@ fn check_merge_deltas(#[case] seed: Seed) {
     let undo_data = delta1.merge_with_delta(delta2.consume()).unwrap();
     assert_eq!(delta1.data(), &expected_data);
 
-    delta1.undo_delta_merge(delta2_origin_data, undo_data).unwrap();
+    delta1.undo_delta_merge(undo_data).unwrap();
     assert_eq!(delta1.data(), &delta1_origin_data);
 }
 
@@ -219,7 +218,7 @@ fn check_merge_values_with_deltas(#[case] seed: Seed) {
     );
     let original_storage = storage.clone();
 
-    let (delta_origin, undo_data) = {
+    let undo_data = {
         let mut db = PoSAccountingDBMut::new(&mut storage);
 
         let delta_data = PoSAccountingDeltaData {
@@ -268,10 +267,8 @@ fn check_merge_values_with_deltas(#[case] seed: Seed) {
             ),
         };
         let delta = PoSAccountingDelta::from_data(&db, delta_data);
-        let delta_origin = delta.data().clone();
 
-        let undo_data = db.merge_with_delta(delta.consume()).unwrap();
-        (delta_origin, undo_data)
+        db.merge_with_delta(delta.consume()).unwrap()
     };
 
     let expected_storage = InMemoryPoSAccounting::from_values(
@@ -302,7 +299,7 @@ fn check_merge_values_with_deltas(#[case] seed: Seed) {
     assert_eq!(storage, expected_storage);
 
     let mut db = PoSAccountingDBMut::new(&mut storage);
-    db.undo_merge_with_delta(delta_origin, undo_data).unwrap();
+    db.undo_merge_with_delta(undo_data).unwrap();
     assert_eq!(storage, original_storage);
 }
 

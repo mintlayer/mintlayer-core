@@ -60,13 +60,13 @@ impl InMemoryPoSAccounting {
         }
     }
 
-    pub fn dump(self) -> PoSAccountingData {
+    pub fn dump(&self) -> PoSAccountingData {
         PoSAccountingData {
-            pool_data: self.pool_data,
-            pool_balances: self.pool_balances,
-            pool_delegation_shares: self.pool_delegation_shares,
-            delegation_balances: self.delegation_balances,
-            delegation_data: self.delegation_data,
+            pool_data: self.pool_data.clone(),
+            pool_balances: self.pool_balances.clone(),
+            pool_delegation_shares: self.pool_delegation_shares.clone(),
+            delegation_balances: self.delegation_balances.clone(),
+            delegation_data: self.delegation_data.clone(),
         }
     }
 }
