@@ -27,7 +27,7 @@ use crate::{net::mock::peer::Role, Result};
 pub trait StreamAdapter: Send {
     type Stream: AsyncRead + AsyncWrite + Send + Unpin;
 
-    /// Wraps base async TcpStream into AsyncRead/AsyncWrite stream that implements encryption.
+    /// Wraps base async TcpStream into AsyncRead/AsyncWrite stream may implement encryption.
     async fn handshake(base: TcpStream, role: Role) -> Result<Self::Stream>;
 }
 
