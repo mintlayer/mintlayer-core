@@ -104,6 +104,7 @@ where
             version: self.version,
             agent: None,
             protocols: self.protocols.into_iter().collect(),
+            subscriptions: self.subscriptions,
         })
     }
 }

@@ -28,7 +28,7 @@ use crate::{
             transport::{MockStream, MockTransport},
             types::{self, MockEvent, MockPeerId, PeerEvent},
         },
-        types::{Protocol, ProtocolType},
+        types::{Protocol, ProtocolType, PubSubTopic},
     },
 };
 
@@ -87,18 +87,16 @@ where
     async fn handshake(&mut self) -> crate::Result<()> {
         match self.role {
             Role::Inbound => {
-                let (peer_id, network, version, protocols) =
-                    if let Ok(Some(types::Message::Handshake(types::HandshakeMessage::Hello {
+                let Ok(Some(types::Message::Handshake(types::HandshakeMessage::Hello {
                         peer_id,
                         version,
                         network,
                         protocols,
+                        subscriptions,
                     }))) = self.socket.recv().await
-                    {
-                        (peer_id, network, version, protocols)
-                    } else {
-                        return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-                    };
+                else {
+                    return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+                };
 
                 self.socket
                     .send(types::Message::Handshake(
@@ -114,6 +112,10 @@ where
                             ]
                             .into_iter()
                             .collect(),
+                            // TODO: Don't hardcode these values.
+                            subscriptions: [PubSubTopic::Transactions, PubSubTopic::Blocks]
+                                .into_iter()
+                                .collect(),
                         },
                     ))
                     .await?;
@@ -126,6 +128,7 @@ where
                             network,
                             version,
                             protocols,
+                            subscriptions,
                         },
                     ))
                     .await
@@ -147,20 +150,21 @@ where
                         ]
                         .into_iter()
                         .collect(),
+                        subscriptions: [PubSubTopic::Transactions, PubSubTopic::Blocks]
+                            .into_iter()
+                            .collect(),
                     }))
                     .await?;
 
-                let (peer_id, network, version, protocols) = if let Ok(Some(
+                let Ok(Some(
                     types::Message::Handshake(types::HandshakeMessage::HelloAck {
                         peer_id,
                         version,
                         network,
                         protocols,
-                    }),
-                )) = self.socket.recv().await
-                {
-                    (peer_id, network, version, protocols)
-                } else {
+                        subscriptions,
+                    }))) = self.socket.recv().await
+                else {
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
                 };
 
@@ -172,6 +176,7 @@ where
                             network,
                             version,
                             protocols,
+                            subscriptions,
                         },
                     ))
                     .await
@@ -282,6 +287,9 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
+                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                    .into_iter()
+                    .collect(),
             }))
             .await
             .is_ok());

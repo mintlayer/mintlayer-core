@@ -455,6 +455,7 @@ where
                 network,
                 version,
                 protocols,
+                subscriptions,
             } => {
                 let (tx, state) = self.pending.remove(&peer_id).expect("peer to exist");
 
@@ -469,6 +470,7 @@ where
                                     version,
                                     agent: None,
                                     protocols,
+                                    subscriptions,
                                 },
                             })
                             .await
@@ -484,6 +486,7 @@ where
                                     version,
                                     agent: None,
                                     protocols,
+                                    subscriptions,
                                 },
                             })
                             .await

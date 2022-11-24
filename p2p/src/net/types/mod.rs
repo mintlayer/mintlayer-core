@@ -60,6 +60,9 @@ pub struct PeerInfo<T: NetworkingService> {
 
     /// A set of supported protocols.
     pub protocols: BTreeSet<Protocol>,
+
+    /// The announcements list that a peer interested is.
+    pub subscriptions: BTreeSet<PubSubTopic>,
 }
 
 impl<T: NetworkingService> Display for PeerInfo<T> {

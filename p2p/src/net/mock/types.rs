@@ -183,6 +183,7 @@ pub struct MockPeerInfo {
     pub version: common::primitives::semver::SemVer,
     pub agent: Option<String>,
     pub protocols: Vec<Protocol>,
+    pub subscriptions: BTreeSet<PubSubTopic>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -193,6 +194,7 @@ pub enum PeerEvent {
         network: [u8; 4],
         version: semver::SemVer,
         protocols: Vec<Protocol>,
+        subscriptions: BTreeSet<PubSubTopic>,
     },
 
     /// Connection closed to remote
@@ -216,12 +218,14 @@ pub enum HandshakeMessage {
         version: common::primitives::semver::SemVer,
         network: [u8; 4],
         protocols: Vec<Protocol>,
+        subscriptions: BTreeSet<PubSubTopic>,
     },
     HelloAck {
         peer_id: MockPeerId,
         version: common::primitives::semver::SemVer,
         network: [u8; 4],
         protocols: Vec<Protocol>,
+        subscriptions: BTreeSet<PubSubTopic>,
     },
 }
 
