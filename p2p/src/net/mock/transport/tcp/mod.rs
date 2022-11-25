@@ -67,7 +67,7 @@ impl<E: StreamAdapter + 'static> MockTransport for TcpMockTransport<E> {
         stream_key: &<<Self as MockTransport>::Stream as MockStream>::StreamKey,
         address: Self::Address,
     ) -> Result<Self::Listener> {
-        TcpMockListener::start(stream_key, address).await
+        TcpMockListener::start(stream_key.clone(), address).await
     }
 
     async fn connect(
@@ -88,13 +88,13 @@ pub struct TcpMockListener<E: StreamAdapter> {
 }
 
 impl<E: StreamAdapter + 'static> TcpMockListener<E> {
-    async fn start(stream_key: &E::StreamKey, address: SocketAddr) -> Result<Self> {
+    async fn start(stream_key: E::StreamKey, address: SocketAddr) -> Result<Self> {
         let listener = TcpListener::bind(address).await?;
         let local_address = listener.local_addr()?;
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
         // Process new connections in background because MockListener::accept must be cancel safe.
-        let stream_key = Arc::new(stream_key.clone());
+        let stream_key = Arc::new(stream_key);
         let join_handle = tokio::spawn(async move {
             loop {
                 let (socket, socket_addr) = match listener.accept().await {
@@ -104,7 +104,7 @@ impl<E: StreamAdapter + 'static> TcpMockListener<E> {
                         return;
                     }
                 };
-                let sender_copy = sender.clone();
+                let sender = sender.clone();
                 let stream_key = Arc::clone(&stream_key);
                 tokio::spawn(async move {
                     let res = timeout(
@@ -124,7 +124,7 @@ impl<E: StreamAdapter + 'static> TcpMockListener<E> {
                         }
                     };
                     // It's not an error if the channel is already closed
-                    _ = sender_copy.send((socket, socket_addr));
+                    _ = sender.send((socket, socket_addr));
                 });
             }
         });
