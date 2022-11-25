@@ -17,6 +17,7 @@ use std::{
     io,
     marker::PhantomData,
     net::{IpAddr, SocketAddr},
+    time::Duration,
 };
 
 pub mod adapter;
@@ -27,6 +28,7 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::mpsc::UnboundedReceiver,
+    time::timeout,
 };
 use tokio_util::codec::{Decoder, Encoder};
 
@@ -46,6 +48,9 @@ use crate::{
 };
 
 use self::adapter::StreamAdapter;
+
+// How much time is allowed to spend setting up (optionally) encrypted stream.
+const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug)]
 pub struct TcpMockTransport<E: StreamAdapter>(PhantomData<E>);
@@ -92,12 +97,19 @@ impl<E: StreamAdapter + 'static> TcpMockListener<E> {
                 };
                 let sender_copy = sender.clone();
                 tokio::spawn(async move {
-                    // TODO(PR): Add timeout
-                    let res = TcpMockStream::<E>::new(socket, Role::Inbound).await;
+                    let res = timeout(
+                        HANDSHAKE_TIMEOUT,
+                        TcpMockStream::<E>::new(socket, Role::Inbound),
+                    )
+                    .await;
                     let socket = match res {
-                        Ok(socket) => socket,
-                        Err(err) => {
+                        Ok(Ok(socket)) => socket,
+                        Ok(Err(err)) => {
                             logging::log::warn!("encryption handshake failed: {}", err);
+                            return;
+                        }
+                        Err(err) => {
+                            logging::log::warn!("encryption handshake timed out: {}", err);
                             return;
                         }
                     };
