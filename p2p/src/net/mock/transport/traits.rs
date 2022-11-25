@@ -17,6 +17,7 @@ use std::{fmt::Debug, hash::Hash, str::FromStr};
 
 use async_trait::async_trait;
 
+use super::tcp::adapter::StreamKey;
 use crate::{
     net::{mock::types::Message, AsBannableAddress, IsBannableAddress},
     Result,
@@ -46,11 +47,14 @@ pub trait MockTransport: Send + 'static {
     /// A messages stream.
     type Stream: MockStream;
 
+    /// A key used to optionally encrypt Steam at transport level.
+    type StreamKey: StreamKey;
+
     /// Creates a new listener bound to the specified address.
-    async fn bind(address: Self::Address) -> Result<Self::Listener>;
+    async fn bind(stream_key: &Self::StreamKey, address: Self::Address) -> Result<Self::Listener>;
 
     /// Open a connection to the given address.
-    async fn connect(address: Self::Address) -> Result<Self::Stream>;
+    async fn connect(stream_key: &Self::StreamKey, address: Self::Address) -> Result<Self::Stream>;
 }
 
 /// An abstraction layer over some kind of network connection.

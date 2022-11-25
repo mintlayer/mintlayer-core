@@ -24,10 +24,20 @@ use tokio::{
 
 use crate::{net::mock::peer::Role, Result};
 
+pub trait StreamKey: Sync + Send + Clone {
+    fn gen_new() -> Self;
+}
+
 #[async_trait]
 pub trait StreamAdapter: Send {
     type Stream: AsyncRead + AsyncWrite + Send + Unpin;
 
+    type StreamKey: StreamKey;
+
     /// Wraps base async TcpStream into AsyncRead/AsyncWrite stream may implement encryption.
-    async fn handshake(base: TcpStream, role: Role) -> Result<Self::Stream>;
+    async fn handshake(
+        stream_key: &Self::StreamKey,
+        base: TcpStream,
+        role: Role,
+    ) -> Result<Self::Stream>;
 }

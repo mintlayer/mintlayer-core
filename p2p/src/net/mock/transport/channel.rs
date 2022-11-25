@@ -34,6 +34,9 @@ use crate::{
     P2pError, Result,
 };
 
+// We need something that implements StreamKey, IdentityStreamKey from tcp::adapter works as well.
+use super::tcp::adapter::identity::IdentityStreamKey;
+
 type Address = u64;
 type MessageSender = UnboundedSender<Message>;
 type MessageReceiver = UnboundedReceiver<Message>;
@@ -54,8 +57,9 @@ impl MockTransport for ChannelMockTransport {
     type BannableAddress = Address;
     type Listener = ChannelMockListener;
     type Stream = ChannelMockStream;
+    type StreamKey = IdentityStreamKey;
 
-    async fn bind(address: Self::Address) -> Result<Self::Listener> {
+    async fn bind(_stream_key: &Self::StreamKey, address: Self::Address) -> Result<Self::Listener> {
         let mut connections = CONNECTIONS.lock().expect("Connections mutex is poisoned");
 
         let address = if address == ZERO_ADDRESS {
@@ -76,7 +80,10 @@ impl MockTransport for ChannelMockTransport {
         Ok(Self::Listener { address, receiver })
     }
 
-    async fn connect(address: Self::Address) -> Result<Self::Stream> {
+    async fn connect(
+        _stream_key: &Self::StreamKey,
+        address: Self::Address,
+    ) -> Result<Self::Stream> {
         // A connection can only be established to a known address.
         assert_ne!(ZERO_ADDRESS, address);
 
@@ -177,14 +184,17 @@ mod tests {
     use super::*;
     use crate::net::{
         message::{BlockListRequest, Request},
-        mock::types::MockRequestId,
+        mock::{transport::StreamKey, types::MockRequestId},
     };
 
     #[tokio::test]
     async fn send_recv() {
         let address = 0;
-        let mut server = ChannelMockTransport::bind(address).await.unwrap();
-        let peer_fut = ChannelMockTransport::connect(server.local_address().unwrap());
+        let mut server = ChannelMockTransport::bind(&IdentityStreamKey::gen_new(), address)
+            .await
+            .unwrap();
+        let client_key = IdentityStreamKey::gen_new();
+        let peer_fut = ChannelMockTransport::connect(&client_key, server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let mut server_stream = server_res.unwrap().0;

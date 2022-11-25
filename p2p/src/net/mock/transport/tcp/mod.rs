@@ -17,6 +17,7 @@ use std::{
     io,
     marker::PhantomData,
     net::{IpAddr, SocketAddr},
+    sync::Arc,
     time::Duration,
 };
 
@@ -61,14 +62,15 @@ impl<E: StreamAdapter + 'static> MockTransport for TcpMockTransport<E> {
     type BannableAddress = IpAddr;
     type Listener = TcpMockListener<E>;
     type Stream = TcpMockStream<E>;
+    type StreamKey = E::StreamKey;
 
-    async fn bind(address: Self::Address) -> Result<Self::Listener> {
-        TcpMockListener::start(address).await
+    async fn bind(stream_key: &Self::StreamKey, address: Self::Address) -> Result<Self::Listener> {
+        TcpMockListener::start(stream_key, address).await
     }
 
-    async fn connect(address: Self::Address) -> Result<Self::Stream> {
+    async fn connect(stream_key: &Self::StreamKey, address: Self::Address) -> Result<Self::Stream> {
         let base = TcpStream::connect(address).await?;
-        let stream = TcpMockStream::new(base, Role::Outbound).await?;
+        let stream = TcpMockStream::new(stream_key, base, Role::Outbound).await?;
         Ok(stream)
     }
 }
@@ -81,12 +83,13 @@ pub struct TcpMockListener<E: StreamAdapter> {
 }
 
 impl<E: StreamAdapter + 'static> TcpMockListener<E> {
-    async fn start(address: SocketAddr) -> Result<Self> {
+    async fn start(stream_key: &E::StreamKey, address: SocketAddr) -> Result<Self> {
         let listener = TcpListener::bind(address).await?;
         let local_address = listener.local_addr()?;
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
-        // Process new connections in background because MockListener::accept must be cancel safe
+        // Process new connections in background because MockListener::accept must be cancel safe.
+        let stream_key = Arc::new(stream_key.clone());
         let join_handle = tokio::spawn(async move {
             loop {
                 let (socket, socket_addr) = match listener.accept().await {
@@ -97,10 +100,11 @@ impl<E: StreamAdapter + 'static> TcpMockListener<E> {
                     }
                 };
                 let sender_copy = sender.clone();
+                let stream_key = Arc::clone(&stream_key);
                 tokio::spawn(async move {
                     let res = timeout(
                         HANDSHAKE_TIMEOUT,
-                        TcpMockStream::<E>::new(socket, Role::Inbound),
+                        TcpMockStream::<E>::new(&stream_key, socket, Role::Inbound),
                     )
                     .await;
                     let socket = match res {
@@ -152,8 +156,8 @@ pub struct TcpMockStream<E: StreamAdapter> {
 }
 
 impl<E: StreamAdapter> TcpMockStream<E> {
-    async fn new(base: TcpStream, role: Role) -> Result<Self> {
-        let stream = E::handshake(base, role).await?;
+    async fn new(stream_key: &E::StreamKey, base: TcpStream, role: Role) -> Result<Self> {
+        let stream = E::handshake(stream_key, base, role).await?;
         Ok(Self {
             stream,
             buffer: BytesMut::new(),
@@ -275,13 +279,16 @@ mod tests {
     };
     use crate::net::{
         message::{BlockListRequest, Request},
-        mock::types::MockRequestId,
+        mock::{transport::StreamKey, types::MockRequestId},
     };
 
     async fn test_send_recv<E: StreamAdapter + 'static>() {
         let address = "[::1]:0".parse().unwrap();
-        let mut server = TcpMockTransport::<E>::bind(address).await.unwrap();
-        let peer_fut = TcpMockTransport::<E>::connect(server.local_address().unwrap());
+        let mut server =
+            TcpMockTransport::<E>::bind(&E::StreamKey::gen_new(), address).await.unwrap();
+        let client_stream_key = E::StreamKey::gen_new();
+        let peer_fut =
+            TcpMockTransport::<E>::connect(&client_stream_key, server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let mut server_stream = server_res.unwrap().0;
@@ -318,8 +325,11 @@ mod tests {
 
     async fn test_send_2_reqs<E: StreamAdapter + 'static>() {
         let address = "[::1]:0".parse().unwrap();
-        let mut server = TcpMockTransport::<E>::bind(address).await.unwrap();
-        let peer_fut = TcpMockTransport::<E>::connect(server.local_address().unwrap());
+        let mut server =
+            TcpMockTransport::<E>::bind(&E::StreamKey::gen_new(), address).await.unwrap();
+        let client_stream_key = E::StreamKey::gen_new();
+        let peer_fut =
+            TcpMockTransport::<E>::connect(&client_stream_key, server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let mut server_stream = server_res.unwrap().0;

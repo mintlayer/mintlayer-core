@@ -126,16 +126,21 @@ where
         config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
+        use transport::StreamKey;
+
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (sync_tx, sync_rx) = mpsc::channel(16);
-        let socket = T::bind(addr).await?;
+        // TODO: Check the data directory first, and use keys from there if available
+        let stream_key = T::StreamKey::gen_new();
+        let socket = T::bind(&stream_key, addr).await?;
         let local_addr = socket.local_address().expect("to have bind address available");
 
         let address = local_addr.clone();
         tokio::spawn(async move {
             let mut backend = backend::Backend::<T>::new(
                 address,
+                stream_key,
                 socket,
                 Arc::clone(&config),
                 cmd_rx,

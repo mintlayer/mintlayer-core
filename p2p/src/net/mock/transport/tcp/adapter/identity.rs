@@ -18,7 +18,16 @@ use tokio::net::TcpStream;
 
 use crate::net::mock::peer::Role;
 
-use super::StreamAdapter;
+use super::{StreamAdapter, StreamKey};
+
+#[derive(Clone)]
+pub struct IdentityStreamKey {}
+
+impl StreamKey for IdentityStreamKey {
+    fn gen_new() -> Self {
+        IdentityStreamKey {}
+    }
+}
 
 #[derive(Debug)]
 pub struct IdentityStreamAdapter {}
@@ -27,7 +36,13 @@ pub struct IdentityStreamAdapter {}
 impl StreamAdapter for IdentityStreamAdapter {
     type Stream = TcpStream;
 
-    async fn handshake(base: TcpStream, _role: Role) -> crate::Result<Self::Stream> {
+    type StreamKey = IdentityStreamKey;
+
+    async fn handshake(
+        _stream_key: &Self::StreamKey,
+        base: TcpStream,
+        _role: Role,
+    ) -> crate::Result<Self::Stream> {
         Ok(base)
     }
 }
