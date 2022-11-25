@@ -155,7 +155,7 @@ pub enum SyncingEvent<T: NetworkingService> {
         /// Received request
         request: message::Request,
     },
-    /// An incoming response to a sent request.
+    /// An incoming response.
     Response {
         /// Unique ID of the sender
         peer_id: T::PeerId,
