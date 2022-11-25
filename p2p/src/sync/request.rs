@@ -72,7 +72,7 @@ where
         request: message::Request,
     ) -> crate::Result<()> {
         let request_id = self.peer_sync_handle.send_request(peer_id, request).await?;
-        let is_inserted = self.pending_responses.insert(request_id.clone());
+        let is_inserted = self.pending_responses.insert(request_id);
         debug_assert!(is_inserted);
 
         let timeout = self.p2p_config.sync_manager_response_timeout.clone().into();
