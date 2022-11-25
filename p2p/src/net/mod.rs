@@ -79,12 +79,7 @@ pub trait NetworkingService {
     ///
     /// # Arguments
     /// `bind_addr` - socket address for incoming P2P traffic
-    ///
-    /// `strategies` - list of strategies that are used for peer discovery
-    ///
     /// `chain_config` - chain config of the node
-    ///
-    /// `timeout` - timeout for outbound connections
     async fn start(
         bind_addr: Self::Address,
         chain_config: Arc<common::chain::ChainConfig>,

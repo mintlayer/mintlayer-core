@@ -123,7 +123,7 @@ where
 
     async fn start(
         addr: Self::Address,
-        _config: Arc<common::chain::ChainConfig>,
+        config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
@@ -137,7 +137,7 @@ where
             let mut backend = backend::Backend::<T>::new(
                 address,
                 socket,
-                Arc::clone(&_config),
+                Arc::clone(&config),
                 cmd_rx,
                 conn_tx,
                 sync_tx,

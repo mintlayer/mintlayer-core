@@ -86,6 +86,7 @@ impl<E: StreamAdapter + 'static> TcpMockListener<E> {
         let local_address = listener.local_addr()?;
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
+        // Process new connections in background because MockListener::accept must be cancel safe
         let join_handle = tokio::spawn(async move {
             loop {
                 let (socket, socket_addr) = match listener.accept().await {
@@ -141,7 +142,7 @@ impl<E: StreamAdapter> MockListener<TcpMockStream<E>, SocketAddr> for TcpMockLis
     }
 
     fn local_address(&self) -> Result<SocketAddr> {
-        Ok(self.local_address.clone())
+        Ok(self.local_address)
     }
 }
 
