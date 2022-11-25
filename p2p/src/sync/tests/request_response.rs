@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashSet, time::Duration};
+use std::{collections::HashSet, fmt::Debug, time::Duration};
 
 use tokio::time::timeout;
 
@@ -38,15 +38,12 @@ use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTes
 async fn request_response<A, T>()
 where
     A: MakeTestAddress<Address = T::Address>,
-    T: NetworkingService + std::fmt::Debug + 'static,
+    T: NetworkingService + Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
-
-    let (mut mgr1, mut conn1, _sync1, _pm1) = make_sync_manager::<T>(addr1).await;
-    let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(addr2).await;
+    let (mut mgr1, mut conn1, _sync1, _pm1) = make_sync_manager::<T>(A::make_address()).await;
+    let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(A::make_address()).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<T>(&mut conn1, &mut conn2).await;
@@ -100,7 +97,7 @@ async fn request_response_mock_channels() {
 async fn multiple_requests_and_responses<A, T>()
 where
     A: MakeTestAddress<Address = T::Address>,
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + 'static + Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
