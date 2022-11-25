@@ -15,6 +15,8 @@
 
 //! Utility functions for sending header/block requests/responses
 
+use tokio::time::{self, Duration};
+
 use chainstate::Locator;
 use common::{
     chain::{block::BlockHeader, Block},
@@ -34,6 +36,8 @@ impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
+    T::SyncingPeerRequestId: 'static,
+    T::PeerId: 'static,
 {
     /// Creates a blocks request message.
     pub fn make_block_request(&self, block_ids: Vec<Id<Block>>) -> message::Request {
@@ -67,7 +71,17 @@ where
         peer_id: T::PeerId,
         request: message::Request,
     ) -> crate::Result<()> {
-        self.peer_sync_handle.send_request(peer_id, request).await?;
+        let request_id = self.peer_sync_handle.send_request(peer_id, request).await?;
+        let is_inserted = self.pending_responses.insert(request_id.clone());
+        debug_assert!(is_inserted);
+
+        let timeout = self.p2p_config.sync_manager_response_timeout.clone().into();
+        let sender = self.timeouts_sender.clone();
+        tokio::spawn(async move {
+            time::sleep(Duration::from_secs(timeout)).await;
+            let _ = sender.send((request_id, peer_id));
+        });
+
         Ok(())
     }
 

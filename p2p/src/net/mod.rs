@@ -64,7 +64,7 @@ pub trait NetworkingService {
     type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString + FromStr;
 
     /// Unique ID assigned to each received request from a peer
-    type SyncingPeerRequestId: Debug + Eq + Hash + Send + Sync;
+    type SyncingPeerRequestId: Copy + Debug + Eq + Hash + Send + Sync;
 
     /// Handle for sending/receiving connectivity-related events
     type ConnectivityHandle: Send;

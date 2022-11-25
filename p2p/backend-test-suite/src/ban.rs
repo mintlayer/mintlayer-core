@@ -18,6 +18,7 @@ use std::{fmt::Debug, sync::Arc};
 use tokio::sync::mpsc;
 
 use p2p::{
+    config::P2pConfig,
     error::{P2pError, PublishError},
     event::PeerManagerEvent,
     message::{Announcement, HeaderListResponse, Request, Response},
@@ -43,31 +44,40 @@ where
 {
     let (_tx_sync, rx_sync) = mpsc::unbounded_channel();
     let (tx_peer_manager, mut rx_peer_manager) = mpsc::unbounded_channel();
-    let config = Arc::new(common::chain::config::create_unit_test_config());
-    let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
+    let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+    let p2p_config = Arc::new(P2pConfig::default());
+    let handle = p2p_test_utils::start_chainstate(Arc::clone(&chain_config)).await;
 
-    let (mut conn1, sync1) = S::start(A::make_address(), Arc::clone(&config), Default::default())
-        .await
-        .unwrap();
+    let (mut conn1, sync1) = S::start(
+        A::make_address(),
+        Arc::clone(&chain_config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
     let mut sync1 = BlockSyncManager::<S>::new(
-        Arc::clone(&config),
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
         sync1,
         handle.clone(),
         rx_sync,
         tx_peer_manager,
     );
 
-    let (mut conn2, mut sync2) =
-        S::start(A::make_address(), Arc::clone(&config), Default::default())
-            .await
-            .unwrap();
+    let (mut conn2, mut sync2) = S::start(
+        A::make_address(),
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+    )
+    .await
+    .unwrap();
 
     connect_services::<S>(&mut conn1, &mut conn2).await;
 
     // create few blocks so `sync2` has something to send to `sync1`
-    let best_block = TestBlockInfo::from_genesis(config.genesis_block());
-    let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&config), best_block, 3);
+    let best_block = TestBlockInfo::from_genesis(chain_config.genesis_block());
+    let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&chain_config), best_block, 3);
 
     let peer = *conn2.peer_id();
     tokio::spawn(async move {
@@ -128,19 +138,28 @@ where
 {
     let (_tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
     let (tx_peer_manager, mut rx_peer_manager) = mpsc::unbounded_channel();
-    let config = Arc::new(common::chain::config::create_unit_test_config());
-    let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
+    let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+    let handle = p2p_test_utils::start_chainstate(Arc::clone(&chain_config)).await;
 
-    let (mut conn1, sync1) = S::start(A::make_address(), Arc::clone(&config), Default::default())
-        .await
-        .unwrap();
+    let (mut conn1, sync1) = S::start(
+        A::make_address(),
+        Arc::clone(&chain_config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
-    let (mut conn2, _sync2) = S::start(A::make_address(), Arc::clone(&config), Default::default())
-        .await
-        .unwrap();
+    let (mut conn2, _sync2) = S::start(
+        A::make_address(),
+        Arc::clone(&chain_config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
     let mut sync1 = BlockSyncManager::<S>::new(
-        Arc::clone(&config),
+        Arc::clone(&chain_config),
+        Arc::new(P2pConfig::default()),
         sync1,
         handle.clone(),
         rx_p2p_sync,
@@ -150,8 +169,8 @@ where
     connect_services::<S>(&mut conn1, &mut conn2).await;
 
     // create few blocks and offer an orphan block to the `SyncManager`
-    let best_block = TestBlockInfo::from_genesis(config.genesis_block());
-    let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&config), best_block, 3);
+    let best_block = TestBlockInfo::from_genesis(chain_config.genesis_block());
+    let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&chain_config), best_block, 3);
 
     // register `conn2` to the `SyncManager`, process a block response
     // and verify the `PeerManager` is notified of the protocol violation

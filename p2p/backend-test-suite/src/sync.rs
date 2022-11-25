@@ -27,6 +27,7 @@ use common::{
     primitives::{Id, Idable},
 };
 use p2p::{
+    config::P2pConfig,
     error::P2pError,
     event::{PeerManagerEvent, SyncControlEvent},
     message::{BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response},
@@ -1069,16 +1070,22 @@ where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
+    T::SyncingPeerRequestId: 'static,
+    T::PeerId: 'static,
 {
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
     let (tx_peer_manager, rx_peer_manager) = mpsc::unbounded_channel();
 
-    let config = Arc::new(common::chain::config::create_mainnet());
-    let (conn, sync) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
+    let chain_config = Arc::new(common::chain::config::create_mainnet());
+    let p2p_config = Arc::new(P2pConfig::default());
+    let (conn, sync) = T::start(addr, Arc::clone(&chain_config), Arc::clone(&p2p_config))
+        .await
+        .unwrap();
 
     (
         BlockSyncManager::<T>::new(
-            Arc::clone(&config),
+            chain_config,
+            p2p_config,
             sync,
             handle,
             rx_p2p_sync,
@@ -1154,6 +1161,8 @@ async fn process_header_request<T>(
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
+    T::SyncingPeerRequestId: 'static,
+    T::PeerId: 'static,
 {
     match mgr.handle_mut().poll_next().await.unwrap() {
         SyncingEvent::Request {
@@ -1181,6 +1190,8 @@ async fn advance_mgr_state<T>(mgr: &mut BlockSyncManager<T>) -> Result<(), P2pEr
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
+    T::SyncingPeerRequestId: 'static,
+    T::PeerId: 'static,
 {
     match mgr.handle_mut().poll_next().await.unwrap() {
         SyncingEvent::Request {

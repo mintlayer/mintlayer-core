@@ -40,6 +40,8 @@ where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
+    T::SyncingPeerRequestId: 'static,
+    T::PeerId: 'static,
 {
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
     let (tx_pm, rx_pm) = mpsc::unbounded_channel();
@@ -61,11 +63,14 @@ where
     );
     tokio::spawn(async move { man.main().await });
 
-    let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (conn, sync) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
+    let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+    let p2p_config = Arc::new(P2pConfig::default());
+    let (conn, sync) = T::start(addr, Arc::clone(&chain_config), Arc::clone(&p2p_config))
+        .await
+        .unwrap();
 
     (
-        BlockSyncManager::<T>::new(Arc::clone(&config), sync, handle, rx_p2p_sync, tx_pm),
+        BlockSyncManager::<T>::new(chain_config, p2p_config, sync, handle, rx_p2p_sync, tx_pm),
         conn,
         tx_p2p_sync,
         rx_pm,

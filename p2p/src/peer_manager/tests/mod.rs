@@ -32,7 +32,7 @@ use crate::{
 
 async fn make_peer_manager<T>(
     addr: T::Address,
-    config: Arc<common::chain::ChainConfig>,
+    chain_config: Arc<common::chain::ChainConfig>,
 ) -> PeerManager<T>
 where
     T: NetworkingService + 'static,
@@ -40,7 +40,7 @@ where
     <T as NetworkingService>::Address: FromStr,
     <<T as NetworkingService>::Address as FromStr>::Err: Debug,
 {
-    let (conn, _) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
+    let (conn, _) = T::start(addr, Arc::clone(&chain_config), Default::default()).await.unwrap();
     let (_, rx) = tokio::sync::mpsc::unbounded_channel();
     let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
 
@@ -51,7 +51,7 @@ where
     });
 
     let p2p_config = Arc::new(P2pConfig::default());
-    PeerManager::<T>::new(Arc::clone(&config), p2p_config, conn, rx, tx_sync)
+    PeerManager::<T>::new(chain_config, p2p_config, conn, rx, tx_sync)
 }
 
 /// Returns a set of minimal required protocols.

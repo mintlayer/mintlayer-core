@@ -25,6 +25,12 @@ make_config_setting!(OutboundConnectionTimeout, u64, 10);
 make_config_setting!(MdnsConfigSetting, MdnsConfig, MdnsConfig::Disabled);
 make_config_setting!(MdnsQueryInterval, u64, MDNS_DEFAULT_QUERY_INTERVAL);
 make_config_setting!(MdnsEnableIpV6Discovery, bool, MDNS_DEFAULT_IPV6_STATE);
+make_config_setting!(
+    /// The `BlockSyncManager` response timeout value in seconds.
+    SyncManagerResponseTimeout,
+    u64,
+    10
+);
 
 /// Multicast DNS configuration.
 #[derive(Debug, Clone)]
@@ -55,4 +61,6 @@ pub struct P2pConfig {
     pub outbound_connection_timeout: OutboundConnectionTimeout,
     /// Multicast DNS configuration.
     pub mdns_config: MdnsConfigSetting,
+    /// The `BlockSyncManager` response timeout value in seconds.
+    pub sync_manager_response_timeout: SyncManagerResponseTimeout,
 }

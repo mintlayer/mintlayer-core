@@ -96,6 +96,10 @@ pub struct RunOptions {
     #[clap(long)]
     pub p2p_outbound_connection_timeout: Option<u64>,
 
+    /// The p2p `BlockSyncManager` response timeout value in seconds.
+    #[clap(long)]
+    pub p2p_sync_manager_response_timeout: Option<u64>,
+
     /// Address to bind http RPC to.
     #[clap(long, value_name = "ADDR")]
     pub http_rpc_addr: Option<SocketAddr>,
