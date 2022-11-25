@@ -47,7 +47,7 @@ pub trait MockTransport: Send + 'static {
     /// A messages stream.
     type Stream: MockStream;
 
-    /// A key used to optionally encrypt Steam at transport level.
+    /// A key used to optionally encrypt Stream at transport level.
     type StreamKey: StreamKey;
 
     /// Creates a new listener bound to the specified address.
