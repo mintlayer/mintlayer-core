@@ -62,9 +62,9 @@ impl<E: StreamAdapter + 'static> MockTransport for TcpMockTransport<E> {
     }
 
     async fn connect(address: Self::Address) -> Result<Self::Stream> {
-        let tcp_stream = TcpStream::connect(address).await?;
-        let noise_stream = TcpMockStream::new(tcp_stream, Role::Outbound).await?;
-        Ok(noise_stream)
+        let base = TcpStream::connect(address).await?;
+        let stream = TcpMockStream::new(base, Role::Outbound).await?;
+        Ok(stream)
     }
 }
 
@@ -257,9 +257,9 @@ impl IsBannableAddress for SocketAddr {
 
 #[cfg(test)]
 mod tests {
-    use adapter::IdentityStreamAdapter;
-
-    use super::{adapter::noise::NoiseEncryptionAdapter, *};
+    use super::{
+        adapter::identity::IdentityStreamAdapter, adapter::noise::NoiseEncryptionAdapter, *,
+    };
     use crate::net::{
         message::{BlockListRequest, Request},
         mock::types::MockRequestId,
