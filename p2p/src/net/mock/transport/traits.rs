@@ -47,14 +47,17 @@ pub trait MockTransport: Send + 'static {
     /// A messages stream.
     type Stream: MockStream;
 
-    /// A key used to optionally encrypt Stream at transport level.
-    type StreamKey: StreamKey;
-
     /// Creates a new listener bound to the specified address.
-    async fn bind(stream_key: &Self::StreamKey, address: Self::Address) -> Result<Self::Listener>;
+    async fn bind(
+        stream_key: &<<Self as MockTransport>::Stream as MockStream>::StreamKey,
+        address: Self::Address,
+    ) -> Result<Self::Listener>;
 
     /// Open a connection to the given address.
-    async fn connect(stream_key: &Self::StreamKey, address: Self::Address) -> Result<Self::Stream>;
+    async fn connect(
+        stream_key: &<<Self as MockTransport>::Stream as MockStream>::StreamKey,
+        address: Self::Address,
+    ) -> Result<Self::Stream>;
 }
 
 /// An abstraction layer over some kind of network connection.
@@ -70,6 +73,9 @@ pub trait MockListener<Stream, Address>: Send {
 /// An abstraction layer over some network stream that can be used to send and receive messages.
 #[async_trait]
 pub trait MockStream: Send {
+    /// A key used to optionally encrypt Stream at transport level.
+    type StreamKey: StreamKey;
+
     /// Sends the given message to a remote peer.
     async fn send(&mut self, msg: Message) -> Result<()>;
 

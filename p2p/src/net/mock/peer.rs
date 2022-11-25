@@ -536,8 +536,13 @@ mod tests {
     {
         use crate::net::mock::transport::StreamKey;
         let addr = A::make_address();
-        let mut server = T::bind(&T::StreamKey::gen_new(), addr).await.unwrap();
-        let client_key = T::StreamKey::gen_new();
+        let mut server = T::bind(
+            &<<T as MockTransport>::Stream as MockStream>::StreamKey::gen_new(),
+            addr,
+        )
+        .await
+        .unwrap();
+        let client_key = <<T as MockTransport>::Stream as MockStream>::StreamKey::gen_new();
         let peer_fut = T::connect(&client_key, server.local_address().unwrap());
 
         let (res1, res2) = tokio::join!(server.accept(), peer_fut);

@@ -35,7 +35,7 @@ use crate::{
     net::{
         mock::{
             constants::ANNOUNCEMENT_MAX_SIZE,
-            transport::{MockListener, MockTransport},
+            transport::{MockListener, MockStream, MockTransport},
             types::{MockMessageId, MockPeerId, MockPeerInfo, MockRequestId},
         },
         types::{ConnectivityEvent, PeerInfo, PubSubTopic, SyncingEvent, ValidationResult},
@@ -132,7 +132,7 @@ where
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (sync_tx, sync_rx) = mpsc::channel(16);
         // TODO: Check the data directory first, and use keys from there if available
-        let stream_key = T::StreamKey::gen_new();
+        let stream_key = <<T as MockTransport>::Stream as MockStream>::StreamKey::gen_new();
         let socket = T::bind(&stream_key, addr).await?;
         let local_addr = socket.local_address().expect("to have bind address available");
 

@@ -57,9 +57,11 @@ impl MockTransport for ChannelMockTransport {
     type BannableAddress = Address;
     type Listener = ChannelMockListener;
     type Stream = ChannelMockStream;
-    type StreamKey = IdentityStreamKey;
 
-    async fn bind(_stream_key: &Self::StreamKey, address: Self::Address) -> Result<Self::Listener> {
+    async fn bind(
+        _stream_key: &<<Self as MockTransport>::Stream as MockStream>::StreamKey,
+        address: Self::Address,
+    ) -> Result<Self::Listener> {
         let mut connections = CONNECTIONS.lock().expect("Connections mutex is poisoned");
 
         let address = if address == ZERO_ADDRESS {
@@ -81,7 +83,7 @@ impl MockTransport for ChannelMockTransport {
     }
 
     async fn connect(
-        _stream_key: &Self::StreamKey,
+        _stream_key: &<<Self as MockTransport>::Stream as MockStream>::StreamKey,
         address: Self::Address,
     ) -> Result<Self::Stream> {
         // A connection can only be established to a known address.
@@ -150,6 +152,8 @@ pub struct ChannelMockStream {
 
 #[async_trait]
 impl MockStream for ChannelMockStream {
+    type StreamKey = IdentityStreamKey;
+
     async fn send(&mut self, msg: Message) -> Result<()> {
         self.sender.send(msg).map_err(|_| P2pError::ChannelClosed)
     }

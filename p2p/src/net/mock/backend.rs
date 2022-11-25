@@ -56,6 +56,8 @@ use crate::{
     },
 };
 
+use super::transport::MockStream;
+
 #[derive(Debug)]
 struct PeerContext {
     _peer_id: MockPeerId,
@@ -76,7 +78,7 @@ pub struct Backend<T: MockTransport> {
     /// Socket address of the backend
     address: T::Address,
 
-    stream_key: T::StreamKey,
+    stream_key: <<T as MockTransport>::Stream as MockStream>::StreamKey,
 
     /// Socket for listening to incoming connections
     socket: T::Listener,
@@ -123,7 +125,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         address: T::Address,
-        stream_key: T::StreamKey,
+        stream_key: <<T as MockTransport>::Stream as MockStream>::StreamKey,
         socket: T::Listener,
         config: Arc<ChainConfig>,
         cmd_rx: mpsc::Receiver<Command<T>>,

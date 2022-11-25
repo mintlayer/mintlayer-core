@@ -62,13 +62,18 @@ impl<E: StreamAdapter + 'static> MockTransport for TcpMockTransport<E> {
     type BannableAddress = IpAddr;
     type Listener = TcpMockListener<E>;
     type Stream = TcpMockStream<E>;
-    type StreamKey = E::StreamKey;
 
-    async fn bind(stream_key: &Self::StreamKey, address: Self::Address) -> Result<Self::Listener> {
+    async fn bind(
+        stream_key: &<<Self as MockTransport>::Stream as MockStream>::StreamKey,
+        address: Self::Address,
+    ) -> Result<Self::Listener> {
         TcpMockListener::start(stream_key, address).await
     }
 
-    async fn connect(stream_key: &Self::StreamKey, address: Self::Address) -> Result<Self::Stream> {
+    async fn connect(
+        stream_key: &<<Self as MockTransport>::Stream as MockStream>::StreamKey,
+        address: Self::Address,
+    ) -> Result<Self::Stream> {
         let base = TcpStream::connect(address).await?;
         let stream = TcpMockStream::new(stream_key, base, Role::Outbound).await?;
         Ok(stream)
@@ -167,6 +172,8 @@ impl<E: StreamAdapter> TcpMockStream<E> {
 
 #[async_trait]
 impl<E: StreamAdapter> MockStream for TcpMockStream<E> {
+    type StreamKey = E::StreamKey;
+
     async fn send(&mut self, msg: Message) -> Result<()> {
         let mut buf = bytes::BytesMut::new();
         EncoderDecoder {}.encode(msg, &mut buf)?;
