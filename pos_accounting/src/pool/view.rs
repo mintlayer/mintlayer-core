@@ -52,7 +52,7 @@ pub trait PoSAccountingView {
     ) -> Result<Option<Amount>, Error>;
 }
 
-#[must_use]
+// TODO: not sure that we actually need this undo
 pub enum BatchWriteUndo {
     Delta(DeltaMergeUndo),
     Data(DataMergeUndo),

@@ -18,7 +18,7 @@ mod error;
 
 pub use crate::{
     delta::{
-        combine::{combine_amount_delta, combine_data_with_delta},
+        combine::{combine_amount_delta, combine_data_with_delta, combine_data_with_delta_el},
         delta_amount_collection::DeltaAmountCollection,
         delta_data_collection::{
             undo::{DataDeltaUndoOp, DeltaDataUndoCollection},

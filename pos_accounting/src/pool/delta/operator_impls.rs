@@ -74,11 +74,15 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<'a
             .get_pool_balance(pool_id)?
             .ok_or(Error::AttemptedDecommissionNonexistingPoolBalance)?;
 
-        self.get_pool_data(pool_id)?
+        let last_data = self
+            .get_pool_data(pool_id)?
             .ok_or(Error::AttemptedDecommissionNonexistingPoolData)?;
 
         self.data.pool_balances.sub_unsigned(pool_id, last_amount)?;
-        let data_undo = self.data.pool_data.merge_delta_data_element(pool_id, DataDelta::Delete)?;
+        let data_undo = self
+            .data
+            .pool_data
+            .merge_delta_data_element(pool_id, DataDelta::Delete(Box::new(last_data)))?;
 
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
             pool_id,

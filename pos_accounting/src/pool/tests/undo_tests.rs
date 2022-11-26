@@ -125,9 +125,9 @@ fn create_pool_flush_undo(#[case] seed: Seed) {
     let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
 
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, _) = create_pool(&mut rng, &mut delta, pledged_amount).unwrap();
+    let (pool_id, pub_key, delta_undo) = create_pool(&mut rng, &mut delta, pledged_amount).unwrap();
 
-    let undo = db.batch_write_delta(delta.consume()).unwrap();
+    let _ = db.batch_write_delta(delta.consume()).unwrap();
 
     let expected_storage = PoSAccountingData {
         pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
@@ -140,10 +140,11 @@ fn create_pool_flush_undo(#[case] seed: Seed) {
 
     {
         let mut db = PoSAccountingDBMut::new(&mut storage);
-        match undo {
-            BatchWriteUndo::Delta(_) => unreachable!(),
-            BatchWriteUndo::Data(d) => db.undo_merge_with_delta(d).unwrap(),
-        };
+        let mut new_delta = PoSAccountingDelta::from_borrowed_parent(&db);
+        new_delta.undo(delta_undo).unwrap();
+
+        db.batch_write_delta(new_delta.consume()).unwrap();
+
         assert_eq!(storage.dump(), PoSAccountingData::new());
     }
 }
@@ -209,18 +210,18 @@ fn decommission_pool_flush_undo(#[case] seed: Seed) {
     let (pool_id, pub_key, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
 
     let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
-    let _ = delta.decommission_pool(pool_id).unwrap();
+    let delta_undo = delta.decommission_pool(pool_id).unwrap();
 
-    let undo = db.batch_write_delta(delta.consume()).unwrap();
+    db.batch_write_delta(delta.consume()).unwrap();
 
     assert_eq!(storage.dump(), PoSAccountingData::new());
 
     {
         let mut db = PoSAccountingDBMut::new(&mut storage);
-        match undo {
-            BatchWriteUndo::Delta(_) => unreachable!(),
-            BatchWriteUndo::Data(d) => db.undo_merge_with_delta(d).unwrap(),
-        };
+        let mut new_delta = PoSAccountingDelta::from_borrowed_parent(&db);
+        new_delta.undo(delta_undo).unwrap();
+
+        db.batch_write_delta(new_delta.consume()).unwrap();
 
         let expected_storage = PoSAccountingData {
             pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
@@ -305,10 +306,10 @@ fn create_delegation_id_flush_undo(#[case] seed: Seed) {
     let (pool_id, pub_key, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
 
     let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
-    let (delegation_id, del_pub_key, _) =
+    let (delegation_id, del_pub_key, delta_undo) =
         create_delegation_id(&mut rng, &mut delta, pool_id).unwrap();
 
-    let undo = db.batch_write_delta(delta.consume()).unwrap();
+    db.batch_write_delta(delta.consume()).unwrap();
 
     let expected_storage = PoSAccountingData {
         pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key.clone(), pledged_amount))]),
@@ -324,10 +325,10 @@ fn create_delegation_id_flush_undo(#[case] seed: Seed) {
 
     {
         let mut db = PoSAccountingDBMut::new(&mut storage);
-        match undo {
-            BatchWriteUndo::Delta(_) => unreachable!(),
-            BatchWriteUndo::Data(d) => db.undo_merge_with_delta(d).unwrap(),
-        };
+        let mut new_delta = PoSAccountingDelta::from_borrowed_parent(&db);
+        new_delta.undo(delta_undo).unwrap();
+
+        db.batch_write_delta(new_delta.consume()).unwrap();
 
         let expected_storage = PoSAccountingData {
             pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
@@ -418,9 +419,9 @@ fn undo_delegate_staking_delta_with_flush(#[case] seed: Seed) {
 
     let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
     let delegated_amount = Amount::from_atoms(300);
-    let _ = delta.delegate_staking(delegation_id, delegated_amount).unwrap();
+    let delta_undo = delta.delegate_staking(delegation_id, delegated_amount).unwrap();
 
-    let undo = db.batch_write_delta(delta.consume()).unwrap();
+    db.batch_write_delta(delta.consume()).unwrap();
 
     let expected_storage = PoSAccountingData {
         pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key.clone(), pledged_amount))]),
@@ -436,10 +437,10 @@ fn undo_delegate_staking_delta_with_flush(#[case] seed: Seed) {
 
     {
         let mut db = PoSAccountingDBMut::new(&mut storage);
-        match undo {
-            BatchWriteUndo::Delta(_) => unreachable!(),
-            BatchWriteUndo::Data(d) => db.undo_merge_with_delta(d).unwrap(),
-        };
+        let mut new_delta = PoSAccountingDelta::from_borrowed_parent(&db);
+        new_delta.undo(delta_undo).unwrap();
+
+        db.batch_write_delta(new_delta.consume()).unwrap();
 
         let expected_storage = PoSAccountingData {
             pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
@@ -553,9 +554,9 @@ fn undo_spend_share_delta_with_flush(#[case] seed: Seed) {
 
     let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
     let spent_amount = Amount::from_atoms(50);
-    let _ = delta.spend_share_from_delegation_id(delegation_id, spent_amount).unwrap();
+    let delta_undo = delta.spend_share_from_delegation_id(delegation_id, spent_amount).unwrap();
 
-    let undo = db.batch_write_delta(delta.consume()).unwrap();
+    db.batch_write_delta(delta.consume()).unwrap();
 
     let expected_storage = PoSAccountingData {
         pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key.clone(), pledged_amount))]),
@@ -580,10 +581,10 @@ fn undo_spend_share_delta_with_flush(#[case] seed: Seed) {
 
     {
         let mut db = PoSAccountingDBMut::new(&mut storage);
-        match undo {
-            BatchWriteUndo::Delta(_) => unreachable!(),
-            BatchWriteUndo::Data(d) => db.undo_merge_with_delta(d).unwrap(),
-        };
+        let mut new_delta = PoSAccountingDelta::from_borrowed_parent(&db);
+        new_delta.undo(delta_undo).unwrap();
+
+        db.batch_write_delta(new_delta.consume()).unwrap();
 
         let expected_storage = PoSAccountingData {
             pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key.clone(), pledged_amount))]),

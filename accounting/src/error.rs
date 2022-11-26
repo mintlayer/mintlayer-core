@@ -39,4 +39,8 @@ pub enum Error {
     DeltaDataModifyAfterDelete,
     #[error("Delta undo negation error")]
     DeltaUndoNegationError,
+    #[error("Data combination over UndoOp is not supported")]
+    DataCombinedOverUndoOpNotSupported,
+    #[error("UndoOp combination with another UndoOp is not supported")]
+    UndoOpsCombinedNotSupported,
 }

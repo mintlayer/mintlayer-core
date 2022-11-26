@@ -33,7 +33,7 @@ use crypto::{
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn basic_reorg(#[case] seed: Seed) {
+fn stake_pool_reorg(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);

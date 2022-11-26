@@ -138,7 +138,14 @@ fn check_merge_deltas(#[case] seed: Seed) {
             .into_iter(),
         ),
         delegation_data: DeltaDataCollection::from_iter(
-            [(new_delegation_id(1), DataDelta::Delete)].into_iter(),
+            [(
+                new_delegation_id(1),
+                DataDelta::Delete(Box::new(DelegationData::new(
+                    new_pool_id(1),
+                    pub_key1.clone(),
+                ))),
+            )]
+            .into_iter(),
         ),
     };
     let delta2 = PoSAccountingDelta::from_data(&db, data2);
@@ -263,7 +270,14 @@ fn check_merge_values_with_deltas(#[case] seed: Seed) {
                 .into_iter(),
             ),
             delegation_data: DeltaDataCollection::from_iter(
-                [(new_delegation_id(1), DataDelta::Delete)].into_iter(),
+                [(
+                    new_delegation_id(1),
+                    DataDelta::Delete(Box::new(DelegationData::new(
+                        new_pool_id(1),
+                        pub_key1.clone(),
+                    ))),
+                )]
+                .into_iter(),
             ),
         };
         let delta = PoSAccountingDelta::from_data(&db, delta_data);

@@ -15,7 +15,7 @@
 
 use std::{collections::BTreeMap, ops::Neg};
 
-use accounting::{combine_amount_delta, combine_data_with_delta, DeltaDataCollection};
+use accounting::{combine_amount_delta, combine_data_with_delta_el, DeltaDataCollection};
 use chainstate_types::storage_result;
 use common::primitives::{signed_amount::SignedAmount, Amount};
 
@@ -209,10 +209,11 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
     {
         let mut store = BorrowedStorageValue::new(self.store, getter, setter, deleter);
         delta
-            .data_iter()
+            .data()
+            .iter()
             .map(|(id, delta)| -> Result<_, Error> {
                 let data = store.get(*id)?;
-                match combine_data_with_delta(data.as_ref(), Some(delta))? {
+                match combine_data_with_delta_el(data.as_ref(), Some(delta))? {
                     Some(result) => store.set(*id, &result)?,
                     None => store.delete(*id)?,
                 }
