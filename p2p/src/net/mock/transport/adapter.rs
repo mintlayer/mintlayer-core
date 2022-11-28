@@ -17,10 +17,7 @@ pub mod identity;
 pub mod noise;
 
 use async_trait::async_trait;
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    net::TcpStream,
-};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{net::mock::peer::Role, Result};
 
@@ -29,15 +26,11 @@ pub trait StreamKey: Sync + Send + Clone {
 }
 
 #[async_trait]
-pub trait StreamAdapter: Send {
+pub trait StreamAdapter<T>: Send {
     type Stream: AsyncRead + AsyncWrite + Send + Unpin;
 
     type StreamKey: StreamKey;
 
-    /// Wraps base async TcpStream into AsyncRead/AsyncWrite stream may implement encryption.
-    async fn handshake(
-        stream_key: &Self::StreamKey,
-        base: TcpStream,
-        role: Role,
-    ) -> Result<Self::Stream>;
+    /// Wraps base async stream into AsyncRead/AsyncWrite stream that may implement encryption.
+    async fn handshake(stream_key: &Self::StreamKey, base: T, role: Role) -> Result<Self::Stream>;
 }

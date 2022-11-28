@@ -19,9 +19,7 @@ mod tcp;
 mod traits;
 
 pub use self::{
-    adapter::{
-        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, StreamAdapter, StreamKey,
-    },
+    adapter::{identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, StreamAdapter},
     channel::{ChannelMockListener, ChannelMockStream, ChannelMockTransport},
     tcp::{EncoderDecoderWithBuf, TcpMockTransport},
     traits::{MockListener, MockStream, MockTransport},

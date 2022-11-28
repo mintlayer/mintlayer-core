@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use tokio::net::TcpStream;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::net::mock::peer::Role;
 
@@ -33,14 +33,16 @@ impl StreamKey for IdentityStreamKey {
 pub struct IdentityStreamAdapter {}
 
 #[async_trait]
-impl StreamAdapter for IdentityStreamAdapter {
-    type Stream = TcpStream;
+impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> StreamAdapter<T>
+    for IdentityStreamAdapter
+{
+    type Stream = T;
 
     type StreamKey = IdentityStreamKey;
 
     async fn handshake(
         _stream_key: &Self::StreamKey,
-        base: TcpStream,
+        base: T,
         _role: Role,
     ) -> crate::Result<Self::Stream> {
         Ok(base)

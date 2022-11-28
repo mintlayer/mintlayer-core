@@ -15,14 +15,11 @@
 
 use async_trait::async_trait;
 use snowstorm::NoiseStream;
-use tokio::net::TcpStream;
+use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::{
-    error::P2pError,
-    net::mock::{peer::Role, transport::StreamKey},
-};
+use crate::{error::P2pError, net::mock::peer::Role};
 
-use super::StreamAdapter;
+use super::{StreamAdapter, StreamKey};
 
 static NOISE_HANDSHAKE_PATTERN: &str = "Noise_XX_25519_ChaChaPoly_SHA256";
 
@@ -58,14 +55,16 @@ impl StreamKey for NoiseStreamKey {
 }
 
 #[async_trait]
-impl StreamAdapter for NoiseEncryptionAdapter {
-    type Stream = snowstorm::NoiseStream<TcpStream>;
+impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> StreamAdapter<T>
+    for NoiseEncryptionAdapter
+{
+    type Stream = snowstorm::NoiseStream<T>;
 
     type StreamKey = NoiseStreamKey;
 
     async fn handshake(
         stream_key: &Self::StreamKey,
-        base: TcpStream,
+        base: T,
         role: Role,
     ) -> crate::Result<Self::Stream> {
         let state = match role {
