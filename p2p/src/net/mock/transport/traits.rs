@@ -16,10 +16,11 @@
 use std::{fmt::Debug, hash::Hash, str::FromStr};
 
 use async_trait::async_trait;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::tcp::adapter::StreamKey;
 use crate::{
-    net::{mock::types::Message, AsBannableAddress, IsBannableAddress},
+    net::{AsBannableAddress, IsBannableAddress},
     Result,
 };
 
@@ -72,13 +73,7 @@ pub trait MockListener<Stream, Address>: Send {
 
 /// An abstraction layer over some network stream that can be used to send and receive messages.
 #[async_trait]
-pub trait MockStream: Send {
+pub trait MockStream: Unpin + Send + AsyncRead + AsyncWrite {
     /// A key used to optionally encrypt Stream at transport level.
     type StreamKey: StreamKey;
-
-    /// Sends the given message to a remote peer.
-    async fn send(&mut self, msg: Message) -> Result<()>;
-
-    /// Receives a message from a remote peer.
-    async fn recv(&mut self) -> Result<Option<Message>>;
 }

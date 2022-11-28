@@ -17,6 +17,7 @@ use std::{
     io,
     marker::PhantomData,
     net::{IpAddr, SocketAddr},
+    pin::Pin,
     sync::Arc,
     time::Duration,
 };
@@ -26,7 +27,7 @@ pub mod adapter;
 use async_trait::async_trait;
 use bytes::{Buf, BytesMut};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::mpsc::UnboundedReceiver,
     time::timeout,
@@ -157,48 +158,52 @@ impl<E: StreamAdapter> MockListener<TcpMockStream<E>, SocketAddr> for TcpMockLis
 
 pub struct TcpMockStream<E: StreamAdapter> {
     stream: E::Stream,
-    buffer: BytesMut,
 }
 
 impl<E: StreamAdapter> TcpMockStream<E> {
     async fn new(stream_key: &E::StreamKey, base: TcpStream, role: Role) -> Result<Self> {
         let stream = E::handshake(stream_key, base, role).await?;
-        Ok(Self {
-            stream,
-            buffer: BytesMut::new(),
-        })
+        Ok(Self { stream })
+    }
+}
+
+impl<E: StreamAdapter> AsyncRead for TcpMockStream<E> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<io::Result<()>> {
+        Pin::new(&mut self.stream).poll_read(cx, buf)
+    }
+}
+
+impl<E: StreamAdapter> AsyncWrite for TcpMockStream<E> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::result::Result<usize, io::Error>> {
+        Pin::new(&mut self.stream).poll_write(cx, buf)
+    }
+
+    fn poll_flush(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::result::Result<(), io::Error>> {
+        Pin::new(&mut self.stream).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::result::Result<(), io::Error>> {
+        Pin::new(&mut self.stream).poll_shutdown(cx)
     }
 }
 
 #[async_trait]
 impl<E: StreamAdapter> MockStream for TcpMockStream<E> {
     type StreamKey = E::StreamKey;
-
-    async fn send(&mut self, msg: Message) -> Result<()> {
-        let mut buf = bytes::BytesMut::new();
-        EncoderDecoder {}.encode(msg, &mut buf)?;
-        self.stream.write_all(&buf).await?;
-        self.stream.flush().await?;
-        Ok(())
-    }
-
-    /// Read a framed message from socket
-    ///
-    /// First try to decode whatever may be in the stream's buffer and if it's empty
-    /// or the frame hasn't been completely received, wait on the socket until the buffer
-    /// has all data. If the buffer has a full frame that can be decoded, return that without
-    /// calling the socket first.
-    async fn recv(&mut self) -> Result<Option<Message>> {
-        match (EncoderDecoder {}.decode(&mut self.buffer)) {
-            Ok(None) => {
-                if self.stream.read_buf(&mut self.buffer).await? == 0 {
-                    return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
-                }
-                self.recv().await
-            }
-            frame => frame,
-        }
-    }
 }
 
 struct EncoderDecoder {}
@@ -265,6 +270,48 @@ impl Encoder<Message> for EncoderDecoder {
     }
 }
 
+pub struct EncoderDecoderWithBuf<S> {
+    stream: S,
+    buffer: BytesMut,
+}
+
+impl<S: AsyncWrite + AsyncRead + Unpin> EncoderDecoderWithBuf<S> {
+    pub fn new(stream: S) -> EncoderDecoderWithBuf<S> {
+        EncoderDecoderWithBuf {
+            stream,
+            buffer: BytesMut::new(),
+        }
+    }
+
+    pub async fn send(&mut self, msg: Message) -> Result<()> {
+        let mut buf = bytes::BytesMut::new();
+        EncoderDecoder {}.encode(msg, &mut buf)?;
+        self.stream.write_all(&buf).await?;
+        self.stream.flush().await?;
+        Ok(())
+    }
+
+    /// Read a framed message from socket
+    ///
+    /// First try to decode whatever may be in the stream's buffer and if it's empty
+    /// or the frame hasn't been completely received, wait on the socket until the buffer
+    /// has all data. If the buffer has a full frame that can be decoded, return that without
+    /// calling the socket first.
+    pub async fn recv(&mut self) -> Result<Option<Message>> {
+        loop {
+            match (EncoderDecoder {}.decode(&mut self.buffer)) {
+                Ok(None) => {
+                    if self.stream.read_buf(&mut self.buffer).await? == 0 {
+                        return Err(io::Error::from(io::ErrorKind::UnexpectedEof).into());
+                    }
+                    continue;
+                }
+                frame => return frame,
+            }
+        }
+    }
+}
+
 impl AsBannableAddress for SocketAddr {
     type BannableAddress = IpAddr;
 
@@ -298,11 +345,12 @@ mod tests {
             TcpMockTransport::<E>::connect(&client_stream_key, server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
-        let mut server_stream = server_res.unwrap().0;
-        let mut peer_stream = peer_res.unwrap();
+        let server_stream = server_res.unwrap().0;
+        let peer_stream = peer_res.unwrap();
 
         let request_id = MockRequestId::new(1337u64);
         let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
+        let mut peer_stream = EncoderDecoderWithBuf::new(peer_stream);
         peer_stream
             .send(Message::Request {
                 request_id,
@@ -311,6 +359,7 @@ mod tests {
             .await
             .unwrap();
 
+        let mut server_stream = EncoderDecoderWithBuf::new(server_stream);
         assert_eq!(
             server_stream.recv().await.unwrap().unwrap(),
             Message::Request {
@@ -339,11 +388,12 @@ mod tests {
             TcpMockTransport::<E>::connect(&client_stream_key, server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
-        let mut server_stream = server_res.unwrap().0;
-        let mut peer_stream = peer_res.unwrap();
+        let server_stream = server_res.unwrap().0;
+        let peer_stream = peer_res.unwrap();
 
         let id_1 = MockRequestId::new(1337u64);
         let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
+        let mut peer_stream = EncoderDecoderWithBuf::new(peer_stream);
         peer_stream
             .send(Message::Request {
                 request_id: id_1,
@@ -361,6 +411,7 @@ mod tests {
             .await
             .unwrap();
 
+        let mut server_stream = EncoderDecoderWithBuf::new(server_stream);
         assert_eq!(
             server_stream.recv().await.unwrap().unwrap(),
             Message::Request {

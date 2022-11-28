@@ -25,12 +25,14 @@ use crate::{
     error::{P2pError, ProtocolError},
     net::{
         mock::{
-            transport::{MockStream, MockTransport},
+            transport::MockTransport,
             types::{self, MockEvent, MockPeerId, PeerEvent},
         },
         types::{Protocol, ProtocolType},
     },
 };
+
+use super::transport::EncoderDecoderWithBuf;
 
 pub enum Role {
     Inbound,
@@ -51,7 +53,7 @@ pub struct Peer<T: MockTransport> {
     role: Role,
 
     /// Peer socket
-    socket: T::Stream,
+    socket: EncoderDecoderWithBuf<T::Stream>,
 
     /// TX channel for communicating with backend
     tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
@@ -73,6 +75,7 @@ where
         tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
         rx: mpsc::Receiver<MockEvent>,
     ) -> Self {
+        let socket = EncoderDecoderWithBuf::new(socket);
         Self {
             local_peer_id,
             remote_peer_id,
@@ -233,8 +236,8 @@ mod tests {
         message,
         net::mock::{
             transport::{
-                ChannelMockTransport, IdentityStreamAdapter, MockListener, NoiseEncryptionAdapter,
-                TcpMockTransport,
+                ChannelMockTransport, IdentityStreamAdapter, MockListener, MockStream,
+                NoiseEncryptionAdapter, TcpMockTransport,
             },
             types,
         },
@@ -249,7 +252,7 @@ mod tests {
         A: MakeTestAddress<Address = T::Address>,
         T: MockTransport,
     {
-        let (socket1, mut socket2) = get_two_connected_sockets::<A, T>().await;
+        let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let config = Arc::new(common::chain::config::create_mainnet());
         let (tx1, mut rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
@@ -272,6 +275,7 @@ mod tests {
             peer
         });
 
+        let mut socket2 = EncoderDecoderWithBuf::new(socket2);
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
@@ -330,7 +334,7 @@ mod tests {
         A: MakeTestAddress<Address = T::Address>,
         T: MockTransport,
     {
-        let (socket1, mut socket2) = get_two_connected_sockets::<A, T>().await;
+        let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let config = Arc::new(common::chain::config::create_mainnet());
         let (tx1, mut rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
@@ -353,6 +357,7 @@ mod tests {
             peer
         });
 
+        let mut socket2 = EncoderDecoderWithBuf::new(socket2);
         if let Some(_message) = socket2.recv().await.unwrap() {
             assert!(socket2
                 .send(types::Message::Handshake(
@@ -414,7 +419,7 @@ mod tests {
         A: MakeTestAddress<Address = T::Address>,
         T: MockTransport,
     {
-        let (socket1, mut socket2) = get_two_connected_sockets::<A, T>().await;
+        let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let config = Arc::new(common::chain::config::create_mainnet());
         let (tx1, _rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
@@ -434,6 +439,7 @@ mod tests {
 
         let handle = tokio::spawn(async move { peer.handshake().await });
 
+        let mut socket2 = EncoderDecoderWithBuf::new(socket2);
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
@@ -476,7 +482,7 @@ mod tests {
         A: MakeTestAddress<Address = T::Address>,
         T: MockTransport,
     {
-        let (socket1, mut socket2) = get_two_connected_sockets::<A, T>().await;
+        let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let config = Arc::new(common::chain::config::create_mainnet());
         let (tx1, _rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
@@ -495,6 +501,7 @@ mod tests {
 
         let handle = tokio::spawn(async move { peer.handshake().await });
 
+        let mut socket2 = EncoderDecoderWithBuf::new(socket2);
         assert!(socket2.recv().now_or_never().is_none());
         socket2
             .send(types::Message::Request {

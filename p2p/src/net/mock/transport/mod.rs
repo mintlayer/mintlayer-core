@@ -22,6 +22,6 @@ pub use self::{
     tcp::adapter::{
         identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, StreamAdapter, StreamKey,
     },
-    tcp::TcpMockTransport,
+    tcp::{EncoderDecoderWithBuf, TcpMockTransport},
     traits::{MockListener, MockStream, MockTransport},
 };
