@@ -15,9 +15,11 @@
 
 use async_trait::async_trait;
 use snowstorm::NoiseStream;
-use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::{error::P2pError, net::mock::peer::Role};
+use crate::{
+    error::P2pError,
+    net::mock::{peer::Role, transport::MockStream},
+};
 
 use super::StreamAdapter;
 
@@ -30,20 +32,16 @@ pub struct NoiseEncryptionAdapter {
     local_key: snowstorm::Keypair,
 }
 
-impl NoiseEncryptionAdapter {
-    pub fn gen_new() -> Self {
+#[async_trait]
+impl<T: MockStream + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
+    type Stream = snowstorm::NoiseStream<T>;
+
+    fn new() -> Self {
         let local_key = snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
             .generate_keypair()
             .expect("key generation must succeed");
         Self { local_key }
     }
-}
-
-#[async_trait]
-impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> StreamAdapter<T>
-    for NoiseEncryptionAdapter
-{
-    type Stream = snowstorm::NoiseStream<T>;
 
     async fn handshake(&self, base: T, role: Role) -> crate::Result<Self::Stream> {
         let state = match role {
@@ -67,3 +65,5 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> StreamAdapter<T>
         Ok(stream)
     }
 }
+
+impl<T: MockStream> MockStream for snowstorm::NoiseStream<T> {}

@@ -13,18 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod identity;
-pub mod noise;
-
 use async_trait::async_trait;
-use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::{net::mock::peer::Role, Result};
+use crate::net::mock::{peer::Role, transport::MockStream};
+
+use super::StreamAdapter;
+
+#[derive(Debug)]
+pub struct IdentityStreamAdapter;
 
 #[async_trait]
-pub trait StreamAdapter<T>: Send {
-    type Stream: AsyncRead + AsyncWrite + Send + Unpin;
+impl<T: MockStream + 'static> StreamAdapter<T> for IdentityStreamAdapter {
+    type Stream = T;
 
-    /// Wraps base async stream into AsyncRead/AsyncWrite stream that may implement encryption.
-    async fn handshake(&self, base: T, role: Role) -> Result<Self::Stream>;
+    fn new() -> Self {
+        Self
+    }
+
+    async fn handshake(&self, base: T, _role: Role) -> crate::Result<Self::Stream> {
+        Ok(base)
+    }
 }
