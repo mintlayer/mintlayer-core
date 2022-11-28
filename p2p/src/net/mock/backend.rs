@@ -73,6 +73,9 @@ enum ConnectionState<T: MockTransport> {
 }
 
 pub struct Backend<T: MockTransport> {
+    /// Transport of the backend
+    transport: T,
+
     /// Socket address of the backend
     address: T::Address,
 
@@ -120,6 +123,7 @@ where
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        transport: T,
         address: T::Address,
         socket: T::Listener,
         config: Arc<ChainConfig>,
@@ -130,6 +134,7 @@ where
     ) -> Self {
         let local_peer_id = MockPeerId::from_socket_address::<T>(&address);
         Self {
+            transport,
             address,
             socket,
             cmd_rx,
@@ -161,7 +166,7 @@ where
             response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
         }
 
-        match timeout(self.timeout, T::connect(address.clone())).await {
+        match timeout(self.timeout, self.transport.connect(address.clone())).await {
             Ok(event) => match event {
                 Ok(socket) => self.create_peer(
                     socket,

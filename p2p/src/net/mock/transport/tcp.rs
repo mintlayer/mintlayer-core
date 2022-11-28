@@ -41,7 +41,13 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct TcpMockTransport {}
+pub struct TcpMockTransport;
+
+impl TcpMockTransport {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 #[async_trait]
 impl MockTransport for TcpMockTransport {
@@ -50,11 +56,15 @@ impl MockTransport for TcpMockTransport {
     type Listener = TcpMockListener;
     type Stream = TcpMockStream;
 
-    async fn bind(address: Self::Address) -> Result<Self::Listener> {
+    fn new() -> Self {
+        Self
+    }
+
+    async fn bind(&self, address: Self::Address) -> Result<Self::Listener> {
         TcpMockListener::new(address).await
     }
 
-    async fn connect(address: Self::Address) -> Result<Self::Stream> {
+    async fn connect(&self, address: Self::Address) -> Result<Self::Stream> {
         let stream = TcpStream::connect(address).await?;
         Ok(stream)
     }
@@ -220,9 +230,10 @@ mod tests {
 
     #[tokio::test]
     async fn send_recv() {
+        let transport = TcpMockTransport::new();
         let address = "[::1]:0".parse().unwrap();
-        let mut server = TcpMockTransport::bind(address).await.unwrap();
-        let peer_fut = TcpMockTransport::connect(server.local_address().unwrap());
+        let mut server = transport.bind(address).await.unwrap();
+        let peer_fut = transport.connect(server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let server_stream = server_res.unwrap().0;
@@ -251,9 +262,10 @@ mod tests {
 
     #[tokio::test]
     async fn send_2_reqs() {
+        let transport = TcpMockTransport::new();
         let address = "[::1]:0".parse().unwrap();
-        let mut server = TcpMockTransport::bind(address).await.unwrap();
-        let peer_fut = TcpMockTransport::connect(server.local_address().unwrap());
+        let mut server = transport.bind(address).await.unwrap();
+        let peer_fut = transport.connect(server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let server_stream = server_res.unwrap().0;

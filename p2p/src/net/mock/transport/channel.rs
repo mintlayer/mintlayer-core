@@ -43,7 +43,7 @@ static CONNECTIONS: Lazy<Mutex<BTreeMap<Address, UnboundedSender<Sender<DuplexSt
     Lazy::new(Default::default);
 
 #[derive(Debug)]
-pub struct ChannelMockTransport {}
+pub struct ChannelMockTransport;
 
 #[async_trait]
 impl MockTransport for ChannelMockTransport {
@@ -52,7 +52,11 @@ impl MockTransport for ChannelMockTransport {
     type Listener = ChannelMockListener;
     type Stream = ChannelMockStream;
 
-    async fn bind(address: Self::Address) -> Result<Self::Listener> {
+    fn new() -> Self {
+        Self
+    }
+
+    async fn bind(&self, address: Self::Address) -> Result<Self::Listener> {
         let mut connections = CONNECTIONS.lock().expect("Connections mutex is poisoned");
 
         let address = if address == ZERO_ADDRESS {
@@ -73,7 +77,7 @@ impl MockTransport for ChannelMockTransport {
         Ok(Self::Listener { address, receiver })
     }
 
-    async fn connect(address: Self::Address) -> Result<Self::Stream> {
+    async fn connect(&self, address: Self::Address) -> Result<Self::Stream> {
         // A connection can only be established to a known address.
         assert_ne!(ZERO_ADDRESS, address);
 
@@ -156,9 +160,10 @@ mod tests {
 
     #[tokio::test]
     async fn send_recv() {
+        let transport = ChannelMockTransport::new();
         let address = 0;
-        let mut server = ChannelMockTransport::bind(address).await.unwrap();
-        let peer_fut = ChannelMockTransport::connect(server.local_address().unwrap());
+        let mut server = transport.bind(address).await.unwrap();
+        let peer_fut = transport.connect(server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let server_stream = server_res.unwrap().0;

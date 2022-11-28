@@ -25,7 +25,7 @@ use crate::{
 
 /// An abstraction layer for creating and opening connections.
 #[async_trait]
-pub trait MockTransport: Send + 'static {
+pub trait MockTransport: Send + Sync + 'static {
     /// An address type.
     type Address: Clone
         + Debug
@@ -47,11 +47,14 @@ pub trait MockTransport: Send + 'static {
     /// A messages stream.
     type Stream: MockStream;
 
+    /// Creates a new transport.
+    fn new() -> Self;
+
     /// Creates a new listener bound to the specified address.
-    async fn bind(address: Self::Address) -> Result<Self::Listener>;
+    async fn bind(&self, address: Self::Address) -> Result<Self::Listener>;
 
     /// Open a connection to the given address.
-    async fn connect(address: Self::Address) -> Result<Self::Stream>;
+    async fn connect(&self, address: Self::Address) -> Result<Self::Stream>;
 }
 
 /// An abstraction layer over some kind of network connection.

@@ -514,9 +514,10 @@ mod tests {
         A: MakeTestAddress<Address = T::Address>,
         T: MockTransport,
     {
+        let transport = T::new();
         let addr = A::make_address();
-        let mut server = T::bind(addr).await.unwrap();
-        let peer_fut = T::connect(server.local_address().unwrap());
+        let mut server = transport.bind(addr).await.unwrap();
+        let peer_fut = transport.connect(server.local_address().unwrap());
 
         let (res1, res2) = tokio::join!(server.accept(), peer_fut);
         (res1.unwrap().0, res2.unwrap())

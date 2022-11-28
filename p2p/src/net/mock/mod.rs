@@ -109,10 +109,7 @@ where
 }
 
 #[async_trait]
-impl<T> NetworkingService for MockService<T>
-where
-    T: MockTransport,
-{
+impl<T: MockTransport> NetworkingService for MockService<T> {
     type Address = T::Address;
     type BannableAddress = T::BannableAddress;
     type PeerId = MockPeerId;
@@ -126,15 +123,17 @@ where
         config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
+        let transport = T::new();
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (sync_tx, sync_rx) = mpsc::channel(16);
-        let socket = T::bind(addr).await?;
+        let socket = transport.bind(addr).await?;
         let local_addr = socket.local_address().expect("to have bind address available");
 
         let address = local_addr.clone();
         tokio::spawn(async move {
             let mut backend = backend::Backend::<T>::new(
+                transport,
                 address,
                 socket,
                 Arc::clone(&config),
