@@ -19,38 +19,23 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{error::P2pError, net::mock::peer::Role};
 
-use super::{StreamAdapter, StreamKey};
+use super::StreamAdapter;
 
 static NOISE_HANDSHAKE_PATTERN: &str = "Noise_XX_25519_ChaChaPoly_SHA256";
 
 static NOISE_HANDSHAKE_PARAMS: once_cell::sync::Lazy<snowstorm::NoiseParams> =
     once_cell::sync::Lazy::new(|| NOISE_HANDSHAKE_PATTERN.parse().expect("valid pattern"));
 
-#[derive(Debug)]
-pub struct NoiseEncryptionAdapter {}
-
-pub struct NoiseStreamKey {
+pub struct NoiseEncryptionAdapter {
     local_key: snowstorm::Keypair,
 }
 
-impl Clone for NoiseStreamKey {
-    fn clone(&self) -> Self {
-        Self {
-            // snowstorm::Keypair does not implement Clone, clone it manually.
-            local_key: snowstorm::Keypair {
-                private: self.local_key.private.clone(),
-                public: self.local_key.public.clone(),
-            },
-        }
-    }
-}
-
-impl StreamKey for NoiseStreamKey {
-    fn gen_new() -> Self {
+impl NoiseEncryptionAdapter {
+    pub fn gen_new() -> Self {
         let local_key = snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
             .generate_keypair()
             .expect("key generation must succeed");
-        NoiseStreamKey { local_key }
+        Self { local_key }
     }
 }
 
@@ -60,20 +45,14 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> StreamAdapter<T>
 {
     type Stream = snowstorm::NoiseStream<T>;
 
-    type StreamKey = NoiseStreamKey;
-
-    async fn handshake(
-        stream_key: &Self::StreamKey,
-        base: T,
-        role: Role,
-    ) -> crate::Result<Self::Stream> {
+    async fn handshake(&self, base: T, role: Role) -> crate::Result<Self::Stream> {
         let state = match role {
             Role::Outbound => snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
-                .local_private_key(&stream_key.local_key.private)
+                .local_private_key(&self.local_key.private)
                 .build_initiator()
                 .expect("snowstorm builder must succeed"),
             Role::Inbound => snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
-                .local_private_key(&stream_key.local_key.private)
+                .local_private_key(&self.local_key.private)
                 .build_responder()
                 .expect("snowstorm builder must succeed"),
         };

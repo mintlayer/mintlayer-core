@@ -18,19 +18,16 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::net::mock::peer::Role;
 
-use super::{StreamAdapter, StreamKey};
-
-#[derive(Clone)]
-pub struct IdentityStreamKey {}
-
-impl StreamKey for IdentityStreamKey {
-    fn gen_new() -> Self {
-        IdentityStreamKey {}
-    }
-}
+use super::StreamAdapter;
 
 #[derive(Debug)]
-pub struct IdentityStreamAdapter {}
+pub struct IdentityStreamAdapter;
+
+impl IdentityStreamAdapter {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 #[async_trait]
 impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> StreamAdapter<T>
@@ -38,13 +35,7 @@ impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> StreamAdapter<T>
 {
     type Stream = T;
 
-    type StreamKey = IdentityStreamKey;
-
-    async fn handshake(
-        _stream_key: &Self::StreamKey,
-        base: T,
-        _role: Role,
-    ) -> crate::Result<Self::Stream> {
+    async fn handshake(&self, base: T, _role: Role) -> crate::Result<Self::Stream> {
         Ok(base)
     }
 }
