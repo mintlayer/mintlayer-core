@@ -13,15 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod adapter;
 mod channel;
 mod tcp;
 mod traits;
 
 pub use self::{
-    channel::{ChannelMockListener, ChannelMockStream, ChannelMockTransport},
-    tcp::adapter::{
+    adapter::{
         identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, StreamAdapter, StreamKey,
     },
+    channel::{ChannelMockListener, ChannelMockStream, ChannelMockTransport},
     tcp::{EncoderDecoderWithBuf, TcpMockTransport},
     traits::{MockListener, MockStream, MockTransport},
 };

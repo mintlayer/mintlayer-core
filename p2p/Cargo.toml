@@ -44,11 +44,7 @@ name = "backend_libp2p"
 harness = false
 
 [[test]]
-name = "backend_mock_tcp_cleartext"
-harness = false
-
-[[test]]
-name = "backend_mock_tcp_noise"
+name = "backend_mock_tcp"
 harness = false
 
 [[test]]

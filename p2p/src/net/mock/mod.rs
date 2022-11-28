@@ -35,7 +35,7 @@ use crate::{
     net::{
         mock::{
             constants::ANNOUNCEMENT_MAX_SIZE,
-            transport::{MockListener, MockStream, MockTransport},
+            transport::{MockListener, MockTransport},
             types::{MockMessageId, MockPeerId, MockPeerInfo, MockRequestId},
         },
         types::{ConnectivityEvent, PeerInfo, PubSubTopic, SyncingEvent, ValidationResult},
@@ -126,21 +126,16 @@ where
         config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
-        use transport::StreamKey;
-
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (sync_tx, sync_rx) = mpsc::channel(16);
-        // TODO: Check the data directory first, and use keys from there if available
-        let stream_key = <<T as MockTransport>::Stream as MockStream>::StreamKey::gen_new();
-        let socket = T::bind(&stream_key, addr).await?;
+        let socket = T::bind(addr).await?;
         let local_addr = socket.local_address().expect("to have bind address available");
 
         let address = local_addr.clone();
         tokio::spawn(async move {
             let mut backend = backend::Backend::<T>::new(
                 address,
-                stream_key,
                 socket,
                 Arc::clone(&config),
                 cmd_rx,
@@ -381,10 +376,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        transport::{IdentityStreamAdapter, NoiseEncryptionAdapter},
-        *,
-    };
+    use super::*;
     use crate::net::{
         self,
         mock::transport::{ChannelMockTransport, TcpMockTransport},
@@ -447,13 +439,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn connect_to_remote_tcp_cleartext() {
-        connect_to_remote::<MakeTcpAddress, TcpMockTransport<IdentityStreamAdapter>>().await;
-    }
-
-    #[tokio::test]
-    async fn connect_to_remote_tcp_noise() {
-        connect_to_remote::<MakeTcpAddress, TcpMockTransport<NoiseEncryptionAdapter>>().await;
+    async fn connect_to_remote_tcp() {
+        connect_to_remote::<MakeTcpAddress, TcpMockTransport>().await;
     }
 
     #[tokio::test]
@@ -514,13 +501,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn accept_incoming_tcp_cleartext() {
-        accept_incoming::<MakeTcpAddress, TcpMockTransport<IdentityStreamAdapter>>().await;
-    }
-
-    #[tokio::test]
-    async fn accept_incoming_tcp_noise() {
-        accept_incoming::<MakeTcpAddress, TcpMockTransport<NoiseEncryptionAdapter>>().await;
+    async fn accept_incoming_tcp() {
+        accept_incoming::<MakeTcpAddress, TcpMockTransport>().await;
     }
 
     #[tokio::test]
@@ -563,13 +545,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn disconnect_tcp_cleartext() {
-        disconnect::<MakeTcpAddress, TcpMockTransport<IdentityStreamAdapter>>().await;
-    }
-
-    #[tokio::test]
-    async fn disconnect_tcp_noise() {
-        disconnect::<MakeTcpAddress, TcpMockTransport<NoiseEncryptionAdapter>>().await;
+    async fn disconnect_tcp() {
+        disconnect::<MakeTcpAddress, TcpMockTransport>().await;
     }
 
     #[tokio::test]

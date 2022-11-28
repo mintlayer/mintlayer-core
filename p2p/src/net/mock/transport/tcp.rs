@@ -15,22 +15,14 @@
 
 use std::{
     io,
-    marker::PhantomData,
     net::{IpAddr, SocketAddr},
-    pin::Pin,
-    sync::Arc,
-    time::Duration,
 };
-
-pub mod adapter;
 
 use async_trait::async_trait;
 use bytes::{Buf, BytesMut};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{TcpListener, TcpStream},
-    sync::mpsc::UnboundedReceiver,
-    time::timeout,
 };
 use tokio_util::codec::{Decoder, Encoder};
 
@@ -40,7 +32,6 @@ use crate::{
     constants::MAX_MESSAGE_SIZE,
     net::{
         mock::{
-            peer::Role,
             transport::{MockListener, MockStream, MockTransport},
             types::Message,
         },
@@ -49,162 +40,55 @@ use crate::{
     P2pError, Result,
 };
 
-use self::adapter::StreamAdapter;
-
-// How much time is allowed to spend setting up (optionally) encrypted stream.
-const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
-
 #[derive(Debug)]
-pub struct TcpMockTransport<E: StreamAdapter>(PhantomData<E>);
+pub struct TcpMockTransport {}
 
 #[async_trait]
-impl<E: StreamAdapter + 'static> MockTransport for TcpMockTransport<E> {
+impl MockTransport for TcpMockTransport {
     type Address = SocketAddr;
     type BannableAddress = IpAddr;
-    type Listener = TcpMockListener<E>;
-    type Stream = TcpMockStream<E>;
+    type Listener = TcpMockListener;
+    type Stream = TcpMockStream;
 
-    async fn bind(
-        stream_key: &<<Self as MockTransport>::Stream as MockStream>::StreamKey,
-        address: Self::Address,
-    ) -> Result<Self::Listener> {
-        TcpMockListener::start(stream_key.clone(), address).await
+    async fn bind(address: Self::Address) -> Result<Self::Listener> {
+        TcpMockListener::new(address).await
     }
 
-    async fn connect(
-        stream_key: &<<Self as MockTransport>::Stream as MockStream>::StreamKey,
-        address: Self::Address,
-    ) -> Result<Self::Stream> {
-        let base = TcpStream::connect(address).await?;
-        let stream = TcpMockStream::new(stream_key, base, Role::Outbound).await?;
+    async fn connect(address: Self::Address) -> Result<Self::Stream> {
+        let stream = TcpStream::connect(address).await?;
         Ok(stream)
     }
 }
 
-pub struct TcpMockListener<E: StreamAdapter> {
-    receiver: UnboundedReceiver<(TcpMockStream<E>, SocketAddr)>,
-    local_address: SocketAddr,
-    join_handle: tokio::task::JoinHandle<()>,
-    _phantom: PhantomData<E>,
+pub struct TcpMockListener {
+    listener: TcpListener,
 }
 
-impl<E: StreamAdapter + 'static> TcpMockListener<E> {
-    async fn start(stream_key: E::StreamKey, address: SocketAddr) -> Result<Self> {
+impl TcpMockListener {
+    async fn new(address: SocketAddr) -> Result<Self> {
         let listener = TcpListener::bind(address).await?;
-        let local_address = listener.local_addr()?;
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
-        // Process new connections in background because MockListener::accept must be cancel safe.
-        let stream_key = Arc::new(stream_key);
-        let join_handle = tokio::spawn(async move {
-            loop {
-                let (socket, socket_addr) = match listener.accept().await {
-                    Ok(socket) => socket,
-                    Err(err) => {
-                        logging::log::error!("TCP accept failed unexpectedly: {}", err);
-                        return;
-                    }
-                };
-                let sender = sender.clone();
-                let stream_key = Arc::clone(&stream_key);
-                tokio::spawn(async move {
-                    let res = timeout(
-                        HANDSHAKE_TIMEOUT,
-                        TcpMockStream::<E>::new(&stream_key, socket, Role::Inbound),
-                    )
-                    .await;
-                    let socket = match res {
-                        Ok(Ok(socket)) => socket,
-                        Ok(Err(err)) => {
-                            logging::log::warn!("encryption handshake failed: {}", err);
-                            return;
-                        }
-                        Err(err) => {
-                            logging::log::warn!("encryption handshake timed out: {}", err);
-                            return;
-                        }
-                    };
-                    // It's not an error if the channel is already closed
-                    _ = sender.send((socket, socket_addr));
-                });
-            }
-        });
-
-        Ok(Self {
-            receiver,
-            local_address,
-            join_handle,
-            _phantom: PhantomData,
-        })
-    }
-}
-
-impl<E: StreamAdapter> Drop for TcpMockListener<E> {
-    fn drop(&mut self) {
-        self.join_handle.abort();
+        Ok(Self { listener })
     }
 }
 
 #[async_trait]
-impl<E: StreamAdapter> MockListener<TcpMockStream<E>, SocketAddr> for TcpMockListener<E> {
-    async fn accept(&mut self) -> Result<(TcpMockStream<E>, SocketAddr)> {
-        self.receiver.recv().await.ok_or(P2pError::ChannelClosed)
+impl MockListener<TcpMockStream, SocketAddr> for TcpMockListener {
+    async fn accept(&mut self) -> Result<(TcpMockStream, SocketAddr)> {
+        let (stream, address) = self.listener.accept().await?;
+        Ok((stream, address))
     }
 
     fn local_address(&self) -> Result<SocketAddr> {
-        Ok(self.local_address)
+        let local_addr = self.listener.local_addr()?;
+        Ok(local_addr)
     }
 }
 
-pub struct TcpMockStream<E: StreamAdapter> {
-    stream: E::Stream,
-}
-
-impl<E: StreamAdapter> TcpMockStream<E> {
-    async fn new(stream_key: &E::StreamKey, base: TcpStream, role: Role) -> Result<Self> {
-        let stream = E::handshake(stream_key, base, role).await?;
-        Ok(Self { stream })
-    }
-}
-
-impl<E: StreamAdapter> AsyncRead for TcpMockStream<E> {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> std::task::Poll<io::Result<()>> {
-        Pin::new(&mut self.stream).poll_read(cx, buf)
-    }
-}
-
-impl<E: StreamAdapter> AsyncWrite for TcpMockStream<E> {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &[u8],
-    ) -> std::task::Poll<std::result::Result<usize, io::Error>> {
-        Pin::new(&mut self.stream).poll_write(cx, buf)
-    }
-
-    fn poll_flush(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<std::result::Result<(), io::Error>> {
-        Pin::new(&mut self.stream).poll_flush(cx)
-    }
-
-    fn poll_shutdown(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<std::result::Result<(), io::Error>> {
-        Pin::new(&mut self.stream).poll_shutdown(cx)
-    }
-}
+pub type TcpMockStream = TcpStream;
 
 #[async_trait]
-impl<E: StreamAdapter> MockStream for TcpMockStream<E> {
-    type StreamKey = E::StreamKey;
-}
+impl MockStream for TcpMockStream {}
 
 struct EncoderDecoder {}
 
@@ -328,21 +212,17 @@ impl IsBannableAddress for SocketAddr {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        adapter::identity::IdentityStreamAdapter, adapter::noise::NoiseEncryptionAdapter, *,
-    };
+    use super::*;
     use crate::net::{
         message::{BlockListRequest, Request},
-        mock::{transport::StreamKey, types::MockRequestId},
+        mock::types::MockRequestId,
     };
 
-    async fn test_send_recv<E: StreamAdapter + 'static>() {
+    #[tokio::test]
+    async fn send_recv() {
         let address = "[::1]:0".parse().unwrap();
-        let mut server =
-            TcpMockTransport::<E>::bind(&E::StreamKey::gen_new(), address).await.unwrap();
-        let client_stream_key = E::StreamKey::gen_new();
-        let peer_fut =
-            TcpMockTransport::<E>::connect(&client_stream_key, server.local_address().unwrap());
+        let mut server = TcpMockTransport::bind(address).await.unwrap();
+        let peer_fut = TcpMockTransport::connect(server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let server_stream = server_res.unwrap().0;
@@ -370,22 +250,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn send_recv_cleartext() {
-        test_send_recv::<IdentityStreamAdapter>().await;
-    }
-
-    #[tokio::test]
-    async fn send_recv_noise() {
-        test_send_recv::<NoiseEncryptionAdapter>().await;
-    }
-
-    async fn test_send_2_reqs<E: StreamAdapter + 'static>() {
+    async fn send_2_reqs() {
         let address = "[::1]:0".parse().unwrap();
-        let mut server =
-            TcpMockTransport::<E>::bind(&E::StreamKey::gen_new(), address).await.unwrap();
-        let client_stream_key = E::StreamKey::gen_new();
-        let peer_fut =
-            TcpMockTransport::<E>::connect(&client_stream_key, server.local_address().unwrap());
+        let mut server = TcpMockTransport::bind(address).await.unwrap();
+        let peer_fut = TcpMockTransport::connect(server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let server_stream = server_res.unwrap().0;
@@ -426,15 +294,5 @@ mod tests {
                 request,
             }
         );
-    }
-
-    #[tokio::test]
-    async fn send_2_reqs_cleartext() {
-        test_send_2_reqs::<IdentityStreamAdapter>().await;
-    }
-
-    #[tokio::test]
-    async fn send_2_reqs_noise() {
-        test_send_2_reqs::<NoiseEncryptionAdapter>().await;
     }
 }

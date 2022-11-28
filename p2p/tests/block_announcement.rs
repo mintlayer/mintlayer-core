@@ -26,10 +26,7 @@ use p2p::{
     net::{
         libp2p::Libp2pService,
         mock::{
-            transport::{
-                ChannelMockTransport, IdentityStreamAdapter, NoiseEncryptionAdapter,
-                TcpMockTransport,
-            },
+            transport::{ChannelMockTransport, TcpMockTransport},
             MockService,
         },
         types::{PubSubTopic, SyncingEvent, ValidationResult},
@@ -187,23 +184,8 @@ async fn block_announcement_3_peers_libp2p() {
 // TODO: Implement announcements resending in partially connected networks.
 #[ignore]
 #[tokio::test]
-async fn block_announcement_3_peers_tcp_cleartext() {
-    block_announcement_3_peers::<
-        MakeTcpAddress,
-        MockService<TcpMockTransport<IdentityStreamAdapter>>,
-    >()
-    .await;
-}
-
-// TODO: Implement announcements resending in partially connected networks.
-#[ignore]
-#[tokio::test]
-async fn block_announcement_3_peers_tcp_noise() {
-    block_announcement_3_peers::<
-        MakeTcpAddress,
-        MockService<TcpMockTransport<NoiseEncryptionAdapter>>,
-    >()
-    .await;
+async fn block_announcement_3_peers_tcp() {
+    block_announcement_3_peers::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
 }
 
 // TODO: Implement announcements resending in partially connected networks.

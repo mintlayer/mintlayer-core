@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, io, pin::Pin, sync::Mutex};
+use std::{collections::BTreeMap, sync::Mutex};
 
 use async_trait::async_trait;
 use once_cell::sync::Lazy;
 use tokio::{
-    io::{AsyncRead, AsyncWrite, DuplexStream},
+    io::DuplexStream,
     sync::{
         mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
         oneshot::{self, Sender},
@@ -33,9 +33,6 @@ use crate::{
     },
     P2pError, Result,
 };
-
-// We need something that implements StreamKey, IdentityStreamKey from tcp::adapter works as well.
-use super::tcp::adapter::identity::IdentityStreamKey;
 
 type Address = u64;
 
@@ -55,10 +52,7 @@ impl MockTransport for ChannelMockTransport {
     type Listener = ChannelMockListener;
     type Stream = ChannelMockStream;
 
-    async fn bind(
-        _stream_key: &<<Self as MockTransport>::Stream as MockStream>::StreamKey,
-        address: Self::Address,
-    ) -> Result<Self::Listener> {
+    async fn bind(address: Self::Address) -> Result<Self::Listener> {
         let mut connections = CONNECTIONS.lock().expect("Connections mutex is poisoned");
 
         let address = if address == ZERO_ADDRESS {
@@ -79,10 +73,7 @@ impl MockTransport for ChannelMockTransport {
         Ok(Self::Listener { address, receiver })
     }
 
-    async fn connect(
-        _stream_key: &<<Self as MockTransport>::Stream as MockStream>::StreamKey,
-        address: Self::Address,
-    ) -> Result<Self::Stream> {
+    async fn connect(address: Self::Address) -> Result<Self::Stream> {
         // A connection can only be established to a known address.
         assert_ne!(ZERO_ADDRESS, address);
 
@@ -98,7 +89,7 @@ impl MockTransport for ChannelMockTransport {
             .map_err(|_| P2pError::DialError(DialError::NoAddresses))?;
         let channel = connect_receiver.await.map_err(|_| P2pError::ChannelClosed)?;
 
-        Ok(Self::Stream { channel })
+        Ok(channel)
     }
 }
 
@@ -115,7 +106,7 @@ impl MockListener<ChannelMockStream, Address> for ChannelMockListener {
         let (server, client) = tokio::io::duplex(10 * 1024 * 1024);
         response_sender.send(client).map_err(|_| P2pError::ChannelClosed)?;
 
-        Ok((ChannelMockStream { channel: server }, self.address))
+        Ok((server, self.address))
     }
 
     fn local_address(&self) -> Result<Address> {
@@ -133,49 +124,10 @@ impl Drop for ChannelMockListener {
     }
 }
 
-pub struct ChannelMockStream {
-    channel: tokio::io::DuplexStream,
-}
-
-impl AsyncRead for ChannelMockStream {
-    fn poll_read(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> std::task::Poll<io::Result<()>> {
-        Pin::new(&mut self.channel).poll_read(cx, buf)
-    }
-}
-
-impl AsyncWrite for ChannelMockStream {
-    fn poll_write(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &[u8],
-    ) -> std::task::Poll<std::result::Result<usize, io::Error>> {
-        Pin::new(&mut self.channel).poll_write(cx, buf)
-    }
-
-    fn poll_flush(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<std::result::Result<(), io::Error>> {
-        Pin::new(&mut self.channel).poll_flush(cx)
-    }
-
-    fn poll_shutdown(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<std::result::Result<(), io::Error>> {
-        Pin::new(&mut self.channel).poll_shutdown(cx)
-    }
-}
+pub type ChannelMockStream = tokio::io::DuplexStream;
 
 #[async_trait]
-impl MockStream for ChannelMockStream {
-    // TODO(PR): Replace ChannelMockStream with plain DuplexStream
-    type StreamKey = IdentityStreamKey;
-}
+impl MockStream for ChannelMockStream {}
 
 impl AsBannableAddress for Address {
     type BannableAddress = Address;
@@ -197,7 +149,7 @@ mod tests {
     use crate::net::{
         message::{BlockListRequest, Request},
         mock::{
-            transport::{EncoderDecoderWithBuf, StreamKey},
+            transport::EncoderDecoderWithBuf,
             types::{Message, MockRequestId},
         },
     };
@@ -205,11 +157,8 @@ mod tests {
     #[tokio::test]
     async fn send_recv() {
         let address = 0;
-        let mut server = ChannelMockTransport::bind(&IdentityStreamKey::gen_new(), address)
-            .await
-            .unwrap();
-        let client_key = IdentityStreamKey::gen_new();
-        let peer_fut = ChannelMockTransport::connect(&client_key, server.local_address().unwrap());
+        let mut server = ChannelMockTransport::bind(address).await.unwrap();
+        let peer_fut = ChannelMockTransport::connect(server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let server_stream = server_res.unwrap().0;

@@ -56,8 +56,6 @@ use crate::{
     },
 };
 
-use super::transport::MockStream;
-
 #[derive(Debug)]
 struct PeerContext {
     _peer_id: MockPeerId,
@@ -77,8 +75,6 @@ enum ConnectionState<T: MockTransport> {
 pub struct Backend<T: MockTransport> {
     /// Socket address of the backend
     address: T::Address,
-
-    stream_key: <<T as MockTransport>::Stream as MockStream>::StreamKey,
 
     /// Socket for listening to incoming connections
     socket: T::Listener,
@@ -125,7 +121,6 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         address: T::Address,
-        stream_key: <<T as MockTransport>::Stream as MockStream>::StreamKey,
         socket: T::Listener,
         config: Arc<ChainConfig>,
         cmd_rx: mpsc::Receiver<Command<T>>,
@@ -136,7 +131,6 @@ where
         let local_peer_id = MockPeerId::from_socket_address::<T>(&address);
         Self {
             address,
-            stream_key,
             socket,
             cmd_rx,
             conn_tx,
@@ -167,7 +161,7 @@ where
             response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
         }
 
-        match timeout(self.timeout, T::connect(&self.stream_key, address.clone())).await {
+        match timeout(self.timeout, T::connect(address.clone())).await {
             Ok(event) => match event {
                 Ok(socket) => self.create_peer(
                     socket,
