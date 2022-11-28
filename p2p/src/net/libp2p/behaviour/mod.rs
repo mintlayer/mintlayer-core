@@ -25,6 +25,7 @@ use std::{
     num::NonZeroU32,
     sync::Arc,
     task::{Context, Poll, Waker},
+    time::Duration,
 };
 
 use libp2p::{
@@ -58,7 +59,7 @@ use crate::{
         },
         constants::{
             GOSSIPSUB_HEARTBEAT, GOSSIPSUB_MAX_TRANSMIT_SIZE, PING_INTERVAL, PING_MAX_RETRIES,
-            PING_TIMEOUT, REQ_RESP_TIMEOUT,
+            PING_TIMEOUT,
         },
         types::{self, ConnectivityEvent, Libp2pBehaviourEvent, SyncingEvent},
     },
@@ -107,7 +108,7 @@ pub type Libp2pNetworkBehaviourAction = NetworkBehaviourAction<
 
 impl Libp2pBehaviour {
     pub async fn new(
-        config: Arc<ChainConfig>,
+        chain_config: Arc<ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
         id_keys: identity::Keypair,
     ) -> Self {
@@ -119,16 +120,18 @@ impl Libp2pBehaviour {
             .build()
             .expect("configuration to be valid");
 
-        let version = config.version();
+        let version = chain_config.version();
         let protocol = format!(
             "/mintlayer/{}.{}.{}-{:x}",
             version.major,
             version.minor,
             version.patch,
-            config.magic_bytes_as_u32(),
+            chain_config.magic_bytes_as_u32(),
         );
         let mut req_cfg = RequestResponseConfig::default();
-        req_cfg.set_request_timeout(REQ_RESP_TIMEOUT);
+        req_cfg.set_request_timeout(Duration::from_secs(
+            p2p_config.response_timeout.clone().into(),
+        ));
 
         let behaviour = Libp2pBehaviour {
             ping: ping::Behaviour::new(
