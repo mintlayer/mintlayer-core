@@ -50,3 +50,7 @@ harness = false
 [[test]]
 name = "backend_mock_channels"
 harness = false
+
+[[test]]
+name = "backend_mock_noise"
+harness = false

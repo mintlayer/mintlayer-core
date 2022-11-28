@@ -32,6 +32,12 @@ pub struct NoiseEncryptionAdapter {
     local_key: snowstorm::Keypair,
 }
 
+impl std::fmt::Debug for NoiseEncryptionAdapter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NoiseEncryptionAdapter").finish()
+    }
+}
+
 #[async_trait]
 impl<T: MockStream + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
     type Stream = snowstorm::NoiseStream<T>;

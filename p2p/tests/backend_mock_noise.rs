@@ -13,20 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod adapted;
-mod channel;
-mod codec;
-mod stream_adapter;
-mod tcp;
-mod traits;
-
-pub use self::{
-    adapted::AdaptedMockTransport,
-    channel::{ChannelMockListener, ChannelMockStream, ChannelMockTransport},
-    codec::EncoderDecoderWithBuf,
-    stream_adapter::{
-        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, StreamAdapter,
-    },
-    tcp::TcpMockTransport,
-    traits::{MockListener, MockStream, MockTransport},
+use p2p::net::mock::{
+    transport::{AdaptedMockTransport, NoiseEncryptionAdapter, TcpMockTransport},
+    MockService,
 };
+use p2p_test_utils::MakeTcpAddress;
+
+fn main() {
+    p2p_backend_test_suite::run::<
+        MakeTcpAddress,
+        MockService<AdaptedMockTransport<NoiseEncryptionAdapter, TcpMockTransport>>,
+    >();
+}
