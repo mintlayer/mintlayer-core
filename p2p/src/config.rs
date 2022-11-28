@@ -61,6 +61,8 @@ pub struct P2pConfig {
     pub outbound_connection_timeout: OutboundConnectionTimeout,
     /// Multicast DNS configuration.
     pub mdns_config: MdnsConfigSetting,
-    /// The `BlockSyncManager` response timeout value in seconds.
-    pub sync_manager_response_timeout: SyncManagerResponseTimeout,
+    /// The response timeout value in seconds.
+    ///
+    /// The peers that failed to respond before this timeout are disconnected.
+    pub response_timeout: SyncManagerResponseTimeout,
 }
