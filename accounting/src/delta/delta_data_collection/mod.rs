@@ -33,16 +33,6 @@ pub enum DataDelta<T: Clone> {
     Delete(Box<T>),
 }
 
-impl<T: Clone> DataDelta<T> {
-    pub fn data(&self) -> &Box<T> {
-        match self {
-            DataDelta::Create(d) => d,
-            DataDelta::Modify((_, d)) => d,
-            DataDelta::Delete(d) => d,
-        }
-    }
-}
-
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub enum DeltaMapElement<T: Clone> {
     Delta(DataDelta<T>),
@@ -62,7 +52,6 @@ impl<K: Ord + Copy, T: Clone> DeltaDataCollection<K, T> {
         }
     }
 
-    // FIXME: is it valid to skip undos?
     pub fn get_data_delta(&self, key: &K) -> Option<&DataDelta<T>> {
         match self.data.get(key) {
             Some(el) => match el {
@@ -89,10 +78,7 @@ impl<K: Ord + Copy, T: Clone> DeltaDataCollection<K, T> {
             .into_iter()
             .filter_map(|(key, other_pool_data)| {
                 match self.merge_delta_data_element_impl(key, other_pool_data) {
-                    Ok(delta_op) => match delta_op {
-                        Some(d) => Some(Ok((key, d))),
-                        None => None,
-                    },
+                    Ok(delta_op) => delta_op.map(|d| Ok((key, d))),
                     Err(e) => Some(Err(e)),
                 }
             })

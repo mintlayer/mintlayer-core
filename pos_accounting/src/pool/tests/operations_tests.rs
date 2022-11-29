@@ -55,8 +55,8 @@ fn create_pool_decomission_pool_undo_merge(#[case] seed: Seed) {
     let mut delta2 = PoSAccountingDelta::from_borrowed_parent(&delta1);
     delta2.undo(undo).unwrap();
 
-    let _ = delta1.batch_write_delta(delta2.consume()).unwrap();
-    let _ = db.batch_write_delta(delta1.consume()).unwrap();
+    delta1.batch_write_delta(delta2.consume()).unwrap();
+    db.batch_write_delta(delta1.consume()).unwrap();
 
     let expected_data = PoSAccountingData {
         pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, pledge_amount))]),
@@ -88,14 +88,14 @@ fn create_pool_decomission_pool_merge_undo_merge(#[case] seed: Seed) {
     let mut delta1 = PoSAccountingDelta::from_borrowed_parent(&db);
     let undo = delta1.decommission_pool(pool_id).unwrap();
 
-    let _ = db.batch_write_delta(delta1.consume()).unwrap();
+    db.batch_write_delta(delta1.consume()).unwrap();
 
     {
         let mut db = PoSAccountingDBMut::new(&mut storage);
         let mut delta2 = PoSAccountingDelta::from_borrowed_parent(&db);
         delta2.undo(undo).unwrap();
 
-        let _ = db.batch_write_delta(delta2.consume()).unwrap();
+        db.batch_write_delta(delta2.consume()).unwrap();
 
         let expected_data = PoSAccountingData {
             pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, pledge_amount))]),
@@ -108,4 +108,4 @@ fn create_pool_decomission_pool_merge_undo_merge(#[case] seed: Seed) {
     }
 }
 
-// FIXME: more tests here
+// TODO: more tests with operations here

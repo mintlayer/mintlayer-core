@@ -127,7 +127,7 @@ fn create_pool_flush_undo(#[case] seed: Seed) {
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pub_key, delta_undo) = create_pool(&mut rng, &mut delta, pledged_amount).unwrap();
 
-    let _ = db.batch_write_delta(delta.consume()).unwrap();
+    db.batch_write_delta(delta.consume()).unwrap();
 
     let expected_storage = PoSAccountingData {
         pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
@@ -163,7 +163,7 @@ fn create_pool_undo_flush(#[case] seed: Seed) {
 
     delta.undo(delta_undo).unwrap();
 
-    let _ = db.batch_write_delta(delta.consume()).unwrap();
+    db.batch_write_delta(delta.consume()).unwrap();
     assert_eq!(storage.dump(), PoSAccountingData::new());
 }
 
@@ -692,7 +692,7 @@ fn spend_share_delta_flush_undo(#[case] seed: Seed) {
         db.batch_write_delta(new_delta.consume()).unwrap();
 
         let expected_storage = PoSAccountingData {
-            pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key.clone(), pledged_amount))]),
+            pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
             pool_balances: BTreeMap::from([(
                 pool_id,
                 (pledged_amount + delegated_amount).unwrap(),
@@ -701,7 +701,7 @@ fn spend_share_delta_flush_undo(#[case] seed: Seed) {
             delegation_balances: BTreeMap::from([(delegation_id, delegated_amount)]),
             delegation_data: BTreeMap::from([(
                 delegation_id,
-                DelegationData::new(pool_id, del_pub_key.clone()),
+                DelegationData::new(pool_id, del_pub_key),
             )]),
         };
         assert_eq!(storage.dump(), expected_storage);
@@ -730,13 +730,13 @@ fn spend_share_delta_undo_flush(#[case] seed: Seed) {
     db.batch_write_delta(delta.consume()).unwrap();
 
     let expected_storage = PoSAccountingData {
-        pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key.clone(), pledged_amount))]),
+        pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
         pool_balances: BTreeMap::from([(pool_id, (pledged_amount + delegated_amount).unwrap())]),
         pool_delegation_shares: BTreeMap::from([((pool_id, delegation_id), delegated_amount)]),
         delegation_balances: BTreeMap::from([(delegation_id, delegated_amount)]),
         delegation_data: BTreeMap::from([(
             delegation_id,
-            DelegationData::new(pool_id, del_pub_key.clone()),
+            DelegationData::new(pool_id, del_pub_key),
         )]),
     };
     assert_eq!(storage.dump(), expected_storage);

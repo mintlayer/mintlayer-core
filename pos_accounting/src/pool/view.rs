@@ -19,12 +19,7 @@ use common::primitives::Amount;
 
 use crate::{error::Error, DelegationId, PoolId};
 
-use super::{
-    delegation::DelegationData,
-    delta::{data::PoSAccountingDeltaData, DeltaMergeUndo},
-    pool_data::PoolData,
-    storage::DataMergeUndo,
-};
+use super::{delegation::DelegationData, delta::data::PoSAccountingDeltaData, pool_data::PoolData};
 
 pub trait PoSAccountingView {
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error>;
@@ -52,11 +47,6 @@ pub trait PoSAccountingView {
     ) -> Result<Option<Amount>, Error>;
 }
 
-// TODO: not sure that we actually need this undo
-pub enum BatchWriteUndo {
-    Delta(DeltaMergeUndo),
-    Data(DataMergeUndo),
-}
 pub trait FlushablePoSAccountingView {
-    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<BatchWriteUndo, Error>;
+    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<(), Error>;
 }
