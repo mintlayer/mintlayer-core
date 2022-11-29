@@ -142,3 +142,61 @@ impl<S: StreamAdapter<T::Stream>, T: MockTransport> MockListener<S::Stream, T::A
         Ok(self.local_address.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    use super::{
+        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, AdaptedMockTransport,
+    };
+    use crate::net::mock::transport::{
+        ChannelMockTransport, MockListener, MockStream, MockTransport, TcpMockTransport,
+    };
+
+    async fn send_recv<T: MockStream>(sender: &mut T, receiver: &mut T, len: usize) {
+        let send_data = (0..len).map(|v| v as u8).collect::<Vec<_>>();
+        sender.write_all(&send_data).await.unwrap();
+        sender.flush().await.unwrap();
+
+        let mut recv_data = (0..len).map(|_| 0).collect::<Vec<_>>();
+        receiver.read_exact(&mut recv_data).await.unwrap();
+        assert_eq!(send_data, recv_data);
+    }
+
+    async fn test<T: MockTransport>(bind_addr: &str) {
+        let transport = T::new();
+        let address = bind_addr.parse().map_err(|_| std::fmt::Error).unwrap();
+        let mut server = transport.bind(address).await.unwrap();
+        let peer_fut = transport.connect(server.local_address().unwrap());
+
+        let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
+        let mut server_stream = server_res.unwrap().0;
+        let mut peer_stream = peer_res.unwrap();
+
+        send_recv(&mut peer_stream, &mut server_stream, 1).await;
+        send_recv(&mut server_stream, &mut peer_stream, 1).await;
+        send_recv(&mut peer_stream, &mut server_stream, 65500).await;
+        send_recv(&mut peer_stream, &mut server_stream, 65536).await;
+        send_recv(&mut server_stream, &mut peer_stream, 70000).await;
+    }
+
+    #[tokio::test]
+    async fn test_send_recv() {
+        test::<TcpMockTransport>("[::1]:0").await;
+        test::<ChannelMockTransport>("0").await;
+
+        test::<AdaptedMockTransport<NoiseEncryptionAdapter, TcpMockTransport>>("[::1]:0").await;
+        test::<AdaptedMockTransport<NoiseEncryptionAdapter, ChannelMockTransport>>("0").await;
+        test::<AdaptedMockTransport<IdentityStreamAdapter, TcpMockTransport>>("[::1]:0").await;
+        test::<AdaptedMockTransport<IdentityStreamAdapter, ChannelMockTransport>>("0").await;
+
+        test::<
+            AdaptedMockTransport<
+                NoiseEncryptionAdapter,
+                AdaptedMockTransport<NoiseEncryptionAdapter, TcpMockTransport>,
+            >,
+        >("[::1]:0")
+        .await;
+    }
+}
