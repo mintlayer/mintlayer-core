@@ -26,7 +26,7 @@ use crate::{error::P2pError, net::mock::peer::Role, Result};
 
 use self::traits::StreamAdapter;
 
-use super::{MockListener, MockTransport};
+use super::{TransportListener, TransportSocket};
 
 // How much time is allowed to spend setting up (optionally) encrypted stream.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -36,13 +36,15 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 /// be equivalent to the tcp transport layer with nothing done to it.
 /// More layers can be added on top of this, with this struct, where we add encryption on top.
 #[derive(Debug)]
-pub struct AdaptedMockTransport<S, T> {
+pub struct WrappedTransportSocket<S, T> {
     stream_adapter: Arc<S>,
     base_transport: T,
 }
 
 #[async_trait]
-impl<S: StreamAdapter<T::Stream>, T: MockTransport> MockTransport for AdaptedMockTransport<S, T> {
+impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
+    for WrappedTransportSocket<S, T>
+{
     type Address = T::Address;
     type BannableAddress = T::BannableAddress;
     type Listener = AdaptedListener<S, T>;
@@ -74,7 +76,7 @@ impl<S: StreamAdapter<T::Stream>, T: MockTransport> MockTransport for AdaptedMoc
 }
 
 /// A listener object that handles new incoming connections, and does any required hand-shakes (see members' comments)
-pub struct AdaptedListener<S: StreamAdapter<T::Stream>, T: MockTransport> {
+pub struct AdaptedListener<S: StreamAdapter<T::Stream>, T: TransportSocket> {
     /// New connections will be sent to this receiver
     receiver: UnboundedReceiver<(S::Stream, T::Address)>,
     /// the local address resulting from binding the transport
@@ -83,13 +85,13 @@ pub struct AdaptedListener<S: StreamAdapter<T::Stream>, T: MockTransport> {
     join_handle: tokio::task::JoinHandle<()>,
 }
 
-impl<S: StreamAdapter<T::Stream>, T: MockTransport> AdaptedListener<S, T> {
+impl<S: StreamAdapter<T::Stream>, T: TransportSocket> AdaptedListener<S, T> {
     async fn start(transport: &T, stream_adapter: Arc<S>, address: T::Address) -> Result<Self> {
         let mut listener = transport.bind(address).await?;
         let local_address = listener.local_address()?;
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
-        // Process new connections in background because MockListener::accept must be cancel safe.
+        // Process new connections in background because TransportListener::accept must be cancel safe.
         let join_handle = tokio::spawn(async move {
             loop {
                 let (base, addr) = match listener.accept().await {
@@ -132,7 +134,7 @@ impl<S: StreamAdapter<T::Stream>, T: MockTransport> AdaptedListener<S, T> {
     }
 }
 
-impl<S: StreamAdapter<T::Stream>, T: MockTransport> Drop for AdaptedListener<S, T> {
+impl<S: StreamAdapter<T::Stream>, T: TransportSocket> Drop for AdaptedListener<S, T> {
     fn drop(&mut self) {
         // This won't block so the base listener might be alive for some more time.
         self.join_handle.abort();
@@ -140,7 +142,7 @@ impl<S: StreamAdapter<T::Stream>, T: MockTransport> Drop for AdaptedListener<S, 
 }
 
 #[async_trait]
-impl<S: StreamAdapter<T::Stream>, T: MockTransport> MockListener<S::Stream, T::Address>
+impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener<S::Stream, T::Address>
     for AdaptedListener<S, T>
 {
     async fn accept(&mut self) -> Result<(S::Stream, T::Address)> {
@@ -160,14 +162,14 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     use super::{
-        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, AdaptedMockTransport,
+        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, WrappedTransportSocket,
     };
     use crate::net::mock::transport::{
-        ChannelMockListener, ChannelMockTransport, MockListener, MockStream, MockTransport,
-        TcpMockTransport,
+        MockChannelListener, MockChannelTransport, PeerStream, TcpTransportSocket,
+        TransportListener, TransportSocket,
     };
 
-    async fn send_recv<T: MockStream>(sender: &mut T, receiver: &mut T, len: usize) {
+    async fn send_recv<T: PeerStream>(sender: &mut T, receiver: &mut T, len: usize) {
         let send_data = (0..len).map(|v| v as u8).collect::<Vec<_>>();
         sender.write_all(&send_data).await.unwrap();
         sender.flush().await.unwrap();
@@ -177,7 +179,7 @@ mod tests {
         assert_eq!(send_data, recv_data);
     }
 
-    async fn test<T: MockTransport>(bind_addr: &str) {
+    async fn test<T: TransportSocket>(bind_addr: &str) {
         let transport = T::new();
         let address = bind_addr.parse().map_err(|_| std::fmt::Error).unwrap();
         let mut server = transport.bind(address).await.unwrap();
@@ -196,43 +198,43 @@ mod tests {
 
     #[tokio::test]
     async fn test_send_recv() {
-        test::<TcpMockTransport>("[::1]:0").await;
-        test::<ChannelMockTransport>("0").await;
+        test::<TcpTransportSocket>("[::1]:0").await;
+        test::<MockChannelTransport>("0").await;
 
-        test::<AdaptedMockTransport<NoiseEncryptionAdapter, TcpMockTransport>>("[::1]:0").await;
-        test::<AdaptedMockTransport<NoiseEncryptionAdapter, ChannelMockTransport>>("0").await;
-        test::<AdaptedMockTransport<IdentityStreamAdapter, TcpMockTransport>>("[::1]:0").await;
-        test::<AdaptedMockTransport<IdentityStreamAdapter, ChannelMockTransport>>("0").await;
+        test::<WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>>("[::1]:0").await;
+        test::<WrappedTransportSocket<NoiseEncryptionAdapter, MockChannelTransport>>("0").await;
+        test::<WrappedTransportSocket<IdentityStreamAdapter, TcpTransportSocket>>("[::1]:0").await;
+        test::<WrappedTransportSocket<IdentityStreamAdapter, MockChannelTransport>>("0").await;
 
         test::<
-            AdaptedMockTransport<
+            WrappedTransportSocket<
                 NoiseEncryptionAdapter,
-                AdaptedMockTransport<NoiseEncryptionAdapter, TcpMockTransport>,
+                WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>,
             >,
         >("[::1]:0")
         .await;
     }
 
     pub struct TestMockTransport {
-        transport: ChannelMockTransport,
+        transport: MockChannelTransport,
         port_open: Arc<Mutex<bool>>,
     }
 
     pub struct TestMockListener {
-        listener: ChannelMockListener,
+        listener: MockChannelListener,
         port_open: Arc<Mutex<bool>>,
     }
 
     #[async_trait]
-    impl MockTransport for TestMockTransport {
-        type Address = <ChannelMockTransport as MockTransport>::Address;
-        type BannableAddress = <ChannelMockTransport as MockTransport>::BannableAddress;
+    impl TransportSocket for TestMockTransport {
+        type Address = <MockChannelTransport as TransportSocket>::Address;
+        type BannableAddress = <MockChannelTransport as TransportSocket>::BannableAddress;
         type Listener = TestMockListener;
-        type Stream = <ChannelMockTransport as MockTransport>::Stream;
+        type Stream = <MockChannelTransport as TransportSocket>::Stream;
 
         fn new() -> Self {
             Self {
-                transport: ChannelMockTransport::new(),
+                transport: MockChannelTransport::new(),
                 port_open: Default::default(),
             }
         }
@@ -253,21 +255,23 @@ mod tests {
 
     #[async_trait]
     impl
-        MockListener<
-            <ChannelMockTransport as MockTransport>::Stream,
-            <ChannelMockTransport as MockTransport>::Address,
+        TransportListener<
+            <MockChannelTransport as TransportSocket>::Stream,
+            <MockChannelTransport as TransportSocket>::Address,
         > for TestMockListener
     {
         async fn accept(
             &mut self,
         ) -> crate::Result<(
-            <ChannelMockTransport as MockTransport>::Stream,
-            <ChannelMockTransport as MockTransport>::Address,
+            <MockChannelTransport as TransportSocket>::Stream,
+            <MockChannelTransport as TransportSocket>::Address,
         )> {
             self.listener.accept().await
         }
 
-        fn local_address(&self) -> crate::Result<<ChannelMockTransport as MockTransport>::Address> {
+        fn local_address(
+            &self,
+        ) -> crate::Result<<MockChannelTransport as TransportSocket>::Address> {
             self.listener.local_address()
         }
     }
@@ -281,7 +285,7 @@ mod tests {
     #[tokio::test]
     // Test that the base listener is dropped after AdaptedMockTransport::Listener is dropped.
     async fn test_bind_port_closed() {
-        let transport = AdaptedMockTransport::<NoiseEncryptionAdapter, TestMockTransport>::new();
+        let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TestMockTransport>::new();
         assert!(!*transport.base_transport.port_open.lock().unwrap());
 
         let listener = transport.bind(0).await.unwrap();

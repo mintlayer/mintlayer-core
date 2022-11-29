@@ -45,7 +45,7 @@ use crate::{
         mock::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             peer, request_manager,
-            transport::{MockListener, MockTransport},
+            transport::{TransportListener, TransportSocket},
             types::{
                 Command, ConnectivityEvent, Message, MockEvent, MockPeerId, MockPeerInfo,
                 MockRequestId, PeerEvent, SyncingEvent,
@@ -64,7 +64,7 @@ struct PeerContext {
 }
 
 #[derive(Debug)]
-enum ConnectionState<T: MockTransport> {
+enum ConnectionState<T: TransportSocket> {
     /// Connection established for outbound connection
     OutboundAccepted { address: T::Address },
 
@@ -72,7 +72,7 @@ enum ConnectionState<T: MockTransport> {
     InboundAccepted { address: T::Address },
 }
 
-pub struct Backend<T: MockTransport> {
+pub struct Backend<T: TransportSocket> {
     /// Transport of the backend
     transport: T,
 
@@ -119,7 +119,7 @@ pub struct Backend<T: MockTransport> {
 
 impl<T> Backend<T>
 where
-    T: MockTransport + 'static,
+    T: TransportSocket + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(

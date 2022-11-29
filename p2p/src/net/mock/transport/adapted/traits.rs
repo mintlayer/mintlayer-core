@@ -16,14 +16,14 @@
 use async_trait::async_trait;
 
 use crate::{
-    net::mock::{peer::Role, transport::MockStream},
+    net::mock::{peer::Role, transport::PeerStream},
     Result,
 };
 
 /// Represents a stream that requires a handshake to function (such as encrypted streams)
 #[async_trait]
 pub trait StreamAdapter<T>: Send + Sync + 'static {
-    type Stream: MockStream;
+    type Stream: PeerStream;
 
     fn new() -> Self;
 

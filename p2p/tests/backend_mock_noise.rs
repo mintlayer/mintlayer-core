@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use p2p::net::mock::{
-    transport::{AdaptedMockTransport, NoiseEncryptionAdapter, TcpMockTransport},
+    transport::{NoiseEncryptionAdapter, TcpTransportSocket, WrappedTransportSocket},
     MockService,
 };
 use p2p_test_utils::MakeTcpAddress;
@@ -22,6 +22,6 @@ use p2p_test_utils::MakeTcpAddress;
 fn main() {
     p2p_backend_test_suite::run::<
         MakeTcpAddress,
-        MockService<AdaptedMockTransport<NoiseEncryptionAdapter, TcpMockTransport>>,
+        MockService<WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>>,
     >();
 }

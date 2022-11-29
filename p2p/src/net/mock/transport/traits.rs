@@ -28,7 +28,7 @@ use crate::{
 ///    The mechanism to retrieve new connected clients are up to the listener struct
 /// 2. Providing the connect function, that's used to connect to other peers
 #[async_trait]
-pub trait MockTransport: Send + Sync + 'static {
+pub trait TransportSocket: Send + Sync + 'static {
     /// An address type.
     type Address: Clone
         + Debug
@@ -45,10 +45,10 @@ pub trait MockTransport: Send + Sync + 'static {
     type BannableAddress: Debug + Eq + Ord + Send;
 
     /// A listener type (or acceptor as per boost terminology).
-    type Listener: MockListener<Self::Stream, Self::Address>;
+    type Listener: TransportListener<Self::Stream, Self::Address>;
 
     /// A messages stream.
-    type Stream: MockStream;
+    type Stream: PeerStream;
 
     /// Creates a new transport.
     fn new() -> Self;
@@ -62,7 +62,7 @@ pub trait MockTransport: Send + Sync + 'static {
 
 /// An abstraction layer over some kind of network connection.
 #[async_trait]
-pub trait MockListener<Stream, Address>: Send {
+pub trait TransportListener<Stream, Address>: Send {
     /// Accepts a new inbound connection.
     async fn accept(&mut self) -> Result<(Stream, Address)>;
 
@@ -72,4 +72,4 @@ pub trait MockListener<Stream, Address>: Send {
 
 /// An abstraction layer over some network stream that can be used to send and receive messages.
 #[async_trait]
-pub trait MockStream: Unpin + Send + AsyncRead + AsyncWrite {}
+pub trait PeerStream: Unpin + Send + AsyncRead + AsyncWrite {}

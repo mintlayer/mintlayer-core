@@ -21,10 +21,10 @@ mod traits;
 
 pub use self::{
     adapted::{
-        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, AdaptedMockTransport,
+        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, WrappedTransportSocket,
     },
-    channel::{ChannelMockListener, ChannelMockStream, ChannelMockTransport},
-    codec::EncoderDecoderWithBuf,
-    tcp::TcpMockTransport,
-    traits::{MockListener, MockStream, MockTransport},
+    channel::{ChannelMockStream, MockChannelListener, MockChannelTransport},
+    codec::BufferedTranscoder,
+    tcp::TcpTransportSocket,
+    traits::{PeerStream, TransportListener, TransportSocket},
 };

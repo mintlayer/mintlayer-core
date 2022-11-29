@@ -20,34 +20,34 @@ use tokio::net::{TcpListener, TcpStream};
 
 use crate::{
     net::{
-        mock::transport::{MockListener, MockStream, MockTransport},
+        mock::transport::{PeerStream, TransportListener, TransportSocket},
         AsBannableAddress, IsBannableAddress,
     },
     Result,
 };
 
 #[derive(Debug)]
-pub struct TcpMockTransport;
+pub struct TcpTransportSocket;
 
-impl TcpMockTransport {
+impl TcpTransportSocket {
     pub fn new() -> Self {
         Self
     }
 }
 
 #[async_trait]
-impl MockTransport for TcpMockTransport {
+impl TransportSocket for TcpTransportSocket {
     type Address = SocketAddr;
     type BannableAddress = IpAddr;
-    type Listener = TcpMockListener;
-    type Stream = TcpMockStream;
+    type Listener = TcpTransportListener;
+    type Stream = TcpTransportStream;
 
     fn new() -> Self {
         Self
     }
 
     async fn bind(&self, address: Self::Address) -> Result<Self::Listener> {
-        TcpMockListener::new(address).await
+        TcpTransportListener::new(address).await
     }
 
     async fn connect(&self, address: Self::Address) -> Result<Self::Stream> {
@@ -56,11 +56,11 @@ impl MockTransport for TcpMockTransport {
     }
 }
 
-pub struct TcpMockListener {
+pub struct TcpTransportListener {
     listener: TcpListener,
 }
 
-impl TcpMockListener {
+impl TcpTransportListener {
     async fn new(address: SocketAddr) -> Result<Self> {
         let listener = TcpListener::bind(address).await?;
 
@@ -69,8 +69,8 @@ impl TcpMockListener {
 }
 
 #[async_trait]
-impl MockListener<TcpMockStream, SocketAddr> for TcpMockListener {
-    async fn accept(&mut self) -> Result<(TcpMockStream, SocketAddr)> {
+impl TransportListener<TcpTransportStream, SocketAddr> for TcpTransportListener {
+    async fn accept(&mut self) -> Result<(TcpTransportStream, SocketAddr)> {
         let (stream, address) = self.listener.accept().await?;
         Ok((stream, address))
     }
@@ -95,10 +95,10 @@ impl IsBannableAddress for SocketAddr {
     }
 }
 
-pub type TcpMockStream = TcpStream;
+pub type TcpTransportStream = TcpStream;
 
 #[async_trait]
-impl MockStream for TcpMockStream {}
+impl PeerStream for TcpTransportStream {}
 
 #[cfg(test)]
 mod tests {
@@ -106,14 +106,14 @@ mod tests {
     use crate::net::{
         message::{BlockListRequest, Request},
         mock::{
-            transport::EncoderDecoderWithBuf,
+            transport::BufferedTranscoder,
             types::{Message, MockRequestId},
         },
     };
 
     #[tokio::test]
     async fn send_recv() {
-        let transport = TcpMockTransport::new();
+        let transport = TcpTransportSocket::new();
         let address = "[::1]:0".parse().unwrap();
         let mut server = transport.bind(address).await.unwrap();
         let peer_fut = transport.connect(server.local_address().unwrap());
@@ -124,7 +124,7 @@ mod tests {
 
         let request_id = MockRequestId::new(1337u64);
         let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
-        let mut peer_stream = EncoderDecoderWithBuf::new(peer_stream);
+        let mut peer_stream = BufferedTranscoder::new(peer_stream);
         peer_stream
             .send(Message::Request {
                 request_id,
@@ -133,7 +133,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut server_stream = EncoderDecoderWithBuf::new(server_stream);
+        let mut server_stream = BufferedTranscoder::new(server_stream);
         assert_eq!(
             server_stream.recv().await.unwrap().unwrap(),
             Message::Request {
@@ -145,7 +145,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_2_reqs() {
-        let transport = TcpMockTransport::new();
+        let transport = TcpTransportSocket::new();
         let address = "[::1]:0".parse().unwrap();
         let mut server = transport.bind(address).await.unwrap();
         let peer_fut = transport.connect(server.local_address().unwrap());
@@ -156,7 +156,7 @@ mod tests {
 
         let id_1 = MockRequestId::new(1337u64);
         let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
-        let mut peer_stream = EncoderDecoderWithBuf::new(peer_stream);
+        let mut peer_stream = BufferedTranscoder::new(peer_stream);
         peer_stream
             .send(Message::Request {
                 request_id: id_1,
@@ -174,7 +174,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut server_stream = EncoderDecoderWithBuf::new(server_stream);
+        let mut server_stream = BufferedTranscoder::new(server_stream);
         assert_eq!(
             server_stream.recv().await.unwrap().unwrap(),
             Message::Request {

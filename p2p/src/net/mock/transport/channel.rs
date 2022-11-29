@@ -28,7 +28,7 @@ use tokio::{
 use crate::{
     error::DialError,
     net::{
-        mock::transport::{MockListener, MockStream, MockTransport},
+        mock::transport::{PeerStream, TransportListener, TransportSocket},
         AsBannableAddress, IsBannableAddress,
     },
     P2pError, Result,
@@ -46,13 +46,13 @@ static CONNECTIONS: Lazy<Mutex<BTreeMap<Address, UnboundedSender<Sender<DuplexSt
     Lazy::new(Default::default);
 
 #[derive(Debug)]
-pub struct ChannelMockTransport;
+pub struct MockChannelTransport;
 
 #[async_trait]
-impl MockTransport for ChannelMockTransport {
+impl TransportSocket for MockChannelTransport {
     type Address = Address;
     type BannableAddress = Address;
-    type Listener = ChannelMockListener;
+    type Listener = MockChannelListener;
     type Stream = ChannelMockStream;
 
     fn new() -> Self {
@@ -100,13 +100,13 @@ impl MockTransport for ChannelMockTransport {
     }
 }
 
-pub struct ChannelMockListener {
+pub struct MockChannelListener {
     address: Address,
     receiver: UnboundedReceiver<Sender<DuplexStream>>,
 }
 
 #[async_trait]
-impl MockListener<ChannelMockStream, Address> for ChannelMockListener {
+impl TransportListener<ChannelMockStream, Address> for MockChannelListener {
     async fn accept(&mut self) -> Result<(ChannelMockStream, Address)> {
         let response_sender = self.receiver.recv().await.ok_or(P2pError::ChannelClosed)?;
 
@@ -121,7 +121,7 @@ impl MockListener<ChannelMockStream, Address> for ChannelMockListener {
     }
 }
 
-impl Drop for ChannelMockListener {
+impl Drop for MockChannelListener {
     fn drop(&mut self) {
         assert!(CONNECTIONS
             .lock()
@@ -134,7 +134,7 @@ impl Drop for ChannelMockListener {
 pub type ChannelMockStream = tokio::io::DuplexStream;
 
 #[async_trait]
-impl MockStream for ChannelMockStream {}
+impl PeerStream for ChannelMockStream {}
 
 impl AsBannableAddress for Address {
     type BannableAddress = Address;
@@ -156,14 +156,14 @@ mod tests {
     use crate::net::{
         message::{BlockListRequest, Request},
         mock::{
-            transport::EncoderDecoderWithBuf,
+            transport::BufferedTranscoder,
             types::{Message, MockRequestId},
         },
     };
 
     #[tokio::test]
     async fn send_recv() {
-        let transport = ChannelMockTransport::new();
+        let transport = MockChannelTransport::new();
         let address = 0;
         let mut server = transport.bind(address).await.unwrap();
         let peer_fut = transport.connect(server.local_address().unwrap());
@@ -174,7 +174,7 @@ mod tests {
 
         let request_id = MockRequestId::new(1337u64);
         let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
-        let mut peer_stream = EncoderDecoderWithBuf::new(peer_stream);
+        let mut peer_stream = BufferedTranscoder::new(peer_stream);
         peer_stream
             .send(Message::Request {
                 request_id,
@@ -183,7 +183,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut server_stream = EncoderDecoderWithBuf::new(server_stream);
+        let mut server_stream = BufferedTranscoder::new(server_stream);
         assert_eq!(
             server_stream.recv().await.unwrap().unwrap(),
             Message::Request {

@@ -21,7 +21,7 @@ use super::*;
 use crate::{
     message::*,
     net::mock::{
-        transport::{ChannelMockTransport, TcpMockTransport},
+        transport::{MockChannelTransport, TcpTransportSocket},
         MockService,
     },
     peer_manager::helpers::connect_services,
@@ -82,12 +82,12 @@ async fn test_request_response_libp2p() {
 
 #[tokio::test]
 async fn test_request_response_mock_tcp() {
-    test_request_response::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    test_request_response::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn test_request_response_mock_channels() {
-    test_request_response::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    test_request_response::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
 }
 
 async fn test_multiple_requests_and_responses<A, T>()
@@ -169,12 +169,12 @@ async fn test_multiple_requests_and_responses_libp2p() {
 
 #[tokio::test]
 async fn test_multiple_requests_and_responses_mock_tcp() {
-    test_multiple_requests_and_responses::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    test_multiple_requests_and_responses::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn test_multiple_requests_and_responses_mock_channels() {
-    test_multiple_requests_and_responses::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+    test_multiple_requests_and_responses::<MakeChannelAddress, MockService<MockChannelTransport>>()
         .await;
 }
 
@@ -246,13 +246,13 @@ async fn test_request_timeout_error_libp2p() {
 #[tokio::test]
 #[ignore]
 async fn test_request_timeout_error_mock_tcp() {
-    test_request_timeout_error::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    test_request_timeout_error::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 #[ignore]
 async fn test_request_timeout_error_mock_channels() {
-    test_request_timeout_error::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    test_request_timeout_error::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
 }
 
 // verify that if after three retries the remote peer still
@@ -318,11 +318,11 @@ async fn request_timeout_libp2p() {
 #[tokio::test]
 #[ignore]
 async fn request_timeout_mock_tcp() {
-    request_timeout::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    request_timeout::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 #[ignore]
 async fn request_timeout_mock_channels() {
-    request_timeout::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    request_timeout::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
 }

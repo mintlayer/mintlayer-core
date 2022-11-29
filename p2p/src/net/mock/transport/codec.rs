@@ -86,14 +86,14 @@ impl Encoder<Message> for EncoderDecoder {
     }
 }
 
-pub struct EncoderDecoderWithBuf<S> {
+pub struct BufferedTranscoder<S> {
     stream: S,
     buffer: BytesMut,
 }
 
-impl<S: AsyncWrite + AsyncRead + Unpin> EncoderDecoderWithBuf<S> {
-    pub fn new(stream: S) -> EncoderDecoderWithBuf<S> {
-        EncoderDecoderWithBuf {
+impl<S: AsyncWrite + AsyncRead + Unpin> BufferedTranscoder<S> {
+    pub fn new(stream: S) -> BufferedTranscoder<S> {
+        BufferedTranscoder {
             stream,
             buffer: BytesMut::new(),
         }

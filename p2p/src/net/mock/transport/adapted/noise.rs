@@ -18,7 +18,7 @@ use snowstorm::NoiseStream;
 
 use crate::{
     error::P2pError,
-    net::mock::{peer::Role, transport::MockStream},
+    net::mock::{peer::Role, transport::PeerStream},
 };
 
 use super::StreamAdapter;
@@ -40,7 +40,7 @@ impl std::fmt::Debug for NoiseEncryptionAdapter {
 
 /// StreamAdapter that encrypts the data going through it with noise protocol
 #[async_trait]
-impl<T: MockStream + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
+impl<T: PeerStream + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
     type Stream = snowstorm::NoiseStream<T>;
 
     fn new() -> Self {
@@ -73,4 +73,4 @@ impl<T: MockStream + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
     }
 }
 
-impl<T: MockStream> MockStream for snowstorm::NoiseStream<T> {}
+impl<T: PeerStream> PeerStream for snowstorm::NoiseStream<T> {}

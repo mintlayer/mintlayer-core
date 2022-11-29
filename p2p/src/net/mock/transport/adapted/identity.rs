@@ -15,7 +15,7 @@
 
 use async_trait::async_trait;
 
-use crate::net::mock::{peer::Role, transport::MockStream};
+use crate::net::mock::{peer::Role, transport::PeerStream};
 
 use super::StreamAdapter;
 
@@ -24,7 +24,7 @@ pub struct IdentityStreamAdapter;
 
 /// An StreamAdapter that does nothing with no handshake (Identity operation on data that goes through it)
 #[async_trait]
-impl<T: MockStream + 'static> StreamAdapter<T> for IdentityStreamAdapter {
+impl<T: PeerStream + 'static> StreamAdapter<T> for IdentityStreamAdapter {
     type Stream = T;
 
     fn new() -> Self {
