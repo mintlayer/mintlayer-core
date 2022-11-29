@@ -75,7 +75,7 @@ where
         let is_inserted = self.pending_responses.insert(request_id);
         debug_assert!(is_inserted);
 
-        let timeout = self.p2p_config.response_timeout.clone().into();
+        let timeout = self.p2p_config.request_timeout.clone().into();
         let sender = self.timeouts_sender.clone();
         tokio::spawn(async move {
             time::sleep(Duration::from_secs(timeout)).await;

@@ -130,7 +130,7 @@ impl Libp2pBehaviour {
         );
         let mut req_cfg = RequestResponseConfig::default();
         req_cfg.set_request_timeout(Duration::from_secs(
-            p2p_config.response_timeout.clone().into(),
+            p2p_config.request_timeout.clone().into(),
         ));
 
         let behaviour = Libp2pBehaviour {

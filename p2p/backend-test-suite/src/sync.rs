@@ -1090,7 +1090,7 @@ where
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (chainstate1, chainstate2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let p2p_config = P2pConfig {
-        response_timeout: 1.into(),
+        request_timeout: 1.into(),
         ..Default::default()
     };
     let (mut mgr1, mut conn1, _sync1, mut pm1) =

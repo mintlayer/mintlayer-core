@@ -26,8 +26,8 @@ make_config_setting!(MdnsConfigSetting, MdnsConfig, MdnsConfig::Disabled);
 make_config_setting!(MdnsQueryInterval, u64, MDNS_DEFAULT_QUERY_INTERVAL);
 make_config_setting!(MdnsEnableIpV6Discovery, bool, MDNS_DEFAULT_IPV6_STATE);
 make_config_setting!(
-    /// The `BlockSyncManager` response timeout value in seconds.
-    SyncManagerResponseTimeout,
+    /// The request timeout value in seconds.
+    RequestTimeout,
     u64,
     10
 );
@@ -61,8 +61,8 @@ pub struct P2pConfig {
     pub outbound_connection_timeout: OutboundConnectionTimeout,
     /// Multicast DNS configuration.
     pub mdns_config: MdnsConfigSetting,
-    /// The response timeout value in seconds.
+    /// The request timeout value in seconds.
     ///
     /// The peers that failed to respond before this timeout are disconnected.
-    pub response_timeout: SyncManagerResponseTimeout,
+    pub request_timeout: RequestTimeout,
 }

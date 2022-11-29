@@ -97,8 +97,8 @@ pub struct P2pConfigFile {
     pub outbound_connection_timeout: Option<u64>,
     /// Multicast DNS configuration.
     pub mdns_config: Option<MdnsConfigFile>,
-    /// The response timeout value in seconds.
-    pub response_timeout: Option<u64>,
+    /// The request timeout value in seconds.
+    pub request_timeout: Option<u64>,
 }
 
 impl From<P2pConfigFile> for P2pConfig {
@@ -109,7 +109,7 @@ impl From<P2pConfigFile> for P2pConfig {
             ban_threshold: c.ban_threshold.into(),
             outbound_connection_timeout: c.outbound_connection_timeout.into(),
             mdns_config: mdns_config.into(),
-            response_timeout: c.response_timeout.into(),
+            request_timeout: c.request_timeout.into(),
         }
     }
 }

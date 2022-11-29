@@ -166,6 +166,10 @@ pub enum SyncingEvent<T: NetworkingService> {
         /// Received response
         response: message::Response,
     },
+    // ///
+    // Timeout {
+    //     //
+    // },
     /// An announcement that is broadcast to all peers.
     Announcement {
         peer_id: T::PeerId,
