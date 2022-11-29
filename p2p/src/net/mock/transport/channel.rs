@@ -39,6 +39,9 @@ type Address = u64;
 /// Zero address has special meaning: bind to a free address.
 const ZERO_ADDRESS: Address = 0;
 
+// How much bytes is allowed for write (without reading on the other side).
+const MAX_BUF_SIZE: usize = 10 * 1024 * 1024;
+
 static CONNECTIONS: Lazy<Mutex<BTreeMap<Address, UnboundedSender<Sender<DuplexStream>>>>> =
     Lazy::new(Default::default);
 
@@ -107,7 +110,7 @@ impl MockListener<ChannelMockStream, Address> for ChannelMockListener {
     async fn accept(&mut self) -> Result<(ChannelMockStream, Address)> {
         let response_sender = self.receiver.recv().await.ok_or(P2pError::ChannelClosed)?;
 
-        let (server, client) = tokio::io::duplex(10 * 1024 * 1024);
+        let (server, client) = tokio::io::duplex(MAX_BUF_SIZE);
         response_sender.send(client).map_err(|_| P2pError::ChannelClosed)?;
 
         Ok((server, self.address))

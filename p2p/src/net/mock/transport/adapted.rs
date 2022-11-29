@@ -81,26 +81,26 @@ impl<S: StreamAdapter<T::Stream>, T: MockTransport> AdaptedListener<S, T> {
                 let (base, addr) = match listener.accept().await {
                     Ok(stream) => stream,
                     Err(err) => {
-                        logging::log::error!("TCP accept failed unexpectedly: {}", err);
+                        logging::log::error!("accept failed unexpectedly: {}", err);
                         return;
                     }
                 };
                 let sender = sender.clone();
-                let stream_adapter_copy = Arc::clone(&stream_adapter);
+                let stream_adapter = Arc::clone(&stream_adapter);
                 tokio::spawn(async move {
                     let res = timeout(
                         HANDSHAKE_TIMEOUT,
-                        stream_adapter_copy.handshake(base, Role::Inbound),
+                        stream_adapter.handshake(base, Role::Inbound),
                     )
                     .await;
                     let socket = match res {
                         Ok(Ok(socket)) => socket,
                         Ok(Err(err)) => {
-                            logging::log::warn!("encryption handshake failed: {}", err);
+                            logging::log::warn!("handshake failed: {}", err);
                             return;
                         }
                         Err(err) => {
-                            logging::log::warn!("encryption handshake timed out: {}", err);
+                            logging::log::warn!("handshake timeout: {}", err);
                             return;
                         }
                     };
