@@ -16,17 +16,15 @@
 mod adapted;
 mod channel;
 mod codec;
-mod stream_adapter;
 mod tcp;
 mod traits;
 
 pub use self::{
-    adapted::AdaptedMockTransport,
+    adapted::{
+        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, AdaptedMockTransport,
+    },
     channel::{ChannelMockListener, ChannelMockStream, ChannelMockTransport},
     codec::EncoderDecoderWithBuf,
-    stream_adapter::{
-        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, StreamAdapter,
-    },
     tcp::TcpMockTransport,
     traits::{MockListener, MockStream, MockTransport},
 };

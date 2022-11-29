@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod identity;
+pub mod noise;
+pub mod traits;
+
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
@@ -20,7 +24,9 @@ use tokio::{sync::mpsc::UnboundedReceiver, time::timeout};
 
 use crate::{error::P2pError, net::mock::peer::Role, Result};
 
-use super::{MockListener, MockTransport, StreamAdapter};
+use self::traits::StreamAdapter;
+
+use super::{MockListener, MockTransport};
 
 // How much time is allowed to spend setting up (optionally) encrypted stream.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);

@@ -13,14 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod identity;
-pub mod noise;
-
 use async_trait::async_trait;
 
-use crate::{net::mock::peer::Role, Result};
-
-use super::MockStream;
+use crate::{
+    net::mock::{peer::Role, transport::MockStream},
+    Result,
+};
 
 #[async_trait]
 pub trait StreamAdapter<T>: Send + Sync + 'static {
