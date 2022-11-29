@@ -33,17 +33,8 @@ pub struct SubsystemConfig {
 }
 
 impl SubsystemConfig {
-    const DEFAULT_SUBSYSTEM_NAME: &'static str = "<unnamed>";
-
     /// New configuration with given name, all other options are defaults.
     pub(crate) fn named(subsystem_name: &'static str) -> Self {
-        Self { subsystem_name }
-    }
-}
-
-impl Default for SubsystemConfig {
-    fn default() -> Self {
-        let subsystem_name = Self::DEFAULT_SUBSYSTEM_NAME;
         Self { subsystem_name }
     }
 }
