@@ -16,6 +16,7 @@
 use std::{pin::Pin, task};
 
 use futures::future::BoxFuture;
+use logging::log;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 /// Defines hooks into a subsystem lifecycle.
@@ -29,29 +30,21 @@ pub trait Subsystem: 'static + Send + Sized {
 pub struct SubsystemConfig {
     /// Subsystem name
     pub subsystem_name: &'static str,
-    /// Capacity of the call request channel
-    pub call_queue_capacity: usize,
 }
 
 impl SubsystemConfig {
-    const DEFAULT_CALL_QUEUE_CAPACITY: usize = 64;
     const DEFAULT_SUBSYSTEM_NAME: &'static str = "<unnamed>";
 
     /// New configuration with given name, all other options are defaults.
     pub(crate) fn named(subsystem_name: &'static str) -> Self {
-        Self {
-            subsystem_name,
-            call_queue_capacity: Self::DEFAULT_CALL_QUEUE_CAPACITY,
-        }
+        Self { subsystem_name }
     }
 }
 
 impl Default for SubsystemConfig {
     fn default() -> Self {
-        Self {
-            subsystem_name: Self::DEFAULT_SUBSYSTEM_NAME,
-            call_queue_capacity: Self::DEFAULT_CALL_QUEUE_CAPACITY,
-        }
+        let subsystem_name = Self::DEFAULT_SUBSYSTEM_NAME;
+        Self { subsystem_name }
     }
 }
 
@@ -59,7 +52,7 @@ impl Default for SubsystemConfig {
 type Action<T, R> = Box<dyn Send + for<'a> FnOnce(&'a mut T) -> BoxFuture<'a, R>>;
 
 /// Call request
-pub struct CallRequest<T>(pub(crate) mpsc::Receiver<Action<T, ()>>);
+pub struct CallRequest<T>(pub(crate) mpsc::UnboundedReceiver<Action<T, ()>>);
 
 impl<T: 'static> CallRequest<T> {
     /// Receive an external call to this subsystem.
@@ -102,6 +95,8 @@ impl ShutdownRequest {
     }
 }
 
+pub type ActionSender<T> = mpsc::UnboundedSender<Action<T, ()>>;
+
 /// Subsystem handle.
 ///
 /// This allows the user to interact with the subsystem from the outside. Currently, it only
@@ -115,7 +110,7 @@ impl ShutdownRequest {
 ///   the result is ready, returning it directly.
 pub struct Handle<T> {
     // Send the subsystem stuff to do.
-    action_tx: mpsc::Sender<Action<T, ()>>,
+    action_tx: ActionSender<T>,
 }
 
 impl<T> Clone for Handle<T> {
@@ -134,12 +129,12 @@ pub enum CallError {
 
 impl<T: Send + 'static> Handle<T> {
     /// Crate a new subsystem handle.
-    pub(crate) fn new(action_tx: mpsc::Sender<Action<T, ()>>) -> Self {
+    pub(crate) fn new(action_tx: ActionSender<T>) -> Self {
         Self { action_tx }
     }
 
     /// Submit an async procedure to the subsystem. Result has to be await-ed explicitly
-    pub async fn submit_async_mut<R: Send + 'static>(
+    pub fn submit_async_mut<R: Send + 'static>(
         &self,
         func: impl for<'a> FnOnce(&'a mut T) -> BoxFuture<'a, R> + Send + 'static,
     ) -> Result<CallResponse<R>, CallError> {
@@ -149,38 +144,38 @@ impl<T: Send + 'static> Handle<T> {
         self.action_tx
             .send(Box::new(move |subsys| {
                 Box::pin(async move {
-                    let result = func(subsys).await;
-                    rtx.send(result).ok().expect("Value return channel closed");
+                    if rtx.send(func(subsys).await).is_err() {
+                        log::trace!("Subsystem call result ignored");
+                    }
                 })
             }))
-            .await
             .map_err(|_| CallError::SubsystemDead)?;
 
         Ok(rrx)
     }
 
     /// Submit an async procedure to the subsystem (immutable).
-    pub async fn submit_async<R: Send + 'static>(
+    pub fn submit_async<R: Send + 'static>(
         &self,
         func: impl for<'a> FnOnce(&'a T) -> BoxFuture<'a, R> + Send + 'static,
     ) -> Result<CallResponse<R>, CallError> {
-        self.submit_async_mut(|this| func(this)).await
+        self.submit_async_mut(|this| func(this))
     }
 
     /// Subimt a procedure to the subsystem.
-    pub async fn submit_mut<R: Send + 'static>(
+    pub fn submit_mut<R: Send + 'static>(
         &self,
         func: impl for<'a> FnOnce(&'a mut T) -> R + Send + 'static,
     ) -> Result<CallResponse<R>, CallError> {
-        self.submit_async_mut(|this| Box::pin(core::future::ready(func(this)))).await
+        self.submit_async_mut(|this| Box::pin(core::future::ready(func(this))))
     }
 
     /// Submit a procedure to the subsystem (immutable).
-    pub async fn submit<R: Send + 'static>(
+    pub fn submit<R: Send + 'static>(
         &self,
         func: impl for<'a> FnOnce(&'a T) -> R + Send + 'static,
     ) -> Result<CallResponse<R>, CallError> {
-        self.submit_mut(|this| func(this)).await
+        self.submit_mut(|this| func(this))
     }
 
     /// Dispatch an async function call to the subsystem.
@@ -188,7 +183,7 @@ impl<T: Send + 'static> Handle<T> {
         &self,
         func: impl for<'a> FnOnce(&'a mut T) -> BoxFuture<'a, R> + Send + 'static,
     ) -> Result<R, CallError> {
-        self.submit_async_mut(func).await?.await
+        self.submit_async_mut(func)?.await
     }
 
     /// Dispatch an async function call to the subsystem (immutable).
@@ -196,7 +191,7 @@ impl<T: Send + 'static> Handle<T> {
         &self,
         func: impl for<'a> FnOnce(&'a T) -> BoxFuture<'a, R> + Send + 'static,
     ) -> Result<R, CallError> {
-        self.submit_async(func).await?.await
+        self.submit_async(func)?.await
     }
 
     /// Dispatch a function call to the subsystem.
@@ -204,7 +199,7 @@ impl<T: Send + 'static> Handle<T> {
         &self,
         func: impl for<'a> FnOnce(&'a mut T) -> R + Send + 'static,
     ) -> Result<R, CallError> {
-        self.submit_mut(func).await?.await
+        self.submit_mut(func)?.await
     }
 
     /// Dispatch a function call to the subsystem (immutable).
@@ -212,7 +207,7 @@ impl<T: Send + 'static> Handle<T> {
         &self,
         func: impl for<'a> FnOnce(&'a T) -> R + Send + 'static,
     ) -> Result<R, CallError> {
-        self.submit(func).await?.await
+        self.submit(func)?.await
     }
 }
 
@@ -221,12 +216,8 @@ mod test {
     use super::*;
 
     #[test]
-    fn default_queue_size_with_named_config() {
+    fn named_config() {
         let config = SubsystemConfig::named("foo");
         assert_eq!(config.subsystem_name, "foo");
-        assert_eq!(
-            config.call_queue_capacity,
-            SubsystemConfig::DEFAULT_CALL_QUEUE_CAPACITY
-        );
     }
 }
