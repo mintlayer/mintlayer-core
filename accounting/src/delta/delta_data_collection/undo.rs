@@ -21,40 +21,24 @@ use serialization::{Decode, Encode};
 
 /// The operations we have to perform in order to undo a delta
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub(super) enum DataDeltaUndoOpInternal<T: Clone> {
-    Write(DataDelta<T>),
-    /// This op preserves original data before the erased value. It is important for merging deltas with data.
-    Erase(DataDelta<T>),
-}
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub struct DataDeltaUndoOp<T: Clone>(pub(super) DataDeltaUndoOpInternal<T>);
-
-impl<T: Clone> DataDeltaUndoOp<T> {
-    pub fn new_write(data: DataDelta<T>) -> Self {
-        Self(DataDeltaUndoOpInternal::Write(data))
-    }
-
-    pub fn new_erase(data: DataDelta<T>) -> Self {
-        Self(DataDeltaUndoOpInternal::Erase(data))
-    }
-}
+pub struct DataDeltaUndo<T: Clone>(pub(super) DataDelta<T>);
 
 #[must_use]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeltaDataUndoCollection<K: Ord, T: Clone> {
-    data: BTreeMap<K, DataDeltaUndoOp<T>>,
+    data: BTreeMap<K, DataDeltaUndo<T>>,
 }
 
 impl<K: Ord, T: Clone> DeltaDataUndoCollection<K, T> {
-    pub fn new(data: BTreeMap<K, DataDeltaUndoOp<T>>) -> Self {
+    pub fn new(data: BTreeMap<K, DataDeltaUndo<T>>) -> Self {
         Self { data }
     }
 
-    pub fn data(&self) -> &BTreeMap<K, DataDeltaUndoOp<T>> {
+    pub fn data(&self) -> &BTreeMap<K, DataDeltaUndo<T>> {
         &self.data
     }
 
-    pub fn consume(self) -> BTreeMap<K, DataDeltaUndoOp<T>> {
+    pub fn consume(self) -> BTreeMap<K, DataDeltaUndo<T>> {
         self.data
     }
 }

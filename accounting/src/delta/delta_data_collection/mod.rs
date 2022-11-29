@@ -23,19 +23,13 @@ use crate::error::Error;
 
 use self::undo::*;
 
-/// The outcome of combining two deltas for a given key upon the map that contains it
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
-enum DeltaMapOp<T: Clone> {
-    /// Write a specific value (for example, to write a Create or Modify operation)
-    Write(T),
-    /// Erase the value at the relevant key spot (for example, a modify followed by Erase yields nothing).
-    Erase,
-}
-
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub enum DataDelta<T: Clone> {
+    // stores new value
     Create(Box<T>),
-    Modify(Box<T>),
+    // stores prev and new values
+    Modify((Box<T>, Box<T>)),
+    // stores prev value before deletion
     Delete(Box<T>),
 }
 
@@ -43,29 +37,16 @@ impl<T: Clone> DataDelta<T> {
     pub fn data(&self) -> &Box<T> {
         match self {
             DataDelta::Create(d) => d,
-            DataDelta::Modify(d) => d,
+            DataDelta::Modify((_, d)) => d,
             DataDelta::Delete(d) => d,
         }
     }
 }
 
-// A collection can store either a delta with data or an undo operation to perform.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub enum DeltaMapElement<T: Clone> {
-    Data(DataDelta<T>),
-    Operation(DataDeltaUndoOp<T>),
-}
-
-impl<T: Clone> DeltaMapElement<T> {
-    pub fn delta_data(&self) -> &DataDelta<T> {
-        match self {
-            DeltaMapElement::Data(d) => d,
-            DeltaMapElement::Operation(op) => match &op.0 {
-                DataDeltaUndoOpInternal::Write(d) => d,
-                DataDeltaUndoOpInternal::Erase(d) => d,
-            },
-        }
-    }
+    Delta(DataDelta<T>),
+    Undo(DataDelta<T>),
 }
 
 #[must_use]
@@ -81,19 +62,22 @@ impl<K: Ord + Copy, T: Clone> DeltaDataCollection<K, T> {
         }
     }
 
-    pub fn data(&self) -> &BTreeMap<K, DeltaMapElement<T>> {
-        &self.data
-    }
-
-    //FIXME: is it valid to skip ops?
+    // FIXME: is it valid to skip undos?
     pub fn get_data_delta(&self, key: &K) -> Option<&DataDelta<T>> {
         match self.data.get(key) {
             Some(el) => match el {
-                DeltaMapElement::Data(d) => Some(d),
-                DeltaMapElement::Operation(_) => None,
+                DeltaMapElement::Delta(d) => Some(d),
+                DeltaMapElement::Undo(_) => None,
             },
             None => None,
         }
+    }
+
+    pub fn delta_iter(&self) -> impl Iterator<Item = (&K, &DataDelta<T>)> {
+        self.data.iter().map(|(k, el)| match el {
+            DeltaMapElement::Delta(d) => (k, d),
+            DeltaMapElement::Undo(d) => (k, d),
+        })
     }
 
     pub fn merge_delta_data(
@@ -103,8 +87,14 @@ impl<K: Ord + Copy, T: Clone> DeltaDataCollection<K, T> {
         let data_undo = delta_to_apply
             .data
             .into_iter()
-            .map(|(key, other_pool_data)| {
-                self.merge_delta_data_element_impl(key, other_pool_data).map(|v| (key, v))
+            .filter_map(|(key, other_pool_data)| {
+                match self.merge_delta_data_element_impl(key, other_pool_data) {
+                    Ok(delta_op) => match delta_op {
+                        Some(d) => Some(Ok((key, d))),
+                        None => None,
+                    },
+                    Err(e) => Some(Err(e)),
+                }
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
 
@@ -115,52 +105,38 @@ impl<K: Ord + Copy, T: Clone> DeltaDataCollection<K, T> {
         &mut self,
         key: K,
         other_data: DataDelta<T>,
-    ) -> Result<DataDeltaUndoOp<T>, Error> {
-        self.merge_delta_data_element_impl(key, DeltaMapElement::Data(other_data))
+    ) -> Result<Option<DataDeltaUndo<T>>, Error> {
+        self.merge_delta_data_element_impl(key, DeltaMapElement::Delta(other_data))
     }
 
     fn merge_delta_data_element_impl(
         &mut self,
         key: K,
-        other_data: DeltaMapElement<T>,
-    ) -> Result<DataDeltaUndoOp<T>, Error> {
-        let current = self.data.get(&key);
-
-        // create the operation/change that would modify the current delta and do the merge
-        let new_data = match current {
-            Some(current_data) => combine_delta_elements(current_data, other_data)?,
-            None => match other_data {
-                DeltaMapElement::Data(d) => DeltaMapOp::Write(d),
-                DeltaMapElement::Operation(op) => match op.0 {
-                    DataDeltaUndoOpInternal::Write(d) => DeltaMapOp::Write(d),
-                    DataDeltaUndoOpInternal::Erase(d) => DeltaMapOp::Write(d),
-                },
+        other: DeltaMapElement<T>,
+    ) -> Result<Option<DataDeltaUndo<T>>, Error> {
+        let current_el = self.data.get(&key);
+        let current_delta = match current_el {
+            Some(d) => match d {
+                DeltaMapElement::Delta(d) => Some(d),
+                DeltaMapElement::Undo(_) => None,
             },
+            None => None,
         };
 
-        // apply the change to the current map and create the undo data
-        let undo = match new_data {
-            // when we insert to a map, undoing is restoring previously state, and erasing if it was empty
-            DeltaMapOp::Write(v) => match self.data.insert(key, DeltaMapElement::Data(v.clone())) {
-                Some(prev_value) => match prev_value {
-                    DeltaMapElement::Data(d) => DataDeltaUndoOp::new_write(d),
-                    DeltaMapElement::Operation(_) => {
-                        return Err(Error::UndoOpsCombinedNotSupported)
-                    }
-                },
-                None => DataDeltaUndoOp::new_erase(create_inverse_delta(&v)),
-            },
-            // when we remove from a map, undoing is rewriting what we removed
-            DeltaMapOp::Erase => match self.data.remove(&key) {
-                Some(el) => match el {
-                    DeltaMapElement::Data(d) => DataDeltaUndoOp::new_write(d),
-                    DeltaMapElement::Operation(_) => {
-                        return Err(Error::UndoOpsCombinedNotSupported)
-                    }
-                },
-                None => return Err(Error::RemoveNonexistingData),
-            },
+        let undo = match &other {
+            DeltaMapElement::Delta(other_delta) => {
+                let undo = create_undo_delta(current_delta, other_delta.clone())?;
+                Some(DataDeltaUndo(undo))
+            }
+            DeltaMapElement::Undo(_) => None,
         };
+
+        let new_element = match current_el {
+            Some(current) => combine_delta_elements(current, other)?,
+            None => other,
+        };
+
+        self.data.insert(key, new_element);
 
         Ok(undo)
     }
@@ -178,20 +154,17 @@ impl<K: Ord + Copy, T: Clone> DeltaDataCollection<K, T> {
     pub fn undo_merge_delta_data_element(
         &mut self,
         key: K,
-        undo_op: DataDeltaUndoOp<T>,
+        undo_op: DataDeltaUndo<T>,
     ) -> Result<(), Error> {
-        match undo_op.0 {
-            DataDeltaUndoOpInternal::Write(d) => {
-                self.data.insert(key, DeltaMapElement::Data(d));
+        let new_data = match self.data.get(&key) {
+            Some(current_data) => {
+                combine_delta_elements(current_data, DeltaMapElement::Undo(undo_op.0))?
             }
-            DataDeltaUndoOpInternal::Erase(_) => {
-                if self.data.remove(&key).is_none() {
-                    // It's OK to undo delta that is not present.
-                    // Store it and later it can be later applied on another collection.
-                    self.data.insert(key, DeltaMapElement::Operation(undo_op));
-                }
-            }
+            None => DeltaMapElement::Undo(undo_op.0),
         };
+
+        self.data.insert(key, new_data);
+
         Ok(())
     }
 }
@@ -200,40 +173,48 @@ impl<K: Ord + Copy, T: Clone> FromIterator<(K, DataDelta<T>)> for DeltaDataColle
     fn from_iter<I: IntoIterator<Item = (K, DataDelta<T>)>>(iter: I) -> Self {
         DeltaDataCollection {
             data: BTreeMap::<K, DeltaMapElement<T>>::from_iter(
-                iter.into_iter().map(|(k, d)| (k, DeltaMapElement::Data(d))),
+                iter.into_iter().map(|(k, d)| (k, DeltaMapElement::Delta(d))),
             ),
         }
     }
 }
 
-fn create_inverse_delta<T: Clone>(applied_delta: &DataDelta<T>) -> DataDelta<T> {
-    match applied_delta {
-        DataDelta::Create(d) => DataDelta::Delete(d.clone()),
-        DataDelta::Modify(d) => DataDelta::Modify(d.clone()),
-        DataDelta::Delete(d) => DataDelta::Create(d.clone()),
-    }
-}
+/// This function returns a delta that if applied to the result of merge(lhs,rhs) gives original lhs
+fn create_undo_delta<T: Clone>(
+    lhs: Option<&DataDelta<T>>,
+    rhs: DataDelta<T>,
+) -> Result<DataDelta<T>, Error> {
+    match lhs {
+        Some(lhs) => match (lhs, rhs) {
+            (DataDelta::Create(d1), DataDelta::Create(d2)) => {
+                Ok(DataDelta::Modify((d2, d1.clone())))
+            }
+            (DataDelta::Create(d1), DataDelta::Modify((_, d2))) => {
+                Ok(DataDelta::Modify((d2, d1.clone())))
+            }
+            (DataDelta::Create(_), DataDelta::Delete(d)) => Ok(DataDelta::Create(d)),
 
-fn combine_delta_elements<T: Clone>(
-    lhs: &DeltaMapElement<T>,
-    rhs: DeltaMapElement<T>,
-) -> Result<DeltaMapOp<DataDelta<T>>, Error> {
-    match (lhs, rhs) {
-        (DeltaMapElement::Data(d1), DeltaMapElement::Data(d2)) => combine_delta_data(d1, d2),
-        (DeltaMapElement::Data(d), DeltaMapElement::Operation(op)) => match (d, op.0) {
-            (DataDelta::Create(_), DataDeltaUndoOpInternal::Write(_)) => todo!(),
-            (DataDelta::Create(_), DataDeltaUndoOpInternal::Erase(_)) => Ok(DeltaMapOp::Erase),
-            (DataDelta::Modify(_), DataDeltaUndoOpInternal::Write(_)) => todo!(),
-            (DataDelta::Modify(_), DataDeltaUndoOpInternal::Erase(_)) => Ok(DeltaMapOp::Erase),
-            (DataDelta::Delete(_), DataDeltaUndoOpInternal::Write(_)) => todo!(),
-            (DataDelta::Delete(_), DataDeltaUndoOpInternal::Erase(_)) => Ok(DeltaMapOp::Erase),
+            (DataDelta::Modify((_, d1)), DataDelta::Create(d2)) => {
+                Ok(DataDelta::Modify((d2, d1.clone())))
+            }
+            (DataDelta::Modify((_, prev)), DataDelta::Modify((_, new))) => {
+                Ok(DataDelta::Modify((new, prev.clone())))
+            }
+            (DataDelta::Modify((_, _)), DataDelta::Delete(d)) => Ok(DataDelta::Create(d)),
+
+            (DataDelta::Delete(_), DataDelta::Create(d)) => Ok(DataDelta::Delete(d)),
+            (DataDelta::Delete(_), DataDelta::Modify((_, _))) => {
+                Err(Error::DeltaDataModifyAfterDelete)
+            }
+            (DataDelta::Delete(_), DataDelta::Delete(_)) => {
+                Err(Error::DeltaDataDeletedMultipleTimes)
+            }
         },
-        (DeltaMapElement::Operation(_), DeltaMapElement::Data(_)) => {
-            Err(Error::DataCombinedOverUndoOpNotSupported)
-        }
-        (DeltaMapElement::Operation(_), DeltaMapElement::Operation(_)) => {
-            Err(Error::UndoOpsCombinedNotSupported)
-        }
+        None => match rhs {
+            DataDelta::Create(d) => Ok(DataDelta::Delete(d)),
+            DataDelta::Modify((prev, new)) => Ok(DataDelta::Modify((new, prev))),
+            DataDelta::Delete(d) => Ok(DataDelta::Create(d)),
+        },
     }
 }
 
@@ -241,23 +222,41 @@ fn combine_delta_elements<T: Clone>(
 fn combine_delta_data<T: Clone>(
     lhs: &DataDelta<T>,
     rhs: DataDelta<T>,
-) -> Result<DeltaMapOp<DataDelta<T>>, Error> {
+) -> Result<DataDelta<T>, Error> {
     match (lhs, rhs) {
-        (DataDelta::Create(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
-        (DataDelta::Create(_), DataDelta::Modify(d)) => Ok(DeltaMapOp::Write(DataDelta::Create(d))),
-        (DataDelta::Create(_), DataDelta::Delete(_)) => {
-            // if lhs had a creation, and we delete, this means nothing is left and there's a net zero to return
-            Ok(DeltaMapOp::Erase)
+        (DataDelta::Create(_), DataDelta::Create(d)) => Ok(DataDelta::Create(d)),
+        (DataDelta::Create(_), DataDelta::Modify((_, d))) => Ok(DataDelta::Create(d)),
+        (DataDelta::Create(_), DataDelta::Delete(d)) => Ok(DataDelta::Delete(d)),
+
+        (DataDelta::Modify((d1, _)), DataDelta::Create(d2)) => {
+            Ok(DataDelta::Modify((d1.clone(), d2)))
         }
-        (DataDelta::Modify(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
-        (DataDelta::Modify(_), DataDelta::Modify(d)) => Ok(DeltaMapOp::Write(DataDelta::Modify(d))),
-        (DataDelta::Modify(_), DataDelta::Delete(_)) => {
-            // if lhs had a modification, and we delete, this means nothing is left and there's a net zero to return
-            Ok(DeltaMapOp::Erase)
+        (DataDelta::Modify((prev, _)), DataDelta::Modify((_, new))) => {
+            Ok(DataDelta::Modify((prev.clone(), new)))
         }
-        (DataDelta::Delete(_), DataDelta::Create(d)) => Ok(DeltaMapOp::Write(DataDelta::Create(d))),
-        (DataDelta::Delete(_), DataDelta::Modify(_)) => Err(Error::DeltaDataModifyAfterDelete),
+        (DataDelta::Modify((_, _)), DataDelta::Delete(d)) => Ok(DataDelta::Delete(d)),
+
+        (DataDelta::Delete(_), DataDelta::Create(d)) => Ok(DataDelta::Create(d)),
+        (DataDelta::Delete(_), DataDelta::Modify((_, _))) => Err(Error::DeltaDataModifyAfterDelete),
         (DataDelta::Delete(_), DataDelta::Delete(_)) => Err(Error::DeltaDataDeletedMultipleTimes),
+    }
+}
+
+fn combine_delta_elements<T: Clone>(
+    lhs: &DeltaMapElement<T>,
+    rhs: DeltaMapElement<T>,
+) -> Result<DeltaMapElement<T>, Error> {
+    match (lhs, rhs) {
+        (DeltaMapElement::Delta(d1), DeltaMapElement::Delta(d2)) => {
+            combine_delta_data(d1, d2).map(|d| DeltaMapElement::Delta(d))
+        }
+        (DeltaMapElement::Delta(d), DeltaMapElement::Undo(u)) => {
+            combine_delta_data(d, u).map(|d| DeltaMapElement::Delta(d))
+        }
+        (DeltaMapElement::Undo(_), DeltaMapElement::Delta(_)) => {
+            Err(Error::DataCombinedOverUndoNotSupported)
+        }
+        (DeltaMapElement::Undo(_), DeltaMapElement::Undo(_)) => Err(Error::UndoUndoNotSupported),
     }
 }
 

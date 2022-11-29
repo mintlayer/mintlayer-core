@@ -55,10 +55,14 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<'a
         }
 
         self.data.pool_balances.add_unsigned(pool_id, pledge_amount)?;
-        let undo_data = self.data.pool_data.merge_delta_data_element(
-            pool_id,
-            DataDelta::Create(Box::new(PoolData::new(decommission_key, pledge_amount))),
-        )?;
+        let undo_data = self
+            .data
+            .pool_data
+            .merge_delta_data_element(
+                pool_id,
+                DataDelta::Create(Box::new(PoolData::new(decommission_key, pledge_amount))),
+            )?
+            .ok_or(Error::FailedToCreateUndoOp)?;
 
         Ok((
             pool_id,
@@ -82,7 +86,8 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<'a
         let data_undo = self
             .data
             .pool_data
-            .merge_delta_data_element(pool_id, DataDelta::Delete(Box::new(last_data)))?;
+            .merge_delta_data_element(pool_id, DataDelta::Delete(Box::new(last_data)))?
+            .ok_or(Error::FailedToCreateUndoOp)?;
 
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
             pool_id,
@@ -109,10 +114,11 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<'a
 
         let delegation_data = DelegationData::new(target_pool, spend_key);
 
-        let data_undo = self.data.delegation_data.merge_delta_data_element(
-            delegation_id,
-            DataDelta::Create(Box::new(delegation_data)),
-        )?;
+        let data_undo = self
+            .data
+            .delegation_data
+            .merge_delta_data_element(delegation_id, DataDelta::Create(Box::new(delegation_data)))?
+            .ok_or(Error::FailedToCreateUndoOp)?;
 
         Ok((
             delegation_id,

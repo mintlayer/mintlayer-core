@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use accounting::DataDeltaUndoOp;
+use accounting::DataDeltaUndo;
 use common::{chain::OutPoint, primitives::Amount};
 use crypto::key::PublicKey;
 use serialization::{Decode, Encode};
@@ -23,13 +23,13 @@ use crate::{error::Error, DelegationId, PoolId};
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub(crate) enum PoolDataUndo {
     Data(PoolData),
-    DataDelta((Amount, DataDeltaUndoOp<PoolData>)),
+    DataDelta((Amount, DataDeltaUndo<PoolData>)),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub(crate) enum DelegationDataUndo {
     Data(Box<DelegationData>),
-    DataDelta(DataDeltaUndoOp<DelegationData>),
+    DataDelta(DataDeltaUndo<DelegationData>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]

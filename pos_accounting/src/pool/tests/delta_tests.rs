@@ -101,10 +101,10 @@ fn check_merge_deltas(#[case] seed: Seed) {
             [
                 (
                     new_pool_id(1),
-                    DataDelta::Modify(Box::new(PoolData::new(
-                        pub_key1.clone(),
-                        Amount::from_atoms(300),
-                    ))),
+                    DataDelta::Modify((
+                        Box::new(PoolData::new(pub_key1.clone(), Amount::from_atoms(100))),
+                        Box::new(PoolData::new(pub_key1.clone(), Amount::from_atoms(300))),
+                    )),
                 ),
                 (
                     new_pool_id(10),
@@ -150,16 +150,22 @@ fn check_merge_deltas(#[case] seed: Seed) {
     };
     let delta2 = PoSAccountingDelta::from_data(&db, data2);
 
-    let expected_data = PoSAccountingDeltaData {
+    let expected_data_after_merge = PoSAccountingDeltaData {
         pool_data: DeltaDataCollection::from_iter(
             [
                 (
                     new_pool_id(1),
-                    DataDelta::Create(Box::new(PoolData::new(pub_key1, Amount::from_atoms(300)))),
+                    DataDelta::Create(Box::new(PoolData::new(
+                        pub_key1.clone(),
+                        Amount::from_atoms(300),
+                    ))),
                 ),
                 (
                     new_pool_id(10),
-                    DataDelta::Create(Box::new(PoolData::new(pub_key2, Amount::from_atoms(100)))),
+                    DataDelta::Create(Box::new(PoolData::new(
+                        pub_key2.clone(),
+                        Amount::from_atoms(100),
+                    ))),
                 ),
             ]
             .into_iter(),
@@ -183,14 +189,38 @@ fn check_merge_deltas(#[case] seed: Seed) {
             ]
             .into_iter(),
         ),
-        delegation_data: DeltaDataCollection::from_iter([]),
+        delegation_data: DeltaDataCollection::from_iter([(
+            new_delegation_id(1),
+            DataDelta::Delete(Box::new(DelegationData::new(
+                new_pool_id(1),
+                pub_key1.clone(),
+            ))),
+        )]),
     };
 
     let undo_data = delta1.merge_with_delta(delta2.consume()).unwrap();
-    assert_eq!(delta1.data(), &expected_data);
+    assert_eq!(delta1.data(), &expected_data_after_merge);
+
+    let expected_data_after_undo = {
+        let mut data = delta1_origin_data;
+        data.pool_data = DeltaDataCollection::from_iter(
+            [
+                (
+                    new_pool_id(1),
+                    DataDelta::Create(Box::new(PoolData::new(pub_key1, Amount::from_atoms(100)))),
+                ),
+                (
+                    new_pool_id(10),
+                    DataDelta::Delete(Box::new(PoolData::new(pub_key2, Amount::from_atoms(100)))),
+                ),
+            ]
+            .into_iter(),
+        );
+        data
+    };
 
     delta1.undo_delta_merge(undo_data).unwrap();
-    assert_eq!(delta1.data(), &delta1_origin_data);
+    assert_eq!(delta1.data(), &expected_data_after_undo);
 }
 
 #[rstest]
@@ -233,10 +263,10 @@ fn check_merge_values_with_deltas(#[case] seed: Seed) {
                 [
                     (
                         new_pool_id(1),
-                        DataDelta::Modify(Box::new(PoolData::new(
-                            pub_key1.clone(),
-                            Amount::from_atoms(300),
-                        ))),
+                        DataDelta::Modify((
+                            Box::new(PoolData::new(pub_key1.clone(), Amount::from_atoms(100))),
+                            Box::new(PoolData::new(pub_key1.clone(), Amount::from_atoms(300))),
+                        )),
                     ),
                     (
                         new_pool_id(10),

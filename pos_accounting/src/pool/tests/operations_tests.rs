@@ -32,10 +32,11 @@ use crate::{
     PoSAccountingData, PoSAccountingOperations,
 };
 
+// Create pool in db -> decomission pool in delta -> undo in delta -> merge -> merge
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_pool_decomission_pool_undo(#[case] seed: Seed) {
+fn create_pool_decomission_pool_undo_merge(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
     let mut db = PoSAccountingDBMut::new(&mut storage);
@@ -66,3 +67,45 @@ fn create_pool_decomission_pool_undo(#[case] seed: Seed) {
     };
     assert_eq!(storage.dump(), expected_data);
 }
+
+// Create pool in db -> decomission pool in delta -> merge -> undo in delta -> merge
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_pool_decomission_pool_merge_undo_merge(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let mut storage = InMemoryPoSAccounting::new();
+    let mut db = PoSAccountingDBMut::new(&mut storage);
+
+    let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let outpoint = OutPoint::new(
+        OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+        0,
+    );
+    let pledge_amount = Amount::from_atoms(100);
+    let (pool_id, _) = db.create_pool(&outpoint, pledge_amount, pub_key.clone()).unwrap();
+
+    let mut delta1 = PoSAccountingDelta::from_borrowed_parent(&db);
+    let undo = delta1.decommission_pool(pool_id).unwrap();
+
+    let _ = db.batch_write_delta(delta1.consume()).unwrap();
+
+    {
+        let mut db = PoSAccountingDBMut::new(&mut storage);
+        let mut delta2 = PoSAccountingDelta::from_borrowed_parent(&db);
+        delta2.undo(undo).unwrap();
+
+        let _ = db.batch_write_delta(delta2.consume()).unwrap();
+
+        let expected_data = PoSAccountingData {
+            pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, pledge_amount))]),
+            pool_balances: BTreeMap::from([(pool_id, pledge_amount)]),
+            pool_delegation_shares: Default::default(),
+            delegation_balances: Default::default(),
+            delegation_data: Default::default(),
+        };
+        assert_eq!(storage.dump(), expected_data);
+    }
+}
+
+// FIXME: more tests here

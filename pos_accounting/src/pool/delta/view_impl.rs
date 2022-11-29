@@ -96,7 +96,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<'a, P> {
         match local_data {
             Some(d) => match d {
                 DataDelta::Create(d) => Ok(Some(*d.clone())),
-                DataDelta::Modify(d) => Ok(Some(*d.clone())),
+                DataDelta::Modify((_, d)) => Ok(Some(*d.clone())),
                 DataDelta::Delete(_) => Ok(None),
             },
             None => self.parent.get_pool_data(pool_id),
@@ -136,7 +136,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<'a, P> {
         match local_data {
             Some(d) => match d {
                 DataDelta::Create(d) => Ok(Some(*d.clone())),
-                DataDelta::Modify(d) => Ok(Some(*d.clone())),
+                DataDelta::Modify((_, d)) => Ok(Some(*d.clone())),
                 DataDelta::Delete(_) => Ok(None),
             },
             None => self.parent.get_delegation_data(delegation_id),
