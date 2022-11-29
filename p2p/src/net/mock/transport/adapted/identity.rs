@@ -22,6 +22,7 @@ use super::StreamAdapter;
 #[derive(Debug)]
 pub struct IdentityStreamAdapter;
 
+/// An StreamAdapter that does nothing with no handshake (Identity operation on data that goes through it)
 #[async_trait]
 impl<T: MockStream + 'static> StreamAdapter<T> for IdentityStreamAdapter {
     type Stream = T;

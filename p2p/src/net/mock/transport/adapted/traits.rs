@@ -20,6 +20,7 @@ use crate::{
     Result,
 };
 
+/// Represents a stream that requires a handshake to function (such as encrypted streams)
 #[async_trait]
 pub trait StreamAdapter<T>: Send + Sync + 'static {
     type Stream: MockStream;

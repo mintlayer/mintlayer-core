@@ -31,6 +31,10 @@ use super::{MockListener, MockTransport};
 // How much time is allowed to spend setting up (optionally) encrypted stream.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Transport layer that wraps a lower-level transport layer (can be seen like an onion with multiple layer)
+/// Simplest version of this can be seen as a tcp transport layer, with an Identity stream_adapter. That would
+/// be equivalent to the tcp transport layer with nothing done to it.
+/// More layers can be added on top of this, with this struct, where we add encryption on top.
 #[derive(Debug)]
 pub struct AdaptedMockTransport<S, T> {
     stream_adapter: Arc<S>,
@@ -69,9 +73,13 @@ impl<S: StreamAdapter<T::Stream>, T: MockTransport> MockTransport for AdaptedMoc
     }
 }
 
+/// A listener object that handles new incoming connections, and does any required hand-shakes (see members' comments)
 pub struct AdaptedListener<S: StreamAdapter<T::Stream>, T: MockTransport> {
+    /// New connections will be sent to this receiver
     receiver: UnboundedReceiver<(S::Stream, T::Address)>,
+    /// the local address resulting from binding the transport
     local_address: T::Address,
+    /// JoinHandle for the task that accepts new connections; once joined, the channel of `receiver` will be dead
     join_handle: tokio::task::JoinHandle<()>,
 }
 

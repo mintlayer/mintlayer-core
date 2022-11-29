@@ -23,7 +23,10 @@ use crate::{
     Result,
 };
 
-/// An abstraction layer for creating and opening connections.
+/// An abstraction layer for the transport layer at the highest level, which is responsible for:
+/// 1. Binding to a socket at a specific port, where we listen to connections.
+///    The mechanism to retrieve new connected clients are up to the listener struct
+/// 2. Providing the connect function, that's used to connect to other peers
 #[async_trait]
 pub trait MockTransport: Send + Sync + 'static {
     /// An address type.
@@ -41,7 +44,7 @@ pub trait MockTransport: Send + Sync + 'static {
     /// A bannable address format.
     type BannableAddress: Debug + Eq + Ord + Send;
 
-    /// A listener type.
+    /// A listener type (or acceptor as per boost terminology).
     type Listener: MockListener<Self::Stream, Self::Address>;
 
     /// A messages stream.

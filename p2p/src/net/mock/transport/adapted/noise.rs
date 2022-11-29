@@ -38,6 +38,7 @@ impl std::fmt::Debug for NoiseEncryptionAdapter {
     }
 }
 
+/// StreamAdapter that encrypts the data going through it with noise protocol
 #[async_trait]
 impl<T: MockStream + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
     type Stream = snowstorm::NoiseStream<T>;
