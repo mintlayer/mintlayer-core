@@ -1274,6 +1274,12 @@ where
                 mgr.process_block_response(peer_id, response.into_blocks()).await?;
             }
         },
+        SyncingEvent::RequestTimeout {
+            peer_id,
+            request_id: _,
+        } => {
+            mgr.unregister_peer(peer_id);
+        }
         SyncingEvent::Announcement {
             peer_id,
             message_id,

@@ -176,6 +176,10 @@ pub enum SyncingEvent {
         request_id: RequestId,
         response: Box<SyncResponse>,
     },
+    RequestTimeout {
+        peer_id: PeerId,
+        request_id: RequestId,
+    },
     Announcement {
         peer_id: PeerId,
         message_id: MessageId,

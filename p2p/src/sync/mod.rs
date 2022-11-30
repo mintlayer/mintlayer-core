@@ -20,10 +20,7 @@ pub mod peer;
 
 mod request;
 
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use futures::FutureExt;
 use tokio::sync::{mpsc, oneshot};
@@ -83,7 +80,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     chain_config: Arc<ChainConfig>,
 
     /// The p2p configuration.
-    p2p_config: Arc<P2pConfig>,
+    _p2p_config: Arc<P2pConfig>,
 
     /// Syncing state of the local node
     state: SyncState,
@@ -102,24 +99,6 @@ pub struct BlockSyncManager<T: NetworkingService> {
 
     /// Subsystem handle to Chainstate
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-
-    /// A list of expected responses identified by the request id.
-    ///
-    /// An identifier is added to the list when a request is sent and removed either when the a
-    /// response is received or when a timeout occurs. In the latter case the peer that failed to
-    /// respond in time is disconnected.  
-    pending_responses: HashSet<T::SyncingPeerRequestId>,
-
-    /// A sender for request timeouts.
-    ///
-    /// When a request is sent, a new task is created that will send request and peer identifiers
-    /// after the time specified by the `sync_manager_response_timeout` field of p2p config.
-    timeouts_sender: mpsc::UnboundedSender<(T::SyncingPeerRequestId, T::PeerId)>,
-
-    /// A receiver for request timeouts.
-    ///
-    /// Timeouts are processed by the `BlockSyncManager::process_request_timeout` function.
-    timeouts_receiver: mpsc::UnboundedReceiver<(T::SyncingPeerRequestId, T::PeerId)>,
 }
 
 /// Syncing manager
@@ -138,20 +117,15 @@ where
         rx_sync: mpsc::UnboundedReceiver<SyncControlEvent<T>>,
         tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
     ) -> Self {
-        let (timeouts_sender, timeouts_receiver) = mpsc::unbounded_channel();
-
         Self {
             chain_config,
-            p2p_config,
+            _p2p_config: p2p_config,
             peer_sync_handle: handle,
             rx_sync,
             tx_peer_manager,
             chainstate_handle,
             peers: Default::default(),
             state: SyncState::Uninitialized,
-            pending_responses: HashSet::new(),
-            timeouts_sender,
-            timeouts_receiver,
         }
     }
 
@@ -413,11 +387,6 @@ where
         request_id: T::SyncingPeerRequestId,
         response: message::Response,
     ) -> crate::Result<()> {
-        if !self.pending_responses.remove(&request_id) {
-            log::warn!("Ignoring unexpected response: {request_id:?} {response:?}");
-            return Ok(());
-        }
-
         match response {
             message::Response::HeaderListResponse(response) => {
                 log::debug!("process header response (id {request_id:?}) from peer {peer_id}");
@@ -440,25 +409,6 @@ where
         }
 
         Ok(())
-    }
-
-    /// Disconnects a peer if it failed to answer our request in time.
-    pub async fn process_request_timeout(
-        &mut self,
-        request_id: T::SyncingPeerRequestId,
-        peer_id: T::PeerId,
-    ) -> crate::Result<()> {
-        if self.pending_responses.contains(&request_id) {
-            self.unregister_peer(peer_id);
-
-            let (sender, receiver) = oneshot::channel();
-            self.tx_peer_manager
-                .send(PeerManagerEvent::Disconnect(peer_id, sender))
-                .map_err(P2pError::from)?;
-            receiver.await.map_err(P2pError::from)?
-        } else {
-            Ok(())
-        }
     }
 
     pub async fn process_announcement(
@@ -589,6 +539,12 @@ where
                     } => {
                         self.process_response(peer_id, request_id, response).await?;
                     },
+                    SyncingEvent::RequestTimeout {
+                        peer_id, request_id
+                    } => {
+                        log::debug!("{request_id:?} request timeout, unregistering {peer_id:?} peer");
+                        self.unregister_peer(peer_id);
+                    },
                     SyncingEvent::Announcement{ peer_id, message_id, announcement } => {
                         self.process_announcement(peer_id, message_id, announcement).await?;
                     }
@@ -610,12 +566,6 @@ where
                     match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
                         Some(block) => self.peer_sync_handle.make_announcement(Announcement::Block(block)).await?,
                         None => log::error!("CRITICAL: best block not available"),
-                    }
-                }
-                ids = self.timeouts_receiver.recv() => {
-                    match ids {
-                        Some((request_id, peer_id)) => self.process_request_timeout(request_id, peer_id).await?,
-                        None => return Err(P2pError::Other("Sync manager timeouts channels closed")),
                     }
                 }
             }

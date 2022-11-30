@@ -15,8 +15,6 @@
 
 //! Utility functions for sending header/block requests/responses
 
-use tokio::time::{self, Duration};
-
 use chainstate::Locator;
 use common::{
     chain::{block::BlockHeader, Block},
@@ -71,18 +69,7 @@ where
         peer_id: T::PeerId,
         request: message::Request,
     ) -> crate::Result<()> {
-        let request_id = self.peer_sync_handle.send_request(peer_id, request).await?;
-        let is_inserted = self.pending_responses.insert(request_id);
-        debug_assert!(is_inserted);
-
-        let timeout = self.p2p_config.request_timeout.clone().into();
-        let sender = self.timeouts_sender.clone();
-        tokio::spawn(async move {
-            time::sleep(Duration::from_secs(timeout)).await;
-            let _ = sender.send((request_id, peer_id));
-        });
-
-        Ok(())
+        self.peer_sync_handle.send_request(peer_id, request).await.map(|_| ())
     }
 
     /// Send block request to remote peer

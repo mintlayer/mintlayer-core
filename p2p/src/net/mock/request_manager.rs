@@ -36,10 +36,11 @@ pub struct RequestManager {
     /// Active ephemeral IDs
     ephemerals: HashMap<types::MockPeerId, HashSet<types::MockRequestId>>,
 
+    // TODO: FIXME: Remove?
     /// Pending outbound requests (TODO: timeouts)
     _pending: HashMap<types::MockRequestId, types::MockRequestId>,
 
-    // Next ID for outbound request
+    /// The next ID for an outbound request.
     next_request_id: types::MockRequestId,
 
     /// Next ephemeral request ID

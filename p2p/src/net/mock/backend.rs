@@ -208,7 +208,7 @@ where
         }
     }
 
-    /// Send request to remote peer
+    /// Sends a request to the remote peer.
     async fn send_request(
         &mut self,
         peer_id: &MockPeerId,
@@ -220,8 +220,9 @@ where
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         let (request_id, request) = self.request_mgr.make_request(peer_id, request)?;
-
         peer.tx.send(MockEvent::SendMessage(request)).await.map_err(P2pError::from)?;
+
+        // TODO: FIXME: Add timeouts!
 
         Ok(request_id)
     }

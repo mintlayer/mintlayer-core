@@ -64,7 +64,10 @@ where
     tokio::spawn(async move { man.main().await });
 
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
-    let p2p_config = Arc::new(P2pConfig::default());
+    let p2p_config = Arc::new(P2pConfig {
+        request_timeout: 1.into(),
+        ..Default::default()
+    });
     let (conn, sync) = T::start(addr, Arc::clone(&chain_config), Arc::clone(&p2p_config))
         .await
         .unwrap();

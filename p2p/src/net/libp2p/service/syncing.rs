@@ -184,6 +184,13 @@ where
                     response,
                 })
             }
+            P2pSyncingEvent::RequestTimeout {
+                peer_id,
+                request_id,
+            } => Ok(SyncingEvent::RequestTimeout {
+                peer_id,
+                request_id,
+            }),
             P2pSyncingEvent::Announcement {
                 peer_id,
                 message_id,

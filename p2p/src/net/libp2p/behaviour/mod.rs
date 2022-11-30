@@ -44,6 +44,7 @@ use libp2p::{
 use common::chain::config::ChainConfig;
 use logging::log;
 use serialization::Decode;
+use utils::tap_error_log::LogError;
 
 use crate::{
     config,
@@ -353,6 +354,13 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
             } => match error {
                 OutboundFailure::Timeout => {
                     log::debug!("OutboundFailure::Timeout for {peer} for {request_id:?}: {error}");
+                    self.add_event(Libp2pBehaviourEvent::Syncing(
+                        SyncingEvent::RequestTimeout {
+                            peer_id: peer,
+                            request_id,
+                        },
+                    ));
+                    let _ = self.connmgr.close_connection(&peer).log_err();
                 }
                 OutboundFailure::ConnectionClosed => {
                     if let Err(err) = self.connmgr.handle_connection_closed(&peer) {
@@ -377,6 +385,13 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
             } => match error {
                 InboundFailure::Timeout => {
                     log::debug!("InboundFailure::Timeout for {peer} for {request_id:?}: {error}");
+                    self.add_event(Libp2pBehaviourEvent::Syncing(
+                        SyncingEvent::RequestTimeout {
+                            peer_id: peer,
+                            request_id,
+                        },
+                    ));
+                    let _ = self.connmgr.close_connection(&peer).log_err();
                 }
                 InboundFailure::ConnectionClosed => {
                     if let Err(err) = self.connmgr.handle_connection_closed(&peer) {

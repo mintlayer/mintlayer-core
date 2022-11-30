@@ -181,3 +181,66 @@ async fn multiple_requests_and_responses_mock_channels() {
     multiple_requests_and_responses::<MakeChannelAddress, MockService<ChannelMockTransport>>()
         .await;
 }
+
+// Receive getheaders before receiving the `Connected` event from the peer manager which makes the
+// request be rejected and time out in the sender's end.
+async fn request_timeout<A, T>()
+where
+    A: MakeTestAddress<Address = T::Address>,
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
+    let (mut mgr1, mut conn1, _sync1, _pm1) = make_sync_manager::<T>(A::make_address()).await;
+    let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(A::make_address()).await;
+
+    // connect the two managers together so that they can exchange messages
+    connect_services::<T>(&mut conn1, &mut conn2).await;
+    let peer2_id = *conn2.peer_id();
+
+    tokio::spawn(async move {
+        mgr1.register_peer(peer2_id).await.unwrap();
+
+        match mgr1.peer_sync_handle.poll_next().await.unwrap() {
+            SyncingEvent::RequestTimeout {
+                peer_id,
+                request_id: _,
+            } => {
+                assert_eq!(peer_id, peer2_id);
+                mgr1.unregister_peer(peer_id);
+            }
+            _ => panic!("invalid event received"),
+        }
+    });
+
+    match timeout(Duration::from_secs(5), mgr2.peer_sync_handle.poll_next()).await {
+        Ok(event) => match event {
+            Ok(SyncingEvent::Request { .. }) => {}
+            _ => panic!("invalid event: {:?}", event),
+        },
+        Err(_) => panic!("did not receive `Request` in time"),
+    }
+
+    match timeout(Duration::from_secs(5), mgr2.peer_sync_handle.poll_next()).await {
+        Ok(event) => match event {
+            Ok(SyncingEvent::RequestTimeout { .. }) => {}
+            _ => panic!("invalid event: {:?}", event),
+        },
+        Err(_) => panic!("did not receive `Error` in time"),
+    }
+}
+
+#[tokio::test]
+async fn request_timeout_libp2p() {
+    request_timeout::<MakeP2pAddress, Libp2pService>().await;
+}
+
+#[tokio::test]
+async fn request_timeout_mock_tcp() {
+    request_timeout::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+}
+
+#[tokio::test]
+async fn request_timeout_mock_channels() {
+    request_timeout::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+}
