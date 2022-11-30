@@ -29,6 +29,7 @@ use crate::{
     Result,
 };
 
+// TODO: Move this constant somewhere else.
 const MAX_CONCURRENT_HANDSHAKES: usize = 100;
 
 /// A listener object that handles new incoming connections, and does any required hand-shakes (see members' comments)
