@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_trait::async_trait;
+use futures::future::BoxFuture;
 
 use crate::{
     net::mock::{peer::Role, transport::PeerStream},
@@ -21,12 +21,11 @@ use crate::{
 };
 
 /// Represents a stream that requires a handshake to function (such as encrypted streams)
-#[async_trait]
 pub trait StreamAdapter<T>: Send + Sync + 'static {
     type Stream: PeerStream;
 
     fn new() -> Self;
 
     /// Wraps base async stream into AsyncRead/AsyncWrite stream that may implement encryption.
-    async fn handshake(&self, base: T, role: Role) -> Result<Self::Stream>;
+    fn handshake(&self, base: T, role: Role) -> BoxFuture<'static, Result<Self::Stream>>;
 }

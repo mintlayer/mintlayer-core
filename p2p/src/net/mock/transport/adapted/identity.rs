@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use async_trait::async_trait;
+use futures::future::{ready, BoxFuture};
 
 use crate::net::mock::{peer::Role, transport::PeerStream};
 
@@ -31,7 +32,7 @@ impl<T: PeerStream + 'static> StreamAdapter<T> for IdentityStreamAdapter {
         Self
     }
 
-    async fn handshake(&self, base: T, _role: Role) -> crate::Result<Self::Stream> {
-        Ok(base)
+    fn handshake(&self, base: T, _role: Role) -> BoxFuture<'static, crate::Result<Self::Stream>> {
+        Box::pin(ready(Ok(base)))
     }
 }

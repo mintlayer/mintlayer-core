@@ -17,19 +17,16 @@ pub mod identity;
 pub mod noise;
 pub mod traits;
 
-use std::{sync::Arc, time::Duration};
+use std::{pin::Pin, task::Poll};
 
 use async_trait::async_trait;
-use tokio::{sync::mpsc::UnboundedReceiver, time::timeout};
+use futures::{future::BoxFuture, Future};
 
-use crate::{error::P2pError, net::mock::peer::Role, Result};
+use crate::{net::mock::peer::Role, Result};
 
 use self::traits::StreamAdapter;
 
 use super::{TransportListener, TransportSocket};
-
-// How much time is allowed to spend setting up (optionally) encrypted stream.
-const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Transport layer that wraps a lower-level transport layer (can be seen like an onion with multiple layer)
 /// Simplest version of this can be seen as a tcp transport layer, with an Identity stream_adapter. That would
@@ -37,7 +34,7 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 /// More layers can be added on top of this, with this struct, where we add encryption on top.
 #[derive(Debug)]
 pub struct WrappedTransportSocket<S, T> {
-    stream_adapter: Arc<S>,
+    stream_adapter: S,
     base_transport: T,
 }
 
@@ -52,7 +49,7 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
 
     fn new() -> Self {
         let base_transport = T::new();
-        let stream_adapter = Arc::new(S::new());
+        let stream_adapter = S::new();
         Self {
             stream_adapter,
             base_transport,
@@ -60,12 +57,13 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
     }
 
     async fn bind(&self, address: Self::Address) -> Result<Self::Listener> {
-        AdaptedListener::start(
-            &self.base_transport,
-            Arc::clone(&self.stream_adapter),
-            address,
-        )
-        .await
+        let stream_adapter = S::new();
+        let listener = self.base_transport.bind(address).await?;
+        Ok(AdaptedListener {
+            listener,
+            stream_adapter,
+            handshakes: Vec::new(),
+        })
     }
 
     async fn connect(&self, address: Self::Address) -> Result<Self::Stream> {
@@ -77,67 +75,41 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
 
 /// A listener object that handles new incoming connections, and does any required hand-shakes (see members' comments)
 pub struct AdaptedListener<S: StreamAdapter<T::Stream>, T: TransportSocket> {
-    /// New connections will be sent to this receiver
-    receiver: UnboundedReceiver<(S::Stream, T::Address)>,
-    /// the local address resulting from binding the transport
-    local_address: T::Address,
-    /// JoinHandle for the task that accepts new connections; once joined, the channel of `receiver` will be dead
-    join_handle: tokio::task::JoinHandle<()>,
+    stream_adapter: S,
+    listener: T::Listener,
+    handshakes: Vec<(BoxFuture<'static, Result<S::Stream>>, T::Address)>,
 }
 
-impl<S: StreamAdapter<T::Stream>, T: TransportSocket> AdaptedListener<S, T> {
-    async fn start(transport: &T, stream_adapter: Arc<S>, address: T::Address) -> Result<Self> {
-        let mut listener = transport.bind(address).await?;
-        let local_address = listener.local_address()?;
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+// Helper future used to drive handshakes concurrently
+struct HandshakeFut<'a, S: StreamAdapter<T::Stream>, T: TransportSocket>(
+    &'a mut Vec<(BoxFuture<'static, Result<S::Stream>>, T::Address)>,
+);
 
-        // Process new connections in background because TransportListener::accept must be cancel safe.
-        let join_handle = tokio::spawn(async move {
-            loop {
-                let (base, addr) = match listener.accept().await {
-                    Ok(stream) => stream,
-                    Err(err) => {
-                        logging::log::error!("accept failed unexpectedly: {}", err);
-                        return;
+impl<'a, S: StreamAdapter<T::Stream>, T: TransportSocket> Future for HandshakeFut<'a, S, T> {
+    type Output = (S::Stream, T::Address);
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        'outer: loop {
+            for i in 0..self.0.len() {
+                match Future::poll(self.0[i].0.as_mut(), cx) {
+                    Poll::Ready(res) => {
+                        let (_, addr) = self.0.remove(i);
+                        match res {
+                            Ok(stream) => {
+                                return Poll::Ready((stream, addr));
+                            }
+                            Err(err) => {
+                                logging::log::warn!("handshake failed: {}", err);
+                                continue 'outer;
+                            }
+                        }
                     }
-                };
-                let sender = sender.clone();
-                let stream_adapter = Arc::clone(&stream_adapter);
-                tokio::spawn(async move {
-                    let res = timeout(
-                        HANDSHAKE_TIMEOUT,
-                        stream_adapter.handshake(base, Role::Inbound),
-                    )
-                    .await;
-                    let socket = match res {
-                        Ok(Ok(socket)) => socket,
-                        Ok(Err(err)) => {
-                            logging::log::warn!("handshake failed: {}", err);
-                            return;
-                        }
-                        Err(err) => {
-                            logging::log::warn!("handshake timeout: {}", err);
-                            return;
-                        }
-                    };
-                    // It's not an error if the channel is already closed
-                    _ = sender.send((socket, addr));
-                });
+                    Poll::Pending => continue,
+                }
             }
-        });
 
-        Ok(Self {
-            receiver,
-            local_address,
-            join_handle,
-        })
-    }
-}
-
-impl<S: StreamAdapter<T::Stream>, T: TransportSocket> Drop for AdaptedListener<S, T> {
-    fn drop(&mut self) {
-        // This won't block so the base listener might be alive for some more time.
-        self.join_handle.abort();
+            return Poll::Pending;
+        }
     }
 }
 
@@ -146,11 +118,30 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener<S::Strea
     for AdaptedListener<S, T>
 {
     async fn accept(&mut self) -> Result<(S::Stream, T::Address)> {
-        self.receiver.recv().await.ok_or(P2pError::ChannelClosed)
+        loop {
+            tokio::select! {
+                handshake = HandshakeFut::<S, T>(&mut self.handshakes) => {
+                    return Ok(handshake);
+                }
+                accept_res = self.listener.accept() => {
+                    match accept_res {
+                        Ok((base, addr)) => {
+                            // Store active handshakes because accept must be cancel safe
+                            let handshake = self.stream_adapter.handshake(base, Role::Inbound);
+                            self.handshakes.push((handshake, addr));
+                        },
+                        Err(err) => {
+                            logging::log::error!("accept failed unexpectedly: {}", err);
+                            return Err(err);
+                        },
+                    }
+                }
+            }
+        }
     }
 
     fn local_address(&self) -> Result<T::Address> {
-        Ok(self.local_address.clone())
+        self.listener.local_address()
     }
 }
 
@@ -292,9 +283,6 @@ mod tests {
         assert!(*transport.base_transport.port_open.lock().unwrap());
 
         drop(listener);
-        // Base listener won't be dropped immediately.
-        while *transport.base_transport.port_open.lock().unwrap() {
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        }
+        assert!(!*transport.base_transport.port_open.lock().unwrap());
     }
 }
