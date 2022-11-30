@@ -102,6 +102,8 @@ impl PeerStream for TcpTransportStream {}
 
 #[cfg(test)]
 mod tests {
+    use p2p_test_utils::{MakeTcpAddress, MakeTestAddress};
+
     use super::*;
     use crate::net::{
         message::{BlockListRequest, Request},
@@ -114,8 +116,7 @@ mod tests {
     #[tokio::test]
     async fn send_recv() {
         let transport = TcpTransportSocket::new();
-        let address = "[::1]:0".parse().unwrap();
-        let mut server = transport.bind(address).await.unwrap();
+        let mut server = transport.bind(MakeTcpAddress::make_address()).await.unwrap();
         let peer_fut = transport.connect(server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
@@ -146,8 +147,7 @@ mod tests {
     #[tokio::test]
     async fn send_2_reqs() {
         let transport = TcpTransportSocket::new();
-        let address = "[::1]:0".parse().unwrap();
-        let mut server = transport.bind(address).await.unwrap();
+        let mut server = transport.bind(MakeTcpAddress::make_address()).await.unwrap();
         let peer_fut = transport.connect(server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);

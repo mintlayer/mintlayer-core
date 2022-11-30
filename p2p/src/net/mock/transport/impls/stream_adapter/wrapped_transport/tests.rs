@@ -170,8 +170,7 @@ async fn test_bind_port_closed() {
 #[tokio::test]
 async fn send_2_reqs() {
     let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new();
-    let address = "[::1]:0".parse().unwrap();
-    let mut server = transport.bind(address).await.unwrap();
+    let mut server = transport.bind(MakeTcpAddress::make_address()).await.unwrap();
     let peer_fut = transport.connect(server.local_address().unwrap());
 
     let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
