@@ -96,7 +96,7 @@ pub type ActionSender<T> = mpsc::UnboundedSender<Action<T, ()>>;
 /// There are two sets of methods for communication with and control of subsystem:
 /// * Methods starting with `submit_` will submit the closure given as the argument for processing
 ///   by the subsystem. The result is not immediately ready and the current task is free to
-///   continue its operation and `.await` the return value at a latet point (or decide not to).
+///   continue its operation and `.await` the return value at a later point (or decide not to).
 /// * Methods starting with `call_` will also submit the closure and suspend the current task until
 ///   the result is ready, returning it directly.
 pub struct Handle<T> {
@@ -153,7 +153,7 @@ impl<T: Send + 'static> Handle<T> {
         self.submit_async_mut(|this| func(this))
     }
 
-    /// Subimt a procedure to the subsystem.
+    /// Submit a procedure to the subsystem.
     pub fn submit_mut<R: Send + 'static>(
         &self,
         func: impl for<'a> FnOnce(&'a mut T) -> R + Send + 'static,
