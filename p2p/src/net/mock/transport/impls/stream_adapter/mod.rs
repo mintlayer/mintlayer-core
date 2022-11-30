@@ -26,7 +26,7 @@ use crate::{net::mock::peer::Role, Result};
 
 use self::traits::StreamAdapter;
 
-use super::{TransportListener, TransportSocket};
+use super::super::{TransportListener, TransportSocket};
 
 /// Transport layer that wraps a lower-level transport layer (can be seen like an onion with multiple layer)
 /// Simplest version of this can be seen as a tcp transport layer, with an Identity stream_adapter. That would
