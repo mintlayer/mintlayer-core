@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod message_codec;
 mod impls;
+mod message_codec;
 mod traits;
 
 use impls::{channel, stream_adapter, tcp};
