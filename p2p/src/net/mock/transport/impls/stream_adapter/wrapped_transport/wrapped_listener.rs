@@ -29,6 +29,8 @@ use crate::{
     Result,
 };
 
+const MAX_CONCURRENT_HANDSHAKES: usize = 100;
+
 /// A listener object that handles new incoming connections, and does any required hand-shakes (see members' comments)
 pub struct AdaptedListener<S: StreamAdapter<T::Stream>, T: TransportSocket> {
     pub stream_adapter: S,
@@ -43,11 +45,12 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener<S::Strea
 {
     async fn accept(&mut self) -> Result<(S::Stream, T::Address)> {
         loop {
+            let accept_new = self.handshakes.len() < MAX_CONCURRENT_HANDSHAKES;
             tokio::select! {
                 handshake = HandshakeFut::<S, T>(&mut self.handshakes) => {
                     return Ok(handshake);
                 }
-                accept_res = self.listener.accept() => {
+                accept_res = self.listener.accept(), if accept_new => {
                     match accept_res {
                         Ok((base, addr)) => {
                             // Store active handshakes because accept must be cancel safe
