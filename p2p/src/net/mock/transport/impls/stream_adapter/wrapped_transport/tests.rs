@@ -13,16 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use async_trait::async_trait;
+use futures::StreamExt;
 use p2p_test_utils::{MakeChannelAddress, MakeTcpAddress, MakeTestAddress};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    time::timeout,
+};
 
 use crate::{
     message::{BlockListRequest, Request},
     net::mock::{
         transport::{
+            impls::stream_adapter::wrapped_transport::wrapped_listener::MAX_CONCURRENT_HANDSHAKES,
             BufferedTranscoder, IdentityStreamAdapter, MockChannelListener, MockChannelTransport,
             NoiseEncryptionAdapter, PeerStream, TcpTransportSocket, TransportListener,
             TransportSocket,
@@ -212,4 +220,32 @@ async fn send_2_reqs() {
             request,
         }
     );
+}
+
+#[tokio::test]
+async fn pending_handshakes() {
+    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new();
+    let mut server = transport.bind(MakeTcpAddress::make_address()).await.unwrap();
+    let local_addr = server.local_address().unwrap();
+
+    let join_handle = tokio::spawn(async move {
+        loop {
+            _ = server.accept().await;
+        }
+    });
+
+    let mut sockets = futures::stream::iter(0..MAX_CONCURRENT_HANDSHAKES)
+        .then(|_| async { tokio::net::TcpStream::connect(local_addr).await.unwrap() })
+        .collect::<Vec<_>>()
+        .await;
+
+    let pending_fut = timeout(Duration::from_millis(100), transport.connect(local_addr)).await;
+    assert!(matches!(pending_fut, Err(_)));
+
+    sockets.pop();
+
+    let pending_fut = timeout(Duration::from_millis(100), transport.connect(local_addr)).await;
+    assert!(matches!(pending_fut, Ok(Ok(_))));
+
+    join_handle.abort();
 }
