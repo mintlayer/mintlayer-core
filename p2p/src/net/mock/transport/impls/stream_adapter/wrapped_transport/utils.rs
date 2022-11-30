@@ -36,14 +36,7 @@ impl<'a, S: StreamAdapter<T::Stream>, T: TransportSocket> Future for HandshakeFu
             for i in 0..self.0.len() {
                 if let Poll::Ready(res) = Future::poll(self.0[i].0.as_mut(), cx) {
                     let (_, addr) = self.0.swap_remove(i);
-                    match res {
-                        Ok(stream) => {
-                            return Poll::Ready(Ok((stream, addr)));
-                        }
-                        Err(err) => {
-                            return Poll::Ready(Err(err));
-                        }
-                    }
+                    return Poll::Ready(res.map(|stream| (stream, addr)));
                 }
             }
 
