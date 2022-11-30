@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod codec;
+mod message_codec;
 mod impls;
 mod traits;
 
@@ -21,7 +21,7 @@ use impls::{channel, stream_adapter, tcp};
 
 pub use self::{
     channel::{ChannelMockStream, MockChannelListener, MockChannelTransport},
-    codec::BufferedTranscoder,
+    message_codec::BufferedTranscoder,
     stream_adapter::{
         identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, WrappedTransportSocket,
     },
