@@ -77,11 +77,13 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
 pub struct AdaptedListener<S: StreamAdapter<T::Stream>, T: TransportSocket> {
     stream_adapter: S,
     listener: T::Listener,
+    #[allow(clippy::type_complexity)]
     handshakes: Vec<(BoxFuture<'static, Result<S::Stream>>, T::Address)>,
 }
 
 // Helper future used to drive handshakes concurrently
 struct HandshakeFut<'a, S: StreamAdapter<T::Stream>, T: TransportSocket>(
+    #[allow(clippy::type_complexity)]
     &'a mut Vec<(BoxFuture<'static, Result<S::Stream>>, T::Address)>,
 );
 
