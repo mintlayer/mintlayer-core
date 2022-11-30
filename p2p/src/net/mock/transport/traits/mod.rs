@@ -13,20 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod impls;
-mod message_codec;
-mod traits;
-
-use impls::{channel, stream_adapter, tcp};
-
-pub use self::{
-    channel::{ChannelMockStream, MockChannelListener, MockChannelTransport},
-    message_codec::BufferedTranscoder,
-    stream_adapter::{
-        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, WrappedTransportSocket,
-    },
-    tcp::TcpTransportSocket,
-    traits::{listener::TransportListener, socket::TransportSocket, stream::PeerStream},
-};
-
-pub type NoiseTcpTransport = WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>;
+pub mod listener;
+pub mod socket;
+pub mod stream;

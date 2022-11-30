@@ -13,20 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod impls;
-mod message_codec;
-mod traits;
+use async_trait::async_trait;
 
-use impls::{channel, stream_adapter, tcp};
+use crate::Result;
 
-pub use self::{
-    channel::{ChannelMockStream, MockChannelListener, MockChannelTransport},
-    message_codec::BufferedTranscoder,
-    stream_adapter::{
-        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, WrappedTransportSocket,
-    },
-    tcp::TcpTransportSocket,
-    traits::{listener::TransportListener, socket::TransportSocket, stream::PeerStream},
-};
+/// An abstraction layer over some kind of network connection.
+#[async_trait]
+pub trait TransportListener<Stream, Address>: Send {
+    /// Accepts a new inbound connection.
+    async fn accept(&mut self) -> Result<(Stream, Address)>;
 
-pub type NoiseTcpTransport = WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>;
+    /// Returns the local address of the listener.
+    fn local_address(&self) -> Result<Address>;
+}

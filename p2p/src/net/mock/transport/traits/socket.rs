@@ -16,12 +16,13 @@
 use std::{fmt::Debug, hash::Hash, str::FromStr};
 
 use async_trait::async_trait;
-use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
     net::{AsBannableAddress, IsBannableAddress},
     Result,
 };
+
+use super::{listener::TransportListener, stream::PeerStream};
 
 /// An abstraction layer for the transport layer at the highest level, which is responsible for:
 /// 1. Binding to a socket at a specific port, where we listen to connections.
@@ -59,17 +60,3 @@ pub trait TransportSocket: Send + Sync + 'static {
     /// Open a connection to the given address.
     async fn connect(&self, address: Self::Address) -> Result<Self::Stream>;
 }
-
-/// An abstraction layer over some kind of network connection.
-#[async_trait]
-pub trait TransportListener<Stream, Address>: Send {
-    /// Accepts a new inbound connection.
-    async fn accept(&mut self) -> Result<(Stream, Address)>;
-
-    /// Returns the local address of the listener.
-    fn local_address(&self) -> Result<Address>;
-}
-
-/// An abstraction layer over some network stream that can be used to send and receive messages.
-#[async_trait]
-pub trait PeerStream: Unpin + Send + AsyncRead + AsyncWrite {}
