@@ -36,10 +36,6 @@ pub struct RequestManager {
     /// Active ephemeral IDs
     ephemerals: HashMap<types::MockPeerId, HashSet<types::MockRequestId>>,
 
-    // TODO: FIXME: Remove?
-    /// Pending outbound requests (TODO: timeouts)
-    _pending: HashMap<types::MockRequestId, types::MockRequestId>,
-
     /// The next ID for an outbound request.
     next_request_id: types::MockRequestId,
 
@@ -80,7 +76,6 @@ impl RequestManager {
     /// Create new outgoing request
     pub fn make_request(
         &mut self,
-        _peer_id: &types::MockPeerId, // TODO: timeouts
         request: message::Request,
     ) -> crate::Result<(types::MockRequestId, Box<types::Message>)> {
         let request_id = self.next_request_id.fetch_and_inc();
@@ -136,16 +131,5 @@ impl RequestManager {
         peer_ephemerals.insert(ephemeral_id);
         self.ephemeral.insert(ephemeral_id, (*peer_id, *request_id));
         Ok(ephemeral_id)
-    }
-
-    /// Register inbound response
-    pub fn register_response(
-        &mut self,
-        _peer_id: &types::MockPeerId,
-        _request_id: &types::MockRequestId,
-        _response: &message::Response,
-    ) -> crate::Result<()> {
-        // TODO: implement request timeouts
-        Ok(())
     }
 }

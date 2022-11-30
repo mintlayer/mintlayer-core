@@ -22,15 +22,16 @@
 //! peers are distinguished by their socket addresses.
 
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     io::ErrorKind,
     sync::Arc,
+    time::Duration,
 };
 
 use futures::{future::join_all, FutureExt, TryFutureExt};
 use tokio::{
     sync::{mpsc, oneshot},
-    time::timeout,
+    time::{self, timeout},
 };
 
 use common::chain::ChainConfig;
@@ -39,6 +40,7 @@ use logging::log;
 use serialization::{Decode, Encode};
 
 use crate::{
+    config::P2pConfig,
     error::{DialError, P2pError, PeerError, PublishError},
     message,
     net::{
@@ -79,8 +81,11 @@ pub struct Backend<T: MockTransport> {
     /// Socket for listening to incoming connections
     socket: T::Listener,
 
-    /// Chain config
-    config: Arc<ChainConfig>,
+    /// A chain configuration.
+    chain_config: Arc<ChainConfig>,
+
+    /// A p2p specific configuration.
+    p2p_config: Arc<P2pConfig>,
 
     /// RX channel for receiving commands from the frontend
     cmd_rx: mpsc::Receiver<Command<T>>,
@@ -105,13 +110,31 @@ pub struct Backend<T: MockTransport> {
     sync_tx: mpsc::Sender<SyncingEvent>,
 
     /// Timeout for outbound operations
-    timeout: std::time::Duration,
+    timeout: Duration,
 
     /// Local peer ID
     local_peer_id: MockPeerId,
 
     /// Request manager for managing inbound/outbound requests and responses
     request_mgr: request_manager::RequestManager,
+
+    /// A list of expected responses identified by the request id.
+    ///
+    /// An identifier is added to the list when a request is sent and removed either when the a
+    /// response is received or when a timeout occurs. In the latter case the peer that failed to
+    /// respond in time is disconnected.  
+    pending_responses: HashSet<MockRequestId>,
+
+    /// A sender for request timeouts.
+    ///
+    /// When a request is sent, a new task is created that will send request and peer identifiers
+    /// after the time specified by the `request_timeout` field of the p2p config.
+    timeouts_sender: mpsc::UnboundedSender<(MockRequestId, MockPeerId)>,
+
+    /// A receiver for request timeouts.
+    ///
+    /// Timeouts are processed by the `Backend::handle_request_timeout` function.
+    timeouts_receiver: mpsc::UnboundedReceiver<(MockRequestId, MockPeerId)>,
 }
 
 impl<T> Backend<T>
@@ -122,19 +145,23 @@ where
     pub fn new(
         address: T::Address,
         socket: T::Listener,
-        config: Arc<ChainConfig>,
+        chain_config: Arc<ChainConfig>,
+        p2p_config: Arc<P2pConfig>,
         cmd_rx: mpsc::Receiver<Command<T>>,
         conn_tx: mpsc::Sender<ConnectivityEvent<T>>,
         sync_tx: mpsc::Sender<SyncingEvent>,
-        timeout: std::time::Duration,
+        timeout: Duration,
     ) -> Self {
         let local_peer_id = MockPeerId::from_socket_address::<T>(&address);
+        let (timeouts_sender, timeouts_receiver) = mpsc::unbounded_channel();
+
         Self {
             address,
             socket,
             cmd_rx,
             conn_tx,
-            config,
+            chain_config,
+            p2p_config,
             sync_tx,
             timeout,
             peers: HashMap::new(),
@@ -142,6 +169,9 @@ where
             peer_chan: mpsc::channel(64),
             local_peer_id,
             request_mgr: request_manager::RequestManager::new(),
+            pending_responses: HashSet::new(),
+            timeouts_sender,
+            timeouts_receiver,
         }
     }
 
@@ -211,18 +241,26 @@ where
     /// Sends a request to the remote peer.
     async fn send_request(
         &mut self,
-        peer_id: &MockPeerId,
+        peer_id: MockPeerId,
         request: message::Request,
     ) -> crate::Result<MockRequestId> {
         let peer = self
             .peers
-            .get_mut(peer_id)
+            .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        let (request_id, request) = self.request_mgr.make_request(peer_id, request)?;
+        let (request_id, request) = self.request_mgr.make_request(request)?;
         peer.tx.send(MockEvent::SendMessage(request)).await.map_err(P2pError::from)?;
 
-        // TODO: FIXME: Add timeouts!
+        let is_inserted = self.pending_responses.insert(request_id);
+        debug_assert!(is_inserted);
+
+        let timeout = self.p2p_config.request_timeout.clone().into();
+        let sender = self.timeouts_sender.clone();
+        tokio::spawn(async move {
+            time::sleep(Duration::from_secs(timeout)).await;
+            let _ = sender.send((request_id, peer_id));
+        });
 
         Ok(request_id)
     }
@@ -338,15 +376,21 @@ where
     ) -> crate::Result<()> {
         log::trace!("response received from peer {peer_id}, request id {request_id}");
 
-        self.request_mgr.register_response(&peer_id, &request_id, &response)?;
-        self.sync_tx
-            .send(SyncingEvent::Response {
-                peer_id,
-                request_id,
-                response,
-            })
-            .await
-            .map_err(P2pError::from)
+        if !self.pending_responses.remove(&request_id) {
+            log::debug!(
+                "Ignoring unexpected {request_id:?} response from {peer_id:?} peer: {response:?}"
+            );
+            Ok(())
+        } else {
+            self.sync_tx
+                .send(SyncingEvent::Response {
+                    peer_id,
+                    request_id,
+                    response,
+                })
+                .await
+                .map_err(P2pError::from)
+        }
     }
 
     fn subscribe_peer(&mut self, peer_id: MockPeerId, topics: BTreeSet<PubSubTopic>) {
@@ -408,6 +452,12 @@ where
                 command = self.cmd_rx.recv().fuse() => {
                     self.handle_command(command.ok_or(P2pError::ChannelClosed)?).await?;
                 }
+                ids = self.timeouts_receiver.recv() => {
+                    match ids {
+                        Some((request_id, peer_id)) => self.handle_request_timeout(peer_id, request_id).await?,
+                        None => return Err(P2pError::Other("Timeouts channels closed")),
+                    }
+                }
             }
         }
     }
@@ -430,7 +480,7 @@ where
         self.pending.insert(remote_peer_id, (tx, state));
 
         let tx = self.peer_chan.0.clone();
-        let config = Arc::clone(&self.config);
+        let config = Arc::clone(&self.chain_config);
 
         tokio::spawn(async move {
             if let Err(err) =
@@ -558,7 +608,7 @@ where
                 message,
                 response,
             } => {
-                let res = self.send_request(&peer_id, message).await;
+                let res = self.send_request(peer_id, message).await;
                 response.send(res).map_err(|_| P2pError::ChannelClosed)?;
             }
             Command::SendResponse {
@@ -581,6 +631,24 @@ where
                 response.send(res).map_err(|_| P2pError::ChannelClosed)?;
             }
         }
+        Ok(())
+    }
+
+    async fn handle_request_timeout(
+        &mut self,
+        peer_id: MockPeerId,
+        request_id: MockRequestId,
+    ) -> crate::Result<()> {
+        if self.pending_responses.remove(&request_id) {
+            self.disconnect_peer(&peer_id).await?;
+            self.sync_tx
+                .send(SyncingEvent::RequestTimeout {
+                    peer_id,
+                    request_id,
+                })
+                .await?;
+        }
+
         Ok(())
     }
 }

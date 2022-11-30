@@ -123,7 +123,7 @@ where
 
     async fn start(
         addr: Self::Address,
-        _config: Arc<common::chain::ChainConfig>,
+        chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
@@ -134,14 +134,16 @@ where
 
         let address = local_addr.clone();
         tokio::spawn(async move {
+            let timeout = *p2p_config.outbound_connection_timeout;
             let mut backend = backend::Backend::<T>::new(
                 address,
                 socket,
-                Arc::clone(&_config),
+                chain_config,
+                p2p_config,
                 cmd_rx,
                 conn_tx,
                 sync_tx,
-                std::time::Duration::from_secs(*p2p_config.outbound_connection_timeout),
+                std::time::Duration::from_secs(timeout),
             );
 
             if let Err(err) = backend.run().await {
@@ -361,6 +363,13 @@ where
                 peer_id,
                 request_id,
                 response,
+            }),
+            types::SyncingEvent::RequestTimeout {
+                peer_id,
+                request_id,
+            } => Ok(SyncingEvent::RequestTimeout {
+                peer_id,
+                request_id,
             }),
             types::SyncingEvent::Announcement {
                 peer_id,
