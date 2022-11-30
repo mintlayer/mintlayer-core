@@ -13,18 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod adapted;
 mod channel;
 mod codec;
+mod stream_adapter;
 mod tcp;
 mod traits;
 
 pub use self::{
-    adapted::{
-        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, WrappedTransportSocket,
-    },
     channel::{ChannelMockStream, MockChannelListener, MockChannelTransport},
     codec::BufferedTranscoder,
+    stream_adapter::{
+        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, WrappedTransportSocket,
+    },
     tcp::TcpTransportSocket,
     traits::{PeerStream, TransportListener, TransportSocket},
 };
