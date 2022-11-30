@@ -67,6 +67,7 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
     }
 
     async fn connect(&self, address: Self::Address) -> Result<Self::Stream> {
+        // Not cancel safe!
         let base = self.base_transport.connect(address).await?;
         let stream = self.stream_adapter.handshake(base, Role::Outbound).await?;
         Ok(stream)
@@ -81,7 +82,8 @@ pub struct AdaptedListener<S: StreamAdapter<T::Stream>, T: TransportSocket> {
     handshakes: Vec<(BoxFuture<'static, Result<S::Stream>>, T::Address)>,
 }
 
-// Helper future used to drive handshakes concurrently
+// Helper future used to drive handshakes concurrently.
+// It works like FuturesUnordered but instead returning Poll::Ready(None) if empty it will return Poll::Pending.
 struct HandshakeFut<'a, S: StreamAdapter<T::Stream>, T: TransportSocket>(
     #[allow(clippy::type_complexity)]
     &'a mut Vec<(BoxFuture<'static, Result<S::Stream>>, T::Address)>,
