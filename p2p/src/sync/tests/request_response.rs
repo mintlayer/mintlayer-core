@@ -20,6 +20,7 @@ use tokio::time::timeout;
 use chainstate::Locator;
 
 use crate::{
+    event::PeerManagerEvent,
     message::{HeaderListRequest, HeaderListResponse, Request, Response},
     net::{
         libp2p::Libp2pService,
@@ -191,7 +192,7 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
-    let (mut mgr1, mut conn1, _sync1, _pm1) = make_sync_manager::<T>(A::make_address()).await;
+    let (mut mgr1, mut conn1, _sync1, mut pm1) = make_sync_manager::<T>(A::make_address()).await;
     let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(A::make_address()).await;
 
     // connect the two managers together so that they can exchange messages
@@ -204,10 +205,10 @@ where
         match mgr1.peer_sync_handle.poll_next().await.unwrap() {
             SyncingEvent::RequestTimeout {
                 peer_id,
-                request_id: _,
+                request_id,
             } => {
                 assert_eq!(peer_id, peer2_id);
-                mgr1.unregister_peer(peer_id);
+                mgr1.process_timeout(peer_id, request_id).await.unwrap();
             }
             _ => panic!("invalid event received"),
         }
@@ -221,12 +222,9 @@ where
         Err(_) => panic!("did not receive `Request` in time"),
     }
 
-    match timeout(Duration::from_secs(5), mgr2.peer_sync_handle.poll_next()).await {
-        Ok(event) => match event {
-            Ok(SyncingEvent::RequestTimeout { .. }) => {}
-            _ => panic!("invalid event: {:?}", event),
-        },
-        Err(_) => panic!("did not receive `Error` in time"),
+    match pm1.recv().await.unwrap() {
+        PeerManagerEvent::Disconnect(peer_id, _) => assert_eq!(peer_id, peer2_id),
+        e => panic!("Unexpected peer manager event: {e:?}"),
     }
 }
 
