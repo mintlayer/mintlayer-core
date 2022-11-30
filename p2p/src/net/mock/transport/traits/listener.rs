@@ -17,7 +17,7 @@ use async_trait::async_trait;
 
 use crate::Result;
 
-/// An abstraction layer over some kind of network connection (acceptor in boost terminology).
+/// An abstraction layer over a potential network connection (acceptor in boost terminology).
 #[async_trait]
 pub trait TransportListener<Stream, Address>: Send {
     /// Accepts a new inbound connection.
