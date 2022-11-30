@@ -64,7 +64,7 @@ impl<T> std::future::Future for CallResponse<T> {
     type Output = Result<T, CallError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Self::Output> {
-        Pin::new(&mut self.0).poll(cx).map(|r| r.map_err(|_| CallError::SubsystemDead))
+        Pin::new(&mut self.0).poll(cx).map_err(|_| CallError::ResultFetchFailed)
     }
 }
 
@@ -114,8 +114,30 @@ impl<T> Clone for Handle<T> {
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
 pub enum CallError {
-    #[error("Callee subsystem has terminated")]
-    SubsystemDead,
+    #[error("Call submission failed")]
+    SubmissionFailed,
+    #[error("Result retrieval failed")]
+    ResultFetchFailed,
+}
+
+pub struct CallResult<T>(Result<CallResponse<T>, CallError>);
+
+impl<T> CallResult<T> {
+    /// Get the corresponding [`CallResponse`], with the opportunity to handle errors at send time.
+    pub fn response(self) -> Result<CallResponse<T>, CallError> {
+        self.0
+    }
+}
+
+impl<T> std::future::Future for CallResult<T> {
+    type Output = Result<T, CallError>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Self::Output> {
+        self.0.as_mut().map_or_else(
+            |err| task::Poll::Ready(Err(*err)),
+            |res| Pin::new(res).poll(cx),
+        )
+    }
 }
 
 impl<T: Send + 'static> Handle<T> {
@@ -124,15 +146,15 @@ impl<T: Send + 'static> Handle<T> {
         Self { action_tx }
     }
 
-    /// Submit an async procedure to the subsystem. Result has to be await-ed explicitly
-    pub fn submit_async_mut<R: Send + 'static>(
+    /// Call an async procedure to the subsystem. Result has to be await-ed explicitly
+    pub fn call_async_mut<R: Send + 'static>(
         &self,
         func: impl for<'a> FnOnce(&'a mut T) -> BoxFuture<'a, R> + Send + 'static,
-    ) -> Result<CallResponse<R>, CallError> {
+    ) -> CallResult<R> {
         let (rtx, rrx) = oneshot::channel::<R>();
-        let rrx = CallResponse(rrx);
 
-        self.action_tx
+        let res = self
+            .action_tx
             .send(Box::new(move |subsys| {
                 Box::pin(async move {
                     if rtx.send(func(subsys).await).is_err() {
@@ -140,65 +162,34 @@ impl<T: Send + 'static> Handle<T> {
                     }
                 })
             }))
-            .map_err(|_| CallError::SubsystemDead)?;
+            .map(|()| CallResponse(rrx))
+            .map_err(|_e| CallError::SubmissionFailed);
 
-        Ok(rrx)
+        CallResult(res)
     }
 
-    /// Submit an async procedure to the subsystem (immutable).
-    pub fn submit_async<R: Send + 'static>(
+    /// Call an async procedure to the subsystem (immutable).
+    pub fn call_async<R: Send + 'static>(
         &self,
         func: impl for<'a> FnOnce(&'a T) -> BoxFuture<'a, R> + Send + 'static,
-    ) -> Result<CallResponse<R>, CallError> {
-        self.submit_async_mut(|this| func(this))
+    ) -> CallResult<R> {
+        self.call_async_mut(|this| func(this))
     }
 
-    /// Submit a procedure to the subsystem.
-    pub fn submit_mut<R: Send + 'static>(
+    /// Call a procedure to the subsystem.
+    pub fn call_mut<R: Send + 'static>(
         &self,
         func: impl for<'a> FnOnce(&'a mut T) -> R + Send + 'static,
-    ) -> Result<CallResponse<R>, CallError> {
-        self.submit_async_mut(|this| Box::pin(core::future::ready(func(this))))
+    ) -> CallResult<R> {
+        self.call_async_mut(|this| Box::pin(core::future::ready(func(this))))
     }
 
-    /// Submit a procedure to the subsystem (immutable).
-    pub fn submit<R: Send + 'static>(
+    /// Call a procedure to the subsystem (immutable).
+    pub fn call<R: Send + 'static>(
         &self,
         func: impl for<'a> FnOnce(&'a T) -> R + Send + 'static,
-    ) -> Result<CallResponse<R>, CallError> {
-        self.submit_mut(|this| func(this))
-    }
-
-    /// Dispatch an async function call to the subsystem.
-    pub async fn call_async_mut<R: Send + 'static>(
-        &self,
-        func: impl for<'a> FnOnce(&'a mut T) -> BoxFuture<'a, R> + Send + 'static,
-    ) -> Result<R, CallError> {
-        self.submit_async_mut(func)?.await
-    }
-
-    /// Dispatch an async function call to the subsystem (immutable).
-    pub async fn call_async<R: Send + 'static>(
-        &self,
-        func: impl for<'a> FnOnce(&'a T) -> BoxFuture<'a, R> + Send + 'static,
-    ) -> Result<R, CallError> {
-        self.submit_async(func)?.await
-    }
-
-    /// Dispatch a function call to the subsystem.
-    pub async fn call_mut<R: Send + 'static>(
-        &self,
-        func: impl for<'a> FnOnce(&'a mut T) -> R + Send + 'static,
-    ) -> Result<R, CallError> {
-        self.submit_mut(func)?.await
-    }
-
-    /// Dispatch a function call to the subsystem (immutable).
-    pub async fn call<R: Send + 'static>(
-        &self,
-        func: impl for<'a> FnOnce(&'a T) -> R + Send + 'static,
-    ) -> Result<R, CallError> {
-        self.submit(func)?.await
+    ) -> CallResult<R> {
+        self.call_mut(|this| func(this))
     }
 }
 
