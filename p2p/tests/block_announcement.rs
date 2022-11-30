@@ -26,7 +26,7 @@ use p2p::{
     net::{
         libp2p::Libp2pService,
         mock::{
-            transport::{MockChannelTransport, TcpTransportSocket},
+            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             MockService,
         },
         types::{PubSubTopic, SyncingEvent, ValidationResult},
@@ -193,4 +193,11 @@ async fn block_announcement_3_peers_tcp() {
 #[ignore]
 async fn block_announcement_3_peers_channels() {
     block_announcement_3_peers::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+}
+
+// TODO: Implement announcements resending in partially connected networks.
+#[ignore]
+#[tokio::test]
+async fn block_announcement_3_peers_noise() {
+    block_announcement_3_peers::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }

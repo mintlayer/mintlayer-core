@@ -21,7 +21,7 @@ use super::*;
 use crate::{
     message::*,
     net::mock::{
-        transport::{MockChannelTransport, TcpTransportSocket},
+        transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
         MockService,
     },
     peer_manager::helpers::connect_services,
@@ -88,6 +88,11 @@ async fn test_request_response_mock_tcp() {
 #[tokio::test]
 async fn test_request_response_mock_channels() {
     test_request_response::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn test_request_response_mock_noise() {
+    test_request_response::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn test_multiple_requests_and_responses<A, T>()
@@ -178,6 +183,11 @@ async fn test_multiple_requests_and_responses_mock_channels() {
         .await;
 }
 
+#[tokio::test]
+async fn test_multiple_requests_and_responses_mock_noise() {
+    test_multiple_requests_and_responses::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
+}
+
 // Receive getheaders before receiving the `Connected` event from the peer manager which makes the
 // request be rejected and time out in the sender's end.
 async fn test_request_timeout_error<A, T>()
@@ -255,6 +265,12 @@ async fn test_request_timeout_error_mock_channels() {
     test_request_timeout_error::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
 }
 
+#[tokio::test]
+#[ignore]
+async fn test_request_timeout_error_mock_noise() {
+    test_request_timeout_error::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
+}
+
 // verify that if after three retries the remote peer still
 // hasn't responded to our request, the connection is closed
 //
@@ -325,4 +341,10 @@ async fn request_timeout_mock_tcp() {
 #[ignore]
 async fn request_timeout_mock_channels() {
     request_timeout::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn request_timeout_mock_noise() {
+    request_timeout::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }

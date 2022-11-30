@@ -18,7 +18,7 @@ use common::chain::block::consensus_data::PoWData;
 
 use super::*;
 use crate::net::mock::{
-    transport::{MockChannelTransport, TcpTransportSocket},
+    transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
     types::MockPeerId,
     MockService,
 };
@@ -59,6 +59,11 @@ async fn peer_doesnt_exist_mock_tcp() {
 #[tokio::test]
 async fn peer_doesnt_exist_mock_channels() {
     peer_doesnt_exist::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn peer_doesnt_exist_mock_noise() {
+    peer_doesnt_exist::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }
 
 // submit valid block but the peer is in invalid state
@@ -110,6 +115,11 @@ async fn valid_block_mock_channels() {
     valid_block::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>().await;
 }
 
+#[tokio::test]
+async fn valid_block_mock_noise() {
+    valid_block::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
+}
+
 // submit valid block
 async fn valid_block_invalid_state<A, P, T>()
 where
@@ -154,6 +164,11 @@ async fn valid_block_invalid_state_mock_channels() {
     valid_block_invalid_state::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>(
     )
     .await;
+}
+
+#[tokio::test]
+async fn valid_block_invalid_state_mock_noise() {
+    valid_block_invalid_state::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }
 
 // submit the same block twice
@@ -215,6 +230,12 @@ async fn valid_block_resubmitted_chainstate_mock_channels() {
     .await;
 }
 
+#[tokio::test]
+async fn valid_block_resubmitted_chainstate_mock_noise() {
+    valid_block_resubmitted_chainstate::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>()
+        .await;
+}
+
 // block validation fails
 async fn invalid_block<A, P, T>()
 where
@@ -268,4 +289,9 @@ async fn invalid_block_mock_tcp() {
 #[tokio::test]
 async fn invalid_block_mock_channels() {
     invalid_block::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn invalid_block_mock_noise() {
+    invalid_block::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }

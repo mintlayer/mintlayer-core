@@ -152,6 +152,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use async_trait::async_trait;
+    use p2p_test_utils::{MakeChannelAddress, MakeTcpAddress, MakeTestAddress};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     use super::{
@@ -178,10 +179,9 @@ mod tests {
         assert_eq!(send_data, recv_data);
     }
 
-    async fn test<T: TransportSocket>(bind_addr: &str) {
+    async fn test<A: MakeTestAddress<Address = T::Address>, T: TransportSocket>() {
         let transport = T::new();
-        let address = bind_addr.parse().map_err(|_| std::fmt::Error).unwrap();
-        let mut server = transport.bind(address).await.unwrap();
+        let mut server = transport.bind(A::make_address()).await.unwrap();
         let peer_fut = transport.connect(server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
@@ -197,20 +197,32 @@ mod tests {
 
     #[tokio::test]
     async fn test_send_recv() {
-        test::<TcpTransportSocket>("[::1]:0").await;
-        test::<MockChannelTransport>("0").await;
+        test::<MakeTcpAddress, TcpTransportSocket>().await;
+        test::<MakeChannelAddress, MockChannelTransport>().await;
 
-        test::<WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>>("[::1]:0").await;
-        test::<WrappedTransportSocket<NoiseEncryptionAdapter, MockChannelTransport>>("0").await;
-        test::<WrappedTransportSocket<IdentityStreamAdapter, TcpTransportSocket>>("[::1]:0").await;
-        test::<WrappedTransportSocket<IdentityStreamAdapter, MockChannelTransport>>("0").await;
+        test::<MakeTcpAddress, WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>>(
+        )
+        .await;
+        test::<
+            MakeChannelAddress,
+            WrappedTransportSocket<NoiseEncryptionAdapter, MockChannelTransport>,
+        >()
+        .await;
+        test::<MakeTcpAddress, WrappedTransportSocket<IdentityStreamAdapter, TcpTransportSocket>>()
+            .await;
+        test::<
+            MakeChannelAddress,
+            WrappedTransportSocket<IdentityStreamAdapter, MockChannelTransport>,
+        >()
+        .await;
 
         test::<
+            MakeTcpAddress,
             WrappedTransportSocket<
                 NoiseEncryptionAdapter,
                 WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>,
             >,
-        >("[::1]:0")
+        >()
         .await;
     }
 

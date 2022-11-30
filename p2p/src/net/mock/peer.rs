@@ -235,7 +235,9 @@ mod tests {
     use crate::{
         message,
         net::mock::{
-            transport::{MockChannelTransport, TcpTransportSocket, TransportListener},
+            transport::{
+                MockChannelTransport, NoiseTcpTransport, TcpTransportSocket, TransportListener,
+            },
             types,
         },
     };
@@ -321,6 +323,11 @@ mod tests {
         handshake_inbound::<MakeChannelAddress, MockChannelTransport>().await;
     }
 
+    #[tokio::test]
+    async fn handshake_inbound_noise() {
+        handshake_inbound::<MakeTcpAddress, NoiseTcpTransport>().await;
+    }
+
     async fn handshake_outbound<A, T>()
     where
         A: MakeTestAddress<Address = T::Address>,
@@ -401,6 +408,11 @@ mod tests {
         handshake_outbound::<MakeChannelAddress, MockChannelTransport>().await;
     }
 
+    #[tokio::test]
+    async fn handshake_outbound_noise() {
+        handshake_outbound::<MakeTcpAddress, NoiseTcpTransport>().await;
+    }
+
     async fn handshake_different_network<A, T>()
     where
         A: MakeTestAddress<Address = T::Address>,
@@ -457,6 +469,11 @@ mod tests {
         handshake_different_network::<MakeChannelAddress, MockChannelTransport>().await;
     }
 
+    #[tokio::test]
+    async fn handshake_different_network_noise() {
+        handshake_different_network::<MakeTcpAddress, NoiseTcpTransport>().await;
+    }
+
     async fn invalid_handshake_message<A, T>()
     where
         A: MakeTestAddress<Address = T::Address>,
@@ -507,6 +524,11 @@ mod tests {
     #[tokio::test]
     async fn invalid_handshake_message_channels() {
         invalid_handshake_message::<MakeChannelAddress, MockChannelTransport>().await;
+    }
+
+    #[tokio::test]
+    async fn invalid_handshake_message_noise() {
+        invalid_handshake_message::<MakeTcpAddress, NoiseTcpTransport>().await;
     }
 
     pub async fn get_two_connected_sockets<A, T>() -> (T::Stream, T::Stream)

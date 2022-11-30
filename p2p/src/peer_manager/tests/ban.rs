@@ -24,7 +24,7 @@ use crate::{
         self,
         libp2p::Libp2pService,
         mock::{
-            transport::{MockChannelTransport, TcpTransportSocket},
+            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             types::MockPeerId,
             MockService,
         },
@@ -84,6 +84,11 @@ async fn ban_connected_peer_mock_channels() {
     // TODO: Currently in the channels backend peer receives a new address everytime it connects.
     // For the banning to work properly the addresses must be persistent.
     ban_connected_peer::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn ban_connected_peer_mock_noise() {
+    ban_connected_peer::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn banned_peer_attempts_to_connect<A, T>()
@@ -147,6 +152,13 @@ async fn banned_peer_attempts_to_connect_mock_channel() {
     // TODO: implement proper peer banning
     banned_peer_attempts_to_connect::<MakeChannelAddress, MockService<MockChannelTransport>>()
         .await;
+}
+
+#[ignore]
+#[tokio::test]
+async fn banned_peer_attempts_to_connect_mock_noise() {
+    // TODO: implement proper peer banning
+    banned_peer_attempts_to_connect::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 // attempt to connect to banned peer
@@ -218,6 +230,11 @@ async fn connect_to_banned_peer_mock_channels() {
     // TODO: Currently in the channels backend peer receives a new address everytime it connects.
     // For the banning to work properly the addresses must be persistent.
     connect_to_banned_peer::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn connect_to_banned_peer_mock_noise() {
+    connect_to_banned_peer::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn validate_invalid_outbound_connection<A, S>(peer_address: S::Address, peer_id: S::PeerId)
@@ -317,6 +334,15 @@ async fn validate_invalid_outbound_connection_mock_tcp() {
 async fn validate_invalid_outbound_connection_mock_channels() {
     validate_invalid_outbound_connection::<MakeChannelAddress, MockService<MockChannelTransport>>(
         1,
+        MockPeerId::random(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn validate_invalid_outbound_connection_mock_noise() {
+    validate_invalid_outbound_connection::<MakeTcpAddress, MockService<NoiseTcpTransport>>(
+        "210.113.67.107:2525".parse().unwrap(),
         MockPeerId::random(),
     )
     .await;
@@ -423,6 +449,15 @@ async fn validate_invalid_inbound_connection_mock_channels() {
     .await;
 }
 
+#[tokio::test]
+async fn validate_invalid_inbound_connection_mock_noise() {
+    validate_invalid_inbound_connection::<MakeTcpAddress, MockService<NoiseTcpTransport>>(
+        "210.113.67.107:2525".parse().unwrap(),
+        MockPeerId::random(),
+    )
+    .await;
+}
+
 async fn inbound_connection_invalid_magic<A, T>()
 where
     A: MakeTestAddress<Address = T::Address>,
@@ -475,4 +510,9 @@ async fn inbound_connection_invalid_magic_mock_tcp() {
 async fn inbound_connection_invalid_magic_mock_channels() {
     inbound_connection_invalid_magic::<MakeChannelAddress, MockService<MockChannelTransport>>()
         .await;
+}
+
+#[tokio::test]
+async fn inbound_connection_invalid_magic_mock_noise() {
+    inbound_connection_invalid_magic::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }

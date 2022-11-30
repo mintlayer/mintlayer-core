@@ -375,7 +375,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{transport::NoiseTcpTransport, *};
     use crate::net::{
         self,
         mock::transport::{MockChannelTransport, TcpTransportSocket},
@@ -447,6 +447,11 @@ mod tests {
         connect_to_remote::<MakeChannelAddress, MockChannelTransport>().await;
     }
 
+    #[tokio::test]
+    async fn connect_to_remote_noise() {
+        connect_to_remote::<MakeTcpAddress, NoiseTcpTransport>().await;
+    }
+
     async fn accept_incoming<A, T>()
     where
         A: MakeTestAddress<Address = T::Address>,
@@ -509,6 +514,11 @@ mod tests {
         accept_incoming::<MakeChannelAddress, MockChannelTransport>().await;
     }
 
+    #[tokio::test]
+    async fn accept_incoming_noise() {
+        accept_incoming::<MakeTcpAddress, NoiseTcpTransport>().await;
+    }
+
     async fn disconnect<A, T>()
     where
         A: MakeTestAddress<Address = T::Address>,
@@ -551,5 +561,10 @@ mod tests {
     #[tokio::test]
     async fn disconnect_channels() {
         disconnect::<MakeChannelAddress, MockChannelTransport>().await;
+    }
+
+    #[tokio::test]
+    async fn disconnect_noise() {
+        disconnect::<MakeTcpAddress, NoiseTcpTransport>().await;
     }
 }
