@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_trait::async_trait;
 use futures::future::{ready, BoxFuture};
 
 use crate::net::mock::{peer::Role, transport::PeerStream};
@@ -24,7 +23,6 @@ use super::StreamAdapter;
 pub struct IdentityStreamAdapter;
 
 /// A StreamAdapter that does nothing with no handshake (Identity operation on data that goes through it)
-#[async_trait]
 impl<T: PeerStream + 'static> StreamAdapter<T> for IdentityStreamAdapter {
     type Stream = T;
 

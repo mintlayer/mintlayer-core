@@ -63,7 +63,6 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
     }
 
     async fn connect(&self, address: Self::Address) -> Result<Self::Stream> {
-        // Not cancel safe!
         let base = self.base_transport.connect(address).await?;
         let stream = self.stream_adapter.handshake(base, Role::Outbound).await?;
         Ok(stream)
