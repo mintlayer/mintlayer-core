@@ -81,7 +81,7 @@ async fn ban_connected_peer_mock_tcp() {
 #[ignore]
 #[tokio::test]
 async fn ban_connected_peer_mock_channels() {
-    // TODO: Currently in the channels backend peer receives a new address everytime it connects.
+    // TODO: Currently in the channels backend peer receives a new address every time it connects.
     // For the banning to work properly the addresses must be persistent.
     ban_connected_peer::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
 }
@@ -227,7 +227,7 @@ async fn connect_to_banned_peer_mock_tcp() {
 #[ignore]
 #[tokio::test]
 async fn connect_to_banned_peer_mock_channels() {
-    // TODO: Currently in the channels backend peer receives a new address everytime it connects.
+    // TODO: Currently in the channels backend peer receives a new address every time it connects.
     // For the banning to work properly the addresses must be persistent.
     connect_to_banned_peer::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
 }

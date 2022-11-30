@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod identity;
-pub mod noise;
-pub mod traits;
-pub mod wrapped_transport;
+mod utils;
+pub mod wrapped_listener;
+pub mod wrapped_socket;
 
-use self::traits::StreamAdapter;
+#[cfg(test)]
+mod tests;

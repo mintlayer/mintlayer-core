@@ -23,7 +23,8 @@ pub use self::{
     channel::{ChannelMockStream, MockChannelListener, MockChannelTransport},
     message_codec::BufferedTranscoder,
     stream_adapter::{
-        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, WrappedTransportSocket,
+        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter,
+        wrapped_transport::wrapped_socket::WrappedTransportSocket,
     },
     tcp::TcpTransportSocket,
     traits::{listener::TransportListener, socket::TransportSocket, stream::PeerStream},
