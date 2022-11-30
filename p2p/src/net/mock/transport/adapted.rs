@@ -157,9 +157,15 @@ mod tests {
     use super::{
         identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter, WrappedTransportSocket,
     };
-    use crate::net::mock::transport::{
-        MockChannelListener, MockChannelTransport, PeerStream, TcpTransportSocket,
-        TransportListener, TransportSocket,
+    use crate::{
+        message::{BlockListRequest, Request},
+        net::mock::{
+            transport::{
+                BufferedTranscoder, MockChannelListener, MockChannelTransport, PeerStream,
+                TcpTransportSocket, TransportListener, TransportSocket,
+            },
+            types::{Message, MockRequestId},
+        },
     };
 
     async fn send_recv<T: PeerStream>(sender: &mut T, receiver: &mut T, len: usize) {
@@ -286,5 +292,53 @@ mod tests {
 
         drop(listener);
         assert!(!*transport.base_transport.port_open.lock().unwrap());
+    }
+
+    #[tokio::test]
+    async fn send_2_reqs() {
+        let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new();
+        let address = "[::1]:0".parse().unwrap();
+        let mut server = transport.bind(address).await.unwrap();
+        let peer_fut = transport.connect(server.local_address().unwrap());
+
+        let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
+        let server_stream = server_res.unwrap().0;
+        let peer_stream = peer_res.unwrap();
+
+        let id_1 = MockRequestId::new(1337u64);
+        let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
+        let mut peer_stream = BufferedTranscoder::new(peer_stream);
+        peer_stream
+            .send(Message::Request {
+                request_id: id_1,
+                request: request.clone(),
+            })
+            .await
+            .unwrap();
+
+        let id_2 = MockRequestId::new(1338u64);
+        peer_stream
+            .send(Message::Request {
+                request_id: id_2,
+                request: request.clone(),
+            })
+            .await
+            .unwrap();
+
+        let mut server_stream = BufferedTranscoder::new(server_stream);
+        assert_eq!(
+            server_stream.recv().await.unwrap().unwrap(),
+            Message::Request {
+                request_id: id_1,
+                request: request.clone(),
+            }
+        );
+        assert_eq!(
+            server_stream.recv().await.unwrap().unwrap(),
+            Message::Request {
+                request_id: id_2,
+                request,
+            }
+        );
     }
 }
