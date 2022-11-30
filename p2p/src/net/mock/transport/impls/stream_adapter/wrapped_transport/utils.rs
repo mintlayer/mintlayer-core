@@ -29,25 +29,21 @@ pub struct HandshakeFut<'a, S: StreamAdapter<T::Stream>, T: TransportSocket>(
 );
 
 impl<'a, S: StreamAdapter<T::Stream>, T: TransportSocket> Future for HandshakeFut<'a, S, T> {
-    type Output = (S::Stream, T::Address);
+    type Output = Result<(S::Stream, T::Address)>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        'outer: loop {
+        loop {
             for i in 0..self.0.len() {
-                match Future::poll(self.0[i].0.as_mut(), cx) {
-                    Poll::Ready(res) => {
-                        let (_, addr) = self.0.swap_remove(i);
-                        match res {
-                            Ok(stream) => {
-                                return Poll::Ready((stream, addr));
-                            }
-                            Err(err) => {
-                                logging::log::warn!("handshake failed: {}", err);
-                                continue 'outer;
-                            }
+                if let Poll::Ready(res) = Future::poll(self.0[i].0.as_mut(), cx) {
+                    let (_, addr) = self.0.swap_remove(i);
+                    match res {
+                        Ok(stream) => {
+                            return Poll::Ready(Ok((stream, addr)));
+                        }
+                        Err(err) => {
+                            return Poll::Ready(Err(err));
                         }
                     }
-                    Poll::Pending => continue,
                 }
             }
 

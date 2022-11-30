@@ -48,8 +48,14 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener<S::Strea
         loop {
             let accept_new = self.handshakes.len() < MAX_CONCURRENT_HANDSHAKES;
             tokio::select! {
-                handshake = HandshakeFut::<S, T>(&mut self.handshakes) => {
-                    return Ok(handshake);
+                handshake_res = HandshakeFut::<S, T>(&mut self.handshakes) => {
+                    match handshake_res {
+                        Ok(handshake) => return Ok(handshake),
+                        Err(err) => {
+                            logging::log::warn!("handshake failed: {}", err);
+                            continue;
+                        },
+                    }
                 }
                 accept_res = self.listener.accept(), if accept_new => {
                     match accept_res {
