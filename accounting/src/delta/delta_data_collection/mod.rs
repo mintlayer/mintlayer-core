@@ -25,11 +25,11 @@ use self::undo::*;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub enum DataDelta<T: Clone> {
-    // stores new value
+    // Stores new value
     Create(Box<T>),
-    // stores prev and new values
+    // Stores prev and new values
     Modify((Box<T>, Box<T>)),
-    // stores prev value before deletion
+    // Stores prev value before deletion
     Delete(Box<T>),
 }
 
@@ -100,8 +100,8 @@ impl<K: Ord + Copy, T: Clone> DeltaDataCollection<K, T> {
         key: K,
         other: DeltaMapElement<T>,
     ) -> Result<Option<DataDeltaUndo<T>>, Error> {
-        let current_el = self.data.get(&key);
-        let current_delta = match current_el {
+        let current_element = self.data.get(&key);
+        let current_delta = match current_element {
             Some(d) => match d {
                 DeltaMapElement::Delta(d) => Some(d),
                 DeltaMapElement::Undo(_) => None,
@@ -117,7 +117,7 @@ impl<K: Ord + Copy, T: Clone> DeltaDataCollection<K, T> {
             DeltaMapElement::Undo(_) => None,
         };
 
-        let new_element = match current_el {
+        let new_element = match current_element {
             Some(current) => combine_delta_elements(current, other)?,
             None => other,
         };
@@ -165,7 +165,7 @@ impl<K: Ord + Copy, T: Clone> FromIterator<(K, DataDelta<T>)> for DeltaDataColle
     }
 }
 
-/// This function returns a delta that if applied to the result of merge(lhs,rhs) gives original lhs
+/// This function returns a delta that if applied to the result of merge(delta1,delta2) gives original delta1
 fn create_undo_delta<T: Clone>(
     lhs: Option<&DataDelta<T>>,
     rhs: DataDelta<T>,

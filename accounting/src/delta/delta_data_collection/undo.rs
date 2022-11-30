@@ -19,7 +19,7 @@ use super::DataDelta;
 
 use serialization::{Decode, Encode};
 
-/// The operations we have to perform in order to undo a delta
+/// The delta we have to apply in order to undo a delta
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct DataDeltaUndo<T: Clone>(pub(super) DataDelta<T>);
 
