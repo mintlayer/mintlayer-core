@@ -92,13 +92,6 @@ pub type ActionSender<T> = mpsc::UnboundedSender<Action<T, ()>>;
 ///
 /// This allows the user to interact with the subsystem from the outside. Currently, it only
 /// supports calling functions on the subsystem.
-///
-/// There are two sets of methods for communication with and control of subsystem:
-/// * Methods starting with `submit_` will submit the closure given as the argument for processing
-///   by the subsystem. The result is not immediately ready and the current task is free to
-///   continue its operation and `.await` the return value at a later point (or decide not to).
-/// * Methods starting with `call_` will also submit the closure and suspend the current task until
-///   the result is ready, returning it directly.
 pub struct Handle<T> {
     // Send the subsystem stuff to do.
     action_tx: ActionSender<T>,
@@ -120,6 +113,12 @@ pub enum CallError {
     ResultFetchFailed,
 }
 
+/// Result of a remote subsystem call.
+///
+/// Calls happen asynchronously. A value of this type represents the return value of the call of
+/// type `T`. To actually fetch the return value, use `.await`. Alternatively, use
+/// [CallResult::response] to verify if the call submission suceeded and get the return value at
+/// a later time.
 pub struct CallResult<T>(Result<CallResponse<T>, CallError>);
 
 impl<T> CallResult<T> {

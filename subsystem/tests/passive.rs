@@ -138,3 +138,39 @@ fn basic_passive_shutdown() {
         })
     })
 }
+
+#[test]
+fn separate_call_and_result() {
+    let runtime = helpers::init_test_runtime();
+    utils::concurrency::model(move || {
+        runtime.block_on(async {
+            let mut app = subsystem::Manager::new("app");
+            let shutdown = app.make_shutdown_trigger();
+
+            let substr = app.add_subsystem("substr", Substringer::new("abc".into()));
+
+            // The API allows for the submission of closure to call to be separate form retrieval
+            // of the result. This task verifies the behavior is as expected.
+            tokio::task::spawn(async move {
+                // Submit three calls to the substr without waiting for results
+                let responses: Vec<_> = (0..3)
+                    .map(|i| substr.call(move |this| this.substr(i, i + 1)).response().unwrap())
+                    .collect();
+
+                // Expected values
+                let expected = ["a", "b", "c"];
+                assert_eq!(responses.len(), expected.len());
+
+                // Gather and verify results
+                for (response, expected) in responses.into_iter().zip(expected.into_iter()) {
+                    assert_eq!(response.await.unwrap(), expected);
+                }
+
+                // Shut down the manager once done
+                shutdown.initiate();
+            });
+
+            app.main().await
+        })
+    })
+}
