@@ -29,7 +29,7 @@ use crate::{
         view::FlushablePoSAccountingView,
     },
     storage::in_memory::InMemoryPoSAccounting,
-    PoSAccountingData, PoSAccountingOperations,
+    PoSAccountingOperations,
 };
 
 // Create pool in db -> decomission pool in delta -> undo in delta -> merge -> merge
@@ -58,14 +58,14 @@ fn create_pool_decomission_pool_undo_merge(#[case] seed: Seed) {
     delta1.batch_write_delta(delta2.consume()).unwrap();
     db.batch_write_delta(delta1.consume()).unwrap();
 
-    let expected_data = PoSAccountingData {
-        pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, pledge_amount))]),
-        pool_balances: BTreeMap::from([(pool_id, pledge_amount)]),
-        pool_delegation_shares: Default::default(),
-        delegation_balances: Default::default(),
-        delegation_data: Default::default(),
-    };
-    assert_eq!(storage.dump(), expected_data);
+    let expected_storage = InMemoryPoSAccounting::from_values(
+        BTreeMap::from([(pool_id, PoolData::new(pub_key, pledge_amount))]),
+        BTreeMap::from([(pool_id, pledge_amount)]),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    );
+    assert_eq!(storage, expected_storage);
 }
 
 // Create pool in db -> decomission pool in delta -> merge -> undo in delta -> merge
@@ -97,14 +97,14 @@ fn create_pool_decomission_pool_merge_undo_merge(#[case] seed: Seed) {
 
         db.batch_write_delta(delta2.consume()).unwrap();
 
-        let expected_data = PoSAccountingData {
-            pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, pledge_amount))]),
-            pool_balances: BTreeMap::from([(pool_id, pledge_amount)]),
-            pool_delegation_shares: Default::default(),
-            delegation_balances: Default::default(),
-            delegation_data: Default::default(),
-        };
-        assert_eq!(storage.dump(), expected_data);
+        let expected_storage = InMemoryPoSAccounting::from_values(
+            BTreeMap::from([(pool_id, PoolData::new(pub_key, pledge_amount))]),
+            BTreeMap::from([(pool_id, pledge_amount)]),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        );
+        assert_eq!(storage, expected_storage);
     }
 }
 
