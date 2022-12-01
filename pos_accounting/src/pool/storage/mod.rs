@@ -208,10 +208,11 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
     {
         let mut store = BorrowedStorageValue::new(self.store, getter, setter, deleter);
         delta
-            .delta_iter()
-            .map(|(id, delta)| -> Result<_, Error> {
+            .data()
+            .iter()
+            .map(|(id, element)| -> Result<_, Error> {
                 let data = store.get(*id)?;
-                match combine_data_with_delta(data.as_ref(), Some(delta))? {
+                match combine_data_with_delta(data.as_ref(), Some(element))? {
                     Some(result) => store.set(*id, &result)?,
                     None => store.delete(*id)?,
                 }

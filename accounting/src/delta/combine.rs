@@ -15,26 +15,46 @@
 
 use common::primitives::{signed_amount::SignedAmount, Amount};
 
-use crate::error::Error;
+use crate::{
+    delta::delta_data_collection::{DataDelta, DeltaMapElement},
+    error::Error,
+};
 
-use super::delta_data_collection::DataDelta;
-
+/// Combine data with an element of `DeltaDataCollection`.
+/// An element can be either a Delta or a result of delta undo.
+/// Note that the rules for these 2 cases differ.
 pub fn combine_data_with_delta<T: Clone>(
     lhs: Option<&T>,
-    rhs: Option<&DataDelta<T>>,
+    rhs: Option<&DeltaMapElement<T>>,
 ) -> Result<Option<T>, Error> {
     match (lhs, rhs) {
         (None, None) => Ok(None),
         (None, Some(d)) => match d {
-            DataDelta::Create(d) => Ok(Some(*d.clone())),
-            DataDelta::Modify(_) => Err(Error::ModifyNonexistingData),
-            DataDelta::Delete(_) => Ok(None),
+            DeltaMapElement::Delta(d) => match d {
+                DataDelta::Create(d) => Ok(Some(*d.clone())),
+                DataDelta::Modify(_) => Err(Error::ModifyNonexistingData),
+                DataDelta::Delete(_) => Err(Error::RemoveNonexistingData),
+            },
+            DeltaMapElement::Undo(u) => match u {
+                DataDelta::Create(d) => Ok(Some(*d.clone())),
+                DataDelta::Modify(_) => Err(Error::ModifyNonexistingData),
+                // This is Ok because the Create + Undo = Delete
+                DataDelta::Delete(_) => Ok(None),
+            },
         },
         (Some(p), None) => Ok(Some(p.clone())),
         (Some(_), Some(d)) => match d {
-            DataDelta::Create(d) => Ok(Some(*d.clone())),
-            DataDelta::Modify((_, d)) => Ok(Some(*d.clone())),
-            DataDelta::Delete(_) => Ok(None),
+            DeltaMapElement::Delta(d) => match d {
+                DataDelta::Create(_) => Err(Error::DataCreatedMultipleTimes),
+                DataDelta::Modify((_, d)) => Ok(Some(*d.clone())),
+                DataDelta::Delete(_) => Ok(None),
+            },
+            DeltaMapElement::Undo(u) => match u {
+                // This is Ok because the Delete + Undo = Create
+                DataDelta::Create(d) => Ok(Some(*d.clone())),
+                DataDelta::Modify((_, d)) => Ok(Some(*d.clone())),
+                DataDelta::Delete(_) => Ok(None),
+            },
         },
     }
 }
@@ -72,18 +92,35 @@ pub mod test {
     #[test]
     #[rustfmt::skip]
     fn test_combine_data_with_delta() {
-        let some_data_create = Some(DataDelta::Create(Box::new('b')));
-        let some_data_modify = Some(DataDelta::Modify((Box::new('a'),Box::new('b'))));
-        let some_data_delete= Some(DataDelta::Delete(Box::new('b')));
+        let delta_create = Some(DeltaMapElement::Delta(DataDelta::Create(Box::new('b'))));
+        let delta_modify = Some(DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('b')))));
+        let delta_delete= Some(DeltaMapElement::Delta(DataDelta::Delete(Box::new('b'))));
 
-        assert_eq!(combine_data_with_delta::<i32>(None, None),                      Ok(None));
-        assert_eq!(combine_data_with_delta(None,        some_data_create.as_ref()), Ok(Some('b')));
-        assert_eq!(combine_data_with_delta(None,        some_data_modify.as_ref()), Err(Error::ModifyNonexistingData));
-        assert_eq!(combine_data_with_delta(None,        some_data_delete.as_ref()), Ok(None));
+        assert_eq!(combine_data_with_delta::<i32>(None, None),                  Ok(None));
+        assert_eq!(combine_data_with_delta(None,        delta_create.as_ref()), Ok(Some('b')));
+        assert_eq!(combine_data_with_delta(None,        delta_modify.as_ref()), Err(Error::ModifyNonexistingData));
+        assert_eq!(combine_data_with_delta(None,        delta_delete.as_ref()), Err(Error::RemoveNonexistingData));
+        assert_eq!(combine_data_with_delta(Some(&'a'),  None),                  Ok(Some('a')));
+        assert_eq!(combine_data_with_delta(Some(&'a'),  delta_create.as_ref()), Err(Error::DataCreatedMultipleTimes));
+        assert_eq!(combine_data_with_delta(Some(&'a'),  delta_modify.as_ref()), Ok(Some('b')));
+        assert_eq!(combine_data_with_delta(Some(&'a'),  delta_delete.as_ref()), Ok(None));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_combine_data_with_undo() {
+        let undo_create = Some(DeltaMapElement::Undo(DataDelta::Create(Box::new('b'))));
+        let undo_modify = Some(DeltaMapElement::Undo(DataDelta::Modify((Box::new('a'),Box::new('b')))));
+        let undo_delete= Some(DeltaMapElement::Undo(DataDelta::Delete(Box::new('b'))));
+
+        assert_eq!(combine_data_with_delta::<i32>(None, None),                  Ok(None));
+        assert_eq!(combine_data_with_delta(None,        undo_create.as_ref()), Ok(Some('b')));
+        assert_eq!(combine_data_with_delta(None,        undo_modify.as_ref()), Err(Error::ModifyNonexistingData));
+        assert_eq!(combine_data_with_delta(None,        undo_delete.as_ref()), Ok(None));
         assert_eq!(combine_data_with_delta(Some(&'a'),  None),                      Ok(Some('a')));
-        assert_eq!(combine_data_with_delta(Some(&'a'),  some_data_create.as_ref()), Ok(Some('b')));
-        assert_eq!(combine_data_with_delta(Some(&'a'),  some_data_modify.as_ref()), Ok(Some('b')));
-        assert_eq!(combine_data_with_delta(Some(&'a'),  some_data_delete.as_ref()), Ok(None));
+        assert_eq!(combine_data_with_delta(Some(&'a'),  undo_create.as_ref()), Ok(Some('b')));
+        assert_eq!(combine_data_with_delta(Some(&'a'),  undo_modify.as_ref()), Ok(Some('b')));
+        assert_eq!(combine_data_with_delta(Some(&'a'),  undo_delete.as_ref()), Ok(None));
     }
 
     #[test]

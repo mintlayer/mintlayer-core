@@ -52,17 +52,14 @@ impl<K: Ord + Copy, T: Clone> DeltaDataCollection<K, T> {
         }
     }
 
+    pub fn data(&self) -> &BTreeMap<K, DeltaMapElement<T>> {
+        &self.data
+    }
+
     pub fn get_data_delta(&self, key: &K) -> Option<&DataDelta<T>> {
         self.data.get(key).map(|el| match el {
             DeltaMapElement::Delta(d) => d,
             DeltaMapElement::Undo(d) => d,
-        })
-    }
-
-    pub fn delta_iter(&self) -> impl Iterator<Item = (&K, &DataDelta<T>)> {
-        self.data.iter().map(|(k, el)| match el {
-            DeltaMapElement::Delta(d) => (k, d),
-            DeltaMapElement::Undo(d) => (k, d),
         })
     }
 
