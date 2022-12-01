@@ -234,18 +234,42 @@ async fn pending_handshakes() {
         }
     });
 
+    // Connect MAX_CONCURRENT_HANDSHAKES amount of idle clients
     let mut sockets = futures::stream::iter(0..MAX_CONCURRENT_HANDSHAKES)
         .then(|_| async { tokio::net::TcpStream::connect(local_addr).await.unwrap() })
         .collect::<Vec<_>>()
         .await;
 
+    // Noise connection will fail because of too many connected idle TCP clients
     let pending_fut = timeout(Duration::from_millis(100), transport.connect(local_addr)).await;
     assert!(matches!(pending_fut, Err(_)));
 
+    // Disconnect one idle client
     sockets.pop();
 
+    // Noise connection should succeed now
     let pending_fut = timeout(Duration::from_millis(100), transport.connect(local_addr)).await;
     assert!(matches!(pending_fut, Ok(Ok(_))));
+
+    join_handle.abort();
+}
+
+#[tokio::test]
+async fn handshake_timeout() {
+    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new();
+    let mut server = transport.bind(MakeTcpAddress::make_address()).await.unwrap();
+    let local_addr = server.local_address().unwrap();
+
+    let join_handle = tokio::spawn(async move {
+        loop {
+            _ = server.accept().await;
+        }
+    });
+
+    let mut bad_client = tokio::net::TcpStream::connect(local_addr).await.unwrap();
+    // Server should disconnect the bad client because of handshake timeout
+    let read_res = bad_client.read_u8().await;
+    assert!(read_res.is_err());
 
     join_handle.abort();
 }
