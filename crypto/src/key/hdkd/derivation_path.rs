@@ -26,6 +26,14 @@ const SEPARATOR: &str = "/";
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct DerivationPath(Vec<ChildNumber>);
 
+impl DerivationPath {
+    pub fn extend(&self, num: ChildNumber) -> Self {
+        let mut new_path = self.0.clone();
+        new_path.push(num);
+        new_path.into()
+    }
+}
+
 impl From<Vec<ChildNumber>> for DerivationPath {
     fn from(path: Vec<ChildNumber>) -> Self {
         DerivationPath(path)
@@ -62,8 +70,8 @@ impl fmt::Display for DerivationPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(PREFIX, f)?;
         for child in self.0.iter() {
-            fmt::Display::fmt(child, f)?;
             fmt::Display::fmt(SEPARATOR, f)?;
+            fmt::Display::fmt(child, f)?;
         }
         Ok(())
     }

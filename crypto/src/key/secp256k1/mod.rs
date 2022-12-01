@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod extended_keys;
+
 use crate::hash::{Blake2b32Stream, StreamHasher};
 use crate::random::{CryptoRng, Rng};
 use secp256k1;
@@ -27,12 +29,12 @@ pub enum Secp256k1KeyError {
 #[derive(Debug, PartialEq, Eq, Clone)]
 // TODO [SECURITY] erase secret on drop
 pub struct Secp256k1PrivateKey {
-    key_data: secp256k1::SecretKey,
+    data: secp256k1::SecretKey,
 }
 
 impl Encode for Secp256k1PrivateKey {
     fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-        self.key_data.as_ref().using_encoded(f)
+        self.data.as_ref().using_encoded(f)
     }
 }
 
@@ -40,10 +42,16 @@ impl Decode for Secp256k1PrivateKey {
     fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         let mut v = <[u8; secp256k1::constants::SECRET_KEY_SIZE]>::decode(input)?;
         let result = secp256k1::SecretKey::from_slice(&v)
-            .map(|r| Secp256k1PrivateKey { key_data: r })
+            .map(|r| Secp256k1PrivateKey { data: r })
             .map_err(|_| serialization::Error::from("Private Key deserialization failed"));
         v.zeroize();
         result
+    }
+}
+
+impl From<secp256k1::SecretKey> for Secp256k1PrivateKey {
+    fn from(sk: secp256k1::SecretKey) -> Self {
+        Self { data: sk }
     }
 }
 
@@ -58,21 +66,21 @@ impl Secp256k1PrivateKey {
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        self.key_data.as_ref()
+        self.data.as_ref()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, Secp256k1KeyError> {
         secp256k1::SecretKey::from_slice(bytes)
-            .map(|r| Secp256k1PrivateKey { key_data: r })
+            .map(|r| Secp256k1PrivateKey { data: r })
             .map_err(|_| Secp256k1KeyError::InvalidData)
     }
 
     pub fn as_native(&self) -> &secp256k1::SecretKey {
-        &self.key_data
+        &self.data
     }
 
     pub fn from_native(native: secp256k1::SecretKey) -> Self {
-        Self { key_data: native }
+        Self { data: native }
     }
 
     pub(crate) fn sign_message(&self, msg: &[u8]) -> secp256k1::schnorr::Signature {
@@ -82,7 +90,7 @@ impl Secp256k1PrivateKey {
         let msg_hash = secp256k1::Message::from_slice(e.as_slice()).expect("Blake2b32 is 32 bytes");
         // Sign the hash
         // TODO [SECURITY] erase keypair after signing
-        let keypair = self.key_data.keypair(&secp);
+        let keypair = self.data.keypair(&secp);
         // TODO [SECURITY] examine the usage of sign_schnorr_with_rng or a RFC6979 scheme
         secp.sign_schnorr(&msg_hash, &keypair)
     }
@@ -108,6 +116,12 @@ impl Decode for Secp256k1PublicKey {
     }
 }
 
+impl From<secp256k1::XOnlyPublicKey> for Secp256k1PublicKey {
+    fn from(pk: secp256k1::XOnlyPublicKey) -> Self {
+        Self { pubkey_data: pk }
+    }
+}
+
 impl Secp256k1PublicKey {
     pub fn as_bytes(&self) -> [u8; secp256k1::constants::SCHNORR_PUBLIC_KEY_SIZE] {
         self.pubkey_data.serialize()
@@ -130,7 +144,7 @@ impl Secp256k1PublicKey {
     }
 
     pub fn from_private_key(private_key: &Secp256k1PrivateKey) -> Self {
-        Self::from_native(private_key.key_data.x_only_public_key(secp256k1::SECP256K1).0)
+        Self::from_native(private_key.data.x_only_public_key(secp256k1::SECP256K1).0)
     }
 
     pub(crate) fn verify_message(

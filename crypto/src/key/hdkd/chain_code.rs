@@ -14,10 +14,11 @@
 // limitations under the License.
 
 use super::child_number::ChildNumber;
+use serialization::{Decode, Encode};
 
 pub const CHAINCODE_LENGTH: usize = 32;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct ChainCode([u8; CHAINCODE_LENGTH]);
 
 impl ChainCode {

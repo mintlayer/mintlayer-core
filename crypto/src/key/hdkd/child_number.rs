@@ -61,6 +61,10 @@ impl ChildNumber {
         }
     }
 
+    pub fn to_encoded_be_bytes(self) -> [u8; 4] {
+        self.to_encoded_index().to_be_bytes()
+    }
+
     /// Returns true if this child number is hardened
     pub fn is_hardened(&self) -> bool {
         match self.0 {
