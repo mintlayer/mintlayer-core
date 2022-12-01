@@ -32,15 +32,13 @@ impl<'a, S: StreamAdapter<T::Stream>, T: TransportSocket> Future for HandshakeFu
     type Output = Result<(S::Stream, T::Address)>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        loop {
-            for i in 0..self.0.len() {
-                if let Poll::Ready(res) = Future::poll(self.0[i].0.as_mut(), cx) {
-                    let (_, addr) = self.0.swap_remove(i);
-                    return Poll::Ready(res.map(|stream| (stream, addr)));
-                }
+        for i in 0..self.0.len() {
+            if let Poll::Ready(res) = Future::poll(self.0[i].0.as_mut(), cx) {
+                let (_, addr) = self.0.swap_remove(i);
+                return Poll::Ready(res.map(|stream| (stream, addr)));
             }
-
-            return Poll::Pending;
         }
+
+        Poll::Pending
     }
 }
