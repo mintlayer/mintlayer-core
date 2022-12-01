@@ -17,20 +17,38 @@ use super::*;
 
 #[test]
 #[rustfmt::skip]
-fn test_combine_delta_data() {
+fn test_combine_deltas() {
     use DataDelta::{Create, Delete, Modify};
 
-    assert_eq!(combine_delta_data(&Create(Box::new('a')), Create(Box::new('b'))),                  Ok(DataDelta::Create(Box::new('b'))));
-    assert_eq!(combine_delta_data(&Create(Box::new('a')), Modify((Box::new('a'), Box::new('b')))), Ok(DataDelta::Create(Box::new('b'))));
-    assert_eq!(combine_delta_data(&Create(Box::new('a')), Delete(Box::new('a'))),                  Ok(DataDelta::Delete(Box::new('a'))));
+    assert_eq!(combine_deltas(&Create(Box::new('a')), Create(Box::new('b'))),                  Err(Error::DeltaDataCreatedMultipleTimes));
+    assert_eq!(combine_deltas(&Create(Box::new('a')), Modify((Box::new('a'), Box::new('b')))), Ok(DataDelta::Create(Box::new('b'))));
+    assert_eq!(combine_deltas(&Create(Box::new('a')), Delete(Box::new('a'))),                  Ok(DataDelta::Delete(Box::new('a'))));
 
-    assert_eq!(combine_delta_data(&Modify((Box::new('a'), Box::new('b'))), Create(Box::new('c'))),                  Ok(DataDelta::Modify((Box::new('a'), Box::new('c')))));
-    assert_eq!(combine_delta_data(&Modify((Box::new('a'), Box::new('b'))), Modify((Box::new('c'), Box::new('d')))), Ok(DataDelta::Modify((Box::new('a'), Box::new('d')))));
-    assert_eq!(combine_delta_data(&Modify((Box::new('a'), Box::new('b'))), Delete(Box::new('c'))),                  Ok(DataDelta::Delete(Box::new('c'))));
+    assert_eq!(combine_deltas(&Modify((Box::new('a'), Box::new('b'))), Create(Box::new('c'))),                  Err(Error::DeltaDataCreatedMultipleTimes));
+    assert_eq!(combine_deltas(&Modify((Box::new('a'), Box::new('b'))), Modify((Box::new('c'), Box::new('d')))), Ok(DataDelta::Modify((Box::new('a'), Box::new('d')))));
+    assert_eq!(combine_deltas(&Modify((Box::new('a'), Box::new('b'))), Delete(Box::new('c'))),                  Ok(DataDelta::Delete(Box::new('c'))));
 
-    assert_eq!(combine_delta_data(&Delete(Box::new('a')), Create(Box::new('b'))),                  Ok(DataDelta::Create(Box::new('b'))));
-    assert_eq!(combine_delta_data(&Delete(Box::new('a')), Modify((Box::new('b'), Box::new('c')))), Err(Error::DeltaDataModifyAfterDelete));
-    assert_eq!(combine_delta_data(&Delete(Box::new('a')), Delete(Box::new('b'))),                  Err(Error::DeltaDataDeletedMultipleTimes));
+    assert_eq!(combine_deltas(&Delete(Box::new('a')), Create(Box::new('b'))),                  Ok(DataDelta::Create(Box::new('b'))));
+    assert_eq!(combine_deltas(&Delete(Box::new('a')), Modify((Box::new('b'), Box::new('c')))), Err(Error::DeltaDataModifyAfterDelete));
+    assert_eq!(combine_deltas(&Delete(Box::new('a')), Delete(Box::new('b'))),                  Err(Error::DeltaDataDeletedMultipleTimes));
+}
+
+#[test]
+#[rustfmt::skip]
+fn test_combine_delta_with_undo() {
+    use DataDelta::{Create, Delete, Modify};
+
+    assert_eq!(combine_delta_with_undo(&Create(Box::new('a')), Create(Box::new('b'))),                  Ok(DataDelta::Create(Box::new('b'))));
+    assert_eq!(combine_delta_with_undo(&Create(Box::new('a')), Modify((Box::new('a'), Box::new('b')))), Ok(DataDelta::Create(Box::new('b'))));
+    assert_eq!(combine_delta_with_undo(&Create(Box::new('a')), Delete(Box::new('a'))),                  Ok(DataDelta::Delete(Box::new('a'))));
+
+    assert_eq!(combine_delta_with_undo(&Modify((Box::new('a'), Box::new('b'))), Create(Box::new('c'))),                  Ok(DataDelta::Modify((Box::new('a'), Box::new('c')))));
+    assert_eq!(combine_delta_with_undo(&Modify((Box::new('a'), Box::new('b'))), Modify((Box::new('c'), Box::new('d')))), Ok(DataDelta::Modify((Box::new('a'), Box::new('d')))));
+    assert_eq!(combine_delta_with_undo(&Modify((Box::new('a'), Box::new('b'))), Delete(Box::new('c'))),                  Ok(DataDelta::Delete(Box::new('c'))));
+
+    assert_eq!(combine_delta_with_undo(&Delete(Box::new('a')), Create(Box::new('b'))),                  Ok(DataDelta::Create(Box::new('b'))));
+    assert_eq!(combine_delta_with_undo(&Delete(Box::new('a')), Modify((Box::new('b'), Box::new('c')))), Err(Error::DeltaDataModifyAfterDelete));
+    assert_eq!(combine_delta_with_undo(&Delete(Box::new('a')), Delete(Box::new('b'))),                  Err(Error::DeltaDataDeletedMultipleTimes));
 }
 
 #[test]
@@ -60,10 +78,8 @@ fn test_merge_collections() {
     // This test check all valid combinations:
     //    collection1 - collection2
     //    -------------------------
-    //         Create - Create
     //         Create - Modify
     //         Create - Delete
-    //         Modify - Create
     //         Modify - Modify
     //         Modify - Delete
     //         Delete - Create
@@ -78,61 +94,52 @@ fn test_merge_collections() {
         [
             (1, DataDelta::Create(Box::new('a'))),
             (2, DataDelta::Create(Box::new('b'))),
-            (3, DataDelta::Create(Box::new('c'))),
-            (4, DataDelta::Modify((Box::new('a'), Box::new('e')))),
-            (5, DataDelta::Modify((Box::new('a'), Box::new('f')))),
-            (6, DataDelta::Modify((Box::new('a'), Box::new('g')))),
-            (7, DataDelta::Delete(Box::new('h'))),
-            (8, DataDelta::Create(Box::new('i'))),
-            (9, DataDelta::Modify((Box::new('a'), Box::new('j')))),
-            (10, DataDelta::Delete(Box::new('k'))),
+            (3, DataDelta::Modify((Box::new('a'), Box::new('c')))),
+            (4, DataDelta::Modify((Box::new('a'), Box::new('d')))),
+            (5, DataDelta::Delete(Box::new('e'))),
+            (6, DataDelta::Create(Box::new('f'))),
+            (7, DataDelta::Modify((Box::new('a'), Box::new('g')))),
+            (8, DataDelta::Delete(Box::new('h'))),
         ]
         .into_iter(),
     );
 
     let collection2 = DeltaDataCollection::from_iter(
         [
-            (1, DataDelta::Create(Box::new('l'))),
-            (2, DataDelta::Modify((Box::new('a'), Box::new('m')))),
-            (3, DataDelta::Delete(Box::new('c'))),
-            (4, DataDelta::Create(Box::new('o'))),
-            (5, DataDelta::Modify((Box::new('c'), Box::new('p')))),
-            (6, DataDelta::Delete(Box::new('g'))),
-            (7, DataDelta::Create(Box::new('h'))),
-            (11, DataDelta::Create(Box::new('s'))),
-            (12, DataDelta::Modify((Box::new('a'), Box::new('t')))),
-            (13, DataDelta::Delete(Box::new('u'))),
+            (1, DataDelta::Modify((Box::new('a'), Box::new('i')))),
+            (2, DataDelta::Delete(Box::new('b'))),
+            (3, DataDelta::Modify((Box::new('c'), Box::new('j')))),
+            (4, DataDelta::Delete(Box::new('d'))),
+            (5, DataDelta::Create(Box::new('e'))),
+            (9, DataDelta::Create(Box::new('m'))),
+            (10, DataDelta::Modify((Box::new('a'), Box::new('n')))),
+            (11, DataDelta::Delete(Box::new('o'))),
         ]
         .into_iter(),
     );
 
     let expected_data_after_merge = BTreeMap::from_iter(
         [
-            (1, DeltaMapElement::Delta(DataDelta::Create(Box::new('l')))),
-            (2, DeltaMapElement::Delta(DataDelta::Create(Box::new('m')))),
-            (3, DeltaMapElement::Delta(DataDelta::Delete(Box::new('c')))),
+            (1, DeltaMapElement::Delta(DataDelta::Create(Box::new('i')))),
+            (2, DeltaMapElement::Delta(DataDelta::Delete(Box::new('b')))),
             (
-                4,
-                DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('o')))),
-            ),
-            (
-                5,
-                DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('p')))),
-            ),
-            (6, DeltaMapElement::Delta(DataDelta::Delete(Box::new('g')))),
-            (7, DeltaMapElement::Delta(DataDelta::Create(Box::new('h')))),
-            (8, DeltaMapElement::Delta(DataDelta::Create(Box::new('i')))),
-            (
-                9,
+                3,
                 DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('j')))),
             ),
-            (10, DeltaMapElement::Delta(DataDelta::Delete(Box::new('k')))),
-            (11, DeltaMapElement::Delta(DataDelta::Create(Box::new('s')))),
+            (4, DeltaMapElement::Delta(DataDelta::Delete(Box::new('d')))),
+            (5, DeltaMapElement::Delta(DataDelta::Create(Box::new('e')))),
+            (6, DeltaMapElement::Delta(DataDelta::Create(Box::new('f')))),
             (
-                12,
-                DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('t')))),
+                7,
+                DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('g')))),
             ),
-            (13, DeltaMapElement::Delta(DataDelta::Delete(Box::new('u')))),
+            (8, DeltaMapElement::Delta(DataDelta::Delete(Box::new('h')))),
+            (9, DeltaMapElement::Delta(DataDelta::Create(Box::new('m')))),
+            (
+                10,
+                DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('n')))),
+            ),
+            (11, DeltaMapElement::Delta(DataDelta::Delete(Box::new('o')))),
         ]
         .into_iter(),
     );
@@ -142,31 +149,26 @@ fn test_merge_collections() {
 
     let expected_data_after_undo = BTreeMap::from_iter(
         [
-            (1, DeltaMapElement::Delta(DataDelta::Create(Box::new('a')))),
-            (2, DeltaMapElement::Delta(DataDelta::Create(Box::new('b')))),
-            (3, DeltaMapElement::Delta(DataDelta::Create(Box::new('c')))),
+            (1, DeltaMapElement::Undo(DataDelta::Create(Box::new('a')))),
+            (2, DeltaMapElement::Undo(DataDelta::Create(Box::new('b')))),
             (
-                4,
-                DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('e')))),
+                3,
+                DeltaMapElement::Undo(DataDelta::Modify((Box::new('a'), Box::new('c')))),
             ),
+            (4, DeltaMapElement::Undo(DataDelta::Create(Box::new('d')))),
+            (5, DeltaMapElement::Undo(DataDelta::Delete(Box::new('e')))),
+            (6, DeltaMapElement::Delta(DataDelta::Create(Box::new('f')))),
             (
-                5,
-                DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('f')))),
+                7,
+                DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('g')))),
             ),
-            (6, DeltaMapElement::Delta(DataDelta::Create(Box::new('g')))),
-            (7, DeltaMapElement::Delta(DataDelta::Delete(Box::new('h')))),
-            (8, DeltaMapElement::Delta(DataDelta::Create(Box::new('i')))),
+            (8, DeltaMapElement::Delta(DataDelta::Delete(Box::new('h')))),
+            (9, DeltaMapElement::Undo(DataDelta::Delete(Box::new('m')))),
             (
-                9,
-                DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('j')))),
+                10,
+                DeltaMapElement::Undo(DataDelta::Modify((Box::new('a'), Box::new('a')))),
             ),
-            (10, DeltaMapElement::Delta(DataDelta::Delete(Box::new('k')))),
-            (11, DeltaMapElement::Delta(DataDelta::Delete(Box::new('s')))),
-            (
-                12,
-                DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('a')))),
-            ),
-            (13, DeltaMapElement::Delta(DataDelta::Create(Box::new('u')))),
+            (11, DeltaMapElement::Undo(DataDelta::Create(Box::new('o')))),
         ]
         .into_iter(),
     );
@@ -221,7 +223,9 @@ fn test_undo_nonexisting_delta() {
 fn create_delete_undo_merge() {
     let mut collection1 =
         DeltaDataCollection::from_iter([(1, DataDelta::Create(Box::new('a')))].into_iter());
-    let collection1_origin = collection1.clone();
+    let expected_data = BTreeMap::from_iter(
+        [(1, DeltaMapElement::Undo(DataDelta::Create(Box::new('a'))))].into_iter(),
+    );
 
     let mut collection2 = DeltaDataCollection::new();
     let undo_op = collection2
@@ -234,14 +238,16 @@ fn create_delete_undo_merge() {
 
     let _ = collection2.merge_delta_data(collection3).unwrap();
     let _ = collection1.merge_delta_data(collection2).unwrap();
-    assert_eq!(collection1.data, collection1_origin.data);
+    assert_eq!(collection1.data, expected_data);
 }
 
 #[test]
 fn create_delete_merge_undo() {
     let mut collection1 =
         DeltaDataCollection::from_iter([(1, DataDelta::Create(Box::new('a')))].into_iter());
-    let collection1_origin = collection1.clone();
+    let expected_data = BTreeMap::from_iter(
+        [(1, DeltaMapElement::Undo(DataDelta::Create(Box::new('a'))))].into_iter(),
+    );
 
     let mut collection2 = DeltaDataCollection::new();
     let undo_op = collection2
@@ -254,14 +260,16 @@ fn create_delete_merge_undo() {
     collection3.undo_merge_delta_data_element(1, undo_op).unwrap();
 
     let _ = collection1.merge_delta_data(collection3).unwrap();
-    assert_eq!(collection1.data, collection1_origin.data);
+    assert_eq!(collection1.data, expected_data);
 }
 
 #[test]
 fn create_modify_undo_merge() {
     let mut collection1 =
         DeltaDataCollection::from_iter([(1, DataDelta::Create(Box::new('a')))].into_iter());
-    let collection1_origin = collection1.clone();
+    let expected_data = BTreeMap::from_iter(
+        [(1, DeltaMapElement::Undo(DataDelta::Create(Box::new('a'))))].into_iter(),
+    );
 
     let mut collection2 = DeltaDataCollection::new();
     let undo_op = collection2
@@ -274,14 +282,16 @@ fn create_modify_undo_merge() {
 
     let _ = collection2.merge_delta_data(collection3).unwrap();
     let _ = collection1.merge_delta_data(collection2).unwrap();
-    assert_eq!(collection1.data, collection1_origin.data);
+    assert_eq!(collection1.data, expected_data);
 }
 
 #[test]
 fn create_modify_merge_undo() {
     let mut collection1 =
         DeltaDataCollection::from_iter([(1, DataDelta::Create(Box::new('a')))].into_iter());
-    let collection1_origin = collection1.clone();
+    let expected_data = BTreeMap::from_iter(
+        [(1, DeltaMapElement::Undo(DataDelta::Create(Box::new('a'))))].into_iter(),
+    );
 
     let mut collection2 = DeltaDataCollection::new();
     let undo_op = collection2
@@ -295,14 +305,16 @@ fn create_modify_merge_undo() {
     collection3.undo_merge_delta_data_element(1, undo_op).unwrap();
 
     let _ = collection1.merge_delta_data(collection3).unwrap();
-    assert_eq!(collection1.data, collection1_origin.data);
+    assert_eq!(collection1.data, expected_data);
 }
 
 #[test]
 fn create_modify_merge_undo2() {
     let mut collection1 =
         DeltaDataCollection::from_iter([(1, DataDelta::Create(Box::new('a')))].into_iter());
-    let collection1_origin = collection1.clone();
+    let expected_data = BTreeMap::from_iter(
+        [(1, DeltaMapElement::Undo(DataDelta::Create(Box::new('a'))))].into_iter(),
+    );
 
     let collection2 = DeltaDataCollection::from_iter(
         [(1, DataDelta::Modify((Box::new('a'), Box::new('b'))))].into_iter(),
@@ -312,7 +324,7 @@ fn create_modify_merge_undo2() {
 
     collection1.undo_merge_delta_data(undo).unwrap();
 
-    assert_eq!(collection1.data, collection1_origin.data);
+    assert_eq!(collection1.data, expected_data);
 }
 
 #[test]
@@ -335,10 +347,14 @@ fn create_modify_undo_undo() {
     let mut collection4 = DeltaDataCollection::new();
     collection4.undo_merge_delta_data_element(1, undo_op_1).unwrap();
 
-    assert_eq!(
-        collection3.merge_delta_data(collection4).unwrap_err(),
-        Error::UndoUndoNotSupported
+    let _ = collection3.merge_delta_data(collection4).unwrap();
+    let _ = collection2.merge_delta_data(collection3).unwrap();
+    let _ = collection1.merge_delta_data(collection2).unwrap();
+
+    let expected_data = BTreeMap::from_iter(
+        [(1, DeltaMapElement::Undo(DataDelta::Delete(Box::new('a'))))].into_iter(),
     );
+    assert_eq!(collection1.data, expected_data);
 }
 
 #[test]
@@ -359,7 +375,7 @@ fn create_undo_modify() {
 
     assert_eq!(
         collection2.merge_delta_data(collection3).unwrap_err(),
-        Error::DataCombinedOverUndoNotSupported
+        Error::DeltaDataModifyAfterDelete
     );
 }
 
@@ -388,9 +404,10 @@ fn create_modify_undo_delete_merge() {
     let _ = collection2.merge_delta_data(collection4).unwrap();
     let _ = collection1.merge_delta_data(collection2).unwrap();
 
-    let expected_collection =
-        DeltaDataCollection::from_iter([(1, DataDelta::Delete(Box::new('b')))].into_iter());
-    assert_eq!(collection1, expected_collection);
+    let expected_data = BTreeMap::from_iter(
+        [(1, DeltaMapElement::Undo(DataDelta::Delete(Box::new('b'))))].into_iter(),
+    );
+    assert_eq!(collection1.data, expected_data);
 }
 
 #[test]
@@ -417,9 +434,10 @@ fn create_modify_delete_undo_merge() {
     let _ = collection2.merge_delta_data(collection3).unwrap();
     let _ = collection1.merge_delta_data(collection2).unwrap();
 
-    let expected_collection =
-        DeltaDataCollection::from_iter([(1, DataDelta::Create(Box::new('b')))].into_iter());
-    assert_eq!(collection1, expected_collection);
+    let expected_data = BTreeMap::from_iter(
+        [(1, DeltaMapElement::Undo(DataDelta::Create(Box::new('b'))))].into_iter(),
+    );
+    assert_eq!(collection1.data, expected_data);
 }
 
 #[test]
@@ -447,9 +465,10 @@ fn create_delete_undo_modify_merge() {
     let _ = collection2.merge_delta_data(collection4).unwrap();
     let _ = collection1.merge_delta_data(collection2).unwrap();
 
-    let expected_collection =
-        DeltaDataCollection::from_iter([(1, DataDelta::Create(Box::new('b')))].into_iter());
-    assert_eq!(collection1, expected_collection);
+    let expected_data = BTreeMap::from_iter(
+        [(1, DeltaMapElement::Undo(DataDelta::Create(Box::new('b'))))].into_iter(),
+    );
+    assert_eq!(collection1.data, expected_data);
 }
 
 #[test]
@@ -476,9 +495,10 @@ fn create_modify_modify_undo_merge() {
     let _ = collection2.merge_delta_data(collection3).unwrap();
     let _ = collection1.merge_delta_data(collection2).unwrap();
 
-    let expected_collection =
-        DeltaDataCollection::from_iter([(1, DataDelta::Create(Box::new('b')))].into_iter());
-    assert_eq!(collection1, expected_collection);
+    let expected_data = BTreeMap::from_iter(
+        [(1, DeltaMapElement::Undo(DataDelta::Create(Box::new('b'))))].into_iter(),
+    );
+    assert_eq!(collection1.data, expected_data);
 }
 
 #[test]
@@ -501,16 +521,21 @@ fn create_modify_modify_merge_undo_undo_merge() {
     let _ = collection2.merge_delta_data(collection3).unwrap();
     collection2.undo_merge_delta_data_element(1, undo_op2).unwrap();
 
-    let expected_collection = DeltaDataCollection::from_iter(
-        [(1, DataDelta::Modify((Box::new('a'), Box::new('b'))))].into_iter(),
+    let expected_data2 = BTreeMap::from_iter(
+        [(
+            1,
+            DeltaMapElement::Undo(DataDelta::Modify((Box::new('a'), Box::new('b')))),
+        )]
+        .into_iter(),
     );
-    assert_eq!(collection2, expected_collection);
+    assert_eq!(collection2.data, expected_data2);
 
     collection2.undo_merge_delta_data_element(1, undo_op1).unwrap();
 
     let _ = collection1.merge_delta_data(collection2).unwrap();
 
-    let expected_collection =
-        DeltaDataCollection::from_iter([(1, DataDelta::Create(Box::new('a')))].into_iter());
-    assert_eq!(collection1, expected_collection);
+    let expected_data1 = BTreeMap::from_iter(
+        [(1, DeltaMapElement::Undo(DataDelta::Create(Box::new('a'))))].into_iter(),
+    );
+    assert_eq!(collection1.data, expected_data1);
 }
