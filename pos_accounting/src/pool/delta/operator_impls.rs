@@ -62,7 +62,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<'a
                 pool_id,
                 DataDelta::Create(Box::new(PoolData::new(decommission_key, pledge_amount))),
             )?
-            .ok_or(Error::FailedToCreateUndoOp)?;
+            .ok_or(Error::FailedToCreateDeltaUndo)?;
 
         Ok((
             pool_id,
@@ -87,7 +87,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<'a
             .data
             .pool_data
             .merge_delta_data_element(pool_id, DataDelta::Delete(Box::new(last_data)))?
-            .ok_or(Error::FailedToCreateUndoOp)?;
+            .ok_or(Error::FailedToCreateDeltaUndo)?;
 
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
             pool_id,
@@ -118,7 +118,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<'a
             .data
             .delegation_data
             .merge_delta_data_element(delegation_id, DataDelta::Create(Box::new(delegation_data)))?
-            .ok_or(Error::FailedToCreateUndoOp)?;
+            .ok_or(Error::FailedToCreateDeltaUndo)?;
 
         Ok((
             delegation_id,
