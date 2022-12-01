@@ -16,12 +16,14 @@
 pub mod hdkd;
 mod key_holder;
 pub mod rschnorr;
+pub mod secp256k1;
 pub mod signature;
 
 use serialization::{Decode, Encode};
 
 use crate::key::rschnorr::{MLRistrettoPrivateKey, MLRistrettoPublicKey, RistrettoSignatureError};
-use crate::key::Signature::RistrettoSchnorr;
+use crate::key::secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey};
+use crate::key::Signature::{RistrettoSchnorr, Secp256k1Schnorr};
 use crate::random::make_true_rng;
 use crate::random::{CryptoRng, Rng};
 pub use signature::Signature;
@@ -40,6 +42,8 @@ pub enum SignatureError {
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub enum KeyKind {
     #[codec(index = 0)]
+    Secp256k1Schnorr,
+    #[codec(index = 2)]
     RistrettoSchnorr,
 }
 
@@ -73,6 +77,10 @@ impl PrivateKey {
         key_kind: KeyKind,
     ) -> (PrivateKey, PublicKey) {
         match key_kind {
+            KeyKind::Secp256k1Schnorr => {
+                let k = Secp256k1PrivateKey::new(rng);
+                (k.0.into(), k.1.into())
+            }
             KeyKind::RistrettoSchnorr => {
                 let k = MLRistrettoPrivateKey::new(rng);
                 (
@@ -89,6 +97,7 @@ impl PrivateKey {
 
     pub fn kind(&self) -> KeyKind {
         match self.key {
+            PrivateKeyHolder::Secp256k1Schnorr(_) => KeyKind::Secp256k1Schnorr,
             PrivateKeyHolder::RistrettoSchnorr(_) => KeyKind::RistrettoSchnorr,
         }
     }
@@ -99,6 +108,7 @@ impl PrivateKey {
 
     pub fn sign_message(&self, msg: &[u8]) -> Result<Signature, SignatureError> {
         let signature = match &self.key {
+            PrivateKeyHolder::Secp256k1Schnorr(ref k) => Secp256k1Schnorr(k.sign_message(msg)),
             PrivateKeyHolder::RistrettoSchnorr(ref k) => RistrettoSchnorr(k.sign_message(msg)?),
         };
         Ok(signature)
@@ -108,7 +118,16 @@ impl PrivateKey {
 impl Derivable for PrivateKey {
     fn derive_child(self, num: ChildNumber) -> Result<Self, DerivationError> {
         match self.key {
+            PrivateKeyHolder::Secp256k1Schnorr(_) => Err(DerivationError::UnsupportedKeyType),
             PrivateKeyHolder::RistrettoSchnorr(key) => Ok(key.derive_child(num)?.into()),
+        }
+    }
+}
+
+impl From<Secp256k1PrivateKey> for PrivateKey {
+    fn from(sk: Secp256k1PrivateKey) -> Self {
+        Self {
+            key: PrivateKeyHolder::Secp256k1Schnorr(sk),
         }
     }
 }
@@ -124,6 +143,9 @@ impl From<MLRistrettoPrivateKey> for PrivateKey {
 impl PublicKey {
     pub fn from_private_key(private_key: &PrivateKey) -> Self {
         match private_key.get_internal_key() {
+            PrivateKeyHolder::Secp256k1Schnorr(ref k) => {
+                Secp256k1PublicKey::from_private_key(k).into()
+            }
             PrivateKeyHolder::RistrettoSchnorr(ref k) => PublicKey {
                 pub_key: PublicKeyHolder::RistrettoSchnorr(MLRistrettoPublicKey::from_private_key(
                     k,
@@ -133,15 +155,30 @@ impl PublicKey {
     }
 
     pub fn verify_message(&self, signature: &Signature, msg: &[u8]) -> bool {
-        let PublicKeyHolder::RistrettoSchnorr(k) = &self.pub_key;
-        match signature {
-            RistrettoSchnorr(s) => k.verify_message(s, msg),
+        match &self.pub_key {
+            PublicKeyHolder::Secp256k1Schnorr(ref k) => match signature {
+                Secp256k1Schnorr(s) => k.verify_message(s, msg),
+                _ => panic!("Wrong key/signature combination"),
+            },
+            PublicKeyHolder::RistrettoSchnorr(ref k) => match signature {
+                RistrettoSchnorr(s) => k.verify_message(s, msg),
+                _ => panic!("Wrong key/signature combination"),
+            },
         }
     }
 
     pub fn is_aggregable(&self) -> bool {
         match self.pub_key {
+            PublicKeyHolder::Secp256k1Schnorr(_) => false,
             PublicKeyHolder::RistrettoSchnorr(_) => true,
+        }
+    }
+}
+
+impl From<Secp256k1PublicKey> for PublicKey {
+    fn from(pk: Secp256k1PublicKey) -> Self {
+        Self {
+            pub_key: PublicKeyHolder::Secp256k1Schnorr(pk),
         }
     }
 }
@@ -159,6 +196,19 @@ mod test {
     #[trace]
     #[case(Seed::from_entropy())]
     fn sign_and_verify(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let (sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        assert_eq!(sk.kind(), KeyKind::Secp256k1Schnorr);
+        let msg_size = 1 + rand::random::<usize>() % 10000;
+        let msg: Vec<u8> = (0..msg_size).map(|_| rand::random::<u8>()).collect();
+        let sig = sk.sign_message(&msg).unwrap();
+        assert!(pk.verify_message(&sig, &msg));
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn sign_and_verify_ristretto(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let (sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         assert_eq!(sk.kind(), KeyKind::RistrettoSchnorr);
