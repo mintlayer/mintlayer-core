@@ -69,20 +69,17 @@ impl<T: PeerStream + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
     fn handshake(&self, base: T, role: Role) -> BoxFuture<'static, crate::Result<Self::Stream>> {
         let local_key = self.clone().local_key;
         Box::pin(async move {
+            let builder = snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
+                .local_private_key(&local_key.private);
             let state = match role {
-                Role::Outbound => snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
-                    .local_private_key(&local_key.private)
-                    .build_initiator()
-                    .expect("snowstorm builder must succeed"),
-                Role::Inbound => snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
-                    .local_private_key(&local_key.private)
-                    .build_responder()
-                    .expect("snowstorm builder must succeed"),
-            };
+                Role::Outbound => builder.build_initiator(),
+                Role::Inbound => builder.build_responder(),
+            }
+            .expect("snowstorm builder must succeed");
 
             let stream = timeout(HANDSHAKE_TIMEOUT, NoiseStream::handshake(base, state))
                 .await
-                .map_err(|err| P2pError::NoiseHandshakeError(err.to_string()))?
+                .map_err(|_err| P2pError::NoiseHandshakeError("Handshake timeout".to_owned()))?
                 .map_err(|err| P2pError::NoiseHandshakeError(err.to_string()))?;
 
             // Remote peer public key is available after handshake
