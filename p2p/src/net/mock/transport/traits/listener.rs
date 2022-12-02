@@ -18,6 +18,7 @@ use async_trait::async_trait;
 use crate::Result;
 
 /// An abstraction layer over a potential inbound network connection (acceptor in boost terminology).
+// TODO: Replace Stream and Address trait parameters with associated types?
 #[async_trait]
 pub trait TransportListener<Stream, Address>: Send {
     /// Accepts a new inbound connection.
