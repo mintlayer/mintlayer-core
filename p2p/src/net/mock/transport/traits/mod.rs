@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod listener;
-pub mod socket;
-pub mod stream;
+mod listener;
+mod socket;
+mod stream;
+
+pub use listener::TransportListener;
+pub use socket::TransportSocket;
+pub use stream::PeerStream;
