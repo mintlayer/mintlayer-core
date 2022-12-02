@@ -39,6 +39,7 @@ impl ManagerConfig {
         None
     };
 
+    /// New config using given subsystem name. Other options are default.
     fn named(name: &'static str) -> Self {
         Self {
             name,
