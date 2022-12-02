@@ -16,7 +16,7 @@
 use std::io;
 
 use bytes::{Buf, BytesMut};
-use serialization::{Decode, Encode};
+use serialization::{DecodeAll, Encode};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio_util::codec::{Decoder, Encoder};
 
@@ -33,9 +33,10 @@ impl Decoder for EncoderDecoder {
             return Ok(None);
         }
 
-        let mut length_bytes = [0u8; 4];
-        length_bytes.copy_from_slice(&src[..4]);
-        let length = u32::from_le_bytes(length_bytes) as usize;
+        let (header, remaining_bytes) = src.split_at_mut(4);
+
+        // Unwrap is safe here because the header size is 4 bytes
+        let length = u32::from_le_bytes(header.try_into().expect("valid size")) as usize;
 
         if length > MAX_MESSAGE_SIZE {
             return Err(io::Error::new(
@@ -45,15 +46,18 @@ impl Decoder for EncoderDecoder {
             .into());
         }
 
-        if src.len() < 4 + length {
+        if remaining_bytes.len() < length {
             src.reserve(4 + length - src.len());
             return Ok(None);
         }
 
-        let data = src[4..4 + length].to_vec();
+        let (body, _extra_bytes) = remaining_bytes.split_at_mut(length);
+
+        let decode_res = Message::decode_all(&mut &body[..]);
+
         src.advance(4 + length);
 
-        match Message::decode(&mut &data[..]) {
+        match decode_res {
             Ok(msg) => Ok(Some(msg)),
             Err(e) => {
                 Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()).into())
