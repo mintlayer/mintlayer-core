@@ -432,6 +432,9 @@ mod tests {
                     ]
                     .into_iter()
                     .collect(),
+                    subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                        .into_iter()
+                        .collect(),
                 }
             );
         } else {

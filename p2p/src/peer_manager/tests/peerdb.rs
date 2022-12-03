@@ -20,7 +20,11 @@ use libp2p::{multiaddr, Multiaddr, PeerId};
 use super::*;
 use crate::{
     config,
-    net::{libp2p::Libp2pService, types, AsBannableAddress},
+    net::{
+        libp2p::Libp2pService,
+        types::{self, PubSubTopic},
+        AsBannableAddress,
+    },
     peer_manager::peerdb::{Peer, PeerDb},
 };
 
@@ -35,6 +39,7 @@ fn make_peer_info() -> (PeerId, types::PeerInfo<Libp2pService>) {
             version: common::primitives::semver::SemVer::new(0, 1, 0),
             agent: None,
             protocols: default_protocols(),
+            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     )
 }

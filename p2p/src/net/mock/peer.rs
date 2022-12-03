@@ -112,7 +112,7 @@ where
                             ]
                             .into_iter()
                             .collect(),
-                            // TODO: Don't hardcode these values.
+                            // TODO: Don't hardcode subscriptions.
                             subscriptions: [PubSubTopic::Transactions, PubSubTopic::Blocks]
                                 .into_iter()
                                 .collect(),
@@ -310,6 +310,9 @@ mod tests {
                     ]
                     .into_iter()
                     .collect(),
+                    subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                        .into_iter()
+                        .collect(),
                 }
             ))
         );
@@ -367,6 +370,9 @@ mod tests {
                         ]
                         .into_iter()
                         .collect(),
+                        subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                            .into_iter()
+                            .collect(),
                     }
                 ))
                 .await
@@ -389,6 +395,9 @@ mod tests {
                     ]
                     .into_iter()
                     .collect(),
+                    subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                        .into_iter()
+                        .collect(),
                 }
             ))
         );
@@ -442,6 +451,9 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
+                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                    .into_iter()
+                    .collect(),
             }))
             .await
             .is_ok());
