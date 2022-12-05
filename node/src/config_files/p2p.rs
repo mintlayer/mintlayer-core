@@ -111,7 +111,7 @@ impl From<P2pConfigFile> for P2pConfig {
             ban_threshold: c.ban_threshold.into(),
             outbound_connection_timeout: c.outbound_connection_timeout.into(),
             mdns_config: mdns_config.into(),
-            request_timeout: c.request_timeout.map(|t| Duration::from_secs(t)).into(),
+            request_timeout: c.request_timeout.map(Duration::from_secs).into(),
         }
     }
 }
