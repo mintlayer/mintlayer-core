@@ -13,22 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
-
-use libp2p::PeerId;
-
-use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
-
-use super::*;
-use crate::{
-    event::{PeerManagerEvent, SyncControlEvent},
-    net::{libp2p::Libp2pService, mock::types::MockPeerId, ConnectivityService},
-};
-
 mod block_response;
 mod connection;
 mod header_response;
 mod request_response;
+
+use std::{sync::Arc, time::Duration};
+
+use libp2p::PeerId;
+use tokio::sync::mpsc;
+
+use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
+
+use crate::{
+    config::{MdnsConfig, P2pConfig},
+    event::{PeerManagerEvent, SyncControlEvent},
+    net::{mock::types::MockPeerId, ConnectivityService},
+    sync::{peer, BlockSyncManager},
+    NetworkingService, SyncingMessagingService,
+};
 
 async fn make_sync_manager<T>(
     addr: T::Address,
@@ -67,8 +70,11 @@ where
 
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(P2pConfig {
+        bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
+        ban_threshold: 100.into(),
+        outbound_connection_timeout: 10.into(),
+        mdns_config: MdnsConfig::Disabled.into(),
         request_timeout: Duration::from_secs(1).into(),
-        ..Default::default()
     });
     let (conn, sync) = T::start(addr, Arc::clone(&chain_config), Arc::clone(&p2p_config))
         .await

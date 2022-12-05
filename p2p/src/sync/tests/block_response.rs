@@ -13,17 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::ChainstateError;
-use common::chain::block::consensus_data::PoWData;
+use std::sync::Arc;
 
-use super::*;
-use crate::net::mock::{
-    transport::{ChannelMockTransport, TcpMockTransport},
-    types::MockPeerId,
-    MockService,
-};
+use libp2p::PeerId;
+
+use chainstate::ChainstateError;
+use common::{chain::block::consensus_data::PoWData, primitives::Idable};
 use p2p_test_utils::{
     MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress, TestBlockInfo,
+};
+
+use crate::{
+    error::{P2pError, PeerError, ProtocolError},
+    net::{
+        libp2p::Libp2pService,
+        mock::{
+            transport::{ChannelMockTransport, TcpMockTransport},
+            types::MockPeerId,
+            MockService,
+        },
+    },
+    sync::{
+        peer,
+        tests::{make_sync_manager, register_peer, MakeTestPeerId},
+    },
+    ConnectivityService, NetworkingService, SyncingMessagingService,
 };
 
 // peer doesn't exist

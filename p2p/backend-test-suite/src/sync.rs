@@ -28,7 +28,7 @@ use common::{
     primitives::{Id, Idable},
 };
 use p2p::{
-    config::P2pConfig,
+    config::{MdnsConfig, P2pConfig},
     error::P2pError,
     event::{PeerManagerEvent, SyncControlEvent},
     message::{BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response},
@@ -1091,8 +1091,11 @@ where
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (chainstate1, chainstate2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let p2p_config = P2pConfig {
+        bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
+        ban_threshold: 100.into(),
+        outbound_connection_timeout: 10.into(),
+        mdns_config: MdnsConfig::Disabled.into(),
         request_timeout: Duration::from_secs(1).into(),
-        ..Default::default()
     };
     let (mut mgr1, mut conn1, _sync1, mut pm1) =
         make_sync_manager::<T>(A::make_address(), chainstate1, p2p_config).await;

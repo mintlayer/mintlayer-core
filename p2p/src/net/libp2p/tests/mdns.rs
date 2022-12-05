@@ -13,29 +13,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
+use std::{sync::Arc, time::Duration};
+
+use futures::StreamExt;
+use libp2p::swarm::SwarmEvent;
+
+use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
+
 use crate::{
-    config,
+    config::{MdnsConfig, P2pConfig},
     net::libp2p::{
         behaviour,
+        tests::{connect_swarms, make_libp2p},
         types::{ConnectivityEvent, Libp2pBehaviourEvent},
     },
 };
-use futures::StreamExt;
-use libp2p::swarm::SwarmEvent;
-use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 
 #[tokio::test]
 async fn test_discovered_and_expired() {
     let (mut backend1, _, _conn_rx, _) = make_libp2p(
         common::chain::config::create_mainnet(),
-        Arc::new(config::P2pConfig {
-            mdns_config: config::MdnsConfig::Enabled {
+        Arc::new(P2pConfig {
+            bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
+            ban_threshold: 100.into(),
+            outbound_connection_timeout: 10.into(),
+            mdns_config: MdnsConfig::Enabled {
                 query_interval: 200.into(),
                 enable_ipv6_mdns_discovery: Default::default(),
             }
             .into(),
-            ..Default::default()
+            request_timeout: Duration::from_secs(10).into(),
         }),
         MakeP2pAddress::make_address(),
         &[],
@@ -44,13 +51,16 @@ async fn test_discovered_and_expired() {
 
     let (mut backend2, _, _, _) = make_libp2p(
         common::chain::config::create_mainnet(),
-        Arc::new(config::P2pConfig {
-            mdns_config: config::MdnsConfig::Enabled {
+        Arc::new(P2pConfig {
+            bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
+            ban_threshold: 100.into(),
+            outbound_connection_timeout: 10.into(),
+            mdns_config: MdnsConfig::Enabled {
                 query_interval: 200.into(),
-                enable_ipv6_mdns_discovery: Default::default(),
+                enable_ipv6_mdns_discovery: false.into(),
             }
             .into(),
-            ..Default::default()
+            request_timeout: Duration::from_secs(10).into(),
         }),
         MakeP2pAddress::make_address(),
         &[],

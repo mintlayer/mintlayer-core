@@ -13,15 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use libp2p::{multiaddr, Multiaddr, PeerId};
 
-use super::*;
 use crate::{
-    config,
+    config::{MdnsConfig, P2pConfig},
     net::{libp2p::Libp2pService, types, AsBannableAddress},
-    peer_manager::peerdb::{Peer, PeerDb},
+    peer_manager::{
+        peerdb::{Peer, PeerDb},
+        tests::default_protocols,
+    },
+    NetworkingService,
 };
 
 fn make_peer_info() -> (PeerId, types::PeerInfo<Libp2pService>) {
@@ -78,7 +81,7 @@ fn add_banned_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
 
 #[test]
 fn num_active_peers() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
 
     assert_eq!(peerdb.idle_peer_count(), 0);
     assert_eq!(peerdb.active_peer_count(), 0);
@@ -125,7 +128,7 @@ fn num_active_peers() {
 
 #[test]
 fn is_active_peer() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
 
     let id1 = add_active_peer(&mut peerdb);
     assert!(peerdb.is_active_peer(&id1));
@@ -142,7 +145,7 @@ fn is_active_peer() {
 
 #[test]
 fn adjust_peer_score_normal_threshold() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
 
     let id = add_active_peer(&mut peerdb);
     assert!(peerdb.adjust_peer_score(&id, 100));
@@ -153,9 +156,12 @@ fn adjust_peer_score_normal_threshold() {
 
 #[test]
 fn adjust_peer_score_higher_threshold() {
-    let config = config::P2pConfig {
+    let config = P2pConfig {
+        bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
         ban_threshold: 200.into(),
-        ..Default::default()
+        outbound_connection_timeout: 10.into(),
+        mdns_config: MdnsConfig::Disabled.into(),
+        request_timeout: Duration::from_secs(10).into(),
     };
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config));
 
@@ -168,9 +174,12 @@ fn adjust_peer_score_higher_threshold() {
 
 #[test]
 fn adjust_peer_score_lower_threshold() {
-    let config = config::P2pConfig {
+    let config = P2pConfig {
+        bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
         ban_threshold: 20.into(),
-        ..Default::default()
+        outbound_connection_timeout: 10.into(),
+        mdns_config: MdnsConfig::Disabled.into(),
+        request_timeout: Duration::from_secs(10).into(),
     };
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config));
 
@@ -182,7 +191,7 @@ fn adjust_peer_score_lower_threshold() {
 
 #[test]
 fn ban_peer() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
 
     // idle peer
     let id = add_banned_peer(&mut peerdb);
@@ -221,7 +230,7 @@ fn ban_peer() {
 
 #[test]
 fn peer_disconnected_unknown() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
 
     // unknown peer doesn't cause any changes
     assert_eq!(peerdb.peers().len(), 0);
@@ -231,7 +240,7 @@ fn peer_disconnected_unknown() {
 
 #[test]
 fn peer_disconnected_idle() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
 
     // idle peer
     let id = add_idle_peer(&mut peerdb);
@@ -242,7 +251,7 @@ fn peer_disconnected_idle() {
 
 #[test]
 fn peer_disconnected_discovered() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
 
     let id = add_discovered_peer(&mut peerdb);
     peerdb.peer_disconnected(&id);
@@ -255,7 +264,7 @@ fn peer_disconnected_discovered() {
 
 #[test]
 fn peer_disconnected_banned() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
 
     let id = add_banned_peer(&mut peerdb);
     peerdb.peer_disconnected(&id);
@@ -267,7 +276,7 @@ fn peer_disconnected_banned() {
 
 #[test]
 fn peer_disconnected_active() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
 
     let id = add_active_peer(&mut peerdb);
     peerdb.peer_disconnected(&id);
@@ -277,7 +286,7 @@ fn peer_disconnected_active() {
 
 #[test]
 fn peer_connected_discovered() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
     let remote_addr: Multiaddr = "/ip6/::1/tcp/8888".parse().unwrap();
 
     // register information for a discovered peer
@@ -306,7 +315,7 @@ fn peer_connected_discovered() {
 
 #[test]
 fn peer_connected_idle() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
     let remote_addr: Multiaddr = "/ip6/::1/tcp/8888".parse().unwrap();
 
     let (id, info) = make_peer_info();
@@ -328,7 +337,7 @@ fn peer_connected_idle() {
 
 #[test]
 fn peer_connected_unknown() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
     let remote_addr: Multiaddr = "/ip6/::1/tcp/8888".parse().unwrap();
 
     let (id, info) = make_peer_info();
@@ -349,7 +358,7 @@ fn peer_connected_unknown() {
 
 #[test]
 fn peer_connected_active() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
 
     // active peer
     let id1 = add_active_peer(&mut peerdb);
@@ -366,7 +375,7 @@ fn peer_connected_active() {
 
 #[test]
 fn peer_connected_banned() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
 
     let id2 = add_banned_peer(&mut peerdb);
     let (_id, mut info2) = make_peer_info();
@@ -382,7 +391,7 @@ fn peer_connected_banned() {
 
 #[test]
 fn register_peer_info_discovered_peer() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
     let remote_addr: Multiaddr = "/ip6/::1/tcp/8888".parse().unwrap();
 
     // register information for a discovered peer
@@ -410,7 +419,7 @@ fn register_peer_info_discovered_peer() {
 // for idle peers the information is updated
 #[test]
 fn register_peer_info_idle_peer() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
 
     let id = add_idle_peer(&mut peerdb);
     if let Some(Peer::Idle(ctx)) = peerdb.peers().get(&id) {
@@ -435,7 +444,7 @@ fn register_peer_info_idle_peer() {
 
 #[test]
 fn register_peer_info_unknown_peer() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
 
     let (id, info) = make_peer_info();
     assert!(peerdb.peers().get(&id).is_none());
@@ -446,7 +455,7 @@ fn register_peer_info_unknown_peer() {
 
 #[test]
 fn register_peer_info_active() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
 
     let id1 = add_active_peer(&mut peerdb);
     let (_id, info1) = make_peer_info();
@@ -461,7 +470,7 @@ fn register_peer_info_active() {
 
 #[test]
 fn register_peer_info_banned() {
-    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
 
     // banned peer
     let id2 = add_banned_peer(&mut peerdb);
@@ -477,7 +486,7 @@ fn register_peer_info_banned() {
 
 #[test]
 fn peer_discovered_libp2p() {
-    let mut peerdb = PeerDb::new(Arc::new(config::P2pConfig::default()));
+    let mut peerdb = PeerDb::new(Arc::new(P2pConfig::default()));
 
     let id_1: libp2p::PeerId = PeerId::random();
     let id_2: libp2p::PeerId = PeerId::random();
