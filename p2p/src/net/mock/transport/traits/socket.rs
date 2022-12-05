@@ -18,13 +18,18 @@ use std::{fmt::Debug, hash::Hash, str::FromStr};
 use async_trait::async_trait;
 
 use crate::{
-    net::{mock::types::Message, AsBannableAddress, IsBannableAddress},
+    net::{AsBannableAddress, IsBannableAddress},
     Result,
 };
 
-/// An abstraction layer for creating and opening connections.
+use super::{listener::TransportListener, stream::PeerStream};
+
+/// An abstraction layer for the transport layer at the highest level, which is responsible for:
+/// 1. Binding to a socket at a specific port, where we listen to connections.
+///    The mechanism to retrieve new connected clients are up to the listener struct
+/// 2. Providing the connect function, that's used to connect to other peers
 #[async_trait]
-pub trait MockTransport: Send + 'static {
+pub trait TransportSocket: Send + Sync + 'static {
     /// An address type.
     type Address: Clone
         + Debug
@@ -40,35 +45,18 @@ pub trait MockTransport: Send + 'static {
     /// A bannable address format.
     type BannableAddress: Debug + Eq + Ord + Send;
 
-    /// A listener type.
-    type Listener: MockListener<Self::Stream, Self::Address>;
+    /// A listener type (or acceptor as per boost terminology).
+    type Listener: TransportListener<Self::Stream, Self::Address>;
 
     /// A messages stream.
-    type Stream: MockStream;
+    type Stream: PeerStream;
+
+    /// Creates a new transport.
+    fn new() -> Self;
 
     /// Creates a new listener bound to the specified address.
-    async fn bind(address: Self::Address) -> Result<Self::Listener>;
+    async fn bind(&self, address: Self::Address) -> Result<Self::Listener>;
 
     /// Open a connection to the given address.
-    async fn connect(address: Self::Address) -> Result<Self::Stream>;
-}
-
-/// An abstraction layer over some kind of network connection.
-#[async_trait]
-pub trait MockListener<Stream, Address>: Send {
-    /// Accepts a new inbound connection.
-    async fn accept(&mut self) -> Result<(Stream, Address)>;
-
-    /// Returns the local address of the listener.
-    fn local_address(&self) -> Result<Address>;
-}
-
-/// An abstraction layer over some network stream that can be used to send and receive messages.
-#[async_trait]
-pub trait MockStream: Send {
-    /// Sends the given message to a remote peer.
-    async fn send(&mut self, msg: Message) -> Result<()>;
-
-    /// Receives a message from a remote peer.
-    async fn recv(&mut self) -> Result<Option<Message>>;
+    async fn connect(&self, address: Self::Address) -> Result<Self::Stream>;
 }

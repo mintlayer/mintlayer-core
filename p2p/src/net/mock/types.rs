@@ -29,12 +29,12 @@ use crate::{
     error, message,
     net::{
         self,
-        mock::transport::MockTransport,
+        mock::transport::TransportSocket,
         types::{Protocol, PubSubTopic},
     },
 };
 
-pub enum Command<T: MockTransport> {
+pub enum Command<T: TransportSocket> {
     Connect {
         address: T::Address,
         response: oneshot::Sender<crate::Result<()>>,
@@ -86,7 +86,7 @@ pub enum SyncingEvent {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum ConnectivityEvent<T: MockTransport> {
+pub enum ConnectivityEvent<T: TransportSocket> {
     InboundAccepted {
         address: T::Address,
         peer_info: MockPeerInfo,
@@ -110,7 +110,7 @@ pub enum ConnectivityEvent<T: MockTransport> {
 }
 
 // TODO: use two events, one for txs and one for blocks?
-pub enum PubSubEvent<T: MockTransport> {
+pub enum PubSubEvent<T: TransportSocket> {
     /// Message received from one of the pubsub topics
     Announcement {
         peer_id: T::Address,
@@ -158,7 +158,7 @@ impl MockPeerId {
         Self(rng.gen::<u64>())
     }
 
-    pub fn from_socket_address<T: MockTransport>(addr: &T::Address) -> Self {
+    pub fn from_socket_address<T: TransportSocket>(addr: &T::Address) -> Self {
         let mut hasher = DefaultHasher::new();
         addr.hash(&mut hasher);
         Self(hasher.finish())

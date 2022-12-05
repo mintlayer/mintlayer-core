@@ -13,9 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p::net::mock::{transport::TcpTransportSocket, MockService};
-use p2p_test_utils::MakeTcpAddress;
+use futures::future::{ready, BoxFuture};
 
-fn main() {
-    p2p_backend_test_suite::run::<MakeTcpAddress, MockService<TcpTransportSocket>>();
+use crate::net::mock::{peer::Role, transport::PeerStream};
+
+use super::StreamAdapter;
+
+#[derive(Debug)]
+pub struct IdentityStreamAdapter;
+
+/// A StreamAdapter that does nothing with no handshake (Identity operation on data that goes through it)
+impl<T: PeerStream + 'static> StreamAdapter<T> for IdentityStreamAdapter {
+    type Stream = T;
+
+    fn new() -> Self {
+        Self
+    }
+
+    fn handshake(&self, base: T, _role: Role) -> BoxFuture<'static, crate::Result<Self::Stream>> {
+        Box::pin(ready(Ok(base)))
+    }
 }

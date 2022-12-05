@@ -25,19 +25,21 @@ use crate::{
     error::{P2pError, ProtocolError},
     net::{
         mock::{
-            transport::{MockStream, MockTransport},
+            transport::TransportSocket,
             types::{self, MockEvent, MockPeerId, PeerEvent},
         },
         types::{Protocol, ProtocolType},
     },
 };
 
+use super::transport::BufferedTranscoder;
+
 pub enum Role {
     Inbound,
     Outbound,
 }
 
-pub struct Peer<T: MockTransport> {
+pub struct Peer<T: TransportSocket> {
     /// Peer ID of the local node
     local_peer_id: MockPeerId,
 
@@ -51,7 +53,7 @@ pub struct Peer<T: MockTransport> {
     role: Role,
 
     /// Peer socket
-    socket: T::Stream,
+    socket: BufferedTranscoder<T::Stream>,
 
     /// TX channel for communicating with backend
     tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
@@ -62,7 +64,7 @@ pub struct Peer<T: MockTransport> {
 
 impl<T> Peer<T>
 where
-    T: MockTransport,
+    T: TransportSocket,
 {
     pub fn new(
         local_peer_id: MockPeerId,
@@ -73,6 +75,7 @@ where
         tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
         rx: mpsc::Receiver<MockEvent>,
     ) -> Self {
+        let socket = BufferedTranscoder::new(socket);
         Self {
             local_peer_id,
             remote_peer_id,
@@ -232,7 +235,9 @@ mod tests {
     use crate::{
         message,
         net::mock::{
-            transport::{ChannelMockTransport, MockListener, TcpMockTransport},
+            transport::{
+                MockChannelTransport, NoiseTcpTransport, TcpTransportSocket, TransportListener,
+            },
             types,
         },
     };
@@ -244,9 +249,9 @@ mod tests {
     async fn handshake_inbound<A, T>()
     where
         A: MakeTestAddress<Address = T::Address>,
-        T: MockTransport,
+        T: TransportSocket,
     {
-        let (socket1, mut socket2) = get_two_connected_sockets::<A, T>().await;
+        let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let config = Arc::new(common::chain::config::create_mainnet());
         let (tx1, mut rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
@@ -269,6 +274,7 @@ mod tests {
             peer
         });
 
+        let mut socket2 = BufferedTranscoder::new(socket2);
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
@@ -309,20 +315,25 @@ mod tests {
 
     #[tokio::test]
     async fn handshake_inbound_tcp() {
-        handshake_inbound::<MakeTcpAddress, TcpMockTransport>().await;
+        handshake_inbound::<MakeTcpAddress, TcpTransportSocket>().await;
     }
 
     #[tokio::test]
     async fn handshake_inbound_channels() {
-        handshake_inbound::<MakeChannelAddress, ChannelMockTransport>().await;
+        handshake_inbound::<MakeChannelAddress, MockChannelTransport>().await;
+    }
+
+    #[tokio::test]
+    async fn handshake_inbound_noise() {
+        handshake_inbound::<MakeTcpAddress, NoiseTcpTransport>().await;
     }
 
     async fn handshake_outbound<A, T>()
     where
         A: MakeTestAddress<Address = T::Address>,
-        T: MockTransport,
+        T: TransportSocket,
     {
-        let (socket1, mut socket2) = get_two_connected_sockets::<A, T>().await;
+        let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let config = Arc::new(common::chain::config::create_mainnet());
         let (tx1, mut rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
@@ -345,6 +356,7 @@ mod tests {
             peer
         });
 
+        let mut socket2 = BufferedTranscoder::new(socket2);
         if let Some(_message) = socket2.recv().await.unwrap() {
             assert!(socket2
                 .send(types::Message::Handshake(
@@ -388,20 +400,25 @@ mod tests {
 
     #[tokio::test]
     async fn handshake_outbound_tcp() {
-        handshake_outbound::<MakeTcpAddress, TcpMockTransport>().await;
+        handshake_outbound::<MakeTcpAddress, TcpTransportSocket>().await;
     }
 
     #[tokio::test]
     async fn handshake_outbound_channels() {
-        handshake_outbound::<MakeChannelAddress, ChannelMockTransport>().await;
+        handshake_outbound::<MakeChannelAddress, MockChannelTransport>().await;
+    }
+
+    #[tokio::test]
+    async fn handshake_outbound_noise() {
+        handshake_outbound::<MakeTcpAddress, NoiseTcpTransport>().await;
     }
 
     async fn handshake_different_network<A, T>()
     where
         A: MakeTestAddress<Address = T::Address>,
-        T: MockTransport,
+        T: TransportSocket,
     {
-        let (socket1, mut socket2) = get_two_connected_sockets::<A, T>().await;
+        let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let config = Arc::new(common::chain::config::create_mainnet());
         let (tx1, _rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
@@ -421,6 +438,7 @@ mod tests {
 
         let handle = tokio::spawn(async move { peer.handshake().await });
 
+        let mut socket2 = BufferedTranscoder::new(socket2);
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
@@ -443,20 +461,25 @@ mod tests {
 
     #[tokio::test]
     async fn handshake_different_network_tcp() {
-        handshake_different_network::<MakeTcpAddress, TcpMockTransport>().await;
+        handshake_different_network::<MakeTcpAddress, TcpTransportSocket>().await;
     }
 
     #[tokio::test]
     async fn handshake_different_network_channels() {
-        handshake_different_network::<MakeChannelAddress, ChannelMockTransport>().await;
+        handshake_different_network::<MakeChannelAddress, MockChannelTransport>().await;
+    }
+
+    #[tokio::test]
+    async fn handshake_different_network_noise() {
+        handshake_different_network::<MakeTcpAddress, NoiseTcpTransport>().await;
     }
 
     async fn invalid_handshake_message<A, T>()
     where
         A: MakeTestAddress<Address = T::Address>,
-        T: MockTransport,
+        T: TransportSocket,
     {
-        let (socket1, mut socket2) = get_two_connected_sockets::<A, T>().await;
+        let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let config = Arc::new(common::chain::config::create_mainnet());
         let (tx1, _rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
@@ -475,6 +498,7 @@ mod tests {
 
         let handle = tokio::spawn(async move { peer.handshake().await });
 
+        let mut socket2 = BufferedTranscoder::new(socket2);
         assert!(socket2.recv().now_or_never().is_none());
         socket2
             .send(types::Message::Request {
@@ -494,22 +518,28 @@ mod tests {
 
     #[tokio::test]
     async fn invalid_handshake_message_tcp() {
-        invalid_handshake_message::<MakeTcpAddress, TcpMockTransport>().await;
+        invalid_handshake_message::<MakeTcpAddress, TcpTransportSocket>().await;
     }
 
     #[tokio::test]
     async fn invalid_handshake_message_channels() {
-        invalid_handshake_message::<MakeChannelAddress, ChannelMockTransport>().await;
+        invalid_handshake_message::<MakeChannelAddress, MockChannelTransport>().await;
+    }
+
+    #[tokio::test]
+    async fn invalid_handshake_message_noise() {
+        invalid_handshake_message::<MakeTcpAddress, NoiseTcpTransport>().await;
     }
 
     pub async fn get_two_connected_sockets<A, T>() -> (T::Stream, T::Stream)
     where
         A: MakeTestAddress<Address = T::Address>,
-        T: MockTransport,
+        T: TransportSocket,
     {
+        let transport = T::new();
         let addr = A::make_address();
-        let mut server = T::bind(addr).await.unwrap();
-        let peer_fut = T::connect(server.local_address().unwrap());
+        let mut server = transport.bind(addr).await.unwrap();
+        let peer_fut = transport.connect(server.local_address().unwrap());
 
         let (res1, res2) = tokio::join!(server.accept(), peer_fut);
         (res1.unwrap().0, res2.unwrap())

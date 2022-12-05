@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::net::mock::{
-    transport::{ChannelMockTransport, TcpMockTransport},
+    transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
     types::MockPeerId,
     MockService,
 };
@@ -50,13 +50,18 @@ async fn test_peer_reconnected_libp2p() {
 
 #[tokio::test]
 async fn test_peer_reconnected_mock_tcp() {
-    test_peer_reconnected::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+    test_peer_reconnected::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn test_peer_reconnected_mock_channels() {
-    test_peer_reconnected::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>()
+    test_peer_reconnected::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>()
         .await;
+}
+
+#[tokio::test]
+async fn test_peer_reconnected_mock_noise() {
+    test_peer_reconnected::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }
 
 // handle peer disconnection event
@@ -93,11 +98,16 @@ async fn test_peer_disconnected_libp2p() {
 
 #[tokio::test]
 async fn test_peer_disconnected_mock_tcp() {
-    test_peer_disconnected::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+    test_peer_disconnected::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn test_peer_disconnected_mock_channels() {
-    test_peer_disconnected::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>()
+    test_peer_disconnected::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>()
         .await;
+}
+
+#[tokio::test]
+async fn test_peer_disconnected_mock_noise() {
+    test_peer_disconnected::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }

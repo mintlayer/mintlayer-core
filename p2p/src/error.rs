@@ -164,6 +164,8 @@ pub enum P2pError {
     DatabaseFailure,
     #[error("Failed to convert data `{0}`")]
     ConversionError(ConversionError),
+    #[error("Noise protocol handshake error")]
+    NoiseHandshakeError(String),
     #[error("Other: `{0}`")]
     Other(&'static str),
 }
@@ -282,6 +284,8 @@ impl BanScore for P2pError {
             P2pError::ChainstateError(_) => 0,
             P2pError::DatabaseFailure => 0,
             P2pError::ConversionError(err) => err.ban_score(),
+            // Could be a noise protocol violation but also a network error, do not ban peer
+            P2pError::NoiseHandshakeError(_) => 0,
             P2pError::Other(_) => 0,
         }
     }
