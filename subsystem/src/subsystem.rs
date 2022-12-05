@@ -43,9 +43,9 @@ impl SubsystemConfig {
 type Action<T, R> = Box<dyn Send + for<'a> FnOnce(&'a mut T) -> BoxFuture<'a, R>>;
 
 /// Call request
-pub struct CallRequest<T>(pub(crate) mpsc::UnboundedReceiver<Action<T, ()>>);
+pub struct CallRequest<T: ?Sized>(pub(crate) mpsc::UnboundedReceiver<Action<T, ()>>);
 
-impl<T: 'static> CallRequest<T> {
+impl<T: 'static + ?Sized> CallRequest<T> {
     /// Receive an external call to this subsystem.
     pub async fn recv(&mut self) -> Action<T, ()> {
         match self.0.recv().await {
@@ -92,12 +92,12 @@ pub type ActionSender<T> = mpsc::UnboundedSender<Action<T, ()>>;
 ///
 /// This allows the user to interact with the subsystem from the outside. Currently, it only
 /// supports calling functions on the subsystem.
-pub struct Handle<T> {
+pub struct Handle<T: ?Sized> {
     // Send the subsystem stuff to do.
     action_tx: ActionSender<T>,
 }
 
-impl<T> Clone for Handle<T> {
+impl<T: ?Sized> Clone for Handle<T> {
     fn clone(&self) -> Self {
         Self {
             action_tx: self.action_tx.clone(),
@@ -139,7 +139,7 @@ impl<T> std::future::Future for CallResult<T> {
     }
 }
 
-impl<T: Send + 'static> Handle<T> {
+impl<T: ?Sized + Send + 'static> Handle<T> {
     /// Crate a new subsystem handle.
     pub(crate) fn new(action_tx: ActionSender<T>) -> Self {
         Self { action_tx }

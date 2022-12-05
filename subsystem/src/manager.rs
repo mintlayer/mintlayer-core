@@ -134,14 +134,16 @@ impl Manager {
     /// });
     /// # let _ = subsystem.call(|()| ());  // Fix the call type to avoid ambiguity.
     /// ```
-    pub fn add_raw_subsystem_with_config<
-        T: 'static + Send,
-        F: 'static + Send + Future<Output = ()>,
-    >(
+    pub fn add_raw_subsystem_with_config<T, F, S>(
         &mut self,
         config: SubsystemConfig,
-        subsystem: impl 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
-    ) -> Handle<T> {
+        subsystem: S,
+    ) -> Handle<T>
+    where
+        T: 'static + Send + ?Sized,
+        F: 'static + Send + Future<Output = ()>,
+        S: 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
+    {
         // Name strings
         let manager_name = self.name;
         let subsys_name = config.subsystem_name;
@@ -194,11 +196,12 @@ impl Manager {
     }
 
     /// Add a raw subsystem. See [Manager::add_raw_subsystem_with_config].
-    pub fn add_raw_subsystem<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
-        &mut self,
-        name: &'static str,
-        subsystem: impl 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
-    ) -> Handle<T> {
+    pub fn add_raw_subsystem<T, F, S>(&mut self, name: &'static str, subsystem: S) -> Handle<T>
+    where
+        T: 'static + Send + ?Sized,
+        F: 'static + Send + Future<Output = ()>,
+        S: 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
+    {
         self.add_raw_subsystem_with_config(SubsystemConfig::named(name), subsystem)
     }
 
