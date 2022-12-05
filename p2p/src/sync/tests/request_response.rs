@@ -95,6 +95,11 @@ async fn request_response_mock_channels() {
     request_response::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
 }
 
+#[tokio::test]
+async fn test_request_response_mock_noise() {
+    test_request_response::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
+}
+
 async fn multiple_requests_and_responses<A, T>()
 where
     A: MakeTestAddress<Address = T::Address>,
@@ -183,6 +188,11 @@ async fn multiple_requests_and_responses_mock_channels() {
         .await;
 }
 
+#[tokio::test]
+async fn test_multiple_requests_and_responses_mock_noise() {
+    test_multiple_requests_and_responses::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
+}
+
 // Receive getheaders before receiving the `Connected` event from the peer manager which makes the
 // request be rejected and time out in the sender's end.
 async fn request_timeout<A, T>()
@@ -221,6 +231,12 @@ where
         },
         Err(_) => panic!("did not receive `Request` in time"),
     }
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_request_timeout_error_mock_noise() {
+    test_request_timeout_error::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 
     match pm1.recv().await.unwrap() {
         PeerManagerEvent::Disconnect(peer_id, _) => assert_eq!(peer_id, peer2_id),
@@ -235,10 +251,16 @@ async fn request_timeout_libp2p() {
 
 #[tokio::test]
 async fn request_timeout_mock_tcp() {
-    request_timeout::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    request_timeout::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn request_timeout_mock_channels() {
-    request_timeout::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    request_timeout::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+#[ignore]
+async fn request_timeout_mock_noise() {
+    request_timeout::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }

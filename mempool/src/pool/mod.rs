@@ -43,7 +43,7 @@ use utils::tap_error_log::LogError;
 use crate::error::Error;
 use crate::error::TxValidationError;
 use crate::get_memory_usage::GetMemoryUsage;
-use crate::interface::mempool_interface_impl::mempool_method_call::MempoolMethodCall;
+use crate::method_call::MempoolMethodCall;
 use crate::tx_accumulator::TransactionAccumulator;
 use crate::MempoolEvent;
 use feerate::FeeRate;
@@ -147,10 +147,12 @@ where
     ) {
         loop {
             tokio::select! {
-                Some((block_id, block_height)) = chainstate_event_receiver.recv() =>{
+                Some((block_id, block_height)) = chainstate_event_receiver.recv() => {
                     self.new_tip_set(block_id, block_height)
                 },
-                Some(method_call) = self.receiver.recv() => self.handle_mempool_method_call(method_call).await
+                Some(method_call) = self.receiver.recv() => {
+                    self.handle_mempool_method_call(method_call).await
+                },
             }
         }
     }

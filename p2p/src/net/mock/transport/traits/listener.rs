@@ -13,9 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p::net::mock::{transport::TcpTransportSocket, MockService};
-use p2p_test_utils::MakeTcpAddress;
+use async_trait::async_trait;
 
-fn main() {
-    p2p_backend_test_suite::run::<MakeTcpAddress, MockService<TcpTransportSocket>>();
+use crate::Result;
+
+/// An abstraction layer over a potential inbound network connection (acceptor in boost terminology).
+// TODO: Replace Stream and Address trait parameters with associated types?
+#[async_trait]
+pub trait TransportListener<Stream, Address>: Send {
+    /// Accepts a new inbound connection.
+    async fn accept(&mut self) -> Result<(Stream, Address)>;
+
+    /// Returns the local address of the listener.
+    fn local_address(&self) -> Result<Address>;
 }

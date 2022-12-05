@@ -148,7 +148,7 @@ impl Manager {
         let shutting_down_tx = self.shutting_down_tx.clone();
         let shutdown_rq = ShutdownRequest(self.shutdown_request_tx.subscribe());
         // Call related channels
-        let (action_tx, action_rx) = mpsc::channel(config.call_queue_capacity);
+        let (action_tx, action_rx) = mpsc::unbounded_channel();
         let call_rq = CallRequest(action_rx);
 
         self.subsystem_tasks.push(Box::pin(async move {

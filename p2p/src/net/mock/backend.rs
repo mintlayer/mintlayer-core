@@ -48,7 +48,7 @@ use crate::{
         mock::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             peer, request_manager,
-            transport::{MockListener, MockTransport},
+            transport::{TransportListener, TransportSocket},
             types::{
                 Command, ConnectivityEvent, Message, MockEvent, MockPeerId, MockPeerInfo,
                 MockRequestId, PeerEvent, SyncingEvent,
@@ -67,7 +67,7 @@ struct PeerContext {
 }
 
 #[derive(Debug)]
-enum ConnectionState<T: MockTransport> {
+enum ConnectionState<T: TransportSocket> {
     /// Connection established for outbound connection
     OutboundAccepted { address: T::Address },
 
@@ -75,7 +75,10 @@ enum ConnectionState<T: MockTransport> {
     InboundAccepted { address: T::Address },
 }
 
-pub struct Backend<T: MockTransport> {
+pub struct Backend<T: TransportSocket> {
+    /// Transport of the backend
+    transport: T,
+
     /// Socket address of the backend
     address: T::Address,
 
@@ -143,10 +146,11 @@ pub struct Backend<T: MockTransport> {
 
 impl<T> Backend<T>
 where
-    T: MockTransport + 'static,
+    T: TransportSocket + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        transport: T,
         address: T::Address,
         socket: T::Listener,
         chain_config: Arc<ChainConfig>,
@@ -160,6 +164,7 @@ where
         let (timeouts_sender, timeouts_receiver) = mpsc::unbounded_channel();
 
         Self {
+            transport,
             address,
             socket,
             cmd_rx,
@@ -195,18 +200,15 @@ where
             response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
         }
 
-        match timeout(self.timeout, T::connect(address.clone())).await {
+        match timeout(self.timeout, self.transport.connect(address.clone())).await {
             Ok(event) => match event {
-                Ok(socket) => {
-                    self.create_peer(
-                        socket,
-                        self.local_peer_id,
-                        MockPeerId::from_socket_address::<T>(&address),
-                        peer::Role::Outbound,
-                        ConnectionState::OutboundAccepted { address },
-                    )
-                    .await
-                }
+                Ok(socket) => self.create_peer(
+                    socket,
+                    self.local_peer_id,
+                    MockPeerId::from_socket_address::<T>(&address),
+                    peer::Role::Outbound,
+                    ConnectionState::OutboundAccepted { address },
+                ),
                 Err(err) => {
                     log::error!("Failed to establish connection: {err}");
 
@@ -447,7 +449,7 @@ where
                         MockPeerId::from_socket_address::<T>(&address),
                         peer::Role::Inbound,
                         ConnectionState::InboundAccepted { address }
-                    ).await?;
+                    )?;
                 }
                 // Handle peer events.
                 event = self.peer_chan.1.recv().fuse() => {
@@ -473,7 +475,7 @@ where
     /// Move the connection to `pending` where it stays until either the connection is closed
     /// or the handshake message is received at which point the peer information is moved from
     /// `pending` to `peers` and the front-end is notified about the peer.
-    async fn create_peer(
+    fn create_peer(
         &mut self,
         socket: T::Stream,
         local_peer_id: MockPeerId,

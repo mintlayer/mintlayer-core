@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p::net::mock::{transport::TcpTransportSocket, MockService};
-use p2p_test_utils::MakeTcpAddress;
+mod listener;
+mod socket;
+mod stream;
 
-fn main() {
-    p2p_backend_test_suite::run::<MakeTcpAddress, MockService<TcpTransportSocket>>();
-}
+pub use listener::TransportListener;
+pub use socket::TransportSocket;
+pub use stream::PeerStream;
