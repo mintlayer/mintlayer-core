@@ -25,7 +25,6 @@ use std::{
     num::NonZeroU32,
     sync::Arc,
     task::{Context, Poll, Waker},
-    time::Duration,
 };
 
 use libp2p::{
@@ -129,9 +128,7 @@ impl Libp2pBehaviour {
             chain_config.magic_bytes_as_u32(),
         );
         let mut req_cfg = RequestResponseConfig::default();
-        req_cfg.set_request_timeout(Duration::from_secs(
-            p2p_config.request_timeout.clone().into(),
-        ));
+        req_cfg.set_request_timeout(p2p_config.request_timeout.clone().into());
 
         let behaviour = Libp2pBehaviour {
             ping: ping::Behaviour::new(

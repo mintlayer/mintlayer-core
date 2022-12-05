@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use p2p::config::{MdnsConfig, P2pConfig};
 use serde::{Deserialize, Serialize};
 
@@ -109,7 +111,7 @@ impl From<P2pConfigFile> for P2pConfig {
             ban_threshold: c.ban_threshold.into(),
             outbound_connection_timeout: c.outbound_connection_timeout.into(),
             mdns_config: mdns_config.into(),
-            request_timeout: c.request_timeout.into(),
+            request_timeout: c.request_timeout.map(|t| Duration::from_secs(t)).into(),
         }
     }
 }

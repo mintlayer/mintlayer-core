@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use utils::make_config_setting;
 
 // TODO: does this constant make sense to be zero? Find the justification for it.
@@ -26,10 +28,10 @@ make_config_setting!(MdnsConfigSetting, MdnsConfig, MdnsConfig::Disabled);
 make_config_setting!(MdnsQueryInterval, u64, MDNS_DEFAULT_QUERY_INTERVAL);
 make_config_setting!(MdnsEnableIpV6Discovery, bool, MDNS_DEFAULT_IPV6_STATE);
 make_config_setting!(
-    /// The request timeout value in seconds.
+    /// The request timeout value.
     RequestTimeout,
-    u64,
-    10
+    Duration,
+    Duration::from_secs(10)
 );
 
 /// Multicast DNS configuration.

@@ -259,7 +259,7 @@ where
         let timeout = self.p2p_config.request_timeout.clone().into();
         let sender = self.timeouts_sender.clone();
         let handle = tokio::spawn(async move {
-            time::sleep(Duration::from_secs(timeout)).await;
+            time::sleep(timeout).await;
             let _ = sender.send((request_id, peer_id));
         });
 
