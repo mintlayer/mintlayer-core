@@ -22,7 +22,7 @@ use crate::{
     net::{
         libp2p::Libp2pService,
         mock::{
-            transport::{ChannelMockTransport, TcpMockTransport},
+            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             types::MockPeerId,
             MockService,
         },

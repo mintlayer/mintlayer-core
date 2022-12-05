@@ -25,7 +25,7 @@ use crate::{
     net::{
         libp2p::Libp2pService,
         mock::{
-            transport::{ChannelMockTransport, TcpMockTransport},
+            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             MockService,
         },
         types::SyncingEvent,
@@ -87,17 +87,17 @@ async fn request_response_libp2p() {
 
 #[tokio::test]
 async fn request_response_mock_tcp() {
-    request_response::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    request_response::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn request_response_mock_channels() {
-    request_response::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    request_response::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
 }
 
 #[tokio::test]
 async fn test_request_response_mock_noise() {
-    test_request_response::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
+    request_response::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn multiple_requests_and_responses<A, T>()
@@ -179,18 +179,18 @@ async fn multiple_requests_and_responses_libp2p() {
 
 #[tokio::test]
 async fn multiple_requests_and_responses_mock_tcp() {
-    multiple_requests_and_responses::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    multiple_requests_and_responses::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn multiple_requests_and_responses_mock_channels() {
-    multiple_requests_and_responses::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+    multiple_requests_and_responses::<MakeChannelAddress, MockService<MockChannelTransport>>()
         .await;
 }
 
 #[tokio::test]
-async fn test_multiple_requests_and_responses_mock_noise() {
-    test_multiple_requests_and_responses::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
+async fn multiple_requests_and_responses_mock_noise() {
+    multiple_requests_and_responses::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 // Receive getheaders before receiving the `Connected` event from the peer manager which makes the
@@ -231,12 +231,6 @@ where
         },
         Err(_) => panic!("did not receive `Request` in time"),
     }
-}
-
-#[tokio::test]
-#[ignore]
-async fn test_request_timeout_error_mock_noise() {
-    test_request_timeout_error::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 
     match pm1.recv().await.unwrap() {
         PeerManagerEvent::Disconnect(peer_id, _) => assert_eq!(peer_id, peer2_id),
@@ -260,7 +254,6 @@ async fn request_timeout_mock_channels() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn request_timeout_mock_noise() {
     request_timeout::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }
