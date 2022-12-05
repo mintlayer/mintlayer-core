@@ -29,10 +29,12 @@ use crate::{
     Result,
 };
 
-// TODO: Move this constant somewhere else.
+// TODO: Move this constant to some configuration + should be used
+// to initialize a const member in AdaptedListener
+// (a better suggestion is OK based on research)
 pub const MAX_CONCURRENT_HANDSHAKES: usize = 100;
 
-/// A listener object that handles new incoming connections, and does any required hand-shakes (see members' comments)
+/// A listener (acceptor) object that handles new incoming connections, and does any required handshakes
 pub struct AdaptedListener<S: StreamAdapter<T::Stream>, T: TransportSocket> {
     pub stream_adapter: S,
     pub listener: T::Listener,
