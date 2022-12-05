@@ -22,7 +22,7 @@
 //! peers are distinguished by their socket addresses.
 
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeSet, HashMap},
     io::ErrorKind,
     sync::Arc,
     time::Duration,
@@ -31,6 +31,7 @@ use std::{
 use futures::{future::join_all, FutureExt, TryFutureExt};
 use tokio::{
     sync::{mpsc, oneshot},
+    task::JoinHandle,
     time::{self, timeout},
 };
 
@@ -118,12 +119,15 @@ pub struct Backend<T: MockTransport> {
     /// Request manager for managing inbound/outbound requests and responses
     request_mgr: request_manager::RequestManager,
 
-    /// A list of expected responses identified by the request id.
+    /// A mapping from the request identifiers of the expected responses to the join-handles of the
+    /// timeout tasks.
     ///
-    /// An identifier is added to the list when a request is sent and removed either when the a
-    /// response is received or when a timeout occurs. In the latter case the peer that failed to
-    /// respond in time is disconnected.  
-    pending_responses: HashSet<MockRequestId>,
+    /// An entry is added to the list when a request is sent and removed either when the a response
+    /// is received or when a timeout occurs. In the latter case the peer that failed to respond in
+    /// time is disconnected.
+    ///
+    /// The handles are used to stop the corresponding timeout task when a response is received.
+    pending_responses: HashMap<MockRequestId, JoinHandle<()>>,
 
     /// A sender for request timeouts.
     ///
@@ -169,7 +173,7 @@ where
             peer_chan: mpsc::channel(64),
             local_peer_id,
             request_mgr: request_manager::RequestManager::new(),
-            pending_responses: HashSet::new(),
+            pending_responses: HashMap::new(),
             timeouts_sender,
             timeouts_receiver,
         }
@@ -252,15 +256,15 @@ where
         let (request_id, request) = self.request_mgr.make_request(request)?;
         peer.tx.send(MockEvent::SendMessage(request)).await.map_err(P2pError::from)?;
 
-        let is_inserted = self.pending_responses.insert(request_id);
-        debug_assert!(is_inserted);
-
         let timeout = self.p2p_config.request_timeout.clone().into();
         let sender = self.timeouts_sender.clone();
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             time::sleep(Duration::from_secs(timeout)).await;
             let _ = sender.send((request_id, peer_id));
         });
+
+        let is_inserted = self.pending_responses.insert(request_id, handle).is_none();
+        debug_assert!(is_inserted);
 
         Ok(request_id)
     }
@@ -376,20 +380,22 @@ where
     ) -> crate::Result<()> {
         log::trace!("response received from peer {peer_id}, request id {request_id}");
 
-        if !self.pending_responses.remove(&request_id) {
-            log::debug!(
-                "Ignoring unexpected {request_id:?} response from {peer_id:?} peer: {response:?}"
-            );
-            Ok(())
-        } else {
-            self.sync_tx
-                .send(SyncingEvent::Response {
-                    peer_id,
-                    request_id,
-                    response,
-                })
-                .await
-                .map_err(P2pError::from)
+        match self.pending_responses.remove(&request_id) {
+            None => {
+                log::debug!("Ignoring unexpected {request_id:?} response from {peer_id:?} peer: {response:?}");
+                Ok(())
+            }
+            Some(handle) => {
+                handle.abort();
+                self.sync_tx
+                    .send(SyncingEvent::Response {
+                        peer_id,
+                        request_id,
+                        response,
+                    })
+                    .await
+                    .map_err(P2pError::from)
+            }
         }
     }
 
@@ -639,7 +645,7 @@ where
         peer_id: MockPeerId,
         request_id: MockRequestId,
     ) -> crate::Result<()> {
-        if self.pending_responses.remove(&request_id) {
+        if self.pending_responses.remove(&request_id).is_some() {
             self.disconnect_peer(&peer_id).await?;
             self.sync_tx
                 .send(SyncingEvent::RequestTimeout {
