@@ -122,6 +122,8 @@ pub struct Backend<T: TransportSocket> {
     /// Request manager for managing inbound/outbound requests and responses
     request_mgr: request_manager::RequestManager,
 
+    // TODO: Change this to timeouts per peer instead of timeouts per request. See
+    // https://github.com/mintlayer/mintlayer-core/issues/583 for details.
     /// A mapping from the request identifiers of the expected responses to the timeout value of
     /// this request.
     ///
