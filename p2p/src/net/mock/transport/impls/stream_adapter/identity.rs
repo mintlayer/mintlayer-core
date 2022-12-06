@@ -19,7 +19,7 @@ use crate::net::mock::{peer::Role, transport::PeerStream};
 
 use super::StreamAdapter;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IdentityStreamAdapter;
 
 /// A StreamAdapter that does nothing with no handshake (Identity operation on data that goes through it)

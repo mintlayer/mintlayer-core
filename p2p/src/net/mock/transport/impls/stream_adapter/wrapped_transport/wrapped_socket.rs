@@ -53,7 +53,7 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
     }
 
     async fn bind(&self, address: Self::Address) -> Result<Self::Listener> {
-        let stream_adapter = S::new();
+        let stream_adapter = self.stream_adapter.clone();
         let listener = self.base_transport.bind(address).await?;
         Ok(AdaptedListener {
             listener,

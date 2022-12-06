@@ -21,7 +21,7 @@ use crate::{
 };
 
 /// Represents a stream that requires a handshake to function (such as encrypted streams)
-pub trait StreamAdapter<T>: Send + Sync + 'static {
+pub trait StreamAdapter<T>: Clone + Send + Sync + 'static {
     type Stream: PeerStream;
 
     fn new() -> Self;
