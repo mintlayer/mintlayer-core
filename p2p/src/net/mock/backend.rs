@@ -25,20 +25,20 @@ use std::{
     collections::{BTreeSet, HashMap},
     io::ErrorKind,
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use futures::{future::join_all, FutureExt, TryFutureExt};
 use tokio::{
     sync::{mpsc, oneshot},
-    task::JoinHandle,
-    time::{self, timeout},
+    time::{interval, timeout, MissedTickBehavior},
 };
 
 use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, SliceRandom};
 use logging::log;
 use serialization::{Decode, Encode};
+use utils::tap_error_log::LogError;
 
 use crate::{
     config::P2pConfig,
@@ -122,26 +122,13 @@ pub struct Backend<T: TransportSocket> {
     /// Request manager for managing inbound/outbound requests and responses
     request_mgr: request_manager::RequestManager,
 
-    /// A mapping from the request identifiers of the expected responses to the join-handles of the
-    /// timeout tasks.
+    /// A mapping from the request identifiers of the expected responses to the timeout value of
+    /// this request.
     ///
-    /// An entry is added to the list when a request is sent and removed either when the a response
-    /// is received or when a timeout occurs. In the latter case the peer that failed to respond in
-    /// time is disconnected.
-    ///
-    /// The handles are used to stop the corresponding timeout task when a response is received.
-    pending_responses: HashMap<MockRequestId, JoinHandle<()>>,
-
-    /// A sender for request timeouts.
-    ///
-    /// When a request is sent, a new task is created that will send request and peer identifiers
-    /// after the time specified by the `request_timeout` field of the p2p config.
-    timeouts_sender: mpsc::UnboundedSender<(MockRequestId, MockPeerId)>,
-
-    /// A receiver for request timeouts.
-    ///
-    /// Timeouts are processed by the `Backend::handle_request_timeout` function.
-    timeouts_receiver: mpsc::UnboundedReceiver<(MockRequestId, MockPeerId)>,
+    /// An entry is added when a request is sent and remove either when a response is received or
+    /// when a timeout occurs. In the latter case the peer that failed to respond in time is
+    /// disconnected.
+    pending_responses: HashMap<MockRequestId, (MockPeerId, Instant)>,
 }
 
 impl<T> Backend<T>
@@ -161,7 +148,6 @@ where
         timeout: Duration,
     ) -> Self {
         let local_peer_id = MockPeerId::from_socket_address::<T>(&address);
-        let (timeouts_sender, timeouts_receiver) = mpsc::unbounded_channel();
 
         Self {
             transport,
@@ -179,8 +165,6 @@ where
             local_peer_id,
             request_mgr: request_manager::RequestManager::new(),
             pending_responses: HashMap::new(),
-            timeouts_sender,
-            timeouts_receiver,
         }
     }
 
@@ -258,14 +242,8 @@ where
         let (request_id, request) = self.request_mgr.make_request(request)?;
         peer.tx.send(MockEvent::SendMessage(request)).await.map_err(P2pError::from)?;
 
-        let timeout = self.p2p_config.request_timeout.clone().into();
-        let sender = self.timeouts_sender.clone();
-        let handle = tokio::spawn(async move {
-            time::sleep(timeout).await;
-            let _ = sender.send((request_id, peer_id));
-        });
-
-        let is_inserted = self.pending_responses.insert(request_id, handle).is_none();
+        let timeout = Instant::now() + self.p2p_config.request_timeout.clone().into();
+        let is_inserted = self.pending_responses.insert(request_id, (peer_id, timeout)).is_none();
         debug_assert!(is_inserted);
 
         Ok(request_id)
@@ -387,8 +365,8 @@ where
                 log::debug!("Ignoring unexpected {request_id:?} response from {peer_id:?} peer: {response:?}");
                 Ok(())
             }
-            Some(handle) => {
-                handle.abort();
+            Some((id, _instant)) => {
+                debug_assert_eq!(id, peer_id);
                 self.sync_tx
                     .send(SyncingEvent::Response {
                         peer_id,
@@ -438,6 +416,9 @@ where
 
     /// Runs the backend events loop.
     pub async fn run(&mut self) -> crate::Result<()> {
+        let mut request_timeout_interval = interval(self.p2p_config.request_timeout.clone().into());
+        request_timeout_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
         loop {
             tokio::select! {
                 // Accept a new peer connection.
@@ -460,11 +441,8 @@ where
                 command = self.cmd_rx.recv().fuse() => {
                     self.handle_command(command.ok_or(P2pError::ChannelClosed)?).await?;
                 }
-                ids = self.timeouts_receiver.recv() => {
-                    match ids {
-                        Some((request_id, peer_id)) => self.handle_request_timeout(peer_id, request_id).await?,
-                        None => return Err(P2pError::Other("Timeouts channels closed")),
-                    }
+                _ = request_timeout_interval.tick() => {
+                    self.handle_request_timeout_interval().await;
                 }
             }
         }
@@ -642,21 +620,27 @@ where
         Ok(())
     }
 
-    async fn handle_request_timeout(
-        &mut self,
-        peer_id: MockPeerId,
-        request_id: MockRequestId,
-    ) -> crate::Result<()> {
-        if self.pending_responses.remove(&request_id).is_some() {
-            self.disconnect_peer(&peer_id).await?;
-            self.sync_tx
+    async fn handle_request_timeout_interval(&mut self) {
+        let now = Instant::now();
+        let mut timeouts = Vec::new();
+        self.pending_responses.retain(|request_id, (peer_id, request_timeout)| {
+            let is_timed_out = *request_timeout < now;
+            if is_timed_out {
+                timeouts.push((*peer_id, *request_id));
+            }
+            !is_timed_out
+        });
+
+        for (peer_id, request_id) in timeouts.into_iter() {
+            let _ = self.disconnect_peer(&peer_id).await.log_err();
+            let _ = self
+                .sync_tx
                 .send(SyncingEvent::RequestTimeout {
                     peer_id,
                     request_id,
                 })
-                .await?;
+                .await
+                .log_err();
         }
-
-        Ok(())
     }
 }
