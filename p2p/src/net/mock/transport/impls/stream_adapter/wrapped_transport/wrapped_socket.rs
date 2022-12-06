@@ -55,11 +55,7 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
     async fn bind(&self, address: Self::Address) -> Result<Self::Listener> {
         let stream_adapter = self.stream_adapter.clone();
         let listener = self.base_transport.bind(address).await?;
-        Ok(AdaptedListener {
-            listener,
-            stream_adapter,
-            handshakes: Vec::new(),
-        })
+        Ok(AdaptedListener::new(stream_adapter, listener))
     }
 
     async fn connect(&self, address: Self::Address) -> Result<Self::Stream> {
