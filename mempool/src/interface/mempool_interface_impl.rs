@@ -13,100 +13,118 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use crate::error::Error;
-use crate::get_memory_usage::GetMemoryUsage;
-use crate::method_call::MempoolMethodCall;
-use crate::tx_accumulator::TransactionAccumulator;
-use crate::MempoolEvent;
-use crate::MempoolInterface;
+use crate::{
+    error::Error, pool::Mempool, tx_accumulator::TransactionAccumulator, GetMemoryUsage,
+    MempoolEvent, MempoolInterface,
+};
 use chainstate::chainstate_interface::ChainstateInterface;
-use common::chain::signed_transaction::SignedTransaction;
-use common::chain::ChainConfig;
-use common::chain::Transaction;
-use common::primitives::Id;
-use common::time_getter::TimeGetter;
+use common::{
+    chain::{Block, ChainConfig, SignedTransaction, Transaction},
+    primitives::{BlockHeight, Id},
+    time_getter::TimeGetter,
+};
+use logging::log;
+use std::sync::Arc;
+use subsystem::{CallRequest, ShutdownRequest};
 use tokio::sync::mpsc;
+use utils::tap_error_log::LogError;
 
-use crate::pool::Mempool;
-pub use crate::SystemUsageEstimator;
-
-pub struct MempoolInterfaceImpl {
-    sender: mpsc::UnboundedSender<MempoolMethodCall>,
+pub struct MempoolInterfaceImpl<M> {
+    pool: Mempool<M>,
 }
 
-impl MempoolInterfaceImpl {
-    pub fn new<M: GetMemoryUsage + Sync + Send + 'static>(
+impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInterfaceImpl<M> {
+    pub fn new(
         chain_config: Arc<ChainConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         time_getter: TimeGetter,
         memory_usage_estimator: M,
-    ) -> Result<Self, crate::error::Error> {
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-
-        Mempool::new(
+    ) -> Self {
+        let pool = Mempool::new(
             chain_config,
             chainstate_handle,
             time_getter,
             memory_usage_estimator,
-            receiver,
-        )
-        .run()?;
+        );
+        Self { pool }
+    }
 
-        Ok(Self { sender })
+    pub async fn run(
+        mut self,
+        mut call_rq: CallRequest<dyn MempoolInterface>,
+        mut shut_rq: ShutdownRequest,
+    ) {
+        let mut chainstate_events_rx = self
+            .subscribe_to_chainstate_events()
+            .await
+            .log_err()
+            .expect("chainstate event subscription");
+        loop {
+            tokio::select! {
+                () = shut_rq.recv() => break,
+                call = call_rq.recv() => call(&mut self).await,
+                Some((block_id, block_height)) = chainstate_events_rx.recv() => {
+                    self.pool.new_tip_set(block_id, block_height);
+                }
+            }
+        }
+    }
+
+    pub async fn subscribe_to_chainstate_events(
+        &mut self,
+    ) -> crate::Result<mpsc::UnboundedReceiver<(Id<Block>, BlockHeight)>> {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let subscribe_func =
+            Arc::new(
+                move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
+                    chainstate::ChainstateEvent::NewTip(block_id, block_height) => {
+                        log::info!(
+                            "Received a new tip with block id {:?} and block height {:?}",
+                            block_id,
+                            block_height
+                        );
+                        if let Err(e) = tx.send((block_id, block_height)) {
+                            log::error!("Mempool Event Handler closed: {:?}", e)
+                        }
+                    }
+                },
+            );
+
+        self.pool
+            .chainstate_handle()
+            .call_mut(|this| this.subscribe_to_events(subscribe_func))
+            .await
+            .map_err(|_| crate::error::Error::SubsystemFailure)?;
+        Ok(rx)
     }
 }
 
 #[async_trait::async_trait]
-impl MempoolInterface for MempoolInterfaceImpl {
+impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInterface for MempoolInterfaceImpl<M> {
     async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
-        let (rtx, rrx) = tokio::sync::oneshot::channel();
-        self.sender
-            .send(MempoolMethodCall::AddTransaction { tx, rtx })
-            .map_err(|_| Error::SendError)?;
-        rrx.await.map_err(|_| Error::RecvError)?
+        self.pool.add_transaction(tx).await
     }
 
     async fn get_all(&self) -> Result<Vec<SignedTransaction>, Error> {
-        let (rtx, rrx) = tokio::sync::oneshot::channel();
-        self.sender
-            .send(MempoolMethodCall::GetAll { rtx })
-            .map_err(|_| Error::SendError)?;
-        rrx.await.map_err(|_| Error::RecvError)
+        Ok(self.pool.get_all())
     }
 
-    // Returns `true` if the mempool contains a transaction with the given id, `false` otherwise.
     async fn contains_transaction(&self, tx_id: &Id<Transaction>) -> Result<bool, Error> {
-        let (rtx, rrx) = tokio::sync::oneshot::channel();
-        self.sender
-            .send(MempoolMethodCall::ContainsTransaction { tx_id: *tx_id, rtx })
-            .map_err(|_| Error::SendError)?;
-        rrx.await.map_err(|_| Error::RecvError)
+        Ok(self.pool.contains_transaction(tx_id))
     }
 
     async fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
     ) -> Result<Box<dyn TransactionAccumulator>, Error> {
-        let (rtx, rrx) = tokio::sync::oneshot::channel();
-        self.sender
-            .send(MempoolMethodCall::CollectTxs {
-                tx_accumulator,
-                rtx,
-            })
-            .map_err(|_| Error::SendError)?;
-        rrx.await.map_err(|_| Error::RecvError)
+        Ok(self.pool.collect_txs(tx_accumulator))
     }
 
     async fn subscribe_to_events(
         &mut self,
         handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
     ) -> Result<(), Error> {
-        let (rtx, rrx) = tokio::sync::oneshot::channel();
-        self.sender
-            .send(MempoolMethodCall::SubscribeToEvents { handler, rtx })
-            .map_err(|_| Error::SendError)?;
-        rrx.await.map_err(|_| Error::RecvError)
+        self.pool.subscribe_to_events(handler);
+        Ok(())
     }
 }

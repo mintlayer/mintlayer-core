@@ -60,15 +60,14 @@ pub async fn initialize(
     let chainstate = manager.add_subsystem("chainstate", chainstate);
 
     // Mempool subsystem
-    let mempool = manager.add_subsystem(
-        "mempool",
-        mempool::make_mempool(
-            Arc::clone(&chain_config),
-            chainstate.clone(),
-            Default::default(),
-            mempool::SystemUsageEstimator {},
-        )?,
+    let mempool = mempool::make_mempool(
+        Arc::clone(&chain_config),
+        chainstate.clone(),
+        Default::default(),
+        mempool::SystemUsageEstimator {},
     );
+    let mempool =
+        manager.add_raw_subsystem("mempool", move |call, shutdn| mempool.run(call, shutdn));
 
     // P2P subsystem
     let p2p = manager.add_subsystem(

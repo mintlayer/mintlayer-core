@@ -52,13 +52,11 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     let parent_id = parent.transaction().get_id();
 
     let chainstate = tf.chainstate();
-    let (_sender, receiver) = mpsc::unbounded_channel();
     let mut mempool = Mempool::new(
         chainstate.get_chain_config(),
         start_chainstate(chainstate).await,
         mock_clock,
         SystemUsageEstimator {},
-        receiver,
     );
     mempool.add_transaction(parent).await?;
 
@@ -121,13 +119,11 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     let config = chainstate.get_chain_config();
     let chainstate_interface = start_chainstate(chainstate).await;
 
-    let (_sender, receiver) = mpsc::unbounded_channel();
     let mut mempool = Mempool::new(
         config,
         chainstate_interface,
         mock_clock,
         SystemUsageEstimator {},
-        receiver,
     );
 
     let parent_id = parent.transaction().get_id();

@@ -14,39 +14,34 @@
 // limitations under the License.
 
 use super::*;
-use crate::get_memory_usage::MockGetMemoryUsage;
-use crate::tx_accumulator::DefaultTxAccumulator;
-use crate::SystemUsageEstimator;
-use chainstate::chainstate_interface;
-use chainstate::make_chainstate;
-use chainstate::BlockSource;
-use chainstate::ChainstateConfig;
-use chainstate::DefaultTransactionVerificationStrategy;
-use chainstate_test_framework::anyonecanspend_address;
-use chainstate_test_framework::empty_witness;
-use chainstate_test_framework::TestFramework;
-use chainstate_test_framework::TransactionBuilder;
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::block::BlockReward;
-use common::chain::block::ConsensusData;
-use common::chain::config::ChainConfig;
-use common::chain::signature::inputsig::InputWitness;
-use common::chain::tokens::OutputValue;
-use common::chain::transaction::{Destination, TxInput, TxOutput};
-use common::chain::OutPointSourceId;
-use common::chain::OutputPurpose;
-use common::primitives::H256;
-use common::{
-    chain::{block::Block, Transaction},
-    primitives::Id,
+use crate::{
+    get_memory_usage::MockGetMemoryUsage, tx_accumulator::DefaultTxAccumulator,
+    SystemUsageEstimator,
 };
-use core::panic;
+use chainstate::{
+    chainstate_interface, make_chainstate, BlockSource, ChainstateConfig,
+    DefaultTransactionVerificationStrategy,
+};
+use chainstate_test_framework::{
+    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+};
+use common::{
+    chain::{
+        block::{timestamp::BlockTimestamp, Block, BlockReward, ConsensusData},
+        config::ChainConfig,
+        signature::inputsig::InputWitness,
+        tokens::OutputValue,
+        transaction::{Destination, TxInput, TxOutput},
+        OutPointSourceId, OutputPurpose, Transaction,
+    },
+    primitives::{Id, H256},
+};
 use rstest::rstest;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
-use test_utils::random::make_seedable_rng;
-use test_utils::random::Seed;
-use tokio::sync::mpsc;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
+use test_utils::random::{make_seedable_rng, Seed};
 
 mod expiry;
 mod replacement;
@@ -220,13 +215,11 @@ async fn setup() -> Mempool<SystemUsageEstimator> {
     logging::init_logging::<&str>(None);
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&config)).await;
-    let (_sender, receiver) = mpsc::unbounded_channel();
     Mempool::new(
         config,
         chainstate_interface,
         Default::default(),
         SystemUsageEstimator {},
-        receiver,
     )
 }
 
@@ -236,13 +229,11 @@ async fn setup_with_chainstate(
     logging::init_logging::<&str>(None);
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let chainstate_handle = start_chainstate(chainstate).await;
-    let (_sender, receiver) = mpsc::unbounded_channel();
     Mempool::new(
         config,
         chainstate_handle,
         Default::default(),
         SystemUsageEstimator {},
-        receiver,
     )
 }
 
@@ -961,14 +952,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     // the trimming process
     log::debug!("parent_id: {}", parent_id.get());
     log::debug!("before adding parent");
-    let (_sender, receiver) = mpsc::unbounded_channel();
-    let mut mempool = Mempool::new(
-        config,
-        chainstate_interface,
-        mock_clock,
-        mock_usage,
-        receiver,
-    );
+    let mut mempool = Mempool::new(config, chainstate_interface, mock_clock, mock_usage);
     mempool.add_transaction(parent).await?;
     log::debug!("after adding parent");
 
@@ -1555,14 +1539,7 @@ async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
     let config = chainstate.get_chain_config();
     let chainstate_handle = start_chainstate(chainstate).await;
 
-    let (_sender, receiver) = mpsc::unbounded_channel();
-    let mut mempool = Mempool::new(
-        config,
-        chainstate_handle,
-        Default::default(),
-        mock_usage,
-        receiver,
-    );
+    let mut mempool = Mempool::new(config, chainstate_handle, Default::default(), mock_usage);
 
     let tx = TransactionBuilder::new()
         .add_input(

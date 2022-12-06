@@ -23,6 +23,7 @@ pub mod tokens;
 pub mod transaction;
 mod upgrades;
 
+pub use signed_transaction::SignedTransaction;
 pub use transaction::*;
 
 pub use block::Block;

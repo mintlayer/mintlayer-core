@@ -13,13 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use crate::{error::Error, tx_accumulator::TransactionAccumulator, MempoolEvent};
 use common::{
-    chain::{signed_transaction::SignedTransaction, Transaction},
+    chain::{SignedTransaction, Transaction},
     primitives::Id,
 };
+use std::sync::Arc;
 
 #[async_trait::async_trait]
 pub trait MempoolInterface: Send + Sync {

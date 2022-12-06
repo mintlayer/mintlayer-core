@@ -13,27 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, BTreeSet},
+};
 
-use common::chain::signed_transaction::SignedTransaction;
-use common::chain::tokens::OutputValue;
-use common::chain::transaction::Transaction;
-use common::chain::OutPoint;
-use common::primitives::amount::Amount;
-use common::primitives::Id;
-use common::primitives::Idable;
-use serialization::Encode;
-
+use common::{
+    chain::{tokens::OutputValue, OutPoint, SignedTransaction, Transaction},
+    primitives::{Amount, Id, Idable},
+};
 use logging::log;
-
+use serialization::Encode;
 use utils::newtype;
 
-use crate::error::Error;
-use crate::error::TxValidationError;
-
 use super::Time;
+use crate::error::{Error, TxValidationError};
 
 newtype! {
     #[derive(Debug)]
