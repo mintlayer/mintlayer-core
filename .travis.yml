@@ -11,3 +11,4 @@ os:
 
 script:
   - cargo fmt --all -- --check
+
