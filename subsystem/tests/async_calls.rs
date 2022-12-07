@@ -67,17 +67,20 @@ fn async_calls() {
             let logger = app.add_subsystem("logger", Logger::new("logging".to_string()));
             let counter = app.add_subsystem("counter", Counter::new(logger.clone()));
 
-            app.add_raw_subsystem("test", |_call_rq: CallRequest<()>, _shut_rq| async move {
-                logger.call(|l| l.write("starting")).await.unwrap();
+            app.add_subsystem_with_custom_eventloop(
+                "test",
+                |_call_rq: CallRequest<()>, _shut_rq| async move {
+                    logger.call(|l| l.write("starting")).await.unwrap();
 
-                // Bump the counter twice
-                let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
-                assert_eq!(res, Ok(Ok(1)));
-                let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
-                assert_eq!(res, Ok(Ok(2)));
+                    // Bump the counter twice
+                    let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
+                    assert_eq!(res, Ok(Ok(1)));
+                    let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
+                    assert_eq!(res, Ok(Ok(2)));
 
-                logger.call(|l| l.write("done")).await.unwrap();
-            });
+                    logger.call(|l| l.write("done")).await.unwrap();
+                },
+            );
 
             app.main().await
         })

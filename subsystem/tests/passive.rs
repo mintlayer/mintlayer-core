@@ -111,7 +111,7 @@ fn basic_passive_subsystem() {
             let counter = app.add_subsystem("counter", Counter::new());
 
             let tester = Tester::new(substr, counter);
-            app.add_raw_subsystem("test", |call_rq, shut_rq| async move {
+            app.add_subsystem_with_custom_eventloop("test", |call_rq, shut_rq| async move {
                 tester.run(call_rq, shut_rq).await
             });
 
@@ -132,7 +132,8 @@ fn basic_passive_shutdown() {
 
             // Start a subsystem that immediately terminates, instructing the remaining subsystems
             // to terminate too.
-            let _shut: subsystem::Handle<()> = app.add_raw_subsystem("terminator", |_, _| async {});
+            let _shut: subsystem::Handle<()> =
+                app.add_subsystem_with_custom_eventloop("terminator", |_, _| async {});
 
             app.main().await
         })

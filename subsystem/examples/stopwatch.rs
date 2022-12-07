@@ -53,6 +53,6 @@ async fn main() {
 
     let mut app = subsystem::Manager::new("toplevel");
     app.install_signal_handlers();
-    app.add_raw_subsystem("watch", Stopwatch::start);
+    app.add_subsystem_with_custom_eventloop("watch", Stopwatch::start);
     app.main().await
 }

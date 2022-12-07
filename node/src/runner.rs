@@ -66,8 +66,9 @@ pub async fn initialize(
         Default::default(),
         mempool::SystemUsageEstimator {},
     );
-    let mempool =
-        manager.add_raw_subsystem("mempool", move |call, shutdn| mempool.run(call, shutdn));
+    let mempool = manager.add_subsystem_with_custom_eventloop("mempool", move |call, shutdn| {
+        mempool.run(call, shutdn)
+    });
 
     // P2P subsystem
     let p2p = manager.add_subsystem(
