@@ -137,12 +137,14 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         ban_threshold,
         outbound_connection_timeout,
         mdns_config: _,
+        request_timeout,
     } = config;
 
     let bind_address = options.p2p_addr.clone().or(bind_address);
     let ban_threshold = options.p2p_ban_threshold.or(ban_threshold);
     let outbound_connection_timeout =
         options.p2p_outbound_connection_timeout.or(outbound_connection_timeout);
+    let request_timeout = options.p2p_request_timeout.or(request_timeout);
 
     let mdns_config = MdnsConfigFile::from_options(
         options.p2p_enable_mdns,
@@ -155,6 +157,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         ban_threshold,
         outbound_connection_timeout,
         mdns_config,
+        request_timeout,
     }
 }
 

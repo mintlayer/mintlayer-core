@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use p2p::config::{MdnsConfig, P2pConfig};
 use serde::{Deserialize, Serialize};
 
@@ -97,6 +99,8 @@ pub struct P2pConfigFile {
     pub outbound_connection_timeout: Option<u64>,
     /// Multicast DNS configuration.
     pub mdns_config: Option<MdnsConfigFile>,
+    /// The request timeout value in seconds.
+    pub request_timeout: Option<u64>,
 }
 
 impl From<P2pConfigFile> for P2pConfig {
@@ -107,6 +111,7 @@ impl From<P2pConfigFile> for P2pConfig {
             ban_threshold: c.ban_threshold.into(),
             outbound_connection_timeout: c.outbound_connection_timeout.into(),
             mdns_config: mdns_config.into(),
+            request_timeout: c.request_timeout.map(Duration::from_secs).into(),
         }
     }
 }

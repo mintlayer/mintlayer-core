@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use libp2p::multiaddr::Protocol;
 
 use p2p::{
-    config,
+    config::{MdnsConfig, P2pConfig},
     net::{
         libp2p::Libp2pService, types::ConnectivityEvent, ConnectivityService, NetworkingService,
     },
@@ -32,13 +32,16 @@ async fn test_libp2p_peer_discovery() {
     let (mut serv, _) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         Arc::clone(&config),
-        Arc::new(config::P2pConfig {
-            mdns_config: config::MdnsConfig::Enabled {
+        Arc::new(P2pConfig {
+            bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
+            ban_threshold: 100.into(),
+            outbound_connection_timeout: 10.into(),
+            mdns_config: MdnsConfig::Enabled {
                 query_interval: 200.into(),
                 enable_ipv6_mdns_discovery: Default::default(),
             }
             .into(),
-            ..Default::default()
+            request_timeout: Duration::from_secs(10).into(),
         }),
     )
     .await
@@ -47,13 +50,16 @@ async fn test_libp2p_peer_discovery() {
     let (mut serv2, _) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         Arc::clone(&config),
-        Arc::new(config::P2pConfig {
-            mdns_config: config::MdnsConfig::Enabled {
+        Arc::new(P2pConfig {
+            bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
+            ban_threshold: 100.into(),
+            outbound_connection_timeout: 10.into(),
+            mdns_config: MdnsConfig::Enabled {
                 query_interval: 200.into(),
                 enable_ipv6_mdns_discovery: Default::default(),
             }
             .into(),
-            ..Default::default()
+            request_timeout: Duration::from_secs(10).into(),
         }),
     )
     .await

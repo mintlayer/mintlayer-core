@@ -120,7 +120,7 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
 
     async fn start(
         addr: Self::Address,
-        config: Arc<common::chain::ChainConfig>,
+        chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
         let transport = T::new();
@@ -132,15 +132,17 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
 
         let address = local_addr.clone();
         tokio::spawn(async move {
+            let timeout = *p2p_config.outbound_connection_timeout;
             let mut backend = backend::Backend::<T>::new(
                 transport,
                 address,
                 socket,
-                Arc::clone(&config),
+                chain_config,
+                p2p_config,
                 cmd_rx,
                 conn_tx,
                 sync_tx,
-                std::time::Duration::from_secs(*p2p_config.outbound_connection_timeout),
+                std::time::Duration::from_secs(timeout),
             );
 
             if let Err(err) = backend.run().await {
@@ -360,6 +362,13 @@ where
                 peer_id,
                 request_id,
                 response,
+            }),
+            types::SyncingEvent::RequestTimeout {
+                peer_id,
+                request_id,
+            } => Ok(SyncingEvent::RequestTimeout {
+                peer_id,
+                request_id,
             }),
             types::SyncingEvent::Announcement {
                 peer_id,

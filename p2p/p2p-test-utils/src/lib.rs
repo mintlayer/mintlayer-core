@@ -18,7 +18,6 @@
 use std::{fmt::Debug, net::SocketAddr, sync::Arc};
 
 use libp2p::Multiaddr;
-use tokio::net::{TcpListener, TcpStream};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, BlockSource, ChainstateConfig,
@@ -38,20 +37,6 @@ use common::{
     primitives::{time, Amount, Id, Idable},
 };
 use crypto::random::SliceRandom;
-
-pub async fn get_tcp_socket() -> TcpStream {
-    let port: u16 = portpicker::pick_unused_port().expect("No ports free");
-    let addr: SocketAddr = format!("[::1]:{}", port).parse().unwrap();
-    let server = TcpListener::bind(addr).await.unwrap();
-
-    tokio::spawn(async move {
-        loop {
-            let _ = server.accept().await.unwrap();
-        }
-    });
-
-    TcpStream::connect(addr).await.unwrap()
-}
 
 pub type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface + 'static>>;
 

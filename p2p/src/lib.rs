@@ -73,7 +73,6 @@ where
         <T as NetworkingService>::Address: FromStr,
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
     {
-        let p2p_config = Arc::new(p2p_config);
         let (conn, sync) = T::start(
             p2p_config.bind_address.parse::<T::Address>().map_err(|_| {
                 P2pError::ConversionError(ConversionError::InvalidAddress(
@@ -99,10 +98,11 @@ where
 
         {
             let chain_config = Arc::clone(&chain_config);
+            let p2p_config = Arc::clone(&p2p_config);
             tokio::spawn(async move {
                 peer_manager::PeerManager::<T>::new(
                     chain_config,
-                    Arc::clone(&p2p_config),
+                    p2p_config,
                     conn,
                     rx_peer_manager,
                     tx_p2p_sync,
@@ -120,6 +120,7 @@ where
             tokio::spawn(async move {
                 sync::BlockSyncManager::<T>::new(
                     chain_config,
+                    p2p_config,
                     sync,
                     chainstate_handle,
                     rx_p2p_sync,

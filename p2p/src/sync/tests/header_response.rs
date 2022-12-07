@@ -13,15 +13,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
-use crate::net::mock::{
-    transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-    types::MockPeerId,
-    MockService,
-};
+use std::sync::Arc;
+
 use crypto::random::{Rng, SliceRandom};
+use libp2p::PeerId;
+
 use p2p_test_utils::{
     MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress, TestBlockInfo,
+};
+
+use crate::{
+    error::{P2pError, PeerError, ProtocolError},
+    net::{
+        libp2p::Libp2pService,
+        mock::{
+            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
+            types::MockPeerId,
+            MockService,
+        },
+    },
+    sync::{
+        peer,
+        tests::{make_sync_manager, register_peer, MakeTestPeerId},
+    },
+    ConnectivityService, NetworkingService, SyncingMessagingService,
 };
 
 // response contains more than 2000 headers

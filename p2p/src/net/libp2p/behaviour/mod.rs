@@ -48,22 +48,19 @@ use crate::{
     config,
     error::{P2pError, ProtocolError},
     message,
-    net::{
-        self,
-        libp2p::{
-            behaviour::{
-                connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent},
-                sync_codec::{
-                    message_types::{SyncRequest, SyncResponse},
-                    SyncMessagingCodec, SyncingProtocol,
-                },
+    net::libp2p::{
+        behaviour::{
+            connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent},
+            sync_codec::{
+                message_types::{SyncRequest, SyncResponse},
+                SyncMessagingCodec, SyncingProtocol,
             },
-            constants::{
-                GOSSIPSUB_HEARTBEAT, GOSSIPSUB_MAX_TRANSMIT_SIZE, PING_INTERVAL, PING_MAX_RETRIES,
-                PING_TIMEOUT, REQ_RESP_TIMEOUT,
-            },
-            types::{self, ConnectivityEvent, Libp2pBehaviourEvent, SyncingEvent},
         },
+        constants::{
+            GOSSIPSUB_HEARTBEAT, GOSSIPSUB_MAX_TRANSMIT_SIZE, PING_INTERVAL, PING_MAX_RETRIES,
+            PING_TIMEOUT,
+        },
+        types::{self, ConnectivityEvent, Libp2pBehaviourEvent, SyncingEvent},
     },
 };
 
@@ -110,7 +107,7 @@ pub type Libp2pNetworkBehaviourAction = NetworkBehaviourAction<
 
 impl Libp2pBehaviour {
     pub async fn new(
-        config: Arc<ChainConfig>,
+        chain_config: Arc<ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
         id_keys: identity::Keypair,
     ) -> Self {
@@ -122,16 +119,16 @@ impl Libp2pBehaviour {
             .build()
             .expect("configuration to be valid");
 
-        let version = config.version();
+        let version = chain_config.version();
         let protocol = format!(
             "/mintlayer/{}.{}.{}-{:x}",
             version.major,
             version.minor,
             version.patch,
-            config.magic_bytes_as_u32(),
+            chain_config.magic_bytes_as_u32(),
         );
         let mut req_cfg = RequestResponseConfig::default();
-        req_cfg.set_request_timeout(REQ_RESP_TIMEOUT);
+        req_cfg.set_request_timeout(p2p_config.request_timeout.clone().into());
 
         let behaviour = Libp2pBehaviour {
             ping: ping::Behaviour::new(
@@ -350,58 +347,62 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
                 peer,
                 request_id,
                 error,
-            } => {
-                match error {
-                    OutboundFailure::Timeout => {
-                        self.add_event(Libp2pBehaviourEvent::Syncing(types::SyncingEvent::Error {
+            } => match error {
+                OutboundFailure::Timeout => {
+                    log::debug!("OutboundFailure::Timeout for {peer} for {request_id:?}: {error}");
+                    self.add_event(Libp2pBehaviourEvent::Syncing(
+                        SyncingEvent::RequestTimeout {
                             peer_id: peer,
                             request_id,
-                            error: net::types::RequestResponseError::Timeout,
-                        }));
-                    }
-                    OutboundFailure::ConnectionClosed => {
-                        if let Err(err) = self.connmgr.handle_connection_closed(&peer) {
-                            log::error!(
-                                "Failed to handle `ConnectionClosed` event for peer {peer}: {err}"
-                            );
-                        }
-                    }
-                    OutboundFailure::DialFailure => {
-                        log::error!("CRITICAL: syncing code tried to dial peer");
-                    }
-                    OutboundFailure::UnsupportedProtocols => {
-                        log::error!("CRITICAL: unsupported protocol should have been caught by peer manager");
+                        },
+                    ));
+                }
+                OutboundFailure::ConnectionClosed => {
+                    if let Err(err) = self.connmgr.handle_connection_closed(&peer) {
+                        log::error!(
+                            "Failed to handle `ConnectionClosed` event for peer {peer}: {err}"
+                        );
                     }
                 }
-            }
+                OutboundFailure::DialFailure => {
+                    log::error!("CRITICAL: syncing code tried to dial peer");
+                }
+                OutboundFailure::UnsupportedProtocols => {
+                    log::error!(
+                        "CRITICAL: unsupported protocol should have been caught by peer manager"
+                    );
+                }
+            },
             RequestResponseEvent::InboundFailure {
                 peer,
                 request_id,
                 error,
-            } => {
-                match error {
-                    InboundFailure::Timeout => {
-                        self.add_event(Libp2pBehaviourEvent::Syncing(types::SyncingEvent::Error {
+            } => match error {
+                InboundFailure::Timeout => {
+                    log::debug!("InboundFailure::Timeout for {peer} for {request_id:?}: {error}");
+                    self.add_event(Libp2pBehaviourEvent::Syncing(
+                        SyncingEvent::RequestTimeout {
                             peer_id: peer,
                             request_id,
-                            error: net::types::RequestResponseError::Timeout,
-                        }));
-                    }
-                    InboundFailure::ConnectionClosed => {
-                        if let Err(err) = self.connmgr.handle_connection_closed(&peer) {
-                            log::error!(
-                                "Failed to handle `ConnectionClosed` event for peer {peer}: {err}",
-                            );
-                        }
-                    }
-                    InboundFailure::ResponseOmission => {
-                        log::error!("CRITICAL(??): response omitted!");
-                    }
-                    InboundFailure::UnsupportedProtocols => {
-                        log::error!("CRITICAL: unsupported protocol should have been caught by peer manager");
+                        },
+                    ));
+                }
+                InboundFailure::ConnectionClosed => {
+                    if let Err(err) = self.connmgr.handle_connection_closed(&peer) {
+                        log::error!(
+                            "Failed to handle `ConnectionClosed` event for peer {peer}: {err}",
+                        );
                     }
                 }
-            }
+                InboundFailure::ResponseOmission => {
+                    log::error!("CRITICAL(??): response omitted!");
+                }
+                InboundFailure::UnsupportedProtocols => {
+                    log::error!(
+                        "CRITICAL: unsupported protocol should have been caught by peer manager"
+                    );
+                }
+            },
         }
     }
 }
