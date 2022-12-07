@@ -29,7 +29,7 @@ use common::{
 };
 use logging::log;
 
-use mempool::rpc::MempoolRpcServer;
+use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
 
 use p2p::rpc::P2pRpcServer;
 

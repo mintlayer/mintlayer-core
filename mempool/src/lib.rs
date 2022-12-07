@@ -15,20 +15,16 @@
 
 #![deny(clippy::clone_on_ref_ptr)]
 
-use std::sync::Arc;
-
-use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
-    chain::{Block, ChainConfig},
+    chain::Block,
     primitives::{BlockHeight, Id},
-    time_getter::TimeGetter,
 };
-pub use interface::mempool_interface::MempoolInterface;
+pub use interface::{
+    mempool_interface::{MempoolInterface, MempoolSubsystemInterface},
+    mempool_interface_impl::make_mempool,
+};
 
-use crate::{
-    error::Error as MempoolError, get_memory_usage::GetMemoryUsage,
-    interface::mempool_interface_impl::MempoolInterfaceImpl,
-};
+use crate::{error::Error as MempoolError, get_memory_usage::GetMemoryUsage};
 
 pub use crate::get_memory_usage::SystemUsageEstimator;
 
@@ -48,20 +44,3 @@ pub enum MempoolEvent {
 pub type MempoolHandle = subsystem::Handle<dyn MempoolInterface>;
 
 pub type Result<T> = core::result::Result<T, MempoolError>;
-
-pub fn make_mempool<M>(
-    chain_config: Arc<ChainConfig>,
-    chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
-    time_getter: TimeGetter,
-    memory_usage_estimator: M,
-) -> MempoolInterfaceImpl<M>
-where
-    M: GetMemoryUsage + 'static + Send + Sync,
-{
-    MempoolInterfaceImpl::new(
-        chain_config,
-        chainstate_handle,
-        time_getter,
-        memory_usage_estimator,
-    )
-}
