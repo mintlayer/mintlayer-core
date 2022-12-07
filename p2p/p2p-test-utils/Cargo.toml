@@ -10,7 +10,6 @@ chainstate = { path = "../../chainstate/" }
 common = { path = "../../common/" }
 crypto = { path = "../../crypto/" }
 mempool = { path = "../../mempool/" }
-p2p = { path = "../" }
 subsystem = { path = "../../subsystem/" }
 
 portpicker = "0.1"

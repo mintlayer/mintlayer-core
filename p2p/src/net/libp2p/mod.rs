@@ -27,10 +27,13 @@ use std::{net::IpAddr, sync::Arc};
 
 use async_trait::async_trait;
 use libp2p::{
-    core::{upgrade, PeerId},
+    core::{
+        muxing::StreamMuxerBox,
+        transport::{self, upgrade},
+        PeerId,
+    },
     gossipsub::MessageId,
-    identity, mplex,
-    noise::{self, AuthenticKeypair},
+    identity, mplex, noise,
     request_response::RequestId,
     swarm::SwarmBuilder,
     tcp::{GenTcpConfig, TokioTcpTransport},
@@ -51,23 +54,15 @@ use crate::{
 #[derive(Debug)]
 pub struct Libp2pService;
 
-// TODO: Check the data directory first, and use keys from there if available
-fn make_libp2p_keys() -> (
+pub type Libp2pTransport = (
+    transport::Boxed<(PeerId, StreamMuxerBox)>,
     PeerId,
     identity::Keypair,
-    AuthenticKeypair<noise::X25519Spec>,
-) {
-    let id_keys = identity::Keypair::generate_ed25519();
-    let peer_id = id_keys.public().to_peer_id();
-    let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-        .into_authentic(&id_keys)
-        .expect("Noise key creation to succeed");
-
-    (peer_id, id_keys, noise_keys)
-}
+);
 
 #[async_trait]
 impl NetworkingService for Libp2pService {
+    type Transport = Libp2pTransport;
     type Address = Multiaddr;
     type BannableAddress = IpAddr;
     type PeerId = PeerId;
@@ -77,19 +72,12 @@ impl NetworkingService for Libp2pService {
     type SyncingMessagingHandle = service::syncing::Libp2pSyncHandle<Self>;
 
     async fn start(
+        transport: Self::Transport,
         bind_addr: Self::Address,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
-        let (peer_id, id_keys, noise_keys) = make_libp2p_keys();
-        let transport = TokioTcpTransport::new(GenTcpConfig::new().nodelay(true))
-            .upgrade(upgrade::Version::V1)
-            .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-            .multiplex(mplex::MplexConfig::new())
-            .outbound_timeout(std::time::Duration::from_secs(
-                *p2p_config.outbound_connection_timeout,
-            ))
-            .boxed();
+        let (transport, peer_id, id_keys) = transport;
 
         let swarm = SwarmBuilder::new(
             transport,
@@ -159,4 +147,24 @@ fn get_ip(address: &Multiaddr) -> Option<IpAddr> {
         }
     }
     None
+}
+
+// TODO: Check the data directory first, and use keys from there if available
+pub fn make_transport(p2p_config: &config::P2pConfig) -> Libp2pTransport {
+    let id_keys = identity::Keypair::generate_ed25519();
+    let peer_id = id_keys.public().to_peer_id();
+    let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+        .into_authentic(&id_keys)
+        .expect("Noise key creation to succeed");
+
+    let transport = TokioTcpTransport::new(GenTcpConfig::new().nodelay(true))
+        .upgrade(upgrade::Version::V1)
+        .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
+        .multiplex(mplex::MplexConfig::new())
+        .outbound_timeout(std::time::Duration::from_secs(
+            *p2p_config.outbound_connection_timeout,
+        ))
+        .boxed();
+
+    (transport, peer_id, id_keys)
 }

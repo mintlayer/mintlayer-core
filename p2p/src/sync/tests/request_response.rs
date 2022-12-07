@@ -19,6 +19,9 @@ use tokio::time::timeout;
 
 use chainstate::Locator;
 
+use crate::testing_utils::{
+    MakeChannelAddress, MakeNoiseAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress,
+};
 use crate::{
     event::PeerManagerEvent,
     message::{HeaderListRequest, HeaderListResponse, Request, Response},
@@ -34,17 +37,18 @@ use crate::{
     sync::tests::make_sync_manager,
     ConnectivityService, NetworkingService, SyncingMessagingService,
 };
-use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress};
 
 async fn request_response<A, T>()
 where
-    A: MakeTestAddress<Address = T::Address>,
+    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
-    let (mut mgr1, mut conn1, _sync1, _pm1) = make_sync_manager::<T>(A::make_address()).await;
-    let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(A::make_address()).await;
+    let (mut mgr1, mut conn1, _sync1, _pm1) =
+        make_sync_manager::<T>(A::make_transport(), A::make_address()).await;
+    let (mut mgr2, mut conn2, _sync2, _pm2) =
+        make_sync_manager::<T>(A::make_transport(), A::make_address()).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<T>(&mut conn1, &mut conn2).await;
@@ -97,12 +101,12 @@ async fn request_response_mock_channels() {
 
 #[tokio::test]
 async fn test_request_response_mock_noise() {
-    request_response::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
+    request_response::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn multiple_requests_and_responses<A, T>()
 where
-    A: MakeTestAddress<Address = T::Address>,
+    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
@@ -110,8 +114,10 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let (mut mgr1, mut conn1, _sync1, _pm1) = make_sync_manager::<T>(addr1).await;
-    let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(addr2).await;
+    let (mut mgr1, mut conn1, _sync1, _pm1) =
+        make_sync_manager::<T>(A::make_transport(), addr1).await;
+    let (mut mgr2, mut conn2, _sync2, _pm2) =
+        make_sync_manager::<T>(A::make_transport(), addr2).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<T>(&mut conn1, &mut conn2).await;
@@ -190,20 +196,22 @@ async fn multiple_requests_and_responses_mock_channels() {
 
 #[tokio::test]
 async fn multiple_requests_and_responses_mock_noise() {
-    multiple_requests_and_responses::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
+    multiple_requests_and_responses::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 // Receive getheaders before receiving the `Connected` event from the peer manager which makes the
 // request be rejected and time out in the sender's end.
 async fn request_timeout<A, T>()
 where
-    A: MakeTestAddress<Address = T::Address>,
+    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
-    let (mut mgr1, mut conn1, _sync1, mut pm1) = make_sync_manager::<T>(A::make_address()).await;
-    let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(A::make_address()).await;
+    let (mut mgr1, mut conn1, _sync1, mut pm1) =
+        make_sync_manager::<T>(A::make_transport(), A::make_address()).await;
+    let (mut mgr2, mut conn2, _sync2, _pm2) =
+        make_sync_manager::<T>(A::make_transport(), A::make_address()).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<T>(&mut conn1, &mut conn2).await;
@@ -255,5 +263,5 @@ async fn request_timeout_mock_channels() {
 
 #[tokio::test]
 async fn request_timeout_mock_noise() {
-    request_timeout::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
+    request_timeout::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
 }

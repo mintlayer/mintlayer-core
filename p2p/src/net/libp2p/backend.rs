@@ -341,6 +341,7 @@ mod tests {
         self, connection_manager, discovery,
         sync_codec::{SyncMessagingCodec, SyncingProtocol},
     };
+    use crate::testing_utils::{MakeP2pAddress, MakeTestAddress};
     use libp2p::{
         core::upgrade,
         gossipsub::{Gossipsub, GossipsubConfigBuilder, MessageAuthenticity},
@@ -351,7 +352,6 @@ mod tests {
         tcp::{GenTcpConfig, TcpTransport},
         Transport,
     };
-    use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
     use std::{
         collections::{HashMap, VecDeque},
         iter,

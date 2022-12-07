@@ -15,8 +15,10 @@
 
 use std::sync::Arc;
 
+use crate::testing_utils::{
+    MakeChannelAddress, MakeNoiseAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress,
+};
 use common::{chain::config, primitives::semver::SemVer};
-use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress};
 
 use crate::{
     error::{P2pError, PeerError},
@@ -38,7 +40,7 @@ use crate::{
 // ban peer whose connected to us
 async fn ban_connected_peer<A, T>()
 where
-    A: MakeTestAddress<Address = T::Address>,
+    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -48,8 +50,8 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut pm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
-    let mut pm2 = make_peer_manager::<T>(addr2, config).await;
+    let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
+    let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
     let (address, peer_info) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
@@ -88,12 +90,12 @@ async fn ban_connected_peer_mock_channels() {
 
 #[tokio::test]
 async fn ban_connected_peer_mock_noise() {
-    ban_connected_peer::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
+    ban_connected_peer::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn banned_peer_attempts_to_connect<A, T>()
 where
-    A: MakeTestAddress<Address = T::Address>,
+    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -103,8 +105,8 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut pm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
-    let mut pm2 = make_peer_manager::<T>(addr2, config).await;
+    let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
+    let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
     let (address, peer_info) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
@@ -158,13 +160,13 @@ async fn banned_peer_attempts_to_connect_mock_channel() {
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_mock_noise() {
     // TODO: implement proper peer banning
-    banned_peer_attempts_to_connect::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
+    banned_peer_attempts_to_connect::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 // attempt to connect to banned peer
 async fn connect_to_banned_peer<A, T>()
 where
-    A: MakeTestAddress<Address = T::Address>,
+    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -174,8 +176,8 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut pm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
-    let mut pm2 = make_peer_manager::<T>(addr2, config).await;
+    let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
+    let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
     let (address, peer_info) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
@@ -234,19 +236,20 @@ async fn connect_to_banned_peer_mock_channels() {
 
 #[tokio::test]
 async fn connect_to_banned_peer_mock_noise() {
-    connect_to_banned_peer::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
+    connect_to_banned_peer::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn validate_invalid_outbound_connection<A, S>(peer_address: S::Address, peer_id: S::PeerId)
 where
-    A: MakeTestAddress<Address = S::Address>,
+    A: MakeTestAddress<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + std::fmt::Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     <S as net::NetworkingService>::Address: std::str::FromStr,
     <<S as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let config = Arc::new(config::create_mainnet());
-    let mut peer_manager = make_peer_manager::<S>(A::make_address(), Arc::clone(&config)).await;
+    let mut peer_manager =
+        make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config)).await;
 
     // valid connection
     let res = peer_manager.accept_connection(
@@ -341,7 +344,7 @@ async fn validate_invalid_outbound_connection_mock_channels() {
 
 #[tokio::test]
 async fn validate_invalid_outbound_connection_mock_noise() {
-    validate_invalid_outbound_connection::<MakeTcpAddress, MockService<NoiseTcpTransport>>(
+    validate_invalid_outbound_connection::<MakeNoiseAddress, MockService<NoiseTcpTransport>>(
         "210.113.67.107:2525".parse().unwrap(),
         MockPeerId::random(),
     )
@@ -350,14 +353,15 @@ async fn validate_invalid_outbound_connection_mock_noise() {
 
 async fn validate_invalid_inbound_connection<A, S>(peer_address: S::Address, peer_id: S::PeerId)
 where
-    A: MakeTestAddress<Address = S::Address>,
+    A: MakeTestAddress<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + std::fmt::Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     <S as net::NetworkingService>::Address: std::str::FromStr,
     <<S as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let config = Arc::new(config::create_mainnet());
-    let mut peer_manager = make_peer_manager::<S>(A::make_address(), Arc::clone(&config)).await;
+    let mut peer_manager =
+        make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config)).await;
 
     // invalid magic bytes
     let res = peer_manager.accept_inbound_connection(
@@ -451,7 +455,7 @@ async fn validate_invalid_inbound_connection_mock_channels() {
 
 #[tokio::test]
 async fn validate_invalid_inbound_connection_mock_noise() {
-    validate_invalid_inbound_connection::<MakeTcpAddress, MockService<NoiseTcpTransport>>(
+    validate_invalid_inbound_connection::<MakeNoiseAddress, MockService<NoiseTcpTransport>>(
         "210.113.67.107:2525".parse().unwrap(),
         MockPeerId::random(),
     )
@@ -460,7 +464,7 @@ async fn validate_invalid_inbound_connection_mock_noise() {
 
 async fn inbound_connection_invalid_magic<A, T>()
 where
-    A: MakeTestAddress<Address = T::Address>,
+    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -469,8 +473,14 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let mut pm1 = make_peer_manager::<T>(addr1, Arc::new(config::create_mainnet())).await;
+    let mut pm1 = make_peer_manager::<T>(
+        A::make_transport(),
+        addr1,
+        Arc::new(config::create_mainnet()),
+    )
+    .await;
     let mut pm2 = make_peer_manager::<T>(
+        A::make_transport(),
         addr2,
         Arc::new(common::chain::config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
     )
@@ -514,5 +524,5 @@ async fn inbound_connection_invalid_magic_mock_channels() {
 
 #[tokio::test]
 async fn inbound_connection_invalid_magic_mock_noise() {
-    inbound_connection_invalid_magic::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
+    inbound_connection_invalid_magic::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
 }

@@ -232,6 +232,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing_utils::{
+        MakeChannelAddress, MakeNoiseAddress, MakeTcpAddress, MakeTestAddress,
+    };
     use crate::{
         message,
         net::mock::{
@@ -244,11 +247,10 @@ mod tests {
     use chainstate::Locator;
     use common::primitives::semver::SemVer;
     use futures::FutureExt;
-    use p2p_test_utils::{MakeChannelAddress, MakeTcpAddress, MakeTestAddress};
 
     async fn handshake_inbound<A, T>()
     where
-        A: MakeTestAddress<Address = T::Address>,
+        A: MakeTestAddress<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
@@ -325,12 +327,12 @@ mod tests {
 
     #[tokio::test]
     async fn handshake_inbound_noise() {
-        handshake_inbound::<MakeTcpAddress, NoiseTcpTransport>().await;
+        handshake_inbound::<MakeNoiseAddress, NoiseTcpTransport>().await;
     }
 
     async fn handshake_outbound<A, T>()
     where
-        A: MakeTestAddress<Address = T::Address>,
+        A: MakeTestAddress<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
@@ -410,12 +412,12 @@ mod tests {
 
     #[tokio::test]
     async fn handshake_outbound_noise() {
-        handshake_outbound::<MakeTcpAddress, NoiseTcpTransport>().await;
+        handshake_outbound::<MakeNoiseAddress, NoiseTcpTransport>().await;
     }
 
     async fn handshake_different_network<A, T>()
     where
-        A: MakeTestAddress<Address = T::Address>,
+        A: MakeTestAddress<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
@@ -471,12 +473,12 @@ mod tests {
 
     #[tokio::test]
     async fn handshake_different_network_noise() {
-        handshake_different_network::<MakeTcpAddress, NoiseTcpTransport>().await;
+        handshake_different_network::<MakeNoiseAddress, NoiseTcpTransport>().await;
     }
 
     async fn invalid_handshake_message<A, T>()
     where
-        A: MakeTestAddress<Address = T::Address>,
+        A: MakeTestAddress<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
@@ -528,15 +530,15 @@ mod tests {
 
     #[tokio::test]
     async fn invalid_handshake_message_noise() {
-        invalid_handshake_message::<MakeTcpAddress, NoiseTcpTransport>().await;
+        invalid_handshake_message::<MakeNoiseAddress, NoiseTcpTransport>().await;
     }
 
     pub async fn get_two_connected_sockets<A, T>() -> (T::Stream, T::Stream)
     where
-        A: MakeTestAddress<Address = T::Address>,
+        A: MakeTestAddress<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
-        let transport = T::new();
+        let transport = A::make_transport();
         let addr = A::make_address();
         let mut server = transport.bind(addr).await.unwrap();
         let peer_fut = transport.connect(server.local_address().unwrap());

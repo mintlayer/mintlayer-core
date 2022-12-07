@@ -102,7 +102,7 @@ impl PeerStream for TcpTransportStream {}
 
 #[cfg(test)]
 mod tests {
-    use p2p_test_utils::{MakeTcpAddress, MakeTestAddress};
+    use crate::testing_utils::{MakeTcpAddress, MakeTestAddress};
 
     use super::*;
     use crate::net::{

@@ -32,6 +32,7 @@ use common::{
 };
 use serialization::Encode;
 
+use p2p::testing_utils::MakeTestAddress;
 use p2p::{
     error::{P2pError, PublishError},
     message::Announcement,
@@ -42,7 +43,6 @@ use p2p::{
     },
     peer_manager::helpers::connect_services,
 };
-use p2p_test_utils::MakeTestAddress;
 
 tests![
     block_announcement,
@@ -52,20 +52,28 @@ tests![
 
 async fn block_announcement<A, S>()
 where
-    A: MakeTestAddress<Address = S::Address>,
+    A: MakeTestAddress<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
     S::ConnectivityHandle: ConnectivityService<S>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut sync1) =
-        S::start(A::make_address(), Arc::clone(&config), Default::default())
-            .await
-            .unwrap();
-    let (mut conn2, mut sync2) =
-        S::start(A::make_address(), Arc::clone(&config), Default::default())
-            .await
-            .unwrap();
+    let (mut conn1, mut sync1) = S::start(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
+    let (mut conn2, mut sync2) = S::start(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
     connect_services::<S>(&mut conn1, &mut conn2).await;
 
@@ -130,19 +138,28 @@ where
 
 async fn block_announcement_no_subscription<A, S>()
 where
-    A: MakeTestAddress<Address = S::Address>,
+    A: MakeTestAddress<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
     S::ConnectivityHandle: ConnectivityService<S>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut sync1) =
-        S::start(A::make_address(), Arc::clone(&config), Default::default())
-            .await
-            .unwrap();
-    let (mut conn2, _sync2) = S::start(A::make_address(), Arc::clone(&config), Default::default())
-        .await
-        .unwrap();
+    let (mut conn1, mut sync1) = S::start(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
+    let (mut conn2, _sync2) = S::start(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
     connect_services::<S>(&mut conn1, &mut conn2).await;
 
@@ -169,21 +186,29 @@ where
 
 async fn block_announcement_too_big_message<A, S>()
 where
-    A: MakeTestAddress<Address = S::Address>,
+    A: MakeTestAddress<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
     S::ConnectivityHandle: ConnectivityService<S>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut sync1) =
-        S::start(A::make_address(), Arc::clone(&config), Default::default())
-            .await
-            .unwrap();
+    let (mut conn1, mut sync1) = S::start(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
-    let (mut conn2, mut sync2) =
-        S::start(A::make_address(), Arc::clone(&config), Default::default())
-            .await
-            .unwrap();
+    let (mut conn2, mut sync2) = S::start(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
     connect_services::<S>(&mut conn1, &mut conn2).await;
 

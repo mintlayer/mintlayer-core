@@ -14,13 +14,13 @@
 // limitations under the License.
 
 use super::*;
+use crate::testing_utils::{MakeP2pAddress, MakeTestAddress};
 use crate::{
     error::{P2pError, PeerError},
     net::libp2p::{behaviour::sync_codec::message_types::SyncRequest, types},
 };
 use futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
-use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 use tokio::sync::oneshot;
 
 // try to send request to an unknown peer and verify that the request is not rejected

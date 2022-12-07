@@ -15,8 +15,8 @@
 
 use super::*;
 use crate::net::libp2p::behaviour;
+use crate::testing_utils::{MakeP2pAddress, MakeTestAddress};
 use libp2p::ping;
-use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 use std::time::Duration;
 
 #[tokio::test]

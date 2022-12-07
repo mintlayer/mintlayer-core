@@ -15,6 +15,7 @@
 
 use super::*;
 use crate::error::P2pError;
+use crate::testing_utils::{MakeP2pAddress, MakeTestAddress};
 use futures::StreamExt;
 use libp2p::{
     core::upgrade,
@@ -22,7 +23,6 @@ use libp2p::{
     swarm::{DialError, SwarmBuilder, SwarmEvent},
     PeerId, Swarm,
 };
-use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 
 // TODO: add more tests at some point
 

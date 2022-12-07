@@ -2982,7 +2982,6 @@ dependencies = [
  "crypto",
  "libp2p",
  "mempool",
- "p2p",
  "portpicker",
  "subsystem",
  "tokio",

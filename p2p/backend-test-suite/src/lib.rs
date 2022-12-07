@@ -29,12 +29,12 @@ use std::fmt::Debug;
 use libtest_mimic::{Arguments, Trial};
 
 use p2p::net::{ConnectivityService, NetworkingService, SyncingMessagingService};
-use p2p_test_utils::MakeTestAddress;
+use p2p::testing_utils::MakeTestAddress;
 
 /// Runs all tests.
 pub fn run<A, S>()
 where
-    A: MakeTestAddress<Address = S::Address>,
+    A: MakeTestAddress<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S> + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S> + Debug,
@@ -47,7 +47,7 @@ where
 /// Collects all backend agnostic tests.
 fn tests<A, S>() -> Vec<Trial>
 where
-    A: MakeTestAddress<Address = S::Address>,
+    A: MakeTestAddress<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S> + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S> + Debug,

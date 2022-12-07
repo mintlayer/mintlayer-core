@@ -18,9 +18,9 @@ use std::{
     time::Duration,
 };
 
+use crate::testing_utils::{MakeChannelAddress, MakeTcpAddress, MakeTestAddress};
 use async_trait::async_trait;
 use futures::StreamExt;
-use p2p_test_utils::{MakeChannelAddress, MakeTcpAddress, MakeTestAddress};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     time::timeout,

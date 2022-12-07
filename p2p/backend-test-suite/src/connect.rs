@@ -17,11 +17,11 @@
 
 use std::{fmt::Debug, sync::Arc};
 
+use p2p::testing_utils::MakeTestAddress;
 use p2p::{
     error::{DialError, P2pError},
     net::{ConnectivityService, NetworkingService, SyncingMessagingService},
 };
-use p2p_test_utils::MakeTestAddress;
 
 tests![
     connect,
@@ -32,13 +32,20 @@ tests![
 
 async fn connect<A, S>()
 where
-    A: MakeTestAddress<Address = S::Address>,
+    A: MakeTestAddress<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    S::start(A::make_address(), config, Default::default()).await.unwrap();
+    S::start(
+        A::make_transport(),
+        A::make_address(),
+        config,
+        Default::default(),
+    )
+    .await
+    .unwrap();
 }
 
 // Check that connecting twice to the same address isn't possible.
@@ -46,19 +53,23 @@ where
 #[cfg(not(target_os = "windows"))]
 async fn connect_address_in_use<A, S>()
 where
-    A: MakeTestAddress<Address = S::Address>,
+    A: MakeTestAddress<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S> + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S> + Debug,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (connectivity, _sync) =
-        S::start(A::make_address(), Arc::clone(&config), Default::default())
-            .await
-            .unwrap();
+    let (connectivity, _sync) = S::start(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
     let address = connectivity.local_addr().await.unwrap().unwrap();
-    let res = S::start(address, config, Default::default())
+    let res = S::start(A::make_transport(), address, config, Default::default())
         .await
         .expect_err("address is not in use");
     assert_eq!(
@@ -71,18 +82,28 @@ where
 // trying to connect to `service1`.
 async fn connect_accept<A, S>()
 where
-    A: MakeTestAddress<Address = S::Address>,
+    A: MakeTestAddress<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + std::fmt::Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut service1, _) = S::start(A::make_address(), Arc::clone(&config), Default::default())
-        .await
-        .unwrap();
-    let (mut service2, _) = S::start(A::make_address(), Arc::clone(&config), Default::default())
-        .await
-        .unwrap();
+    let (mut service1, _) = S::start(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
+    let (mut service2, _) = S::start(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
     let conn_addr = service1.local_addr().await.unwrap().unwrap();
     let (res1, res2) = tokio::join!(service1.poll_next(), service2.connect(conn_addr));

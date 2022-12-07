@@ -15,12 +15,12 @@
 
 use super::*;
 use crate::net::libp2p::behaviour;
+use crate::testing_utils::{MakeP2pAddress, MakeTestAddress};
 use futures::StreamExt;
 use libp2p::{
     ping,
     swarm::{SwarmBuilder, SwarmEvent},
 };
-use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 use std::time::Duration;
 
 #[tokio::test]

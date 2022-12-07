@@ -16,9 +16,9 @@
 
 use super::*;
 use crate::net::libp2p::{behaviour, types::*};
+use crate::testing_utils::{MakeP2pAddress, MakeTestAddress};
 use futures::StreamExt;
 use libp2p::gossipsub::IdentTopic as Topic;
-use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 use serialization::Encode;
 
 #[tokio::test]
