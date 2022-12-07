@@ -13,52 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
-use std::num::NonZeroUsize;
-use std::sync::Arc;
-use std::time::Duration;
-
-use common::chain::Block;
-use common::primitives::BlockHeight;
-use tokio::sync::mpsc;
+use parking_lot::RwLock;
+use std::{collections::BTreeSet, num::NonZeroUsize, sync::Arc, time::Duration};
 
 use chainstate::chainstate_interface::ChainstateInterface;
-use common::chain::signed_transaction::SignedTransaction;
-use common::chain::ChainConfig;
-use common::time_getter::TimeGetter;
-use parking_lot::RwLock;
-use serialization::Encode;
-
-use common::chain::transaction::Transaction;
-use common::primitives::amount::Amount;
-use common::primitives::Id;
-use common::primitives::Idable;
-
+use common::{
+    chain::{Block, ChainConfig, SignedTransaction, Transaction},
+    primitives::{amount::Amount, BlockHeight, Id, Idable},
+    time_getter::TimeGetter,
+};
 use logging::log;
+use serialization::Encode;
+use utils::{ensure, eventhandler::EventsController};
 
-use utils::ensure;
-use utils::eventhandler::EventsController;
-use utils::tap_error_log::LogError;
-
-use crate::error::Error;
-use crate::error::TxValidationError;
-use crate::get_memory_usage::GetMemoryUsage;
-use crate::method_call::MempoolMethodCall;
-use crate::tx_accumulator::TransactionAccumulator;
-use crate::MempoolEvent;
-use feerate::FeeRate;
-use feerate::INCREMENTAL_RELAY_FEE_RATE;
-use feerate::INCREMENTAL_RELAY_THRESHOLD;
+use crate::{
+    error::{Error, TxValidationError},
+    get_memory_usage::GetMemoryUsage,
+    tx_accumulator::TransactionAccumulator,
+    MempoolEvent,
+};
+use feerate::{FeeRate, INCREMENTAL_RELAY_FEE_RATE, INCREMENTAL_RELAY_THRESHOLD};
 use rolling_fee_rate::RollingFeeRate;
 use spends_unconfirmed::SpendsUnconfirmed;
-use store::Conflicts;
-use store::MempoolRemovalReason;
-use store::MempoolStore;
-use store::TxMempoolEntry;
+use store::{Conflicts, MempoolRemovalReason, MempoolStore, TxMempoolEntry};
 use try_get_fee::TryGetFee;
 use tx_with_fee::TxWithFee;
-
-pub use crate::interface::mempool_interface::MempoolInterface;
 
 use crate::config::*;
 
@@ -74,7 +53,7 @@ fn get_relay_fee(tx: &SignedTransaction) -> Amount {
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
 }
 
-pub struct Mempool<M: GetMemoryUsage + 'static + Send + Sync> {
+pub struct Mempool<M> {
     #[allow(unused)]
     chain_config: Arc<ChainConfig>,
     store: MempoolStore,
@@ -85,7 +64,6 @@ pub struct Mempool<M: GetMemoryUsage + 'static + Send + Sync> {
     clock: TimeGetter,
     memory_usage_estimator: M,
     events_controller: EventsController<MempoolEvent>,
-    receiver: mpsc::UnboundedReceiver<MempoolMethodCall>,
 }
 
 impl<M> std::fmt::Debug for Mempool<M>
@@ -115,7 +93,6 @@ where
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         clock: TimeGetter,
         memory_usage_estimator: M,
-        receiver: tokio::sync::mpsc::UnboundedReceiver<MempoolMethodCall>,
     ) -> Self {
         Self {
             chain_config,
@@ -128,97 +105,11 @@ where
             clock,
             memory_usage_estimator,
             events_controller: Default::default(),
-            receiver,
         }
     }
 
-    pub fn run(mut self) -> Result<(), Error> {
-        tokio::spawn(async move {
-            let event_receiver =
-                self.subscribe_to_chainstate_events().await.log_err().expect("chainstate dead");
-            self.mempool_event_loop(event_receiver).await
-        });
-        Ok(())
-    }
-
-    pub async fn mempool_event_loop(
-        mut self,
-        mut chainstate_event_receiver: mpsc::UnboundedReceiver<(Id<Block>, BlockHeight)>,
-    ) {
-        loop {
-            tokio::select! {
-                Some((block_id, block_height)) = chainstate_event_receiver.recv() => {
-                    self.new_tip_set(block_id, block_height)
-                },
-                Some(method_call) = self.receiver.recv() => {
-                    self.handle_mempool_method_call(method_call).await
-                },
-            }
-        }
-    }
-
-    pub async fn handle_mempool_method_call(&mut self, method_call: MempoolMethodCall) {
-        match method_call {
-            MempoolMethodCall::AddTransaction { tx, rtx } => {
-                if let Err(e) = rtx.send(self.add_transaction(tx).await) {
-                    logging::log::error!("AddTransaction: Error sending response: {:?}", e);
-                }
-            }
-            MempoolMethodCall::GetAll { rtx } => {
-                if let Err(e) = rtx.send(self.get_all()) {
-                    logging::log::error!("GetAll: Error sending response: {:?}", e);
-                }
-            }
-            MempoolMethodCall::CollectTxs {
-                tx_accumulator,
-                rtx,
-            } => {
-                if let Err(e) = rtx.send(self.collect_txs(tx_accumulator)) {
-                    logging::log::error!(
-                        "CollectTxs: Error sending response: {:?}",
-                        e.transactions()
-                    );
-                }
-            }
-            MempoolMethodCall::ContainsTransaction { tx_id, rtx } => {
-                if let Err(e) = rtx.send(self.contains_transaction(&tx_id)) {
-                    logging::log::error!("ContainsTransaction: Error sending response: {:?}", e);
-                }
-            }
-            MempoolMethodCall::SubscribeToEvents { handler, rtx } => {
-                self.subscribe_to_events(handler);
-                if let Err(e) = rtx.send(()) {
-                    logging::log::error!("SubscribeToEvents: Error sending response: {:?}", e);
-                }
-            }
-        }
-    }
-
-    pub async fn subscribe_to_chainstate_events(
-        &mut self,
-    ) -> crate::Result<mpsc::UnboundedReceiver<(Id<Block>, BlockHeight)>> {
-        let (tx, rx) = mpsc::unbounded_channel();
-        let subscribe_func =
-            Arc::new(
-                move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
-                    chainstate::ChainstateEvent::NewTip(block_id, block_height) => {
-                        log::info!(
-                            "Received a new tip with block id {:?} and block height {:?}",
-                            block_id,
-                            block_height
-                        );
-                        if let Err(e) = tx.send((block_id, block_height)) {
-                            log::error!("Mempool Event Handler closed: {:?}", e)
-                        }
-                    }
-                },
-            );
-
-        self.chainstate_handle
-            .call_mut(|this| this.subscribe_to_events(subscribe_func))
-            .await
-            .map_err(|_| crate::error::Error::SubsystemFailure)?;
-        Ok(rx)
+    pub fn chainstate_handle(&self) -> &subsystem::Handle<Box<dyn ChainstateInterface>> {
+        &self.chainstate_handle
     }
 }
 
@@ -789,7 +680,7 @@ where
         self.store.txs_by_id.contains_key(tx_id)
     }
 
-    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
+    pub fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
         self.events_controller.subscribe_to_events(handler)
     }
 

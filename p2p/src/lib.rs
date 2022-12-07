@@ -33,7 +33,6 @@ use tokio::sync::mpsc;
 use chainstate::chainstate_interface;
 use common::chain::ChainConfig;
 use logging::log;
-use mempool::MempoolInterface;
 
 use crate::{
     config::P2pConfig,
@@ -67,7 +66,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-        _mempool_handle: subsystem::Handle<Box<dyn MempoolInterface>>,
+        _mempool_handle: mempool::MempoolHandle,
     ) -> crate::Result<Self>
     where
         <T as NetworkingService>::Address: FromStr,
@@ -147,7 +146,7 @@ pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-    mempool_handle: subsystem::Handle<Box<dyn MempoolInterface>>,
+    mempool_handle: mempool::MempoolHandle,
 ) -> crate::Result<Box<dyn P2pInterface>>
 where
     T: NetworkingService + 'static,

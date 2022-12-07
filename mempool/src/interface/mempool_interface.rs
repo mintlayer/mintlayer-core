@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use crate::{error::Error, tx_accumulator::TransactionAccumulator, MempoolEvent};
 use common::{
-    chain::{signed_transaction::SignedTransaction, Transaction},
+    chain::{SignedTransaction, Transaction},
     primitives::Id,
 };
+use std::sync::Arc;
+use subsystem::{CallRequest, ShutdownRequest};
 
 #[async_trait::async_trait]
 pub trait MempoolInterface: Send + Sync {
@@ -38,4 +38,9 @@ pub trait MempoolInterface: Send + Sync {
         &mut self,
         handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
     ) -> Result<(), Error>;
+}
+
+#[async_trait::async_trait]
+pub trait MempoolSubsystemInterface: MempoolInterface + 'static {
+    async fn run(self, call_rq: CallRequest<dyn MempoolInterface>, shut_rq: ShutdownRequest);
 }

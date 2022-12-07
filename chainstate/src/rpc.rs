@@ -171,7 +171,7 @@ mod test {
             )
             .unwrap(),
         );
-        let _ = man.add_raw_subsystem(
+        let _ = man.add_subsystem_with_custom_eventloop(
             "test",
             move |_: subsystem::subsystem::CallRequest<()>, _| proc(handle),
         );

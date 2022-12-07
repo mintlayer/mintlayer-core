@@ -39,6 +39,7 @@ impl ManagerConfig {
         None
     };
 
+    /// New config using given subsystem name. Other options are default.
     fn named(name: &'static str) -> Self {
         Self {
             name,
@@ -120,27 +121,32 @@ impl Manager {
     /// A typical skeleton of a subsystem looks like this:
     /// ```no_run
     /// # let mut manager = subsystem::Manager::new("app");
-    /// let subsystem = manager.add_raw_subsystem("my-subsys", |mut call, mut shutdown| async move {
-    ///     loop {
-    ///         tokio::select! {
-    ///             // Shutdown received, break out of the loop.
-    ///             () = shutdown.recv() => { break; }
-    ///             // Handle calls. An object representing the subsystem is passed in.
-    ///             func = call.recv() => { func(todo!("put an argument here")); }
-    ///             // Handle any other IO events here
-    ///         };
-    ///     }
-    /// });
+    /// let subsystem = manager.add_subsystem_with_custom_eventloop(
+    ///     "my-subsys",
+    ///     |mut call, mut shutdown| async move {
+    ///         loop {
+    ///             tokio::select! {
+    ///                 // Shutdown received, break out of the loop.
+    ///                 () = shutdown.recv() => { break; }
+    ///                 // Handle calls. An object representing the subsystem is passed in.
+    ///                 func = call.recv() => { func(todo!("put an argument here")); }
+    ///                 // Handle any other IO events here
+    ///             };
+    ///         }
+    ///     },
+    /// );
     /// # let _ = subsystem.call(|()| ());  // Fix the call type to avoid ambiguity.
     /// ```
-    pub fn add_raw_subsystem_with_config<
-        T: 'static + Send,
-        F: 'static + Send + Future<Output = ()>,
-    >(
+    pub fn add_raw_subsystem_with_config<T, F, S>(
         &mut self,
         config: SubsystemConfig,
-        subsystem: impl 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
-    ) -> Handle<T> {
+        subsystem: S,
+    ) -> Handle<T>
+    where
+        T: 'static + Send + ?Sized,
+        F: 'static + Send + Future<Output = ()>,
+        S: 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
+    {
         // Name strings
         let manager_name = self.name;
         let subsys_name = config.subsystem_name;
@@ -193,11 +199,16 @@ impl Manager {
     }
 
     /// Add a raw subsystem. See [Manager::add_raw_subsystem_with_config].
-    pub fn add_raw_subsystem<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
+    pub fn add_subsystem_with_custom_eventloop<T, F, S>(
         &mut self,
         name: &'static str,
-        subsystem: impl 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
-    ) -> Handle<T> {
+        subsystem: S,
+    ) -> Handle<T>
+    where
+        T: 'static + Send + ?Sized,
+        F: 'static + Send + Future<Output = ()>,
+        S: 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
+    {
         self.add_raw_subsystem_with_config(SubsystemConfig::named(name), subsystem)
     }
 
@@ -212,7 +223,7 @@ impl Manager {
     /// signalling all other subsystems and the whole manager to shut down.
     #[cfg(not(loom))]
     pub fn install_signal_handlers(&mut self) {
-        self.add_raw_subsystem(
+        self.add_subsystem_with_custom_eventloop(
             "ctrl-c",
             |mut call_rq: CallRequest<()>, mut shutdown_rq| async move {
                 tokio::select! {
@@ -359,7 +370,7 @@ mod test {
             shutdown_timeout: Some(Duration::from_secs(1)),
         });
 
-        man.add_raw_subsystem(
+        man.add_subsystem_with_custom_eventloop(
             "does_not_want_to_exit",
             |_call_rq: CallRequest<()>, _shut_rq| std::future::pending(),
         );

@@ -13,12 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{chain::signed_transaction::SignedTransaction, primitives::Amount};
+use common::{chain::SignedTransaction, primitives::Amount};
 
+use super::{try_get_fee::TryGetFee, Mempool};
 use crate::{error::TxValidationError, get_memory_usage::GetMemoryUsage};
-
-use super::try_get_fee::TryGetFee;
-use super::Mempool;
 
 pub struct TxWithFee {
     tx: SignedTransaction,
