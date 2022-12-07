@@ -38,6 +38,15 @@ pub struct NoiseEncryptionAdapter {
     local_key: snowstorm::Keypair,
 }
 
+impl NoiseEncryptionAdapter {
+    pub fn gen_new() -> Self {
+        let local_key = snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
+            .generate_keypair()
+            .expect("key generation must succeed");
+        Self { local_key }
+    }
+}
+
 impl std::fmt::Debug for NoiseEncryptionAdapter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("NoiseEncryptionAdapter").finish()
@@ -58,13 +67,6 @@ impl Clone for NoiseEncryptionAdapter {
 /// StreamAdapter that encrypts the data going through it with noise protocol
 impl<T: PeerStream + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
     type Stream = snowstorm::NoiseStream<T>;
-
-    fn new() -> Self {
-        let local_key = snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
-            .generate_keypair()
-            .expect("key generation must succeed");
-        Self { local_key }
-    }
 
     fn handshake(&self, base: T, role: Role) -> BoxFuture<'static, crate::Result<Self::Stream>> {
         let local_key = self.clone().local_key;

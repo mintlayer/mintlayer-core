@@ -42,10 +42,6 @@ impl TransportSocket for TcpTransportSocket {
     type Listener = TcpTransportListener;
     type Stream = TcpTransportStream;
 
-    fn new() -> Self {
-        Self
-    }
-
     async fn bind(&self, address: Self::Address) -> Result<Self::Listener> {
         TcpTransportListener::new(address).await
     }

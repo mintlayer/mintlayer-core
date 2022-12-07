@@ -24,8 +24,6 @@ use crate::{
 pub trait StreamAdapter<T>: Clone + Send + Sync + 'static {
     type Stream: PeerStream;
 
-    fn new() -> Self;
-
     /// Wraps base async stream into AsyncRead/AsyncWrite stream that may implement encryption.
     fn handshake(&self, base: T, role: Role) -> BoxFuture<'static, Result<Self::Stream>>;
 }

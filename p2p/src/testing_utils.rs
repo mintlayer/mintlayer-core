@@ -1,4 +1,17 @@
-use crate::net::mock::transport::TransportSocket;
+// Copyright (c) 2022 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use libp2p::Multiaddr;
 use std::net::SocketAddr;
@@ -36,7 +49,7 @@ impl MakeTestAddress for MakeP2pAddress {
     }
 
     fn make_address() -> Self::Address {
-        "/ip6/::1/tcp/0".parse().unwrap()
+        "/ip6/::1/tcp/0".parse().expect("valid address")
     }
 }
 
@@ -52,7 +65,7 @@ impl MakeTestAddress for MakeTcpAddress {
     }
 
     fn make_address() -> Self::Address {
-        "[::1]:0".parse().unwrap()
+        "[::1]:0".parse().expect("valid address")
     }
 }
 
@@ -80,10 +93,12 @@ impl MakeTestAddress for MakeNoiseAddress {
     type Address = SocketAddr;
 
     fn make_transport() -> Self::Transport {
-        crate::net::mock::transport::NoiseTcpTransport::new()
+        let stream_adapter = crate::net::mock::transport::NoiseEncryptionAdapter::gen_new();
+        let base_transport = crate::net::mock::transport::TcpTransportSocket::new();
+        crate::net::mock::transport::NoiseTcpTransport::new(stream_adapter, base_transport)
     }
 
     fn make_address() -> Self::Address {
-        "[::1]:0".parse().unwrap()
+        MakeTcpAddress::make_address()
     }
 }
