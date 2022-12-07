@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use accounting::{combine_amount_delta, DataDelta};
+use accounting::combine_amount_delta;
 use common::primitives::{signed_amount::SignedAmount, Amount};
 
 use crate::{
@@ -34,6 +34,13 @@ fn signed_to_unsigned_pair(
 }
 
 impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
+        Ok(self
+            .get_pool_data(pool_id)?
+            .ok_or_else(|| self.parent.get_pool_data(pool_id))
+            .is_ok())
+    }
+
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
         let parent_balance = self.parent.get_pool_balance(pool_id)?;
         let local_delta = self.data.pool_balances.data().get(&pool_id).cloned();
@@ -41,14 +48,10 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
-        let local_data = self.data.pool_data.data().get(&pool_id);
-        match local_data {
-            Some(d) => match d {
-                DataDelta::Create(d) => Ok(Some(*d.clone())),
-                DataDelta::Modify(d) => Ok(Some(*d.clone())),
-                DataDelta::Delete => Ok(None),
-            },
-            None => self.parent.get_pool_data(pool_id),
+        match self.data.pool_data.get_data_delta(&pool_id) {
+            accounting::GetDataResult::Present(d) => Ok(Some(d.clone())),
+            accounting::GetDataResult::Deleted => Ok(None),
+            accounting::GetDataResult::Missing => self.parent.get_pool_data(pool_id),
         }
     }
 
@@ -81,14 +84,10 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, Error> {
-        let local_data = self.data.delegation_data.data().get(&delegation_id);
-        match local_data {
-            Some(d) => match d {
-                DataDelta::Create(d) => Ok(Some(*d.clone())),
-                DataDelta::Modify(d) => Ok(Some(*d.clone())),
-                DataDelta::Delete => Ok(None),
-            },
-            None => self.parent.get_delegation_data(delegation_id),
+        match self.data.delegation_data.get_data_delta(&delegation_id) {
+            accounting::GetDataResult::Present(d) => Ok(Some(d.clone())),
+            accounting::GetDataResult::Deleted => Ok(None),
+            accounting::GetDataResult::Missing => self.parent.get_delegation_data(delegation_id),
         }
     }
 

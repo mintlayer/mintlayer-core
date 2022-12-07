@@ -59,6 +59,10 @@ impl<'a> PoSAccountingOperationsCache<'a> {
 }
 
 impl<'a> PoSAccountingView for PoSAccountingOperationsCache<'a> {
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
+        self.get_pool_data(pool_id).map(|v| v.is_some())
+    }
+
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
         match self.pool_balances.get(&pool_id) {
             Some(v) => Ok(Some(*v)),

@@ -15,30 +15,24 @@
 
 use std::collections::BTreeMap;
 
-use super::DataDelta;
+use super::DataDeltaUndo;
 
-/// The operations we have to do in order to undo a delta
-pub(super) enum DataDeltaUndoOpInternal<T> {
-    Write(DataDelta<T>),
-    Erase,
+#[must_use]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeltaDataUndoCollection<K: Ord, T: Clone> {
+    data: BTreeMap<K, DataDeltaUndo<T>>,
 }
 
-pub struct DataDeltaUndoOp<T>(pub(super) DataDeltaUndoOpInternal<T>);
-
-pub struct DeltaDataUndoCollection<K: Ord, T> {
-    data: BTreeMap<K, DataDeltaUndoOp<T>>,
-}
-
-impl<K: Ord, T> DeltaDataUndoCollection<K, T> {
-    pub fn new(data: BTreeMap<K, DataDeltaUndoOp<T>>) -> Self {
+impl<K: Ord, T: Clone> DeltaDataUndoCollection<K, T> {
+    pub fn new(data: BTreeMap<K, DataDeltaUndo<T>>) -> Self {
         Self { data }
     }
 
-    pub fn data(&self) -> &BTreeMap<K, DataDeltaUndoOp<T>> {
+    pub fn data(&self) -> &BTreeMap<K, DataDeltaUndo<T>> {
         &self.data
     }
 
-    pub fn consume(self) -> BTreeMap<K, DataDeltaUndoOp<T>> {
+    pub fn consume(self) -> BTreeMap<K, DataDeltaUndo<T>> {
         self.data
     }
 }

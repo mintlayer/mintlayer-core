@@ -79,4 +79,6 @@ pub enum Error {
     InvariantErrorDelegationUndoFailedDataNotFound,
     #[error("Delta reverts merge failed due to duplicates")]
     DuplicatesInDeltaAndUndo,
+    #[error("Could not create delta undo")]
+    FailedToCreateDeltaUndo,
 }
