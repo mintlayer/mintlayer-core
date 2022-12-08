@@ -43,7 +43,7 @@ use crate::{
     event::{PeerManagerEvent, SyncControlEvent},
     message::{self, Announcement},
     net::{
-        types::{PubSubTopic, SyncingEvent, ValidationResult},
+        types::{SyncingEvent, ValidationResult},
         NetworkingService, SyncingMessagingService,
     },
 };
@@ -378,7 +378,7 @@ where
         }
 
         self.state = SyncState::Done;
-        self.peer_sync_handle.subscribe(&[PubSubTopic::Blocks]).await
+        Ok(())
     }
 
     pub async fn process_response(

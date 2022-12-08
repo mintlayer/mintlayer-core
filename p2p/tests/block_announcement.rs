@@ -29,7 +29,7 @@ use p2p::{
             transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             MockService,
         },
-        types::{PubSubTopic, SyncingEvent, ValidationResult},
+        types::{SyncingEvent, ValidationResult},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
     peer_manager::helpers::connect_services,
@@ -71,11 +71,6 @@ where
     connect_services::<S>(&mut conn1, &mut peer1.0).await;
     connect_services::<S>(&mut peer1.0, &mut peer2.0).await;
     connect_services::<S>(&mut peer2.0, &mut peer3.0).await;
-
-    sync1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
-    peer1.1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
-    peer2.1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
-    peer3.1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
 
     // Spam the message until we have a peer.
     loop {

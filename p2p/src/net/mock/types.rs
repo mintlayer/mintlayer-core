@@ -58,9 +58,6 @@ pub enum Command<T: TransportSocket> {
         message: message::Response,
         response: oneshot::Sender<crate::Result<()>>,
     },
-    Subscribe {
-        topics: BTreeSet<PubSubTopic>,
-    },
     AnnounceData {
         topic: PubSubTopic,
         message: Vec<u8>,

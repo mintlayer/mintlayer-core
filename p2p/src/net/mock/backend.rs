@@ -277,27 +277,6 @@ where
         Ok(())
     }
 
-    async fn subscribe(&mut self, topics: BTreeSet<PubSubTopic>) {
-        // Send the message to all peers in pseudorandom order.
-        // TODO: This can be moved to a separate function and reused in the `announce_data`
-        // function, when we no longer need the special logic for the `InsufficientPeers` error.
-        let mut futures: Vec<_> = self
-            .peers
-            .iter()
-            .map(|(id, p)| {
-                p.tx.send(MockEvent::SendMessage(Box::new(Message::Subscribe {
-                    topics: topics.clone(),
-                })))
-                .inspect_err(move |e| {
-                    log::error!("Failed to send subscription to {id:?} peer: {e:?}")
-                })
-            })
-            .collect();
-        futures.shuffle(&mut make_pseudo_rng());
-
-        join_all(futures).await;
-    }
-
     /// Sends the announcement to all peers.
     ///
     /// Returns the `InsufficientPeers` error if there are no peers that subscribed to the related
@@ -609,9 +588,6 @@ where
             } => {
                 let res = self.send_response(request_id, message).await;
                 response.send(res).map_err(|_| P2pError::ChannelClosed)?;
-            }
-            Command::Subscribe { topics } => {
-                self.subscribe(topics).await;
             }
             Command::AnnounceData {
                 topic,

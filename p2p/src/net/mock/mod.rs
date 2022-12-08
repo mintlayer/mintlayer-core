@@ -326,15 +326,6 @@ where
         receiver.await?
     }
 
-    async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()> {
-        self.cmd_tx
-            .send(types::Command::Subscribe {
-                topics: topics.iter().cloned().collect(),
-            })
-            .await
-            .map_err(P2pError::from)
-    }
-
     async fn report_validation_result(
         &mut self,
         _source: S::PeerId,
