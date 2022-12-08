@@ -34,6 +34,9 @@ use crate::{
 
 use super::transport::BufferedTranscoder;
 
+// TODO: This constant should be replace by the node type in the config.
+const SUBSCRIPTIONS: &[PubSubTopic] = &[PubSubTopic::Transactions, PubSubTopic::Blocks];
+
 pub enum Role {
     Inbound,
     Outbound,
@@ -116,9 +119,7 @@ where
                             .into_iter()
                             .collect(),
                             // TODO: Don't hardcode subscriptions.
-                            subscriptions: [PubSubTopic::Transactions, PubSubTopic::Blocks]
-                                .into_iter()
-                                .collect(),
+                            subscriptions: SUBSCRIPTIONS.iter().cloned().collect(),
                         },
                     ))
                     .await?;
@@ -153,9 +154,7 @@ where
                         ]
                         .into_iter()
                         .collect(),
-                        subscriptions: [PubSubTopic::Transactions, PubSubTopic::Blocks]
-                            .into_iter()
-                            .collect(),
+                        subscriptions: SUBSCRIPTIONS.iter().cloned().collect(),
                     }))
                     .await?;
 
