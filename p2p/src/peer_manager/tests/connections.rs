@@ -509,7 +509,9 @@ async fn inbound_connection_too_many_peers_mock_tcp() {
                 ]
                 .into_iter()
                 .collect(),
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
+                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                    .into_iter()
+                    .collect(),
             },
         )
         .collect::<Vec<_>>();
@@ -562,6 +564,7 @@ async fn inbound_connection_too_many_peers_mock_noise() {
             ]
             .into_iter()
             .collect(),
+            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         })
         .collect::<Vec<_>>();
 

@@ -20,6 +20,10 @@ use libp2p::{multiaddr, Multiaddr, PeerId};
 use crate::{
     config::{MdnsConfig, P2pConfig},
     net::{
+        libp2p::Libp2pService,
+        types::{AddrInfo, PeerInfo, PubSubTopic},
+        AsBannableAddress,
+    },
     peer_manager::{
         peerdb::{Peer, PeerDb},
         tests::default_protocols,
@@ -27,12 +31,12 @@ use crate::{
     NetworkingService,
 };
 
-fn make_peer_info() -> (PeerId, types::PeerInfo<Libp2pService>) {
+fn make_peer_info() -> (PeerId, PeerInfo<Libp2pService>) {
     let peer_id = PeerId::random();
 
     (
         peer_id,
-        types::PeerInfo::<Libp2pService> {
+        PeerInfo::<Libp2pService> {
             peer_id,
             magic_bytes: [1, 2, 3, 4],
             version: common::primitives::semver::SemVer::new(0, 1, 0),
@@ -59,7 +63,7 @@ fn add_idle_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
 
 fn add_discovered_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
     let peer_id = PeerId::random();
-    peerdb.peer_discovered(&types::AddrInfo {
+    peerdb.peer_discovered(&AddrInfo {
         peer_id,
         ip4: vec![],
         ip6: vec![],
@@ -292,7 +296,7 @@ fn peer_connected_discovered() {
 
     // register information for a discovered peer
     let (peer_id, info) = make_peer_info();
-    peerdb.peer_discovered(&types::AddrInfo {
+    peerdb.peer_discovered(&AddrInfo {
         peer_id,
         ip4: vec![],
         ip6: vec![remote_addr.clone(), "/ip6/::1/tcp/8889".parse().unwrap()],
@@ -397,7 +401,7 @@ fn register_peer_info_discovered_peer() {
 
     // register information for a discovered peer
     let (peer_id, info) = make_peer_info();
-    peerdb.peer_discovered(&types::AddrInfo {
+    peerdb.peer_discovered(&AddrInfo {
         peer_id,
         ip4: vec![],
         ip6: vec![remote_addr.clone(), "/ip6/::1/tcp/8889".parse().unwrap()],
@@ -535,12 +539,12 @@ fn peer_discovered_libp2p() {
         };
 
     // first add two new peers, both with ipv4 and ipv6 address
-    peerdb.peer_discovered(&types::AddrInfo {
+    peerdb.peer_discovered(&AddrInfo {
         peer_id: id_1,
         ip4: vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
         ip6: vec!["/ip6/::1/tcp/9091".parse().unwrap()],
     });
-    peerdb.peer_discovered(&types::AddrInfo {
+    peerdb.peer_discovered(&AddrInfo {
         peer_id: id_2,
         ip4: vec!["/ip4/127.0.0.1/tcp/9092".parse().unwrap()],
         ip6: vec!["/ip6/::1/tcp/9093".parse().unwrap()],
@@ -568,12 +572,12 @@ fn peer_discovered_libp2p() {
     );
 
     // then discover one new peer and two additional ipv6 addresses for peer 1
-    peerdb.peer_discovered(&types::AddrInfo {
+    peerdb.peer_discovered(&AddrInfo {
         peer_id: id_1,
         ip4: vec![],
         ip6: vec!["/ip6/::1/tcp/9094".parse().unwrap(), "/ip6/::1/tcp/9095".parse().unwrap()],
     });
-    peerdb.peer_discovered(&types::AddrInfo {
+    peerdb.peer_discovered(&AddrInfo {
         peer_id: id_3,
         ip4: vec!["/ip4/127.0.0.1/tcp/9096".parse().unwrap()],
         ip6: vec!["/ip6/::1/tcp/9097".parse().unwrap()],
