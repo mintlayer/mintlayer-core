@@ -462,8 +462,12 @@ fn create_modify_merge_undo2() {
     assert_eq!(collection1.data, expected_data);
 }
 
-#[test]
-fn create_delete_undo_undo() {
+fn make_collections() -> (
+    DeltaDataCollection<i32, char>,
+    DeltaDataCollection<i32, char>,
+    DeltaDataCollection<i32, char>,
+    DeltaDataCollection<i32, char>,
+) {
     let mut collection1 = DeltaDataCollection::new();
     let undo_create = collection1
         .merge_delta_data_element(1, DataDelta::Create(Box::new('a')))
@@ -482,18 +486,61 @@ fn create_delete_undo_undo() {
     let mut collection4 = DeltaDataCollection::new();
     collection4.undo_merge_delta_data_element(1, undo_create).unwrap();
 
-    let _ = collection3.merge_delta_data(collection4).unwrap();
-    let _ = collection2.merge_delta_data(collection3).unwrap();
-    let _ = collection1.merge_delta_data(collection2).unwrap();
+    (collection1, collection2, collection3, collection4)
+}
 
-    let expected_data = BTreeMap::from_iter(
-        [(
-            1,
-            DeltaMapElement::DeltaUndo(DataDeltaUndo::Delete(Box::new('a'))),
-        )]
-        .into_iter(),
-    );
-    assert_eq!(collection1.data, expected_data);
+#[test]
+fn create_delete_undo_undo() {
+    let (mut collection1, mut collection2, mut collection3, collection4) = make_collections();
+
+    {
+        let _ = collection3.merge_delta_data(collection4).unwrap();
+        let _ = collection2.merge_delta_data(collection3).unwrap();
+        let _ = collection1.merge_delta_data(collection2).unwrap();
+
+        let expected_data = BTreeMap::from_iter(
+            [(
+                1,
+                DeltaMapElement::DeltaUndo(DataDeltaUndo::Delete(Box::new('a'))),
+            )]
+            .into_iter(),
+        );
+        assert_eq!(collection1.data, expected_data);
+    }
+
+    let (mut collection1, mut collection2, collection3, collection4) = make_collections();
+
+    {
+        let _ = collection2.merge_delta_data(collection3).unwrap();
+        let _ = collection2.merge_delta_data(collection4).unwrap();
+        let _ = collection1.merge_delta_data(collection2).unwrap();
+
+        let expected_data = BTreeMap::from_iter(
+            [(
+                1,
+                DeltaMapElement::DeltaUndo(DataDeltaUndo::Delete(Box::new('a'))),
+            )]
+            .into_iter(),
+        );
+        assert_eq!(collection1.data, expected_data);
+    }
+
+    let (mut collection1, collection2, collection3, collection4) = make_collections();
+
+    {
+        let _ = collection1.merge_delta_data(collection2).unwrap();
+        let _ = collection1.merge_delta_data(collection3).unwrap();
+        let _ = collection1.merge_delta_data(collection4).unwrap();
+
+        let expected_data = BTreeMap::from_iter(
+            [(
+                1,
+                DeltaMapElement::DeltaUndo(DataDeltaUndo::Delete(Box::new('a'))),
+            )]
+            .into_iter(),
+        );
+        assert_eq!(collection1.data, expected_data);
+    }
 }
 
 #[test]
