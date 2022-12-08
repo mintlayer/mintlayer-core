@@ -210,27 +210,3 @@ impl<'a, P: PoSAccountingView> PoSAccountingDelta<'a, P> {
             .map_err(Error::AccountingError)
     }
 }
-
-// TODO: this is used in both operator and view impls. Find an appropriate place for it.
-fn sum_maps<K: Ord + Copy>(
-    mut m1: BTreeMap<K, Amount>,
-    m2: BTreeMap<K, SignedAmount>,
-) -> Result<BTreeMap<K, Amount>, Error> {
-    for (k, v) in m2 {
-        let base_value = match m1.get(&k) {
-            Some(pv) => *pv,
-            None => Amount::from_atoms(0),
-        };
-        let base_amount = base_value.into_signed().ok_or(Error::AccountingError(
-            accounting::Error::ArithmeticErrorToUnsignedFailed,
-        ))?;
-        let new_amount = (base_amount + v).ok_or(Error::AccountingError(
-            accounting::Error::ArithmeticErrorSumToSignedFailed,
-        ))?;
-        let new_amount = new_amount.into_unsigned().ok_or(Error::AccountingError(
-            accounting::Error::ArithmeticErrorToUnsignedFailed,
-        ))?;
-        m1.insert(k, new_amount);
-    }
-    Ok(m1)
-}

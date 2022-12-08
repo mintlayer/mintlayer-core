@@ -28,13 +28,36 @@ use crate::{
     DelegationId, PoolId,
 };
 
-use super::{data::PoSAccountingDeltaData, sum_maps, PoSAccountingDelta, PoSAccountingViewCow};
+use super::{data::PoSAccountingDeltaData, PoSAccountingDelta, PoSAccountingViewCow};
 
 fn signed_to_unsigned_pair(
     (k, v): (DelegationId, SignedAmount),
 ) -> Result<(DelegationId, Amount), Error> {
     let v = v.into_unsigned().ok_or(accounting::Error::ArithmeticErrorToUnsignedFailed)?;
     Ok((k, v))
+}
+
+fn sum_maps<K: Ord + Copy>(
+    mut m1: BTreeMap<K, Amount>,
+    m2: BTreeMap<K, SignedAmount>,
+) -> Result<BTreeMap<K, Amount>, Error> {
+    for (k, v) in m2 {
+        let base_value = match m1.get(&k) {
+            Some(pv) => *pv,
+            None => Amount::from_atoms(0),
+        };
+        let base_amount = base_value.into_signed().ok_or(Error::AccountingError(
+            accounting::Error::ArithmeticErrorToUnsignedFailed,
+        ))?;
+        let new_amount = (base_amount + v).ok_or(Error::AccountingError(
+            accounting::Error::ArithmeticErrorSumToSignedFailed,
+        ))?;
+        let new_amount = new_amount.into_unsigned().ok_or(Error::AccountingError(
+            accounting::Error::ArithmeticErrorToUnsignedFailed,
+        ))?;
+        m1.insert(k, new_amount);
+    }
+    Ok(m1)
 }
 
 impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingViewCow<'a, P> {

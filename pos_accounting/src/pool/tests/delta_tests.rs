@@ -16,10 +16,12 @@
 use std::collections::BTreeMap;
 
 use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection, DeltaMapElement};
-use common::primitives::{signed_amount::SignedAmount, Amount, H256};
+use common::primitives::{signed_amount::SignedAmount, Amount};
 use crypto::key::{KeyKind, PrivateKey};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+
+use super::{new_delegation_id, new_pool_id};
 
 use crate::{
     pool::{
@@ -29,16 +31,7 @@ use crate::{
         storage::PoSAccountingDBMut,
     },
     storage::in_memory::InMemoryPoSAccounting,
-    DelegationId, PoolId,
 };
-
-fn new_pool_id(v: u64) -> PoolId {
-    PoolId::new(H256::from_low_u64_be(v))
-}
-
-fn new_delegation_id(v: u64) -> DelegationId {
-    DelegationId::new(H256::from_low_u64_be(v))
-}
 
 #[rstest]
 #[trace]

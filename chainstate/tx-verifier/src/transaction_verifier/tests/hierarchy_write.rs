@@ -780,13 +780,13 @@ fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
 
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
-    verifier1
+    let _ = verifier1
         .accounting_delta
         .create_pool(&outpoint1, pool_balance1, pub_key1)
         .unwrap();
 
     let mut verifier2 = verifier1.derive_child();
-    verifier2
+    let _ = verifier2
         .accounting_delta
         .create_pool(&outpoint2, pool_balance2, pub_key2)
         .unwrap();

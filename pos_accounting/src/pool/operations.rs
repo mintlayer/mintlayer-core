@@ -62,6 +62,7 @@ pub struct SpendFromShareUndo {
     pub(crate) amount: Amount,
 }
 
+#[must_use]
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum PoSAccountingUndo {
     CreatePool(CreatePoolUndo),

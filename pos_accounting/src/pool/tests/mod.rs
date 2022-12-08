@@ -13,5 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::primitives::H256;
+
+use crate::{DelegationId, PoolId};
+
 mod delta_tests;
+mod operations_tests;
 mod undo_tests;
+
+fn new_pool_id(v: u64) -> PoolId {
+    PoolId::new(H256::from_low_u64_be(v))
+}
+
+fn new_delegation_id(v: u64) -> DelegationId {
+    DelegationId::new(H256::from_low_u64_be(v))
+}

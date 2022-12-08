@@ -20,9 +20,7 @@ use chainstate_types::storage_result;
 use common::primitives::{signed_amount::SignedAmount, Amount};
 
 use crate::{
-    error::Error,
-    pool::delta::data::PoSAccountingDeltaData,
-    storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
+    error::Error, pool::delta::data::PoSAccountingDeltaData, storage::PoSAccountingStorageWrite,
     DelegationId, PoolId,
 };
 
@@ -331,18 +329,6 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
             self.store.del_pool_delegation_share(pool_id, delegation_id)?;
         }
         Ok(())
-    }
-}
-
-impl<'a, S: PoSAccountingStorageRead> PoSAccountingDBMut<'a, S> {
-    fn get_delegation_data(
-        &self,
-        delegation_target: DelegationId,
-    ) -> Result<DelegationData, Error> {
-        self.store
-            .get_delegation_data(delegation_target)
-            .map_err(Error::from)?
-            .ok_or(Error::DelegateToNonexistingId)
     }
 }
 

@@ -117,7 +117,10 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperations for PoSAccounting
         delegation_target: DelegationId,
         amount_to_delegate: Amount,
     ) -> Result<PoSAccountingUndo, Error> {
-        let pool_id = *self.get_delegation_data(delegation_target)?.source_pool();
+        let pool_id = *self
+            .get_delegation_data(delegation_target)?
+            .ok_or(Error::DelegateToNonexistingId)?
+            .source_pool();
 
         self.add_to_delegation_balance(delegation_target, amount_to_delegate)?;
 
@@ -136,7 +139,10 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperations for PoSAccounting
         delegation_id: DelegationId,
         amount: Amount,
     ) -> Result<PoSAccountingUndo, Error> {
-        let pool_id = *self.get_delegation_data(delegation_id)?.source_pool();
+        let pool_id = *self
+            .get_delegation_data(delegation_id)?
+            .ok_or(Error::InvariantErrorDelegationUndoFailedDataNotFound)?
+            .source_pool();
 
         self.sub_delegation_from_pool_share(pool_id, delegation_id, amount)?;
 
@@ -234,7 +240,10 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
     }
 
     fn undo_delegate_staking(&mut self, undo_data: DelegateStakingUndo) -> Result<(), Error> {
-        let pool_id = *self.get_delegation_data(undo_data.delegation_target)?.source_pool();
+        let pool_id = *self
+            .get_delegation_data(undo_data.delegation_target)?
+            .ok_or(Error::InvariantErrorDelegationUndoFailedDataNotFound)?
+            .source_pool();
 
         self.sub_delegation_from_pool_share(
             pool_id,
@@ -256,7 +265,10 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         &mut self,
         undo_data: SpendFromShareUndo,
     ) -> Result<(), Error> {
-        let pool_id = *self.get_delegation_data(undo_data.delegation_id)?.source_pool();
+        let pool_id = *self
+            .get_delegation_data(undo_data.delegation_id)?
+            .ok_or(Error::DelegationCreationFailedPoolDoesNotExist)?
+            .source_pool();
 
         self.add_to_delegation_balance(undo_data.delegation_id, undo_data.amount)?;
 
