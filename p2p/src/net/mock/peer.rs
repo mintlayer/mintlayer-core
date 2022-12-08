@@ -91,12 +91,12 @@ where
         match self.role {
             Role::Inbound => {
                 let (peer_id, network, version, protocols) =
-                    if let Ok(Some(types::Message::Handshake(types::HandshakeMessage::Hello {
+                    if let Ok(types::Message::Handshake(types::HandshakeMessage::Hello {
                         peer_id,
                         version,
                         network,
                         protocols,
-                    }))) = self.socket.recv().await
+                    })) = self.socket.recv().await
                     {
                         (peer_id, network, version, protocols)
                     } else {
@@ -153,19 +153,18 @@ where
                     }))
                     .await?;
 
-                let (peer_id, network, version, protocols) = if let Ok(Some(
-                    types::Message::Handshake(types::HandshakeMessage::HelloAck {
+                let (peer_id, network, version, protocols) =
+                    if let Ok(types::Message::Handshake(types::HandshakeMessage::HelloAck {
                         peer_id,
                         version,
                         network,
                         protocols,
-                    }),
-                )) = self.socket.recv().await
-                {
-                    (peer_id, network, version, protocols)
-                } else {
-                    return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-                };
+                    })) = self.socket.recv().await
+                    {
+                        (peer_id, network, version, protocols)
+                    } else {
+                        return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+                    };
 
                 self.tx
                     .send((
@@ -211,8 +210,7 @@ where
                         log::info!("peer connection closed, reason {err:?}");
                         return self.destroy_peer().await;
                     }
-                    Ok(None) => {},
-                    Ok(Some(message)) => {
+                    Ok(message) => {
                         self.tx
                             .send((
                                 self.remote_peer_id,
@@ -359,25 +357,24 @@ mod tests {
         });
 
         let mut socket2 = BufferedTranscoder::new(socket2);
-        if let Some(_message) = socket2.recv().await.unwrap() {
-            assert!(socket2
-                .send(types::Message::Handshake(
-                    types::HandshakeMessage::HelloAck {
-                        peer_id: peer_id2,
-                        version: *config.version(),
-                        network: *config.magic_bytes(),
-                        protocols: [
-                            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-                        ]
-                        .into_iter()
-                        .collect(),
-                    }
-                ))
-                .await
-                .is_ok());
-        }
+        socket2.recv().await.unwrap();
+        assert!(socket2
+            .send(types::Message::Handshake(
+                types::HandshakeMessage::HelloAck {
+                    peer_id: peer_id2,
+                    version: *config.version(),
+                    network: *config.magic_bytes(),
+                    protocols: [
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+                    ]
+                    .into_iter()
+                    .collect(),
+                }
+            ))
+            .await
+            .is_ok());
 
         let _peer = handle.await;
         assert_eq!(

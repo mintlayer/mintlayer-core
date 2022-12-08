@@ -187,7 +187,7 @@ mod tests {
 
         let mut server_stream = BufferedTranscoder::new(server_stream);
         assert_eq!(
-            server_stream.recv().await.unwrap().unwrap(),
+            server_stream.recv().await.unwrap(),
             Message::Request {
                 request_id,
                 request,
