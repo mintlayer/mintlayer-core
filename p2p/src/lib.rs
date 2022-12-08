@@ -146,23 +146,15 @@ impl subsystem::Subsystem for Box<dyn P2pInterface> {}
 
 pub type P2pHandle = subsystem::Handle<Box<dyn P2pInterface>>;
 
-pub async fn make_p2p<T>(
-    transport: T::Transport,
+pub async fn make_p2p(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     mempool_handle: mempool::MempoolHandle,
-) -> crate::Result<Box<dyn P2pInterface>>
-where
-    T: NetworkingService + 'static,
-    T::ConnectivityHandle: ConnectivityService<T>,
-    T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    <T as NetworkingService>::Address: FromStr,
-    <<T as NetworkingService>::Address as FromStr>::Err: Debug,
-    <T as NetworkingService>::PeerId: FromStr,
-    <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
-{
-    let p2p = P2p::<T>::new(
+) -> crate::Result<Box<dyn P2pInterface>> {
+    let transport = net::libp2p::make_transport(&p2p_config);
+
+    let p2p = P2p::<net::libp2p::Libp2pService>::new(
         transport,
         chain_config,
         p2p_config,
@@ -170,5 +162,6 @@ where
         mempool_handle,
     )
     .await?;
+
     Ok(Box::new(p2p))
 }
