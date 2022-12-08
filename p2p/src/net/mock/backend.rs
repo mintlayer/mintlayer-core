@@ -471,13 +471,13 @@ where
         let config = Arc::clone(&self.chain_config);
 
         tokio::spawn(async move {
-            if let Err(err) =
-                peer::Peer::<T>::new(local_peer_id, remote_peer_id, role, config, socket, tx, rx)
-                    .start()
-                    .await
-            {
+            let mut peer =
+                peer::Peer::<T>::new(local_peer_id, remote_peer_id, role, config, socket, tx, rx);
+            let run_res = peer.run().await;
+            if let Err(err) = run_res {
                 log::error!("peer {remote_peer_id} failed: {err}");
             }
+            peer.destroy().await;
         });
 
         Ok(())

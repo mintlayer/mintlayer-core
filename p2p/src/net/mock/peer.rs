@@ -185,30 +185,27 @@ where
         }
     }
 
-    async fn destroy_peer(&mut self) -> crate::Result<()> {
-        self.tx
-            .send((self.remote_peer_id, types::PeerEvent::ConnectionClosed))
-            .await
-            .map_err(P2pError::from)
+    pub async fn destroy(self) {
+        let _ = self.tx.send((self.remote_peer_id, types::PeerEvent::ConnectionClosed)).await;
     }
 
-    pub async fn start(&mut self) -> crate::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<()> {
         // handshake with remote peer and send peer's info to backend
         if let Err(err) = self.handshake().await {
             log::debug!("handshake failed for peer {}: {err}", self.remote_peer_id);
-            return self.destroy_peer().await;
+            return Err(err);
         }
 
         loop {
             tokio::select! {
                 event = self.rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
-                    MockEvent::Disconnect => return self.destroy_peer().await,
+                    MockEvent::Disconnect => return Ok(()),
                     MockEvent::SendMessage(message) => self.socket.send(*message).await?,
                 },
                 event = self.socket.recv() => match event {
                     Err(err) => {
                         log::info!("peer connection closed, reason {err:?}");
-                        return self.destroy_peer().await;
+                        return Ok(());
                     }
                     Ok(message) => {
                         self.tx
