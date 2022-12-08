@@ -33,7 +33,8 @@ use libp2p::{
         PeerId,
     },
     gossipsub::MessageId,
-    identity, mplex, noise,
+    identity, mplex,
+    noise::{self, AuthenticKeypair},
     request_response::RequestId,
     swarm::SwarmBuilder,
     tcp::{GenTcpConfig, TokioTcpTransport},
@@ -150,12 +151,23 @@ fn get_ip(address: &Multiaddr) -> Option<IpAddr> {
 }
 
 // TODO: Check the data directory first, and use keys from there if available
-pub fn make_transport(p2p_config: &config::P2pConfig) -> Libp2pTransport {
+fn make_libp2p_keys() -> (
+    PeerId,
+    identity::Keypair,
+    AuthenticKeypair<noise::X25519Spec>,
+) {
     let id_keys = identity::Keypair::generate_ed25519();
     let peer_id = id_keys.public().to_peer_id();
     let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
         .into_authentic(&id_keys)
         .expect("Noise key creation to succeed");
+
+    (peer_id, id_keys, noise_keys)
+}
+
+// TODO: Check the data directory first, and use keys from there if available
+pub fn make_transport(p2p_config: &config::P2pConfig) -> Libp2pTransport {
+    let (peer_id, id_keys, noise_keys) = make_libp2p_keys();
 
     let transport = TokioTcpTransport::new(GenTcpConfig::new().nodelay(true))
         .upgrade(upgrade::Version::V1)
