@@ -335,7 +335,7 @@ fn test_undo_nonexisting_delta() {
 }
 
 #[test]
-fn create_delete_undo_merge() {
+fn create_delete_in_collection_then_undo_delete_in_new_collection_then_merge() {
     let mut collection1 =
         DeltaDataCollection::from_iter([(1, DataDelta::Create(Box::new('a')))].into_iter());
     let expected_data = BTreeMap::from_iter(
