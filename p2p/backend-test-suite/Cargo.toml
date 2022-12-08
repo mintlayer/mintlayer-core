@@ -6,7 +6,7 @@ license = "MIT"
 
 [dependencies]
 common = { path = "../../common" }
-p2p = { path = "../../p2p" }
+p2p = { path = "../../p2p", features = ["testing_utils"] }
 p2p-test-utils = { path = "../p2p-test-utils" }
 logging = { path = "../../logging" }
 serialization = { path = "../../serialization" }

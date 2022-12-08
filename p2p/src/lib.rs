@@ -23,6 +23,7 @@ pub mod net;
 pub mod peer_manager;
 pub mod rpc;
 pub mod sync;
+#[cfg(feature = "testing_utils")]
 pub mod testing_utils;
 
 use std::{fmt::Debug, str::FromStr, sync::Arc};
