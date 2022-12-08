@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{signed_transaction::SignedTransaction, tokens::OutputValue},
+    chain::{tokens::OutputValue, SignedTransaction},
     primitives::{Amount, Idable},
 };
 

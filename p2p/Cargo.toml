@@ -29,6 +29,7 @@ jsonrpsee = { version = "0.15", features = ["macros"]}
 libp2p = { version = "0.46", default-features = false, features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "request-response", "tcp-tokio"] }
 tokio = { version = "1", default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 tokio-util = {version = "0.7", default-features = false, features = ["codec"] }
+snowstorm = "0.4.0"
 
 [dev-dependencies]
 chainstate-storage = { path = "../chainstate/storage" }
@@ -48,4 +49,8 @@ harness = false
 
 [[test]]
 name = "backend_mock_channels"
+harness = false
+
+[[test]]
+name = "backend_mock_noise"
 harness = false

@@ -37,4 +37,4 @@ pub mod manager;
 pub mod subsystem;
 
 pub use crate::manager::Manager;
-pub use crate::subsystem::{Handle, Subsystem};
+pub use crate::subsystem::{CallRequest, CallResult, Handle, ShutdownRequest, Subsystem};

@@ -144,17 +144,10 @@ pub enum ConnectivityEvent<T: NetworkingService> {
     },
 }
 
-/// Request-response errors
-#[derive(Debug, PartialEq, Eq)]
-pub enum RequestResponseError {
-    /// Request timed out
-    Timeout,
-}
-
 /// Syncing-related events
 #[derive(Debug)]
 pub enum SyncingEvent<T: NetworkingService> {
-    /// Incoming request
+    /// An incoming request.
     Request {
         /// Unique ID of the sender
         peer_id: T::PeerId,
@@ -165,8 +158,7 @@ pub enum SyncingEvent<T: NetworkingService> {
         /// Received request
         request: message::Request,
     },
-
-    /// Incoming response to a sent request
+    /// An incoming response.
     Response {
         /// Unique ID of the sender
         peer_id: T::PeerId,
@@ -177,14 +169,13 @@ pub enum SyncingEvent<T: NetworkingService> {
         /// Received response
         response: message::Response,
     },
-
-    /// Error occurred with syncing codec
-    Error {
+    // TODO: Perhaps timeouts can be removed. See https://github.com/mintlayer/mintlayer-core/issues/583 for details.
+    /// A request timeout.
+    RequestTimeout {
         peer_id: T::PeerId,
         request_id: T::SyncingPeerRequestId,
-        error: RequestResponseError,
     },
-
+    /// An announcement that is broadcast to all peers.
     Announcement {
         peer_id: T::PeerId,
         message_id: T::SyncingMessageId,

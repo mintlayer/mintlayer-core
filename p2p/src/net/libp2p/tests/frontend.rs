@@ -13,8 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{sync::Arc, time::Duration};
+
+use libp2p::{core::PeerId, multiaddr::Protocol, Multiaddr};
+use tokio::net::TcpListener;
+
+use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
+use serialization::{Decode, Encode};
+
 use crate::{
-    config,
+    config::{MdnsConfig, P2pConfig},
     error::{ConversionError, DialError, P2pError},
     net::{
         self,
@@ -25,11 +33,6 @@ use crate::{
         ConnectivityService, NetworkingService,
     },
 };
-use libp2p::{core::PeerId, multiaddr::Protocol, Multiaddr};
-use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
-use serialization::{Decode, Encode};
-use std::sync::Arc;
-use tokio::net::TcpListener;
 
 #[derive(Debug, Encode, Decode, PartialEq, Eq, Copy, Clone)]
 struct Transaction {
@@ -228,9 +231,12 @@ async fn test_connect_with_timeout() {
     let (mut service, _) = Libp2pService::start(
         MakeP2pAddress::make_address(),
         config,
-        Arc::new(config::P2pConfig {
+        Arc::new(P2pConfig {
+            bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
+            ban_threshold: 100.into(),
             outbound_connection_timeout: 2.into(),
-            ..Default::default()
+            mdns_config: MdnsConfig::Disabled.into(),
+            request_timeout: Duration::from_secs(10).into(),
         }),
     )
     .await

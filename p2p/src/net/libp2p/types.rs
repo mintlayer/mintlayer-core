@@ -176,10 +176,9 @@ pub enum SyncingEvent {
         request_id: RequestId,
         response: Box<SyncResponse>,
     },
-    Error {
+    RequestTimeout {
         peer_id: PeerId,
         request_id: RequestId,
-        error: net::types::RequestResponseError,
     },
     Announcement {
         peer_id: PeerId,

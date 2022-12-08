@@ -13,33 +13,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashSet, time::Duration};
+use std::{collections::HashSet, fmt::Debug, time::Duration};
 
 use tokio::time::timeout;
 
-use super::*;
+use chainstate::Locator;
+
 use crate::{
-    message::*,
-    net::mock::{
-        transport::{ChannelMockTransport, TcpMockTransport},
-        MockService,
+    event::PeerManagerEvent,
+    message::{HeaderListRequest, HeaderListResponse, Request, Response},
+    net::{
+        libp2p::Libp2pService,
+        mock::{
+            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
+            MockService,
+        },
+        types::SyncingEvent,
     },
     peer_manager::helpers::connect_services,
+    sync::tests::make_sync_manager,
+    ConnectivityService, NetworkingService, SyncingMessagingService,
 };
 use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress};
 
-async fn test_request_response<A, T>()
+async fn request_response<A, T>()
 where
     A: MakeTestAddress<Address = T::Address>,
-    T: NetworkingService + std::fmt::Debug + 'static,
+    T: NetworkingService + Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
-
-    let (mut mgr1, mut conn1, _sync1, _pm1) = make_sync_manager::<T>(addr1).await;
-    let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(addr2).await;
+    let (mut mgr1, mut conn1, _sync1, _pm1) = make_sync_manager::<T>(A::make_address()).await;
+    let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(A::make_address()).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<T>(&mut conn1, &mut conn2).await;
@@ -52,7 +57,7 @@ where
         .await
         .unwrap();
 
-    if let Ok(net::types::SyncingEvent::Request {
+    if let Ok(SyncingEvent::Request {
         peer_id: _,
         request_id,
         request,
@@ -76,24 +81,29 @@ where
 }
 
 #[tokio::test]
-async fn test_request_response_libp2p() {
-    test_request_response::<MakeP2pAddress, Libp2pService>().await;
+async fn request_response_libp2p() {
+    request_response::<MakeP2pAddress, Libp2pService>().await;
 }
 
 #[tokio::test]
-async fn test_request_response_mock_tcp() {
-    test_request_response::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+async fn request_response_mock_tcp() {
+    request_response::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn test_request_response_mock_channels() {
-    test_request_response::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+async fn request_response_mock_channels() {
+    request_response::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
 }
 
-async fn test_multiple_requests_and_responses<A, T>()
+#[tokio::test]
+async fn test_request_response_mock_noise() {
+    request_response::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
+}
+
+async fn multiple_requests_and_responses<A, T>()
 where
     A: MakeTestAddress<Address = T::Address>,
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + 'static + Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
@@ -132,7 +142,7 @@ where
     for i in 0..2 {
         match timeout(Duration::from_secs(15), mgr2.peer_sync_handle.poll_next()).await {
             Ok(event) => match event {
-                Ok(net::types::SyncingEvent::Request { request_id, .. }) => {
+                Ok(SyncingEvent::Request { request_id, .. }) => {
                     mgr2.peer_sync_handle
                         .send_response(
                             request_id,
@@ -150,7 +160,7 @@ where
     for i in 0..2 {
         match timeout(Duration::from_secs(15), mgr1.peer_sync_handle.poll_next()).await {
             Ok(event) => match event {
-                Ok(net::types::SyncingEvent::Response { request_id, .. }) => {
+                Ok(SyncingEvent::Response { request_id, .. }) => {
                     request_ids.remove(&request_id);
                 }
                 _ => panic!("invalid event: {:?}", event),
@@ -163,35 +173,37 @@ where
 }
 
 #[tokio::test]
-async fn test_multiple_requests_and_responses_libp2p() {
-    test_multiple_requests_and_responses::<MakeP2pAddress, Libp2pService>().await;
+async fn multiple_requests_and_responses_libp2p() {
+    multiple_requests_and_responses::<MakeP2pAddress, Libp2pService>().await;
 }
 
 #[tokio::test]
-async fn test_multiple_requests_and_responses_mock_tcp() {
-    test_multiple_requests_and_responses::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+async fn multiple_requests_and_responses_mock_tcp() {
+    multiple_requests_and_responses::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn test_multiple_requests_and_responses_mock_channels() {
-    test_multiple_requests_and_responses::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+async fn multiple_requests_and_responses_mock_channels() {
+    multiple_requests_and_responses::<MakeChannelAddress, MockService<MockChannelTransport>>()
         .await;
+}
+
+#[tokio::test]
+async fn multiple_requests_and_responses_mock_noise() {
+    multiple_requests_and_responses::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 // Receive getheaders before receiving the `Connected` event from the peer manager which makes the
 // request be rejected and time out in the sender's end.
-async fn test_request_timeout_error<A, T>()
+async fn request_timeout<A, T>()
 where
     A: MakeTestAddress<Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
-
-    let (mut mgr1, mut conn1, _sync1, _pm1) = make_sync_manager::<T>(addr1).await;
-    let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(addr2).await;
+    let (mut mgr1, mut conn1, _sync1, mut pm1) = make_sync_manager::<T>(A::make_address()).await;
+    let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(A::make_address()).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<T>(&mut conn1, &mut conn2).await;
@@ -201,128 +213,47 @@ where
         mgr1.register_peer(peer2_id).await.unwrap();
 
         match mgr1.peer_sync_handle.poll_next().await.unwrap() {
-            net::types::SyncingEvent::Error {
+            SyncingEvent::RequestTimeout {
                 peer_id,
                 request_id,
-                error,
             } => {
-                assert_eq!(error, net::types::RequestResponseError::Timeout);
-                mgr1.process_error(peer_id, request_id, error).await.unwrap();
+                assert_eq!(peer_id, peer2_id);
+                mgr1.process_timeout(peer_id, request_id).await.unwrap();
             }
             _ => panic!("invalid event received"),
         }
     });
 
-    match timeout(Duration::from_secs(15), mgr2.peer_sync_handle.poll_next()).await {
+    match timeout(Duration::from_secs(5), mgr2.peer_sync_handle.poll_next()).await {
         Ok(event) => match event {
-            Ok(net::types::SyncingEvent::Request { .. }) => {}
+            Ok(SyncingEvent::Request { .. }) => {}
             _ => panic!("invalid event: {:?}", event),
         },
         Err(_) => panic!("did not receive `Request` in time"),
     }
 
-    match timeout(Duration::from_secs(15), mgr2.peer_sync_handle.poll_next()).await {
-        Ok(event) => match event {
-            Ok(net::types::SyncingEvent::Error { .. }) => {}
-            _ => panic!("invalid event: {:?}", event),
-        },
-        Err(_) => panic!("did not receive `Error` in time"),
-    }
-
-    match timeout(Duration::from_secs(15), mgr2.peer_sync_handle.poll_next()).await {
-        Ok(event) => match event {
-            Ok(net::types::SyncingEvent::Request { .. }) => {}
-            _ => panic!("invalid event: {:?}", event),
-        },
-        Err(_) => panic!("did not receive `Request` in time"),
+    match pm1.recv().await.unwrap() {
+        PeerManagerEvent::Disconnect(peer_id, _) => assert_eq!(peer_id, peer2_id),
+        e => panic!("Unexpected peer manager event: {e:?}"),
     }
 }
 
 #[tokio::test]
-async fn test_request_timeout_error_libp2p() {
-    test_request_timeout_error::<MakeP2pAddress, Libp2pService>().await;
-}
-
-#[tokio::test]
-#[ignore]
-async fn test_request_timeout_error_mock_tcp() {
-    test_request_timeout_error::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
-}
-
-#[tokio::test]
-#[ignore]
-async fn test_request_timeout_error_mock_channels() {
-    test_request_timeout_error::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
-}
-
-// verify that if after three retries the remote peer still
-// hasn't responded to our request, the connection is closed
-//
-// marked as ignored as it takes quite a long time to complete
-async fn request_timeout<A, T>()
-where
-    A: MakeTestAddress<Address = T::Address>,
-    T: NetworkingService + 'static + std::fmt::Debug,
-    T::ConnectivityHandle: ConnectivityService<T>,
-    T::SyncingMessagingHandle: SyncingMessagingService<T>,
-{
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
-
-    let (mut mgr1, mut conn1, _sync1, mut pm_rx) = make_sync_manager::<T>(addr1).await;
-    let (mut mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(addr2).await;
-
-    // connect the two managers together so that they can exchange messages
-    connect_services::<T>(&mut conn1, &mut conn2).await;
-    let _peer2_id = *conn2.peer_id();
-
-    tokio::spawn(async move {
-        mgr1.register_peer(_peer2_id).await.unwrap();
-
-        for _ in 0..4 {
-            match mgr1.peer_sync_handle.poll_next().await.unwrap() {
-                net::types::SyncingEvent::Error {
-                    peer_id,
-                    request_id,
-                    error,
-                } => {
-                    assert_eq!(error, net::types::RequestResponseError::Timeout);
-                    mgr1.process_error(peer_id, request_id, error).await.unwrap();
-                }
-                _ => panic!("invalid event received"),
-            }
-        }
-
-        let (_tx, rx) = oneshot::channel();
-        assert!(std::matches!(
-            pm_rx.try_recv(),
-            Ok(PeerManagerEvent::Disconnect(_peer2_id, _tx))
-        ));
-        assert_eq!(rx.await, Ok(()));
-    });
-
-    for _ in 0..8 {
-        assert!(std::matches!(
-            mgr2.peer_sync_handle.poll_next().await,
-            Ok(net::types::SyncingEvent::Request { .. } | net::types::SyncingEvent::Error { .. })
-        ));
-    }
-}
-
-#[tokio::test]
-#[ignore]
 async fn request_timeout_libp2p() {
     request_timeout::<MakeP2pAddress, Libp2pService>().await;
 }
 
 #[tokio::test]
-#[ignore]
 async fn request_timeout_mock_tcp() {
-    request_timeout::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    request_timeout::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-#[ignore]
 async fn request_timeout_mock_channels() {
-    request_timeout::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    request_timeout::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn request_timeout_mock_noise() {
+    request_timeout::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }

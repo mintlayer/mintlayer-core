@@ -28,7 +28,7 @@ use crate::{
         self,
         libp2p::Libp2pService,
         mock::{
-            transport::{ChannelMockTransport, TcpMockTransport},
+            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             types::MockPeerId,
             MockService,
         },
@@ -71,7 +71,7 @@ async fn test_peer_manager_connect_mock() {
     let bind_addr = MakeTcpAddress::make_address();
     let remote_addr: SocketAddr = "[::1]:1".parse().unwrap();
 
-    test_peer_manager_connect::<MockService<TcpMockTransport>>(bind_addr, remote_addr).await;
+    test_peer_manager_connect::<MockService<TcpTransportSocket>>(bind_addr, remote_addr).await;
 }
 
 #[tokio::test]
@@ -133,12 +133,17 @@ async fn test_auto_connect_libp2p() {
 
 #[tokio::test]
 async fn test_auto_connect_mock_tcp() {
-    test_auto_connect::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    test_auto_connect::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn test_auto_connect_mock_channels() {
-    test_auto_connect::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    test_auto_connect::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn test_auto_connect_mock_noise() {
+    test_auto_connect::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn connect_outbound_same_network<A, T>()
@@ -170,12 +175,17 @@ async fn connect_outbound_same_network_libp2p() {
 
 #[tokio::test]
 async fn connect_outbound_same_network_mock_tcp() {
-    connect_outbound_same_network::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    connect_outbound_same_network::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn connect_outbound_same_network_mock_channels() {
-    connect_outbound_same_network::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    connect_outbound_same_network::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn connect_outbound_same_network_mock_noise() {
+    connect_outbound_same_network::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 #[tokio::test]
@@ -259,13 +269,18 @@ async fn connect_outbound_different_network_libp2p() {
 
 #[tokio::test]
 async fn connect_outbound_different_network_mock_tcp() {
-    connect_outbound_different_network::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    connect_outbound_different_network::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn connect_outbound_different_network_mock_channels() {
-    connect_outbound_different_network::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+    connect_outbound_different_network::<MakeChannelAddress, MockService<MockChannelTransport>>()
         .await;
+}
+
+#[tokio::test]
+async fn connect_outbound_different_network_mock_noise() {
+    connect_outbound_different_network::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn connect_inbound_same_network<A, T>()
@@ -298,12 +313,17 @@ async fn connect_inbound_same_network_libp2p() {
 
 #[tokio::test]
 async fn connect_inbound_same_network_mock_tcp() {
-    connect_inbound_same_network::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    connect_inbound_same_network::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn connect_inbound_same_network_mock_channel() {
-    connect_inbound_same_network::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    connect_inbound_same_network::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn connect_inbound_same_network_mock_noise() {
+    connect_inbound_same_network::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn connect_inbound_different_network<A, T>()
@@ -346,13 +366,18 @@ async fn connect_inbound_different_network_libp2p() {
 
 #[tokio::test]
 async fn connect_inbound_different_network_mock_tcp() {
-    connect_inbound_different_network::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    connect_inbound_different_network::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn connect_inbound_different_network_mock_channels() {
-    connect_inbound_different_network::<MakeChannelAddress, MockService<ChannelMockTransport>>()
+    connect_inbound_different_network::<MakeChannelAddress, MockService<MockChannelTransport>>()
         .await;
+}
+
+#[tokio::test]
+async fn connect_inbound_different_network_mock_noise() {
+    connect_inbound_different_network::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn remote_closes_connection<A, T>()
@@ -394,12 +419,17 @@ async fn remote_closes_connection_libp2p() {
 
 #[tokio::test]
 async fn remote_closes_connection_mock_tcp() {
-    remote_closes_connection::<MakeTcpAddress, MockService<TcpMockTransport>>().await;
+    remote_closes_connection::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn remote_closes_connection_mock_channels() {
-    remote_closes_connection::<MakeChannelAddress, MockService<ChannelMockTransport>>().await;
+    remote_closes_connection::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn remote_closes_connection_mock_noise() {
+    remote_closes_connection::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn inbound_connection_too_many_peers<A, T>(peers: Vec<net::types::PeerInfo<T>>)
@@ -467,22 +497,25 @@ async fn inbound_connection_too_many_peers_libp2p() {
 async fn inbound_connection_too_many_peers_mock_tcp() {
     let config = Arc::new(config::create_mainnet());
     let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
-        .map(|_| net::types::PeerInfo::<MockService<TcpMockTransport>> {
-            peer_id: MockPeerId::random(),
-            magic_bytes: *config.magic_bytes(),
-            version: common::primitives::semver::SemVer::new(0, 1, 0),
-            agent: None,
-            protocols: [
-                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                Protocol::new(ProtocolType::Sync, SemVer::new(1, 0, 0)),
-            ]
-            .into_iter()
-            .collect(),
+        .map(
+            |_| net::types::PeerInfo::<MockService<TcpTransportSocket>> {
+                peer_id: MockPeerId::random(),
+                magic_bytes: *config.magic_bytes(),
+                version: common::primitives::semver::SemVer::new(0, 1, 0),
+                agent: None,
+                protocols: [
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                    Protocol::new(ProtocolType::Sync, SemVer::new(1, 0, 0)),
+                ]
+                .into_iter()
+                .collect(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
-        })
+            },
+        )
         .collect::<Vec<_>>();
 
-    inbound_connection_too_many_peers::<MakeTcpAddress, MockService<TcpMockTransport>>(peers).await;
+    inbound_connection_too_many_peers::<MakeTcpAddress, MockService<TcpTransportSocket>>(peers)
+        .await;
 }
 
 #[tokio::test]
@@ -490,7 +523,7 @@ async fn inbound_connection_too_many_peers_mock_channels() {
     let config = Arc::new(config::create_mainnet());
     let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
         .map(
-            |_| net::types::PeerInfo::<MockService<ChannelMockTransport>> {
+            |_| net::types::PeerInfo::<MockService<MockChannelTransport>> {
                 peer_id: MockPeerId::random(),
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
@@ -508,10 +541,32 @@ async fn inbound_connection_too_many_peers_mock_channels() {
         )
         .collect::<Vec<_>>();
 
-    inbound_connection_too_many_peers::<MakeChannelAddress, MockService<ChannelMockTransport>>(
+    inbound_connection_too_many_peers::<MakeChannelAddress, MockService<MockChannelTransport>>(
         peers,
     )
     .await;
+}
+
+#[tokio::test]
+async fn inbound_connection_too_many_peers_mock_noise() {
+    let config = Arc::new(config::create_mainnet());
+    let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
+        .map(|_| net::types::PeerInfo::<MockService<NoiseTcpTransport>> {
+            peer_id: MockPeerId::random(),
+            magic_bytes: *config.magic_bytes(),
+            version: common::primitives::semver::SemVer::new(0, 1, 0),
+            agent: None,
+            protocols: [
+                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
+                Protocol::new(ProtocolType::Sync, SemVer::new(1, 0, 0)),
+            ]
+            .into_iter()
+            .collect(),
+        })
+        .collect::<Vec<_>>();
+
+    inbound_connection_too_many_peers::<MakeTcpAddress, MockService<NoiseTcpTransport>>(peers)
+        .await;
 }
 
 async fn connection_timeout<T>(addr1: T::Address, addr2: T::Address)
@@ -556,7 +611,7 @@ async fn connection_timeout_libp2p() {
 
 #[tokio::test]
 async fn connection_timeout_mock_tcp() {
-    connection_timeout::<MockService<TcpMockTransport>>(
+    connection_timeout::<MockService<TcpTransportSocket>>(
         MakeTcpAddress::make_address(),
         MakeTcpAddress::make_address(),
     )
@@ -565,9 +620,18 @@ async fn connection_timeout_mock_tcp() {
 
 #[tokio::test]
 async fn connection_timeout_mock_channels() {
-    connection_timeout::<MockService<ChannelMockTransport>>(
+    connection_timeout::<MockService<MockChannelTransport>>(
         MakeChannelAddress::make_address(),
         65_535,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn connection_timeout_mock_noise() {
+    connection_timeout::<MockService<NoiseTcpTransport>>(
+        MakeTcpAddress::make_address(),
+        MakeTcpAddress::make_address(),
     )
     .await;
 }
@@ -633,7 +697,7 @@ async fn connection_timeout_rpc_notified_libp2p() {
 
 #[tokio::test]
 async fn connection_timeout_rpc_notified_mock_tcp() {
-    connection_timeout_rpc_notified::<MockService<TcpMockTransport>>(
+    connection_timeout_rpc_notified::<MockService<TcpTransportSocket>>(
         MakeTcpAddress::make_address(),
         MakeTcpAddress::make_address(),
     )
@@ -642,9 +706,18 @@ async fn connection_timeout_rpc_notified_mock_tcp() {
 
 #[tokio::test]
 async fn connection_timeout_rpc_notified_mock_channels() {
-    connection_timeout_rpc_notified::<MockService<ChannelMockTransport>>(
+    connection_timeout_rpc_notified::<MockService<MockChannelTransport>>(
         MakeChannelAddress::make_address(),
         9999,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn connection_timeout_rpc_notified_mock_noise() {
+    connection_timeout_rpc_notified::<MockService<NoiseTcpTransport>>(
+        MakeTcpAddress::make_address(),
+        MakeTcpAddress::make_address(),
     )
     .await;
 }

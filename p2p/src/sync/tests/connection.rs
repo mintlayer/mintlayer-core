@@ -13,13 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
-use crate::net::mock::{
-    transport::{ChannelMockTransport, TcpMockTransport},
-    types::MockPeerId,
-    MockService,
-};
+use libp2p::PeerId;
+
 use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress};
+
+use crate::{
+    error::{P2pError, PeerError},
+    net::{
+        libp2p::Libp2pService,
+        mock::{
+            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
+            types::MockPeerId,
+            MockService,
+        },
+    },
+    sync::tests::{make_sync_manager, register_peer, MakeTestPeerId},
+    ConnectivityService, NetworkingService, SyncingMessagingService,
+};
 
 // handle peer reconnection
 async fn test_peer_reconnected<A, P, T>()
@@ -50,13 +60,18 @@ async fn test_peer_reconnected_libp2p() {
 
 #[tokio::test]
 async fn test_peer_reconnected_mock_tcp() {
-    test_peer_reconnected::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+    test_peer_reconnected::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn test_peer_reconnected_mock_channels() {
-    test_peer_reconnected::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>()
+    test_peer_reconnected::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>()
         .await;
+}
+
+#[tokio::test]
+async fn test_peer_reconnected_mock_noise() {
+    test_peer_reconnected::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }
 
 // handle peer disconnection event
@@ -93,11 +108,16 @@ async fn test_peer_disconnected_libp2p() {
 
 #[tokio::test]
 async fn test_peer_disconnected_mock_tcp() {
-    test_peer_disconnected::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+    test_peer_disconnected::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn test_peer_disconnected_mock_channels() {
-    test_peer_disconnected::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>()
+    test_peer_disconnected::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>()
         .await;
+}
+
+#[tokio::test]
+async fn test_peer_disconnected_mock_noise() {
+    test_peer_disconnected::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }

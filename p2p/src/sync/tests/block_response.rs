@@ -13,17 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::ChainstateError;
-use common::chain::block::consensus_data::PoWData;
+use std::sync::Arc;
 
-use super::*;
-use crate::net::mock::{
-    transport::{ChannelMockTransport, TcpMockTransport},
-    types::MockPeerId,
-    MockService,
-};
+use libp2p::PeerId;
+
+use chainstate::ChainstateError;
+use common::{chain::block::consensus_data::PoWData, primitives::Idable};
 use p2p_test_utils::{
     MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress, TestBlockInfo,
+};
+
+use crate::{
+    error::{P2pError, PeerError, ProtocolError},
+    net::{
+        libp2p::Libp2pService,
+        mock::{
+            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
+            types::MockPeerId,
+            MockService,
+        },
+    },
+    sync::{
+        peer,
+        tests::{make_sync_manager, register_peer, MakeTestPeerId},
+    },
+    ConnectivityService, NetworkingService, SyncingMessagingService,
 };
 
 // peer doesn't exist
@@ -53,12 +67,17 @@ async fn peer_doesnt_exist_libp2p() {
 
 #[tokio::test]
 async fn peer_doesnt_exist_mock_tcp() {
-    peer_doesnt_exist::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+    peer_doesnt_exist::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn peer_doesnt_exist_mock_channels() {
-    peer_doesnt_exist::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>().await;
+    peer_doesnt_exist::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn peer_doesnt_exist_mock_noise() {
+    peer_doesnt_exist::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }
 
 // submit valid block but the peer is in invalid state
@@ -102,12 +121,17 @@ async fn valid_block_libp2p() {
 
 #[tokio::test]
 async fn valid_block_mock_tcp() {
-    valid_block::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+    valid_block::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn valid_block_mock_channels() {
-    valid_block::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>().await;
+    valid_block::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn valid_block_mock_noise() {
+    valid_block::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }
 
 // submit valid block
@@ -145,14 +169,20 @@ async fn valid_block_invalid_state_libp2p() {
 
 #[tokio::test]
 async fn valid_block_invalid_state_mock_tcp() {
-    valid_block_invalid_state::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+    valid_block_invalid_state::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>()
+        .await;
 }
 
 #[tokio::test]
 async fn valid_block_invalid_state_mock_channels() {
-    valid_block_invalid_state::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>(
+    valid_block_invalid_state::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>(
     )
     .await;
+}
+
+#[tokio::test]
+async fn valid_block_invalid_state_mock_noise() {
+    valid_block_invalid_state::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }
 
 // submit the same block twice
@@ -200,9 +230,8 @@ async fn valid_block_resubmitted_chainstate_libp2p() {
 
 #[tokio::test]
 async fn valid_block_resubmitted_chainstate_mock_tcp() {
-    valid_block_resubmitted_chainstate::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>(
-    )
-    .await;
+    valid_block_resubmitted_chainstate::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>()
+        .await;
 }
 
 #[tokio::test]
@@ -210,9 +239,15 @@ async fn valid_block_resubmitted_chainstate_mock_channels() {
     valid_block_resubmitted_chainstate::<
         MakeChannelAddress,
         MockPeerId,
-        MockService<ChannelMockTransport>,
+        MockService<MockChannelTransport>,
     >()
     .await;
+}
+
+#[tokio::test]
+async fn valid_block_resubmitted_chainstate_mock_noise() {
+    valid_block_resubmitted_chainstate::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>()
+        .await;
 }
 
 // block validation fails
@@ -262,10 +297,15 @@ async fn invalid_block_libp2p() {
 
 #[tokio::test]
 async fn invalid_block_mock_tcp() {
-    invalid_block::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+    invalid_block::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn invalid_block_mock_channels() {
-    invalid_block::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>().await;
+    invalid_block::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn invalid_block_mock_noise() {
+    invalid_block::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }

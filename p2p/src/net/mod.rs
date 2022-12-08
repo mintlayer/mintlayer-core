@@ -64,7 +64,7 @@ pub trait NetworkingService {
     type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString + FromStr;
 
     /// Unique ID assigned to each received request from a peer
-    type SyncingPeerRequestId: Debug + Eq + Hash + Send + Sync;
+    type SyncingPeerRequestId: Copy + Debug + Eq + Hash + Send + Sync;
 
     /// Handle for sending/receiving connectivity-related events
     type ConnectivityHandle: Send;
@@ -79,12 +79,7 @@ pub trait NetworkingService {
     ///
     /// # Arguments
     /// `bind_addr` - socket address for incoming P2P traffic
-    ///
-    /// `strategies` - list of strategies that are used for peer discovery
-    ///
     /// `chain_config` - chain config of the node
-    ///
-    /// `timeout` - timeout for outbound connections
     async fn start(
         bind_addr: Self::Address,
         chain_config: Arc<common::chain::ChainConfig>,

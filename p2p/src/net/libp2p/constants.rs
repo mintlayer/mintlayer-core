@@ -31,5 +31,4 @@ pub const PING_INTERVAL: Duration = Duration::from_secs(60);
 pub const PING_MAX_RETRIES: u32 = 3;
 
 /// Request-response configuration
-pub const REQ_RESP_TIMEOUT: Duration = Duration::from_secs(10);
 pub const MESSAGE_MAX_SIZE: usize = 10 * 1024 * 1024;

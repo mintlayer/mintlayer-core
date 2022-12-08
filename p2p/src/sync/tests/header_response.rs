@@ -13,15 +13,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
-use crate::net::mock::{
-    transport::{ChannelMockTransport, TcpMockTransport},
-    types::MockPeerId,
-    MockService,
-};
+use std::sync::Arc;
+
 use crypto::random::{Rng, SliceRandom};
+use libp2p::PeerId;
+
 use p2p_test_utils::{
     MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress, TestBlockInfo,
+};
+
+use crate::{
+    error::{P2pError, PeerError, ProtocolError},
+    net::{
+        libp2p::Libp2pService,
+        mock::{
+            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
+            types::MockPeerId,
+            MockService,
+        },
+    },
+    sync::{
+        peer,
+        tests::{make_sync_manager, register_peer, MakeTestPeerId},
+    },
+    ConnectivityService, NetworkingService, SyncingMessagingService,
 };
 
 // response contains more than 2000 headers
@@ -62,12 +77,17 @@ async fn too_many_headers_libp2p() {
 
 #[tokio::test]
 async fn too_many_headers_mock_tcp() {
-    too_many_headers::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+    too_many_headers::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn too_many_headers_mock_channels() {
-    too_many_headers::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>().await;
+    too_many_headers::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn too_many_headers_mock_noise() {
+    too_many_headers::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }
 
 // header response is empty
@@ -98,12 +118,17 @@ async fn empty_response_libp2p() {
 
 #[tokio::test]
 async fn empty_response_mock_tcp() {
-    empty_response::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+    empty_response::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn empty_response_mock_channels() {
-    empty_response::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>().await;
+    empty_response::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn empty_response_mock_noise() {
+    empty_response::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }
 
 // valid response with headers in order and the first header attaching to local chain
@@ -147,12 +172,17 @@ async fn valid_response_libp2p() {
 
 #[tokio::test]
 async fn valid_response_mock_tcp() {
-    valid_response::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+    valid_response::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn valid_response_mock_channles() {
-    valid_response::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>().await;
+    valid_response::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn valid_response_mock_noise() {
+    valid_response::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }
 
 // the first header doesn't attach to local chain
@@ -195,8 +225,11 @@ async fn header_doesnt_attach_to_local_chain_libp2p() {
 
 #[tokio::test]
 async fn header_doesnt_attach_to_local_chain_mock_tcp() {
-    header_doesnt_attach_to_local_chain::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>(
-    )
+    header_doesnt_attach_to_local_chain::<
+        MakeTcpAddress,
+        MockPeerId,
+        MockService<TcpTransportSocket>,
+    >()
     .await;
 }
 
@@ -205,7 +238,17 @@ async fn header_doesnt_attach_to_local_chain_mock_channel() {
     header_doesnt_attach_to_local_chain::<
         MakeChannelAddress,
         MockPeerId,
-        MockService<ChannelMockTransport>,
+        MockService<MockChannelTransport>,
+    >()
+    .await;
+}
+
+#[tokio::test]
+async fn header_doesnt_attach_to_local_chain_mock_noise() {
+    header_doesnt_attach_to_local_chain::<
+        MakeTcpAddress,
+        MockPeerId,
+        MockService<NoiseTcpTransport>,
     >()
     .await;
 }
@@ -251,13 +294,18 @@ async fn headers_not_in_order_libp2p() {
 
 #[tokio::test]
 async fn headers_not_in_order_mock_tcp() {
-    headers_not_in_order::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+    headers_not_in_order::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn headers_not_in_order_mock_channels() {
-    headers_not_in_order::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>()
+    headers_not_in_order::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>()
         .await;
+}
+
+#[tokio::test]
+async fn headers_not_in_order_mock_noise() {
+    headers_not_in_order::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }
 
 // peer state is incorrect to be sending header responses
@@ -302,12 +350,17 @@ async fn invalid_state_libp2p() {
 
 #[tokio::test]
 async fn invalid_state_mock_tcp() {
-    invalid_state::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+    invalid_state::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn invalid_state_mock_channels() {
-    invalid_state::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>().await;
+    invalid_state::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn invalid_state_mock_noise() {
+    invalid_state::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }
 
 // peer doesn't exist
@@ -337,10 +390,15 @@ async fn peer_doesnt_exist_libp2p() {
 
 #[tokio::test]
 async fn peer_doesnt_exist_mock_tcp() {
-    peer_doesnt_exist::<MakeTcpAddress, MockPeerId, MockService<TcpMockTransport>>().await;
+    peer_doesnt_exist::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn peer_doesnt_exist_mock_channels() {
-    peer_doesnt_exist::<MakeChannelAddress, MockPeerId, MockService<ChannelMockTransport>>().await;
+    peer_doesnt_exist::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>().await;
+}
+
+#[tokio::test]
+async fn peer_doesnt_exist_mock_noise() {
+    peer_doesnt_exist::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }

@@ -33,7 +33,6 @@ use tokio::sync::mpsc;
 use chainstate::chainstate_interface;
 use common::chain::ChainConfig;
 use logging::log;
-use mempool::MempoolInterface;
 
 use crate::{
     config::P2pConfig,
@@ -67,13 +66,12 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-        _mempool_handle: subsystem::Handle<Box<dyn MempoolInterface>>,
+        _mempool_handle: mempool::MempoolHandle,
     ) -> crate::Result<Self>
     where
         <T as NetworkingService>::Address: FromStr,
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
     {
-        let p2p_config = Arc::new(p2p_config);
         let (conn, sync) = T::start(
             p2p_config.bind_address.parse::<T::Address>().map_err(|_| {
                 P2pError::ConversionError(ConversionError::InvalidAddress(
@@ -99,10 +97,11 @@ where
 
         {
             let chain_config = Arc::clone(&chain_config);
+            let p2p_config = Arc::clone(&p2p_config);
             tokio::spawn(async move {
                 peer_manager::PeerManager::<T>::new(
                     chain_config,
-                    Arc::clone(&p2p_config),
+                    p2p_config,
                     conn,
                     rx_peer_manager,
                     tx_p2p_sync,
@@ -120,6 +119,7 @@ where
             tokio::spawn(async move {
                 sync::BlockSyncManager::<T>::new(
                     chain_config,
+                    p2p_config,
                     sync,
                     chainstate_handle,
                     rx_p2p_sync,
@@ -146,7 +146,7 @@ pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-    mempool_handle: subsystem::Handle<Box<dyn MempoolInterface>>,
+    mempool_handle: mempool::MempoolHandle,
 ) -> crate::Result<Box<dyn P2pInterface>>
 where
     T: NetworkingService + 'static,

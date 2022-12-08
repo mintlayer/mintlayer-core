@@ -111,7 +111,7 @@ fn basic_passive_subsystem() {
             let counter = app.add_subsystem("counter", Counter::new());
 
             let tester = Tester::new(substr, counter);
-            app.add_raw_subsystem("test", |call_rq, shut_rq| async move {
+            app.add_subsystem_with_custom_eventloop("test", |call_rq, shut_rq| async move {
                 tester.run(call_rq, shut_rq).await
             });
 
@@ -132,7 +132,44 @@ fn basic_passive_shutdown() {
 
             // Start a subsystem that immediately terminates, instructing the remaining subsystems
             // to terminate too.
-            let _shut: subsystem::Handle<()> = app.add_raw_subsystem("terminator", |_, _| async {});
+            let _shut: subsystem::Handle<()> =
+                app.add_subsystem_with_custom_eventloop("terminator", |_, _| async {});
+
+            app.main().await
+        })
+    })
+}
+
+#[test]
+fn separate_call_and_result() {
+    let runtime = helpers::init_test_runtime();
+    utils::concurrency::model(move || {
+        runtime.block_on(async {
+            let mut app = subsystem::Manager::new("app");
+            let shutdown = app.make_shutdown_trigger();
+
+            let substr = app.add_subsystem("substr", Substringer::new("abc".into()));
+
+            // The API allows for the submission of closure to call to be separate form retrieval
+            // of the result. This task verifies the behavior is as expected.
+            tokio::task::spawn(async move {
+                // Submit three calls to the substr without waiting for results
+                let responses: Vec<_> = (0..3)
+                    .map(|i| substr.call(move |this| this.substr(i, i + 1)).response().unwrap())
+                    .collect();
+
+                // Expected values
+                let expected = ["a", "b", "c"];
+                assert_eq!(responses.len(), expected.len());
+
+                // Gather and verify results
+                for (response, expected) in responses.into_iter().zip(expected.into_iter()) {
+                    assert_eq!(response.await.unwrap(), expected);
+                }
+
+                // Shut down the manager once done
+                shutdown.initiate();
+            });
 
             app.main().await
         })
