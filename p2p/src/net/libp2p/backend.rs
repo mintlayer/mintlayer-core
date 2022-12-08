@@ -18,7 +18,7 @@
 
 use futures::StreamExt;
 use libp2p::{
-    gossipsub::{IdentTopic, MessageAcceptance, MessageId},
+    gossipsub::{MessageAcceptance, MessageId},
     request_response::RequestId,
     swarm::{Swarm, SwarmEvent},
     Multiaddr, PeerId,
@@ -185,7 +185,7 @@ impl Libp2pBackend {
             .swarm
             .behaviour_mut()
             .gossipsub
-            .publish((&topic).into(), message)
+            .publish((topic).into(), message)
             .map(|_| ())
             .map_err(|e| e.into());
         response.send(res).map_err(|_| P2pError::ChannelClosed)
@@ -262,23 +262,6 @@ impl Libp2pBackend {
         }
     }
 
-    /// Subscribe to GossipSub topics
-    fn subscribe(
-        &mut self,
-        topics: Vec<IdentTopic>,
-        response: oneshot::Sender<crate::Result<()>>,
-    ) -> crate::Result<()> {
-        log::trace!("subscribe to gossipsub topics {topics:#?}");
-
-        for topic in topics {
-            if let Err(err) = self.swarm.behaviour_mut().gossipsub.subscribe(&topic) {
-                return response.send(Err(err.into())).map_err(|_| P2pError::ChannelClosed);
-            }
-        }
-
-        response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
-    }
-
     /// Ban peer
     fn ban_peer(
         &mut self,
@@ -325,7 +308,6 @@ impl Libp2pBackend {
                 response,
                 channel,
             } => self.send_response(request_id, *response, channel),
-            types::Command::Subscribe { topics, response } => self.subscribe(topics, response),
             types::Command::BanPeer { peer_id, response } => self.ban_peer(peer_id, response),
             types::Command::ListenAddress { response } => {
                 response.send(self.listen_addr.clone()).map_err(|_| P2pError::ChannelClosed)

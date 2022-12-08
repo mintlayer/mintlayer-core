@@ -29,7 +29,7 @@ use crate::{
     net::{
         self,
         libp2p::types,
-        types::{ConnectivityEvent, Protocol, ProtocolType},
+        types::{ConnectivityEvent, Protocol, ProtocolType, PubSubTopic},
         ConnectivityService, NetworkingService,
     },
 };
@@ -168,7 +168,8 @@ where
             version,
             agent: Some(self.agent_version.clone()),
             protocols: parse_protocols(&self.protocols),
-            subscriptions: todo!(),
+            // TODO: Remove the hardcoded value.
+            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         })
     }
 }

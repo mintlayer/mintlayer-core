@@ -48,19 +48,22 @@ use crate::{
     config,
     error::{P2pError, ProtocolError},
     message,
-    net::libp2p::{
-        behaviour::{
-            connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent},
-            sync_codec::{
-                message_types::{SyncRequest, SyncResponse},
-                SyncMessagingCodec, SyncingProtocol,
+    net::{
+        libp2p::{
+            behaviour::{
+                connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent},
+                sync_codec::{
+                    message_types::{SyncRequest, SyncResponse},
+                    SyncMessagingCodec, SyncingProtocol,
+                },
             },
+            constants::{
+                GOSSIPSUB_HEARTBEAT, GOSSIPSUB_MAX_TRANSMIT_SIZE, PING_INTERVAL, PING_MAX_RETRIES,
+                PING_TIMEOUT,
+            },
+            types::{self, ConnectivityEvent, Libp2pBehaviourEvent, SyncingEvent},
         },
-        constants::{
-            GOSSIPSUB_HEARTBEAT, GOSSIPSUB_MAX_TRANSMIT_SIZE, PING_INTERVAL, PING_MAX_RETRIES,
-            PING_TIMEOUT,
-        },
-        types::{self, ConnectivityEvent, Libp2pBehaviourEvent, SyncingEvent},
+        types::PubSubTopic,
     },
 };
 
@@ -130,6 +133,16 @@ impl Libp2pBehaviour {
         let mut req_cfg = RequestResponseConfig::default();
         req_cfg.set_request_timeout(p2p_config.request_timeout.clone().into());
 
+        let mut gossipsub = Gossipsub::new(
+            MessageAuthenticity::Signed(id_keys.clone()),
+            gossipsub_config,
+        )
+        .expect("configuration to be valid");
+        gossipsub
+            .subscribe(&PubSubTopic::Transactions.into())
+            .expect("Failed to subscribe");
+        gossipsub.subscribe(&PubSubTopic::Blocks.into()).expect("Failed to subscribe");
+
         let behaviour = Libp2pBehaviour {
             ping: ping::Behaviour::new(
                 ping::Config::new()
@@ -148,11 +161,7 @@ impl Libp2pBehaviour {
                 iter::once((SyncingProtocol(), ProtocolSupport::Full)),
                 req_cfg,
             ),
-            gossipsub: Gossipsub::new(
-                MessageAuthenticity::Signed(id_keys.clone()),
-                gossipsub_config,
-            )
-            .expect("configuration to be valid"),
+            gossipsub,
             connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(Arc::clone(&p2p_config)).await,
             events: VecDeque::new(),
