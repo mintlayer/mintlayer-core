@@ -341,7 +341,7 @@ mod tests {
         self, connection_manager, discovery,
         sync_codec::{SyncMessagingCodec, SyncingProtocol},
     };
-    use crate::testing_utils::{MakeP2pAddress, MakeTestAddress};
+    use crate::testing_utils::{TestTransport, TestTransportLibp2p};
     use libp2p::{
         core::upgrade,
         gossipsub::{Gossipsub, GossipsubConfigBuilder, MessageAuthenticity},
@@ -422,7 +422,7 @@ mod tests {
 
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx.send(types::Command::Listen {
-            addr: MakeP2pAddress::make_address(),
+            addr: TestTransportLibp2p::make_address(),
             response: tx,
         });
         assert!(res.is_ok());
@@ -446,7 +446,7 @@ mod tests {
 
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx.send(types::Command::Listen {
-            addr: MakeP2pAddress::make_address(),
+            addr: TestTransportLibp2p::make_address(),
             response: tx,
         });
         assert!(res.is_ok());
@@ -458,7 +458,7 @@ mod tests {
         // try to bind to the same interface again
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx.send(types::Command::Listen {
-            addr: MakeP2pAddress::make_address(),
+            addr: TestTransportLibp2p::make_address(),
             response: tx,
         });
         assert!(res.is_ok());

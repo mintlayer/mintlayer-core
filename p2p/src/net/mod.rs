@@ -34,7 +34,7 @@ use crate::{config, message, message::Announcement};
 pub trait NetworkingService {
     /// A generic networking transport.
     ///
-    /// Can be used to initialize networking transport with authentification keys for example.
+    /// Can be used to initialize networking transport with authentication keys for example.
     type Transport;
 
     /// A generic network address.

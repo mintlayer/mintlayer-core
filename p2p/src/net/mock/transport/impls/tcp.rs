@@ -98,7 +98,7 @@ impl PeerStream for TcpTransportStream {}
 
 #[cfg(test)]
 mod tests {
-    use crate::testing_utils::{MakeTcpAddress, MakeTestAddress};
+    use crate::testing_utils::{TestTransport, TestTransportTcp};
 
     use super::*;
     use crate::net::{
@@ -112,7 +112,7 @@ mod tests {
     #[tokio::test]
     async fn send_recv() {
         let transport = TcpTransportSocket::new();
-        let mut server = transport.bind(MakeTcpAddress::make_address()).await.unwrap();
+        let mut server = transport.bind(TestTransportTcp::make_address()).await.unwrap();
         let peer_fut = transport.connect(server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
@@ -143,7 +143,7 @@ mod tests {
     #[tokio::test]
     async fn send_2_reqs() {
         let transport = TcpTransportSocket::new();
-        let mut server = transport.bind(MakeTcpAddress::make_address()).await.unwrap();
+        let mut server = transport.bind(TestTransportTcp::make_address()).await.unwrap();
         let peer_fut = transport.connect(server.local_address().unwrap());
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);

@@ -16,11 +16,11 @@
 use libp2p::Multiaddr;
 use std::net::SocketAddr;
 
-/// An interface for creating the address.
+/// An interface for creating test transports and addresses.
 ///
-/// This abstraction layer is needed to uniformly create an address in the tests for different
-/// mocks transport implementations.
-pub trait MakeTestAddress {
+/// This abstraction layer is needed to uniformly create transports and addresses
+/// in the tests for different mocks transport implementations.
+pub trait TestTransport {
     /// A transport type.
     type Transport;
 
@@ -36,9 +36,9 @@ pub trait MakeTestAddress {
     fn make_address() -> Self::Address;
 }
 
-pub struct MakeP2pAddress {}
+pub struct TestTransportLibp2p {}
 
-impl MakeTestAddress for MakeP2pAddress {
+impl TestTransport for TestTransportLibp2p {
     type Transport = crate::net::libp2p::Libp2pTransport;
 
     type Address = Multiaddr;
@@ -53,9 +53,9 @@ impl MakeTestAddress for MakeP2pAddress {
     }
 }
 
-pub struct MakeTcpAddress {}
+pub struct TestTransportTcp {}
 
-impl MakeTestAddress for MakeTcpAddress {
+impl TestTransport for TestTransportTcp {
     type Transport = crate::net::mock::transport::TcpTransportSocket;
 
     type Address = SocketAddr;
@@ -69,9 +69,9 @@ impl MakeTestAddress for MakeTcpAddress {
     }
 }
 
-pub struct MakeChannelAddress {}
+pub struct TestTransportChannel {}
 
-impl MakeTestAddress for MakeChannelAddress {
+impl TestTransport for TestTransportChannel {
     type Transport = crate::net::mock::transport::MockChannelTransport;
 
     type Address = u64;
@@ -85,9 +85,9 @@ impl MakeTestAddress for MakeChannelAddress {
     }
 }
 
-pub struct MakeNoiseAddress {}
+pub struct TestTransportNoise {}
 
-impl MakeTestAddress for MakeNoiseAddress {
+impl TestTransport for TestTransportNoise {
     type Transport = crate::net::mock::transport::NoiseTcpTransport;
 
     type Address = SocketAddr;
@@ -99,6 +99,6 @@ impl MakeTestAddress for MakeNoiseAddress {
     }
 
     fn make_address() -> Self::Address {
-        MakeTcpAddress::make_address()
+        TestTransportTcp::make_address()
     }
 }

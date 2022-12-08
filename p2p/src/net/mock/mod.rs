@@ -386,21 +386,21 @@ where
 #[cfg(test)]
 mod tests {
     use super::{transport::NoiseTcpTransport, *};
-    use crate::testing_utils::{MakeChannelAddress, MakeTcpAddress, MakeTestAddress};
+    use crate::testing_utils::{TestTransport, TestTransportChannel, TestTransportTcp};
     use crate::{
         net::{
             self,
             mock::transport::{MockChannelTransport, TcpTransportSocket},
             types::{Protocol, ProtocolType},
         },
-        testing_utils::MakeNoiseAddress,
+        testing_utils::TestTransportNoise,
     };
     use common::primitives::semver::SemVer;
     use std::fmt::Debug;
 
     async fn connect_to_remote<A, T>()
     where
-        A: MakeTestAddress<Transport = T, Address = T::Address>,
+        A: TestTransport<Transport = T, Address = T::Address>,
         T: TransportSocket + Debug,
     {
         let config = Arc::new(common::chain::config::create_mainnet());
@@ -454,22 +454,22 @@ mod tests {
 
     #[tokio::test]
     async fn connect_to_remote_tcp() {
-        connect_to_remote::<MakeTcpAddress, TcpTransportSocket>().await;
+        connect_to_remote::<TestTransportTcp, TcpTransportSocket>().await;
     }
 
     #[tokio::test]
     async fn connect_to_remote_channels() {
-        connect_to_remote::<MakeChannelAddress, MockChannelTransport>().await;
+        connect_to_remote::<TestTransportChannel, MockChannelTransport>().await;
     }
 
     #[tokio::test]
     async fn connect_to_remote_noise() {
-        connect_to_remote::<MakeNoiseAddress, NoiseTcpTransport>().await;
+        connect_to_remote::<TestTransportNoise, NoiseTcpTransport>().await;
     }
 
     async fn accept_incoming<A, T>()
     where
-        A: MakeTestAddress<Transport = T, Address = T::Address>,
+        A: TestTransport<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
         let config = Arc::new(common::chain::config::create_mainnet());
@@ -523,22 +523,22 @@ mod tests {
 
     #[tokio::test]
     async fn accept_incoming_tcp() {
-        accept_incoming::<MakeTcpAddress, TcpTransportSocket>().await;
+        accept_incoming::<TestTransportTcp, TcpTransportSocket>().await;
     }
 
     #[tokio::test]
     async fn accept_incoming_channels() {
-        accept_incoming::<MakeChannelAddress, MockChannelTransport>().await;
+        accept_incoming::<TestTransportChannel, MockChannelTransport>().await;
     }
 
     #[tokio::test]
     async fn accept_incoming_noise() {
-        accept_incoming::<MakeNoiseAddress, NoiseTcpTransport>().await;
+        accept_incoming::<TestTransportNoise, NoiseTcpTransport>().await;
     }
 
     async fn disconnect<A, T>()
     where
-        A: MakeTestAddress<Transport = T, Address = T::Address>,
+        A: TestTransport<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
         let config = Arc::new(common::chain::config::create_mainnet());
@@ -575,16 +575,16 @@ mod tests {
 
     #[tokio::test]
     async fn disconnect_tcp() {
-        disconnect::<MakeTcpAddress, TcpTransportSocket>().await;
+        disconnect::<TestTransportTcp, TcpTransportSocket>().await;
     }
 
     #[tokio::test]
     async fn disconnect_channels() {
-        disconnect::<MakeChannelAddress, MockChannelTransport>().await;
+        disconnect::<TestTransportChannel, MockChannelTransport>().await;
     }
 
     #[tokio::test]
     async fn disconnect_noise() {
-        disconnect::<MakeNoiseAddress, NoiseTcpTransport>().await;
+        disconnect::<TestTransportNoise, NoiseTcpTransport>().await;
     }
 }

@@ -19,7 +19,7 @@ use libp2p::{Multiaddr, PeerId};
 use tokio::{sync::oneshot, time::timeout};
 
 use crate::testing_utils::{
-    MakeChannelAddress, MakeNoiseAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress,
+    TestTransport, TestTransportChannel, TestTransportLibp2p, TestTransportNoise, TestTransportTcp,
 };
 use common::{chain::config, primitives::semver::SemVer};
 
@@ -71,8 +71,8 @@ async fn test_peer_manager_connect<T: NetworkingService>(
 
 #[tokio::test]
 async fn test_peer_manager_connect_mock() {
-    let transport = MakeTcpAddress::make_transport();
-    let bind_addr = MakeTcpAddress::make_address();
+    let transport = TestTransportTcp::make_transport();
+    let bind_addr = TestTransportTcp::make_address();
     let remote_addr: SocketAddr = "[::1]:1".parse().unwrap();
 
     test_peer_manager_connect::<MockService<TcpTransportSocket>>(transport, bind_addr, remote_addr)
@@ -81,8 +81,8 @@ async fn test_peer_manager_connect_mock() {
 
 #[tokio::test]
 async fn test_peer_manager_connect_libp2p() {
-    let transport = MakeP2pAddress::make_transport();
-    let bind_addr = MakeP2pAddress::make_address();
+    let transport = TestTransportLibp2p::make_transport();
+    let bind_addr = TestTransportLibp2p::make_address();
     let remote_addr: Multiaddr =
         "/ip6/::1/tcp/6666/p2p/12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ"
             .parse()
@@ -95,7 +95,7 @@ async fn test_peer_manager_connect_libp2p() {
 // is below the desired threshold and there are idle peers in the peerdb
 async fn test_auto_connect<A, T>()
 where
-    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
+    A: TestTransport<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -134,27 +134,27 @@ where
 
 #[tokio::test]
 async fn test_auto_connect_libp2p() {
-    test_auto_connect::<MakeP2pAddress, Libp2pService>().await;
+    test_auto_connect::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
 async fn test_auto_connect_mock_tcp() {
-    test_auto_connect::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
+    test_auto_connect::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn test_auto_connect_mock_channels() {
-    test_auto_connect::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+    test_auto_connect::<TestTransportChannel, MockService<MockChannelTransport>>().await;
 }
 
 #[tokio::test]
 async fn test_auto_connect_mock_noise() {
-    test_auto_connect::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
+    test_auto_connect::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn connect_outbound_same_network<A, T>()
 where
-    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
+    A: TestTransport<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -176,30 +176,31 @@ where
 
 #[tokio::test]
 async fn connect_outbound_same_network_libp2p() {
-    connect_outbound_same_network::<MakeP2pAddress, Libp2pService>().await;
+    connect_outbound_same_network::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
 async fn connect_outbound_same_network_mock_tcp() {
-    connect_outbound_same_network::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
+    connect_outbound_same_network::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn connect_outbound_same_network_mock_channels() {
-    connect_outbound_same_network::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+    connect_outbound_same_network::<TestTransportChannel, MockService<MockChannelTransport>>()
+        .await;
 }
 
 #[tokio::test]
 async fn connect_outbound_same_network_mock_noise() {
-    connect_outbound_same_network::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
+    connect_outbound_same_network::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
 }
 
 #[tokio::test]
 async fn test_validate_supported_protocols() {
     let config = Arc::new(config::create_mainnet());
     let peer_manager = make_peer_manager::<Libp2pService>(
-        MakeP2pAddress::make_transport(),
-        MakeP2pAddress::make_address(),
+        TestTransportLibp2p::make_transport(),
+        TestTransportLibp2p::make_address(),
         config,
     )
     .await;
@@ -247,7 +248,7 @@ async fn test_validate_supported_protocols() {
 
 async fn connect_outbound_different_network<A, T>()
 where
-    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
+    A: TestTransport<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -275,28 +276,29 @@ where
 
 #[tokio::test]
 async fn connect_outbound_different_network_libp2p() {
-    connect_outbound_different_network::<MakeP2pAddress, Libp2pService>().await;
+    connect_outbound_different_network::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
 async fn connect_outbound_different_network_mock_tcp() {
-    connect_outbound_different_network::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
+    connect_outbound_different_network::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn connect_outbound_different_network_mock_channels() {
-    connect_outbound_different_network::<MakeChannelAddress, MockService<MockChannelTransport>>()
+    connect_outbound_different_network::<TestTransportChannel, MockService<MockChannelTransport>>()
         .await;
 }
 
 #[tokio::test]
 async fn connect_outbound_different_network_mock_noise() {
-    connect_outbound_different_network::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
+    connect_outbound_different_network::<TestTransportNoise, MockService<NoiseTcpTransport>>()
+        .await;
 }
 
 async fn connect_inbound_same_network<A, T>()
 where
-    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
+    A: TestTransport<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -319,27 +321,27 @@ where
 
 #[tokio::test]
 async fn connect_inbound_same_network_libp2p() {
-    connect_inbound_same_network::<MakeP2pAddress, Libp2pService>().await;
+    connect_inbound_same_network::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
 async fn connect_inbound_same_network_mock_tcp() {
-    connect_inbound_same_network::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
+    connect_inbound_same_network::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn connect_inbound_same_network_mock_channel() {
-    connect_inbound_same_network::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+    connect_inbound_same_network::<TestTransportChannel, MockService<MockChannelTransport>>().await;
 }
 
 #[tokio::test]
 async fn connect_inbound_same_network_mock_noise() {
-    connect_inbound_same_network::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
+    connect_inbound_same_network::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn connect_inbound_different_network<A, T>()
 where
-    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
+    A: TestTransport<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -378,28 +380,28 @@ where
 
 #[tokio::test]
 async fn connect_inbound_different_network_libp2p() {
-    connect_inbound_different_network::<MakeP2pAddress, Libp2pService>().await;
+    connect_inbound_different_network::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
 async fn connect_inbound_different_network_mock_tcp() {
-    connect_inbound_different_network::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
+    connect_inbound_different_network::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn connect_inbound_different_network_mock_channels() {
-    connect_inbound_different_network::<MakeChannelAddress, MockService<MockChannelTransport>>()
+    connect_inbound_different_network::<TestTransportChannel, MockService<MockChannelTransport>>()
         .await;
 }
 
 #[tokio::test]
 async fn connect_inbound_different_network_mock_noise() {
-    connect_inbound_different_network::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
+    connect_inbound_different_network::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn remote_closes_connection<A, T>()
 where
-    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
+    A: TestTransport<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -441,27 +443,27 @@ where
 
 #[tokio::test]
 async fn remote_closes_connection_libp2p() {
-    remote_closes_connection::<MakeP2pAddress, Libp2pService>().await;
+    remote_closes_connection::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
 async fn remote_closes_connection_mock_tcp() {
-    remote_closes_connection::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
+    remote_closes_connection::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn remote_closes_connection_mock_channels() {
-    remote_closes_connection::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+    remote_closes_connection::<TestTransportChannel, MockService<MockChannelTransport>>().await;
 }
 
 #[tokio::test]
 async fn remote_closes_connection_mock_noise() {
-    remote_closes_connection::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
+    remote_closes_connection::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn inbound_connection_too_many_peers<A, T>(peers: Vec<net::types::PeerInfo<T>>)
 where
-    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
+    A: TestTransport<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -516,7 +518,7 @@ async fn inbound_connection_too_many_peers_libp2p() {
         })
         .collect::<Vec<_>>();
 
-    inbound_connection_too_many_peers::<MakeP2pAddress, Libp2pService>(peers).await;
+    inbound_connection_too_many_peers::<TestTransportLibp2p, Libp2pService>(peers).await;
 }
 
 #[tokio::test]
@@ -539,7 +541,7 @@ async fn inbound_connection_too_many_peers_mock_tcp() {
         )
         .collect::<Vec<_>>();
 
-    inbound_connection_too_many_peers::<MakeTcpAddress, MockService<TcpTransportSocket>>(peers)
+    inbound_connection_too_many_peers::<TestTransportTcp, MockService<TcpTransportSocket>>(peers)
         .await;
 }
 
@@ -563,7 +565,7 @@ async fn inbound_connection_too_many_peers_mock_channels() {
         )
         .collect::<Vec<_>>();
 
-    inbound_connection_too_many_peers::<MakeChannelAddress, MockService<MockChannelTransport>>(
+    inbound_connection_too_many_peers::<TestTransportChannel, MockService<MockChannelTransport>>(
         peers,
     )
     .await;
@@ -587,7 +589,7 @@ async fn inbound_connection_too_many_peers_mock_noise() {
         })
         .collect::<Vec<_>>();
 
-    inbound_connection_too_many_peers::<MakeNoiseAddress, MockService<NoiseTcpTransport>>(peers)
+    inbound_connection_too_many_peers::<TestTransportNoise, MockService<NoiseTcpTransport>>(peers)
         .await;
 }
 
@@ -623,8 +625,8 @@ where
 #[tokio::test]
 async fn connection_timeout_libp2p() {
     connection_timeout::<Libp2pService>(
-        MakeP2pAddress::make_transport(),
-        MakeP2pAddress::make_address(),
+        TestTransportLibp2p::make_transport(),
+        TestTransportLibp2p::make_address(),
         format!("/ip4/255.255.255.255/tcp/8888/p2p/{}", PeerId::random())
             .parse()
             .unwrap(),
@@ -635,9 +637,9 @@ async fn connection_timeout_libp2p() {
 #[tokio::test]
 async fn connection_timeout_mock_tcp() {
     connection_timeout::<MockService<TcpTransportSocket>>(
-        MakeTcpAddress::make_transport(),
-        MakeTcpAddress::make_address(),
-        MakeTcpAddress::make_address(),
+        TestTransportTcp::make_transport(),
+        TestTransportTcp::make_address(),
+        TestTransportTcp::make_address(),
     )
     .await;
 }
@@ -645,8 +647,8 @@ async fn connection_timeout_mock_tcp() {
 #[tokio::test]
 async fn connection_timeout_mock_channels() {
     connection_timeout::<MockService<MockChannelTransport>>(
-        MakeChannelAddress::make_transport(),
-        MakeChannelAddress::make_address(),
+        TestTransportChannel::make_transport(),
+        TestTransportChannel::make_address(),
         65_535,
     )
     .await;
@@ -655,9 +657,9 @@ async fn connection_timeout_mock_channels() {
 #[tokio::test]
 async fn connection_timeout_mock_noise() {
     connection_timeout::<MockService<NoiseTcpTransport>>(
-        MakeNoiseAddress::make_transport(),
-        MakeNoiseAddress::make_address(),
-        MakeNoiseAddress::make_address(),
+        TestTransportNoise::make_transport(),
+        TestTransportNoise::make_address(),
+        TestTransportNoise::make_address(),
     )
     .await;
 }
@@ -723,8 +725,8 @@ async fn connection_timeout_rpc_notified<T>(
 #[tokio::test]
 async fn connection_timeout_rpc_notified_libp2p() {
     connection_timeout_rpc_notified::<Libp2pService>(
-        MakeP2pAddress::make_transport(),
-        MakeP2pAddress::make_address(),
+        TestTransportLibp2p::make_transport(),
+        TestTransportLibp2p::make_address(),
         format!("/ip4/255.255.255.255/tcp/8888/p2p/{}", PeerId::random())
             .parse()
             .unwrap(),
@@ -735,9 +737,9 @@ async fn connection_timeout_rpc_notified_libp2p() {
 #[tokio::test]
 async fn connection_timeout_rpc_notified_mock_tcp() {
     connection_timeout_rpc_notified::<MockService<TcpTransportSocket>>(
-        MakeTcpAddress::make_transport(),
-        MakeTcpAddress::make_address(),
-        MakeTcpAddress::make_address(),
+        TestTransportTcp::make_transport(),
+        TestTransportTcp::make_address(),
+        TestTransportTcp::make_address(),
     )
     .await;
 }
@@ -745,8 +747,8 @@ async fn connection_timeout_rpc_notified_mock_tcp() {
 #[tokio::test]
 async fn connection_timeout_rpc_notified_mock_channels() {
     connection_timeout_rpc_notified::<MockService<MockChannelTransport>>(
-        MakeChannelAddress::make_transport(),
-        MakeChannelAddress::make_address(),
+        TestTransportChannel::make_transport(),
+        TestTransportChannel::make_address(),
         9999,
     )
     .await;
@@ -755,9 +757,9 @@ async fn connection_timeout_rpc_notified_mock_channels() {
 #[tokio::test]
 async fn connection_timeout_rpc_notified_mock_noise() {
     connection_timeout_rpc_notified::<MockService<NoiseTcpTransport>>(
-        MakeNoiseAddress::make_transport(),
-        MakeNoiseAddress::make_address(),
-        MakeNoiseAddress::make_address(),
+        TestTransportNoise::make_transport(),
+        TestTransportNoise::make_address(),
+        TestTransportNoise::make_address(),
     )
     .await;
 }
@@ -766,10 +768,13 @@ async fn connection_timeout_rpc_notified_mock_noise() {
 #[tokio::test]
 async fn connect_no_ip_in_address_libp2p() {
     let config = Arc::new(config::create_mainnet());
-    let bind_address = MakeP2pAddress::make_address();
-    let mut peer_manager =
-        make_peer_manager::<Libp2pService>(MakeP2pAddress::make_transport(), bind_address, config)
-            .await;
+    let bind_address = TestTransportLibp2p::make_address();
+    let mut peer_manager = make_peer_manager::<Libp2pService>(
+        TestTransportLibp2p::make_transport(),
+        bind_address,
+        config,
+    )
+    .await;
 
     let no_ip_addresses = [
         Multiaddr::empty(),

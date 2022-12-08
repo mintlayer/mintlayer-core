@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use p2p::net::libp2p::Libp2pService;
-use p2p::testing_utils::MakeP2pAddress;
+use p2p::testing_utils::TestTransportLibp2p;
 
 fn main() {
-    p2p_backend_test_suite::run::<MakeP2pAddress, Libp2pService>();
+    p2p_backend_test_suite::run::<TestTransportLibp2p, Libp2pService>();
 }

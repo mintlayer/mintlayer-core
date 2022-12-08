@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::net::libp2p::behaviour;
-use crate::testing_utils::{MakeP2pAddress, MakeTestAddress};
+use crate::testing_utils::{TestTransport, TestTransportLibp2p};
 use libp2p::ping;
 use std::time::Duration;
 
@@ -25,7 +25,7 @@ async fn test_identify_not_supported() {
     let (mut backend1, _cmd1, _conn1, _sync1) = make_libp2p(
         config.clone(),
         Default::default(),
-        MakeP2pAddress::make_address(),
+        TestTransportLibp2p::make_address(),
         &[],
     )
     .await;

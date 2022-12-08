@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::error::P2pError;
-use crate::testing_utils::{MakeP2pAddress, MakeTestAddress};
+use crate::testing_utils::{TestTransport, TestTransportLibp2p};
 use futures::StreamExt;
 use libp2p::{
     core::upgrade,
@@ -62,7 +62,7 @@ async fn dial_then_disconnect() {
     let (_peer_id1, mut swarm1) = make_dummy_swarm();
     let (peer_id2, mut swarm2) = make_dummy_swarm();
 
-    swarm2.listen_on(MakeP2pAddress::make_address()).unwrap();
+    swarm2.listen_on(TestTransportLibp2p::make_address()).unwrap();
     let addr = get_address::<identify::Identify>(&mut swarm2).await;
 
     tokio::spawn(async move {
@@ -89,7 +89,7 @@ async fn disconnect_closing_connection() {
     let (_peer_id1, mut swarm1) = make_dummy_swarm();
     let (peer_id2, mut swarm2) = make_dummy_swarm();
 
-    swarm2.listen_on(MakeP2pAddress::make_address()).unwrap();
+    swarm2.listen_on(TestTransportLibp2p::make_address()).unwrap();
     let addr = get_address(&mut swarm2).await;
 
     tokio::spawn(async move {

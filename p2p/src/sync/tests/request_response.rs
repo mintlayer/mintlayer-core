@@ -20,7 +20,7 @@ use tokio::time::timeout;
 use chainstate::Locator;
 
 use crate::testing_utils::{
-    MakeChannelAddress, MakeNoiseAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress,
+    TestTransport, TestTransportChannel, TestTransportLibp2p, TestTransportNoise, TestTransportTcp,
 };
 use crate::{
     event::PeerManagerEvent,
@@ -40,7 +40,7 @@ use crate::{
 
 async fn request_response<A, T>()
 where
-    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
+    A: TestTransport<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
@@ -86,27 +86,27 @@ where
 
 #[tokio::test]
 async fn request_response_libp2p() {
-    request_response::<MakeP2pAddress, Libp2pService>().await;
+    request_response::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
 async fn request_response_mock_tcp() {
-    request_response::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
+    request_response::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn request_response_mock_channels() {
-    request_response::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+    request_response::<TestTransportChannel, MockService<MockChannelTransport>>().await;
 }
 
 #[tokio::test]
 async fn test_request_response_mock_noise() {
-    request_response::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
+    request_response::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
 }
 
 async fn multiple_requests_and_responses<A, T>()
 where
-    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
+    A: TestTransport<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
@@ -180,30 +180,30 @@ where
 
 #[tokio::test]
 async fn multiple_requests_and_responses_libp2p() {
-    multiple_requests_and_responses::<MakeP2pAddress, Libp2pService>().await;
+    multiple_requests_and_responses::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
 async fn multiple_requests_and_responses_mock_tcp() {
-    multiple_requests_and_responses::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
+    multiple_requests_and_responses::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn multiple_requests_and_responses_mock_channels() {
-    multiple_requests_and_responses::<MakeChannelAddress, MockService<MockChannelTransport>>()
+    multiple_requests_and_responses::<TestTransportChannel, MockService<MockChannelTransport>>()
         .await;
 }
 
 #[tokio::test]
 async fn multiple_requests_and_responses_mock_noise() {
-    multiple_requests_and_responses::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
+    multiple_requests_and_responses::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
 }
 
 // Receive getheaders before receiving the `Connected` event from the peer manager which makes the
 // request be rejected and time out in the sender's end.
 async fn request_timeout<A, T>()
 where
-    A: MakeTestAddress<Transport = T::Transport, Address = T::Address>,
+    A: TestTransport<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
@@ -248,20 +248,20 @@ where
 
 #[tokio::test]
 async fn request_timeout_libp2p() {
-    request_timeout::<MakeP2pAddress, Libp2pService>().await;
+    request_timeout::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
 async fn request_timeout_mock_tcp() {
-    request_timeout::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
+    request_timeout::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn request_timeout_mock_channels() {
-    request_timeout::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+    request_timeout::<TestTransportChannel, MockService<MockChannelTransport>>().await;
 }
 
 #[tokio::test]
 async fn request_timeout_mock_noise() {
-    request_timeout::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
+    request_timeout::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
 }

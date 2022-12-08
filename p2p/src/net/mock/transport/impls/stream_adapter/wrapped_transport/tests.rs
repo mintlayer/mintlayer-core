@@ -18,7 +18,7 @@ use std::{
     time::Duration,
 };
 
-use crate::testing_utils::{MakeChannelAddress, MakeTcpAddress, MakeTestAddress};
+use crate::testing_utils::{TestTransport, TestTransportChannel, TestTransportTcp};
 use async_trait::async_trait;
 use futures::StreamExt;
 use tokio::{
@@ -51,7 +51,7 @@ async fn send_recv<T: PeerStream>(sender: &mut T, receiver: &mut T, len: usize) 
     assert_eq!(send_data, recv_data);
 }
 
-async fn test<A: MakeTestAddress<Address = T::Address>, T: TransportSocket>(transport: T) {
+async fn test<A: TestTransport<Address = T::Address>, T: TransportSocket>(transport: T) {
     let mut server = transport.bind(A::make_address()).await.unwrap();
     let peer_fut = transport.connect(server.local_address().unwrap());
 
@@ -68,34 +68,37 @@ async fn test<A: MakeTestAddress<Address = T::Address>, T: TransportSocket>(tran
 
 #[tokio::test]
 async fn test_send_recv() {
-    test::<MakeTcpAddress, TcpTransportSocket>(TcpTransportSocket::new()).await;
+    test::<TestTransportTcp, TcpTransportSocket>(TcpTransportSocket::new()).await;
 
-    test::<MakeChannelAddress, MockChannelTransport>(MockChannelTransport::new()).await;
+    test::<TestTransportChannel, MockChannelTransport>(MockChannelTransport::new()).await;
 
-    test::<MakeTcpAddress, WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>>(
+    test::<TestTransportTcp, WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>>(
         WrappedTransportSocket::new(NoiseEncryptionAdapter::gen_new(), TcpTransportSocket::new()),
     )
     .await;
 
     test::<
-        MakeChannelAddress,
+        TestTransportChannel,
         WrappedTransportSocket<NoiseEncryptionAdapter, MockChannelTransport>,
-    >(WrappedTransportSocket::new(NoiseEncryptionAdapter::gen_new(), MockChannelTransport::new()))
+    >(WrappedTransportSocket::new(
+        NoiseEncryptionAdapter::gen_new(),
+        MockChannelTransport::new(),
+    ))
     .await;
 
-    test::<MakeTcpAddress, WrappedTransportSocket<IdentityStreamAdapter, TcpTransportSocket>>(
+    test::<TestTransportTcp, WrappedTransportSocket<IdentityStreamAdapter, TcpTransportSocket>>(
         WrappedTransportSocket::new(IdentityStreamAdapter::new(), TcpTransportSocket::new()),
     )
     .await;
 
     test::<
-        MakeChannelAddress,
+        TestTransportChannel,
         WrappedTransportSocket<IdentityStreamAdapter, MockChannelTransport>,
     >(WrappedTransportSocket::new(IdentityStreamAdapter::new(), MockChannelTransport::new()))
     .await;
 
     test::<
-        MakeTcpAddress,
+        TestTransportTcp,
         WrappedTransportSocket<
             NoiseEncryptionAdapter,
             WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>,
@@ -196,7 +199,7 @@ async fn send_2_reqs() {
         NoiseEncryptionAdapter::gen_new(),
         TcpTransportSocket::new(),
     );
-    let mut server = transport.bind(MakeTcpAddress::make_address()).await.unwrap();
+    let mut server = transport.bind(TestTransportTcp::make_address()).await.unwrap();
     let peer_fut = transport.connect(server.local_address().unwrap());
 
     let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
@@ -246,7 +249,7 @@ async fn pending_handshakes() {
         NoiseEncryptionAdapter::gen_new(),
         TcpTransportSocket::new(),
     );
-    let mut server = transport.bind(MakeTcpAddress::make_address()).await.unwrap();
+    let mut server = transport.bind(TestTransportTcp::make_address()).await.unwrap();
     let local_addr = server.local_address().unwrap();
 
     let join_handle = tokio::spawn(async move {
@@ -281,7 +284,7 @@ async fn handshake_timeout() {
         NoiseEncryptionAdapter::gen_new(),
         TcpTransportSocket::new(),
     );
-    let mut server = transport.bind(MakeTcpAddress::make_address()).await.unwrap();
+    let mut server = transport.bind(TestTransportTcp::make_address()).await.unwrap();
     let local_addr = server.local_address().unwrap();
 
     let join_handle = tokio::spawn(async move {

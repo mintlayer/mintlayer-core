@@ -21,7 +21,7 @@ use common::{
 };
 
 use p2p::testing_utils::{
-    MakeChannelAddress, MakeNoiseAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress,
+    TestTransport, TestTransportChannel, TestTransportLibp2p, TestTransportNoise, TestTransportTcp,
 };
 use p2p::{
     error::{P2pError, PublishError},
@@ -42,7 +42,7 @@ use p2p::{
 // don't automatically forward the messages.
 async fn block_announcement_3_peers<A, S>()
 where
-    A: MakeTestAddress<Transport = S::Transport, Address = S::Address>,
+    A: TestTransport<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
     S::ConnectivityHandle: ConnectivityService<S>,
@@ -189,26 +189,26 @@ where
 
 #[tokio::test]
 async fn block_announcement_3_peers_libp2p() {
-    block_announcement_3_peers::<MakeP2pAddress, Libp2pService>().await;
+    block_announcement_3_peers::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 // TODO: Implement announcements resending in partially connected networks.
 #[ignore]
 #[tokio::test]
 async fn block_announcement_3_peers_tcp() {
-    block_announcement_3_peers::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
+    block_announcement_3_peers::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
 }
 
 // TODO: Implement announcements resending in partially connected networks.
 #[tokio::test]
 #[ignore]
 async fn block_announcement_3_peers_channels() {
-    block_announcement_3_peers::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+    block_announcement_3_peers::<TestTransportChannel, MockService<MockChannelTransport>>().await;
 }
 
 // TODO: Implement announcements resending in partially connected networks.
 #[ignore]
 #[tokio::test]
 async fn block_announcement_3_peers_noise() {
-    block_announcement_3_peers::<MakeNoiseAddress, MockService<NoiseTcpTransport>>().await;
+    block_announcement_3_peers::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
 }

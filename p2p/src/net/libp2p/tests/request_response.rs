@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::*;
-use crate::testing_utils::{MakeP2pAddress, MakeTestAddress};
+use crate::testing_utils::{TestTransport, TestTransportLibp2p};
 use crate::{
     error::{P2pError, PeerError},
     net::libp2p::{behaviour::sync_codec::message_types::SyncRequest, types},
@@ -29,7 +29,7 @@ async fn request_sent_directly_but_peer_not_part_of_swarm() {
     let (mut backend, _cmd, _conn_rx, _sync_rx) = make_libp2p(
         common::chain::config::create_mainnet(),
         Arc::new(Default::default()),
-        MakeP2pAddress::make_address(),
+        TestTransportLibp2p::make_address(),
         &[],
     )
     .await;
@@ -52,7 +52,7 @@ async fn request_sent_but_peer_not_part_of_swarm() {
     let (mut backend, _cmd, _conn_rx, _sync_rx) = make_libp2p(
         common::chain::config::create_mainnet(),
         Arc::new(Default::default()),
-        MakeP2pAddress::make_address(),
+        TestTransportLibp2p::make_address(),
         &[],
     )
     .await;

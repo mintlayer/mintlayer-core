@@ -17,7 +17,7 @@ use std::{sync::Arc, time::Duration};
 
 use libp2p::multiaddr::Protocol;
 
-use p2p::testing_utils::{MakeP2pAddress, MakeTestAddress};
+use p2p::testing_utils::{TestTransport, TestTransportLibp2p};
 use p2p::{
     config::{MdnsConfig, P2pConfig},
     net::{
@@ -30,8 +30,8 @@ use p2p::{
 async fn test_libp2p_peer_discovery() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut serv, _) = Libp2pService::start(
-        MakeP2pAddress::make_transport(),
-        MakeP2pAddress::make_address(),
+        TestTransportLibp2p::make_transport(),
+        TestTransportLibp2p::make_address(),
         Arc::clone(&config),
         Arc::new(P2pConfig {
             bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
@@ -49,8 +49,8 @@ async fn test_libp2p_peer_discovery() {
     .unwrap();
 
     let (mut serv2, _) = Libp2pService::start(
-        MakeP2pAddress::make_transport(),
-        MakeP2pAddress::make_address(),
+        TestTransportLibp2p::make_transport(),
+        TestTransportLibp2p::make_address(),
         Arc::clone(&config),
         Arc::new(P2pConfig {
             bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
