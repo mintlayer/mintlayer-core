@@ -684,6 +684,15 @@ where
         self.events_controller.subscribe_to_events(handler)
     }
 
+    pub fn process_chainstate_event(&mut self, evt: chainstate::ChainstateEvent) {
+        log::info!("mempool: Processing chainstate event {evt:?}");
+        match evt {
+            chainstate::ChainstateEvent::NewTip(block_id, block_height) => {
+                self.new_tip_set(block_id, block_height);
+            }
+        }
+    }
+
     pub fn new_tip_set(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
         log::info!(
             "new tip with block_id {:?} and block_height {:?}",
