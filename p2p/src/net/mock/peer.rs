@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use futures::FutureExt;
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, time::timeout};
 
 use common::{chain::ChainConfig, primitives::semver::SemVer};
 use logging::log;
@@ -33,6 +33,8 @@ use crate::{
 };
 
 use super::transport::BufferedTranscoder;
+
+const PEER_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub enum Role {
     Inbound,
@@ -191,9 +193,17 @@ where
 
     pub async fn run(&mut self) -> crate::Result<()> {
         // handshake with remote peer and send peer's info to backend
-        if let Err(err) = self.handshake().await {
-            log::debug!("handshake failed for peer {}: {err}", self.remote_peer_id);
-            return Err(err);
+        let handshake_res = timeout(PEER_HANDSHAKE_TIMEOUT, self.handshake()).await;
+        match handshake_res {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => {
+                log::debug!("handshake failed for peer {}: {err}", self.remote_peer_id);
+                return Err(err);
+            }
+            Err(_) => {
+                log::debug!("handshake timeout for peer {}", self.remote_peer_id);
+                return Err(P2pError::ProtocolError(ProtocolError::Unresponsive));
+            }
         }
 
         loop {
