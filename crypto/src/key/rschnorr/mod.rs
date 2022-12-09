@@ -242,7 +242,7 @@ mod test {
     use std::str::FromStr;
 
     #[test]
-    fn basic_ristretto() {
+    fn basic() {
         let mut rng = make_true_rng();
         let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
         let pk2 = MLRistrettoPublicKey::from_private_key(&sk);
@@ -250,7 +250,7 @@ mod test {
     }
 
     #[test]
-    fn import_from_short_key_ristretto() {
+    fn import_from_short_key() {
         let mut rng = make_true_rng();
         let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
         {
@@ -270,7 +270,7 @@ mod test {
     }
 
     #[test]
-    fn serialize_ristretto() {
+    fn serialize() {
         let mut rng = make_true_rng();
         let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
         let sk_encoded = sk.encode();
@@ -282,7 +282,7 @@ mod test {
     }
 
     #[test]
-    fn serialize_chosen_data_ristretto() {
+    fn serialize_chosen_data() {
         let sk = MLRistrettoPrivateKey::from_bytes(
             &hex::decode("181b259bac04d8ec3f6ea2a86b37f39a353288a8410fc469b9f2d5c59ce30a36c10bfdc906c8343fe0fb42c2564d6b1d3bf8ae3d73f0f7e5424cb60a9639d7e0")
                 .unwrap(),
@@ -312,7 +312,7 @@ mod test {
     }
 
     #[test]
-    fn sign_and_verify_ristretto() {
+    fn sign_and_verify() {
         let mut rng = make_true_rng();
         let msg_size = 1 + rand::random::<usize>() % 10000;
         let msg: Vec<u8> = (0..msg_size).map(|_| rand::random::<u8>()).collect();
@@ -322,7 +322,7 @@ mod test {
     }
 
     #[test]
-    fn sign_empty_ristretto() {
+    fn sign_empty() {
         let mut rng = make_true_rng();
         let msg: Vec<u8> = Vec::new();
         let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
@@ -331,7 +331,7 @@ mod test {
     }
 
     #[test]
-    fn sk_zeroed_ristretto() {
+    fn sk_zeroed() {
         let mut rng = make_true_rng();
         let (mut sk, _) = MLRistrettoPrivateKey::new(&mut rng);
         unsafe { core::ptr::drop_in_place(&mut sk) };
