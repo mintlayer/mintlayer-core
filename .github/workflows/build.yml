@@ -12,13 +12,13 @@ env:
 
 jobs:
 
-  cargo_deny:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - uses: EmbarkStudios/cargo-deny-action@v1
-      with:
-        arguments: --all-features --workspace
+  # cargo_deny:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - uses: actions/checkout@v2
+  #   - uses: EmbarkStudios/cargo-deny-action@v1
+  #     with:
+  #       arguments: --all-features --workspace
 
   rustfmt:
     runs-on: ubuntu-latest
