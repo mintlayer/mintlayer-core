@@ -168,7 +168,6 @@ where
             version,
             agent: Some(self.agent_version.clone()),
             protocols: parse_protocols(&self.protocols),
-            // TODO: Remove the hardcoded value.
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         })
     }
