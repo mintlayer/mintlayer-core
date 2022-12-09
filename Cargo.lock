@@ -894,7 +894,7 @@ dependencies = [
  "serde_test",
  "serial_test",
  "serialization",
- "sscanf 0.3.1",
+ "sscanf",
  "static_assertions",
  "test-utils",
  "thiserror",
@@ -3048,7 +3048,7 @@ dependencies = [
  "rpc",
  "serialization",
  "snowstorm",
- "sscanf 0.4.0",
+ "sscanf",
  "subsystem",
  "tap",
  "thiserror",
@@ -4352,18 +4352,6 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "sscanf"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ecdd7ea17bcadebf81d656db919f58f96c1d194d748cf0839a44a220123eedd"
-dependencies = [
- "const_format",
- "lazy_static",
- "regex",
- "sscanf_macro 0.3.1",
-]
-
-[[package]]
-name = "sscanf"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "887a5b09bbf30cc01d059ccb4b7a0b508a0cef3028df2f2ee0d745bc9e624c56"
@@ -4371,19 +4359,7 @@ dependencies = [
  "const_format",
  "lazy_static",
  "regex",
- "sscanf_macro 0.4.0",
-]
-
-[[package]]
-name = "sscanf_macro"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe2309d255caf220c1ff9f380d89420a1377de1cabc1d57e0b308e53b0406bed"
-dependencies = [
- "proc-macro2",
- "quote",
- "regex-syntax",
- "syn",
+ "sscanf_macro",
 ]
 
 [[package]]
