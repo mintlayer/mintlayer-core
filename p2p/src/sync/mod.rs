@@ -355,30 +355,29 @@ where
     ///
     /// The node is considered fully synced (its initial block download is done) if all its peers
     /// are in the `Done` state.
-    pub async fn update_state(&mut self) -> crate::Result<()> {
+    pub async fn update_state(&mut self) {
         // TODO: improve "initial block download done" check
 
         if self.peers.is_empty() {
             self.state = SyncState::Uninitialized;
-            return Ok(());
+            return;
         }
 
         for peer in self.peers.values() {
             match peer.state() {
                 peer::PeerSyncState::UploadingBlocks(_) => {
                     self.state = SyncState::DownloadingBlocks;
-                    return Ok(());
+                    return;
                 }
                 peer::PeerSyncState::UploadingHeaders(_) | peer::PeerSyncState::Unknown => {
                     self.state = SyncState::Uninitialized;
-                    return Ok(());
+                    return;
                 }
                 peer::PeerSyncState::Idle => {}
             }
         }
 
         self.state = SyncState::Done;
-        Ok(())
     }
 
     pub async fn process_response(
@@ -585,7 +584,7 @@ where
                 }
             }
 
-            self.update_state().await?;
+            self.update_state().await;
         }
     }
 
