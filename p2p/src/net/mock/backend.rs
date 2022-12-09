@@ -28,7 +28,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{future::join_all, FutureExt, TryFutureExt};
+use futures::{future::join_all, TryFutureExt};
 use tokio::{
     sync::{mpsc, oneshot},
     time::{interval, timeout, MissedTickBehavior},
@@ -435,12 +435,12 @@ where
                     )?;
                 }
                 // Handle peer events.
-                event = self.peer_chan.1.recv().fuse() => {
+                event = self.peer_chan.1.recv() => {
                     let (peer, event) = event.ok_or(P2pError::ChannelClosed)?;
                     self.handle_peer_event(peer, event).await?;
                 },
                 // Handle commands.
-                command = self.cmd_rx.recv().fuse() => {
+                command = self.cmd_rx.recv() => {
                     self.handle_command(command.ok_or(P2pError::ChannelClosed)?).await?;
                 }
                 _ = request_timeout_interval.tick() => {

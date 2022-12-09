@@ -15,7 +15,6 @@
 
 use std::{sync::Arc, time::Duration};
 
-use futures::FutureExt;
 use tokio::{sync::mpsc, time::timeout};
 
 use common::{chain::ChainConfig, primitives::semver::SemVer};
@@ -208,7 +207,7 @@ where
 
         loop {
             tokio::select! {
-                event = self.rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
+                event = self.rx.recv() => match event.ok_or(P2pError::ChannelClosed)? {
                     MockEvent::Disconnect => return Ok(()),
                     MockEvent::SendMessage(message) => self.socket.send(*message).await?,
                 },
