@@ -29,7 +29,7 @@ thiserror = "1.0"
 void = "1.0"
 tap = "1.0"
 once_cell = "1.13"
-jsonrpsee = { version = "0.15", features = ["macros"]}
+jsonrpsee = { version = "0.16", features = ["macros"]}
 libp2p = { version = "0.46", default-features = false, features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "request-response", "tcp-tokio"] }
 tokio = { version = "1", default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 tokio-util = {version = "0.7", default-features = false, features = ["codec"] }

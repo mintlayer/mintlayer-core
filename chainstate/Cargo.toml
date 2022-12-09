@@ -21,7 +21,7 @@ consensus = {path = "../consensus"}
 async-trait = "0.1"
 hex = "0.4"
 itertools = "0.10"
-jsonrpsee = {version = "0.15", features = ["macros"]}
+jsonrpsee = {version = "0.16", features = ["macros"]}
 thiserror = "1.0"
 
 [dev-dependencies]
