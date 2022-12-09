@@ -16,7 +16,8 @@
 use libp2p::PeerId;
 
 use crate::testing_utils::{
-    TestTransport, TestTransportChannel, TestTransportLibp2p, TestTransportNoise, TestTransportTcp,
+    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
+    TestTransportTcp,
 };
 
 use crate::{
@@ -36,7 +37,7 @@ use crate::{
 // handle peer reconnection
 async fn test_peer_reconnected<A, P, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -79,7 +80,7 @@ async fn test_peer_reconnected_mock_noise() {
 // handle peer disconnection event
 async fn test_peer_disconnected<A, P, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,

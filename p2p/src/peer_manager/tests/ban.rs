@@ -16,7 +16,8 @@
 use std::sync::Arc;
 
 use crate::testing_utils::{
-    TestTransport, TestTransportChannel, TestTransportLibp2p, TestTransportNoise, TestTransportTcp,
+    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
+    TestTransportTcp,
 };
 use common::{chain::config, primitives::semver::SemVer};
 
@@ -40,7 +41,7 @@ use crate::{
 // ban peer whose connected to us
 async fn ban_connected_peer<A, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -95,7 +96,7 @@ async fn ban_connected_peer_mock_noise() {
 
 async fn banned_peer_attempts_to_connect<A, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -166,7 +167,7 @@ async fn banned_peer_attempts_to_connect_mock_noise() {
 // attempt to connect to banned peer
 async fn connect_to_banned_peer<A, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -241,7 +242,7 @@ async fn connect_to_banned_peer_mock_noise() {
 
 async fn validate_invalid_outbound_connection<A, S>(peer_address: S::Address, peer_id: S::PeerId)
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + std::fmt::Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     <S as net::NetworkingService>::Address: std::str::FromStr,
@@ -353,7 +354,7 @@ async fn validate_invalid_outbound_connection_mock_noise() {
 
 async fn validate_invalid_inbound_connection<A, S>(peer_address: S::Address, peer_id: S::PeerId)
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + std::fmt::Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     <S as net::NetworkingService>::Address: std::str::FromStr,
@@ -464,7 +465,7 @@ async fn validate_invalid_inbound_connection_mock_noise() {
 
 async fn inbound_connection_invalid_magic<A, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,

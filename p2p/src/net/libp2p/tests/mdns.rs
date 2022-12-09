@@ -18,7 +18,7 @@ use std::{sync::Arc, time::Duration};
 use futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
 
-use crate::testing_utils::{TestTransport, TestTransportLibp2p};
+use crate::testing_utils::{TestTransportLibp2p, TestTransportMaker};
 
 use crate::{
     config::{MdnsConfig, P2pConfig},

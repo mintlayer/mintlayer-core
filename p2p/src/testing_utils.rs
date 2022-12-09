@@ -16,11 +16,11 @@
 use libp2p::Multiaddr;
 use std::net::SocketAddr;
 
-/// An interface for creating test transports and addresses.
+/// An interface for creating transports and addresses used in tests.
 ///
 /// This abstraction layer is needed to uniformly create transports and addresses
 /// in the tests for different mocks transport implementations.
-pub trait TestTransport {
+pub trait TestTransportMaker {
     /// A transport type.
     type Transport;
 
@@ -38,7 +38,7 @@ pub trait TestTransport {
 
 pub struct TestTransportLibp2p {}
 
-impl TestTransport for TestTransportLibp2p {
+impl TestTransportMaker for TestTransportLibp2p {
     type Transport = crate::net::libp2p::Libp2pTransport;
 
     type Address = Multiaddr;
@@ -55,7 +55,7 @@ impl TestTransport for TestTransportLibp2p {
 
 pub struct TestTransportTcp {}
 
-impl TestTransport for TestTransportTcp {
+impl TestTransportMaker for TestTransportTcp {
     type Transport = crate::net::mock::transport::TcpTransportSocket;
 
     type Address = SocketAddr;
@@ -71,7 +71,7 @@ impl TestTransport for TestTransportTcp {
 
 pub struct TestTransportChannel {}
 
-impl TestTransport for TestTransportChannel {
+impl TestTransportMaker for TestTransportChannel {
     type Transport = crate::net::mock::transport::MockChannelTransport;
 
     type Address = u64;
@@ -87,7 +87,7 @@ impl TestTransport for TestTransportChannel {
 
 pub struct TestTransportNoise {}
 
-impl TestTransport for TestTransportNoise {
+impl TestTransportMaker for TestTransportNoise {
     type Transport = crate::net::mock::transport::NoiseTcpTransport;
 
     type Address = SocketAddr;

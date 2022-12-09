@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::net::libp2p::behaviour;
-use crate::testing_utils::{TestTransport, TestTransportLibp2p};
+use crate::testing_utils::{TestTransportLibp2p, TestTransportMaker};
 use futures::StreamExt;
 use libp2p::{
     ping,

@@ -18,7 +18,7 @@ use std::{sync::Arc, time::Duration};
 use libp2p::{core::PeerId, multiaddr::Protocol, Multiaddr};
 use tokio::net::TcpListener;
 
-use crate::testing_utils::{TestTransport, TestTransportLibp2p};
+use crate::testing_utils::{TestTransportLibp2p, TestTransportMaker};
 use serialization::{Decode, Encode};
 
 use crate::{

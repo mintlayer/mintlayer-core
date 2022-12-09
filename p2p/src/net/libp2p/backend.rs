@@ -341,7 +341,7 @@ mod tests {
         self, connection_manager, discovery,
         sync_codec::{SyncMessagingCodec, SyncingProtocol},
     };
-    use crate::testing_utils::{TestTransport, TestTransportLibp2p};
+    use crate::testing_utils::{TestTransportLibp2p, TestTransportMaker};
     use libp2p::{
         core::upgrade,
         gossipsub::{Gossipsub, GossipsubConfigBuilder, MessageAuthenticity},

@@ -27,7 +27,7 @@ use common::{
     chain::{config::ChainConfig, GenBlock},
     primitives::{Id, Idable},
 };
-use p2p::testing_utils::TestTransport;
+use p2p::testing_utils::TestTransportMaker;
 use p2p::{
     config::{MdnsConfig, P2pConfig},
     error::P2pError,
@@ -58,7 +58,7 @@ tests![
 
 async fn local_and_remote_in_sync<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -107,7 +107,7 @@ where
 // no blocks are downloaded whereas local node downloads the 7 new blocks from remote
 async fn remote_ahead_by_7_blocks<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -209,7 +209,7 @@ where
 // local and remote nodes are in the same chain but local is ahead of remote by 12 blocks
 async fn local_ahead_by_12_blocks<A, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
@@ -330,7 +330,7 @@ where
 // verify that remote nodes does a reorg
 async fn remote_local_diff_chains_local_higher<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -476,7 +476,7 @@ where
 // verify that local node does a reorg
 async fn remote_local_diff_chains_remote_higher<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -620,7 +620,7 @@ where
 
 async fn two_remote_nodes_different_chains<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -742,7 +742,7 @@ where
 
 async fn two_remote_nodes_same_chains<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -880,7 +880,7 @@ where
 
 async fn two_remote_nodes_same_chains_new_blocks<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -1032,7 +1032,7 @@ where
 // // verify that local node downloads the blocks and after that they are in sync
 async fn connect_disconnect_resyncing<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -1159,7 +1159,7 @@ where
 // Check that the peer that ignores requests is disconnected.
 async fn disconnect_unresponsive_peer<A, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,

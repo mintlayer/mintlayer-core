@@ -98,7 +98,7 @@ impl PeerStream for TcpTransportStream {}
 
 #[cfg(test)]
 mod tests {
-    use crate::testing_utils::{TestTransport, TestTransportTcp};
+    use crate::testing_utils::{TestTransportMaker, TestTransportTcp};
 
     use super::*;
     use crate::net::{

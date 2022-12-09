@@ -32,7 +32,7 @@ use common::{
 };
 use serialization::Encode;
 
-use p2p::testing_utils::TestTransport;
+use p2p::testing_utils::TestTransportMaker;
 use p2p::{
     error::{P2pError, PublishError},
     message::Announcement,
@@ -52,7 +52,7 @@ tests![
 
 async fn block_announcement<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
     S::ConnectivityHandle: ConnectivityService<S>,
@@ -138,7 +138,7 @@ where
 
 async fn block_announcement_no_subscription<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
     S::ConnectivityHandle: ConnectivityService<S>,
@@ -186,7 +186,7 @@ where
 
 async fn block_announcement_too_big_message<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
     S::ConnectivityHandle: ConnectivityService<S>,

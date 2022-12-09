@@ -21,7 +21,8 @@ use common::{
 };
 
 use p2p::testing_utils::{
-    TestTransport, TestTransportChannel, TestTransportLibp2p, TestTransportNoise, TestTransportTcp,
+    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
+    TestTransportTcp,
 };
 use p2p::{
     error::{P2pError, PublishError},
@@ -42,7 +43,7 @@ use p2p::{
 // don't automatically forward the messages.
 async fn block_announcement_3_peers<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
     S::ConnectivityHandle: ConnectivityService<S>,

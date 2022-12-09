@@ -17,7 +17,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::mpsc;
 
-use p2p::testing_utils::TestTransport;
+use p2p::testing_utils::TestTransportMaker;
 use p2p::{
     config::P2pConfig,
     error::{P2pError, PublishError},
@@ -38,7 +38,7 @@ tests![invalid_pubsub_block, invalid_sync_block,];
 // receives a `AdjustPeerScore` event which bans the peer of the second service.
 async fn invalid_pubsub_block<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -134,7 +134,7 @@ where
 // Start two networking services and give an invalid block, verify that `PeerManager` is informed.
 async fn invalid_sync_block<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,

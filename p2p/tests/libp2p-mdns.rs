@@ -17,7 +17,7 @@ use std::{sync::Arc, time::Duration};
 
 use libp2p::multiaddr::Protocol;
 
-use p2p::testing_utils::{TestTransport, TestTransportLibp2p};
+use p2p::testing_utils::{TestTransportLibp2p, TestTransportMaker};
 use p2p::{
     config::{MdnsConfig, P2pConfig},
     net::{

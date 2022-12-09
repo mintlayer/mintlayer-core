@@ -17,7 +17,7 @@
 
 use std::{fmt::Debug, sync::Arc};
 
-use p2p::testing_utils::TestTransport;
+use p2p::testing_utils::TestTransportMaker;
 use p2p::{
     error::{DialError, P2pError},
     net::{ConnectivityService, NetworkingService, SyncingMessagingService},
@@ -32,7 +32,7 @@ tests![
 
 async fn connect<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -53,7 +53,7 @@ where
 #[cfg(not(target_os = "windows"))]
 async fn connect_address_in_use<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S> + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S> + Debug,
@@ -82,7 +82,7 @@ where
 // trying to connect to `service1`.
 async fn connect_accept<A, S>()
 where
-    A: TestTransport<Transport = S::Transport, Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + std::fmt::Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,

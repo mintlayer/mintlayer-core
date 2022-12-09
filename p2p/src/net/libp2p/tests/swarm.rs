@@ -15,7 +15,7 @@
 
 use super::*;
 use crate::error::P2pError;
-use crate::testing_utils::{TestTransport, TestTransportLibp2p};
+use crate::testing_utils::{TestTransportLibp2p, TestTransportMaker};
 use futures::StreamExt;
 use libp2p::{
     core::upgrade,

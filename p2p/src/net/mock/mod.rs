@@ -386,7 +386,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{transport::NoiseTcpTransport, *};
-    use crate::testing_utils::{TestTransport, TestTransportChannel, TestTransportTcp};
+    use crate::testing_utils::{TestTransportChannel, TestTransportMaker, TestTransportTcp};
     use crate::{
         net::{
             self,
@@ -400,7 +400,7 @@ mod tests {
 
     async fn connect_to_remote<A, T>()
     where
-        A: TestTransport<Transport = T, Address = T::Address>,
+        A: TestTransportMaker<Transport = T, Address = T::Address>,
         T: TransportSocket + Debug,
     {
         let config = Arc::new(common::chain::config::create_mainnet());
@@ -469,7 +469,7 @@ mod tests {
 
     async fn accept_incoming<A, T>()
     where
-        A: TestTransport<Transport = T, Address = T::Address>,
+        A: TestTransportMaker<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
         let config = Arc::new(common::chain::config::create_mainnet());
@@ -538,7 +538,7 @@ mod tests {
 
     async fn disconnect<A, T>()
     where
-        A: TestTransport<Transport = T, Address = T::Address>,
+        A: TestTransportMaker<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
         let config = Arc::new(common::chain::config::create_mainnet());

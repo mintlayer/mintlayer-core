@@ -20,7 +20,8 @@ use tokio::time::timeout;
 use chainstate::Locator;
 
 use crate::testing_utils::{
-    TestTransport, TestTransportChannel, TestTransportLibp2p, TestTransportNoise, TestTransportTcp,
+    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
+    TestTransportTcp,
 };
 use crate::{
     event::PeerManagerEvent,
@@ -40,7 +41,7 @@ use crate::{
 
 async fn request_response<A, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
@@ -106,7 +107,7 @@ async fn test_request_response_mock_noise() {
 
 async fn multiple_requests_and_responses<A, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
@@ -203,7 +204,7 @@ async fn multiple_requests_and_responses_mock_noise() {
 // request be rejected and time out in the sender's end.
 async fn request_timeout<A, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,

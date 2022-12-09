@@ -19,7 +19,8 @@ use crypto::random::{Rng, SliceRandom};
 use libp2p::PeerId;
 
 use crate::testing_utils::{
-    TestTransport, TestTransportChannel, TestTransportLibp2p, TestTransportNoise, TestTransportTcp,
+    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
+    TestTransportTcp,
 };
 use p2p_test_utils::TestBlockInfo;
 
@@ -43,7 +44,7 @@ use crate::{
 // response contains more than 2000 headers
 async fn too_many_headers<A, P, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -94,7 +95,7 @@ async fn too_many_headers_mock_noise() {
 // header response is empty
 async fn empty_response<A, P, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -135,7 +136,7 @@ async fn empty_response_mock_noise() {
 // valid response with headers in order and the first header attaching to local chain
 async fn valid_response<A, P, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -189,7 +190,7 @@ async fn valid_response_mock_noise() {
 // the first header doesn't attach to local chain
 async fn header_doesnt_attach_to_local_chain<A, P, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -257,7 +258,7 @@ async fn header_doesnt_attach_to_local_chain_mock_noise() {
 // valid headers but they are not in order
 async fn headers_not_in_order<A, P, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -312,7 +313,7 @@ async fn headers_not_in_order_mock_noise() {
 // peer state is incorrect to be sending header responses
 async fn invalid_state<A, P, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -367,7 +368,7 @@ async fn invalid_state_mock_noise() {
 // peer doesn't exist
 async fn peer_doesnt_exist<A, P, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,

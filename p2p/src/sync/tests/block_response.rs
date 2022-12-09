@@ -19,7 +19,8 @@ use libp2p::PeerId;
 use p2p_test_utils::TestBlockInfo;
 
 use crate::testing_utils::{
-    TestTransport, TestTransportChannel, TestTransportLibp2p, TestTransportNoise, TestTransportTcp,
+    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
+    TestTransportTcp,
 };
 use chainstate::ChainstateError;
 use common::{chain::block::consensus_data::PoWData, primitives::Idable};
@@ -44,7 +45,7 @@ use crate::{
 // peer doesn't exist
 async fn peer_doesnt_exist<A, P, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -85,7 +86,7 @@ async fn peer_doesnt_exist_mock_noise() {
 // submit valid block but the peer is in invalid state
 async fn valid_block<A, P, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -139,7 +140,7 @@ async fn valid_block_mock_noise() {
 // submit valid block
 async fn valid_block_invalid_state<A, P, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -191,7 +192,7 @@ async fn valid_block_invalid_state_mock_noise() {
 // submit the same block twice
 async fn valid_block_resubmitted_chainstate<A, P, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -264,7 +265,7 @@ async fn valid_block_resubmitted_chainstate_mock_noise() {
 // block validation fails
 async fn invalid_block<A, P, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,

@@ -19,7 +19,8 @@ use libp2p::{Multiaddr, PeerId};
 use tokio::{sync::oneshot, time::timeout};
 
 use crate::testing_utils::{
-    TestTransport, TestTransportChannel, TestTransportLibp2p, TestTransportNoise, TestTransportTcp,
+    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
+    TestTransportTcp,
 };
 use common::{chain::config, primitives::semver::SemVer};
 
@@ -95,7 +96,7 @@ async fn test_peer_manager_connect_libp2p() {
 // is below the desired threshold and there are idle peers in the peerdb
 async fn test_auto_connect<A, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -154,7 +155,7 @@ async fn test_auto_connect_mock_noise() {
 
 async fn connect_outbound_same_network<A, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -248,7 +249,7 @@ async fn test_validate_supported_protocols() {
 
 async fn connect_outbound_different_network<A, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -298,7 +299,7 @@ async fn connect_outbound_different_network_mock_noise() {
 
 async fn connect_inbound_same_network<A, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -341,7 +342,7 @@ async fn connect_inbound_same_network_mock_noise() {
 
 async fn connect_inbound_different_network<A, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -401,7 +402,7 @@ async fn connect_inbound_different_network_mock_noise() {
 
 async fn remote_closes_connection<A, T>()
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
@@ -463,7 +464,7 @@ async fn remote_closes_connection_mock_noise() {
 
 async fn inbound_connection_too_many_peers<A, T>(peers: Vec<net::types::PeerInfo<T>>)
 where
-    A: TestTransport<Transport = T::Transport, Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,

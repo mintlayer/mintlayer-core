@@ -233,7 +233,7 @@ where
 mod tests {
     use super::*;
     use crate::testing_utils::{
-        TestTransport, TestTransportChannel, TestTransportNoise, TestTransportTcp,
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     };
     use crate::{
         message,
@@ -250,7 +250,7 @@ mod tests {
 
     async fn handshake_inbound<A, T>()
     where
-        A: TestTransport<Transport = T, Address = T::Address>,
+        A: TestTransportMaker<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
@@ -332,7 +332,7 @@ mod tests {
 
     async fn handshake_outbound<A, T>()
     where
-        A: TestTransport<Transport = T, Address = T::Address>,
+        A: TestTransportMaker<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
@@ -417,7 +417,7 @@ mod tests {
 
     async fn handshake_different_network<A, T>()
     where
-        A: TestTransport<Transport = T, Address = T::Address>,
+        A: TestTransportMaker<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
@@ -478,7 +478,7 @@ mod tests {
 
     async fn invalid_handshake_message<A, T>()
     where
-        A: TestTransport<Transport = T, Address = T::Address>,
+        A: TestTransportMaker<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
@@ -535,7 +535,7 @@ mod tests {
 
     pub async fn get_two_connected_sockets<A, T>() -> (T::Stream, T::Stream)
     where
-        A: TestTransport<Transport = T, Address = T::Address>,
+        A: TestTransportMaker<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
         let transport = A::make_transport();

@@ -18,7 +18,7 @@ use std::{
     time::Duration,
 };
 
-use crate::testing_utils::{TestTransport, TestTransportChannel, TestTransportTcp};
+use crate::testing_utils::{TestTransportChannel, TestTransportMaker, TestTransportTcp};
 use async_trait::async_trait;
 use futures::StreamExt;
 use tokio::{
@@ -51,7 +51,7 @@ async fn send_recv<T: PeerStream>(sender: &mut T, receiver: &mut T, len: usize) 
     assert_eq!(send_data, recv_data);
 }
 
-async fn test<A: TestTransport<Address = T::Address>, T: TransportSocket>(transport: T) {
+async fn test<A: TestTransportMaker<Address = T::Address>, T: TransportSocket>(transport: T) {
     let mut server = transport.bind(A::make_address()).await.unwrap();
     let peer_fut = transport.connect(server.local_address().unwrap());
 

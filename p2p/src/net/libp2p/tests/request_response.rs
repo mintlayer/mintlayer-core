@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::*;
-use crate::testing_utils::{TestTransport, TestTransportLibp2p};
+use crate::testing_utils::{TestTransportLibp2p, TestTransportMaker};
 use crate::{
     error::{P2pError, PeerError},
     net::libp2p::{behaviour::sync_codec::message_types::SyncRequest, types},
