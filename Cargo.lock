@@ -855,7 +855,6 @@ dependencies = [
  "serde_test",
  "serial_test",
  "serialization",
- "sscanf",
  "static_assertions",
  "test-utils",
  "thiserror",
