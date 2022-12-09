@@ -111,7 +111,7 @@ mod test {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn serialize(#[case] seed: Seed) {
+    fn serialize_secp256k1(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let (sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let msg = b"abc";
@@ -124,7 +124,7 @@ mod test {
     }
 
     #[test]
-    fn serialize_chosen_data() {
+    fn serialize_chosen_data_secp256k1() {
         let msg = b"abc";
 
         // we signed the message above and stored the encoded data. Now it has to work from decoded data
@@ -140,6 +140,9 @@ mod test {
         let sk = PrivateKey::decode(&mut sk_bin.as_slice()).unwrap();
         let sig = Signature::decode(&mut sig_bin.as_slice()).unwrap();
 
+        assert_eq!(pk.kind(), KeyKind::Secp256k1Schnorr);
+        assert_eq!(sk.kind(), KeyKind::Secp256k1Schnorr);
+
         assert!(pk.verify_message(&sig, msg));
         assert_eq!(PublicKey::from_private_key(&sk), pk);
     }
@@ -147,7 +150,7 @@ mod test {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn serialize2(#[case] seed: Seed) {
+    fn serialize_ristretto_schnorr(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let (sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let msg = b"abc";
@@ -160,7 +163,7 @@ mod test {
     }
 
     #[test]
-    fn serialize_chosen_data2() {
+    fn serialize_chosen_data_ristretto_schnorr() {
         let msg = b"abc";
 
         // we signed the message above and stored the encoded data. Now it has to work from decoded data
@@ -175,6 +178,10 @@ mod test {
         let decoded_pk = PublicKey::decode(&mut pk_bin.as_slice()).unwrap();
         let decoded_sk = PrivateKey::decode(&mut sk_bin.as_slice()).unwrap();
         let decoded_sig = Signature::decode(&mut sig_bin.as_slice()).unwrap();
+
+        assert_eq!(decoded_pk.kind(), KeyKind::RistrettoSchnorr);
+        assert_eq!(decoded_sk.kind(), KeyKind::RistrettoSchnorr);
+
         assert!(decoded_pk.verify_message(&decoded_sig, msg));
         assert_eq!(PublicKey::from_private_key(&decoded_sk), decoded_pk);
     }

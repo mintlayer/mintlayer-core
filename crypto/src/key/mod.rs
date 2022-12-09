@@ -154,6 +154,13 @@ impl PublicKey {
         }
     }
 
+    pub fn kind(&self) -> KeyKind {
+        match self.pub_key {
+            PublicKeyHolder::Secp256k1Schnorr(_) => KeyKind::Secp256k1Schnorr,
+            PublicKeyHolder::RistrettoSchnorr(_) => KeyKind::RistrettoSchnorr,
+        }
+    }
+
     pub fn verify_message(&self, signature: &Signature, msg: &[u8]) -> bool {
         match &self.pub_key {
             PublicKeyHolder::Secp256k1Schnorr(ref k) => match signature {
