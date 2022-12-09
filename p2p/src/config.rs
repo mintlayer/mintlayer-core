@@ -13,9 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::{collections::BTreeSet, time::Duration};
 
 use utils::make_config_setting;
+
+use crate::net::types::PubSubTopic;
 
 // TODO: does this constant make sense to be zero? Find the justification for it.
 pub const MDNS_DEFAULT_QUERY_INTERVAL: u64 = 0;
@@ -32,6 +34,11 @@ make_config_setting!(
     RequestTimeout,
     Duration,
     Duration::from_secs(10)
+);
+make_config_setting!(
+    AnnouncementSubscriptions,
+    BTreeSet<PubSubTopic>,
+    [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
 );
 
 /// Multicast DNS configuration.
@@ -63,8 +70,10 @@ pub struct P2pConfig {
     pub outbound_connection_timeout: OutboundConnectionTimeout,
     /// Multicast DNS configuration.
     pub mdns_config: MdnsConfigSetting,
-    /// The request timeout value in seconds.
+    /// The request timeout value.
     ///
     /// The peers that failed to respond before this timeout are disconnected.
     pub request_timeout: RequestTimeout,
+    /// A list of announcements this node is subscribed to.
+    pub announcement_subscriptions: AnnouncementSubscriptions,
 }

@@ -18,7 +18,7 @@ use std::{sync::Arc, time::Duration};
 use libp2p::multiaddr::Protocol;
 
 use p2p::{
-    config::{MdnsConfig, P2pConfig},
+    config::{AnnouncementSubscriptions, MdnsConfig, P2pConfig},
     net::{
         libp2p::Libp2pService, types::ConnectivityEvent, ConnectivityService, NetworkingService,
     },
@@ -42,6 +42,7 @@ async fn test_libp2p_peer_discovery() {
             }
             .into(),
             request_timeout: Duration::from_secs(10).into(),
+            announcement_subscriptions: AnnouncementSubscriptions::default(),
         }),
     )
     .await
@@ -60,6 +61,7 @@ async fn test_libp2p_peer_discovery() {
             }
             .into(),
             request_timeout: Duration::from_secs(10).into(),
+            announcement_subscriptions: AnnouncementSubscriptions::default(),
         }),
     )
     .await

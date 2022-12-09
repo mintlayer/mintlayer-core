@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, sync::Arc};
+use std::{collections::BTreeSet, fmt::Debug, sync::Arc};
 
 use tokio::{pin, select, time::Duration};
 
@@ -33,6 +33,7 @@ use common::{
 use serialization::Encode;
 
 use p2p::{
+    config::P2pConfig,
     error::{P2pError, PublishError},
     message::Announcement,
     net::{
@@ -131,14 +132,23 @@ where
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
     S::ConnectivityHandle: ConnectivityService<S>,
 {
-    let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut sync1) =
-        S::start(A::make_address(), Arc::clone(&config), Default::default())
-            .await
-            .unwrap();
-    let (mut conn2, _sync2) = S::start(A::make_address(), Arc::clone(&config), Default::default())
-        .await
-        .unwrap();
+    let chain_config = Arc::new(common::chain::config::create_mainnet());
+    let p2p_config = Arc::new(P2pConfig {
+        bind_address: Default::default(),
+        ban_threshold: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        mdns_config: Default::default(),
+        request_timeout: Default::default(),
+        announcement_subscriptions: BTreeSet::new().into(),
+    });
+    let (mut conn1, mut sync1) = S::start(
+        A::make_address(),
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+    )
+    .await
+    .unwrap();
+    let (mut conn2, _sync2) = S::start(A::make_address(), chain_config, p2p_config).await.unwrap();
 
     connect_services::<S>(&mut conn1, &mut conn2).await;
 

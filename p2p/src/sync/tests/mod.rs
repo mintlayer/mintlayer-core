@@ -26,7 +26,7 @@ use tokio::sync::mpsc;
 use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
 
 use crate::{
-    config::{MdnsConfig, P2pConfig},
+    config::{AnnouncementSubscriptions, MdnsConfig, P2pConfig},
     event::{PeerManagerEvent, SyncControlEvent},
     net::{mock::types::MockPeerId, ConnectivityService},
     sync::{peer, BlockSyncManager},
@@ -75,6 +75,7 @@ where
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
         request_timeout: Duration::from_secs(1).into(),
+        announcement_subscriptions: AnnouncementSubscriptions::default(),
     });
     let (conn, sync) = T::start(addr, Arc::clone(&chain_config), Arc::clone(&p2p_config))
         .await

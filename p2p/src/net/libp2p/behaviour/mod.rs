@@ -48,22 +48,19 @@ use crate::{
     config,
     error::{P2pError, ProtocolError},
     message,
-    net::{
-        libp2p::{
-            behaviour::{
-                connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent},
-                sync_codec::{
-                    message_types::{SyncRequest, SyncResponse},
-                    SyncMessagingCodec, SyncingProtocol,
-                },
+    net::libp2p::{
+        behaviour::{
+            connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent},
+            sync_codec::{
+                message_types::{SyncRequest, SyncResponse},
+                SyncMessagingCodec, SyncingProtocol,
             },
-            constants::{
-                GOSSIPSUB_HEARTBEAT, GOSSIPSUB_MAX_TRANSMIT_SIZE, PING_INTERVAL, PING_MAX_RETRIES,
-                PING_TIMEOUT,
-            },
-            types::{self, ConnectivityEvent, Libp2pBehaviourEvent, SyncingEvent},
         },
-        types::PubSubTopic,
+        constants::{
+            GOSSIPSUB_HEARTBEAT, GOSSIPSUB_MAX_TRANSMIT_SIZE, PING_INTERVAL, PING_MAX_RETRIES,
+            PING_TIMEOUT,
+        },
+        types::{self, ConnectivityEvent, Libp2pBehaviourEvent, SyncingEvent},
     },
 };
 
@@ -138,10 +135,9 @@ impl Libp2pBehaviour {
             gossipsub_config,
         )
         .expect("configuration to be valid");
-        gossipsub
-            .subscribe(&PubSubTopic::Transactions.into())
-            .expect("Failed to subscribe");
-        gossipsub.subscribe(&PubSubTopic::Blocks.into()).expect("Failed to subscribe");
+        for &subscription in p2p_config.announcement_subscriptions.as_ref() {
+            gossipsub.subscribe(&subscription.into()).expect("Unable to subscribe");
+        }
 
         let behaviour = Libp2pBehaviour {
             ping: ping::Behaviour::new(

@@ -28,7 +28,7 @@ use common::{
     primitives::{Id, Idable},
 };
 use p2p::{
-    config::{MdnsConfig, P2pConfig},
+    config::{AnnouncementSubscriptions, MdnsConfig, P2pConfig},
     error::P2pError,
     event::{PeerManagerEvent, SyncControlEvent},
     message::{BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response},
@@ -1096,6 +1096,7 @@ where
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
         request_timeout: Duration::from_secs(1).into(),
+        announcement_subscriptions: AnnouncementSubscriptions::default(),
     };
     let (mut mgr1, mut conn1, _sync1, mut pm1) =
         make_sync_manager::<T>(A::make_address(), chainstate1, p2p_config).await;

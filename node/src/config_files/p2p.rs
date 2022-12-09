@@ -15,8 +15,9 @@
 
 use std::time::Duration;
 
-use p2p::config::{MdnsConfig, P2pConfig};
 use serde::{Deserialize, Serialize};
+
+use p2p::config::{AnnouncementSubscriptions, MdnsConfig, P2pConfig};
 
 /// Multicast DNS configuration.
 #[derive(Serialize, Deserialize, Debug)]
@@ -112,6 +113,8 @@ impl From<P2pConfigFile> for P2pConfig {
             outbound_connection_timeout: c.outbound_connection_timeout.into(),
             mdns_config: mdns_config.into(),
             request_timeout: c.request_timeout.map(Duration::from_secs).into(),
+            // TODO: This should probably be set indirectly, for example by the node type.
+            announcement_subscriptions: AnnouncementSubscriptions::default(),
         }
     }
 }

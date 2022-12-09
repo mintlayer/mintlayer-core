@@ -447,13 +447,22 @@ where
         self.pending.insert(remote_peer_id, (tx, state));
 
         let tx = self.peer_chan.0.clone();
-        let config = Arc::clone(&self.chain_config);
+        let chain_config = Arc::clone(&self.chain_config);
+        let p2p_config = Arc::clone(&self.p2p_config);
 
         tokio::spawn(async move {
-            if let Err(err) =
-                peer::Peer::<T>::new(local_peer_id, remote_peer_id, role, config, socket, tx, rx)
-                    .start()
-                    .await
+            if let Err(err) = peer::Peer::<T>::new(
+                local_peer_id,
+                remote_peer_id,
+                role,
+                chain_config,
+                p2p_config,
+                socket,
+                tx,
+                rx,
+            )
+            .start()
+            .await
             {
                 log::error!("peer {remote_peer_id} failed: {err}");
             }
