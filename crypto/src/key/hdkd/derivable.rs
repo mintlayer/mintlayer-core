@@ -27,6 +27,8 @@ pub enum DerivationError {
     InvalidDerivationPathFormat,
     #[error("Unsupported derivation type")]
     UnsupportedDerivationType,
+    #[error("Unsupported derivation for key type")]
+    UnsupportedKeyType,
 }
 
 pub trait Derivable: Sized {
