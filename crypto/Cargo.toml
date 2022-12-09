@@ -32,6 +32,6 @@ zeroize = "1.5.7"
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 
-rstest = "0.15"
+rstest = "0.16"
 hex = "0.4"
 rand_chacha = "0.3.1"

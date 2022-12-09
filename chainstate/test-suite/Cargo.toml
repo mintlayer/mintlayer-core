@@ -21,10 +21,9 @@ consensus = { path = '../../consensus' }
 logging = { path = '../../logging' }
 utxo = { path = '../../utxo' }
 
-rstest = "0.15"
 hex = "0.4"
 itertools = "0.10"
 
 [dev-dependencies]
-rstest = "0.15"
+rstest = "0.16"
 expect-test = "1.3"
