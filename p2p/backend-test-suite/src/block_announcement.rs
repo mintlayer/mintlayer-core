@@ -150,14 +150,21 @@ where
         announcement_subscriptions: BTreeSet::new().into(),
     });
     let (mut conn1, mut sync1) = S::start(
+        A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
     )
+    .await
+    .unwrap();
+    let (mut conn2, _sync2) = S::start(
+        A::make_transport(),
+        A::make_address(),
+        chain_config,
+        p2p_config,
     )
     .await
     .unwrap();
-    let (mut conn2, _sync2) = S::start(A::make_address(), chain_config, p2p_config).await.unwrap();
 
     connect_services::<S>(&mut conn1, &mut conn2).await;
 
@@ -199,13 +206,14 @@ where
     .await
     .unwrap();
 
-    let (mut conn2, _sync2) = S::start(A::make_address(), Arc::clone(&config), Default::default())
+    let (mut conn2, _sync2) = S::start(
+        A::make_transport(),
         A::make_address(),
         Arc::clone(&config),
         Default::default(),
     )
-        .await
-        .unwrap();
+    .await
+    .unwrap();
 
     connect_services::<S>(&mut conn1, &mut conn2).await;
 
