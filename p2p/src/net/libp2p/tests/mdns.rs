@@ -18,7 +18,7 @@ use std::{sync::Arc, time::Duration};
 use futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
 
-use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
+use crate::testing_utils::{TestTransportLibp2p, TestTransportMaker};
 
 use crate::{
     config::{MdnsConfig, P2pConfig},
@@ -44,7 +44,7 @@ async fn test_discovered_and_expired() {
             .into(),
             request_timeout: Duration::from_secs(10).into(),
         }),
-        MakeP2pAddress::make_address(),
+        TestTransportLibp2p::make_address(),
         &[],
     )
     .await;
@@ -62,7 +62,7 @@ async fn test_discovered_and_expired() {
             .into(),
             request_timeout: Duration::from_secs(10).into(),
         }),
-        MakeP2pAddress::make_address(),
+        TestTransportLibp2p::make_address(),
         &[],
     )
     .await;

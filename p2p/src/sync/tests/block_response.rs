@@ -16,12 +16,14 @@
 use std::sync::Arc;
 
 use libp2p::PeerId;
+use p2p_test_utils::TestBlockInfo;
 
+use crate::testing_utils::{
+    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
+    TestTransportTcp,
+};
 use chainstate::ChainstateError;
 use common::{chain::block::consensus_data::PoWData, primitives::Idable};
-use p2p_test_utils::{
-    MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress, TestBlockInfo,
-};
 
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
@@ -43,7 +45,7 @@ use crate::{
 // peer doesn't exist
 async fn peer_doesnt_exist<A, P, T>()
 where
-    A: MakeTestAddress<Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -52,7 +54,7 @@ where
     let addr = A::make_address();
     let peer_id = P::random();
 
-    let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(addr).await;
+    let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(A::make_transport(), addr).await;
 
     assert_eq!(
         mgr.validate_header_response(&peer_id, vec![]).await,
@@ -62,28 +64,29 @@ where
 
 #[tokio::test]
 async fn peer_doesnt_exist_libp2p() {
-    peer_doesnt_exist::<MakeP2pAddress, PeerId, Libp2pService>().await;
+    peer_doesnt_exist::<TestTransportLibp2p, PeerId, Libp2pService>().await;
 }
 
 #[tokio::test]
 async fn peer_doesnt_exist_mock_tcp() {
-    peer_doesnt_exist::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
+    peer_doesnt_exist::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn peer_doesnt_exist_mock_channels() {
-    peer_doesnt_exist::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>().await;
+    peer_doesnt_exist::<TestTransportChannel, MockPeerId, MockService<MockChannelTransport>>()
+        .await;
 }
 
 #[tokio::test]
 async fn peer_doesnt_exist_mock_noise() {
-    peer_doesnt_exist::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
+    peer_doesnt_exist::<TestTransportNoise, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }
 
 // submit valid block but the peer is in invalid state
 async fn valid_block<A, P, T>()
 where
-    A: MakeTestAddress<Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -93,7 +96,7 @@ where
     let peer_id = P::random();
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(addr).await;
+    let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(A::make_transport(), addr).await;
     register_peer(&mut mgr, peer_id).await;
 
     let blocks = p2p_test_utils::create_n_blocks(
@@ -116,28 +119,28 @@ where
 
 #[tokio::test]
 async fn valid_block_libp2p() {
-    valid_block::<MakeP2pAddress, PeerId, Libp2pService>().await;
+    valid_block::<TestTransportLibp2p, PeerId, Libp2pService>().await;
 }
 
 #[tokio::test]
 async fn valid_block_mock_tcp() {
-    valid_block::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
+    valid_block::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn valid_block_mock_channels() {
-    valid_block::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>().await;
+    valid_block::<TestTransportChannel, MockPeerId, MockService<MockChannelTransport>>().await;
 }
 
 #[tokio::test]
 async fn valid_block_mock_noise() {
-    valid_block::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
+    valid_block::<TestTransportNoise, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }
 
 // submit valid block
 async fn valid_block_invalid_state<A, P, T>()
 where
-    A: MakeTestAddress<Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -147,7 +150,7 @@ where
     let peer_id = P::random();
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(addr).await;
+    let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(A::make_transport(), addr).await;
     register_peer(&mut mgr, peer_id).await;
 
     let blocks = p2p_test_utils::create_n_blocks(
@@ -164,31 +167,32 @@ where
 
 #[tokio::test]
 async fn valid_block_invalid_state_libp2p() {
-    valid_block_invalid_state::<MakeP2pAddress, PeerId, Libp2pService>().await;
+    valid_block_invalid_state::<TestTransportLibp2p, PeerId, Libp2pService>().await;
 }
 
 #[tokio::test]
 async fn valid_block_invalid_state_mock_tcp() {
-    valid_block_invalid_state::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>()
+    valid_block_invalid_state::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>()
         .await;
 }
 
 #[tokio::test]
 async fn valid_block_invalid_state_mock_channels() {
-    valid_block_invalid_state::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>(
+    valid_block_invalid_state::<TestTransportChannel, MockPeerId, MockService<MockChannelTransport>>(
     )
     .await;
 }
 
 #[tokio::test]
 async fn valid_block_invalid_state_mock_noise() {
-    valid_block_invalid_state::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
+    valid_block_invalid_state::<TestTransportNoise, MockPeerId, MockService<NoiseTcpTransport>>()
+        .await;
 }
 
 // submit the same block twice
 async fn valid_block_resubmitted_chainstate<A, P, T>()
 where
-    A: MakeTestAddress<Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -199,7 +203,7 @@ where
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
-    let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(addr).await;
+    let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(A::make_transport(), addr).await;
     register_peer(&mut mgr, peer_id).await;
 
     let blocks = p2p_test_utils::create_n_blocks(
@@ -225,19 +229,23 @@ where
 
 #[tokio::test]
 async fn valid_block_resubmitted_chainstate_libp2p() {
-    valid_block_resubmitted_chainstate::<MakeP2pAddress, PeerId, Libp2pService>().await;
+    valid_block_resubmitted_chainstate::<TestTransportLibp2p, PeerId, Libp2pService>().await;
 }
 
 #[tokio::test]
 async fn valid_block_resubmitted_chainstate_mock_tcp() {
-    valid_block_resubmitted_chainstate::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>()
-        .await;
+    valid_block_resubmitted_chainstate::<
+        TestTransportTcp,
+        MockPeerId,
+        MockService<TcpTransportSocket>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn valid_block_resubmitted_chainstate_mock_channels() {
     valid_block_resubmitted_chainstate::<
-        MakeChannelAddress,
+        TestTransportChannel,
         MockPeerId,
         MockService<MockChannelTransport>,
     >()
@@ -246,14 +254,18 @@ async fn valid_block_resubmitted_chainstate_mock_channels() {
 
 #[tokio::test]
 async fn valid_block_resubmitted_chainstate_mock_noise() {
-    valid_block_resubmitted_chainstate::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>()
-        .await;
+    valid_block_resubmitted_chainstate::<
+        TestTransportNoise,
+        MockPeerId,
+        MockService<NoiseTcpTransport>,
+    >()
+    .await;
 }
 
 // block validation fails
 async fn invalid_block<A, P, T>()
 where
-    A: MakeTestAddress<Address = T::Address>,
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -264,7 +276,7 @@ where
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
-    let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(addr).await;
+    let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(A::make_transport(), addr).await;
     register_peer(&mut mgr, peer_id).await;
 
     let mut blocks = p2p_test_utils::create_n_blocks(
@@ -292,20 +304,20 @@ where
 
 #[tokio::test]
 async fn invalid_block_libp2p() {
-    invalid_block::<MakeP2pAddress, PeerId, Libp2pService>().await;
+    invalid_block::<TestTransportLibp2p, PeerId, Libp2pService>().await;
 }
 
 #[tokio::test]
 async fn invalid_block_mock_tcp() {
-    invalid_block::<MakeTcpAddress, MockPeerId, MockService<TcpTransportSocket>>().await;
+    invalid_block::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn invalid_block_mock_channels() {
-    invalid_block::<MakeChannelAddress, MockPeerId, MockService<MockChannelTransport>>().await;
+    invalid_block::<TestTransportChannel, MockPeerId, MockService<MockChannelTransport>>().await;
 }
 
 #[tokio::test]
 async fn invalid_block_mock_noise() {
-    invalid_block::<MakeTcpAddress, MockPeerId, MockService<NoiseTcpTransport>>().await;
+    invalid_block::<TestTransportNoise, MockPeerId, MockService<NoiseTcpTransport>>().await;
 }

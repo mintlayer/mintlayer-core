@@ -15,9 +15,7 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::{fmt::Debug, net::SocketAddr, sync::Arc};
-
-use libp2p::Multiaddr;
+use std::{fmt::Debug, sync::Arc};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, BlockSource, ChainstateConfig,
@@ -234,48 +232,4 @@ pub async fn add_more_blocks(
 
     let blocks = create_n_blocks(config, base_block, nblocks);
     import_blocks(handle, blocks).await;
-}
-
-/// An interface for creating the address.
-///
-/// This abstraction layer is needed to uniformly create an address in the tests for different
-/// mocks transport implementations.
-pub trait MakeTestAddress {
-    /// An address type.
-    type Address: Clone + Debug + Eq + std::hash::Hash + Send + Sync + ToString;
-
-    /// Creates a new unused address.
-    ///
-    /// This should work similar to requesting a port of number 0 when opening a TCP connection.
-    fn make_address() -> Self::Address;
-}
-
-pub struct MakeP2pAddress {}
-
-impl MakeTestAddress for MakeP2pAddress {
-    type Address = Multiaddr;
-
-    fn make_address() -> Self::Address {
-        "/ip6/::1/tcp/0".parse().unwrap()
-    }
-}
-
-pub struct MakeTcpAddress {}
-
-impl MakeTestAddress for MakeTcpAddress {
-    type Address = SocketAddr;
-
-    fn make_address() -> Self::Address {
-        "[::1]:0".parse().unwrap()
-    }
-}
-
-pub struct MakeChannelAddress {}
-
-impl MakeTestAddress for MakeChannelAddress {
-    type Address = u64;
-
-    fn make_address() -> Self::Address {
-        0
-    }
 }

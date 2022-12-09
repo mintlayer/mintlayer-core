@@ -19,16 +19,18 @@ use crate::net::mock::{peer::Role, transport::PeerStream};
 
 use super::StreamAdapter;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IdentityStreamAdapter;
+
+impl IdentityStreamAdapter {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 /// A StreamAdapter that does nothing with no handshake (Identity operation on data that goes through it)
 impl<T: PeerStream + 'static> StreamAdapter<T> for IdentityStreamAdapter {
     type Stream = T;
-
-    fn new() -> Self {
-        Self
-    }
 
     fn handshake(&self, base: T, _role: Role) -> BoxFuture<'static, crate::Result<Self::Stream>> {
         Box::pin(ready(Ok(base)))

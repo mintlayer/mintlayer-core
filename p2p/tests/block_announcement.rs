@@ -20,6 +20,10 @@ use common::{
     primitives::{Id, H256},
 };
 
+use p2p::testing_utils::{
+    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
+    TestTransportTcp,
+};
 use p2p::{
     error::{P2pError, PublishError},
     message::Announcement,
@@ -34,28 +38,36 @@ use p2p::{
     },
     peer_manager::helpers::connect_services,
 };
-use p2p_test_utils::{MakeChannelAddress, MakeP2pAddress, MakeTcpAddress, MakeTestAddress};
 
 // Test announcements with multiple peers and verify that the message validation is done and peers
 // don't automatically forward the messages.
 async fn block_announcement_3_peers<A, S>()
 where
-    A: MakeTestAddress<Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
     S::ConnectivityHandle: ConnectivityService<S>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut sync1) =
-        S::start(A::make_address(), Arc::clone(&config), Default::default())
-            .await
-            .unwrap();
+    let (mut conn1, mut sync1) = S::start(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
     let (mut peer1, mut peer2, mut peer3) = {
         let mut peers = futures::future::join_all((0..3).map(|_| async {
-            let res = S::start(A::make_address(), Arc::clone(&config), Default::default())
-                .await
-                .unwrap();
+            let res = S::start(
+                A::make_transport(),
+                A::make_address(),
+                Arc::clone(&config),
+                Default::default(),
+            )
+            .await
+            .unwrap();
             (res.0, res.1)
         }))
         .await;
@@ -178,26 +190,26 @@ where
 
 #[tokio::test]
 async fn block_announcement_3_peers_libp2p() {
-    block_announcement_3_peers::<MakeP2pAddress, Libp2pService>().await;
+    block_announcement_3_peers::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 // TODO: Implement announcements resending in partially connected networks.
 #[ignore]
 #[tokio::test]
 async fn block_announcement_3_peers_tcp() {
-    block_announcement_3_peers::<MakeTcpAddress, MockService<TcpTransportSocket>>().await;
+    block_announcement_3_peers::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
 }
 
 // TODO: Implement announcements resending in partially connected networks.
 #[tokio::test]
 #[ignore]
 async fn block_announcement_3_peers_channels() {
-    block_announcement_3_peers::<MakeChannelAddress, MockService<MockChannelTransport>>().await;
+    block_announcement_3_peers::<TestTransportChannel, MockService<MockChannelTransport>>().await;
 }
 
 // TODO: Implement announcements resending in partially connected networks.
 #[ignore]
 #[tokio::test]
 async fn block_announcement_3_peers_noise() {
-    block_announcement_3_peers::<MakeTcpAddress, MockService<NoiseTcpTransport>>().await;
+    block_announcement_3_peers::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
 }

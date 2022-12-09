@@ -34,6 +34,15 @@ pub struct WrappedTransportSocket<S, T> {
     pub base_transport: T,
 }
 
+impl<S, T> WrappedTransportSocket<S, T> {
+    pub fn new(stream_adapter: S, base_transport: T) -> Self {
+        Self {
+            stream_adapter,
+            base_transport,
+        }
+    }
+}
+
 #[async_trait]
 impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
     for WrappedTransportSocket<S, T>
@@ -43,23 +52,10 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
     type Listener = AdaptedListener<S, T>;
     type Stream = S::Stream;
 
-    fn new() -> Self {
-        let base_transport = T::new();
-        let stream_adapter = S::new();
-        Self {
-            stream_adapter,
-            base_transport,
-        }
-    }
-
     async fn bind(&self, address: Self::Address) -> Result<Self::Listener> {
-        let stream_adapter = S::new();
+        let stream_adapter = self.stream_adapter.clone();
         let listener = self.base_transport.bind(address).await?;
-        Ok(AdaptedListener {
-            listener,
-            stream_adapter,
-            handshakes: Vec::new(),
-        })
+        Ok(AdaptedListener::new(stream_adapter, listener))
     }
 
     async fn connect(&self, address: Self::Address) -> Result<Self::Stream> {

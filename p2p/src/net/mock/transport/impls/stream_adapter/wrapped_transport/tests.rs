@@ -18,9 +18,9 @@ use std::{
     time::Duration,
 };
 
+use crate::testing_utils::{TestTransportChannel, TestTransportMaker, TestTransportTcp};
 use async_trait::async_trait;
 use futures::StreamExt;
-use p2p_test_utils::{MakeChannelAddress, MakeTcpAddress, MakeTestAddress};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     time::timeout,
@@ -51,8 +51,7 @@ async fn send_recv<T: PeerStream>(sender: &mut T, receiver: &mut T, len: usize) 
     assert_eq!(send_data, recv_data);
 }
 
-async fn test<A: MakeTestAddress<Address = T::Address>, T: TransportSocket>() {
-    let transport = T::new();
+async fn test<A: TestTransportMaker<Address = T::Address>, T: TransportSocket>(transport: T) {
     let mut server = transport.bind(A::make_address()).await.unwrap();
     let peer_fut = transport.connect(server.local_address().unwrap());
 
@@ -69,31 +68,45 @@ async fn test<A: MakeTestAddress<Address = T::Address>, T: TransportSocket>() {
 
 #[tokio::test]
 async fn test_send_recv() {
-    test::<MakeTcpAddress, TcpTransportSocket>().await;
-    test::<MakeChannelAddress, MockChannelTransport>().await;
+    test::<TestTransportTcp, TcpTransportSocket>(TcpTransportSocket::new()).await;
 
-    test::<MakeTcpAddress, WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>>()
-        .await;
+    test::<TestTransportChannel, MockChannelTransport>(MockChannelTransport::new()).await;
+
+    test::<TestTransportTcp, WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>>(
+        WrappedTransportSocket::new(NoiseEncryptionAdapter::gen_new(), TcpTransportSocket::new()),
+    )
+    .await;
+
     test::<
-        MakeChannelAddress,
+        TestTransportChannel,
         WrappedTransportSocket<NoiseEncryptionAdapter, MockChannelTransport>,
-    >()
+    >(WrappedTransportSocket::new(
+        NoiseEncryptionAdapter::gen_new(),
+        MockChannelTransport::new(),
+    ))
     .await;
-    test::<MakeTcpAddress, WrappedTransportSocket<IdentityStreamAdapter, TcpTransportSocket>>()
-        .await;
-    test::<
-        MakeChannelAddress,
-        WrappedTransportSocket<IdentityStreamAdapter, MockChannelTransport>,
-    >()
+
+    test::<TestTransportTcp, WrappedTransportSocket<IdentityStreamAdapter, TcpTransportSocket>>(
+        WrappedTransportSocket::new(IdentityStreamAdapter::new(), TcpTransportSocket::new()),
+    )
     .await;
 
     test::<
-        MakeTcpAddress,
+        TestTransportChannel,
+        WrappedTransportSocket<IdentityStreamAdapter, MockChannelTransport>,
+    >(WrappedTransportSocket::new(IdentityStreamAdapter::new(), MockChannelTransport::new()))
+    .await;
+
+    test::<
+        TestTransportTcp,
         WrappedTransportSocket<
             NoiseEncryptionAdapter,
             WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>,
         >,
-    >()
+    >(WrappedTransportSocket::new(
+        NoiseEncryptionAdapter::gen_new(),
+        WrappedTransportSocket::new(NoiseEncryptionAdapter::gen_new(), TcpTransportSocket::new()),
+    ))
     .await;
 }
 
@@ -107,19 +120,21 @@ pub struct TestMockListener {
     port_open: Arc<Mutex<bool>>,
 }
 
-#[async_trait]
-impl TransportSocket for TestMockTransport {
-    type Address = <MockChannelTransport as TransportSocket>::Address;
-    type BannableAddress = <MockChannelTransport as TransportSocket>::BannableAddress;
-    type Listener = TestMockListener;
-    type Stream = <MockChannelTransport as TransportSocket>::Stream;
-
+impl TestMockTransport {
     fn new() -> Self {
         Self {
             transport: MockChannelTransport::new(),
             port_open: Default::default(),
         }
     }
+}
+
+#[async_trait]
+impl TransportSocket for TestMockTransport {
+    type Address = <MockChannelTransport as TransportSocket>::Address;
+    type BannableAddress = <MockChannelTransport as TransportSocket>::BannableAddress;
+    type Listener = TestMockListener;
+    type Stream = <MockChannelTransport as TransportSocket>::Stream;
 
     async fn bind(&self, address: Self::Address) -> crate::Result<Self::Listener> {
         let listener = self.transport.bind(address).await.unwrap();
@@ -165,7 +180,10 @@ impl Drop for TestMockListener {
 #[tokio::test]
 // Test that the base listener is dropped after AdaptedMockTransport::Listener is dropped.
 async fn test_bind_port_closed() {
-    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TestMockTransport>::new();
+    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TestMockTransport>::new(
+        NoiseEncryptionAdapter::gen_new(),
+        TestMockTransport::new(),
+    );
     assert!(!*transport.base_transport.port_open.lock().unwrap());
 
     let listener = transport.bind(0).await.unwrap();
@@ -177,8 +195,11 @@ async fn test_bind_port_closed() {
 
 #[tokio::test]
 async fn send_2_reqs() {
-    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new();
-    let mut server = transport.bind(MakeTcpAddress::make_address()).await.unwrap();
+    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new(
+        NoiseEncryptionAdapter::gen_new(),
+        TcpTransportSocket::new(),
+    );
+    let mut server = transport.bind(TestTransportTcp::make_address()).await.unwrap();
     let peer_fut = transport.connect(server.local_address().unwrap());
 
     let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
@@ -224,8 +245,11 @@ async fn send_2_reqs() {
 
 #[tokio::test]
 async fn pending_handshakes() {
-    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new();
-    let mut server = transport.bind(MakeTcpAddress::make_address()).await.unwrap();
+    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new(
+        NoiseEncryptionAdapter::gen_new(),
+        TcpTransportSocket::new(),
+    );
+    let mut server = transport.bind(TestTransportTcp::make_address()).await.unwrap();
     let local_addr = server.local_address().unwrap();
 
     let join_handle = tokio::spawn(async move {
@@ -256,8 +280,11 @@ async fn pending_handshakes() {
 
 #[tokio::test]
 async fn handshake_timeout() {
-    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new();
-    let mut server = transport.bind(MakeTcpAddress::make_address()).await.unwrap();
+    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new(
+        NoiseEncryptionAdapter::gen_new(),
+        TcpTransportSocket::new(),
+    );
+    let mut server = transport.bind(TestTransportTcp::make_address()).await.unwrap();
     let local_addr = server.local_address().unwrap();
 
     let join_handle = tokio::spawn(async move {

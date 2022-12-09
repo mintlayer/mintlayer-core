@@ -17,6 +17,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::mpsc;
 
+use p2p::testing_utils::TestTransportMaker;
 use p2p::{
     config::P2pConfig,
     error::{P2pError, PublishError},
@@ -28,7 +29,7 @@ use p2p::{
     peer_manager::helpers::connect_services,
     sync::BlockSyncManager,
 };
-use p2p_test_utils::{MakeTestAddress, TestBlockInfo};
+use p2p_test_utils::TestBlockInfo;
 
 tests![invalid_pubsub_block, invalid_sync_block,];
 
@@ -37,7 +38,7 @@ tests![invalid_pubsub_block, invalid_sync_block,];
 // receives a `AdjustPeerScore` event which bans the peer of the second service.
 async fn invalid_pubsub_block<A, S>()
 where
-    A: MakeTestAddress<Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -49,6 +50,7 @@ where
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&chain_config)).await;
 
     let (mut conn1, sync1) = S::start(
+        A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
         Default::default(),
@@ -66,6 +68,7 @@ where
     );
 
     let (mut conn2, mut sync2) = S::start(
+        A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
@@ -131,7 +134,7 @@ where
 // Start two networking services and give an invalid block, verify that `PeerManager` is informed.
 async fn invalid_sync_block<A, S>()
 where
-    A: MakeTestAddress<Address = S::Address>,
+    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -142,6 +145,7 @@ where
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&chain_config)).await;
 
     let (mut conn1, sync1) = S::start(
+        A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
         Default::default(),
@@ -150,6 +154,7 @@ where
     .unwrap();
 
     let (mut conn2, _sync2) = S::start(
+        A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
         Default::default(),

@@ -48,16 +48,18 @@ static CONNECTIONS: Lazy<Mutex<BTreeMap<Address, UnboundedSender<Sender<DuplexSt
 #[derive(Debug)]
 pub struct MockChannelTransport;
 
+impl MockChannelTransport {
+    pub fn new() -> Self {
+        MockChannelTransport
+    }
+}
+
 #[async_trait]
 impl TransportSocket for MockChannelTransport {
     type Address = Address;
     type BannableAddress = Address;
     type Listener = MockChannelListener;
     type Stream = ChannelMockStream;
-
-    fn new() -> Self {
-        Self
-    }
 
     async fn bind(&self, address: Self::Address) -> Result<Self::Listener> {
         let mut connections = CONNECTIONS.lock().expect("Connections mutex is poisoned");

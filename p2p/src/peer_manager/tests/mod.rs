@@ -31,6 +31,7 @@ use crate::{
 };
 
 async fn make_peer_manager<T>(
+    transport: T::Transport,
     addr: T::Address,
     chain_config: Arc<common::chain::ChainConfig>,
 ) -> PeerManager<T>
@@ -40,7 +41,14 @@ where
     <T as NetworkingService>::Address: FromStr,
     <<T as NetworkingService>::Address as FromStr>::Err: Debug,
 {
-    let (conn, _) = T::start(addr, Arc::clone(&chain_config), Default::default()).await.unwrap();
+    let (conn, _) = T::start(
+        transport,
+        addr,
+        Arc::clone(&chain_config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
     let (_, rx) = tokio::sync::mpsc::unbounded_channel();
     let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
 
