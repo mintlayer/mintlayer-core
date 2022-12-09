@@ -355,7 +355,7 @@ where
     ///
     /// The node is considered fully synced (its initial block download is done) if all its peers
     /// are in the `Done` state.
-    pub async fn update_state(&mut self) {
+    pub fn update_state(&mut self) {
         // TODO: improve "initial block download done" check
 
         if self.peers.is_empty() {
@@ -584,7 +584,7 @@ where
                 }
             }
 
-            self.update_state().await;
+            self.update_state();
         }
     }
 

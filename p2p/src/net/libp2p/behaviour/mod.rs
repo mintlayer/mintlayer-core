@@ -139,7 +139,7 @@ impl Libp2pBehaviour {
             gossipsub.subscribe(&subscription.into()).expect("Unable to subscribe");
         }
 
-        let behaviour = Libp2pBehaviour {
+        Libp2pBehaviour {
             ping: ping::Behaviour::new(
                 ping::Config::new()
                     .with_timeout(PING_TIMEOUT)
@@ -163,9 +163,7 @@ impl Libp2pBehaviour {
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             waker: None,
-        };
-
-        behaviour
+        }
     }
 
     fn add_event(&mut self, event: Libp2pBehaviourEvent) {

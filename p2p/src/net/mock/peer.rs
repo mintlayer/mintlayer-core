@@ -69,6 +69,7 @@ impl<T> Peer<T>
 where
     T: TransportSocket,
 {
+    #![allow(clippy::too_many_arguments)]
     pub fn new(
         local_peer_id: MockPeerId,
         remote_peer_id: MockPeerId,

@@ -200,7 +200,7 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await;
+    mgr1.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Done);
@@ -319,8 +319,8 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await;
-    mgr2.update_state().await;
+    mgr1.update_state();
+    mgr2.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Done);
@@ -463,8 +463,8 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await;
-    mgr2.update_state().await;
+    mgr1.update_state();
+    mgr2.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await == local_tip);
@@ -609,8 +609,8 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await;
-    mgr2.update_state().await;
+    mgr1.update_state();
+    mgr2.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await != local_tip);
@@ -732,7 +732,7 @@ where
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await;
+    mgr1.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
@@ -870,7 +870,7 @@ where
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await;
+    mgr1.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
@@ -1020,7 +1020,7 @@ where
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await;
+    mgr1.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(same_tip(&mgr2_handle, &mgr3_handle).await);
@@ -1150,7 +1150,7 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await;
+    mgr1.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Done);
@@ -1386,6 +1386,6 @@ where
         }
     }
 
-    mgr.update_state().await;
+    mgr.update_state();
     Ok(())
 }
