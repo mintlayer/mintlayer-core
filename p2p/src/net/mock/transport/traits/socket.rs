@@ -51,9 +51,6 @@ pub trait TransportSocket: Send + Sync + 'static {
     /// A messages stream.
     type Stream: PeerStream;
 
-    /// Creates a new transport.
-    fn new() -> Self;
-
     /// Creates a new listener bound to the specified address.
     async fn bind(&self, address: Self::Address) -> Result<Self::Listener>;
 

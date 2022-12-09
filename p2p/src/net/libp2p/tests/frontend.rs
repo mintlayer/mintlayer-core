@@ -18,7 +18,7 @@ use std::{sync::Arc, time::Duration};
 use libp2p::{core::PeerId, multiaddr::Protocol, Multiaddr};
 use tokio::net::TcpListener;
 
-use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
+use crate::testing_utils::{TestTransportLibp2p, TestTransportMaker};
 use serialization::{Decode, Encode};
 
 use crate::{
@@ -46,10 +46,14 @@ struct Transaction {
 async fn test_connect_peer_id_missing() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let addr: Multiaddr = "/ip6/::1/tcp/8904".parse().unwrap();
-    let (mut service, _) =
-        Libp2pService::start(MakeP2pAddress::make_address(), config, Default::default())
-            .await
-            .unwrap();
+    let (mut service, _) = Libp2pService::start(
+        TestTransportLibp2p::make_transport(),
+        TestTransportLibp2p::make_address(),
+        config,
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
     match service.connect(addr.clone()).await {
         Ok(_) => panic!("connect succeeded without peer id"),
@@ -229,7 +233,8 @@ fn test_parse_peers_valid_3_peers_1_valid() {
 async fn test_connect_with_timeout() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut service, _) = Libp2pService::start(
-        MakeP2pAddress::make_address(),
+        TestTransportLibp2p::make_transport(),
+        TestTransportLibp2p::make_address(),
         config,
         Arc::new(P2pConfig {
             bind_address: "/ip6/::1/tcp/3031".to_owned().into(),

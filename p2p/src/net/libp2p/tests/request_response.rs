@@ -14,13 +14,13 @@
 // limitations under the License.
 
 use super::*;
+use crate::testing_utils::{TestTransportLibp2p, TestTransportMaker};
 use crate::{
     error::{P2pError, PeerError},
     net::libp2p::{behaviour::sync_codec::message_types::SyncRequest, types},
 };
 use futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
-use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 use tokio::sync::oneshot;
 
 // try to send request to an unknown peer and verify that the request is not rejected
@@ -29,7 +29,7 @@ async fn request_sent_directly_but_peer_not_part_of_swarm() {
     let (mut backend, _cmd, _conn_rx, _sync_rx) = make_libp2p(
         common::chain::config::create_mainnet(),
         Arc::new(Default::default()),
-        MakeP2pAddress::make_address(),
+        TestTransportLibp2p::make_address(),
         &[],
     )
     .await;
@@ -52,7 +52,7 @@ async fn request_sent_but_peer_not_part_of_swarm() {
     let (mut backend, _cmd, _conn_rx, _sync_rx) = make_libp2p(
         common::chain::config::create_mainnet(),
         Arc::new(Default::default()),
-        MakeP2pAddress::make_address(),
+        TestTransportLibp2p::make_address(),
         &[],
     )
     .await;

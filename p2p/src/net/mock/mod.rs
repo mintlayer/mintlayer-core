@@ -111,6 +111,7 @@ where
 
 #[async_trait]
 impl<T: TransportSocket> NetworkingService for MockService<T> {
+    type Transport = T;
     type Address = T::Address;
     type BannableAddress = T::BannableAddress;
     type PeerId = MockPeerId;
@@ -120,11 +121,11 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
     type SyncingMessagingHandle = MockSyncingMessagingHandle<Self, T>;
 
     async fn start(
+        transport: Self::Transport,
         addr: Self::Address,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
-        let transport = T::new();
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (sync_tx, sync_rx) = mpsc::channel(16);
@@ -377,24 +378,28 @@ where
 #[cfg(test)]
 mod tests {
     use super::{transport::NoiseTcpTransport, *};
-    use crate::net::{
-        self,
-        mock::transport::{MockChannelTransport, TcpTransportSocket},
-        types::{Protocol, ProtocolType},
+    use crate::testing_utils::{TestTransportChannel, TestTransportMaker, TestTransportTcp};
+    use crate::{
+        net::{
+            self,
+            mock::transport::{MockChannelTransport, TcpTransportSocket},
+            types::{Protocol, ProtocolType},
+        },
+        testing_utils::TestTransportNoise,
     };
     use common::primitives::semver::SemVer;
-    use p2p_test_utils::{MakeChannelAddress, MakeTcpAddress, MakeTestAddress};
     use std::fmt::Debug;
 
     async fn connect_to_remote<A, T>()
     where
-        A: MakeTestAddress<Address = T::Address>,
+        A: TestTransportMaker<Transport = T, Address = T::Address>,
         T: TransportSocket + Debug,
     {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
         let (mut conn1, _) = MockService::<T>::start(
+            A::make_transport(),
             A::make_address(),
             Arc::clone(&config),
             Arc::clone(&p2p_config),
@@ -403,6 +408,7 @@ mod tests {
         .unwrap();
 
         let (conn2, _) = MockService::<T>::start(
+            A::make_transport(),
             A::make_address(),
             Arc::clone(&config),
             Arc::clone(&p2p_config),
@@ -443,28 +449,29 @@ mod tests {
 
     #[tokio::test]
     async fn connect_to_remote_tcp() {
-        connect_to_remote::<MakeTcpAddress, TcpTransportSocket>().await;
+        connect_to_remote::<TestTransportTcp, TcpTransportSocket>().await;
     }
 
     #[tokio::test]
     async fn connect_to_remote_channels() {
-        connect_to_remote::<MakeChannelAddress, MockChannelTransport>().await;
+        connect_to_remote::<TestTransportChannel, MockChannelTransport>().await;
     }
 
     #[tokio::test]
     async fn connect_to_remote_noise() {
-        connect_to_remote::<MakeTcpAddress, NoiseTcpTransport>().await;
+        connect_to_remote::<TestTransportNoise, NoiseTcpTransport>().await;
     }
 
     async fn accept_incoming<A, T>()
     where
-        A: MakeTestAddress<Address = T::Address>,
+        A: TestTransportMaker<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
         let (mut conn1, _) = MockService::<T>::start(
+            A::make_transport(),
             A::make_address(),
             Arc::clone(&config),
             Arc::clone(&p2p_config),
@@ -473,6 +480,7 @@ mod tests {
         .unwrap();
 
         let (mut conn2, _) = MockService::<T>::start(
+            A::make_transport(),
             A::make_address(),
             Arc::clone(&config),
             Arc::clone(&p2p_config),
@@ -510,28 +518,29 @@ mod tests {
 
     #[tokio::test]
     async fn accept_incoming_tcp() {
-        accept_incoming::<MakeTcpAddress, TcpTransportSocket>().await;
+        accept_incoming::<TestTransportTcp, TcpTransportSocket>().await;
     }
 
     #[tokio::test]
     async fn accept_incoming_channels() {
-        accept_incoming::<MakeChannelAddress, MockChannelTransport>().await;
+        accept_incoming::<TestTransportChannel, MockChannelTransport>().await;
     }
 
     #[tokio::test]
     async fn accept_incoming_noise() {
-        accept_incoming::<MakeTcpAddress, NoiseTcpTransport>().await;
+        accept_incoming::<TestTransportNoise, NoiseTcpTransport>().await;
     }
 
     async fn disconnect<A, T>()
     where
-        A: MakeTestAddress<Address = T::Address>,
+        A: TestTransportMaker<Transport = T, Address = T::Address>,
         T: TransportSocket,
     {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
         let (mut conn1, _) = MockService::<T>::start(
+            A::make_transport(),
             A::make_address(),
             Arc::clone(&config),
             Arc::clone(&p2p_config),
@@ -539,7 +548,9 @@ mod tests {
         .await
         .unwrap();
         let (mut conn2, _) =
-            MockService::<T>::start(A::make_address(), config, p2p_config).await.unwrap();
+            MockService::<T>::start(A::make_transport(), A::make_address(), config, p2p_config)
+                .await
+                .unwrap();
 
         let (_res1, res2) = tokio::join!(
             conn1.connect(conn2.local_addr().await.unwrap().unwrap()),
@@ -559,16 +570,16 @@ mod tests {
 
     #[tokio::test]
     async fn disconnect_tcp() {
-        disconnect::<MakeTcpAddress, TcpTransportSocket>().await;
+        disconnect::<TestTransportTcp, TcpTransportSocket>().await;
     }
 
     #[tokio::test]
     async fn disconnect_channels() {
-        disconnect::<MakeChannelAddress, MockChannelTransport>().await;
+        disconnect::<TestTransportChannel, MockChannelTransport>().await;
     }
 
     #[tokio::test]
     async fn disconnect_noise() {
-        disconnect::<MakeTcpAddress, NoiseTcpTransport>().await;
+        disconnect::<TestTransportNoise, NoiseTcpTransport>().await;
     }
 }

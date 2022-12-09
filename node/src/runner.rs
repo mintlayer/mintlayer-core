@@ -73,7 +73,7 @@ pub async fn initialize(
     // P2P subsystem
     let p2p = manager.add_subsystem(
         "p2p",
-        p2p::make_p2p::<p2p::net::libp2p::Libp2pService>(
+        p2p::make_p2p(
             Arc::clone(&chain_config),
             Arc::new(node_config.p2p.into()),
             chainstate.clone(),

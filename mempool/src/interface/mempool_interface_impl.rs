@@ -19,11 +19,10 @@ use crate::{
 };
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
-    chain::{Block, ChainConfig, SignedTransaction, Transaction},
-    primitives::{BlockHeight, Id},
+    chain::{ChainConfig, SignedTransaction, Transaction},
+    primitives::Id,
     time_getter::TimeGetter,
 };
-use logging::log;
 use std::sync::Arc;
 use subsystem::{CallRequest, ShutdownRequest};
 use tokio::sync::mpsc;
@@ -51,23 +50,11 @@ impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInterfaceImpl<M> {
 
     pub async fn subscribe_to_chainstate_events(
         &mut self,
-    ) -> crate::Result<mpsc::UnboundedReceiver<(Id<Block>, BlockHeight)>> {
+    ) -> crate::Result<mpsc::UnboundedReceiver<chainstate::ChainstateEvent>> {
         let (tx, rx) = mpsc::unbounded_channel();
-        let subscribe_func =
-            Arc::new(
-                move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
-                    chainstate::ChainstateEvent::NewTip(block_id, block_height) => {
-                        log::info!(
-                            "Received a new tip with block id {:?} and block height {:?}",
-                            block_id,
-                            block_height
-                        );
-                        if let Err(e) = tx.send((block_id, block_height)) {
-                            log::error!("Mempool Event Handler closed: {:?}", e)
-                        }
-                    }
-                },
-            );
+        let subscribe_func = Arc::new(move |chainstate_event: chainstate::ChainstateEvent| {
+            let _ = tx.send(chainstate_event).log_err_pfx("Mempool event handler closed");
+        });
 
         self.pool
             .chainstate_handle()
@@ -96,9 +83,7 @@ impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolSubsystemInterface
             tokio::select! {
                 () = shut_rq.recv() => break,
                 call = call_rq.recv() => call(&mut self).await,
-                Some((block_id, block_height)) = chainstate_events_rx.recv() => {
-                    self.pool.new_tip_set(block_id, block_height);
-                }
+                Some(evt) = chainstate_events_rx.recv() => self.pool.process_chainstate_event(evt),
             }
         }
     }

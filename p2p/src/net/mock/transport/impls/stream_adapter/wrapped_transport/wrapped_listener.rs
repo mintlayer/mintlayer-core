@@ -36,10 +36,20 @@ pub const MAX_CONCURRENT_HANDSHAKES: usize = 100;
 
 /// A listener (acceptor) object that handles new incoming connections, and does any required handshakes
 pub struct AdaptedListener<S: StreamAdapter<T::Stream>, T: TransportSocket> {
-    pub stream_adapter: S,
-    pub listener: T::Listener,
+    stream_adapter: S,
+    listener: T::Listener,
     #[allow(clippy::type_complexity)]
-    pub handshakes: Vec<(BoxFuture<'static, Result<S::Stream>>, T::Address)>,
+    handshakes: Vec<(BoxFuture<'static, Result<S::Stream>>, T::Address)>,
+}
+
+impl<S: StreamAdapter<T::Stream>, T: TransportSocket> AdaptedListener<S, T> {
+    pub fn new(stream_adapter: S, listener: T::Listener) -> Self {
+        Self {
+            stream_adapter,
+            listener,
+            handshakes: Vec::new(),
+        }
+    }
 }
 
 #[async_trait]

@@ -32,6 +32,11 @@ use crate::{config, message, message::Announcement};
 /// that each network service provider must implement
 #[async_trait]
 pub trait NetworkingService {
+    /// A generic networking transport.
+    ///
+    /// Can be used to initialize networking transport with authentication keys for example.
+    type Transport;
+
     /// A generic network address.
     ///
     /// Although the `Address` allows a fallible conversion to `BannableAddress`, a valid address
@@ -81,6 +86,7 @@ pub trait NetworkingService {
     /// `bind_addr` - socket address for incoming P2P traffic
     /// `chain_config` - chain config of the node
     async fn start(
+        transport: Self::Transport,
         bind_addr: Self::Address,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,

@@ -15,12 +15,12 @@
 
 use super::*;
 use crate::net::libp2p::behaviour;
+use crate::testing_utils::{TestTransportLibp2p, TestTransportMaker};
 use futures::StreamExt;
 use libp2p::{
     ping,
     swarm::{SwarmBuilder, SwarmEvent},
 };
-use p2p_test_utils::{MakeP2pAddress, MakeTestAddress};
 use std::time::Duration;
 
 #[tokio::test]
@@ -28,7 +28,7 @@ async fn test_remote_doesnt_respond() {
     let (mut backend1, _cmd, _conn_rx, _sync_rx) = make_libp2p_with_ping(
         common::chain::config::create_mainnet(),
         Arc::new(Default::default()),
-        MakeP2pAddress::make_address(),
+        TestTransportLibp2p::make_address(),
         &[],
         make_ping(
             Some(Duration::from_secs(2)),
@@ -72,7 +72,7 @@ async fn test_ping_not_supported() {
     let (mut backend1, _cmd, _conn_rx, _) = make_libp2p_with_ping(
         config.clone(),
         Arc::new(Default::default()),
-        MakeP2pAddress::make_address(),
+        TestTransportLibp2p::make_address(),
         &[],
         make_ping(
             Some(Duration::from_secs(2)),

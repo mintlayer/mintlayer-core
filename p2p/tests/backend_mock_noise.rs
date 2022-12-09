@@ -17,11 +17,11 @@ use p2p::net::mock::{
     transport::{NoiseEncryptionAdapter, TcpTransportSocket, WrappedTransportSocket},
     MockService,
 };
-use p2p_test_utils::MakeTcpAddress;
+use p2p::testing_utils::TestTransportNoise;
 
 fn main() {
     p2p_backend_test_suite::run::<
-        MakeTcpAddress,
+        TestTransportNoise,
         MockService<WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>>,
     >();
 }

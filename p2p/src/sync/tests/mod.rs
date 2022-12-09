@@ -34,6 +34,7 @@ use crate::{
 };
 
 async fn make_sync_manager<T>(
+    transport: T::Transport,
     addr: T::Address,
 ) -> (
     BlockSyncManager<T>,
@@ -77,9 +78,14 @@ where
         request_timeout: Duration::from_secs(1).into(),
         announcement_subscriptions: AnnouncementSubscriptions::default(),
     });
-    let (conn, sync) = T::start(addr, Arc::clone(&chain_config), Arc::clone(&p2p_config))
-        .await
-        .unwrap();
+    let (conn, sync) = T::start(
+        transport,
+        addr,
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+    )
+    .await
+    .unwrap();
 
     (
         BlockSyncManager::<T>::new(chain_config, p2p_config, sync, handle, rx_p2p_sync, tx_pm),
