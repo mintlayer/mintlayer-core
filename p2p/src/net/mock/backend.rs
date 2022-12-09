@@ -360,13 +360,6 @@ where
         }
     }
 
-    fn subscribe_peer(&mut self, peer_id: MockPeerId, topics: BTreeSet<PubSubTopic>) {
-        match self.peers.get_mut(&peer_id) {
-            Some(peer) => peer.subscriptions = topics.into_iter().collect(),
-            None => log::warn!("Unable to subscribe non-existent peer: {peer_id:?}"),
-        }
-    }
-
     async fn handle_announcement(
         &mut self,
         peer_id: MockPeerId,
@@ -497,7 +490,7 @@ where
                                     version,
                                     agent: None,
                                     protocols,
-                                    subscriptions,
+                                    subscriptions: subscriptions.clone(),
                                 },
                             })
                             .await
@@ -513,7 +506,7 @@ where
                                     version,
                                     agent: None,
                                     protocols,
-                                    subscriptions,
+                                    subscriptions: subscriptions.clone(),
                                 },
                             })
                             .await
@@ -525,7 +518,7 @@ where
                     received_id,
                     PeerContext {
                         _peer_id: received_id,
-                        subscriptions: BTreeSet::new(),
+                        subscriptions,
                         tx,
                     },
                 );
@@ -562,9 +555,6 @@ where
                 response,
             } => {
                 self.handle_incoming_response(peer_id, request_id, response).await?;
-            }
-            Message::Subscribe { topics } => {
-                self.subscribe_peer(peer_id, topics);
             }
             Message::Announcement { announcement } => {
                 self.handle_announcement(peer_id, announcement).await?;

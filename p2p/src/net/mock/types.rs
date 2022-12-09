@@ -241,9 +241,6 @@ pub enum Message {
         request_id: MockRequestId,
         response: message::Response,
     },
-    Subscribe {
-        topics: BTreeSet<PubSubTopic>,
-    },
     Announcement {
         announcement: message::Announcement,
     },
