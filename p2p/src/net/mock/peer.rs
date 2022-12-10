@@ -13,10 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
-use futures::FutureExt;
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, time::timeout};
 
 use common::{chain::ChainConfig, primitives::semver::SemVer};
 use logging::log;
@@ -33,6 +32,8 @@ use crate::{
 };
 
 use super::transport::BufferedTranscoder;
+
+const PEER_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub enum Role {
     Inbound,
@@ -91,12 +92,12 @@ where
         match self.role {
             Role::Inbound => {
                 let (peer_id, network, version, protocols) =
-                    if let Ok(Some(types::Message::Handshake(types::HandshakeMessage::Hello {
+                    if let Ok(types::Message::Handshake(types::HandshakeMessage::Hello {
                         peer_id,
                         version,
                         network,
                         protocols,
-                    }))) = self.socket.recv().await
+                    })) = self.socket.recv().await
                     {
                         (peer_id, network, version, protocols)
                     } else {
@@ -153,19 +154,18 @@ where
                     }))
                     .await?;
 
-                let (peer_id, network, version, protocols) = if let Ok(Some(
-                    types::Message::Handshake(types::HandshakeMessage::HelloAck {
+                let (peer_id, network, version, protocols) =
+                    if let Ok(types::Message::Handshake(types::HandshakeMessage::HelloAck {
                         peer_id,
                         version,
                         network,
                         protocols,
-                    }),
-                )) = self.socket.recv().await
-                {
-                    (peer_id, network, version, protocols)
-                } else {
-                    return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-                };
+                    })) = self.socket.recv().await
+                    {
+                        (peer_id, network, version, protocols)
+                    } else {
+                        return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+                    };
 
                 self.tx
                     .send((
@@ -186,33 +186,37 @@ where
         }
     }
 
-    async fn destroy_peer(&mut self) -> crate::Result<()> {
-        self.tx
-            .send((self.remote_peer_id, types::PeerEvent::ConnectionClosed))
-            .await
-            .map_err(P2pError::from)
+    pub async fn destroy(self) {
+        let _ = self.tx.send((self.remote_peer_id, types::PeerEvent::ConnectionClosed)).await;
     }
 
-    pub async fn start(&mut self) -> crate::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<()> {
         // handshake with remote peer and send peer's info to backend
-        if let Err(err) = self.handshake().await {
-            log::debug!("handshake failed for peer {}: {err}", self.remote_peer_id);
-            return self.destroy_peer().await;
+        let handshake_res = timeout(PEER_HANDSHAKE_TIMEOUT, self.handshake()).await;
+        match handshake_res {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => {
+                log::debug!("handshake failed for peer {}: {err}", self.remote_peer_id);
+                return Err(err);
+            }
+            Err(_) => {
+                log::debug!("handshake timeout for peer {}", self.remote_peer_id);
+                return Err(P2pError::ProtocolError(ProtocolError::Unresponsive));
+            }
         }
 
         loop {
             tokio::select! {
-                event = self.rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
-                    MockEvent::Disconnect => return self.destroy_peer().await,
+                event = self.rx.recv() => match event.ok_or(P2pError::ChannelClosed)? {
+                    MockEvent::Disconnect => return Ok(()),
                     MockEvent::SendMessage(message) => self.socket.send(*message).await?,
                 },
                 event = self.socket.recv() => match event {
                     Err(err) => {
                         log::info!("peer connection closed, reason {err:?}");
-                        return self.destroy_peer().await;
+                        return Ok(());
                     }
-                    Ok(None) => {},
-                    Ok(Some(message)) => {
+                    Ok(message) => {
                         self.tx
                             .send((
                                 self.remote_peer_id,
@@ -359,25 +363,24 @@ mod tests {
         });
 
         let mut socket2 = BufferedTranscoder::new(socket2);
-        if let Some(_message) = socket2.recv().await.unwrap() {
-            assert!(socket2
-                .send(types::Message::Handshake(
-                    types::HandshakeMessage::HelloAck {
-                        peer_id: peer_id2,
-                        version: *config.version(),
-                        network: *config.magic_bytes(),
-                        protocols: [
-                            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-                        ]
-                        .into_iter()
-                        .collect(),
-                    }
-                ))
-                .await
-                .is_ok());
-        }
+        socket2.recv().await.unwrap();
+        assert!(socket2
+            .send(types::Message::Handshake(
+                types::HandshakeMessage::HelloAck {
+                    peer_id: peer_id2,
+                    version: *config.version(),
+                    network: *config.magic_bytes(),
+                    protocols: [
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+                    ]
+                    .into_iter()
+                    .collect(),
+                }
+            ))
+            .await
+            .is_ok());
 
         let _peer = handle.await;
         assert_eq!(

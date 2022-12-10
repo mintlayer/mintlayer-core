@@ -697,11 +697,7 @@ async fn connection_timeout_rpc_notified<T>(
         tx_sync,
     );
 
-    tokio::spawn(async move {
-        loop {
-            let _ = rx_sync.recv().await;
-        }
-    });
+    tokio::spawn(async move { while rx_sync.recv().await.is_some() {} });
     tokio::spawn(async move {
         peer_manager.run().await.unwrap();
     });

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use futures::future::BoxFuture;
 use snowstorm::NoiseStream;
@@ -34,15 +34,18 @@ static NOISE_HANDSHAKE_PATTERN: &str = "Noise_XX_25519_ChaChaPoly_SHA256";
 static NOISE_HANDSHAKE_PARAMS: once_cell::sync::Lazy<snowstorm::NoiseParams> =
     once_cell::sync::Lazy::new(|| NOISE_HANDSHAKE_PATTERN.parse().expect("valid pattern"));
 
+#[derive(Clone)]
 pub struct NoiseEncryptionAdapter {
-    local_key: snowstorm::Keypair,
+    local_key: Arc<snowstorm::Keypair>,
 }
 
 impl NoiseEncryptionAdapter {
     pub fn gen_new() -> Self {
-        let local_key = snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
-            .generate_keypair()
-            .expect("key generation must succeed");
+        let local_key = Arc::new(
+            snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
+                .generate_keypair()
+                .expect("key generation must succeed"),
+        );
         Self { local_key }
     }
 }
@@ -53,23 +56,12 @@ impl std::fmt::Debug for NoiseEncryptionAdapter {
     }
 }
 
-impl Clone for NoiseEncryptionAdapter {
-    fn clone(&self) -> Self {
-        Self {
-            local_key: snowstorm::Keypair {
-                private: self.local_key.private.clone(),
-                public: self.local_key.public.clone(),
-            },
-        }
-    }
-}
-
 /// StreamAdapter that encrypts the data going through it with noise protocol
 impl<T: PeerStream + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
     type Stream = snowstorm::NoiseStream<T>;
 
     fn handshake(&self, base: T, role: Role) -> BoxFuture<'static, crate::Result<Self::Stream>> {
-        let local_key = self.clone().local_key;
+        let local_key = Arc::clone(&self.local_key);
         Box::pin(async move {
             let builder = snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
                 .local_private_key(&local_key.private);

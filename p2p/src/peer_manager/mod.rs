@@ -32,7 +32,6 @@ use std::{
     time::Duration,
 };
 
-use futures::FutureExt;
 use tokio::sync::{mpsc, oneshot};
 
 use chainstate::ban_score::BanScore;
@@ -424,7 +423,7 @@ where
     pub async fn run(&mut self) -> crate::Result<void::Void> {
         loop {
             tokio::select! {
-                event = self.rx_peer_manager.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
+                event = self.rx_peer_manager.recv() => match event.ok_or(P2pError::ChannelClosed)? {
                     //
                     // Handle events from an outside controller (rpc, for example) that sets/gets values for PeerManager
                     //
