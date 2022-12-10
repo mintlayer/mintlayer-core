@@ -21,5 +21,5 @@ replace_with = "0.1"
 [dev-dependencies]
 test-utils = { path = "../../test-utils" }
 
-rstest = "0.15"
+rstest = "0.16"
 mockall = "0.11"
