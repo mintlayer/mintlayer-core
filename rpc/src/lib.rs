@@ -111,7 +111,7 @@ impl Rpc {
     ) -> anyhow::Result<Self> {
         let http = match http_bind_addr {
             Some(bind_addr) => {
-                let http_server = ServerBuilder::default().build(bind_addr).await?;
+                let http_server = ServerBuilder::default().http_only().build(bind_addr).await?;
                 let http_address = http_server.local_addr()?;
                 let http_handle = http_server.start(methods.clone())?;
                 Some((http_address, http_handle))
@@ -121,7 +121,7 @@ impl Rpc {
 
         let websocket = match ws_bind_addr {
             Some(bind_addr) => {
-                let ws_server = ServerBuilder::default().build(bind_addr).await?;
+                let ws_server = ServerBuilder::default().ws_only().build(bind_addr).await?;
                 let ws_address = ws_server.local_addr()?;
                 let ws_handle = ws_server.start(methods)?;
                 Some((ws_address, ws_handle))
