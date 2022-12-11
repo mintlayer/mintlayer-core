@@ -59,7 +59,7 @@ jobs:
       run: cargo test --release --workspace
     # This test is ignored, so it needs to run separately.
     - name: Run mixed_sighash_types test
-      run: cargo test -p common --release mixed_sighash_types -- --ignored
+      run: cargo test --release -p common mixed_sighash_types -- --ignored
     - name: Run functional tests
       run: cargo test --release -p mintlayer-test --test functional -- --ignored
     - uses: actions/upload-artifact@v2
