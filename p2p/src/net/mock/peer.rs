@@ -97,13 +97,13 @@ where
     async fn handshake(&mut self) -> crate::Result<()> {
         match self.role {
             Role::Inbound => {
-                let Ok(Some(types::Message::Handshake(types::HandshakeMessage::Hello {
-                    if let Ok(types::Message::Handshake(types::HandshakeMessage::Hello {
-                        peer_id,
-                        version,
-                        network,
-                        protocols,
-                    })) = self.socket.recv().await
+                let Ok(types::Message::Handshake(types::HandshakeMessage::Hello {
+                    peer_id,
+                    version,
+                    network,
+                    protocols,
+                    subscriptions,
+                })) = self.socket.recv().await
                 else {
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
                 };
@@ -165,18 +165,16 @@ where
                     }))
                     .await?;
 
-                let (peer_id, network, version, protocols) =
-                    if let Ok(types::Message::Handshake(types::HandshakeMessage::HelloAck {
-                        peer_id,
-                        version,
-                        network,
-                        protocols,
-                    })) = self.socket.recv().await
-                    {
-                        (peer_id, network, version, protocols)
-                    } else {
-                        return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-                    };
+                let Ok(types::Message::Handshake(types::HandshakeMessage::HelloAck {
+                    peer_id,
+                    version,
+                    network,
+                    protocols,
+                    subscriptions,
+                })) = self.socket.recv().await
+                else {
+                    return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+                };
 
                 self.tx
                     .send((
@@ -393,8 +391,8 @@ mod tests {
             .send(types::Message::Handshake(
                 types::HandshakeMessage::HelloAck {
                     peer_id: peer_id2,
-                        version: *chain_config.version(),
-                        network: *chain_config.magic_bytes(),
+                    version: *chain_config.version(),
+                    network: *chain_config.magic_bytes(),
                     protocols: [
                         Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
                         Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
@@ -402,9 +400,9 @@ mod tests {
                     ]
                     .into_iter()
                     .collect(),
-                        subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
-                            .into_iter()
-                            .collect(),
+                    subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                        .into_iter()
+                        .collect(),
                 }
             ))
             .await

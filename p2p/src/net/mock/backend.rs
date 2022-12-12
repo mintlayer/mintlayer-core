@@ -444,8 +444,16 @@ where
         let p2p_config = Arc::clone(&self.p2p_config);
 
         tokio::spawn(async move {
-            let mut peer =
-                peer::Peer::<T>::new(local_peer_id, remote_peer_id, role, config, socket, tx, rx);
+            let mut peer = peer::Peer::<T>::new(
+                local_peer_id,
+                remote_peer_id,
+                role,
+                chain_config,
+                p2p_config,
+                socket,
+                tx,
+                rx,
+            );
             let run_res = peer.run().await;
             if let Err(err) = run_res {
                 log::error!("peer {remote_peer_id} failed: {err}");
