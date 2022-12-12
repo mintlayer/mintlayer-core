@@ -22,7 +22,6 @@ mod request;
 
 use std::{collections::HashMap, sync::Arc};
 
-use futures::FutureExt;
 use tokio::sync::{mpsc, oneshot};
 use void::Void;
 
@@ -563,7 +562,7 @@ where
                         self.process_announcement(peer_id, message_id, announcement).await?;
                     }
                 },
-                event = self.rx_sync.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
+                event = self.rx_sync.recv() => match event.ok_or(P2pError::ChannelClosed)? {
                     SyncControlEvent::Connected(peer_id) => {
                         log::debug!("register peer {peer_id} to sync manager");
                         let result = self.register_peer(peer_id).await;
@@ -574,7 +573,7 @@ where
                         self.unregister_peer(peer_id)
                     }
                 },
-                block_id = block_rx.recv().fuse(), if self.state == SyncState::Done => {
+                block_id = block_rx.recv(), if self.state == SyncState::Done => {
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
 
                     match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {

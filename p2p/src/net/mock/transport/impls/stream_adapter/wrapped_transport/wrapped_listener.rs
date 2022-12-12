@@ -14,16 +14,16 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use futures::future::BoxFuture;
+use futures::{
+    future::BoxFuture,
+    stream::{FuturesUnordered, StreamExt},
+};
 
 use crate::{
     net::mock::{
         peer::Role,
         transport::{
-            impls::stream_adapter::{
-                traits::StreamAdapter, wrapped_transport::utils::HandshakeFut,
-            },
-            TransportListener, TransportSocket,
+            impls::stream_adapter::traits::StreamAdapter, TransportListener, TransportSocket,
         },
     },
     Result,
@@ -39,7 +39,7 @@ pub struct AdaptedListener<S: StreamAdapter<T::Stream>, T: TransportSocket> {
     stream_adapter: S,
     listener: T::Listener,
     #[allow(clippy::type_complexity)]
-    handshakes: Vec<(BoxFuture<'static, Result<S::Stream>>, T::Address)>,
+    handshakes: FuturesUnordered<BoxFuture<'static, (Result<S::Stream>, T::Address)>>,
 }
 
 impl<S: StreamAdapter<T::Stream>, T: TransportSocket> AdaptedListener<S, T> {
@@ -47,7 +47,7 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> AdaptedListener<S, T> {
         Self {
             stream_adapter,
             listener,
-            handshakes: Vec::new(),
+            handshakes: FuturesUnordered::new(),
         }
     }
 }
@@ -60,10 +60,11 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener<S::Strea
         loop {
             let accept_new = self.handshakes.len() < MAX_CONCURRENT_HANDSHAKES;
             tokio::select! {
-                handshake_res = HandshakeFut::<S, T>(&mut self.handshakes) => {
+                // FuturesUnordered will panic if polled while empty
+                handshake_res = self.handshakes.select_next_some(), if !self.handshakes.is_empty() => {
                     match handshake_res {
-                        Ok(handshake) => return Ok(handshake),
-                        Err(err) => {
+                        (Ok(handshake), addr) => return Ok((handshake, addr)),
+                        (Err(err), _) => {
                             logging::log::warn!("handshake failed: {}", err);
                             continue;
                         },
@@ -74,7 +75,11 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener<S::Strea
                         Ok((base, addr)) => {
                             // Store active handshakes because accept must be cancel safe
                             let handshake = self.stream_adapter.handshake(base, Role::Inbound);
-                            self.handshakes.push((handshake, addr));
+                            // Wrap one more time to store original address
+                            let handshake_with_addr = Box::pin(async move {
+                                (handshake.await, addr)
+                            });
+                            self.handshakes.push(handshake_with_addr);
                         },
                         Err(err) => {
                             logging::log::error!("accept failed unexpectedly: {}", err);

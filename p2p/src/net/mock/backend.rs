@@ -28,7 +28,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{future::join_all, FutureExt, TryFutureExt};
+use futures::{future::join_all, TryFutureExt};
 use tokio::{
     sync::{mpsc, oneshot},
     time::{interval, timeout, MissedTickBehavior},
@@ -407,12 +407,12 @@ where
                     )?;
                 }
                 // Handle peer events.
-                event = self.peer_chan.1.recv().fuse() => {
+                event = self.peer_chan.1.recv() => {
                     let (peer, event) = event.ok_or(P2pError::ChannelClosed)?;
                     self.handle_peer_event(peer, event).await?;
                 },
                 // Handle commands.
-                command = self.cmd_rx.recv().fuse() => {
+                command = self.cmd_rx.recv() => {
                     self.handle_command(command.ok_or(P2pError::ChannelClosed)?).await?;
                 }
                 _ = request_timeout_interval.tick() => {
@@ -444,21 +444,13 @@ where
         let p2p_config = Arc::clone(&self.p2p_config);
 
         tokio::spawn(async move {
-            if let Err(err) = peer::Peer::<T>::new(
-                local_peer_id,
-                remote_peer_id,
-                role,
-                chain_config,
-                p2p_config,
-                socket,
-                tx,
-                rx,
-            )
-            .start()
-            .await
-            {
+            let mut peer =
+                peer::Peer::<T>::new(local_peer_id, remote_peer_id, role, config, socket, tx, rx);
+            let run_res = peer.run().await;
+            if let Err(err) = run_res {
                 log::error!("peer {remote_peer_id} failed: {err}");
             }
+            peer.destroy().await;
         });
 
         Ok(())
