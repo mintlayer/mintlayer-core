@@ -37,6 +37,8 @@ pub struct AddrInfo<T: NetworkingService> {
     pub ip6: Vec<T::Address>,
 }
 
+// TODO: Introduce and check the maximum allowed peer information size. See
+// https://github.com/mintlayer/mintlayer-core/issues/594 for details.
 /// Peer information learned during handshaking
 ///
 /// When an inbound/outbound connection succeeds, the networking service handshakes with the remote
