@@ -219,7 +219,7 @@ class TestNode():
 
         cmd = self.args + extra_args
         self.log.debug("Starting node with command: {}".format(" ".join(self.args + extra_args)))
-        self.process = subprocess.Popen(cmd, env=subp_env, stdout=stdout, stderr=stderr, cwd=cwd, **kwargs)
+        self.process = subprocess.Popen(cmd, env=subp_env, stdout=None, stderr=None, cwd=cwd, **kwargs)
 
         self.running = True
         self.log.debug("mintlayer-core started, waiting for RPC to come up")
