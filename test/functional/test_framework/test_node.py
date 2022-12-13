@@ -234,7 +234,7 @@ class TestNode():
         for _ in range(poll_per_s * self.rpc_timeout):
             if self.process.poll() is not None:
                 raise FailedToStartError(self._node_msg(
-                    'bitcoind exited with status {} during initialization'.format(self.process.returncode)))
+                    'bitcoind exited with status {} during initialization\n\n\n{}\n\n\n{}'.format(self.process.returncode, self.process.stdout, self.process.stderr)))
             try:
                 rpc = get_rpc_proxy(
                     self.init_rpc_url,
