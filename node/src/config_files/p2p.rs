@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
-use p2p::config::{AnnouncementSubscriptions, MdnsConfig, P2pConfig};
+use p2p::config::{MdnsConfig, NodeType, P2pConfig};
 
 /// Multicast DNS configuration.
 #[derive(Serialize, Deserialize, Debug)]
@@ -89,6 +89,35 @@ impl From<MdnsConfigFile> for MdnsConfig {
     }
 }
 
+/// A node type.
+#[derive(Debug, Serialize, Deserialize, Copy, Clone, Eq, PartialEq)]
+pub enum NodeTypeConfigFile {
+    /// A full node.
+    #[serde(rename = "full-node", alias = "full")]
+    FullNode,
+    /// A node that only download blocks, but ignores transactions.
+    #[serde(rename = "blocks-only-node", alias = "blocks")]
+    BlocksOnlyNode,
+}
+
+impl From<NodeTypeConfigFile> for NodeType {
+    fn from(t: NodeTypeConfigFile) -> Self {
+        match t {
+            NodeTypeConfigFile::FullNode => Self::Full,
+            NodeTypeConfigFile::BlocksOnlyNode => Self::BlocksOnly,
+        }
+    }
+}
+
+impl FromStr for NodeTypeConfigFile {
+    type Err = serde::de::value::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let de = serde::de::value::StrDeserializer::new(s);
+        Deserialize::deserialize(de)
+    }
+}
+
 /// The p2p subsystem configuration.
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct P2pConfigFile {
@@ -102,6 +131,8 @@ pub struct P2pConfigFile {
     pub mdns_config: Option<MdnsConfigFile>,
     /// The request timeout value in seconds.
     pub request_timeout: Option<u64>,
+    /// A node type.
+    pub node_type: Option<NodeTypeConfigFile>,
 }
 
 impl From<P2pConfigFile> for P2pConfig {
@@ -113,8 +144,7 @@ impl From<P2pConfigFile> for P2pConfig {
             outbound_connection_timeout: c.outbound_connection_timeout.into(),
             mdns_config: mdns_config.into(),
             request_timeout: c.request_timeout.map(Duration::from_secs).into(),
-            // TODO: This should probably be set indirectly, for example by the node type.
-            announcement_subscriptions: AnnouncementSubscriptions::default(),
+            node_type: c.node_type.map(Into::into).into(),
         }
     }
 }

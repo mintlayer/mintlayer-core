@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, fmt::Debug, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
 
 use tokio::{pin, select, time::Duration};
 
@@ -34,7 +34,7 @@ use serialization::Encode;
 
 use p2p::testing_utils::TestTransportMaker;
 use p2p::{
-    config::P2pConfig,
+    config::{NodeType, P2pConfig},
     error::{P2pError, PublishError},
     message::Announcement,
     net::{
@@ -147,7 +147,7 @@ where
         outbound_connection_timeout: Default::default(),
         mdns_config: Default::default(),
         request_timeout: Default::default(),
-        announcement_subscriptions: BTreeSet::new().into(),
+        node_type: NodeType::Inactive.into(),
     });
     let (mut conn1, mut sync1) = S::start(
         A::make_transport(),

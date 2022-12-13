@@ -18,7 +18,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use libp2p::{multiaddr, Multiaddr, PeerId};
 
 use crate::{
-    config::{AnnouncementSubscriptions, MdnsConfig, P2pConfig},
+    config::{MdnsConfig, NodeType, P2pConfig},
     net::{
         libp2p::Libp2pService,
         types::{AddrInfo, PeerInfo, PubSubTopic},
@@ -167,7 +167,7 @@ fn adjust_peer_score_higher_threshold() {
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
         request_timeout: Duration::from_secs(10).into(),
-        announcement_subscriptions: AnnouncementSubscriptions::default(),
+        node_type: NodeType::Full.into(),
     };
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config));
 
@@ -186,7 +186,7 @@ fn adjust_peer_score_lower_threshold() {
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
         request_timeout: Duration::from_secs(10).into(),
-        announcement_subscriptions: AnnouncementSubscriptions::default(),
+        node_type: NodeType::Full.into(),
     };
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config));
 

@@ -40,6 +40,7 @@ make_config_setting!(
     BTreeSet<PubSubTopic>,
     [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
 );
+make_config_setting!(NodeTypeSetting, NodeType, NodeType::Full);
 
 /// Multicast DNS configuration.
 #[derive(Debug, Clone)]
@@ -59,6 +60,31 @@ impl Default for MdnsConfig {
     }
 }
 
+/// A node type.
+#[derive(Debug, Copy, Clone)]
+pub enum NodeType {
+    /// A full node.
+    Full,
+    /// A node that only download blocks, but ignores transactions.
+    BlocksOnly,
+    /// A node that doesn't subscribe to any events.
+    ///
+    /// This node type isn't useful outside of the tests.
+    Inactive,
+}
+
+impl From<NodeType> for BTreeSet<PubSubTopic> {
+    fn from(t: NodeType) -> Self {
+        match t {
+            NodeType::Full => {
+                [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
+            }
+            NodeType::BlocksOnly => [PubSubTopic::Blocks].into_iter().collect(),
+            NodeType::Inactive => BTreeSet::new(),
+        }
+    }
+}
+
 /// The p2p subsystem configuration.
 #[derive(Debug, Default)]
 pub struct P2pConfig {
@@ -74,6 +100,6 @@ pub struct P2pConfig {
     ///
     /// The peers that failed to respond before this timeout are disconnected.
     pub request_timeout: RequestTimeout,
-    /// A list of announcements this node is subscribed to.
-    pub announcement_subscriptions: AnnouncementSubscriptions,
+    /// A node type.
+    pub node_type: NodeTypeSetting,
 }

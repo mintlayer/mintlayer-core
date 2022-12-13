@@ -27,9 +27,10 @@ use common::{
     chain::{config::ChainConfig, GenBlock},
     primitives::{Id, Idable},
 };
+
 use p2p::testing_utils::TestTransportMaker;
 use p2p::{
-    config::{AnnouncementSubscriptions, MdnsConfig, P2pConfig},
+    config::{MdnsConfig, NodeType, P2pConfig},
     error::P2pError,
     event::{PeerManagerEvent, SyncControlEvent},
     message::{BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response},
@@ -1172,7 +1173,7 @@ where
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
         request_timeout: Duration::from_secs(1).into(),
-        announcement_subscriptions: AnnouncementSubscriptions::default(),
+        node_type: NodeType::Full.into(),
     };
     let (mut mgr1, mut conn1, _sync1, mut pm1) = make_sync_manager::<T>(
         A::make_transport(),

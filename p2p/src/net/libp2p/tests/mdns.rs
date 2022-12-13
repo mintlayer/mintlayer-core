@@ -21,7 +21,7 @@ use libp2p::swarm::SwarmEvent;
 use crate::testing_utils::{TestTransportLibp2p, TestTransportMaker};
 
 use crate::{
-    config::{AnnouncementSubscriptions, MdnsConfig, P2pConfig},
+    config::{MdnsConfig, NodeType, P2pConfig},
     net::libp2p::{
         behaviour,
         tests::{connect_swarms, make_libp2p},
@@ -43,7 +43,7 @@ async fn test_discovered_and_expired() {
             }
             .into(),
             request_timeout: Duration::from_secs(10).into(),
-            announcement_subscriptions: AnnouncementSubscriptions::default(),
+            node_type: NodeType::Full.into(),
         }),
         TestTransportLibp2p::make_address(),
         &[],
@@ -62,7 +62,7 @@ async fn test_discovered_and_expired() {
             }
             .into(),
             request_timeout: Duration::from_secs(10).into(),
-            announcement_subscriptions: AnnouncementSubscriptions::default(),
+            node_type: NodeType::Full.into(),
         }),
         TestTransportLibp2p::make_address(),
         &[],

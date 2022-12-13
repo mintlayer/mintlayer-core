@@ -20,7 +20,7 @@ pub mod discovery;
 pub mod sync_codec;
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{BTreeSet, HashMap, VecDeque},
     iter,
     num::NonZeroU32,
     sync::Arc,
@@ -135,7 +135,7 @@ impl Libp2pBehaviour {
             gossipsub_config,
         )
         .expect("configuration to be valid");
-        for &subscription in p2p_config.announcement_subscriptions.as_ref() {
+        for subscription in Into::<BTreeSet<_>>::into(p2p_config.node_type.as_ref().clone()) {
             gossipsub.subscribe(&subscription.into()).expect("Unable to subscribe");
         }
 

@@ -23,7 +23,7 @@ mod runner;
 
 pub type Error = anyhow::Error;
 
-pub use config_files::{NodeConfigFile, StorageBackendConfigFile};
+pub use config_files::{NodeConfigFile, NodeTypeConfigFile, StorageBackendConfigFile};
 pub use options::{Command, Options, RunOptions};
 pub use runner::{initialize, run};
 
