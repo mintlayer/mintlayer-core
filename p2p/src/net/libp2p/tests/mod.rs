@@ -135,7 +135,7 @@ pub async fn make_libp2p(
             waker: None,
         };
 
-        for topic in topics.iter() {
+        for &topic in topics.iter() {
             log::info!("subscribing to gossipsub topic {:?}", topic);
             behaviour.gossipsub.subscribe(&topic.into()).expect("subscription to work");
         }
@@ -228,7 +228,7 @@ pub async fn make_libp2p_with_ping(
             waker: None,
         };
 
-        for topic in topics.iter() {
+        for &topic in topics.iter() {
             log::info!("subscribing to gossipsub topic {:?}", topic);
             behaviour.gossipsub.subscribe(&topic.into()).expect("subscription to work");
         }

@@ -168,9 +168,6 @@ where
     /// Publishes an announcement on the network.
     async fn make_announcement(&mut self, announcement: Announcement) -> crate::Result<()>;
 
-    /// Subscribes to the specified list of topics.
-    async fn subscribe(&mut self, topics: &[types::PubSubTopic]) -> crate::Result<()>;
-
     /// Reports a message validation result back to the backend.
     ///
     /// This function must be called as a result of an announcement processing.

@@ -104,6 +104,7 @@ where
             version: self.version,
             agent: None,
             protocols: self.protocols.into_iter().collect(),
+            subscriptions: self.subscriptions,
         })
     }
 }
@@ -326,15 +327,6 @@ where
         receiver.await?
     }
 
-    async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()> {
-        self.cmd_tx
-            .send(types::Command::Subscribe {
-                topics: topics.iter().cloned().collect(),
-            })
-            .await
-            .map_err(P2pError::from)
-    }
-
     async fn report_validation_result(
         &mut self,
         _source: S::PeerId,
@@ -445,6 +437,9 @@ mod tests {
                     ]
                     .into_iter()
                     .collect(),
+                    subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                        .into_iter()
+                        .collect(),
                 }
             );
         } else {

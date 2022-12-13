@@ -15,6 +15,13 @@
 
 //! The node configuration.
 
+pub use self::{chainstate_launcher::StorageBackendConfigFile, p2p::NodeTypeConfigFile};
+
+mod chainstate;
+mod chainstate_launcher;
+mod p2p;
+mod rpc;
+
 use std::{
     fs,
     net::SocketAddr,
@@ -33,13 +40,6 @@ use self::{
     p2p::{MdnsConfigFile, P2pConfigFile},
     rpc::RpcConfigFile,
 };
-
-mod chainstate;
-mod chainstate_launcher;
-mod p2p;
-mod rpc;
-
-pub use self::chainstate_launcher::StorageBackendConfigFile;
 
 /// The node configuration.
 #[derive(Serialize, Deserialize, Debug)]
@@ -138,6 +138,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         outbound_connection_timeout,
         mdns_config: _,
         request_timeout,
+        node_type,
     } = config;
 
     let bind_address = options.p2p_addr.clone().or(bind_address);
@@ -145,6 +146,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let outbound_connection_timeout =
         options.p2p_outbound_connection_timeout.or(outbound_connection_timeout);
     let request_timeout = options.p2p_request_timeout.or(request_timeout);
+    let node_type = options.node_type.or(node_type);
 
     let mdns_config = MdnsConfigFile::from_options(
         options.p2p_enable_mdns,
@@ -158,6 +160,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         outbound_connection_timeout,
         mdns_config,
         request_timeout,
+        node_type,
     }
 }
 

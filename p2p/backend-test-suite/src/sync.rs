@@ -27,9 +27,10 @@ use common::{
     chain::{config::ChainConfig, GenBlock},
     primitives::{Id, Idable},
 };
+
 use p2p::testing_utils::TestTransportMaker;
 use p2p::{
-    config::{MdnsConfig, P2pConfig},
+    config::{MdnsConfig, NodeType, P2pConfig},
     error::P2pError,
     event::{PeerManagerEvent, SyncControlEvent},
     message::{BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response},
@@ -200,7 +201,7 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
+    mgr1.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Done);
@@ -319,8 +320,8 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
-    mgr2.update_state().await.unwrap();
+    mgr1.update_state();
+    mgr2.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Done);
@@ -463,8 +464,8 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
-    mgr2.update_state().await.unwrap();
+    mgr1.update_state();
+    mgr2.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await == local_tip);
@@ -609,8 +610,8 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
-    mgr2.update_state().await.unwrap();
+    mgr1.update_state();
+    mgr2.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await != local_tip);
@@ -732,7 +733,7 @@ where
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
+    mgr1.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
@@ -870,7 +871,7 @@ where
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
+    mgr1.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
@@ -1020,7 +1021,7 @@ where
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
+    mgr1.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(same_tip(&mgr2_handle, &mgr3_handle).await);
@@ -1150,7 +1151,7 @@ where
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
+    mgr1.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Done);
@@ -1172,6 +1173,7 @@ where
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
         request_timeout: Duration::from_secs(1).into(),
+        node_type: NodeType::Full.into(),
     };
     let (mut mgr1, mut conn1, _sync1, mut pm1) = make_sync_manager::<T>(
         A::make_transport(),
@@ -1385,6 +1387,6 @@ where
         }
     }
 
-    mgr.update_state().await.unwrap();
+    mgr.update_state();
     Ok(())
 }

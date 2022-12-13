@@ -21,6 +21,7 @@ use common::{chain::ChainConfig, primitives::semver::SemVer};
 use logging::log;
 
 use crate::{
+    config::P2pConfig,
     error::{P2pError, ProtocolError},
     net::{
         mock::{
@@ -48,7 +49,9 @@ pub struct Peer<T: TransportSocket> {
     remote_peer_id: MockPeerId,
 
     /// Chain config
-    config: Arc<ChainConfig>,
+    chain_config: Arc<ChainConfig>,
+
+    p2p_config: Arc<P2pConfig>,
 
     /// Is the connection inbound or outbound
     role: Role,
@@ -67,11 +70,13 @@ impl<T> Peer<T>
 where
     T: TransportSocket,
 {
+    #![allow(clippy::too_many_arguments)]
     pub fn new(
         local_peer_id: MockPeerId,
         remote_peer_id: MockPeerId,
         role: Role,
-        config: Arc<ChainConfig>,
+        chain_config: Arc<ChainConfig>,
+        p2p_config: Arc<P2pConfig>,
         socket: T::Stream,
         tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
         rx: mpsc::Receiver<MockEvent>,
@@ -81,7 +86,8 @@ where
             local_peer_id,
             remote_peer_id,
             role,
-            config,
+            chain_config,
+            p2p_config,
             socket,
             tx,
             rx,
@@ -91,25 +97,23 @@ where
     async fn handshake(&mut self) -> crate::Result<()> {
         match self.role {
             Role::Inbound => {
-                let (peer_id, network, version, protocols) =
-                    if let Ok(types::Message::Handshake(types::HandshakeMessage::Hello {
-                        peer_id,
-                        version,
-                        network,
-                        protocols,
-                    })) = self.socket.recv().await
-                    {
-                        (peer_id, network, version, protocols)
-                    } else {
-                        return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-                    };
+                let Ok(types::Message::Handshake(types::HandshakeMessage::Hello {
+                    peer_id,
+                    version,
+                    network,
+                    protocols,
+                    subscriptions,
+                })) = self.socket.recv().await
+                else {
+                    return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+                };
 
                 self.socket
                     .send(types::Message::Handshake(
                         types::HandshakeMessage::HelloAck {
                             peer_id: self.local_peer_id,
-                            version: *self.config.version(),
-                            network: *self.config.magic_bytes(),
+                            version: *self.chain_config.version(),
+                            network: *self.chain_config.magic_bytes(),
                             // TODO: Replace the hard-coded values when ping and pubsub protocols are implemented for the mock interface.
                             protocols: [
                                 Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
@@ -118,6 +122,7 @@ where
                             ]
                             .into_iter()
                             .collect(),
+                            subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
                         },
                     ))
                     .await?;
@@ -130,6 +135,7 @@ where
                             network,
                             version,
                             protocols,
+                            subscriptions,
                         },
                     ))
                     .await
@@ -142,8 +148,8 @@ where
                 self.socket
                     .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                         peer_id: self.local_peer_id,
-                        version: *self.config.version(),
-                        network: *self.config.magic_bytes(),
+                        version: *self.chain_config.version(),
+                        network: *self.chain_config.magic_bytes(),
                         protocols: [
                             Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
                             Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
@@ -151,21 +157,20 @@ where
                         ]
                         .into_iter()
                         .collect(),
+                        subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
                     }))
                     .await?;
 
-                let (peer_id, network, version, protocols) =
-                    if let Ok(types::Message::Handshake(types::HandshakeMessage::HelloAck {
-                        peer_id,
-                        version,
-                        network,
-                        protocols,
-                    })) = self.socket.recv().await
-                    {
-                        (peer_id, network, version, protocols)
-                    } else {
-                        return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-                    };
+                let Ok(types::Message::Handshake(types::HandshakeMessage::HelloAck {
+                    peer_id,
+                    version,
+                    network,
+                    protocols,
+                    subscriptions,
+                })) = self.socket.recv().await
+                else {
+                    return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+                };
 
                 self.tx
                     .send((
@@ -175,6 +180,7 @@ where
                             network,
                             version,
                             protocols,
+                            subscriptions,
                         },
                     ))
                     .await
@@ -241,11 +247,14 @@ mod tests {
     };
     use crate::{
         message,
-        net::mock::{
-            transport::{
-                MockChannelTransport, NoiseTcpTransport, TcpTransportSocket, TransportListener,
+        net::{
+            mock::{
+                transport::{
+                    MockChannelTransport, NoiseTcpTransport, TcpTransportSocket, TransportListener,
+                },
+                types,
             },
-            types,
+            types::PubSubTopic,
         },
     };
     use chainstate::Locator;
@@ -258,7 +267,8 @@ mod tests {
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
-        let config = Arc::new(common::chain::config::create_mainnet());
+        let chain_config = Arc::new(common::chain::config::create_mainnet());
+        let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, mut rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
         let peer_id1 = MockPeerId::random();
@@ -269,7 +279,8 @@ mod tests {
             peer_id1,
             peer_id3,
             Role::Inbound,
-            Arc::clone(&config),
+            Arc::clone(&chain_config),
+            p2p_config,
             socket1,
             tx1,
             rx2,
@@ -285,8 +296,8 @@ mod tests {
         assert!(socket2
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                 peer_id: peer_id2,
-                version: *config.version(),
-                network: *config.magic_bytes(),
+                version: *chain_config.version(),
+                network: *chain_config.magic_bytes(),
                 protocols: [
                     Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
                     Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
@@ -294,6 +305,9 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
+                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                    .into_iter()
+                    .collect(),
             }))
             .await
             .is_ok());
@@ -305,8 +319,8 @@ mod tests {
                 peer_id3,
                 types::PeerEvent::PeerInfoReceived {
                     peer_id: peer_id2,
-                    network: *config.magic_bytes(),
-                    version: *config.version(),
+                    network: *chain_config.magic_bytes(),
+                    version: *chain_config.version(),
                     protocols: [
                         Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
                         Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
@@ -314,6 +328,9 @@ mod tests {
                     ]
                     .into_iter()
                     .collect(),
+                    subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                        .into_iter()
+                        .collect(),
                 }
             ))
         );
@@ -340,7 +357,8 @@ mod tests {
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
-        let config = Arc::new(common::chain::config::create_mainnet());
+        let chain_config = Arc::new(common::chain::config::create_mainnet());
+        let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, mut rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
         let peer_id1 = MockPeerId::random();
@@ -351,7 +369,8 @@ mod tests {
             peer_id1,
             peer_id3,
             Role::Outbound,
-            Arc::clone(&config),
+            Arc::clone(&chain_config),
+            p2p_config,
             socket1,
             tx1,
             rx2,
@@ -368,8 +387,8 @@ mod tests {
             .send(types::Message::Handshake(
                 types::HandshakeMessage::HelloAck {
                     peer_id: peer_id2,
-                    version: *config.version(),
-                    network: *config.magic_bytes(),
+                    version: *chain_config.version(),
+                    network: *chain_config.magic_bytes(),
                     protocols: [
                         Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
                         Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
@@ -377,6 +396,9 @@ mod tests {
                     ]
                     .into_iter()
                     .collect(),
+                    subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                        .into_iter()
+                        .collect(),
                 }
             ))
             .await
@@ -389,8 +411,8 @@ mod tests {
                 peer_id3,
                 types::PeerEvent::PeerInfoReceived {
                     peer_id: peer_id2,
-                    network: *config.magic_bytes(),
-                    version: *config.version(),
+                    network: *chain_config.magic_bytes(),
+                    version: *chain_config.version(),
                     protocols: [
                         Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
                         Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
@@ -398,6 +420,9 @@ mod tests {
                     ]
                     .into_iter()
                     .collect(),
+                    subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                        .into_iter()
+                        .collect(),
                 }
             ))
         );
@@ -424,7 +449,8 @@ mod tests {
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
-        let config = Arc::new(common::chain::config::create_mainnet());
+        let chain_config = Arc::new(common::chain::config::create_mainnet());
+        let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, _rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
         let peer_id1 = MockPeerId::random();
@@ -435,7 +461,8 @@ mod tests {
             peer_id1,
             peer_id3,
             Role::Inbound,
-            Arc::clone(&config),
+            Arc::clone(&chain_config),
+            p2p_config,
             socket1,
             tx1,
             rx2,
@@ -448,7 +475,7 @@ mod tests {
         assert!(socket2
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                 peer_id: peer_id2,
-                version: *config.version(),
+                version: *chain_config.version(),
                 network: [1, 2, 3, 4],
                 protocols: [
                     Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
@@ -457,6 +484,9 @@ mod tests {
                 ]
                 .into_iter()
                 .collect(),
+                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                    .into_iter()
+                    .collect(),
             }))
             .await
             .is_ok());
@@ -485,7 +515,8 @@ mod tests {
         T: TransportSocket,
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
-        let config = Arc::new(common::chain::config::create_mainnet());
+        let chain_config = Arc::new(common::chain::config::create_mainnet());
+        let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, _rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
         let peer_id1 = MockPeerId::random();
@@ -495,7 +526,8 @@ mod tests {
             peer_id1,
             peer_id2,
             Role::Inbound,
-            Arc::clone(&config),
+            chain_config,
+            p2p_config,
             socket1,
             tx1,
             rx2,

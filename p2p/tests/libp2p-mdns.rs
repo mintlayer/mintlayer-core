@@ -19,7 +19,7 @@ use libp2p::multiaddr::Protocol;
 
 use p2p::testing_utils::{TestTransportLibp2p, TestTransportMaker};
 use p2p::{
-    config::{MdnsConfig, P2pConfig},
+    config::{MdnsConfig, NodeType, P2pConfig},
     net::{
         libp2p::Libp2pService, types::ConnectivityEvent, ConnectivityService, NetworkingService,
     },
@@ -43,6 +43,7 @@ async fn test_libp2p_peer_discovery() {
             }
             .into(),
             request_timeout: Duration::from_secs(10).into(),
+            node_type: NodeType::Full.into(),
         }),
     )
     .await
@@ -62,6 +63,7 @@ async fn test_libp2p_peer_discovery() {
             }
             .into(),
             request_timeout: Duration::from_secs(10).into(),
+            node_type: NodeType::Full.into(),
         }),
     )
     .await
