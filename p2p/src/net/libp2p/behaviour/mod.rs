@@ -135,7 +135,7 @@ impl Libp2pBehaviour {
             gossipsub_config,
         )
         .expect("configuration to be valid");
-        for subscription in Into::<BTreeSet<_>>::into(p2p_config.node_type.as_ref().clone()) {
+        for subscription in Into::<BTreeSet<_>>::into(*p2p_config.node_type.as_ref()) {
             gossipsub.subscribe(&subscription.into()).expect("Unable to subscribe");
         }
 

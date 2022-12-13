@@ -122,7 +122,7 @@ where
                             ]
                             .into_iter()
                             .collect(),
-                            subscriptions: self.p2p_config.node_type.as_ref().clone().into(),
+                            subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
                         },
                     ))
                     .await?;
@@ -157,7 +157,7 @@ where
                         ]
                         .into_iter()
                         .collect(),
-                        subscriptions: self.p2p_config.node_type.as_ref().clone().into(),
+                        subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
                     }))
                     .await?;
 
