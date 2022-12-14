@@ -605,3 +605,25 @@ fn peer_discovered_libp2p() {
         vec!["/ip6/::1/tcp/9097".parse().unwrap()],
     );
 }
+
+#[tokio::test]
+async fn unban_peer() {
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig {
+        bind_address: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Duration::from_secs(2).into(),
+        outbound_connection_timeout: Default::default(),
+        mdns_config: Default::default(),
+        request_timeout: Default::default(),
+        node_type: Default::default(),
+    }));
+
+    let id = add_banned_peer(&mut peerdb);
+    let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable();
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert!(peerdb.is_address_banned(&address));
+
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    assert!(!peerdb.is_address_banned(&address));
+}

@@ -417,8 +417,6 @@ impl<T: NetworkingService> PeerDb<T> {
     /// If peer is banned, it is still kept in the peer storage but it is removed
     /// from the `available` storage so it won't be picked up again and its peer ID
     /// is recorded into the `banned` storage which keeps track of all banned peers.
-    ///
-    /// TODO: implement unbanning
     pub fn adjust_peer_score(&mut self, peer_id: &T::PeerId, score: u32) -> bool {
         let final_score = match self.peers.entry(*peer_id) {
             Entry::Vacant(entry) => {
