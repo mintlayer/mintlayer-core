@@ -35,7 +35,7 @@ use crate::{
             types::MockPeerId,
             MockService,
         },
-        types::{Protocol, ProtocolType},
+        types::{Protocol, ProtocolType, PubSubTopic},
         ConnectivityService, NetworkingService,
     },
     peer_manager::{
@@ -516,6 +516,7 @@ async fn inbound_connection_too_many_peers_libp2p() {
             version: common::primitives::semver::SemVer::new(0, 1, 0),
             agent: None,
             protocols: default_protocols(),
+            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         })
         .collect::<Vec<_>>();
 
@@ -538,6 +539,9 @@ async fn inbound_connection_too_many_peers_mock_tcp() {
                 ]
                 .into_iter()
                 .collect(),
+                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                    .into_iter()
+                    .collect(),
             },
         )
         .collect::<Vec<_>>();
@@ -562,6 +566,9 @@ async fn inbound_connection_too_many_peers_mock_channels() {
                 ]
                 .into_iter()
                 .collect(),
+                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                    .into_iter()
+                    .collect(),
             },
         )
         .collect::<Vec<_>>();
@@ -587,6 +594,7 @@ async fn inbound_connection_too_many_peers_mock_noise() {
             ]
             .into_iter()
             .collect(),
+            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         })
         .collect::<Vec<_>>();
 
@@ -697,11 +705,7 @@ async fn connection_timeout_rpc_notified<T>(
         tx_sync,
     );
 
-    tokio::spawn(async move {
-        loop {
-            let _ = rx_sync.recv().await;
-        }
-    });
+    tokio::spawn(async move { while rx_sync.recv().await.is_some() {} });
     tokio::spawn(async move {
         peer_manager.run().await.unwrap();
     });

@@ -168,6 +168,7 @@ where
             version,
             agent: Some(self.agent_version.clone()),
             protocols: parse_protocols(&self.protocols),
+            subscriptions: BTreeSet::new(),
         })
     }
 }

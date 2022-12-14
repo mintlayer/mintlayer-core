@@ -123,15 +123,6 @@ where
         rx.await?
     }
 
-    async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()> {
-        let (tx, rx) = oneshot::channel();
-        self.cmd_tx.send(Command::Subscribe {
-            topics: topics.iter().map(|topic| topic.into()).collect::<Vec<_>>(),
-            response: tx,
-        })?;
-        rx.await?
-    }
-
     async fn report_validation_result(
         &mut self,
         source: T::PeerId,

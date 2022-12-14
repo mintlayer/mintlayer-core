@@ -52,11 +52,7 @@ where
     let (_, rx) = tokio::sync::mpsc::unbounded_channel();
     let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
 
-    tokio::spawn(async move {
-        loop {
-            let _ = rx_sync.recv().await;
-        }
-    });
+    tokio::spawn(async move { while rx_sync.recv().await.is_some() {} });
 
     let p2p_config = Arc::new(P2pConfig::default());
     PeerManager::<T>::new(chain_config, p2p_config, conn, rx, tx_sync)

@@ -13,9 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::{collections::BTreeSet, time::Duration};
 
 use utils::make_config_setting;
+
+use crate::net::types::PubSubTopic;
 
 // TODO: does this constant make sense to be zero? Find the justification for it.
 pub const MDNS_DEFAULT_QUERY_INTERVAL: u64 = 0;
@@ -33,6 +35,12 @@ make_config_setting!(
     Duration,
     Duration::from_secs(10)
 );
+make_config_setting!(
+    AnnouncementSubscriptions,
+    BTreeSet<PubSubTopic>,
+    [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
+);
+make_config_setting!(NodeTypeSetting, NodeType, NodeType::Full);
 
 /// Multicast DNS configuration.
 #[derive(Debug, Clone)]
@@ -52,6 +60,31 @@ impl Default for MdnsConfig {
     }
 }
 
+/// A node type.
+#[derive(Debug, Copy, Clone)]
+pub enum NodeType {
+    /// A full node.
+    Full,
+    /// A node that only download blocks, but ignores transactions.
+    BlocksOnly,
+    /// A node that doesn't subscribe to any events.
+    ///
+    /// This node type isn't useful outside of the tests.
+    Inactive,
+}
+
+impl From<NodeType> for BTreeSet<PubSubTopic> {
+    fn from(t: NodeType) -> Self {
+        match t {
+            NodeType::Full => {
+                [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
+            }
+            NodeType::BlocksOnly => [PubSubTopic::Blocks].into_iter().collect(),
+            NodeType::Inactive => BTreeSet::new(),
+        }
+    }
+}
+
 /// The p2p subsystem configuration.
 #[derive(Debug, Default)]
 pub struct P2pConfig {
@@ -63,8 +96,10 @@ pub struct P2pConfig {
     pub outbound_connection_timeout: OutboundConnectionTimeout,
     /// Multicast DNS configuration.
     pub mdns_config: MdnsConfigSetting,
-    /// The request timeout value in seconds.
+    /// The request timeout value.
     ///
     /// The peers that failed to respond before this timeout are disconnected.
     pub request_timeout: RequestTimeout,
+    /// A node type.
+    pub node_type: NodeTypeSetting,
 }

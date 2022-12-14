@@ -23,9 +23,7 @@ use p2p::{
     error::{P2pError, PublishError},
     event::PeerManagerEvent,
     message::{Announcement, HeaderListResponse, Request, Response},
-    net::{
-        self, types::SyncingEvent, ConnectivityService, NetworkingService, SyncingMessagingService,
-    },
+    net::{types::SyncingEvent, ConnectivityService, NetworkingService, SyncingMessagingService},
     peer_manager::helpers::connect_services,
     sync::BlockSyncManager,
 };
@@ -90,8 +88,6 @@ where
 
     // spawn `sync2` into background and spam an orphan block on the network
     tokio::spawn(async move {
-        sync2.subscribe(&[net::types::PubSubTopic::Blocks]).await.unwrap();
-
         let request_id = match sync2.poll_next().await.unwrap() {
             SyncingEvent::Request {
                 peer_id: _,

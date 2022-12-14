@@ -31,7 +31,7 @@ use crate::{
             types::MockPeerId,
             MockService,
         },
-        types::{Protocol, ProtocolType},
+        types::{Protocol, ProtocolType, PubSubTopic},
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
     peer_manager::helpers::connect_services,
@@ -261,6 +261,7 @@ where
             version: common::primitives::semver::SemVer::new(0, 1, 0),
             agent: None,
             protocols: default_protocols(),
+            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
@@ -276,6 +277,7 @@ where
             version: common::primitives::semver::SemVer::new(0, 1, 0),
             agent: None,
             protocols: default_protocols(),
+            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
@@ -290,6 +292,7 @@ where
             version: common::primitives::semver::SemVer::new(1, 1, 1),
             agent: None,
             protocols: default_protocols(),
+            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
@@ -310,6 +313,7 @@ where
             ]
             .into_iter()
             .collect(),
+            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
@@ -373,6 +377,7 @@ where
             version: common::primitives::semver::SemVer::new(0, 1, 0),
             agent: None,
             protocols: default_protocols(),
+            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
@@ -387,6 +392,7 @@ where
             version: common::primitives::semver::SemVer::new(1, 1, 1),
             agent: None,
             protocols: default_protocols(),
+            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
@@ -407,6 +413,7 @@ where
             ]
             .into_iter()
             .collect(),
+            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
@@ -421,6 +428,7 @@ where
             version: common::primitives::semver::SemVer::new(0, 1, 0),
             agent: None,
             protocols: default_protocols(),
+            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));

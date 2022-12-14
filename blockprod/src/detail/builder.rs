@@ -21,7 +21,6 @@ use common::{
     primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
-use futures::FutureExt;
 use logging::log;
 use mempool::{MempoolEvent, MempoolHandle};
 use tokio::sync::mpsc;
@@ -129,15 +128,15 @@ impl PerpetualBlockBuilder {
             tokio::select! {
                 // when we receive information from chainstate that we have a new tip, we stop building the current block,
                 // and expect the mempool to soon send a trigger for a new command
-                block_info = chainstate_rx.recv().fuse() => {
+                block_info = chainstate_rx.recv() => {
                     let (block_id, block_height) = block_info.ok_or(BlockProductionError::ChainstateChannelClosed)?;
                     self.stop_building(block_id, block_height)?;
                 }
-                block_info = mempool_rx.recv().fuse() => {
+                block_info = mempool_rx.recv() => {
                     let (block_id, block_height) = block_info.ok_or(BlockProductionError::MempoolChannelClosed)?;
                     self.trigger_new_block_production(block_id, block_height).await?;
                 }
-                event = self.builder_rx.recv().fuse() => match event.ok_or(BlockProductionError::BlockBuilderChannelClosed)? {
+                event = self.builder_rx.recv() => match event.ok_or(BlockProductionError::BlockBuilderChannelClosed)? {
                     BlockBuilderControlCommand::Stop => {
                         self.enabled = false;
                         self.stop_all_block_makers()?;

@@ -34,12 +34,12 @@ use serialization::Encode;
 
 use p2p::testing_utils::TestTransportMaker;
 use p2p::{
+    config::{NodeType, P2pConfig},
     error::{P2pError, PublishError},
     message::Announcement,
     net::{
-        mock::constants::ANNOUNCEMENT_MAX_SIZE,
-        types::{PubSubTopic, SyncingEvent},
-        ConnectivityService, NetworkingService, SyncingMessagingService,
+        mock::constants::ANNOUNCEMENT_MAX_SIZE, types::SyncingEvent, ConnectivityService,
+        NetworkingService, SyncingMessagingService,
     },
     peer_manager::helpers::connect_services,
 };
@@ -76,9 +76,6 @@ where
     .unwrap();
 
     connect_services::<S>(&mut conn1, &mut conn2).await;
-
-    sync1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
-    sync2.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
 
     // Spam the message until until we have a peer.
     loop {
@@ -143,20 +140,28 @@ where
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
     S::ConnectivityHandle: ConnectivityService<S>,
 {
-    let config = Arc::new(common::chain::config::create_mainnet());
+    let chain_config = Arc::new(common::chain::config::create_mainnet());
+    let p2p_config = Arc::new(P2pConfig {
+        bind_address: Default::default(),
+        ban_threshold: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        mdns_config: Default::default(),
+        request_timeout: Default::default(),
+        node_type: NodeType::Inactive.into(),
+    });
     let (mut conn1, mut sync1) = S::start(
         A::make_transport(),
         A::make_address(),
-        Arc::clone(&config),
-        Default::default(),
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
     )
     .await
     .unwrap();
     let (mut conn2, _sync2) = S::start(
         A::make_transport(),
         A::make_address(),
-        Arc::clone(&config),
-        Default::default(),
+        chain_config,
+        p2p_config,
     )
     .await
     .unwrap();
@@ -201,7 +206,7 @@ where
     .await
     .unwrap();
 
-    let (mut conn2, mut sync2) = S::start(
+    let (mut conn2, _sync2) = S::start(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&config),
@@ -211,9 +216,6 @@ where
     .unwrap();
 
     connect_services::<S>(&mut conn1, &mut conn2).await;
-
-    sync1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
-    sync2.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
 
     let input = TxInput::new(config.genesis_block_id().into(), 0);
     let signature = (0..ANNOUNCEMENT_MAX_SIZE).into_iter().map(|_| 0).collect::<Vec<u8>>();

@@ -20,7 +20,7 @@ pub mod discovery;
 pub mod sync_codec;
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{BTreeSet, HashMap, VecDeque},
     iter,
     num::NonZeroU32,
     sync::Arc,
@@ -130,7 +130,16 @@ impl Libp2pBehaviour {
         let mut req_cfg = RequestResponseConfig::default();
         req_cfg.set_request_timeout(p2p_config.request_timeout.clone().into());
 
-        let behaviour = Libp2pBehaviour {
+        let mut gossipsub = Gossipsub::new(
+            MessageAuthenticity::Signed(id_keys.clone()),
+            gossipsub_config,
+        )
+        .expect("configuration to be valid");
+        for subscription in Into::<BTreeSet<_>>::into(*p2p_config.node_type.as_ref()) {
+            gossipsub.subscribe(&subscription.into()).expect("Unable to subscribe");
+        }
+
+        Libp2pBehaviour {
             ping: ping::Behaviour::new(
                 ping::Config::new()
                     .with_timeout(PING_TIMEOUT)
@@ -148,19 +157,13 @@ impl Libp2pBehaviour {
                 iter::once((SyncingProtocol(), ProtocolSupport::Full)),
                 req_cfg,
             ),
-            gossipsub: Gossipsub::new(
-                MessageAuthenticity::Signed(id_keys.clone()),
-                gossipsub_config,
-            )
-            .expect("configuration to be valid"),
+            gossipsub,
             connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(Arc::clone(&p2p_config)).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             waker: None,
-        };
-
-        behaviour
+        }
     }
 
     fn add_event(&mut self, event: Libp2pBehaviourEvent) {

@@ -43,7 +43,7 @@ impl std::str::FromStr for StorageBackendConfigFile {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let de = serde::de::value::StrDeserializer::new(s);
-        serde::Deserialize::deserialize(de)
+        Deserialize::deserialize(de)
     }
 }
 

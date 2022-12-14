@@ -110,12 +110,6 @@ pub enum Command {
         channel: oneshot::Sender<crate::Result<()>>,
     },
 
-    /// Subscribe to gossipsub topics
-    Subscribe {
-        topics: Vec<Topic>,
-        response: oneshot::Sender<crate::Result<()>>,
-    },
-
     /// Get the active listen address
     ListenAddress {
         response: oneshot::Sender<Option<Multiaddr>>,
@@ -192,8 +186,8 @@ pub enum ControlEvent {
     CloseConnection { peer_id: PeerId },
 }
 
-impl From<&net::types::PubSubTopic> for Topic {
-    fn from(t: &net::types::PubSubTopic) -> Topic {
+impl From<net::types::PubSubTopic> for Topic {
+    fn from(t: net::types::PubSubTopic) -> Topic {
         match t {
             net::types::PubSubTopic::Transactions => Topic::new("mintlayer-gossipsub-transactions"),
             net::types::PubSubTopic::Blocks => Topic::new("mintlayer-gossipsub-blocks"),

@@ -22,7 +22,7 @@ use crate::testing_utils::{TestTransportLibp2p, TestTransportMaker};
 use serialization::{Decode, Encode};
 
 use crate::{
-    config::{MdnsConfig, P2pConfig},
+    config::{MdnsConfig, NodeType, P2pConfig},
     error::{ConversionError, DialError, P2pError},
     net::{
         self,
@@ -242,6 +242,7 @@ async fn test_connect_with_timeout() {
             outbound_connection_timeout: 2.into(),
             mdns_config: MdnsConfig::Disabled.into(),
             request_timeout: Duration::from_secs(10).into(),
+            node_type: NodeType::Full.into(),
         }),
     )
     .await

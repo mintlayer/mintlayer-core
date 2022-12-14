@@ -132,7 +132,7 @@ mod tests {
 
         let mut server_stream = BufferedTranscoder::new(server_stream);
         assert_eq!(
-            server_stream.recv().await.unwrap().unwrap(),
+            server_stream.recv().await.unwrap(),
             Message::Request {
                 request_id,
                 request,
@@ -172,14 +172,14 @@ mod tests {
 
         let mut server_stream = BufferedTranscoder::new(server_stream);
         assert_eq!(
-            server_stream.recv().await.unwrap().unwrap(),
+            server_stream.recv().await.unwrap(),
             Message::Request {
                 request_id: id_1,
                 request: request.clone(),
             }
         );
         assert_eq!(
-            server_stream.recv().await.unwrap().unwrap(),
+            server_stream.recv().await.unwrap(),
             Message::Request {
                 request_id: id_2,
                 request,

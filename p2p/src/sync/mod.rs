@@ -22,7 +22,6 @@ mod request;
 
 use std::{collections::HashMap, sync::Arc};
 
-use futures::FutureExt;
 use tokio::sync::{mpsc, oneshot};
 use void::Void;
 
@@ -43,7 +42,7 @@ use crate::{
     event::{PeerManagerEvent, SyncControlEvent},
     message::{self, Announcement},
     net::{
-        types::{PubSubTopic, SyncingEvent, ValidationResult},
+        types::{SyncingEvent, ValidationResult},
         NetworkingService, SyncingMessagingService,
     },
 };
@@ -355,30 +354,29 @@ where
     ///
     /// The node is considered fully synced (its initial block download is done) if all its peers
     /// are in the `Done` state.
-    pub async fn update_state(&mut self) -> crate::Result<()> {
+    pub fn update_state(&mut self) {
         // TODO: improve "initial block download done" check
 
         if self.peers.is_empty() {
             self.state = SyncState::Uninitialized;
-            return Ok(());
+            return;
         }
 
         for peer in self.peers.values() {
             match peer.state() {
                 peer::PeerSyncState::UploadingBlocks(_) => {
                     self.state = SyncState::DownloadingBlocks;
-                    return Ok(());
+                    return;
                 }
                 peer::PeerSyncState::UploadingHeaders(_) | peer::PeerSyncState::Unknown => {
                     self.state = SyncState::Uninitialized;
-                    return Ok(());
+                    return;
                 }
                 peer::PeerSyncState::Idle => {}
             }
         }
 
         self.state = SyncState::Done;
-        self.peer_sync_handle.subscribe(&[PubSubTopic::Blocks]).await
     }
 
     pub async fn process_response(
@@ -564,7 +562,7 @@ where
                         self.process_announcement(peer_id, message_id, announcement).await?;
                     }
                 },
-                event = self.rx_sync.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
+                event = self.rx_sync.recv() => match event.ok_or(P2pError::ChannelClosed)? {
                     SyncControlEvent::Connected(peer_id) => {
                         log::debug!("register peer {peer_id} to sync manager");
                         let result = self.register_peer(peer_id).await;
@@ -575,7 +573,7 @@ where
                         self.unregister_peer(peer_id)
                     }
                 },
-                block_id = block_rx.recv().fuse(), if self.state == SyncState::Done => {
+                block_id = block_rx.recv(), if self.state == SyncState::Done => {
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
 
                     match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
@@ -585,7 +583,7 @@ where
                 }
             }
 
-            self.update_state().await?;
+            self.update_state();
         }
     }
 

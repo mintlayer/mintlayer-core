@@ -4,6 +4,7 @@
 import os
 import re
 import sys
+import toml
 
 SCALECODEC_RE = r'\bparity_scale_codec(_derive)?::'
 JSONRPSEE_RE = r'\bjsonrpsee[_a-z0-9]*::'
@@ -53,6 +54,30 @@ def disallow(pat, exclude = []):
 
     print()
     return not found_re
+
+# Check we depend on only one version of given crate
+def check_crate_version_unique(crate_name):
+    packages = toml.load('Cargo.lock')['package']
+    versions = [ p['version'] for p in packages if p['name'] == crate_name ]
+
+    if len(versions) == 0:
+        print("Crate missing: '{}'".format(crate_name))
+    if len(versions) >= 2:
+        print("Multiple versions of '{}': {}".format(crate_name, ', '.join(versions)))
+
+    return len(versions) == 1
+
+# Check crate versions
+def check_crate_versions():
+    print("==== Checking crate versions:")
+
+    ok = all([
+            check_crate_version_unique('parity-scale-codec'),
+            check_crate_version_unique('parity-scale-codec-derive'),
+        ])
+
+    print()
+    return ok
 
 # Check license header
 def check_licenses():
@@ -110,6 +135,7 @@ def run_checks():
             disallow(SCALECODEC_RE, exclude = ['serialization/core']),
             disallow(JSONRPSEE_RE, exclude = ['rpc']),
             check_licenses(),
+            check_crate_versions(),
             check_todos()
         ])
 

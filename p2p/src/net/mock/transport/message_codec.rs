@@ -117,7 +117,7 @@ impl<S: AsyncWrite + AsyncRead + Unpin> BufferedTranscoder<S> {
     /// or the frame hasn't been completely received, wait on the socket until the buffer
     /// has all data. If the buffer has a full frame that can be decoded, return that without
     /// calling the socket first.
-    pub async fn recv(&mut self) -> Result<Option<Message>> {
+    pub async fn recv(&mut self) -> Result<Message> {
         loop {
             match (EncoderDecoder {}.decode(&mut self.buffer)) {
                 Ok(None) => {
@@ -126,7 +126,8 @@ impl<S: AsyncWrite + AsyncRead + Unpin> BufferedTranscoder<S> {
                     }
                     continue;
                 }
-                frame => return frame,
+                Ok(Some(msg)) => return Ok(msg),
+                Err(e) => return Err(e),
             }
         }
     }

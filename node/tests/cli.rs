@@ -19,7 +19,7 @@ use assert_cmd::Command;
 use directories::UserDirs;
 use tempfile::TempDir;
 
-use node::{NodeConfigFile, RunOptions, StorageBackendConfigFile};
+use node::{NodeConfigFile, NodeTypeConfigFile, RunOptions, StorageBackendConfigFile};
 
 const BIN_NAME: &str = env!("CARGO_BIN_EXE_node");
 const CONFIG_NAME: &str = "config.toml";
@@ -94,6 +94,7 @@ fn read_config_override_values() {
     let ws_rpc_addr = SocketAddr::from_str("127.0.0.1:5433").unwrap();
     let enable_mdns = false;
     let backend_type = StorageBackendConfigFile::InMemory;
+    let node_type = NodeTypeConfigFile::FullNode;
 
     let options = RunOptions {
         max_db_commit_attempts: Some(max_db_commit_attempts),
@@ -111,6 +112,7 @@ fn read_config_override_values() {
         ws_rpc_addr: Some(ws_rpc_addr),
         ws_rpc_enabled: Some(false),
         storage_backend: Some(backend_type.clone()),
+        node_type: Some(node_type),
     };
     let datadir_opt = Some(data_dir.path().into());
     let config = NodeConfigFile::read(&config_path, &datadir_opt, &options).unwrap();
@@ -134,6 +136,7 @@ fn read_config_override_values() {
     assert_eq!(config.p2p.ban_threshold, Some(p2p_ban_threshold));
     assert_eq!(config.p2p.outbound_connection_timeout, Some(p2p_timeout));
     assert_eq!(config.p2p.request_timeout, Some(p2p_request_timeout));
+    assert_eq!(config.p2p.node_type, Some(node_type));
 
     assert_eq!(config.rpc.http_bind_address, Some(http_rpc_addr));
     assert!(config.rpc.http_enabled.unwrap());
@@ -206,5 +209,6 @@ fn default_run_options() -> RunOptions {
         ws_rpc_addr: None,
         ws_rpc_enabled: None,
         storage_backend: None,
+        node_type: None,
     }
 }

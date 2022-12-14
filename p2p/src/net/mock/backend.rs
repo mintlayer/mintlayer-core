@@ -28,7 +28,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{future::join_all, FutureExt, TryFutureExt};
+use futures::{future::join_all, TryFutureExt};
 use tokio::{
     sync::{mpsc, oneshot},
     time::{interval, timeout, MissedTickBehavior},
@@ -277,27 +277,6 @@ where
         Ok(())
     }
 
-    async fn subscribe(&mut self, topics: BTreeSet<PubSubTopic>) {
-        // Send the message to all peers in pseudorandom order.
-        // TODO: This can be moved to a separate function and reused in the `announce_data`
-        // function, when we no longer need the special logic for the `InsufficientPeers` error.
-        let mut futures: Vec<_> = self
-            .peers
-            .iter()
-            .map(|(id, p)| {
-                p.tx.send(MockEvent::SendMessage(Box::new(Message::Subscribe {
-                    topics: topics.clone(),
-                })))
-                .inspect_err(move |e| {
-                    log::error!("Failed to send subscription to {id:?} peer: {e:?}")
-                })
-            })
-            .collect();
-        futures.shuffle(&mut make_pseudo_rng());
-
-        join_all(futures).await;
-    }
-
     /// Sends the announcement to all peers.
     ///
     /// Returns the `InsufficientPeers` error if there are no peers that subscribed to the related
@@ -381,13 +360,6 @@ where
         }
     }
 
-    fn subscribe_peer(&mut self, peer_id: MockPeerId, topics: BTreeSet<PubSubTopic>) {
-        match self.peers.get_mut(&peer_id) {
-            Some(peer) => peer.subscriptions = topics.into_iter().collect(),
-            None => log::warn!("Unable to subscribe non-existent peer: {peer_id:?}"),
-        }
-    }
-
     async fn handle_announcement(
         &mut self,
         peer_id: MockPeerId,
@@ -435,12 +407,12 @@ where
                     )?;
                 }
                 // Handle peer events.
-                event = self.peer_chan.1.recv().fuse() => {
+                event = self.peer_chan.1.recv() => {
                     let (peer, event) = event.ok_or(P2pError::ChannelClosed)?;
                     self.handle_peer_event(peer, event).await?;
                 },
                 // Handle commands.
-                command = self.cmd_rx.recv().fuse() => {
+                command = self.cmd_rx.recv() => {
                     self.handle_command(command.ok_or(P2pError::ChannelClosed)?).await?;
                 }
                 _ = request_timeout_interval.tick() => {
@@ -468,16 +440,25 @@ where
         self.pending.insert(remote_peer_id, (tx, state));
 
         let tx = self.peer_chan.0.clone();
-        let config = Arc::clone(&self.chain_config);
+        let chain_config = Arc::clone(&self.chain_config);
+        let p2p_config = Arc::clone(&self.p2p_config);
 
         tokio::spawn(async move {
-            if let Err(err) =
-                peer::Peer::<T>::new(local_peer_id, remote_peer_id, role, config, socket, tx, rx)
-                    .start()
-                    .await
-            {
+            let mut peer = peer::Peer::<T>::new(
+                local_peer_id,
+                remote_peer_id,
+                role,
+                chain_config,
+                p2p_config,
+                socket,
+                tx,
+                rx,
+            );
+            let run_res = peer.run().await;
+            if let Err(err) = run_res {
                 log::error!("peer {remote_peer_id} failed: {err}");
             }
+            peer.destroy().await;
         });
 
         Ok(())
@@ -494,6 +475,7 @@ where
                 network,
                 version,
                 protocols,
+                subscriptions,
             } => {
                 let (tx, state) = self.pending.remove(&peer_id).expect("peer to exist");
 
@@ -508,6 +490,7 @@ where
                                     version,
                                     agent: None,
                                     protocols,
+                                    subscriptions: subscriptions.clone(),
                                 },
                             })
                             .await
@@ -523,6 +506,7 @@ where
                                     version,
                                     agent: None,
                                     protocols,
+                                    subscriptions: subscriptions.clone(),
                                 },
                             })
                             .await
@@ -534,7 +518,7 @@ where
                     received_id,
                     PeerContext {
                         _peer_id: received_id,
-                        subscriptions: BTreeSet::new(),
+                        subscriptions,
                         tx,
                     },
                 );
@@ -572,9 +556,6 @@ where
             } => {
                 self.handle_incoming_response(peer_id, request_id, response).await?;
             }
-            Message::Subscribe { topics } => {
-                self.subscribe_peer(peer_id, topics);
-            }
             Message::Announcement { announcement } => {
                 self.handle_announcement(peer_id, announcement).await?;
             }
@@ -606,9 +587,6 @@ where
             } => {
                 let res = self.send_response(request_id, message).await;
                 response.send(res).map_err(|_| P2pError::ChannelClosed)?;
-            }
-            Command::Subscribe { topics } => {
-                self.subscribe(topics).await;
             }
             Command::AnnounceData {
                 topic,
