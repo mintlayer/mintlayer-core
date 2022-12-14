@@ -144,6 +144,7 @@ where
     let p2p_config = Arc::new(P2pConfig {
         bind_address: Default::default(),
         ban_threshold: Default::default(),
+        ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         mdns_config: Default::default(),
         request_timeout: Default::default(),

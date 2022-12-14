@@ -42,8 +42,6 @@ use crate::{
     net::{types, AsBannableAddress, NetworkingService},
 };
 
-const BAN_DURATION: Duration = Duration::from_secs(60 * 60 * 24);
-
 #[derive(Debug)]
 pub struct PeerContext<T: NetworkingService> {
     /// Peer information
@@ -403,7 +401,7 @@ impl<T: NetworkingService> PeerDb<T> {
                 .duration_since(UNIX_EPOCH)
                 // This can fail only if `SystemTime::now()` returns the time before `UNIX_EPOCH`.
                 .expect("Invalid system time")
-                + BAN_DURATION;
+                + *self.p2p_config.ban_duration;
             self.banned.insert(address, ban_till);
         } else {
             log::error!("Failed to get address for peer {}", peer_id);

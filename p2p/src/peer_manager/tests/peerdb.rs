@@ -164,6 +164,7 @@ fn adjust_peer_score_higher_threshold() {
     let config = P2pConfig {
         bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
         ban_threshold: 200.into(),
+        ban_duration: Default::default(),
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
         request_timeout: Duration::from_secs(10).into(),
@@ -183,6 +184,7 @@ fn adjust_peer_score_lower_threshold() {
     let config = P2pConfig {
         bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
         ban_threshold: 20.into(),
+        ban_duration: Default::default(),
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
         request_timeout: Duration::from_secs(10).into(),

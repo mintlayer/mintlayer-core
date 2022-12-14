@@ -36,6 +36,7 @@ async fn test_discovered_and_expired() {
         Arc::new(P2pConfig {
             bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
             ban_threshold: 100.into(),
+            ban_duration: Default::default(),
             outbound_connection_timeout: 10.into(),
             mdns_config: MdnsConfig::Enabled {
                 query_interval: 200.into(),
@@ -55,6 +56,7 @@ async fn test_discovered_and_expired() {
         Arc::new(P2pConfig {
             bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
             ban_threshold: 100.into(),
+            ban_duration: Default::default(),
             outbound_connection_timeout: 10.into(),
             mdns_config: MdnsConfig::Enabled {
                 query_interval: 200.into(),

@@ -125,6 +125,8 @@ pub struct P2pConfigFile {
     pub bind_address: Option<String>,
     /// The score threshold after which a peer is banned.
     pub ban_threshold: Option<u32>,
+    /// Duration of bans in seconds.
+    pub ban_duration: Option<u64>,
     /// The outbound connection timeout value in seconds.
     pub outbound_connection_timeout: Option<u64>,
     /// Multicast DNS configuration.
@@ -141,6 +143,7 @@ impl From<P2pConfigFile> for P2pConfig {
         P2pConfig {
             bind_address: c.bind_address.into(),
             ban_threshold: c.ban_threshold.into(),
+            ban_duration: c.ban_duration.map(Duration::from_secs).into(),
             outbound_connection_timeout: c.outbound_connection_timeout.into(),
             mdns_config: mdns_config.into(),
             request_timeout: c.request_timeout.map(Duration::from_secs).into(),
