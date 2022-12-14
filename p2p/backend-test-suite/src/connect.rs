@@ -72,10 +72,12 @@ where
     let res = S::start(A::make_transport(), address, config, Default::default())
         .await
         .expect_err("address is not in use");
-    assert_eq!(
+    assert!(matches!(
         res,
-        P2pError::DialError(DialError::IoError(std::io::ErrorKind::AddrInUse))
-    );
+        P2pError::DialError(DialError::IoError(
+            std::io::ErrorKind::AddrInUse | std::io::ErrorKind::AddrNotAvailable
+        ))
+    ));
 }
 
 // Try to connect two nodes by having `service1` listen for network events and having `service2`
