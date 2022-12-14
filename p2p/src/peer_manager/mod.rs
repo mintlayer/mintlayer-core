@@ -269,7 +269,7 @@ where
         log::debug!("adjusting score for peer {peer_id}, adjustment {score}");
 
         if self.peerdb.adjust_peer_score(&peer_id, score) {
-            return self.peer_connectivity_handle.ban_peer(peer_id).await;
+            let _ = self.peer_connectivity_handle.disconnect(peer_id).await;
         }
 
         Ok(())
