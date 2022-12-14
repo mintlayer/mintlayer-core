@@ -219,7 +219,7 @@ class TestNode():
 
         cmd = self.args + extra_args
         self.log.debug("Starting node with command: {}".format(" ".join(self.args + extra_args)))
-        self.process = subprocess.Popen(cmd, env=subp_env, stdout=None, stderr=None, cwd=cwd, **kwargs)
+        self.process = subprocess.Popen(cmd, env=subp_env, stdout=stdout, stderr=stderr, cwd=cwd, **kwargs)
 
         self.running = True
         self.log.debug("mintlayer-core started, waiting for RPC to come up")
@@ -234,7 +234,7 @@ class TestNode():
         for _ in range(poll_per_s * self.rpc_timeout):
             if self.process.poll() is not None:
                 raise FailedToStartError(self._node_msg(
-                    'bitcoind exited with status {} during initialization\n\n\n{}\n\n\n{}'.format(self.process.returncode, self.process.stdout, self.process.stderr)))
+                    'bitcoind exited with status {} during initialization'.format(self.process.returncode)))
             try:
                 rpc = get_rpc_proxy(
                     self.init_rpc_url,

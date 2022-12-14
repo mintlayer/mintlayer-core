@@ -53,17 +53,17 @@ jobs:
       uses: actions/checkout@v2
       with:
         submodules: recursive
-    - name: Build
-      run: cargo build --release
-    - name: Run tests
-      run: cargo test --release --workspace
+#    - name: Build
+#      run: cargo build --release
+#    - name: Run tests
+#      run: cargo test --release --workspace
     # This test is ignored, so it needs to run separately.
-    - name: Run mixed_sighash_types test
-      run: cargo test --release mixed_sighash_types
+#    - name: Run mixed_sighash_types test
+#      run: cargo test --release mixed_sighash_types
     - name: Run functional tests
       run: cargo test --release -p mintlayer-test --test functional -- --ignored
     - uses: actions/upload-artifact@v2
-      if: failure()
+#      if: failure()
       with:
         name: windows-functional-test-artifacts
         path: target/tmp
