@@ -13,7 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, sync::Mutex};
+use std::{
+    collections::BTreeMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
+};
 
 use async_trait::async_trait;
 use once_cell::sync::Lazy;
@@ -42,15 +48,26 @@ const ZERO_ADDRESS: Address = 0;
 // How much bytes is allowed for write (without reading on the other side).
 const MAX_BUF_SIZE: usize = 10 * 1024 * 1024;
 
-static CONNECTIONS: Lazy<Mutex<BTreeMap<Address, UnboundedSender<Sender<DuplexStream>>>>> =
+type IncomingConnection = (Address, Sender<DuplexStream>);
+
+static CONNECTIONS: Lazy<Mutex<BTreeMap<Address, UnboundedSender<IncomingConnection>>>> =
     Lazy::new(Default::default);
 
+static NEXT_ADDRESS: AtomicU64 = AtomicU64::new(1);
+
+// Creating new transport is like attaching new "host" to the network.
+// New unique address is registered for the new "host".
+// Unlike TCP only one active bind is allowed at any moment to keep things simple
+// (so there is only one port per host).
 #[derive(Debug)]
-pub struct MockChannelTransport;
+pub struct MockChannelTransport {
+    local_address: Address,
+}
 
 impl MockChannelTransport {
     pub fn new() -> Self {
-        MockChannelTransport
+        let local_address = NEXT_ADDRESS.fetch_add(1, Ordering::Relaxed);
+        MockChannelTransport { local_address }
     }
 }
 
@@ -62,24 +79,30 @@ impl TransportSocket for MockChannelTransport {
     type Stream = ChannelMockStream;
 
     async fn bind(&self, address: Self::Address) -> Result<Self::Listener> {
-        let mut connections = CONNECTIONS.lock().expect("Connections mutex is poisoned");
-
-        let address = if address == ZERO_ADDRESS {
-            connections.iter().next_back().map_or(1, |(&a, _)| a + 1)
-        } else {
-            address
+        // It's not possible to bind to random address
+        if address != ZERO_ADDRESS && address != self.local_address {
+            return Err(P2pError::DialError(DialError::IoError(
+                std::io::ErrorKind::AddrNotAvailable,
+            )));
         };
 
-        if connections.contains_key(&address) {
+        let mut connections = CONNECTIONS.lock().expect("Connections mutex is poisoned");
+
+        if connections.contains_key(&self.local_address) {
             return Err(P2pError::DialError(DialError::IoError(
                 std::io::ErrorKind::AddrInUse,
             )));
         }
 
         let (sender, receiver) = unbounded_channel();
-        assert!(connections.insert(address, sender).is_none());
 
-        Ok(Self::Listener { address, receiver })
+        let old_entry = connections.insert(self.local_address, sender);
+        assert!(old_entry.is_none());
+
+        Ok(Self::Listener {
+            address: self.local_address,
+            receiver,
+        })
     }
 
     async fn connect(&self, address: Self::Address) -> Result<Self::Stream> {
@@ -92,10 +115,12 @@ impl TransportSocket for MockChannelTransport {
             .get(&address)
             .ok_or(P2pError::DialError(DialError::NoAddresses))?
             .clone();
+
         let (connect_sender, connect_receiver) = oneshot::channel();
         server_sender
-            .send(connect_sender)
+            .send((self.local_address, connect_sender))
             .map_err(|_| P2pError::DialError(DialError::NoAddresses))?;
+
         let channel = connect_receiver.await.map_err(|_| P2pError::ChannelClosed)?;
 
         Ok(channel)
@@ -104,18 +129,20 @@ impl TransportSocket for MockChannelTransport {
 
 pub struct MockChannelListener {
     address: Address,
-    receiver: UnboundedReceiver<Sender<DuplexStream>>,
+    receiver: UnboundedReceiver<IncomingConnection>,
 }
 
 #[async_trait]
 impl TransportListener<ChannelMockStream, Address> for MockChannelListener {
     async fn accept(&mut self) -> Result<(ChannelMockStream, Address)> {
-        let response_sender = self.receiver.recv().await.ok_or(P2pError::ChannelClosed)?;
+        let (remote_address, response_sender) =
+            self.receiver.recv().await.ok_or(P2pError::ChannelClosed)?;
 
         let (server, client) = tokio::io::duplex(MAX_BUF_SIZE);
+
         response_sender.send(client).map_err(|_| P2pError::ChannelClosed)?;
 
-        Ok((server, self.address))
+        Ok((server, remote_address))
     }
 
     fn local_address(&self) -> Result<Address> {
@@ -125,11 +152,9 @@ impl TransportListener<ChannelMockStream, Address> for MockChannelListener {
 
 impl Drop for MockChannelListener {
     fn drop(&mut self) {
-        assert!(CONNECTIONS
-            .lock()
-            .expect("Connections mutex is poisoned")
-            .remove(&self.address)
-            .is_some());
+        let old_entry =
+            CONNECTIONS.lock().expect("Connections mutex is poisoned").remove(&self.address);
+        assert!(old_entry.is_some());
     }
 }
 
@@ -166,7 +191,7 @@ mod tests {
     #[tokio::test]
     async fn send_recv() {
         let transport = MockChannelTransport::new();
-        let address = 0;
+        let address = ZERO_ADDRESS;
         let mut server = transport.bind(address).await.unwrap();
         let peer_fut = transport.connect(server.local_address().unwrap());
 
