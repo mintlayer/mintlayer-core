@@ -9,5 +9,5 @@ storage-core = { path = "../core" }
 utils = { path = "../../utils" }
 logging = { path = "../../logging" }
 
-libtest-mimic = "0.5"
+libtest-mimic = "0.6"
 proptest = "1.0"

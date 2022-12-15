@@ -15,8 +15,7 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
-use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
+use jsonrpsee::server::{ServerBuilder, ServerHandle};
 
 use logging::log;
 
@@ -100,8 +99,8 @@ impl Builder {
 
 /// The RPC subsystem
 pub struct Rpc {
-    http: Option<(SocketAddr, HttpServerHandle)>,
-    websocket: Option<(SocketAddr, WsServerHandle)>,
+    http: Option<(SocketAddr, ServerHandle)>,
+    websocket: Option<(SocketAddr, ServerHandle)>,
 }
 
 impl Rpc {
@@ -112,7 +111,7 @@ impl Rpc {
     ) -> anyhow::Result<Self> {
         let http = match http_bind_addr {
             Some(bind_addr) => {
-                let http_server = HttpServerBuilder::default().build(bind_addr).await?;
+                let http_server = ServerBuilder::default().http_only().build(bind_addr).await?;
                 let http_address = http_server.local_addr()?;
                 let http_handle = http_server.start(methods.clone())?;
                 Some((http_address, http_handle))
@@ -122,7 +121,7 @@ impl Rpc {
 
         let websocket = match ws_bind_addr {
             Some(bind_addr) => {
-                let ws_server = WsServerBuilder::default().build(bind_addr).await?;
+                let ws_server = ServerBuilder::default().ws_only().build(bind_addr).await?;
                 let ws_address = ws_server.local_addr()?;
                 let ws_handle = ws_server.start(methods)?;
                 Some((ws_address, ws_handle))
@@ -147,15 +146,13 @@ impl subsystem::Subsystem for Rpc {
     async fn shutdown(self) {
         if let Some(obj) = self.http {
             match obj.1.stop() {
-                Ok(stop) => {
-                    stop.await.unwrap_or_else(|e| log::error!("Http RPC join error: {}", e))
-                }
+                Ok(_) => (),
                 Err(e) => log::error!("Http RPC stop handle acquisition failed: {}", e),
             }
         }
         if let Some(obj) = self.websocket {
             match obj.1.stop() {
-                Ok(stop) => stop.await,
+                Ok(_) => (),
                 Err(e) => log::error!("Websocket RPC stop handle acquisition failed: {}", e),
             }
         }

@@ -42,10 +42,21 @@ impl TryFrom<&str> for SemVer {
     type Error = &'static str;
 
     fn try_from(v: &str) -> Result<SemVer, Self::Error> {
-        match sscanf::scanf!(v, "{}.{}.{}", u8, u8, u16) {
-            Err(_) => Err("String does not contain SemVer"),
-            Ok((ma, mi, pa)) => Ok(SemVer::new(ma, mi, pa)),
+        let split_version = v.split('.').collect::<Vec<_>>();
+        if split_version.len() != 3 {
+            return Err("Invalid version. Number of components is wrong.");
         }
+
+        let parse_err: &'static str = "Parsing SemVer component to integer failed";
+        let major = split_version[0].parse::<u8>().map_err(|_| parse_err)?;
+        let minor = split_version[1].parse::<u8>().map_err(|_| parse_err)?;
+        let patch = split_version[2].parse::<u16>().map_err(|_| parse_err)?;
+
+        Ok(Self {
+            major,
+            minor,
+            patch,
+        })
     }
 }
 
@@ -53,10 +64,7 @@ impl TryFrom<String> for SemVer {
     type Error = &'static str;
 
     fn try_from(v: String) -> Result<SemVer, Self::Error> {
-        match sscanf::scanf!(v, "{}.{}.{}", u8, u8, u16) {
-            Err(_) => Err("String does not contain SemVer"),
-            Ok((ma, mi, pa)) => Ok(SemVer::new(ma, mi, pa)),
-        }
+        Self::try_from(v.as_str())
     }
 }
 
@@ -84,14 +92,34 @@ mod tests {
         let version = SemVer::new(1, 2, 0x500);
         assert_eq!(String::from(version), "1.2.1280");
 
+        assert_eq!(
+            SemVer::try_from(" "),
+            Err("Invalid version. Number of components is wrong.")
+        );
+
+        assert_eq!(
+            SemVer::try_from(""),
+            Err("Invalid version. Number of components is wrong.")
+        );
+
+        assert_eq!(
+            SemVer::try_from("1.2"),
+            Err("Invalid version. Number of components is wrong.")
+        );
+
+        assert_eq!(
+            SemVer::try_from("1"),
+            Err("Invalid version. Number of components is wrong.")
+        );
+
         let version = "hello";
         assert_eq!(
             SemVer::try_from(version),
-            Err("String does not contain SemVer")
+            Err("Invalid version. Number of components is wrong.")
         );
         assert_eq!(
             SemVer::try_from(version),
-            Err("String does not contain SemVer")
+            Err("Invalid version. Number of components is wrong.")
         );
 
         let version = "1.2.3".to_string();
@@ -112,11 +140,26 @@ mod tests {
         let version = "255.255.65536";
         assert_eq!(
             SemVer::try_from(version),
-            Err("String does not contain SemVer")
+            Err("Parsing SemVer component to integer failed")
         );
         assert_eq!(
             SemVer::try_from(version.to_string()),
-            Err("String does not contain SemVer")
+            Err("Parsing SemVer component to integer failed")
+        );
+
+        assert_eq!(
+            SemVer::try_from("1.2.a"),
+            Err("Parsing SemVer component to integer failed")
+        );
+
+        assert_eq!(
+            SemVer::try_from("1.2."),
+            Err("Parsing SemVer component to integer failed")
+        );
+
+        assert_eq!(
+            SemVer::try_from("1..3"),
+            Err("Parsing SemVer component to integer failed")
         );
     }
 

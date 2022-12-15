@@ -15,7 +15,7 @@ utils = { path = "../utils/" }
 # External dependencies
 anyhow = "1.0"
 async-trait = "0.1"
-jsonrpsee = { version = "0.15", features = ["full"] }
+jsonrpsee = { version = "0.16", features = ["full"] }
 
 [dev-dependencies]
 async-trait = "0.1"

@@ -13,7 +13,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           # TODO: Inspect coverage, and change toolchain to stable
-          toolchain: nightly-2022-12-05
+          toolchain: nightly-2022-12-13
           override: true
       - uses: actions-rs/cargo@v1
         with:

@@ -20,8 +20,8 @@ subsystem = { path = "../subsystem/" }
 
 # External dependencies
 anyhow = "1.0"
-clap = { version = "3.1", features = ["derive"] }
-jsonrpsee = { version = "0.15", features = ["macros"] }
+clap = { version = "4", features = ["derive"] }
+jsonrpsee = { version = "0.16", features = ["macros"] }
 tokio = { version = "1.19", default-features = false }
 serde = { version = "1", features = ["derive"] }
 toml = "0.5"

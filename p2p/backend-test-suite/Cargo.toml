@@ -15,4 +15,4 @@ subsystem = { path = "../../subsystem/" }
 
 tokio = { version = "1", default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 futures = "0.3"
-libtest-mimic = "0.5"
+libtest-mimic = "0.6"

@@ -20,5 +20,5 @@ tokio = { version = "1", default-features = false, features = ["io-util", "macro
 futures = "0.3"
 void = "1.0"
 crossbeam-channel = "0.5"
-jsonrpsee = {version = "0.15", features = ["macros"]}
+jsonrpsee = {version = "0.16", features = ["macros"]}
 async-trait = "0.1"
