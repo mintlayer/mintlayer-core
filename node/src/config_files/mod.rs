@@ -135,6 +135,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let P2pConfigFile {
         bind_address,
         ban_threshold,
+        ban_duration,
         outbound_connection_timeout,
         mdns_config: _,
         request_timeout,
@@ -157,6 +158,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     P2pConfigFile {
         bind_address,
         ban_threshold,
+        ban_duration,
         outbound_connection_timeout,
         mdns_config,
         request_timeout,

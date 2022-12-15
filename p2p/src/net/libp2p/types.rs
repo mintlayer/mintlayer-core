@@ -114,12 +114,6 @@ pub enum Command {
     ListenAddress {
         response: oneshot::Sender<Option<Multiaddr>>,
     },
-
-    /// Ban remote peer
-    BanPeer {
-        peer_id: PeerId,
-        response: oneshot::Sender<crate::Result<()>>,
-    },
 }
 
 #[derive(Debug)]

@@ -42,8 +42,6 @@ use crate::{
     net::{types, AsBannableAddress, NetworkingService},
 };
 
-const BAN_DURATION: Duration = Duration::from_secs(60 * 60 * 24);
-
 #[derive(Debug)]
 pub struct PeerContext<T: NetworkingService> {
     /// Peer information
@@ -403,7 +401,7 @@ impl<T: NetworkingService> PeerDb<T> {
                 .duration_since(UNIX_EPOCH)
                 // This can fail only if `SystemTime::now()` returns the time before `UNIX_EPOCH`.
                 .expect("Invalid system time")
-                + BAN_DURATION;
+                + *self.p2p_config.ban_duration;
             self.banned.insert(address, ban_till);
         } else {
             log::error!("Failed to get address for peer {}", peer_id);
@@ -419,8 +417,6 @@ impl<T: NetworkingService> PeerDb<T> {
     /// If peer is banned, it is still kept in the peer storage but it is removed
     /// from the `available` storage so it won't be picked up again and its peer ID
     /// is recorded into the `banned` storage which keeps track of all banned peers.
-    ///
-    /// TODO: implement unbanning
     pub fn adjust_peer_score(&mut self, peer_id: &T::PeerId, score: u32) -> bool {
         let final_score = match self.peers.entry(*peer_id) {
             Entry::Vacant(entry) => {

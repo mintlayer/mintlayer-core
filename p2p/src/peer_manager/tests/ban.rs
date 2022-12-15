@@ -121,17 +121,6 @@ where
         pm2.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
-
-    // try to reestablish connection, it timeouts because it's rejected in the backend
-    let addr = pm2.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
-    tokio::spawn(async move { pm1.peer_connectivity_handle.connect(addr).await });
-
-    tokio::select! {
-        _event = pm2.peer_connectivity_handle.poll_next() => {
-            panic!("did not expect event, received {:?}", _event)
-        },
-        _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
-    }
 }
 
 #[tokio::test]
@@ -139,25 +128,19 @@ async fn banned_peer_attempts_to_connect_libp2p() {
     banned_peer_attempts_to_connect::<TestTransportLibp2p, Libp2pService>().await;
 }
 
-#[ignore]
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_mock_tcp() {
-    // TODO: implement proper peer banning
     banned_peer_attempts_to_connect::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
 }
 
-#[ignore]
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_mock_channel() {
-    // TODO: implement proper peer banning
     banned_peer_attempts_to_connect::<TestTransportChannel, MockService<MockChannelTransport>>()
         .await;
 }
 
-#[ignore]
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_mock_noise() {
-    // TODO: implement proper peer banning
     banned_peer_attempts_to_connect::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
 }
 

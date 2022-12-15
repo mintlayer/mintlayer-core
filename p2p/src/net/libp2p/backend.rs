@@ -262,18 +262,6 @@ impl Libp2pBackend {
         }
     }
 
-    /// Ban peer
-    fn ban_peer(
-        &mut self,
-        peer_id: PeerId,
-        response: oneshot::Sender<crate::Result<()>>,
-    ) -> crate::Result<()> {
-        log::trace!("ban peer {peer_id}");
-
-        self.swarm.ban_peer_id(peer_id);
-        response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
-    }
-
     // TODO: design p2p global command system
     /// Handle command received from the libp2p front-end
     fn on_command(&mut self, cmd: types::Command) -> crate::Result<()> {
@@ -308,7 +296,6 @@ impl Libp2pBackend {
                 response,
                 channel,
             } => self.send_response(request_id, *response, channel),
-            types::Command::BanPeer { peer_id, response } => self.ban_peer(peer_id, response),
             types::Command::ListenAddress { response } => {
                 response.send(self.listen_addr.clone()).map_err(|_| P2pError::ChannelClosed)
             }
