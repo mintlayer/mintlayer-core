@@ -79,14 +79,6 @@ where
         rx.await.map_err(P2pError::from)
     }
 
-    async fn get_peer_id(&self) -> crate::Result<String> {
-        let (tx, rx) = oneshot::channel();
-        self.tx_peer_manager
-            .send(PeerManagerEvent::GetPeerId(tx))
-            .map_err(P2pError::from)?;
-        rx.await.map_err(P2pError::from)
-    }
-
     async fn get_connected_peers(&self) -> crate::Result<Vec<String>> {
         let (tx, rx) = oneshot::channel();
         self.tx_peer_manager

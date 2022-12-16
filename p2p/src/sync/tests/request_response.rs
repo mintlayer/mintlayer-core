@@ -52,11 +52,11 @@ where
         make_sync_manager::<T>(A::make_transport(), A::make_address()).await;
 
     // connect the two managers together so that they can exchange messages
-    connect_services::<T>(&mut conn1, &mut conn2).await;
+    let (_address, _peer_info1, peer_info2) = connect_services::<T>(&mut conn1, &mut conn2).await;
 
     mgr1.peer_sync_handle
         .send_request(
-            *conn2.peer_id(),
+            peer_info2.peer_id,
             Request::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .await
@@ -121,13 +121,13 @@ where
         make_sync_manager::<T>(A::make_transport(), addr2).await;
 
     // connect the two managers together so that they can exchange messages
-    connect_services::<T>(&mut conn1, &mut conn2).await;
+    let (_address, _peer_info1, peer_info2) = connect_services::<T>(&mut conn1, &mut conn2).await;
     let mut request_ids = HashSet::new();
 
     let id = mgr1
         .peer_sync_handle
         .send_request(
-            *conn2.peer_id(),
+            peer_info2.peer_id,
             Request::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .await
@@ -137,7 +137,7 @@ where
     let id = mgr1
         .peer_sync_handle
         .send_request(
-            *conn2.peer_id(),
+            peer_info2.peer_id,
             Request::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .await
@@ -215,8 +215,8 @@ where
         make_sync_manager::<T>(A::make_transport(), A::make_address()).await;
 
     // connect the two managers together so that they can exchange messages
-    connect_services::<T>(&mut conn1, &mut conn2).await;
-    let peer2_id = *conn2.peer_id();
+    let (_address, _peer_info1, peer_info2) = connect_services::<T>(&mut conn1, &mut conn2).await;
+    let peer2_id = peer_info2.peer_id;
 
     tokio::spawn(async move {
         mgr1.register_peer(peer2_id).await.unwrap();

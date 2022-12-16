@@ -23,7 +23,5 @@ pub trait P2pInterface: Send + Sync {
 
     async fn get_bind_address(&self) -> crate::Result<String>;
 
-    async fn get_peer_id(&self) -> crate::Result<String>;
-
     async fn get_connected_peers(&self) -> crate::Result<Vec<String>>;
 }

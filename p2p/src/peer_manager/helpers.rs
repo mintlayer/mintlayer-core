@@ -28,7 +28,7 @@ use crate::net::{
 pub async fn connect_services<T>(
     conn1: &mut T::ConnectivityHandle,
     conn2: &mut T::ConnectivityHandle,
-) -> (T::Address, PeerInfo<T>)
+) -> (T::Address, PeerInfo<T>, PeerInfo<T>)
 where
     T: NetworkingService + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -40,7 +40,7 @@ where
         .unwrap();
     conn1.connect(addr).await.expect("dial to succeed");
 
-    let (address, peer_info) = match timeout(Duration::from_secs(5), conn2.poll_next()).await {
+    let (address, peer_info1) = match timeout(Duration::from_secs(5), conn2.poll_next()).await {
         Ok(event) => match event.unwrap() {
             ConnectivityEvent::InboundAccepted { address, peer_info } => (address, peer_info),
             event => panic!("expected `InboundAccepted`, got {event:?}"),
@@ -48,13 +48,13 @@ where
         Err(_err) => panic!("did not receive `InboundAccepted` in time"),
     };
 
-    match timeout(Duration::from_secs(5), conn1.poll_next()).await {
+    let (_address2, peer_info2) = match timeout(Duration::from_secs(5), conn1.poll_next()).await {
         Ok(event) => match event.unwrap() {
-            ConnectivityEvent::OutboundAccepted { .. } => {}
+            ConnectivityEvent::OutboundAccepted { address, peer_info } => (address, peer_info),
             event => panic!("expected `OutboundAccepted`, got {event:?}"),
         },
         Err(_err) => panic!("did not receive `OutboundAccepted` in time"),
-    }
+    };
 
-    (address, peer_info)
+    (address, peer_info1, peer_info2)
 }

@@ -34,10 +34,6 @@ trait P2pRpc {
     #[method(name = "get_bind_address")]
     async fn get_bind_address(&self) -> rpc::Result<String>;
 
-    /// Get peer ID of the local node
-    #[method(name = "get_peer_id")]
-    async fn get_peer_id(&self) -> rpc::Result<String>;
-
     /// Get peer IDs of connected peers
     #[method(name = "get_connected_peers")]
     async fn get_connected_peers(&self) -> rpc::Result<Vec<String>>;
@@ -62,11 +58,6 @@ impl P2pRpcServer for super::P2pHandle {
 
     async fn get_bind_address(&self) -> rpc::Result<String> {
         let res = self.call_async(|this| Box::pin(this.get_bind_address())).await;
-        handle_error(res)
-    }
-
-    async fn get_peer_id(&self) -> rpc::Result<String> {
-        let res = self.call_async(|this| Box::pin(this.get_peer_id())).await;
         handle_error(res)
     }
 

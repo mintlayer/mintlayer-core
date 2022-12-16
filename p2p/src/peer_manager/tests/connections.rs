@@ -110,7 +110,7 @@ where
     let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
     let addr = pm2.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
-    let peer_id = *pm2.peer_connectivity_handle.peer_id();
+    let peer_id = todo!();
 
     tokio::spawn(async move {
         loop {
@@ -267,7 +267,7 @@ where
     )
     .await;
 
-    let (_address, peer_info) = connect_services::<T>(
+    let (_address, peer_info, _) = connect_services::<T>(
         &mut pm2.peer_connectivity_handle,
         &mut pm1.peer_connectivity_handle,
     )
@@ -312,7 +312,7 @@ where
     let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
-    let (address, peer_info) = connect_services::<T>(
+    let (address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
@@ -364,7 +364,7 @@ where
     )
     .await;
 
-    let (address, peer_info) = connect_services::<T>(
+    let (address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
@@ -424,7 +424,7 @@ where
     )
     .await;
 
-    let (_address, peer_info) = connect_services::<T>(
+    let (_address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
@@ -484,7 +484,7 @@ where
         peer_manager::MAX_ACTIVE_CONNECTIONS
     );
 
-    let (_address, peer_info) = connect_services::<T>(
+    let (_address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )

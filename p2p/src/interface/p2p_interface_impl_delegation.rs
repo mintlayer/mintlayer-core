@@ -37,10 +37,6 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
         self.deref().get_bind_address().await
     }
 
-    async fn get_peer_id(&self) -> crate::Result<String> {
-        self.deref().get_peer_id().await
-    }
-
     async fn get_connected_peers(&self) -> crate::Result<Vec<String>> {
         self.deref().get_connected_peers().await
     }
