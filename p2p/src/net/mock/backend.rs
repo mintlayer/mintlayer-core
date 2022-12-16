@@ -184,7 +184,7 @@ where
             Ok(event) => match event {
                 Ok(socket) => self.create_peer(
                     socket,
-                    MockPeerId::from_socket_address::<T>(&address),
+                    MockPeerId::new(),
                     peer::Role::Outbound,
                     ConnectionState::OutboundAccepted { address },
                 ),
@@ -390,7 +390,7 @@ where
                     let (stream, address) = res.map_err(|_| P2pError::Other("accept() failed"))?;
                     self.create_peer(
                         stream,
-                        MockPeerId::from_socket_address::<T>(&address),
+                        MockPeerId::new(),
                         peer::Role::Inbound,
                         ConnectionState::InboundAccepted { address }
                     )?;

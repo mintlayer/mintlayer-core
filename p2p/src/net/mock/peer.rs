@@ -258,7 +258,7 @@ mod tests {
         let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, mut rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
-        let peer_id2 = MockPeerId::random();
+        let peer_id2 = MockPeerId::new();
 
         let mut peer = Peer::<T>::new(
             peer_id2,
@@ -340,7 +340,7 @@ mod tests {
         let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, mut rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
-        let peer_id3 = MockPeerId::random();
+        let peer_id3 = MockPeerId::new();
 
         let mut peer = Peer::<T>::new(
             peer_id3,
@@ -427,7 +427,7 @@ mod tests {
         let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, _rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
-        let peer_id3 = MockPeerId::random();
+        let peer_id3 = MockPeerId::new();
 
         let mut peer = Peer::<T>::new(
             peer_id3,
@@ -489,7 +489,7 @@ mod tests {
         let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, _rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
-        let peer_id2 = MockPeerId::random();
+        let peer_id2 = MockPeerId::new();
 
         let mut peer = Peer::<T>::new(
             peer_id2,

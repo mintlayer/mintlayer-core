@@ -14,15 +14,15 @@
 // limitations under the License.
 
 use std::{
-    collections::{hash_map::DefaultHasher, BTreeSet},
-    hash::{Hash, Hasher},
+    collections::BTreeSet,
+    hash::Hash,
     str::FromStr,
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 use tokio::sync::oneshot;
 
 use common::primitives::semver;
-use crypto::random::{make_pseudo_rng, Rng};
 use serialization::{Decode, Encode};
 
 use crate::{
@@ -153,16 +153,12 @@ impl FromStr for MockPeerId {
     }
 }
 
-impl MockPeerId {
-    pub fn random() -> Self {
-        let mut rng = make_pseudo_rng();
-        Self(rng.gen::<u64>())
-    }
+static NEXT_PEER_ID: AtomicU64 = AtomicU64::new(1);
 
-    pub fn from_socket_address<T: TransportSocket>(addr: &T::Address) -> Self {
-        let mut hasher = DefaultHasher::new();
-        addr.hash(&mut hasher);
-        Self(hasher.finish())
+impl MockPeerId {
+    pub fn new() -> Self {
+        let id = NEXT_PEER_ID.fetch_add(1, Ordering::Relaxed);
+        Self(id)
     }
 }
 

@@ -127,6 +127,6 @@ impl MakeTestPeerId for MockPeerId {
     type PeerId = Self;
 
     fn random() -> Self::PeerId {
-        MockPeerId::random()
+        MockPeerId::new()
     }
 }

@@ -1089,7 +1089,7 @@ where
     let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&config), parent_info, 7);
     p2p_test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
 
-    connect_services::<S>(&mut conn1, &mut conn2).await;
+    let (_address, _peer_info1, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
     assert_eq!(mgr1.register_peer(peer_info2.peer_id).await, Ok(()));
 
     let handle = tokio::spawn(async move {

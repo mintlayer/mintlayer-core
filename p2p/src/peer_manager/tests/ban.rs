@@ -309,7 +309,7 @@ async fn validate_invalid_outbound_connection_libp2p() {
 async fn validate_invalid_outbound_connection_mock_tcp() {
     validate_invalid_outbound_connection::<TestTransportTcp, MockService<TcpTransportSocket>>(
         "210.113.67.107:2525".parse().unwrap(),
-        MockPeerId::random(),
+        MockPeerId::new(),
     )
     .await;
 }
@@ -318,7 +318,7 @@ async fn validate_invalid_outbound_connection_mock_tcp() {
 async fn validate_invalid_outbound_connection_mock_channels() {
     validate_invalid_outbound_connection::<TestTransportChannel, MockService<MockChannelTransport>>(
         1,
-        MockPeerId::random(),
+        MockPeerId::new(),
     )
     .await;
 }
@@ -327,7 +327,7 @@ async fn validate_invalid_outbound_connection_mock_channels() {
 async fn validate_invalid_outbound_connection_mock_noise() {
     validate_invalid_outbound_connection::<TestTransportNoise, MockService<NoiseTcpTransport>>(
         "210.113.67.107:2525".parse().unwrap(),
-        MockPeerId::random(),
+        MockPeerId::new(),
     )
     .await;
 }
@@ -424,7 +424,7 @@ async fn validate_invalid_inbound_connection_libp2p() {
 async fn validate_invalid_inbound_connection_mock_tcp() {
     validate_invalid_inbound_connection::<TestTransportTcp, MockService<TcpTransportSocket>>(
         "210.113.67.107:2525".parse().unwrap(),
-        MockPeerId::random(),
+        MockPeerId::new(),
     )
     .await;
 }
@@ -433,7 +433,7 @@ async fn validate_invalid_inbound_connection_mock_tcp() {
 async fn validate_invalid_inbound_connection_mock_channels() {
     validate_invalid_inbound_connection::<TestTransportChannel, MockService<MockChannelTransport>>(
         1,
-        MockPeerId::random(),
+        MockPeerId::new(),
     )
     .await;
 }
@@ -442,7 +442,7 @@ async fn validate_invalid_inbound_connection_mock_channels() {
 async fn validate_invalid_inbound_connection_mock_noise() {
     validate_invalid_inbound_connection::<TestTransportNoise, MockService<NoiseTcpTransport>>(
         "210.113.67.107:2525".parse().unwrap(),
-        MockPeerId::random(),
+        MockPeerId::new(),
     )
     .await;
 }

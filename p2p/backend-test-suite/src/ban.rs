@@ -166,7 +166,7 @@ where
         tx_peer_manager,
     );
 
-    let (_address, peer_info, _) = connect_services::<S>(&mut conn1, &mut conn2).await;
+    let (_address, _peer_info, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
 
     // create few blocks and offer an orphan block to the `SyncManager`
     let best_block = TestBlockInfo::from_genesis(chain_config.genesis_block());
@@ -174,7 +174,7 @@ where
 
     // register `conn2` to the `SyncManager`, process a block response
     // and verify the `PeerManager` is notified of the protocol violation
-    let remote_id = peer_info.peer_id;
+    let remote_id = peer_info2.peer_id;
 
     tokio::spawn(async move {
         sync1.register_peer(remote_id).await.unwrap();
