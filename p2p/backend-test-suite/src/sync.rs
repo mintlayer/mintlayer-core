@@ -234,9 +234,9 @@ where
     assert!(!same_tip(&mgr1_handle, &mgr2_handle).await);
 
     // add peer to the hashmap of known peers and send getheaders request to them
-    connect_services::<T>(&mut conn1, &mut conn2).await;
+    let (_address, peer_info) = connect_services::<T>(&mut conn1, &mut conn2).await;
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
-    assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
+    assert_eq!(mgr2.register_peer(peer_info.peer_id).await, Ok(()));
 
     let handle = tokio::spawn(async move {
         for _ in 0..14 {
@@ -361,9 +361,9 @@ where
     let remote_tip = get_tip(&mgr2_handle).await;
 
     // add peer to the hashmap of known peers and send getheaders request to them
-    connect_services::<S>(&mut conn1, &mut conn2).await;
+    let (_address, peer_info) = connect_services::<S>(&mut conn1, &mut conn2).await;
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
-    assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
+    assert_eq!(mgr2.register_peer(peer_info.peer_id).await, Ok(()));
 
     let handle = tokio::spawn(async move {
         for _ in 0..24 {
@@ -507,9 +507,9 @@ where
     let remote_tip = get_tip(&mgr2_handle).await;
 
     // add peer to the hashmap of known peers and send getheaders request to them
-    connect_services::<S>(&mut conn1, &mut conn2).await;
+    let (_address, peer_info) = connect_services::<S>(&mut conn1, &mut conn2).await;
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
-    assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
+    assert_eq!(mgr2.register_peer(peer_info.peer_id).await, Ok(()));
 
     let handle = tokio::spawn(async move {
         for _ in 0..20 {
@@ -663,13 +663,13 @@ where
     let mgr3_tip = get_tip(&mgr3_handle).await;
 
     // connect remote peers to local peer
-    connect_services::<S>(&mut conn1, &mut conn2).await;
-    connect_services::<S>(&mut conn1, &mut conn3).await;
+    let (_address, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
+    let (_address, peer_info3) = connect_services::<S>(&mut conn1, &mut conn3).await;
 
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
     assert_eq!(mgr1.register_peer(*conn3.peer_id()).await, Ok(()));
-    assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
-    assert_eq!(mgr3.register_peer(*conn1.peer_id()).await, Ok(()));
+    assert_eq!(mgr2.register_peer(peer_info2.peer_id).await, Ok(()));
+    assert_eq!(mgr3.register_peer(peer_info3.peer_id).await, Ok(()));
 
     let handle = tokio::spawn(async move {
         for _ in 0..18 {
@@ -794,13 +794,13 @@ where
     assert!(!same_tip(&mgr2_handle, &mgr1_handle).await);
 
     // connect remote peers to local peer
-    connect_services::<S>(&mut conn1, &mut conn2).await;
-    connect_services::<S>(&mut conn1, &mut conn3).await;
+    let (_address, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
+    let (_address, peer_info3) = connect_services::<S>(&mut conn1, &mut conn3).await;
 
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
     assert_eq!(mgr1.register_peer(*conn3.peer_id()).await, Ok(()));
-    assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
-    assert_eq!(mgr3.register_peer(*conn1.peer_id()).await, Ok(()));
+    assert_eq!(mgr2.register_peer(peer_info2.peer_id).await, Ok(()));
+    assert_eq!(mgr3.register_peer(peer_info3.peer_id).await, Ok(()));
 
     let (tx, mut rx) = mpsc::unbounded_channel();
     let handle = tokio::spawn(async move {
@@ -925,13 +925,13 @@ where
     p2p_test_utils::import_blocks(&mgr3_handle, blocks).await;
 
     // connect remote peers to local peer
-    connect_services::<S>(&mut conn1, &mut conn2).await;
-    connect_services::<S>(&mut conn1, &mut conn3).await;
+    let (_address, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
+    let (_address, peer_info3) = connect_services::<S>(&mut conn1, &mut conn3).await;
 
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
     assert_eq!(mgr1.register_peer(*conn3.peer_id()).await, Ok(()));
-    assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
-    assert_eq!(mgr3.register_peer(*conn1.peer_id()).await, Ok(()));
+    assert_eq!(mgr2.register_peer(peer_info2.peer_id).await, Ok(()));
+    assert_eq!(mgr3.register_peer(peer_info3.peer_id).await, Ok(()));
 
     let (tx, mut rx) = mpsc::unbounded_channel();
     let mut gethdr_received = HashSet::new();

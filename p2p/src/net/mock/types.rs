@@ -191,7 +191,6 @@ pub struct MockPeerInfo {
 pub enum PeerEvent {
     /// Peer information received from remote
     PeerInfoReceived {
-        peer_id: MockPeerId,
         network: [u8; 4],
         version: semver::SemVer,
         protocols: Vec<Protocol>,
@@ -215,14 +214,12 @@ pub enum MockEvent {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum HandshakeMessage {
     Hello {
-        peer_id: MockPeerId,
         version: common::primitives::semver::SemVer,
         network: [u8; 4],
         protocols: Vec<Protocol>,
         subscriptions: BTreeSet<PubSubTopic>,
     },
     HelloAck {
-        peer_id: MockPeerId,
         version: common::primitives::semver::SemVer,
         network: [u8; 4],
         protocols: Vec<Protocol>,

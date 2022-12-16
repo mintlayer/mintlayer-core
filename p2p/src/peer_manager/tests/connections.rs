@@ -424,16 +424,14 @@ where
     )
     .await;
 
-    let (_address, _peer_info) = connect_services::<T>(
+    let (_address, peer_info) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
     .await;
 
     assert_eq!(
-        pm2.peer_connectivity_handle
-            .disconnect(*pm1.peer_connectivity_handle.peer_id())
-            .await,
+        pm2.peer_connectivity_handle.disconnect(peer_info.peer_id).await,
         Ok(())
     );
     assert!(std::matches!(
@@ -486,12 +484,11 @@ where
         peer_manager::MAX_ACTIVE_CONNECTIONS
     );
 
-    let (_address, _peer_info) = connect_services::<T>(
+    let (_address, peer_info) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
     .await;
-    let pm1_id = *pm1.peer_connectivity_handle.peer_id();
 
     // run the first peer manager in the background and poll events from the peer manager
     // that tries to connect to the first manager
@@ -500,7 +497,7 @@ where
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) =
         pm2.peer_connectivity_handle.poll_next().await
     {
-        assert_eq!(peer_id, pm1_id);
+        assert_eq!(peer_id, peer_info.peer_id);
     } else {
         panic!("invalid event received");
     }

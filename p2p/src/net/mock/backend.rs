@@ -116,9 +116,6 @@ pub struct Backend<T: TransportSocket> {
     /// Timeout for outbound operations
     timeout: Duration,
 
-    /// Local peer ID
-    local_peer_id: MockPeerId,
-
     /// Request manager for managing inbound/outbound requests and responses
     request_mgr: request_manager::RequestManager,
 
@@ -149,8 +146,6 @@ where
         sync_tx: mpsc::Sender<SyncingEvent>,
         timeout: Duration,
     ) -> Self {
-        let local_peer_id = MockPeerId::from_socket_address::<T>(&address);
-
         Self {
             transport,
             address,
@@ -164,7 +159,6 @@ where
             peers: HashMap::new(),
             pending: HashMap::new(),
             peer_chan: mpsc::channel(64),
-            local_peer_id,
             request_mgr: request_manager::RequestManager::new(),
             pending_responses: HashMap::new(),
         }
@@ -190,7 +184,6 @@ where
             Ok(event) => match event {
                 Ok(socket) => self.create_peer(
                     socket,
-                    self.local_peer_id,
                     MockPeerId::from_socket_address::<T>(&address),
                     peer::Role::Outbound,
                     ConnectionState::OutboundAccepted { address },
@@ -257,10 +250,7 @@ where
         request_id: MockRequestId,
         response: message::Response,
     ) -> crate::Result<()> {
-        log::trace!(
-            "{}: try to send response to request, request id {request_id}",
-            self.local_peer_id
-        );
+        log::trace!("try to send response to request, request id {request_id}");
 
         if let Some((peer_id, response)) = self.request_mgr.make_response(&request_id, response) {
             return self
@@ -400,7 +390,6 @@ where
                     let (stream, address) = res.map_err(|_| P2pError::Other("accept() failed"))?;
                     self.create_peer(
                         stream,
-                        self.local_peer_id,
                         MockPeerId::from_socket_address::<T>(&address),
                         peer::Role::Inbound,
                         ConnectionState::InboundAccepted { address }
@@ -430,7 +419,6 @@ where
     fn create_peer(
         &mut self,
         socket: T::Stream,
-        local_peer_id: MockPeerId,
         remote_peer_id: MockPeerId,
         role: peer::Role,
         state: ConnectionState<T>,
@@ -445,7 +433,6 @@ where
 
         tokio::spawn(async move {
             let mut peer = peer::Peer::<T>::new(
-                local_peer_id,
                 remote_peer_id,
                 role,
                 chain_config,
@@ -471,7 +458,6 @@ where
     ) -> crate::Result<()> {
         match event {
             PeerEvent::PeerInfoReceived {
-                peer_id: received_id,
                 network,
                 version,
                 protocols,
@@ -485,7 +471,7 @@ where
                             .send(ConnectivityEvent::OutboundAccepted {
                                 address,
                                 peer_info: MockPeerInfo {
-                                    peer_id: received_id,
+                                    peer_id,
                                     network,
                                     version,
                                     agent: None,
@@ -501,7 +487,7 @@ where
                             .send(ConnectivityEvent::InboundAccepted {
                                 address,
                                 peer_info: MockPeerInfo {
-                                    peer_id: received_id,
+                                    peer_id,
                                     network,
                                     version,
                                     agent: None,
@@ -515,14 +501,14 @@ where
                 }
 
                 self.peers.insert(
-                    received_id,
+                    peer_id,
                     PeerContext {
-                        _peer_id: received_id,
+                        _peer_id: peer_id,
                         subscriptions,
                         tx,
                     },
                 );
-                let _ = self.request_mgr.register_peer(received_id);
+                let _ = self.request_mgr.register_peer(peer_id);
             }
             PeerEvent::MessageReceived { message } => {
                 self.handle_message(peer_id, message).await?;

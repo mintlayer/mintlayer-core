@@ -42,11 +42,8 @@ pub enum Role {
 }
 
 pub struct Peer<T: TransportSocket> {
-    /// Peer ID of the local node
-    local_peer_id: MockPeerId,
-
     /// Peer ID of the remote node
-    remote_peer_id: MockPeerId,
+    peer_id: MockPeerId,
 
     /// Chain config
     chain_config: Arc<ChainConfig>,
@@ -72,8 +69,7 @@ where
 {
     #![allow(clippy::too_many_arguments)]
     pub fn new(
-        local_peer_id: MockPeerId,
-        remote_peer_id: MockPeerId,
+        peer_id: MockPeerId,
         role: Role,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
@@ -83,8 +79,7 @@ where
     ) -> Self {
         let socket = BufferedTranscoder::new(socket);
         Self {
-            local_peer_id,
-            remote_peer_id,
+            peer_id,
             role,
             chain_config,
             p2p_config,
@@ -98,7 +93,6 @@ where
         match self.role {
             Role::Inbound => {
                 let Ok(types::Message::Handshake(types::HandshakeMessage::Hello {
-                    peer_id,
                     version,
                     network,
                     protocols,
@@ -111,7 +105,6 @@ where
                 self.socket
                     .send(types::Message::Handshake(
                         types::HandshakeMessage::HelloAck {
-                            peer_id: self.local_peer_id,
                             version: *self.chain_config.version(),
                             network: *self.chain_config.magic_bytes(),
                             // TODO: Replace the hard-coded values when ping and pubsub protocols are implemented for the mock interface.
@@ -129,9 +122,8 @@ where
 
                 self.tx
                     .send((
-                        self.remote_peer_id,
+                        self.peer_id,
                         types::PeerEvent::PeerInfoReceived {
-                            peer_id,
                             network,
                             version,
                             protocols,
@@ -141,13 +133,11 @@ where
                     .await
                     .map_err(P2pError::from)?;
 
-                self.remote_peer_id = peer_id;
                 Ok(())
             }
             Role::Outbound => {
                 self.socket
                     .send(types::Message::Handshake(types::HandshakeMessage::Hello {
-                        peer_id: self.local_peer_id,
                         version: *self.chain_config.version(),
                         network: *self.chain_config.magic_bytes(),
                         protocols: [
@@ -162,7 +152,6 @@ where
                     .await?;
 
                 let Ok(types::Message::Handshake(types::HandshakeMessage::HelloAck {
-                    peer_id,
                     version,
                     network,
                     protocols,
@@ -174,9 +163,8 @@ where
 
                 self.tx
                     .send((
-                        self.remote_peer_id,
+                        self.peer_id,
                         types::PeerEvent::PeerInfoReceived {
-                            peer_id,
                             network,
                             version,
                             protocols,
@@ -186,14 +174,13 @@ where
                     .await
                     .map_err(P2pError::from)?;
 
-                self.remote_peer_id = peer_id;
                 Ok(())
             }
         }
     }
 
     pub async fn destroy(self) {
-        let _ = self.tx.send((self.remote_peer_id, types::PeerEvent::ConnectionClosed)).await;
+        let _ = self.tx.send((self.peer_id, types::PeerEvent::ConnectionClosed)).await;
     }
 
     pub async fn run(&mut self) -> crate::Result<()> {
@@ -202,11 +189,11 @@ where
         match handshake_res {
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
-                log::debug!("handshake failed for peer {}: {err}", self.remote_peer_id);
+                log::debug!("handshake failed for peer {}: {err}", self.peer_id);
                 return Err(err);
             }
             Err(_) => {
-                log::debug!("handshake timeout for peer {}", self.remote_peer_id);
+                log::debug!("handshake timeout for peer {}", self.peer_id);
                 return Err(P2pError::ProtocolError(ProtocolError::Unresponsive));
             }
         }
@@ -225,7 +212,7 @@ where
                     Ok(message) => {
                         self.tx
                             .send((
-                                self.remote_peer_id,
+                                self.peer_id,
                                 types::PeerEvent::MessageReceived {
                                     message
                                 },
@@ -271,13 +258,10 @@ mod tests {
         let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, mut rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
-        let peer_id1 = MockPeerId::random();
         let peer_id2 = MockPeerId::random();
-        let peer_id3 = MockPeerId::random();
 
         let mut peer = Peer::<T>::new(
-            peer_id1,
-            peer_id3,
+            peer_id2,
             Role::Inbound,
             Arc::clone(&chain_config),
             p2p_config,
@@ -295,7 +279,6 @@ mod tests {
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
-                peer_id: peer_id2,
                 version: *chain_config.version(),
                 network: *chain_config.magic_bytes(),
                 protocols: [
@@ -314,25 +297,21 @@ mod tests {
 
         let _peer = handle.await;
         assert_eq!(
-            rx1.try_recv(),
-            Ok((
-                peer_id3,
-                types::PeerEvent::PeerInfoReceived {
-                    peer_id: peer_id2,
-                    network: *chain_config.magic_bytes(),
-                    version: *chain_config.version(),
-                    protocols: [
-                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-                    ]
+            rx1.try_recv().unwrap().1,
+            types::PeerEvent::PeerInfoReceived {
+                network: *chain_config.magic_bytes(),
+                version: *chain_config.version(),
+                protocols: [
+                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                    Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+                ]
+                .into_iter()
+                .collect(),
+                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
-                    subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
-                        .into_iter()
-                        .collect(),
-                }
-            ))
+            }
         );
     }
 
@@ -361,12 +340,9 @@ mod tests {
         let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, mut rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
-        let peer_id1 = MockPeerId::random();
-        let peer_id2 = MockPeerId::random();
         let peer_id3 = MockPeerId::random();
 
         let mut peer = Peer::<T>::new(
-            peer_id1,
             peer_id3,
             Role::Outbound,
             Arc::clone(&chain_config),
@@ -386,7 +362,6 @@ mod tests {
         assert!(socket2
             .send(types::Message::Handshake(
                 types::HandshakeMessage::HelloAck {
-                    peer_id: peer_id2,
                     version: *chain_config.version(),
                     network: *chain_config.magic_bytes(),
                     protocols: [
@@ -410,7 +385,6 @@ mod tests {
             Ok((
                 peer_id3,
                 types::PeerEvent::PeerInfoReceived {
-                    peer_id: peer_id2,
                     network: *chain_config.magic_bytes(),
                     version: *chain_config.version(),
                     protocols: [
@@ -453,12 +427,9 @@ mod tests {
         let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, _rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
-        let peer_id1 = MockPeerId::random();
-        let peer_id2 = MockPeerId::random();
         let peer_id3 = MockPeerId::random();
 
         let mut peer = Peer::<T>::new(
-            peer_id1,
             peer_id3,
             Role::Inbound,
             Arc::clone(&chain_config),
@@ -474,7 +445,6 @@ mod tests {
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
-                peer_id: peer_id2,
                 version: *chain_config.version(),
                 network: [1, 2, 3, 4],
                 protocols: [
@@ -519,11 +489,9 @@ mod tests {
         let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, _rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
-        let peer_id1 = MockPeerId::random();
         let peer_id2 = MockPeerId::random();
 
         let mut peer = Peer::<T>::new(
-            peer_id1,
             peer_id2,
             Role::Inbound,
             chain_config,
