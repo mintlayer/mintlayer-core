@@ -184,7 +184,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         })
     }
 
-    fn merge_data_generic<K: Ord + Copy, T: Clone, Getter, Setter, Deleter>(
+    fn merge_data_generic<K: Ord + Copy, T: Clone + PartialEq, Getter, Setter, Deleter>(
         &mut self,
         delta: DeltaDataCollection<K, T>,
         getter: Getter,

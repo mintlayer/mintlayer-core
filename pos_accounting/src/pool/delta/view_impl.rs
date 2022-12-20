@@ -48,7 +48,7 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
-        match self.data.pool_data.get_data_delta(&pool_id) {
+        match self.data.pool_data.get_data(&pool_id) {
             accounting::GetDataResult::Present(d) => Ok(Some(d.clone())),
             accounting::GetDataResult::Deleted => Ok(None),
             accounting::GetDataResult::Missing => self.parent.get_pool_data(pool_id),
@@ -84,7 +84,7 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, Error> {
-        match self.data.delegation_data.get_data_delta(&delegation_id) {
+        match self.data.delegation_data.get_data(&delegation_id) {
             accounting::GetDataResult::Present(d) => Ok(Some(d.clone())),
             accounting::GetDataResult::Deleted => Ok(None),
             accounting::GetDataResult::Missing => self.parent.get_delegation_data(delegation_id),

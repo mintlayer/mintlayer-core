@@ -42,6 +42,8 @@ fn new_delegation_id(v: u64) -> DelegationId {
     DelegationId::new(H256::from_low_u64_be(v))
 }
 
+// FIXME: enable this test
+#[ignore]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
