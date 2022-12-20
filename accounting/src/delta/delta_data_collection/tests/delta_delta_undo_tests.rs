@@ -27,6 +27,7 @@ type ThreeCollections = (
 #[case(make_create_modify_undo_collections())]
 #[case(make_modify_modify_undo_collections())]
 #[case(make_modify_delete_undo_collections())]
+#[case(make_delete_create_undo_collections())]
 fn delta_delta_undo_associativity(#[case] collections: ThreeCollections) {
     {
         // Delta1 + Delta2 + Undo = Delta1
@@ -144,6 +145,22 @@ fn make_modify_delete_undo_collections() -> ThreeCollections {
 
     let collection3 =
         DeltaDataCollection::from_iter([(1, DeltaMapElement::DeltaUndo(undo_delete))].into_iter());
+
+    (collection1, collection2, collection3)
+}
+
+fn make_delete_create_undo_collections() -> ThreeCollections {
+    let collection1 =
+        DeltaDataCollection::from_iter([(1, DataDelta::Delete(Box::new('a')))].into_iter());
+
+    let mut collection2 = DeltaDataCollection::new();
+    let undo_create = collection2
+        .merge_delta_data_element(1, DataDelta::Create(Box::new('b')))
+        .unwrap()
+        .unwrap();
+
+    let collection3 =
+        DeltaDataCollection::from_iter([(1, DeltaMapElement::DeltaUndo(undo_create))].into_iter());
 
     (collection1, collection2, collection3)
 }

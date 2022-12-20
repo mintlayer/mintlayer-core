@@ -207,7 +207,7 @@ fn combine_delta_elements<T: Clone + PartialEq>(
         },
         (DeltaMapElement::Delta(d), DeltaMapElement::DeltaUndo(u)) => {
             match combine_delta_with_undo(d, u)? {
-                Some(d) => Ok(DeltaMapOp::Insert(d)),
+                Some(d) => Ok(DeltaMapOp::Insert(DeltaMapElement::Delta(d))),
                 None => Ok(DeltaMapOp::Erase),
             }
         }

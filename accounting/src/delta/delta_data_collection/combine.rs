@@ -36,9 +36,12 @@ pub fn combine_deltas<T: Clone + PartialEq>(
             }
         }
         (DataDelta::Modify((d, _)), DataDelta::Delete(_)) => Ok(Some(DataDelta::Delete(d.clone()))),
-        (DataDelta::Delete(_), DataDelta::Create(_)) => {
-            // Thought this case seems plausible it's forbidden as it breaks associativity of delta+undo operations
-            Err(Error::DeltaDataCreatedMultipleTimes)
+        (DataDelta::Delete(lhs), DataDelta::Create(rhs)) => {
+            if lhs == &rhs {
+                Ok(None)
+            } else {
+                Ok(Some(DataDelta::Modify((lhs.clone(), rhs))))
+            }
         }
         (DataDelta::Delete(_), DataDelta::Modify(_)) => Err(Error::DeltaDataModifyAfterDelete),
         (DataDelta::Delete(_), DataDelta::Delete(_)) => Err(Error::DeltaDataDeletedMultipleTimes),
@@ -51,31 +54,24 @@ pub fn combine_deltas<T: Clone + PartialEq>(
 pub fn combine_delta_with_undo<T: Clone + PartialEq>(
     lhs: &DataDelta<T>,
     rhs: DataDeltaUndo<T>,
-) -> Result<Option<DeltaMapElement<T>>, Error> {
+) -> Result<Option<DataDelta<T>>, Error> {
     match (lhs, rhs) {
         (DataDelta::Create(_), DataDeltaUndo::Create(_)) => {
             Err(Error::DeltaDataCreatedMultipleTimes)
         }
-        (DataDelta::Create(_), DataDeltaUndo::Modify((_, d))) => {
-            Ok(Some(DeltaMapElement::Delta(DataDelta::Create(d))))
-        }
+        (DataDelta::Create(_), DataDeltaUndo::Modify((_, d))) => Ok(Some(DataDelta::Create(d))),
         (DataDelta::Create(_), DataDeltaUndo::Delete(_)) => Ok(None),
 
-        (DataDelta::Modify((_, _)), DataDeltaUndo::Create(d)) => {
-            Ok(Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Create(d))))
-        }
+        (DataDelta::Modify((_, _)), DataDeltaUndo::Create(d)) => Ok(Some(DataDelta::Create(d))),
         (DataDelta::Modify((lhs1, lhs2)), DataDeltaUndo::Modify((rhs1, rhs2))) => {
             if lhs1 == &rhs2 && lhs2 == &rhs1 {
                 Ok(None)
             } else {
-                Ok(Some(DeltaMapElement::Delta(DataDelta::Modify((
-                    lhs1.clone(),
-                    rhs2,
-                )))))
+                Ok(Some(DataDelta::Modify((lhs1.clone(), rhs2))))
             }
         }
-        (DataDelta::Modify(_), DataDeltaUndo::Delete(d)) => {
-            Ok(Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Delete(d))))
+        (DataDelta::Modify((d, _)), DataDeltaUndo::Delete(_)) => {
+            Ok(Some(DataDelta::Delete(d.clone())))
         }
 
         (DataDelta::Delete(lhs), DataDeltaUndo::Create(rhs)) => {
@@ -84,10 +80,7 @@ pub fn combine_delta_with_undo<T: Clone + PartialEq>(
             } else {
                 // Delete + Undo(Delete) produces Modify if the data has changed.
                 // This is introduced specifically for the case: (Modify + Delete) + Undo(Delete) = Modify
-                Ok(Some(DeltaMapElement::Delta(DataDelta::Modify((
-                    lhs.clone(),
-                    rhs,
-                )))))
+                Ok(Some(DataDelta::Modify((lhs.clone(), rhs))))
             }
         }
         (DataDelta::Delete(_), DataDeltaUndo::Modify(_)) => Err(Error::DeltaDataModifyAfterDelete),
@@ -123,7 +116,13 @@ pub fn combine_undos<T: Clone + PartialEq>(
             Ok(Some(DataDeltaUndo::Delete(d.clone())))
         }
 
-        (DataDeltaUndo::Delete(_), DataDeltaUndo::Create(_)) => Ok(None),
+        (DataDeltaUndo::Delete(lhs), DataDeltaUndo::Create(rhs)) => {
+            if lhs == &rhs {
+                Ok(None)
+            } else {
+                Ok(Some(DataDeltaUndo::Modify((lhs.clone(), rhs))))
+            }
+        }
         (DataDeltaUndo::Delete(_), DataDeltaUndo::Modify(_)) => {
             Err(Error::DeltaDataCreatedMultipleTimes)
         }
@@ -152,7 +151,8 @@ pub mod test {
         assert_eq!(combine_deltas(&Modify((Box::new('a'), Box::new('b'))), Modify((Box::new('b'), Box::new('a')))), Ok(None));
         assert_eq!(combine_deltas(&Modify((Box::new('a'), Box::new('b'))), Delete(Box::new('c'))),                  Ok(Some(DataDelta::Delete(Box::new('a')))));
     
-        assert_eq!(combine_deltas(&Delete(Box::new('a')), Create(Box::new('b'))),                  Err(Error::DeltaDataCreatedMultipleTimes));
+        assert_eq!(combine_deltas(&Delete(Box::new('a')), Create(Box::new('a'))),                  Ok(None));
+        assert_eq!(combine_deltas(&Delete(Box::new('a')), Create(Box::new('b'))),                  Ok(Some(DataDelta::Modify((Box::new('a'), Box::new('b'))))));
         assert_eq!(combine_deltas(&Delete(Box::new('a')), Modify((Box::new('b'), Box::new('c')))), Err(Error::DeltaDataModifyAfterDelete));
         assert_eq!(combine_deltas(&Delete(Box::new('a')), Delete(Box::new('b'))),                  Err(Error::DeltaDataDeletedMultipleTimes));
     }
@@ -169,16 +169,16 @@ pub mod test {
         let undo_create= |c| DataDeltaUndo::Delete(Box::new(c));
 
         assert_eq!(combine_delta_with_undo(&delta_create('a'),      undo_delete('b')),      Err(Error::DeltaDataCreatedMultipleTimes));
-        assert_eq!(combine_delta_with_undo(&delta_create('a'),      undo_modify('a', 'b')), Ok(Some(DeltaMapElement::Delta(delta_create('b')))));
+        assert_eq!(combine_delta_with_undo(&delta_create('a'),      undo_modify('a', 'b')), Ok(Some(delta_create('b'))));
         assert_eq!(combine_delta_with_undo(&delta_create('a'),      undo_create('a')),      Ok(None));
 
-        assert_eq!(combine_delta_with_undo(&delta_modify('a', 'b'), undo_delete('c')),      Ok(Some(DeltaMapElement::DeltaUndo(undo_delete('c')))));
-        assert_eq!(combine_delta_with_undo(&delta_modify('a', 'b'), undo_modify('c', 'd')), Ok(Some(DeltaMapElement::Delta(delta_modify('a', 'd')))));
+        assert_eq!(combine_delta_with_undo(&delta_modify('a', 'b'), undo_delete('c')),      Ok(Some(delta_create('c'))));
+        assert_eq!(combine_delta_with_undo(&delta_modify('a', 'b'), undo_modify('c', 'd')), Ok(Some(delta_modify('a', 'd'))));
         assert_eq!(combine_delta_with_undo(&delta_modify('a', 'b'), undo_modify('b', 'a')), Ok(None));
-        assert_eq!(combine_delta_with_undo(&delta_modify('a', 'b'), undo_create('b')),      Ok(Some(DeltaMapElement::DeltaUndo(undo_create('b')))));
+        assert_eq!(combine_delta_with_undo(&delta_modify('a', 'b'), undo_create('b')),      Ok(Some(delta_delete('a'))));
 
         assert_eq!(combine_delta_with_undo(&delta_delete('a'),      undo_delete('a')),      Ok(None));
-        assert_eq!(combine_delta_with_undo(&delta_delete('a'),      undo_delete('b')),      Ok(Some(DeltaMapElement::Delta(delta_modify('a', 'b')))));
+        assert_eq!(combine_delta_with_undo(&delta_delete('a'),      undo_delete('b')),      Ok(Some(delta_modify('a', 'b'))));
         assert_eq!(combine_delta_with_undo(&delta_delete('a'),      undo_modify('a', 'b')), Err(Error::DeltaDataModifyAfterDelete));
         assert_eq!(combine_delta_with_undo(&delta_delete('a'),      undo_create('b')),      Err(Error::DeltaDataDeletedMultipleTimes));
     }
@@ -198,7 +198,8 @@ pub mod test {
         assert_eq!(combine_undos(&modify('a', 'b'), modify('c', 'd')), Ok(Some(modify('a', 'd'))));
         assert_eq!(combine_undos(&modify('a', 'b'), delete('b')),      Ok(Some(delete('a'))));
     
-        assert_eq!(combine_undos(&delete('a'),      create('b')),      Ok(None));
+        assert_eq!(combine_undos(&delete('a'),      create('a')),      Ok(None));
+        assert_eq!(combine_undos(&delete('a'),      create('b')),      Ok(Some(modify('a', 'b'))));
         assert_eq!(combine_undos(&delete('a'),      modify('a', 'b')), Err(Error::DeltaDataCreatedMultipleTimes));
         assert_eq!(combine_undos(&delete('a'),      delete('b')),      Err(Error::DeltaDataCreatedMultipleTimes));
     }

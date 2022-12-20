@@ -109,18 +109,18 @@ pub mod test {
     #[test]
     #[rustfmt::skip]
     fn test_combine_data_with_undo() {
-        let undo_create = Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Create(Box::new('b'))));
+        let undo_delete = Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Create(Box::new('b'))));
         let undo_modify = Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Modify((Box::new('a'),Box::new('b')))));
-        let undo_delete= Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Delete(Box::new('b'))));
+        let undo_create= Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Delete(Box::new('b'))));
 
-        assert_eq!(combine_data_with_delta::<i32>(None, None),                  Ok(None));
-        assert_eq!(combine_data_with_delta(None,        undo_create.as_ref()), Ok(Some('b')));
+        assert_eq!(combine_data_with_delta::<i32>(None, None),                 Ok(None));
+        assert_eq!(combine_data_with_delta(None,        undo_delete.as_ref()), Ok(Some('b')));
         assert_eq!(combine_data_with_delta(None,        undo_modify.as_ref()), Err(Error::ModifyNonexistingData));
-        assert_eq!(combine_data_with_delta(None,        undo_delete.as_ref()), Ok(None));
-        assert_eq!(combine_data_with_delta(Some(&'a'),  None),                      Ok(Some('a')));
-        assert_eq!(combine_data_with_delta(Some(&'a'),  undo_create.as_ref()), Ok(Some('b')));
+        assert_eq!(combine_data_with_delta(None,        undo_create.as_ref()), Ok(None));
+        assert_eq!(combine_data_with_delta(Some(&'a'),  None),                 Ok(Some('a')));
+        assert_eq!(combine_data_with_delta(Some(&'a'),  undo_delete.as_ref()), Ok(Some('b')));
         assert_eq!(combine_data_with_delta(Some(&'a'),  undo_modify.as_ref()), Ok(Some('b')));
-        assert_eq!(combine_data_with_delta(Some(&'a'),  undo_delete.as_ref()), Ok(None));
+        assert_eq!(combine_data_with_delta(Some(&'a'),  undo_create.as_ref()), Ok(None));
     }
 
     #[test]

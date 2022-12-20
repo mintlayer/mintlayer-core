@@ -38,10 +38,7 @@ fn create_delta_undo_roundtrip() {
         let combine_result = combine_deltas(&delta1, delta2).unwrap().unwrap();
         let undo_result = combine_delta_with_undo(&combine_result, undo).unwrap().unwrap();
 
-        match undo_result {
-            DeltaMapElement::Delta(result) => assert_eq!(delta1, result),
-            DeltaMapElement::DeltaUndo(_) => panic!("shouldn't be undo"),
-        };
+        assert_eq!(delta1, undo_result);
     };
 
     check_undo(
@@ -57,6 +54,11 @@ fn create_delta_undo_roundtrip() {
     check_undo(
         DataDelta::Modify((Box::new('a'), Box::new('b'))),
         DataDelta::Modify((Box::new('b'), Box::new('c'))),
+    );
+
+    check_undo(
+        DataDelta::Delete(Box::new('a')),
+        DataDelta::Create(Box::new('b')),
     );
 }
 
@@ -78,6 +80,11 @@ fn create_delta_undo_noop_roundtrip() {
     check_undo(
         DataDelta::Create(Box::new('a')),
         DataDelta::Delete(Box::new('a')),
+    );
+
+    check_undo(
+        DataDelta::Delete(Box::new('a')),
+        DataDelta::Create(Box::new('a')),
     );
 }
 
@@ -319,6 +326,22 @@ fn modify_delete_undo_same_collection() {
 
     let undo = collection
         .merge_delta_data_element(1, DataDelta::Delete(Box::new('b')))
+        .unwrap()
+        .unwrap();
+
+    collection.undo_merge_delta_data_element(1, undo).unwrap();
+
+    assert_eq!(collection, expected_collection);
+}
+
+#[test]
+fn delete_create_undo_same_collection() {
+    let mut collection =
+        DeltaDataCollection::from_iter([(1, DataDelta::Delete(Box::new('a')))].into_iter());
+    let expected_collection = collection.clone();
+
+    let undo = collection
+        .merge_delta_data_element(1, DataDelta::Create(Box::new('b')))
         .unwrap()
         .unwrap();
 
