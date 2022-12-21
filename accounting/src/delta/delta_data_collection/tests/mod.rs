@@ -88,9 +88,7 @@ fn create_delta_undo_noop_roundtrip() {
     );
 }
 
-// FIXME: enable this test
 #[test]
-#[ignore]
 fn merge_collections_and_undo() {
     // This test check all valid combinations:
     //    collection1 - collection2
@@ -138,13 +136,13 @@ fn merge_collections_and_undo() {
     let expected_data_after_merge = BTreeMap::from_iter(
         [
             (1, DeltaMapElement::Delta(DataDelta::Create(Box::new('i')))),
-            (2, DeltaMapElement::Delta(DataDelta::Delete(Box::new('b')))),
+            // 2 is No-op
             (
                 3,
                 DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('j')))),
             ),
-            (4, DeltaMapElement::Delta(DataDelta::Delete(Box::new('d')))),
-            (5, DeltaMapElement::Delta(DataDelta::Create(Box::new('e')))),
+            (4, DeltaMapElement::Delta(DataDelta::Delete(Box::new('a')))),
+            // 5 is No-op
             (6, DeltaMapElement::Delta(DataDelta::Create(Box::new('f')))),
             (
                 7,
@@ -166,21 +164,18 @@ fn merge_collections_and_undo() {
 
     let expected_data_after_undo = BTreeMap::from_iter(
         [
-            (
-                1,
-                DeltaMapElement::DeltaUndo(DataDeltaUndo::Create(Box::new('a'))),
-            ),
+            (1, DeltaMapElement::Delta(DataDelta::Create(Box::new('a')))),
             (
                 2,
                 DeltaMapElement::DeltaUndo(DataDeltaUndo::Create(Box::new('b'))),
             ),
             (
                 3,
-                DeltaMapElement::DeltaUndo(DataDeltaUndo::Modify((Box::new('a'), Box::new('c')))),
+                DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('c')))),
             ),
             (
                 4,
-                DeltaMapElement::DeltaUndo(DataDeltaUndo::Create(Box::new('d'))),
+                DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('d')))),
             ),
             (
                 5,
@@ -192,18 +187,6 @@ fn merge_collections_and_undo() {
                 DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('g')))),
             ),
             (8, DeltaMapElement::Delta(DataDelta::Delete(Box::new('h')))),
-            (
-                9,
-                DeltaMapElement::DeltaUndo(DataDeltaUndo::Delete(Box::new('m'))),
-            ),
-            (
-                10,
-                DeltaMapElement::DeltaUndo(DataDeltaUndo::Modify((Box::new('a'), Box::new('a')))),
-            ),
-            (
-                11,
-                DeltaMapElement::DeltaUndo(DataDeltaUndo::Create(Box::new('o'))),
-            ),
         ]
         .into_iter(),
     );

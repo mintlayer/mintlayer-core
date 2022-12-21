@@ -42,8 +42,6 @@ fn new_delegation_id(v: u64) -> DelegationId {
     DelegationId::new(H256::from_low_u64_be(v))
 }
 
-// FIXME: enable this test
-#[ignore]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -166,10 +164,7 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
                 ),
                 (
                     new_pool_id(10),
-                    DataDelta::Create(Box::new(PoolData::new(
-                        pub_key2.clone(),
-                        Amount::from_atoms(100),
-                    ))),
+                    DataDelta::Create(Box::new(PoolData::new(pub_key2, Amount::from_atoms(100)))),
                 ),
             ]
             .into_iter(),
@@ -193,13 +188,7 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
             ]
             .into_iter(),
         ),
-        delegation_data: DeltaDataCollection::from_iter([(
-            new_delegation_id(1),
-            DataDelta::Delete(Box::new(DelegationData::new(
-                new_pool_id(1),
-                pub_key1.clone(),
-            ))),
-        )]),
+        delegation_data: DeltaDataCollection::new(),
     };
 
     let undo_data = delta1.merge_with_delta(delta2.consume()).unwrap();
@@ -207,22 +196,13 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
 
     let expected_data_after_undo = PoSAccountingDeltaData {
         pool_data: DeltaDataCollection::from_iter(
-            [
-                (
-                    new_pool_id(1),
-                    DeltaMapElement::DeltaUndo(DataDeltaUndo::Create(Box::new(PoolData::new(
-                        pub_key1.clone(),
-                        Amount::from_atoms(100),
-                    )))),
-                ),
-                (
-                    new_pool_id(10),
-                    DeltaMapElement::DeltaUndo(DataDeltaUndo::Delete(Box::new(PoolData::new(
-                        pub_key2,
-                        Amount::from_atoms(100),
-                    )))),
-                ),
-            ]
+            [(
+                new_pool_id(1),
+                DeltaMapElement::Delta(DataDelta::Create(Box::new(PoolData::new(
+                    pub_key1.clone(),
+                    Amount::from_atoms(100),
+                )))),
+            )]
             .into_iter(),
         ),
         pool_balances: DeltaAmountCollection::from_iter(

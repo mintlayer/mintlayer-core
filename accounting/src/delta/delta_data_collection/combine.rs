@@ -49,7 +49,6 @@ pub fn combine_deltas<T: Clone + PartialEq>(
 }
 
 /// Given a delta and undo delta, combine them into one element.
-/// The result can be either Delta or DeltaUndo.
 /// If a combination gives No-op then None is returned.
 pub fn combine_delta_with_undo<T: Clone + PartialEq>(
     lhs: &DataDelta<T>,
@@ -107,7 +106,7 @@ pub fn combine_undos<T: Clone + PartialEq>(
         (DataDeltaUndo::Create(_), DataDeltaUndo::Delete(_)) => Ok(None),
 
         (DataDeltaUndo::Modify(_), DataDeltaUndo::Create(_)) => {
-            Err(Error::DeltaDataModifyAfterDelete)
+            Err(Error::DeltaDataCreatedMultipleTimes)
         }
         (DataDeltaUndo::Modify((prev, _)), DataDeltaUndo::Modify((_, new))) => {
             Ok(Some(DataDeltaUndo::Modify((prev.clone(), new))))
@@ -124,7 +123,7 @@ pub fn combine_undos<T: Clone + PartialEq>(
             }
         }
         (DataDeltaUndo::Delete(_), DataDeltaUndo::Modify(_)) => {
-            Err(Error::DeltaDataCreatedMultipleTimes)
+            Err(Error::DeltaDataModifyAfterDelete)
         }
         (DataDeltaUndo::Delete(_), DataDeltaUndo::Delete(_)) => {
             // Delta(Create) + Delta(Create) is forbidden thus its undo is forbidden as well
@@ -194,13 +193,13 @@ pub mod test {
         assert_eq!(combine_undos(&create('a'),      modify('a', 'b')), Ok(Some(create('b'))));
         assert_eq!(combine_undos(&create('a'),      delete('a')),      Ok(None));
     
-        assert_eq!(combine_undos(&modify('a', 'b'), create('c')),      Err(Error::DeltaDataModifyAfterDelete));
+        assert_eq!(combine_undos(&modify('a', 'b'), create('c')),      Err(Error::DeltaDataCreatedMultipleTimes));
         assert_eq!(combine_undos(&modify('a', 'b'), modify('c', 'd')), Ok(Some(modify('a', 'd'))));
         assert_eq!(combine_undos(&modify('a', 'b'), delete('b')),      Ok(Some(delete('a'))));
     
         assert_eq!(combine_undos(&delete('a'),      create('a')),      Ok(None));
         assert_eq!(combine_undos(&delete('a'),      create('b')),      Ok(Some(modify('a', 'b'))));
-        assert_eq!(combine_undos(&delete('a'),      modify('a', 'b')), Err(Error::DeltaDataCreatedMultipleTimes));
+        assert_eq!(combine_undos(&delete('a'),      modify('a', 'b')), Err(Error::DeltaDataModifyAfterDelete));
         assert_eq!(combine_undos(&delete('a'),      delete('b')),      Err(Error::DeltaDataCreatedMultipleTimes));
     }
 }
