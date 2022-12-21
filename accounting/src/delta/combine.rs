@@ -38,8 +38,7 @@ pub fn combine_data_with_delta<T: Clone>(
             DeltaMapElement::DeltaUndo(u) => match u {
                 DataDeltaUndo::Create(d) => Ok(Some(*d.clone())),
                 DataDeltaUndo::Modify(_) => Err(Error::ModifyNonexistingData),
-                // This is Ok because the Create + Undo = Delete
-                DataDeltaUndo::Delete(_) => Ok(None),
+                DataDeltaUndo::Delete(_) => Err(Error::RemoveNonexistingData),
             },
         },
         (Some(p), None) => Ok(Some(p.clone())),
@@ -50,8 +49,7 @@ pub fn combine_data_with_delta<T: Clone>(
                 DataDelta::Delete(_) => Ok(None),
             },
             DeltaMapElement::DeltaUndo(u) => match u {
-                // This is Ok because the Delete + Undo = Create
-                DataDeltaUndo::Create(d) => Ok(Some(*d.clone())),
+                DataDeltaUndo::Create(_) => Err(Error::DataCreatedMultipleTimes),
                 DataDeltaUndo::Modify((_, d)) => Ok(Some(*d.clone())),
                 DataDeltaUndo::Delete(_) => Ok(None),
             },
@@ -116,9 +114,9 @@ pub mod test {
         assert_eq!(combine_data_with_delta::<i32>(None, None),                 Ok(None));
         assert_eq!(combine_data_with_delta(None,        undo_delete.as_ref()), Ok(Some('b')));
         assert_eq!(combine_data_with_delta(None,        undo_modify.as_ref()), Err(Error::ModifyNonexistingData));
-        assert_eq!(combine_data_with_delta(None,        undo_create.as_ref()), Ok(None));
+        assert_eq!(combine_data_with_delta(None,        undo_create.as_ref()), Err(Error::RemoveNonexistingData));
         assert_eq!(combine_data_with_delta(Some(&'a'),  None),                 Ok(Some('a')));
-        assert_eq!(combine_data_with_delta(Some(&'a'),  undo_delete.as_ref()), Ok(Some('b')));
+        assert_eq!(combine_data_with_delta(Some(&'a'),  undo_delete.as_ref()), Err(Error::DataCreatedMultipleTimes));
         assert_eq!(combine_data_with_delta(Some(&'a'),  undo_modify.as_ref()), Ok(Some('b')));
         assert_eq!(combine_data_with_delta(Some(&'a'),  undo_create.as_ref()), Ok(None));
     }

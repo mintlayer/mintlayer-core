@@ -16,3 +16,6 @@
 pub mod combine;
 pub mod delta_amount_collection;
 pub mod delta_data_collection;
+
+#[cfg(test)]
+mod tests;
