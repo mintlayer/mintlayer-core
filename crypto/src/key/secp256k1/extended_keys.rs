@@ -21,6 +21,7 @@ use crate::key::hdkd::{
 };
 use crate::key::secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey};
 use crate::random::{CryptoRng, Rng};
+use generic_array::{sequence::Split, typenum::U32, GenericArray};
 use hmac::{Hmac, Mac};
 use secp256k1;
 use secp256k1::SECP256K1;
@@ -39,25 +40,47 @@ pub struct Secp256k1ExtendedPrivateKey {
     pub private_key: Secp256k1PrivateKey,
 }
 
+fn new_hmac_sha_512(key: &[u8]) -> HmacSha512 {
+    HmacSha512::new_from_slice(key).expect("HMAC can take key of any size")
+}
+
+fn to_key_and_chain_code(
+    mac: HmacSha512,
+) -> Result<(secp256k1::SecretKey, ChainCode), DerivationError> {
+    // Finalize the hmac
+    let mut result = mac.finalize().into_bytes();
+
+    // Split in to two 32 byte arrays
+    let (mut secret_key_bytes, mut chain_code_bytes): (
+        GenericArray<u8, U32>,
+        GenericArray<u8, U32>,
+    ) = result.split();
+    result.zeroize();
+
+    // Create the secret key key
+    let secret_key = secp256k1::SecretKey::from_slice(&secret_key_bytes)
+        .map_err(|_| DerivationError::KeyDerivationError)?;
+    secret_key_bytes.zeroize();
+
+    // Chain code
+    let chain_code: [u8; CHAINCODE_LENGTH] = chain_code_bytes.into();
+    let chain_code = ChainCode::from(chain_code);
+    chain_code_bytes.zeroize();
+
+    Ok((secret_key, chain_code))
+}
+
 impl Secp256k1ExtendedPrivateKey {
     pub fn new_master(seed: &[u8]) -> Result<Secp256k1ExtendedPrivateKey, DerivationError> {
-        let mut mac =
-            HmacSha512::new_from_slice(b"Bitcoin seed").expect("HMAC can take key of any size");
+        // Create a new mac with the appropriate BIP39 constant
+        let mut mac = new_hmac_sha_512(b"Bitcoin seed");
+
         mac.update(seed);
-        let mut result = mac.finalize().into_bytes();
 
-        let private_key = secp256k1::SecretKey::from_slice(&result[..32])
-            .map_err(|_| DerivationError::KeyDerivationError)?
-            .into();
-
-        let chain_code: [u8; CHAINCODE_LENGTH] =
-            result[32..].try_into().expect("Chaincode size is 32 bytes");
-        let chain_code = ChainCode::from(chain_code);
-
-        result.zeroize();
+        let (private_key, chain_code) = to_key_and_chain_code(mac)?;
 
         Ok(Secp256k1ExtendedPrivateKey {
-            private_key,
+            private_key: private_key.into(),
             chain_code,
         })
     }
@@ -81,42 +104,36 @@ impl Secp256k1ExtendedPrivateKey {
         (ext_priv, ext_pub)
     }
 
-    pub fn as_private_key(&self) -> &Secp256k1PrivateKey {
+    pub fn private_key(&self) -> &Secp256k1PrivateKey {
         &self.private_key
     }
 }
 
 impl Derivable for Secp256k1ExtendedPrivateKey {
     fn derive_child(self, num: ChildNumber) -> Result<Self, DerivationError> {
-        let mut mac = HmacSha512::new_from_slice(&self.chain_code.into_array())
-            .expect("HMAC can take key of any size");
+        // Create a new hmac with the chain code as the key
+        let mut mac = new_hmac_sha_512(&self.chain_code.into_array());
 
         let secp_key = self.private_key.data;
 
         // We only support hard derivations
-        if num.is_hardened() {
-            mac.update(&[0u8]);
-            mac.update(&secp_key[..]);
-        } else {
-            return Err(DerivationError::UnsupportedDerivationType);
-        }
+        mac.update(&[0u8]);
+        mac.update(&secp_key[..]);
 
         // Add the child number
-        mac.update(&num.to_encoded_be_bytes());
+        mac.update(&num.into_encoded_be_bytes());
 
-        let mut result = mac.finalize().into_bytes();
-        let private_key = secp256k1::SecretKey::from_slice(&result[..32])
-            .map_err(|_| DerivationError::KeyDerivationError)?
-            // TODO [SECURITY] a Scalar is created here but not erased
-            .add_tweak(&secp_key.into())
+        // Finalize and get the new un-tweaked key and the new chain code
+        let (key_part, chain_code) = to_key_and_chain_code(mac)?;
+
+        // TODO(SECURITY) erase this scalar after use
+        let tweak_scalar = secp_key.into();
+
+        // Create the derived private key
+        let private_key = key_part
+            .add_tweak(&tweak_scalar)
             .map_err(|_| DerivationError::KeyDerivationError)?
             .into();
-
-        let chain_code: [u8; CHAINCODE_LENGTH] =
-            result[32..].try_into().expect("Chaincode size is 32 bytes");
-        let chain_code = ChainCode::from(chain_code);
-
-        result.zeroize();
 
         Ok(Secp256k1ExtendedPrivateKey {
             private_key,
@@ -134,7 +151,7 @@ pub struct Secp256k1ExtendedPublicKey {
 }
 
 impl Secp256k1ExtendedPublicKey {
-    pub fn as_public_key(&self) -> &Secp256k1PublicKey {
+    pub fn public_key(&self) -> &Secp256k1PublicKey {
         &self.public_key
     }
 
@@ -157,7 +174,7 @@ mod test {
     use std::str::FromStr;
 
     #[test]
-    fn test_serialization() {
+    fn serialization() {
         let sk_hex = "7923408dadd3c7b56eed15567707ae5e5dca089de972e07f3b860450e2a3b70e1837c1be8e2995ec11cda2b066151be2cfb48adf9e47b151d46adab3a21cdf67";
         let sk =
             Secp256k1ExtendedPrivateKey::decode_all(&mut hex::decode(sk_hex).unwrap().as_slice())
@@ -171,7 +188,7 @@ mod test {
     }
 
     #[test]
-    fn test_derivation_private_key() {
+    fn derivation_private_key() {
         let mnemonic_str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let mnemonic = Mnemonic::parse_normalized(mnemonic_str).unwrap();
         let master_key =

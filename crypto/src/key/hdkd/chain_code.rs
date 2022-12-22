@@ -42,7 +42,7 @@ impl From<ChainCode> for [u8; CHAINCODE_LENGTH] {
 impl From<ChildNumber> for ChainCode {
     fn from(num: ChildNumber) -> Self {
         let mut chaincode = ChainCode([0u8; CHAINCODE_LENGTH]);
-        chaincode.0[0..4].copy_from_slice(&num.to_encoded_index().to_be_bytes());
+        chaincode.0[0..4].copy_from_slice(&num.into_encoded_index().to_be_bytes());
         chaincode
     }
 }

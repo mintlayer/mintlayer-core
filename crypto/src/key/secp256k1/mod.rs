@@ -27,7 +27,7 @@ pub enum Secp256k1KeyError {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-// TODO [SECURITY] erase secret on drop
+// TODO(SECURITY) erase secret on drop
 pub struct Secp256k1PrivateKey {
     data: secp256k1::SecretKey,
 }
@@ -89,9 +89,9 @@ impl Secp256k1PrivateKey {
         let e = Blake2b32Stream::new().write(msg).finalize();
         let msg_hash = secp256k1::Message::from_slice(e.as_slice()).expect("Blake2b32 is 32 bytes");
         // Sign the hash
-        // TODO [SECURITY] erase keypair after signing
+        // TODO(SECURITY) erase keypair after signing
         let keypair = self.data.keypair(&secp);
-        // TODO [SECURITY] examine the usage of sign_schnorr_with_rng or a RFC6979 scheme
+        // TODO(SECURITY) examine the usage of sign_schnorr_with_rng or a RFC6979 scheme
         secp.sign_schnorr(&msg_hash, &keypair)
     }
 }
