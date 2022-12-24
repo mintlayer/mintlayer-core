@@ -17,7 +17,7 @@
 pub trait P2pInterface: Send + Sync {
     async fn connect(&mut self, addr: String) -> crate::Result<()>;
 
-    async fn disconnect(&self, peer_id: String) -> crate::Result<()>;
+    async fn disconnect(&self, addr: String) -> crate::Result<()>;
 
     async fn get_peer_count(&self) -> crate::Result<usize>;
 

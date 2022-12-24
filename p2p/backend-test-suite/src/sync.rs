@@ -36,7 +36,7 @@ use p2p::{
     message::{BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response},
     net::{
         types::{ConnectivityEvent, SyncingEvent},
-        ConnectivityService, NetworkingService, SyncingMessagingService,
+        ConnectivityService, DisconnectId, NetworkingService, SyncingMessagingService,
     },
     peer_manager::helpers::connect_services,
     sync::BlockSyncManager,
@@ -1075,7 +1075,10 @@ where
     assert_eq!(mgr1.state(), &SyncState::Done);
 
     mgr1.unregister_peer(peer_info2.peer_id);
-    assert_eq!(conn1.disconnect(peer_info2.peer_id).await, Ok(()));
+    assert_eq!(
+        conn1.disconnect(DisconnectId::PeerId(peer_info2.peer_id)).await,
+        Ok(())
+    );
     assert!(std::matches!(
         conn2.poll_next().await,
         Ok(ConnectivityEvent::ConnectionClosed { .. })
@@ -1200,7 +1203,9 @@ where
     });
 
     match pm1.recv().await.unwrap() {
-        PeerManagerEvent::Disconnect(peer_id, _) => assert_eq!(peer_id, peer2_id),
+        PeerManagerEvent::Disconnect(id, _) => {
+            assert_eq!(id, DisconnectId::PeerId(peer2_id))
+        }
         e => panic!("Unexpected peer manager event: {e:?}"),
     }
 }

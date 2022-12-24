@@ -20,7 +20,7 @@ use tokio::sync::oneshot;
 use crate::{
     error::{ConversionError, P2pError},
     event::PeerManagerEvent,
-    net::NetworkingService,
+    net::{DisconnectId, NetworkingService},
     P2p,
 };
 
@@ -37,28 +37,29 @@ where
         <T as NetworkingService>::PeerId: FromStr,
     {
         let (tx, rx) = oneshot::channel();
+        let addr = addr
+            .parse::<T::Address>()
+            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidAddress(addr)))?;
         self.tx_peer_manager
-            .send(PeerManagerEvent::Connect(
-                addr.parse::<T::Address>().map_err(|_| {
-                    P2pError::ConversionError(ConversionError::InvalidAddress(addr))
-                })?,
-                tx,
-            ))
+            .send(PeerManagerEvent::Connect(addr, tx))
             .map_err(|_| P2pError::ChannelClosed)?;
         rx.await.map_err(P2pError::from)?
     }
 
-    async fn disconnect(&self, peer_id: String) -> crate::Result<()>
+    async fn disconnect(&self, addr: String) -> crate::Result<()>
     where
         <T as NetworkingService>::PeerId: FromStr,
     {
         let (tx, rx) = oneshot::channel();
-        let peer_id = peer_id
-            .parse::<T::PeerId>()
-            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidPeerId(peer_id)))?;
+        let addr = addr
+            .parse::<T::Address>()
+            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidAddress(addr)))?;
 
         self.tx_peer_manager
-            .send(PeerManagerEvent::Disconnect(peer_id, tx))
+            .send(PeerManagerEvent::Disconnect(
+                DisconnectId::Address(addr),
+                tx,
+            ))
             .map_err(|_| P2pError::ChannelClosed)?;
         rx.await.map_err(P2pError::from)?
     }

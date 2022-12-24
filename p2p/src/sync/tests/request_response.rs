@@ -19,12 +19,13 @@ use tokio::time::timeout;
 
 use chainstate::Locator;
 
+use crate::event::PeerManagerEvent;
+use crate::net::DisconnectId;
 use crate::testing_utils::{
     TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
     TestTransportTcp,
 };
 use crate::{
-    event::PeerManagerEvent,
     message::{HeaderListRequest, HeaderListResponse, Request, Response},
     net::{
         libp2p::Libp2pService,
@@ -242,7 +243,7 @@ where
     }
 
     match pm1.recv().await.unwrap() {
-        PeerManagerEvent::Disconnect(peer_id, _) => assert_eq!(peer_id, peer2_id),
+        PeerManagerEvent::Disconnect(id, _) => assert_eq!(id, DisconnectId::PeerId(peer2_id)),
         e => panic!("Unexpected peer manager event: {e:?}"),
     }
 }

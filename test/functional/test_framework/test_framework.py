@@ -31,8 +31,6 @@ from .util import (
     check_json_precision,
     get_datadir_path,
     initialize_datadir,
-    p2p_port,
-    p2p_url,
     wait_until_helper,
 )
 
@@ -559,24 +557,26 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         self.nodes[i].process.wait(timeout)
 
     def connect_nodes(self, a, b):
-        id_a = self.nodes[a].p2p_get_peer_id()
-        id_b = self.nodes[b].p2p_get_peer_id()
+        count_a = self.nodes[a].p2p_get_peer_count()
+        count_b = self.nodes[b].p2p_get_peer_count()
 
-        addr_a = p2p_url(a) + "/p2p/" + id_a
+        addr_a = self.nodes[a].p2p_get_bind_address()
         ret = self.nodes[b].p2p_connect(addr_a)
+
         wait_until_helper(lambda:
-            self.nodes[b].p2p_get_connected_peers().count(id_a) != 0 and
-            self.nodes[a].p2p_get_connected_peers().count(id_b) != 0, timeout=60)
+            self.nodes[a].p2p_get_peer_count() == count_a + 1 and
+            self.nodes[b].p2p_get_peer_count() == count_b + 1, timeout=60)
 
     def disconnect_nodes(self, a, b):
-        id_a = self.nodes[a].p2p_get_peer_id()
-        id_b = self.nodes[b].p2p_get_peer_id()
+        count_a = self.nodes[a].p2p_get_peer_count()
+        count_b = self.nodes[b].p2p_get_peer_count()
 
-        self.nodes[a].p2p_disconnect(id_b)
+        addr_a = self.nodes[a].p2p_get_bind_address()
+        ret = self.nodes[b].p2p_disconnect(addr_a)
 
         wait_until_helper(lambda:
-            self.nodes[b].p2p_get_connected_peers().count(id_a) == 0 and
-            self.nodes[a].p2p_get_connected_peers().count(id_b) == 0, timeout=60)
+            self.nodes[a].p2p_get_peer_count() == count_a - 1 and
+            self.nodes[b].p2p_get_peer_count() == count_b - 1, timeout=60)
 
     def split_network(self):
         """

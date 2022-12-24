@@ -24,7 +24,7 @@ trait P2pRpc {
 
     /// Disconnect peer
     #[method(name = "disconnect")]
-    async fn disconnect(&self, peer_id: String) -> rpc::Result<()>;
+    async fn disconnect(&self, addr: String) -> rpc::Result<()>;
 
     /// Get the number of peers
     #[method(name = "get_peer_count")]
@@ -34,7 +34,7 @@ trait P2pRpc {
     #[method(name = "get_bind_address")]
     async fn get_bind_address(&self) -> rpc::Result<String>;
 
-    /// Get peer IDs of connected peers
+    /// Get addresses of connected peers
     #[method(name = "get_connected_peers")]
     async fn get_connected_peers(&self) -> rpc::Result<Vec<String>>;
 }
@@ -46,8 +46,8 @@ impl P2pRpcServer for super::P2pHandle {
         handle_error(res)
     }
 
-    async fn disconnect(&self, peer_id: String) -> rpc::Result<()> {
-        let res = self.call_async_mut(|this| Box::pin(this.disconnect(peer_id))).await;
+    async fn disconnect(&self, addr: String) -> rpc::Result<()> {
+        let res = self.call_async_mut(|this| Box::pin(this.disconnect(addr))).await;
         handle_error(res)
     }
 

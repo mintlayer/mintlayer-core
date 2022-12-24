@@ -46,7 +46,7 @@ use crate::{
     net::{
         self,
         types::{Protocol, ProtocolType},
-        AsBannableAddress, ConnectivityService, IsBannableAddress, NetworkingService,
+        AsBannableAddress, ConnectivityService, DisconnectId, IsBannableAddress, NetworkingService,
     },
 };
 
@@ -269,7 +269,7 @@ where
         log::debug!("adjusting score for peer {peer_id}, adjustment {score}");
 
         if self.peerdb.adjust_peer_score(&peer_id, score) {
-            let _ = self.peer_connectivity_handle.disconnect(peer_id).await;
+            let _ = self.peer_connectivity_handle.disconnect(DisconnectId::PeerId(peer_id)).await;
         }
 
         Ok(())
@@ -435,11 +435,11 @@ where
                         });
                         self.handle_result(None, res).await?;
                     }
-                    PeerManagerEvent::Disconnect(peer_id, response) => {
-                        log::debug!("disconnect peer {peer_id}");
+                    PeerManagerEvent::Disconnect(id, response) => {
+                        log::debug!("disconnect peer {id:?}");
 
                         response
-                            .send(self.peer_connectivity_handle.disconnect(peer_id).await)
+                            .send(self.peer_connectivity_handle.disconnect(id).await)
                             .map_err(|_| P2pError::ChannelClosed)?;
                     }
                     PeerManagerEvent::AdjustPeerScore(peer_id, score, response) => {
@@ -462,7 +462,7 @@ where
                         let peers = self.peerdb
                             .active_peers()
                             .iter()
-                            .map(|(id, _)| id.to_string())
+                            .filter_map(|(_id, info)| info.address.as_ref().map(|addr| addr.to_string()))
                             .collect::<Vec<_>>();
                         response.send(peers).map_err(|_| P2pError::ChannelClosed)?
                     }
@@ -477,7 +477,7 @@ where
                                 Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
                                 Err(P2pError::PeerError(err)) => {
                                     log::warn!("peer error for peer {peer_id}: {err}");
-                                    self.peer_connectivity_handle.disconnect(peer_id).await?;
+                                    self.peer_connectivity_handle.disconnect(DisconnectId::PeerId(peer_id)).await?;
                                 }
                                 Err(P2pError::ProtocolError(err)) => {
                                     log::warn!("peer error for peer {peer_id}: {err}");

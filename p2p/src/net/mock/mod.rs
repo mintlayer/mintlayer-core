@@ -43,6 +43,8 @@ use crate::{
     },
 };
 
+use super::DisconnectId;
+
 #[derive(Debug)]
 pub struct MockService<T: TransportSocket>(PhantomData<T>);
 
@@ -189,16 +191,11 @@ where
         rx.await?
     }
 
-    async fn disconnect(&mut self, peer_id: S::PeerId) -> crate::Result<()> {
-        log::debug!("close connection with remote, {peer_id}");
+    async fn disconnect(&mut self, id: DisconnectId<S::Address, S::PeerId>) -> crate::Result<()> {
+        log::debug!("close connection with remote, {id:?}");
 
         let (tx, rx) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::Disconnect {
-                peer_id,
-                response: tx,
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::Disconnect { id, response: tx }).await?;
 
         rx.await?
     }
@@ -539,7 +536,10 @@ mod tests {
                 address: _,
                 peer_info,
             } => {
-                assert_eq!(conn2.disconnect(peer_info.peer_id).await, Ok(()));
+                assert_eq!(
+                    conn2.disconnect(DisconnectId::PeerId(peer_info.peer_id)).await,
+                    Ok(())
+                );
             }
             _ => panic!("invalid event received, expected incoming connection"),
         }

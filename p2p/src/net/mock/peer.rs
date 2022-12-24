@@ -36,6 +36,7 @@ use super::transport::BufferedTranscoder;
 
 const PEER_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
+#[derive(Debug, Clone, Copy)]
 pub enum Role {
     Inbound,
     Outbound,

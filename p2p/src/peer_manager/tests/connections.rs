@@ -18,9 +18,12 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use libp2p::{Multiaddr, PeerId};
 use tokio::{sync::oneshot, time::timeout};
 
-use crate::testing_utils::{
-    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
-    TestTransportTcp,
+use crate::{
+    net::DisconnectId,
+    testing_utils::{
+        TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
+        TestTransportTcp,
+    },
 };
 use common::{chain::config, primitives::semver::SemVer};
 
@@ -432,7 +435,9 @@ where
     .await;
 
     assert_eq!(
-        pm2.peer_connectivity_handle.disconnect(peer_info.peer_id).await,
+        pm2.peer_connectivity_handle
+            .disconnect(DisconnectId::PeerId(peer_info.peer_id))
+            .await,
         Ok(())
     );
     assert!(std::matches!(

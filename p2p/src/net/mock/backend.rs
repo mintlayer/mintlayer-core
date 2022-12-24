@@ -59,20 +59,20 @@ use crate::{
     },
 };
 
-#[derive(Debug)]
-struct PeerContext {
-    _peer_id: MockPeerId,
+use super::peer::Role;
+
+/// Active peer data
+struct PeerContext<A> {
+    address: A,
     subscriptions: BTreeSet<PubSubTopic>,
     tx: mpsc::Sender<MockEvent>,
 }
 
-#[derive(Debug)]
-enum ConnectionState<T: TransportSocket> {
-    /// Connection established for outbound connection
-    OutboundAccepted { address: T::Address },
-
-    /// Connection established for inbound connection
-    InboundAccepted { address: T::Address },
+/// Pending peer data (until handshake message is recevied)
+struct PendingPeerContext<A> {
+    address: A,
+    role: Role,
+    tx: mpsc::Sender<MockEvent>,
 }
 
 pub struct Backend<T: TransportSocket> {
@@ -95,10 +95,10 @@ pub struct Backend<T: TransportSocket> {
     cmd_rx: mpsc::Receiver<Command<T>>,
 
     /// Active peers
-    peers: HashMap<MockPeerId, PeerContext>,
+    peers: HashMap<MockPeerId, PeerContext<T::Address>>,
 
     /// Pending connections
-    pending: HashMap<MockPeerId, (mpsc::Sender<MockEvent>, ConnectionState<T>)>,
+    pending: HashMap<MockPeerId, PendingPeerContext<T::Address>>,
 
     /// RX channel for receiving events from peers
     #[allow(clippy::type_complexity)]
@@ -182,12 +182,9 @@ where
 
         match timeout(self.timeout, self.transport.connect(address.clone())).await {
             Ok(event) => match event {
-                Ok(socket) => self.create_peer(
-                    socket,
-                    MockPeerId::new(),
-                    peer::Role::Outbound,
-                    ConnectionState::OutboundAccepted { address },
-                ),
+                Ok(socket) => {
+                    self.create_peer(socket, MockPeerId::new(), peer::Role::Outbound, address)
+                }
                 Err(err) => {
                     log::error!("Failed to establish connection: {err}");
 
@@ -211,7 +208,7 @@ where
         }
     }
 
-    /// Disconnect remote peer
+    /// Disconnect remote peer by id
     async fn disconnect_peer(&mut self, peer_id: &MockPeerId) -> crate::Result<()> {
         self.request_mgr.unregister_peer(peer_id);
         if let Some(context) = self.peers.remove(peer_id) {
@@ -219,6 +216,22 @@ where
         } else {
             // TODO: Think about error handling. Currently we simply follow the libp2p behaviour.
             log::error!("{peer_id} peer doesn't exist");
+            Ok(())
+        }
+    }
+
+    /// Disconnect remote peer by address
+    async fn disconnect_addr(&mut self, address: &T::Address) -> crate::Result<()> {
+        let peer_id = self
+            .peers
+            .iter()
+            .find(|(_peer_id, peer)| peer.address == *address)
+            .map(|(peer_id, _peer)| *peer_id);
+        if let Some(peer_id) = peer_id {
+            self.disconnect_peer(&peer_id).await
+        } else {
+            // TODO: Think about error handling. Currently we simply follow the libp2p behaviour.
+            log::error!("Peer with address {address:?} doesn't exist");
             Ok(())
         }
     }
@@ -392,7 +405,7 @@ where
                         stream,
                         MockPeerId::new(),
                         peer::Role::Inbound,
-                        ConnectionState::InboundAccepted { address }
+                        address,
                     )?;
                 }
                 // Handle peer events.
@@ -421,11 +434,11 @@ where
         socket: T::Stream,
         remote_peer_id: MockPeerId,
         role: peer::Role,
-        state: ConnectionState<T>,
+        address: T::Address,
     ) -> crate::Result<()> {
         let (tx, rx) = mpsc::channel(16);
 
-        self.pending.insert(remote_peer_id, (tx, state));
+        self.pending.insert(remote_peer_id, PendingPeerContext { address, role, tx });
 
         let tx = self.peer_chan.0.clone();
         let chain_config = Arc::clone(&self.chain_config);
@@ -463,13 +476,14 @@ where
                 protocols,
                 subscriptions,
             } => {
-                let (tx, state) = self.pending.remove(&peer_id).expect("peer to exist");
+                let PendingPeerContext { address, role, tx } =
+                    self.pending.remove(&peer_id).expect("peer to exist");
 
-                match state {
-                    ConnectionState::OutboundAccepted { address } => {
+                match role {
+                    Role::Outbound => {
                         self.conn_tx
                             .send(ConnectivityEvent::OutboundAccepted {
-                                address,
+                                address: address.clone(),
                                 peer_info: MockPeerInfo {
                                     peer_id,
                                     network,
@@ -482,10 +496,10 @@ where
                             .await
                             .map_err(P2pError::from)?;
                     }
-                    ConnectionState::InboundAccepted { address } => {
+                    Role::Inbound => {
                         self.conn_tx
                             .send(ConnectivityEvent::InboundAccepted {
-                                address,
+                                address: address.clone(),
                                 peer_info: MockPeerInfo {
                                     peer_id,
                                     network,
@@ -503,7 +517,7 @@ where
                 self.peers.insert(
                     peer_id,
                     PeerContext {
-                        _peer_id: peer_id,
+                        address,
                         subscriptions,
                         tx,
                     },
@@ -554,9 +568,16 @@ where
             Command::Connect { address, response } => {
                 self.connect(address, response).await?;
             }
-            Command::Disconnect { peer_id, response } | Command::BanPeer { peer_id, response } => {
-                let res = self.disconnect_peer(&peer_id).await;
-                response.send(res).map_err(|_| P2pError::ChannelClosed)?;
+            Command::Disconnect { id, response } => {
+                let res = match id {
+                    crate::net::DisconnectId::Address(address) => {
+                        self.disconnect_addr(&address).await
+                    }
+                    crate::net::DisconnectId::PeerId(peer_id) => {
+                        self.disconnect_peer(&peer_id).await
+                    }
+                };
+                response.send(res).map_err(|_| P2pError::ChannelClosed)?
             }
             Command::SendRequest {
                 peer_id,
