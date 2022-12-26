@@ -48,9 +48,12 @@ where
         Err(_err) => panic!("did not receive `InboundAccepted` in time"),
     };
 
-    let (_address2, peer_info2) = match timeout(Duration::from_secs(5), conn1.poll_next()).await {
+    let peer_info2 = match timeout(Duration::from_secs(5), conn1.poll_next()).await {
         Ok(event) => match event.unwrap() {
-            ConnectivityEvent::OutboundAccepted { address, peer_info } => (address, peer_info),
+            ConnectivityEvent::OutboundAccepted {
+                address: _,
+                peer_info,
+            } => peer_info,
             event => panic!("expected `OutboundAccepted`, got {event:?}"),
         },
         Err(_err) => panic!("did not receive `OutboundAccepted` in time"),
