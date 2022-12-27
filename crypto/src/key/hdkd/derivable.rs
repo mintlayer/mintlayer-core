@@ -29,6 +29,8 @@ pub enum DerivationError {
     UnsupportedDerivationType,
     #[error("Unsupported derivation for key type")]
     UnsupportedKeyType,
+    #[error("Key derivation error")]
+    KeyDerivationError,
 }
 
 pub trait Derivable: Sized {
@@ -57,20 +59,19 @@ mod tests {
     }
 
     #[test]
-    fn test_derivation_trait() {
+    fn derivation_trait() {
         let dummy = DummyDerivable::default();
         let path = DerivationPath::from_str("m/1'/2'/3'").unwrap();
         let derived = dummy.derive_path(&path).unwrap();
         let mut expected = DummyDerivable(vec![
-            ChildNumber::from_hardened(1.try_into().unwrap()).unwrap(),
-            ChildNumber::from_hardened(2.try_into().unwrap()).unwrap(),
-            ChildNumber::from_hardened(3.try_into().unwrap()).unwrap(),
+            ChildNumber::from_hardened(1.try_into().unwrap()),
+            ChildNumber::from_hardened(2.try_into().unwrap()),
+            ChildNumber::from_hardened(3.try_into().unwrap()),
         ]);
         assert_eq!(derived, expected);
-        let derived = derived
-            .derive_child(ChildNumber::from_hardened(4.try_into().unwrap()).unwrap())
-            .unwrap();
-        expected.0.push(ChildNumber::from_hardened(4.try_into().unwrap()).unwrap());
+        let derived =
+            derived.derive_child(ChildNumber::from_hardened(4.try_into().unwrap())).unwrap();
+        expected.0.push(ChildNumber::from_hardened(4.try_into().unwrap()));
         assert_eq!(derived, expected);
     }
 }

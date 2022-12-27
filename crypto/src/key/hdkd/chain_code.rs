@@ -14,10 +14,11 @@
 // limitations under the License.
 
 use super::child_number::ChildNumber;
+use serialization::{Decode, Encode};
 
 pub const CHAINCODE_LENGTH: usize = 32;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct ChainCode([u8; CHAINCODE_LENGTH]);
 
 impl ChainCode {
@@ -41,7 +42,7 @@ impl From<ChainCode> for [u8; CHAINCODE_LENGTH] {
 impl From<ChildNumber> for ChainCode {
     fn from(num: ChildNumber) -> Self {
         let mut chaincode = ChainCode([0u8; CHAINCODE_LENGTH]);
-        chaincode.0[0..4].copy_from_slice(&num.to_encoded_index().to_be_bytes());
+        chaincode.0[0..4].copy_from_slice(&num.into_encoded_index().to_be_bytes());
         chaincode
     }
 }

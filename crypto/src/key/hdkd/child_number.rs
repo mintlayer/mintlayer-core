@@ -34,38 +34,29 @@ enum DerivationType {
 
 impl ChildNumber {
     /// Return a hardened child number
-    pub fn from_hardened(index: U31) -> Result<Self, DerivationError> {
-        Ok(ChildNumber(DerivationType::Hardened(index)))
-    }
-
-    /// Return a normal child number
-    fn from_normal(_index: U31) -> Result<Self, DerivationError> {
-        // For the time being we don't support non-hardened derivations
-        Err(DerivationError::UnsupportedDerivationType)
+    pub fn from_hardened(index: U31) -> Self {
+        ChildNumber(DerivationType::Hardened(index))
     }
 
     /// Return a child based on the hardened bit (MSB bit)
     pub fn from_index_with_hardened_bit(index: u32) -> Result<Self, DerivationError> {
         let (index_u31, msb) = U31::from_u32_with_msb(index);
         if msb {
-            Self::from_hardened(index_u31)
+            Ok(Self::from_hardened(index_u31))
         } else {
-            Self::from_normal(index_u31)
+            Err(DerivationError::UnsupportedDerivationType)
         }
     }
 
     /// Return a BIP32-like child number index that has the hardened bit set if needed
-    pub fn to_encoded_index(self) -> u32 {
+    pub fn into_encoded_index(self) -> u32 {
         match self.0 {
             DerivationType::Hardened(i) => i.into_encoded_with_msb(true),
         }
     }
 
-    /// Returns true if this child number is hardened
-    pub fn is_hardened(&self) -> bool {
-        match self.0 {
-            DerivationType::Hardened(_) => true,
-        }
+    pub fn into_encoded_be_bytes(self) -> [u8; 4] {
+        self.into_encoded_index().to_be_bytes()
     }
 }
 
@@ -92,9 +83,9 @@ impl FromStr for ChildNumber {
         let index = U31::from_str(index_str)?;
 
         if is_hardened {
-            ChildNumber::from_hardened(index)
+            Ok(ChildNumber::from_hardened(index))
         } else {
-            ChildNumber::from_normal(index)
+            Err(DerivationError::UnsupportedDerivationType)
         }
     }
 }

@@ -168,8 +168,8 @@ mod test {
 
         // we signed the message above and stored the encoded data. Now it has to work from decoded data
         let sig_hex = "010101aa39cdbb96b4eec724cac0400a30cf0d2b9a1040d3aa4f58a34a218d03349f730b8dc2e9b592c6eaac524bc7a5266815f47633aa6eb58708ee262667629a1b86";
-        let pk_hex = "0280283462ee4f0840e21d6de7744ba42929d1b74b7a948e8229d9551e7760ec8c52";
-        let sk_hex = "020101181b259bac04d8ec3f6ea2a86b37f39a353288a8410fc469b9f2d5c59ce30a36c10bfdc906c8343fe0fb42c2564d6b1d3bf8ae3d73f0f7e5424cb60a9639d7e0";
+        let pk_hex = "0180283462ee4f0840e21d6de7744ba42929d1b74b7a948e8229d9551e7760ec8c52";
+        let sk_hex = "010101181b259bac04d8ec3f6ea2a86b37f39a353288a8410fc469b9f2d5c59ce30a36c10bfdc906c8343fe0fb42c2564d6b1d3bf8ae3d73f0f7e5424cb60a9639d7e0";
 
         let sig_bin: Vec<u8> = FromHex::from_hex(sig_hex).unwrap();
         let pk_bin: Vec<u8> = FromHex::from_hex(pk_hex).unwrap();
