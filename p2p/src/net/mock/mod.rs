@@ -342,13 +342,6 @@ where
                 request_id,
                 response,
             }),
-            types::SyncingEvent::RequestTimeout {
-                peer_id,
-                request_id,
-            } => Ok(SyncingEvent::RequestTimeout {
-                peer_id,
-                request_id,
-            }),
             types::SyncingEvent::Announcement {
                 peer_id,
                 announcement,

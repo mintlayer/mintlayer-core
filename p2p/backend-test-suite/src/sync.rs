@@ -17,7 +17,6 @@ use std::{
     collections::{HashSet, VecDeque},
     fmt::Debug,
     sync::Arc,
-    time::Duration,
 };
 
 use tokio::sync::mpsc;
@@ -1173,7 +1172,6 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
-        request_timeout: Duration::from_secs(1).into(),
         node_type: NodeType::Full.into(),
     };
     let (mut mgr1, mut conn1, _sync1, mut pm1) = make_sync_manager::<T>(
@@ -1373,12 +1371,6 @@ where
                 mgr.process_block_response(peer_id, response.into_blocks()).await?;
             }
         },
-        SyncingEvent::RequestTimeout {
-            peer_id,
-            request_id: _,
-        } => {
-            mgr.unregister_peer(peer_id);
-        }
         SyncingEvent::Announcement {
             peer_id,
             message_id,

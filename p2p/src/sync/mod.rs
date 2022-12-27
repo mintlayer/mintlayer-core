@@ -409,22 +409,6 @@ where
         Ok(())
     }
 
-    pub async fn process_timeout(
-        &mut self,
-        peer_id: T::PeerId,
-        request_id: T::SyncingPeerRequestId,
-    ) -> crate::Result<()> {
-        log::debug!("{request_id:?} request timeout, unregistering {peer_id:?} peer");
-
-        self.unregister_peer(peer_id);
-
-        let (tx, rx) = oneshot::channel();
-        self.tx_peer_manager
-            .send(PeerManagerEvent::Disconnect(peer_id, tx))
-            .map_err(P2pError::from)?;
-        rx.await.map_err(P2pError::from)?
-    }
-
     pub async fn process_announcement(
         &mut self,
         peer_id: T::PeerId,
@@ -552,11 +536,6 @@ where
                         response,
                     } => {
                         self.process_response(peer_id, request_id, response).await?;
-                    },
-                    SyncingEvent::RequestTimeout {
-                        peer_id, request_id
-                    } => {
-                        self.process_timeout(peer_id, request_id).await?;
                     },
                     SyncingEvent::Announcement{ peer_id, message_id, announcement } => {
                         self.process_announcement(peer_id, message_id, announcement).await?;

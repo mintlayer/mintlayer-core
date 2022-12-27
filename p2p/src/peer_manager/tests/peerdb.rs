@@ -167,7 +167,6 @@ fn adjust_peer_score_higher_threshold() {
         ban_duration: Default::default(),
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
-        request_timeout: Duration::from_secs(10).into(),
         node_type: NodeType::Full.into(),
     };
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config));
@@ -187,7 +186,6 @@ fn adjust_peer_score_lower_threshold() {
         ban_duration: Default::default(),
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
-        request_timeout: Duration::from_secs(10).into(),
         node_type: NodeType::Full.into(),
     };
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config));
@@ -614,7 +612,6 @@ async fn unban_peer() {
         ban_duration: Duration::from_secs(2).into(),
         outbound_connection_timeout: Default::default(),
         mdns_config: Default::default(),
-        request_timeout: Default::default(),
         node_type: Default::default(),
     }));
 

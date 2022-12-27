@@ -131,8 +131,6 @@ pub struct P2pConfigFile {
     pub outbound_connection_timeout: Option<u64>,
     /// Multicast DNS configuration.
     pub mdns_config: Option<MdnsConfigFile>,
-    /// The request timeout value in seconds.
-    pub request_timeout: Option<u64>,
     /// A node type.
     pub node_type: Option<NodeTypeConfigFile>,
 }
@@ -146,7 +144,6 @@ impl From<P2pConfigFile> for P2pConfig {
             ban_duration: c.ban_duration.map(Duration::from_secs).into(),
             outbound_connection_timeout: c.outbound_connection_timeout.into(),
             mdns_config: mdns_config.into(),
-            request_timeout: c.request_timeout.map(Duration::from_secs).into(),
             node_type: c.node_type.map(Into::into).into(),
         }
     }

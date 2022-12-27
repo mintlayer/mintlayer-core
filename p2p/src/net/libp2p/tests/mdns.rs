@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
@@ -43,7 +43,6 @@ async fn test_discovered_and_expired() {
                 enable_ipv6_mdns_discovery: Default::default(),
             }
             .into(),
-            request_timeout: Duration::from_secs(10).into(),
             node_type: NodeType::Full.into(),
         }),
         TestTransportLibp2p::make_address(),
@@ -63,7 +62,6 @@ async fn test_discovered_and_expired() {
                 enable_ipv6_mdns_discovery: false.into(),
             }
             .into(),
-            request_timeout: Duration::from_secs(10).into(),
             node_type: NodeType::Full.into(),
         }),
         TestTransportLibp2p::make_address(),

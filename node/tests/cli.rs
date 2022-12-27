@@ -89,7 +89,6 @@ fn read_config_override_values() {
     let p2p_addr = "address";
     let p2p_ban_threshold = 3;
     let p2p_timeout = 10000;
-    let p2p_request_timeout = 15;
     let http_rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
     let ws_rpc_addr = SocketAddr::from_str("127.0.0.1:5433").unwrap();
     let enable_mdns = false;
@@ -106,7 +105,6 @@ fn read_config_override_values() {
         p2p_enable_mdns: Some(enable_mdns),
         p2p_mdns_query_interval: None,
         p2p_enable_ipv6_mdns_discovery: None,
-        p2p_request_timeout: Some(p2p_request_timeout),
         http_rpc_addr: Some(http_rpc_addr),
         http_rpc_enabled: Some(true),
         ws_rpc_addr: Some(ws_rpc_addr),
@@ -135,7 +133,6 @@ fn read_config_override_values() {
     assert_eq!(config.p2p.bind_address, Some(p2p_addr.into()));
     assert_eq!(config.p2p.ban_threshold, Some(p2p_ban_threshold));
     assert_eq!(config.p2p.outbound_connection_timeout, Some(p2p_timeout));
-    assert_eq!(config.p2p.request_timeout, Some(p2p_request_timeout));
     assert_eq!(config.p2p.node_type, Some(node_type));
 
     assert_eq!(config.rpc.http_bind_address, Some(http_rpc_addr));
@@ -203,7 +200,6 @@ fn default_run_options() -> RunOptions {
         p2p_enable_mdns: None,
         p2p_mdns_query_interval: None,
         p2p_enable_ipv6_mdns_discovery: None,
-        p2p_request_timeout: None,
         http_rpc_addr: None,
         http_rpc_enabled: None,
         ws_rpc_addr: None,
