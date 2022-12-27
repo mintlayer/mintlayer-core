@@ -31,13 +31,13 @@ pub fn combine_data_with_delta<T: Clone>(
         (None, None) => Ok(None),
         (None, Some(d)) => match d {
             DeltaMapElement::Delta(d) => match d {
-                DataDelta::Create(d) => Ok(Some(*d.clone())),
-                DataDelta::Modify(_) => Err(Error::ModifyNonexistingData),
+                DataDelta::Create(d) => Ok(Some(d.clone())),
+                DataDelta::Modify(_, _) => Err(Error::ModifyNonexistingData),
                 DataDelta::Delete(_) => Err(Error::RemoveNonexistingData),
             },
             DeltaMapElement::DeltaUndo(u) => match u {
-                DataDeltaUndo::Create(d) => Ok(Some(*d.clone())),
-                DataDeltaUndo::Modify(_) => Err(Error::ModifyNonexistingData),
+                DataDeltaUndo::Create(d) => Ok(Some(d.clone())),
+                DataDeltaUndo::Modify(_, _) => Err(Error::ModifyNonexistingData),
                 DataDeltaUndo::Delete(_) => Err(Error::RemoveNonexistingData),
             },
         },
@@ -45,12 +45,12 @@ pub fn combine_data_with_delta<T: Clone>(
         (Some(_), Some(d)) => match d {
             DeltaMapElement::Delta(d) => match d {
                 DataDelta::Create(_) => Err(Error::DataCreatedMultipleTimes),
-                DataDelta::Modify((_, d)) => Ok(Some(*d.clone())),
+                DataDelta::Modify(_, d) => Ok(Some(d.clone())),
                 DataDelta::Delete(_) => Ok(None),
             },
             DeltaMapElement::DeltaUndo(u) => match u {
                 DataDeltaUndo::Create(_) => Err(Error::DataCreatedMultipleTimes),
-                DataDeltaUndo::Modify((_, d)) => Ok(Some(*d.clone())),
+                DataDeltaUndo::Modify(_, d) => Ok(Some(d.clone())),
                 DataDeltaUndo::Delete(_) => Ok(None),
             },
         },
@@ -90,9 +90,9 @@ pub mod test {
     #[test]
     #[rustfmt::skip]
     fn test_combine_data_with_delta() {
-        let delta_create = Some(DeltaMapElement::Delta(DataDelta::Create(Box::new('b'))));
-        let delta_modify = Some(DeltaMapElement::Delta(DataDelta::Modify((Box::new('a'), Box::new('b')))));
-        let delta_delete= Some(DeltaMapElement::Delta(DataDelta::Delete(Box::new('b'))));
+        let delta_create = Some(DeltaMapElement::Delta(DataDelta::Create('b')));
+        let delta_modify = Some(DeltaMapElement::Delta(DataDelta::Modify('a', 'b')));
+        let delta_delete= Some(DeltaMapElement::Delta(DataDelta::Delete('b')));
 
         assert_eq!(combine_data_with_delta::<i32>(None, None),                  Ok(None));
         assert_eq!(combine_data_with_delta(None,        delta_create.as_ref()), Ok(Some('b')));
@@ -107,9 +107,9 @@ pub mod test {
     #[test]
     #[rustfmt::skip]
     fn test_combine_data_with_undo() {
-        let undo_delete = Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Create(Box::new('b'))));
-        let undo_modify = Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Modify((Box::new('a'),Box::new('b')))));
-        let undo_create= Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Delete(Box::new('b'))));
+        let undo_delete = Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Create('b')));
+        let undo_modify = Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Modify('a', 'b')));
+        let undo_create= Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Delete('b')));
 
         assert_eq!(combine_data_with_delta::<i32>(None, None),                 Ok(None));
         assert_eq!(combine_data_with_delta(None,        undo_delete.as_ref()), Ok(Some('b')));

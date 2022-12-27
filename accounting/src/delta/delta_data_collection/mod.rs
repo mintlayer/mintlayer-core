@@ -26,7 +26,7 @@ mod combine;
 use self::combine::*;
 
 /// The outcome of combining two deltas for a given key upon the map that contains it
-enum DeltaMapOp<T: Clone> {
+enum DeltaMapOp<T> {
     /// Insert a specific value (for example, to write a Create or Modify operation)
     Insert(DeltaMapElement<T>),
     /// Erase the value at the relevant key spot (for example, a Create followed by Delete yields nothing)
@@ -34,27 +34,27 @@ enum DeltaMapOp<T: Clone> {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
-pub enum DataDelta<T: Clone> {
+pub enum DataDelta<T> {
     // Stores new value
-    Create(Box<T>),
+    Create(T),
     // Stores prev and new values
-    Modify((Box<T>, Box<T>)),
+    Modify(T, T),
     // Stores value to restore
-    Delete(Box<T>),
+    Delete(T),
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
-pub enum DataDeltaUndo<T: Clone> {
+pub enum DataDeltaUndo<T> {
     // Stores new value
-    Create(Box<T>),
+    Create(T),
     // Stores prev and new values
-    Modify((Box<T>, Box<T>)),
+    Modify(T, T),
     // Stores value to restore
-    Delete(Box<T>),
+    Delete(T),
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
-pub enum DeltaMapElement<T: Clone> {
+pub enum DeltaMapElement<T> {
     Delta(DataDelta<T>),
     DeltaUndo(DataDeltaUndo<T>),
 }
@@ -67,7 +67,7 @@ pub enum GetDataResult<T> {
 
 #[must_use]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
-pub struct DeltaDataCollection<K: Ord, T: Clone> {
+pub struct DeltaDataCollection<K, T> {
     data: BTreeMap<K, DeltaMapElement<T>>,
 }
 
@@ -87,12 +87,12 @@ impl<K: Ord + Copy, T: Clone + PartialEq> DeltaDataCollection<K, T> {
             Some(d) => match d {
                 DeltaMapElement::Delta(d) => match d {
                     DataDelta::Create(d) => GetDataResult::Present(d),
-                    DataDelta::Modify((_, d)) => GetDataResult::Present(d),
+                    DataDelta::Modify(_, d) => GetDataResult::Present(d),
                     DataDelta::Delete(_) => GetDataResult::Deleted,
                 },
                 DeltaMapElement::DeltaUndo(d) => match d {
                     DataDeltaUndo::Create(d) => GetDataResult::Present(d),
-                    DataDeltaUndo::Modify((_, d)) => GetDataResult::Present(d),
+                    DataDeltaUndo::Modify(_, d) => GetDataResult::Present(d),
                     DataDeltaUndo::Delete(_) => GetDataResult::Deleted,
                 },
             },
@@ -191,7 +191,7 @@ impl<K: Ord + Copy, T: Clone> FromIterator<(K, DataDelta<T>)> for DeltaDataColle
 fn create_undo_delta<T: Clone>(delta: DataDelta<T>) -> DataDeltaUndo<T> {
     match delta {
         DataDelta::Create(d) => DataDeltaUndo::Delete(d),
-        DataDelta::Modify((prev, new)) => DataDeltaUndo::Modify((new, prev)),
+        DataDelta::Modify(prev, new) => DataDeltaUndo::Modify(new, prev),
         DataDelta::Delete(d) => DataDeltaUndo::Create(d),
     }
 }

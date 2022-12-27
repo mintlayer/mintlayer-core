@@ -22,28 +22,30 @@ pub fn combine_deltas<T: Clone + PartialEq>(
 ) -> Result<Option<DataDelta<T>>, Error> {
     match (lhs, rhs) {
         (DataDelta::Create(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
-        (DataDelta::Create(_), DataDelta::Modify((_, d))) => Ok(Some(DataDelta::Create(d))),
+        (DataDelta::Create(_), DataDelta::Modify(_, d)) => Ok(Some(DataDelta::Create(d))),
         (DataDelta::Create(_), DataDelta::Delete(_)) => {
-            // if lhs had a creation, and we delete, this means nothing is left and there's a net zero to return
+            // if lhs had a creation, and we DataDeltaUndo::Delete, this means nothing is left and there's a net zero to return
             Ok(None)
         }
-        (DataDelta::Modify(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
-        (DataDelta::Modify((lhs1, lhs2)), DataDelta::Modify((rhs1, rhs2))) => {
+        (DataDelta::Modify(_, _), DataDelta::Create(_)) => {
+            Err(Error::DeltaDataCreatedMultipleTimes)
+        }
+        (DataDelta::Modify(lhs1, lhs2), DataDelta::Modify(rhs1, rhs2)) => {
             if lhs1 == &rhs2 && lhs2 == &rhs1 {
                 Ok(None)
             } else {
-                Ok(Some(DataDelta::Modify((lhs1.clone(), rhs2))))
+                Ok(Some(DataDelta::Modify(lhs1.clone(), rhs2)))
             }
         }
-        (DataDelta::Modify((d, _)), DataDelta::Delete(_)) => Ok(Some(DataDelta::Delete(d.clone()))),
+        (DataDelta::Modify(d, _), DataDelta::Delete(_)) => Ok(Some(DataDelta::Delete(d.clone()))),
         (DataDelta::Delete(lhs), DataDelta::Create(rhs)) => {
             if lhs == &rhs {
                 Ok(None)
             } else {
-                Ok(Some(DataDelta::Modify((lhs.clone(), rhs))))
+                Ok(Some(DataDelta::Modify(lhs.clone(), rhs)))
             }
         }
-        (DataDelta::Delete(_), DataDelta::Modify(_)) => Err(Error::DeltaDataModifyAfterDelete),
+        (DataDelta::Delete(_), DataDelta::Modify(_, _)) => Err(Error::DeltaDataModifyAfterDelete),
         (DataDelta::Delete(_), DataDelta::Delete(_)) => Err(Error::DeltaDataDeletedMultipleTimes),
     }
 }
@@ -58,18 +60,18 @@ pub fn combine_delta_with_undo<T: Clone + PartialEq>(
         (DataDelta::Create(_), DataDeltaUndo::Create(_)) => {
             Err(Error::DeltaDataCreatedMultipleTimes)
         }
-        (DataDelta::Create(_), DataDeltaUndo::Modify((_, d))) => Ok(Some(DataDelta::Create(d))),
+        (DataDelta::Create(_), DataDeltaUndo::Modify(_, d)) => Ok(Some(DataDelta::Create(d))),
         (DataDelta::Create(_), DataDeltaUndo::Delete(_)) => Ok(None),
 
-        (DataDelta::Modify((_, _)), DataDeltaUndo::Create(d)) => Ok(Some(DataDelta::Create(d))),
-        (DataDelta::Modify((lhs1, lhs2)), DataDeltaUndo::Modify((rhs1, rhs2))) => {
+        (DataDelta::Modify(_, _), DataDeltaUndo::Create(d)) => Ok(Some(DataDelta::Create(d))),
+        (DataDelta::Modify(lhs1, lhs2), DataDeltaUndo::Modify(rhs1, rhs2)) => {
             if lhs1 == &rhs2 && lhs2 == &rhs1 {
                 Ok(None)
             } else {
-                Ok(Some(DataDelta::Modify((lhs1.clone(), rhs2))))
+                Ok(Some(DataDelta::Modify(lhs1.clone(), rhs2)))
             }
         }
-        (DataDelta::Modify((d, _)), DataDeltaUndo::Delete(_)) => {
+        (DataDelta::Modify(d, _), DataDeltaUndo::Delete(_)) => {
             Ok(Some(DataDelta::Delete(d.clone())))
         }
 
@@ -79,10 +81,12 @@ pub fn combine_delta_with_undo<T: Clone + PartialEq>(
             } else {
                 // Delete + Undo(Delete) produces Modify if the data has changed.
                 // This is introduced specifically for the case: (Modify + Delete) + Undo(Delete) = Modify
-                Ok(Some(DataDelta::Modify((lhs.clone(), rhs))))
+                Ok(Some(DataDelta::Modify(lhs.clone(), rhs)))
             }
         }
-        (DataDelta::Delete(_), DataDeltaUndo::Modify(_)) => Err(Error::DeltaDataModifyAfterDelete),
+        (DataDelta::Delete(_), DataDeltaUndo::Modify(_, _)) => {
+            Err(Error::DeltaDataModifyAfterDelete)
+        }
         (DataDelta::Delete(_), DataDeltaUndo::Delete(_)) => {
             Err(Error::DeltaDataDeletedMultipleTimes)
         }
@@ -100,18 +104,18 @@ pub fn combine_undos<T: Clone + PartialEq>(
             // Delta(Delete) + Delta(Delete) is forbidden thus its undo is forbidden as well
             Err(Error::DeltaDataDeletedMultipleTimes)
         }
-        (DataDeltaUndo::Create(_), DataDeltaUndo::Modify((_, d))) => {
+        (DataDeltaUndo::Create(_), DataDeltaUndo::Modify(_, d)) => {
             Ok(Some(DataDeltaUndo::Create(d)))
         }
         (DataDeltaUndo::Create(_), DataDeltaUndo::Delete(_)) => Ok(None),
 
-        (DataDeltaUndo::Modify(_), DataDeltaUndo::Create(_)) => {
+        (DataDeltaUndo::Modify(_, _), DataDeltaUndo::Create(_)) => {
             Err(Error::DeltaDataCreatedMultipleTimes)
         }
-        (DataDeltaUndo::Modify((prev, _)), DataDeltaUndo::Modify((_, new))) => {
-            Ok(Some(DataDeltaUndo::Modify((prev.clone(), new))))
+        (DataDeltaUndo::Modify(prev, _), DataDeltaUndo::Modify(_, new)) => {
+            Ok(Some(DataDeltaUndo::Modify(prev.clone(), new)))
         }
-        (DataDeltaUndo::Modify((d, _)), DataDeltaUndo::Delete(_)) => {
+        (DataDeltaUndo::Modify(d, _), DataDeltaUndo::Delete(_)) => {
             Ok(Some(DataDeltaUndo::Delete(d.clone())))
         }
 
@@ -119,10 +123,10 @@ pub fn combine_undos<T: Clone + PartialEq>(
             if lhs == &rhs {
                 Ok(None)
             } else {
-                Ok(Some(DataDeltaUndo::Modify((lhs.clone(), rhs))))
+                Ok(Some(DataDeltaUndo::Modify(lhs.clone(), rhs)))
             }
         }
-        (DataDeltaUndo::Delete(_), DataDeltaUndo::Modify(_)) => {
+        (DataDeltaUndo::Delete(_), DataDeltaUndo::Modify(_, _)) => {
             Err(Error::DeltaDataModifyAfterDelete)
         }
         (DataDeltaUndo::Delete(_), DataDeltaUndo::Delete(_)) => {
@@ -141,65 +145,53 @@ pub mod test {
     fn test_combine_deltas() {
         use DataDelta::{Create, Delete, Modify};
     
-        assert_eq!(combine_deltas(&Create(Box::new('a')), Create(Box::new('b'))),                  Err(Error::DeltaDataCreatedMultipleTimes));
-        assert_eq!(combine_deltas(&Create(Box::new('a')), Modify((Box::new('a'), Box::new('b')))), Ok(Some(DataDelta::Create(Box::new('b')))));
-        assert_eq!(combine_deltas(&Create(Box::new('a')), Delete(Box::new('a'))),                  Ok(None));
+        assert_eq!(combine_deltas(&Create('a'), Create('b')),      Err(Error::DeltaDataCreatedMultipleTimes));
+        assert_eq!(combine_deltas(&Create('a'), Modify('a', 'b')), Ok(Some(DataDelta::Create('b'))));
+        assert_eq!(combine_deltas(&Create('a'), Delete('a')),      Ok(None));
     
-        assert_eq!(combine_deltas(&Modify((Box::new('a'), Box::new('b'))), Create(Box::new('c'))),                  Err(Error::DeltaDataCreatedMultipleTimes));
-        assert_eq!(combine_deltas(&Modify((Box::new('a'), Box::new('b'))), Modify((Box::new('c'), Box::new('d')))), Ok(Some(DataDelta::Modify((Box::new('a'), Box::new('d'))))));
-        assert_eq!(combine_deltas(&Modify((Box::new('a'), Box::new('b'))), Modify((Box::new('b'), Box::new('a')))), Ok(None));
-        assert_eq!(combine_deltas(&Modify((Box::new('a'), Box::new('b'))), Delete(Box::new('c'))),                  Ok(Some(DataDelta::Delete(Box::new('a')))));
+        assert_eq!(combine_deltas(&Modify('a', 'b'), Create('c')),      Err(Error::DeltaDataCreatedMultipleTimes));
+        assert_eq!(combine_deltas(&Modify('a', 'b'), Modify('c', 'd')), Ok(Some(DataDelta::Modify('a', 'd'))));
+        assert_eq!(combine_deltas(&Modify('a', 'b'), Modify('b', 'a')), Ok(None));
+        assert_eq!(combine_deltas(&Modify('a', 'b'), Delete('c')),      Ok(Some(DataDelta::Delete('a'))));
     
-        assert_eq!(combine_deltas(&Delete(Box::new('a')), Create(Box::new('a'))),                  Ok(None));
-        assert_eq!(combine_deltas(&Delete(Box::new('a')), Create(Box::new('b'))),                  Ok(Some(DataDelta::Modify((Box::new('a'), Box::new('b'))))));
-        assert_eq!(combine_deltas(&Delete(Box::new('a')), Modify((Box::new('b'), Box::new('c')))), Err(Error::DeltaDataModifyAfterDelete));
-        assert_eq!(combine_deltas(&Delete(Box::new('a')), Delete(Box::new('b'))),                  Err(Error::DeltaDataDeletedMultipleTimes));
+        assert_eq!(combine_deltas(&Delete('a'), Create('a')),      Ok(None));
+        assert_eq!(combine_deltas(&Delete('a'), Create('b')),      Ok(Some(DataDelta::Modify('a', 'b'))));
+        assert_eq!(combine_deltas(&Delete('a'), Modify('b', 'c')), Err(Error::DeltaDataModifyAfterDelete));
+        assert_eq!(combine_deltas(&Delete('a'), Delete('b')),      Err(Error::DeltaDataDeletedMultipleTimes));
     }
 
     #[test]
     #[rustfmt::skip]
     fn test_combine_delta_with_undo() {
-        let delta_create = |c| DataDelta::Create(Box::new(c));
-        let delta_modify = |c1, c2| DataDelta::Modify((Box::new(c1), Box::new(c2)));
-        let delta_delete= |c| DataDelta::Delete(Box::new(c));
+        assert_eq!(combine_delta_with_undo(&DataDelta::Create('a'),      DataDeltaUndo::Create('b')),      Err(Error::DeltaDataCreatedMultipleTimes));
+        assert_eq!(combine_delta_with_undo(&DataDelta::Create('a'),      DataDeltaUndo::Modify('a', 'b')), Ok(Some(DataDelta::Create('b'))));
+        assert_eq!(combine_delta_with_undo(&DataDelta::Create('a'),      DataDeltaUndo::Delete('a')),      Ok(None));
 
-        let undo_delete = |c| DataDeltaUndo::Create(Box::new(c));
-        let undo_modify = |c1,c2| DataDeltaUndo::Modify((Box::new(c1), Box::new(c2)));
-        let undo_create= |c| DataDeltaUndo::Delete(Box::new(c));
+        assert_eq!(combine_delta_with_undo(&DataDelta::Modify('a', 'b'), DataDeltaUndo::Create('c')),      Ok(Some(DataDelta::Create('c'))));
+        assert_eq!(combine_delta_with_undo(&DataDelta::Modify('a', 'b'), DataDeltaUndo::Modify('c', 'd')), Ok(Some(DataDelta::Modify('a', 'd'))));
+        assert_eq!(combine_delta_with_undo(&DataDelta::Modify('a', 'b'), DataDeltaUndo::Modify('b', 'a')), Ok(None));
+        assert_eq!(combine_delta_with_undo(&DataDelta::Modify('a', 'b'), DataDeltaUndo::Delete('b')),      Ok(Some(DataDelta::Delete('a'))));
 
-        assert_eq!(combine_delta_with_undo(&delta_create('a'),      undo_delete('b')),      Err(Error::DeltaDataCreatedMultipleTimes));
-        assert_eq!(combine_delta_with_undo(&delta_create('a'),      undo_modify('a', 'b')), Ok(Some(delta_create('b'))));
-        assert_eq!(combine_delta_with_undo(&delta_create('a'),      undo_create('a')),      Ok(None));
-
-        assert_eq!(combine_delta_with_undo(&delta_modify('a', 'b'), undo_delete('c')),      Ok(Some(delta_create('c'))));
-        assert_eq!(combine_delta_with_undo(&delta_modify('a', 'b'), undo_modify('c', 'd')), Ok(Some(delta_modify('a', 'd'))));
-        assert_eq!(combine_delta_with_undo(&delta_modify('a', 'b'), undo_modify('b', 'a')), Ok(None));
-        assert_eq!(combine_delta_with_undo(&delta_modify('a', 'b'), undo_create('b')),      Ok(Some(delta_delete('a'))));
-
-        assert_eq!(combine_delta_with_undo(&delta_delete('a'),      undo_delete('a')),      Ok(None));
-        assert_eq!(combine_delta_with_undo(&delta_delete('a'),      undo_delete('b')),      Ok(Some(delta_modify('a', 'b'))));
-        assert_eq!(combine_delta_with_undo(&delta_delete('a'),      undo_modify('a', 'b')), Err(Error::DeltaDataModifyAfterDelete));
-        assert_eq!(combine_delta_with_undo(&delta_delete('a'),      undo_create('b')),      Err(Error::DeltaDataDeletedMultipleTimes));
+        assert_eq!(combine_delta_with_undo(&DataDelta::Delete('a'),      DataDeltaUndo::Create('a')),      Ok(None));
+        assert_eq!(combine_delta_with_undo(&DataDelta::Delete('a'),      DataDeltaUndo::Create('b')),      Ok(Some(DataDelta::Modify('a', 'b'))));
+        assert_eq!(combine_delta_with_undo(&DataDelta::Delete('a'),      DataDeltaUndo::Modify('a', 'b')), Err(Error::DeltaDataModifyAfterDelete));
+        assert_eq!(combine_delta_with_undo(&DataDelta::Delete('a'),      DataDeltaUndo::Delete('b')),      Err(Error::DeltaDataDeletedMultipleTimes));
     }
 
     #[test]
     #[rustfmt::skip]
     fn test_combine_undos() {
-        let create = |c| DataDeltaUndo::Create(Box::new(c));
-        let modify = |c1,c2| DataDeltaUndo::Modify((Box::new(c1), Box::new(c2)));
-        let delete= |c| DataDeltaUndo::Delete(Box::new(c));
+        assert_eq!(combine_undos(&DataDeltaUndo::Create('a'),      DataDeltaUndo::Create('b')),      Err(Error::DeltaDataDeletedMultipleTimes));
+        assert_eq!(combine_undos(&DataDeltaUndo::Create('a'),      DataDeltaUndo::Modify('a', 'b')), Ok(Some(DataDeltaUndo::Create('b'))));
+        assert_eq!(combine_undos(&DataDeltaUndo::Create('a'),      DataDeltaUndo::Delete('a')),      Ok(None));
     
-        assert_eq!(combine_undos(&create('a'),      create('b')),      Err(Error::DeltaDataDeletedMultipleTimes));
-        assert_eq!(combine_undos(&create('a'),      modify('a', 'b')), Ok(Some(create('b'))));
-        assert_eq!(combine_undos(&create('a'),      delete('a')),      Ok(None));
+        assert_eq!(combine_undos(&DataDeltaUndo::Modify('a', 'b'), DataDeltaUndo::Create('c')),      Err(Error::DeltaDataCreatedMultipleTimes));
+        assert_eq!(combine_undos(&DataDeltaUndo::Modify('a', 'b'), DataDeltaUndo::Modify('c', 'd')), Ok(Some(DataDeltaUndo::Modify('a', 'd'))));
+        assert_eq!(combine_undos(&DataDeltaUndo::Modify('a', 'b'), DataDeltaUndo::Delete('b')),      Ok(Some(DataDeltaUndo::Delete('a'))));
     
-        assert_eq!(combine_undos(&modify('a', 'b'), create('c')),      Err(Error::DeltaDataCreatedMultipleTimes));
-        assert_eq!(combine_undos(&modify('a', 'b'), modify('c', 'd')), Ok(Some(modify('a', 'd'))));
-        assert_eq!(combine_undos(&modify('a', 'b'), delete('b')),      Ok(Some(delete('a'))));
-    
-        assert_eq!(combine_undos(&delete('a'),      create('a')),      Ok(None));
-        assert_eq!(combine_undos(&delete('a'),      create('b')),      Ok(Some(modify('a', 'b'))));
-        assert_eq!(combine_undos(&delete('a'),      modify('a', 'b')), Err(Error::DeltaDataModifyAfterDelete));
-        assert_eq!(combine_undos(&delete('a'),      delete('b')),      Err(Error::DeltaDataCreatedMultipleTimes));
+        assert_eq!(combine_undos(&DataDeltaUndo::Delete('a'),      DataDeltaUndo::Create('a')),      Ok(None));
+        assert_eq!(combine_undos(&DataDeltaUndo::Delete('a'),      DataDeltaUndo::Create('b')),      Ok(Some(DataDeltaUndo::Modify('a', 'b'))));
+        assert_eq!(combine_undos(&DataDeltaUndo::Delete('a'),      DataDeltaUndo::Modify('a', 'b')), Err(Error::DeltaDataModifyAfterDelete));
+        assert_eq!(combine_undos(&DataDeltaUndo::Delete('a'),      DataDeltaUndo::Delete('b')),      Err(Error::DeltaDataCreatedMultipleTimes));
     }
 }

@@ -60,7 +60,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             .pool_data
             .merge_delta_data_element(
                 pool_id,
-                DataDelta::Create(Box::new(PoolData::new(decommission_key, pledge_amount))),
+                DataDelta::Create(PoolData::new(decommission_key, pledge_amount)),
             )?
             .ok_or(Error::FailedToCreateDeltaUndo)?;
 
@@ -68,7 +68,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             pool_id,
             PoSAccountingUndo::CreatePool(CreatePoolUndo {
                 pool_id,
-                data_undo: PoolDataUndo::DataDelta((pledge_amount, undo_data)),
+                data_undo: PoolDataUndo::DataDelta(Box::new((pledge_amount, undo_data))),
             }),
         ))
     }
@@ -86,12 +86,12 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         let data_undo = self
             .data
             .pool_data
-            .merge_delta_data_element(pool_id, DataDelta::Delete(Box::new(last_data)))?
+            .merge_delta_data_element(pool_id, DataDelta::Delete(last_data))?
             .ok_or(Error::FailedToCreateDeltaUndo)?;
 
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
             pool_id,
-            data_undo: PoolDataUndo::DataDelta((last_amount, data_undo)),
+            data_undo: PoolDataUndo::DataDelta(Box::new((last_amount, data_undo))),
         }))
     }
 
@@ -117,14 +117,14 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         let data_undo = self
             .data
             .delegation_data
-            .merge_delta_data_element(delegation_id, DataDelta::Create(Box::new(delegation_data)))?
+            .merge_delta_data_element(delegation_id, DataDelta::Create(delegation_data))?
             .ok_or(Error::FailedToCreateDeltaUndo)?;
 
         Ok((
             delegation_id,
             PoSAccountingUndo::CreateDelegationId(CreateDelegationIdUndo {
                 delegation_id,
-                data_undo: DelegationDataUndo::DataDelta(data_undo),
+                data_undo: DelegationDataUndo::DataDelta(Box::new(data_undo)),
             }),
         ))
     }
@@ -189,7 +189,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
 impl<'a> PoSAccountingDelta<'a> {
     fn undo_create_pool(&mut self, undo: CreatePoolUndo) -> Result<(), Error> {
         let (pledge_amount, undo_data) = match undo.data_undo {
-            PoolDataUndo::DataDelta(v) => v,
+            PoolDataUndo::DataDelta(v) => *v,
             PoolDataUndo::Data(_) => unreachable!("incompatible PoolDataUndo supplied"),
         };
         let amount = self.get_pool_balance(undo.pool_id)?;
@@ -215,7 +215,7 @@ impl<'a> PoSAccountingDelta<'a> {
 
     fn undo_decommission_pool(&mut self, undo: DecommissionPoolUndo) -> Result<(), Error> {
         let (last_amount, undo_data) = match undo.data_undo {
-            PoolDataUndo::DataDelta(v) => v,
+            PoolDataUndo::DataDelta(v) => *v,
             PoolDataUndo::Data(_) => unreachable!("incompatible PoolDataUndo supplied"),
         };
 
@@ -244,7 +244,7 @@ impl<'a> PoSAccountingDelta<'a> {
 
         self.data
             .delegation_data
-            .undo_merge_delta_data_element(undo.delegation_id, undo_data)?;
+            .undo_merge_delta_data_element(undo.delegation_id, *undo_data)?;
 
         Ok(())
     }

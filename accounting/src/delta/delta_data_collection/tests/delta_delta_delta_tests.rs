@@ -23,8 +23,7 @@ type ThreeCollections = (
 
 #[test]
 fn create_modify_modify_associativity() {
-    let expected_collection =
-        DeltaDataCollection::from_iter([(1, DataDelta::Create(Box::new('c')))]);
+    let expected_collection = DeltaDataCollection::from_iter([(1, DataDelta::Create('c'))]);
 
     {
         // Create + Modify + Modify = Create
@@ -49,19 +48,19 @@ fn create_modify_modify_associativity() {
 fn make_create_modify_modify_collections() -> ThreeCollections {
     let mut collection1 = DeltaDataCollection::new();
     let _ = collection1
-        .merge_delta_data_element(1, DataDelta::Create(Box::new('a')))
+        .merge_delta_data_element(1, DataDelta::Create('a'))
         .unwrap()
         .unwrap();
 
     let mut collection2 = DeltaDataCollection::new();
     let _ = collection2
-        .merge_delta_data_element(1, DataDelta::Modify((Box::new('a'), Box::new('b'))))
+        .merge_delta_data_element(1, DataDelta::Modify('a', 'b'))
         .unwrap()
         .unwrap();
 
     let mut collection3 = DeltaDataCollection::new();
     let _ = collection3
-        .merge_delta_data_element(1, DataDelta::Modify((Box::new('b'), Box::new('c'))))
+        .merge_delta_data_element(1, DataDelta::Modify('b', 'c'))
         .unwrap()
         .unwrap();
 
@@ -95,19 +94,19 @@ fn create_modify_delete_associativity() {
 fn make_create_modify_delete_collections() -> ThreeCollections {
     let mut collection1 = DeltaDataCollection::new();
     let _ = collection1
-        .merge_delta_data_element(1, DataDelta::Create(Box::new('a')))
+        .merge_delta_data_element(1, DataDelta::Create('a'))
         .unwrap()
         .unwrap();
 
     let mut collection2 = DeltaDataCollection::new();
     let _ = collection2
-        .merge_delta_data_element(1, DataDelta::Modify((Box::new('a'), Box::new('b'))))
+        .merge_delta_data_element(1, DataDelta::Modify('a', 'b'))
         .unwrap()
         .unwrap();
 
     let mut collection3 = DeltaDataCollection::new();
     let _ = collection3
-        .merge_delta_data_element(1, DataDelta::Delete(Box::new('b')))
+        .merge_delta_data_element(1, DataDelta::Delete('b'))
         .unwrap()
         .unwrap();
 

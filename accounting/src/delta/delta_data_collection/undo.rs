@@ -19,7 +19,7 @@ use super::DataDeltaUndo;
 
 #[must_use]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DeltaDataUndoCollection<K: Ord, T: Clone> {
+pub struct DeltaDataUndoCollection<K, T> {
     data: BTreeMap<K, DataDeltaUndo<T>>,
 }
 

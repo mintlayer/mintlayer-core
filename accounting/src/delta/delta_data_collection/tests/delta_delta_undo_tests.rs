@@ -62,11 +62,7 @@ fn create_delete_undo_associativity() {
         let _ = collection1.merge_delta_data(collection3).unwrap();
 
         let expected_collection = DeltaDataCollection::from_iter(
-            [(
-                1,
-                DeltaMapElement::DeltaUndo(DataDeltaUndo::Create(Box::new('a'))),
-            )]
-            .into_iter(),
+            [(1, DeltaMapElement::DeltaUndo(DataDeltaUndo::Create('a')))].into_iter(),
         );
         assert_eq!(collection1, expected_collection);
     }
@@ -84,12 +80,11 @@ fn create_delete_undo_associativity() {
 }
 
 fn make_create_delete_undo_collections() -> ThreeCollections {
-    let collection1 =
-        DeltaDataCollection::from_iter([(1, DataDelta::Create(Box::new('a')))].into_iter());
+    let collection1 = DeltaDataCollection::from_iter([(1, DataDelta::Create('a'))].into_iter());
 
     let mut collection2 = DeltaDataCollection::new();
     let undo_delete = collection2
-        .merge_delta_data_element(1, DataDelta::Delete(Box::new('a')))
+        .merge_delta_data_element(1, DataDelta::Delete('a'))
         .unwrap()
         .unwrap();
 
@@ -100,12 +95,11 @@ fn make_create_delete_undo_collections() -> ThreeCollections {
 }
 
 fn make_create_modify_undo_collections() -> ThreeCollections {
-    let collection1 =
-        DeltaDataCollection::from_iter([(1, DataDelta::Create(Box::new('a')))].into_iter());
+    let collection1 = DeltaDataCollection::from_iter([(1, DataDelta::Create('a'))].into_iter());
 
     let mut collection2 = DeltaDataCollection::new();
     let undo_modify = collection2
-        .merge_delta_data_element(1, DataDelta::Modify((Box::new('a'), Box::new('b'))))
+        .merge_delta_data_element(1, DataDelta::Modify('a', 'b'))
         .unwrap()
         .unwrap();
 
@@ -116,13 +110,12 @@ fn make_create_modify_undo_collections() -> ThreeCollections {
 }
 
 fn make_modify_modify_undo_collections() -> ThreeCollections {
-    let collection1 = DeltaDataCollection::from_iter(
-        [(1, DataDelta::Modify((Box::new('a'), Box::new('b'))))].into_iter(),
-    );
+    let collection1 =
+        DeltaDataCollection::from_iter([(1, DataDelta::Modify('a', 'b'))].into_iter());
 
     let mut collection2 = DeltaDataCollection::new();
     let undo_modify = collection2
-        .merge_delta_data_element(1, DataDelta::Modify((Box::new('b'), Box::new('c'))))
+        .merge_delta_data_element(1, DataDelta::Modify('b', 'c'))
         .unwrap()
         .unwrap();
 
@@ -133,13 +126,12 @@ fn make_modify_modify_undo_collections() -> ThreeCollections {
 }
 
 fn make_modify_delete_undo_collections() -> ThreeCollections {
-    let collection1 = DeltaDataCollection::from_iter(
-        [(1, DataDelta::Modify((Box::new('a'), Box::new('b'))))].into_iter(),
-    );
+    let collection1 =
+        DeltaDataCollection::from_iter([(1, DataDelta::Modify('a', 'b'))].into_iter());
 
     let mut collection2 = DeltaDataCollection::new();
     let undo_delete = collection2
-        .merge_delta_data_element(1, DataDelta::Delete(Box::new('b')))
+        .merge_delta_data_element(1, DataDelta::Delete('b'))
         .unwrap()
         .unwrap();
 
@@ -150,12 +142,11 @@ fn make_modify_delete_undo_collections() -> ThreeCollections {
 }
 
 fn make_delete_create_undo_collections() -> ThreeCollections {
-    let collection1 =
-        DeltaDataCollection::from_iter([(1, DataDelta::Delete(Box::new('a')))].into_iter());
+    let collection1 = DeltaDataCollection::from_iter([(1, DataDelta::Delete('a'))].into_iter());
 
     let mut collection2 = DeltaDataCollection::new();
     let undo_create = collection2
-        .merge_delta_data_element(1, DataDelta::Create(Box::new('b')))
+        .merge_delta_data_element(1, DataDelta::Create('b'))
         .unwrap()
         .unwrap();
 

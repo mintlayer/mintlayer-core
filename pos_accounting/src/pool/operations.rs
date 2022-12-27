@@ -22,13 +22,13 @@ use crypto::key::PublicKey;
 use crate::{error::Error, DelegationId, PoolId};
 
 pub(crate) enum PoolDataUndo {
-    Data(PoolData),
-    DataDelta((Amount, DataDeltaUndo<PoolData>)),
+    Data(Box<PoolData>),
+    DataDelta(Box<(Amount, DataDeltaUndo<PoolData>)>),
 }
 
 pub(crate) enum DelegationDataUndo {
     Data(Box<DelegationData>),
-    DataDelta(DataDeltaUndo<DelegationData>),
+    DataDelta(Box<DataDeltaUndo<DelegationData>>),
 }
 
 pub struct CreatePoolUndo {
