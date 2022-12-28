@@ -62,7 +62,11 @@ fn create_delete_undo_associativity() {
         let _ = collection1.merge_delta_data(collection3).unwrap();
 
         let expected_collection = DeltaDataCollection::from_iter(
-            [(1, DeltaMapElement::DeltaUndo(DataDeltaUndo::Create('a')))].into_iter(),
+            [(
+                1,
+                DeltaMapElement::DeltaUndo(DataDeltaUndo(DataDelta::Create('a'))),
+            )]
+            .into_iter(),
         );
         assert_eq!(collection1, expected_collection);
     }

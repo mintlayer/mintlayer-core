@@ -21,8 +21,8 @@ pub use crate::{
         combine::{combine_amount_delta, combine_data_with_delta},
         delta_amount_collection::DeltaAmountCollection,
         delta_data_collection::{
-            undo::DeltaDataUndoCollection, DataDelta, DataDeltaUndo, DeltaDataCollection,
-            DeltaMapElement, GetDataResult,
+            undo::{DataDeltaUndo, DeltaDataUndoCollection},
+            DataDelta, DeltaDataCollection, DeltaMapElement, GetDataResult,
         },
     },
     error::Error,

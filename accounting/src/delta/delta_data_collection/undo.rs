@@ -15,7 +15,12 @@
 
 use std::collections::BTreeMap;
 
-use super::DataDeltaUndo;
+use serialization::{Decode, Encode};
+
+use super::DataDelta;
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
+pub struct DataDeltaUndo<T>(pub DataDelta<T>);
 
 #[must_use]
 #[derive(Clone, Debug, PartialEq, Eq)]

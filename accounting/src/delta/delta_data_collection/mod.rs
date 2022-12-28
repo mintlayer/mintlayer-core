@@ -22,10 +22,7 @@ use serialization::{Decode, Encode};
 
 use crate::error::Error;
 
-mod combine;
-use self::combine::*;
-
-/// The outcome of combining two deltas for a given key upon the map that contains it
+/// The outcome of combining two deltas for a given key upon the map that contains it.
 enum DeltaMapOp<T> {
     /// Insert a specific value (for example, to write a Create or Modify operation)
     Insert(DeltaMapElement<T>),
@@ -44,19 +41,18 @@ pub enum DataDelta<T> {
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
-pub enum DataDeltaUndo<T> {
-    // Stores new value
-    Create(T),
-    // Stores prev and new values
-    Modify(T, T),
-    // Stores value to restore
-    Delete(T),
-}
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub enum DeltaMapElement<T> {
     Delta(DataDelta<T>),
     DeltaUndo(DataDeltaUndo<T>),
+}
+
+impl<T> DeltaMapElement<T> {
+    pub fn get_data_delta(&self) -> &DataDelta<T> {
+        match self {
+            DeltaMapElement::Delta(d) => d,
+            DeltaMapElement::DeltaUndo(d) => &d.0,
+        }
+    }
 }
 
 pub enum GetDataResult<T> {
@@ -84,17 +80,10 @@ impl<K: Ord + Copy, T: Clone + PartialEq> DeltaDataCollection<K, T> {
 
     pub fn get_data(&self, key: &K) -> GetDataResult<&T> {
         match self.data.get(key) {
-            Some(d) => match d {
-                DeltaMapElement::Delta(d) => match d {
-                    DataDelta::Create(d) => GetDataResult::Present(d),
-                    DataDelta::Modify(_, d) => GetDataResult::Present(d),
-                    DataDelta::Delete(_) => GetDataResult::Deleted,
-                },
-                DeltaMapElement::DeltaUndo(d) => match d {
-                    DataDeltaUndo::Create(d) => GetDataResult::Present(d),
-                    DataDeltaUndo::Modify(_, d) => GetDataResult::Present(d),
-                    DataDeltaUndo::Delete(_) => GetDataResult::Deleted,
-                },
+            Some(d) => match d.get_data_delta() {
+                DataDelta::Create(d) => GetDataResult::Present(d),
+                DataDelta::Modify(_, d) => GetDataResult::Present(d),
+                DataDelta::Delete(_) => GetDataResult::Deleted,
             },
             None => GetDataResult::Missing,
         }
@@ -190,9 +179,9 @@ impl<K: Ord + Copy, T: Clone> FromIterator<(K, DataDelta<T>)> for DeltaDataColle
 /// Returns an undo delta that has the opposite result of the provided delta
 fn create_undo_delta<T: Clone>(delta: DataDelta<T>) -> DataDeltaUndo<T> {
     match delta {
-        DataDelta::Create(d) => DataDeltaUndo::Delete(d),
-        DataDelta::Modify(prev, new) => DataDeltaUndo::Modify(new, prev),
-        DataDelta::Delete(d) => DataDeltaUndo::Create(d),
+        DataDelta::Create(d) => DataDeltaUndo(DataDelta::Delete(d)),
+        DataDelta::Modify(prev, new) => DataDeltaUndo(DataDelta::Modify(new, prev)),
+        DataDelta::Delete(d) => DataDeltaUndo(DataDelta::Create(d)),
     }
 }
 
@@ -201,12 +190,14 @@ fn combine_delta_elements<T: Clone + PartialEq>(
     rhs: DeltaMapElement<T>,
 ) -> Result<DeltaMapOp<T>, Error> {
     match (lhs, rhs) {
-        (DeltaMapElement::Delta(d1), DeltaMapElement::Delta(d2)) => match combine_deltas(d1, d2)? {
-            Some(d) => Ok(DeltaMapOp::Insert(DeltaMapElement::Delta(d))),
-            None => Ok(DeltaMapOp::Erase),
-        },
+        (DeltaMapElement::Delta(d1), DeltaMapElement::Delta(d2)) => {
+            match combine_delta_data(d1, d2)? {
+                Some(d) => Ok(DeltaMapOp::Insert(DeltaMapElement::Delta(d))),
+                None => Ok(DeltaMapOp::Erase),
+            }
+        }
         (DeltaMapElement::Delta(d), DeltaMapElement::DeltaUndo(u)) => {
-            match combine_delta_with_undo(d, u)? {
+            match combine_delta_data(d, u.0)? {
                 Some(d) => Ok(DeltaMapOp::Insert(DeltaMapElement::Delta(d))),
                 None => Ok(DeltaMapOp::Erase),
             }
@@ -215,11 +206,46 @@ fn combine_delta_elements<T: Clone + PartialEq>(
             Err(Error::DeltaOverUndoApplied)
         }
         (DeltaMapElement::DeltaUndo(u1), DeltaMapElement::DeltaUndo(u2)) => {
-            match combine_undos(u1, u2)? {
+            match combine_delta_data(&u1.0, u2.0).map(|d| d.map(|d| DataDeltaUndo(d)))? {
                 Some(d) => Ok(DeltaMapOp::Insert(DeltaMapElement::DeltaUndo(d))),
                 None => Ok(DeltaMapOp::Erase),
             }
         }
+    }
+}
+
+/// Given two deltas, combine them into one delta, this is the basic delta data composability function
+fn combine_delta_data<T: Clone + PartialEq>(
+    lhs: &DataDelta<T>,
+    rhs: DataDelta<T>,
+) -> Result<Option<DataDelta<T>>, Error> {
+    match (lhs, rhs) {
+        (DataDelta::Create(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
+        (DataDelta::Create(_), DataDelta::Modify(_, d)) => Ok(Some(DataDelta::Create(d))),
+        (DataDelta::Create(_), DataDelta::Delete(_)) => {
+            // if lhs had a creation, and we DataDeltaUndo::Delete, this means nothing is left and there's a net zero to return
+            Ok(None)
+        }
+        (DataDelta::Modify(_, _), DataDelta::Create(_)) => {
+            Err(Error::DeltaDataCreatedMultipleTimes)
+        }
+        (DataDelta::Modify(lhs1, lhs2), DataDelta::Modify(rhs1, rhs2)) => {
+            if lhs1 == &rhs2 && lhs2 == &rhs1 {
+                Ok(None)
+            } else {
+                Ok(Some(DataDelta::Modify(lhs1.clone(), rhs2)))
+            }
+        }
+        (DataDelta::Modify(d, _), DataDelta::Delete(_)) => Ok(Some(DataDelta::Delete(d.clone()))),
+        (DataDelta::Delete(lhs), DataDelta::Create(rhs)) => {
+            if lhs == &rhs {
+                Ok(None)
+            } else {
+                Ok(Some(DataDelta::Modify(lhs.clone(), rhs)))
+            }
+        }
+        (DataDelta::Delete(_), DataDelta::Modify(_, _)) => Err(Error::DeltaDataModifyAfterDelete),
+        (DataDelta::Delete(_), DataDelta::Delete(_)) => Err(Error::DeltaDataDeletedMultipleTimes),
     }
 }
 

@@ -214,10 +214,10 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
         delegation_data: DeltaDataCollection::from_iter(
             [(
                 new_delegation_id(1),
-                DeltaMapElement::DeltaUndo(DataDeltaUndo::Create(DelegationData::new(
+                DeltaMapElement::DeltaUndo(DataDeltaUndo(DataDelta::Create(DelegationData::new(
                     new_pool_id(1),
                     pub_key1,
-                ))),
+                )))),
             )]
             .into_iter(),
         ),

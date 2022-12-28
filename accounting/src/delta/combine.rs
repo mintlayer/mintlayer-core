@@ -16,7 +16,7 @@
 use common::primitives::{signed_amount::SignedAmount, Amount};
 
 use crate::{
-    delta::delta_data_collection::{DataDelta, DataDeltaUndo, DeltaMapElement},
+    delta::delta_data_collection::{DataDelta, DeltaMapElement},
     error::Error,
 };
 
@@ -29,30 +29,16 @@ pub fn combine_data_with_delta<T: Clone>(
 ) -> Result<Option<T>, Error> {
     match (lhs, rhs) {
         (None, None) => Ok(None),
-        (None, Some(d)) => match d {
-            DeltaMapElement::Delta(d) => match d {
-                DataDelta::Create(d) => Ok(Some(d.clone())),
-                DataDelta::Modify(_, _) => Err(Error::ModifyNonexistingData),
-                DataDelta::Delete(_) => Err(Error::RemoveNonexistingData),
-            },
-            DeltaMapElement::DeltaUndo(u) => match u {
-                DataDeltaUndo::Create(d) => Ok(Some(d.clone())),
-                DataDeltaUndo::Modify(_, _) => Err(Error::ModifyNonexistingData),
-                DataDeltaUndo::Delete(_) => Err(Error::RemoveNonexistingData),
-            },
+        (None, Some(d)) => match d.get_data_delta() {
+            DataDelta::Create(d) => Ok(Some(d.clone())),
+            DataDelta::Modify(_, _) => Err(Error::ModifyNonexistingData),
+            DataDelta::Delete(_) => Err(Error::RemoveNonexistingData),
         },
         (Some(p), None) => Ok(Some(p.clone())),
-        (Some(_), Some(d)) => match d {
-            DeltaMapElement::Delta(d) => match d {
-                DataDelta::Create(_) => Err(Error::DataCreatedMultipleTimes),
-                DataDelta::Modify(_, d) => Ok(Some(d.clone())),
-                DataDelta::Delete(_) => Ok(None),
-            },
-            DeltaMapElement::DeltaUndo(u) => match u {
-                DataDeltaUndo::Create(_) => Err(Error::DataCreatedMultipleTimes),
-                DataDeltaUndo::Modify(_, d) => Ok(Some(d.clone())),
-                DataDeltaUndo::Delete(_) => Ok(None),
-            },
+        (Some(_), Some(d)) => match d.get_data_delta() {
+            DataDelta::Create(_) => Err(Error::DataCreatedMultipleTimes),
+            DataDelta::Modify(_, d) => Ok(Some(d.clone())),
+            DataDelta::Delete(_) => Ok(None),
         },
     }
 }
@@ -84,6 +70,8 @@ pub fn combine_amount_delta(
 
 #[cfg(test)]
 pub mod test {
+    use crate::DataDeltaUndo;
+
     use super::*;
     use common::primitives::{amount::UnsignedIntType, signed_amount::SignedIntType};
 
@@ -107,9 +95,9 @@ pub mod test {
     #[test]
     #[rustfmt::skip]
     fn test_combine_data_with_undo() {
-        let undo_delete = Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Create('b')));
-        let undo_modify = Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Modify('a', 'b')));
-        let undo_create= Some(DeltaMapElement::DeltaUndo(DataDeltaUndo::Delete('b')));
+        let undo_delete = Some(DeltaMapElement::DeltaUndo(DataDeltaUndo(DataDelta::Create('b'))));
+        let undo_modify = Some(DeltaMapElement::DeltaUndo(DataDeltaUndo(DataDelta::Modify('a', 'b'))));
+        let undo_create= Some(DeltaMapElement::DeltaUndo(DataDeltaUndo(DataDelta::Delete('b'))));
 
         assert_eq!(combine_data_with_delta::<i32>(None, None),                 Ok(None));
         assert_eq!(combine_data_with_delta(None,        undo_delete.as_ref()), Ok(Some('b')));
