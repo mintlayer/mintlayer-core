@@ -22,7 +22,6 @@ use crate::{
 
 /// Combine data with an element of `DeltaDataCollection`.
 /// An element can be either a Delta or a result of delta undo.
-/// Note that the rules for these 2 cases differ.
 pub fn combine_data_with_delta<T: Clone>(
     lhs: Option<&T>,
     rhs: Option<&DeltaMapElement<T>>,
@@ -43,7 +42,7 @@ pub fn combine_data_with_delta<T: Clone>(
     }
 }
 
-/// add two numbers that can be Some or None, one unsigned and another signed
+/// Add two numbers that can be Some or None, one unsigned and another signed
 /// If both numbers are None, then the result is none (if key not found in both parent and local)
 /// If only unsigned is present, then the unsigned is returned (only parent found)
 /// If only signed is present, we convert it to unsigned and return it (only delta found)

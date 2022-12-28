@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 common = {path = '../common'}
 serialization = {path = "../serialization"}
+utils = {path = '../utils'}
 
 thiserror = "1.0"
 parity-scale-codec = "3.1"

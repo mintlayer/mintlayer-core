@@ -41,4 +41,6 @@ pub enum Error {
     DeltaUndoNegationError,
     #[error("Applying Delta over Undo is not supported")]
     DeltaOverUndoApplied,
+    #[error("The data inside the DeltaData doesn't match")]
+    DeltaDataMismatch,
 }

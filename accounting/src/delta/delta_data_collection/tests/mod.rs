@@ -31,7 +31,7 @@ fn test_combine_deltas() {
     assert_eq!(combine_delta_data(&Modify('a', 'b'), Create('c')),      Err(Error::DeltaDataCreatedMultipleTimes));
     assert_eq!(combine_delta_data(&Modify('a', 'b'), Modify('c', 'd')), Ok(Some(Modify('a', 'd'))));
     assert_eq!(combine_delta_data(&Modify('a', 'b'), Modify('b', 'a')), Ok(None));
-    assert_eq!(combine_delta_data(&Modify('a', 'b'), Delete('c')),      Ok(Some(Delete('a'))));
+    assert_eq!(combine_delta_data(&Modify('a', 'b'), Delete('b')),      Ok(Some(Delete('a'))));
 
     assert_eq!(combine_delta_data(&Delete('a'), Create('a')),      Ok(None));
     assert_eq!(combine_delta_data(&Delete('a'), Create('b')),      Ok(Some(Modify('a', 'b'))));

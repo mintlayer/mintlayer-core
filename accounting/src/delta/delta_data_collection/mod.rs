@@ -19,6 +19,7 @@ use self::undo::*;
 use std::collections::BTreeMap;
 
 use serialization::{Decode, Encode};
+use utils::ensure;
 
 use crate::error::Error;
 
@@ -221,9 +222,13 @@ fn combine_delta_data<T: Clone + PartialEq>(
 ) -> Result<Option<DataDelta<T>>, Error> {
     match (lhs, rhs) {
         (DataDelta::Create(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
-        (DataDelta::Create(_), DataDelta::Modify(_, d)) => Ok(Some(DataDelta::Create(d))),
-        (DataDelta::Create(_), DataDelta::Delete(_)) => {
+        (DataDelta::Create(lhs), DataDelta::Modify(from, to)) => {
+            ensure!(lhs == &from, Error::DeltaDataMismatch);
+            Ok(Some(DataDelta::Create(to)))
+        }
+        (DataDelta::Create(lhs), DataDelta::Delete(rhs)) => {
             // if lhs had a creation, and we DataDeltaUndo::Delete, this means nothing is left and there's a net zero to return
+            ensure!(lhs == &rhs, Error::DeltaDataMismatch);
             Ok(None)
         }
         (DataDelta::Modify(_, _), DataDelta::Create(_)) => {
@@ -236,7 +241,10 @@ fn combine_delta_data<T: Clone + PartialEq>(
                 Ok(Some(DataDelta::Modify(lhs1.clone(), rhs2)))
             }
         }
-        (DataDelta::Modify(d, _), DataDelta::Delete(_)) => Ok(Some(DataDelta::Delete(d.clone()))),
+        (DataDelta::Modify(from, to), DataDelta::Delete(rhs)) => {
+            ensure!(to == &rhs, Error::DeltaDataMismatch);
+            Ok(Some(DataDelta::Delete(from.clone())))
+        }
         (DataDelta::Delete(lhs), DataDelta::Create(rhs)) => {
             if lhs == &rhs {
                 Ok(None)

@@ -112,3 +112,95 @@ fn make_create_modify_delete_collections() -> ThreeCollections {
 
     (collection1, collection2, collection3)
 }
+
+#[test]
+fn create_delete_create_associativity() {
+    let expected_collection = DeltaDataCollection::from_iter([(1, DataDelta::Create('b'))]);
+
+    {
+        // Create +  Delete + Create = Create
+        let (mut collection1, collection2, collection3) = make_create_delete_create_collections();
+        let _ = collection1.merge_delta_data(collection2).unwrap();
+        let _ = collection1.merge_delta_data(collection3).unwrap();
+
+        assert_eq!(collection1, expected_collection);
+    }
+
+    {
+        // Create + (Delete + Create) = Create
+        let (mut collection1, mut collection2, collection3) =
+            make_create_delete_create_collections();
+        let _ = collection2.merge_delta_data(collection3).unwrap();
+        let _ = collection1.merge_delta_data(collection2).unwrap();
+
+        assert_eq!(collection1, expected_collection);
+    }
+}
+
+fn make_create_delete_create_collections() -> ThreeCollections {
+    let mut collection1 = DeltaDataCollection::new();
+    let _ = collection1
+        .merge_delta_data_element(1, DataDelta::Create('a'))
+        .unwrap()
+        .unwrap();
+
+    let mut collection2 = DeltaDataCollection::new();
+    let _ = collection2
+        .merge_delta_data_element(1, DataDelta::Delete('a'))
+        .unwrap()
+        .unwrap();
+
+    let mut collection3 = DeltaDataCollection::new();
+    let _ = collection3
+        .merge_delta_data_element(1, DataDelta::Create('b'))
+        .unwrap()
+        .unwrap();
+
+    (collection1, collection2, collection3)
+}
+
+#[test]
+fn modify_modify_delete_associativity() {
+    let expected_collection = DeltaDataCollection::from_iter([(1, DataDelta::Delete('a'))]);
+
+    {
+        // Modify + Modify + Delete = Delete
+        let (mut collection1, collection2, collection3) = make_modify_modify_delete_collections();
+        let _ = collection1.merge_delta_data(collection2).unwrap();
+        let _ = collection1.merge_delta_data(collection3).unwrap();
+
+        assert_eq!(collection1, expected_collection);
+    }
+
+    {
+        // Modify + (Modify + Delete) = Delete
+        let (mut collection1, mut collection2, collection3) =
+            make_modify_modify_delete_collections();
+        let _ = collection2.merge_delta_data(collection3).unwrap();
+        let _ = collection1.merge_delta_data(collection2).unwrap();
+
+        assert_eq!(collection1, expected_collection);
+    }
+}
+
+fn make_modify_modify_delete_collections() -> ThreeCollections {
+    let mut collection1 = DeltaDataCollection::new();
+    let _ = collection1
+        .merge_delta_data_element(1, DataDelta::Modify('a', 'b'))
+        .unwrap()
+        .unwrap();
+
+    let mut collection2 = DeltaDataCollection::new();
+    let _ = collection2
+        .merge_delta_data_element(1, DataDelta::Modify('b', 'c'))
+        .unwrap()
+        .unwrap();
+
+    let mut collection3 = DeltaDataCollection::new();
+    let _ = collection3
+        .merge_delta_data_element(1, DataDelta::Delete('c'))
+        .unwrap()
+        .unwrap();
+
+    (collection1, collection2, collection3)
+}
