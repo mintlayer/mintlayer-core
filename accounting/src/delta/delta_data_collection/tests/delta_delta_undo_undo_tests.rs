@@ -25,11 +25,11 @@ type FourCollections = (
 );
 
 #[rstest]
-#[case(make_create_modify_undo_undo_collections())]
-#[case(make_create_delete_undo_undo_collections())]
-#[case(make_modify_modify_undo_undo_collections())]
-#[case(make_modify_delete_undo_undo_collections())]
-#[case(make_delete_create_undo_undo_collections())]
+#[case(make_collections_with_undo(DataDelta::Create('a'), DataDelta::Delete('a')))]
+#[case(make_collections_with_undo(DataDelta::Create('a'), DataDelta::Modify('a', 'b')))]
+#[case(make_collections_with_undo(DataDelta::Modify('a', 'b'), DataDelta::Modify('b', 'c')))]
+#[case(make_collections_with_undo(DataDelta::Modify('a', 'b'), DataDelta::Delete('b')))]
+#[case(make_collections_with_undo(DataDelta::Delete('a'), DataDelta::Create('b')))]
 fn delta_delta_undo_undo_associativity(#[case] collections: FourCollections) {
     let expected_collection = DeltaDataCollection::new();
 
@@ -74,112 +74,18 @@ fn delta_delta_undo_undo_associativity(#[case] collections: FourCollections) {
     }
 }
 
-fn make_create_delete_undo_undo_collections() -> FourCollections {
+fn make_collections_with_undo(delta1: DataDelta<char>, delta2: DataDelta<char>) -> FourCollections {
     let mut collection1 = DeltaDataCollection::new();
-    let undo_create = collection1
-        .merge_delta_data_element(1, DataDelta::Create('a'))
-        .unwrap()
-        .unwrap();
+    let undo_delta1 = collection1.merge_delta_data_element(1, delta1).unwrap().unwrap();
 
     let mut collection2 = DeltaDataCollection::new();
-    let undo_delete = collection2
-        .merge_delta_data_element(1, DataDelta::Delete('a'))
-        .unwrap()
-        .unwrap();
+    let undo_delta2 = collection2.merge_delta_data_element(1, delta2).unwrap().unwrap();
 
     let mut collection3 = DeltaDataCollection::new();
-    collection3.undo_merge_delta_data_element(1, undo_delete).unwrap();
+    collection3.undo_merge_delta_data_element(1, undo_delta2).unwrap();
 
     let mut collection4 = DeltaDataCollection::new();
-    collection4.undo_merge_delta_data_element(1, undo_create).unwrap();
-
-    (collection1, collection2, collection3, collection4)
-}
-
-fn make_create_modify_undo_undo_collections() -> FourCollections {
-    let mut collection1 = DeltaDataCollection::new();
-    let undo_create = collection1
-        .merge_delta_data_element(1, DataDelta::Create('a'))
-        .unwrap()
-        .unwrap();
-
-    let mut collection2 = DeltaDataCollection::new();
-    let undo_modify = collection2
-        .merge_delta_data_element(1, DataDelta::Modify('a', 'b'))
-        .unwrap()
-        .unwrap();
-
-    let mut collection3 = DeltaDataCollection::new();
-    collection3.undo_merge_delta_data_element(1, undo_modify).unwrap();
-
-    let mut collection4 = DeltaDataCollection::new();
-    collection4.undo_merge_delta_data_element(1, undo_create).unwrap();
-
-    (collection1, collection2, collection3, collection4)
-}
-
-fn make_modify_modify_undo_undo_collections() -> FourCollections {
-    let mut collection1 = DeltaDataCollection::new();
-    let undo_modify1 = collection1
-        .merge_delta_data_element(1, DataDelta::Modify('a', 'b'))
-        .unwrap()
-        .unwrap();
-
-    let mut collection2 = DeltaDataCollection::new();
-    let undo_modify2 = collection2
-        .merge_delta_data_element(1, DataDelta::Modify('b', 'c'))
-        .unwrap()
-        .unwrap();
-
-    let mut collection3 = DeltaDataCollection::new();
-    collection3.undo_merge_delta_data_element(1, undo_modify2).unwrap();
-
-    let mut collection4 = DeltaDataCollection::new();
-    collection4.undo_merge_delta_data_element(1, undo_modify1).unwrap();
-
-    (collection1, collection2, collection3, collection4)
-}
-
-fn make_modify_delete_undo_undo_collections() -> FourCollections {
-    let mut collection1 = DeltaDataCollection::new();
-    let undo_modify = collection1
-        .merge_delta_data_element(1, DataDelta::Modify('a', 'b'))
-        .unwrap()
-        .unwrap();
-
-    let mut collection2 = DeltaDataCollection::new();
-    let undo_delete = collection2
-        .merge_delta_data_element(1, DataDelta::Delete('b'))
-        .unwrap()
-        .unwrap();
-
-    let mut collection3 = DeltaDataCollection::new();
-    collection3.undo_merge_delta_data_element(1, undo_delete).unwrap();
-
-    let mut collection4 = DeltaDataCollection::new();
-    collection4.undo_merge_delta_data_element(1, undo_modify).unwrap();
-
-    (collection1, collection2, collection3, collection4)
-}
-
-fn make_delete_create_undo_undo_collections() -> FourCollections {
-    let mut collection1 = DeltaDataCollection::new();
-    let undo_delete = collection1
-        .merge_delta_data_element(1, DataDelta::Delete('a'))
-        .unwrap()
-        .unwrap();
-
-    let mut collection2 = DeltaDataCollection::new();
-    let undo_create = collection2
-        .merge_delta_data_element(1, DataDelta::Create('b'))
-        .unwrap()
-        .unwrap();
-
-    let mut collection3 = DeltaDataCollection::new();
-    collection3.undo_merge_delta_data_element(1, undo_create).unwrap();
-
-    let mut collection4 = DeltaDataCollection::new();
-    collection4.undo_merge_delta_data_element(1, undo_delete).unwrap();
+    collection4.undo_merge_delta_data_element(1, undo_delta1).unwrap();
 
     (collection1, collection2, collection3, collection4)
 }

@@ -15,6 +15,7 @@
 
 use super::*;
 
+mod delta_delta_delta_delta_tests;
 mod delta_delta_delta_tests;
 mod delta_delta_undo_tests;
 mod delta_delta_undo_undo_tests;
