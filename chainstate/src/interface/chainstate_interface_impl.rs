@@ -172,6 +172,16 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         Ok(best_block_index.block_height())
     }
 
+    fn get_best_block_header(&self) -> Result<BlockHeader, ChainstateError> {
+        Ok(self
+            .chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_best_block_header()
+            .map_err(ChainstateError::FailedToReadProperty)?
+            .expect("Best block header could not be found"))
+    }
+
     fn get_best_block_index(&self) -> Result<GenBlockIndex, ChainstateError> {
         Ok(self
             .chainstate

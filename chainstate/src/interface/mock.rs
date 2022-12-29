@@ -52,6 +52,7 @@ mockall::mock! {
         fn preliminary_header_check(&self, header: BlockHeader) -> Result<(), ChainstateError>;
         fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError>;
         fn get_best_block_height(&self) -> Result<BlockHeight, ChainstateError>;
+        fn get_best_block_header(&self) -> Result<BlockHeader, ChainstateError>;
         fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> Result<bool, ChainstateError>;
         fn get_block_height_in_main_chain(
             &self,
