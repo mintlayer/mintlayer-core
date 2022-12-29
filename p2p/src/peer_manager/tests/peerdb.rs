@@ -168,6 +168,7 @@ fn adjust_peer_score_higher_threshold() {
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
         node_type: NodeType::Full.into(),
+        max_tip_age: Default::default(),
     };
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config));
 
@@ -187,6 +188,7 @@ fn adjust_peer_score_lower_threshold() {
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
         node_type: NodeType::Full.into(),
+        max_tip_age: Default::default(),
     };
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config));
 
@@ -613,6 +615,7 @@ async fn unban_peer() {
         outbound_connection_timeout: Default::default(),
         mdns_config: Default::default(),
         node_type: Default::default(),
+        max_tip_age: Default::default(),
     }));
 
     let id = add_banned_peer(&mut peerdb);

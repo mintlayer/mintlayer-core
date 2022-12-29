@@ -1173,6 +1173,7 @@ where
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
         node_type: NodeType::Full.into(),
+        max_tip_age: Default::default(),
     };
     let (mut mgr1, mut conn1, _sync1, mut pm1) = make_sync_manager::<T>(
         A::make_transport(),

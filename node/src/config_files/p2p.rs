@@ -133,6 +133,11 @@ pub struct P2pConfigFile {
     pub mdns_config: Option<MdnsConfigFile>,
     /// A node type.
     pub node_type: Option<NodeTypeConfigFile>,
+    /// A maximum tip age in seconds.
+    ///
+    /// The initial block download is finished if the difference between the current time and the
+    /// tip time is less than this value.
+    pub max_tip_age: Option<u64>,
 }
 
 impl From<P2pConfigFile> for P2pConfig {
@@ -145,6 +150,7 @@ impl From<P2pConfigFile> for P2pConfig {
             outbound_connection_timeout: c.outbound_connection_timeout.into(),
             mdns_config: mdns_config.into(),
             node_type: c.node_type.map(Into::into).into(),
+            max_tip_age: c.max_tip_age.map(Duration::from_secs).into(),
         }
     }
 }

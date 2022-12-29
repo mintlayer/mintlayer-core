@@ -44,6 +44,7 @@ async fn test_discovered_and_expired() {
             }
             .into(),
             node_type: NodeType::Full.into(),
+            max_tip_age: Default::default(),
         }),
         TestTransportLibp2p::make_address(),
         &[],
@@ -63,6 +64,7 @@ async fn test_discovered_and_expired() {
             }
             .into(),
             node_type: NodeType::Full.into(),
+            max_tip_age: Default::default(),
         }),
         TestTransportLibp2p::make_address(),
         &[],

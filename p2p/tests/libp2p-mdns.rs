@@ -44,6 +44,7 @@ async fn test_libp2p_peer_discovery() {
             }
             .into(),
             node_type: NodeType::Full.into(),
+            max_tip_age: Default::default(),
         }),
     )
     .await
@@ -64,6 +65,7 @@ async fn test_libp2p_peer_discovery() {
             }
             .into(),
             node_type: NodeType::Full.into(),
+            max_tip_age: Default::default(),
         }),
     )
     .await

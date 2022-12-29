@@ -243,6 +243,7 @@ async fn test_connect_with_timeout() {
             outbound_connection_timeout: 2.into(),
             mdns_config: MdnsConfig::Disabled.into(),
             node_type: NodeType::Full.into(),
+            max_tip_age: Default::default(),
         }),
     )
     .await
