@@ -20,7 +20,11 @@ pub mod peer;
 
 mod request;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use tokio::sync::{mpsc, oneshot};
 use void::Void;
@@ -66,7 +70,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     chain_config: Arc<ChainConfig>,
 
     /// The p2p configuration.
-    _p2p_config: Arc<P2pConfig>,
+    p2p_config: Arc<P2pConfig>,
 
     /// Equals to false when the initial block download is finished.
     is_initial_block_download: bool,
@@ -105,7 +109,7 @@ where
     ) -> Self {
         Self {
             chain_config,
-            _p2p_config: p2p_config,
+            p2p_config,
             peer_sync_handle: handle,
             rx_sync,
             tx_peer_manager,
@@ -341,17 +345,27 @@ where
     ///
     /// The node is considered fully synced (its initial block download is done) if
     /// `current time - config.max_tip_age` is less than the time of the best block.
-    pub fn update_state(&mut self) {
+    pub async fn update_state(&mut self) -> crate::Result<()> {
         if !self.is_initial_block_download {
-            return;
+            return Ok(());
         }
 
-        //self.chainstate_handle
+        let block_timestamp = self
+            .chainstate_handle
+            .call(|c| c.get_best_block_header())
+            .await??
+            .timestamp()
+            .as_duration_since_epoch();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            // This can fail only if `SystemTime::now()` returns the time before `UNIX_EPOCH`.
+            .expect("Invalid system time");
 
-        //let now = Instant::now();
+        if block_timestamp + self.p2p_config.max_tip_age.clone().into() > now {
+            self.is_initial_block_download = false;
+        }
 
-        // TODO: FIXME:
-        self.is_initial_block_download = false;
+        Ok(())
     }
 
     pub async fn process_response(
@@ -537,7 +551,7 @@ where
                 }
             }
 
-            self.update_state();
+            self.update_state().await?;
         }
     }
 
