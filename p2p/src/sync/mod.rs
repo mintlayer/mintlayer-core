@@ -53,19 +53,6 @@ const HEADER_LIMIT: usize = 2000;
 // TODO: add more tests
 // TODO: cache locator and invalidate it when `NewTip` event is received
 
-/// Syncing state of the local node
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum SyncState {
-    /// Local node's state is uninitialized
-    Uninitialized,
-
-    /// Downloading blocks from remote node(s)
-    DownloadingBlocks,
-
-    /// The local block index is fully synced.
-    Done,
-}
-
 /// Sync manager is responsible for syncing the local blockchain to the chain with most trust
 /// and keeping up with updates to different branches of the blockchain.
 ///
@@ -81,8 +68,8 @@ pub struct BlockSyncManager<T: NetworkingService> {
     /// The p2p configuration.
     _p2p_config: Arc<P2pConfig>,
 
-    /// Syncing state of the local node
-    state: SyncState,
+    /// Equals to false when the initial block download is finished.
+    is_initial_block_download: bool,
 
     /// Handle for sending/receiving syncing events
     peer_sync_handle: T::SyncingMessagingHandle,
@@ -124,13 +111,13 @@ where
             tx_peer_manager,
             chainstate_handle,
             peers: Default::default(),
-            state: SyncState::Uninitialized,
+            is_initial_block_download: true,
         }
     }
 
-    /// Get current sync state
-    pub fn state(&self) -> &SyncState {
-        &self.state
+    /// Returns true if the initial block download isn't finished yet.
+    pub fn is_initial_block_download(&self) -> bool {
+        self.is_initial_block_download
     }
 
     /// Get mutable reference to the handle
@@ -352,31 +339,19 @@ where
 
     /// Checks the current state of syncing.
     ///
-    /// The node is considered fully synced (its initial block download is done) if all its peers
-    /// are in the `Done` state.
+    /// The node is considered fully synced (its initial block download is done) if
+    /// `current time - config.max_tip_age` is less than the time of the best block.
     pub fn update_state(&mut self) {
-        // TODO: improve "initial block download done" check
-
-        if self.peers.is_empty() {
-            self.state = SyncState::Uninitialized;
+        if !self.is_initial_block_download {
             return;
         }
 
-        for peer in self.peers.values() {
-            match peer.state() {
-                peer::PeerSyncState::UploadingBlocks(_) => {
-                    self.state = SyncState::DownloadingBlocks;
-                    return;
-                }
-                peer::PeerSyncState::UploadingHeaders(_) | peer::PeerSyncState::Unknown => {
-                    self.state = SyncState::Uninitialized;
-                    return;
-                }
-                peer::PeerSyncState::Idle => {}
-            }
-        }
+        //self.chainstate_handle
 
-        self.state = SyncState::Done;
+        //let now = Instant::now();
+
+        // TODO: FIXME:
+        self.is_initial_block_download = false;
     }
 
     pub async fn process_response(
@@ -552,7 +527,7 @@ where
                         self.unregister_peer(peer_id)
                     }
                 },
-                block_id = block_rx.recv(), if self.state == SyncState::Done => {
+                block_id = block_rx.recv(), if !self.is_initial_block_download() => {
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
 
                     match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {

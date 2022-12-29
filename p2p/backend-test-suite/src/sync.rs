@@ -39,7 +39,6 @@ use p2p::{
     },
     peer_manager::helpers::connect_services,
     sync::BlockSyncManager,
-    sync::SyncState,
 };
 use p2p_test_utils::TestBlockInfo;
 
@@ -98,7 +97,7 @@ where
     assert_eq!(res2, Ok(()));
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1.is_initial_block_download());
 }
 
 // local and remote nodes are in the same chain but remote is ahead 7 blocks
@@ -203,7 +202,7 @@ where
     mgr1.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1.is_initial_block_download());
 }
 
 // local and remote nodes are in the same chain but local is ahead of remote by 12 blocks
@@ -323,7 +322,7 @@ where
     mgr2.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1.is_initial_block_download());
 }
 
 // local and remote nodes are in the same chain but local is ahead of remote by 14 blocks
@@ -469,7 +468,7 @@ where
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await == local_tip);
     assert!(get_tip(&mgr2_handle).await != remote_tip);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1.is_initial_block_download());
 }
 
 // local and remote nodes are in different chains and remote has longer chain
@@ -615,7 +614,7 @@ where
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await != local_tip);
     assert!(get_tip(&mgr2_handle).await == remote_tip);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1.is_initial_block_download());
 }
 
 async fn two_remote_nodes_different_chains<A, S>()
@@ -737,7 +736,7 @@ where
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
     assert!(get_tip(&mgr3_handle).await == mgr3_tip);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1.is_initial_block_download());
 }
 
 async fn two_remote_nodes_same_chains<A, S>()
@@ -806,7 +805,7 @@ where
         loop {
             advance_mgr_state(&mut mgr1).await.unwrap();
 
-            if mgr1.state() == &SyncState::Done {
+            if !mgr1.is_initial_block_download() {
                 break;
             }
         }
@@ -875,7 +874,7 @@ where
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
     assert!(get_tip(&mgr3_handle).await == mgr3_tip);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1.is_initial_block_download());
 }
 
 async fn two_remote_nodes_same_chains_new_blocks<A, S>()
@@ -940,7 +939,7 @@ where
         loop {
             advance_mgr_state(&mut mgr1).await.unwrap();
 
-            if mgr1.state() == &SyncState::Done {
+            if !mgr1.is_initial_block_download() {
                 break;
             }
         }
@@ -1024,7 +1023,7 @@ where
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(same_tip(&mgr2_handle, &mgr3_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1.is_initial_block_download());
 }
 
 // // connect two nodes, they are in sync so no blocks are downloaded
@@ -1071,7 +1070,7 @@ where
     assert_eq!(res2, Ok(()));
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1.is_initial_block_download());
 
     mgr1.unregister_peer(*conn2.peer_id());
     assert_eq!(conn1.disconnect(*conn2.peer_id()).await, Ok(()));
@@ -1153,7 +1152,7 @@ where
     mgr1.update_state();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1.is_initial_block_download());
 }
 
 // Check that the peer that ignores requests is disconnected.
