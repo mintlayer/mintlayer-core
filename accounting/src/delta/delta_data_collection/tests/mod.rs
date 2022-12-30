@@ -25,27 +25,27 @@ mod delta_delta_undo_undo_tests;
 fn test_combine_deltas() {
     use DataDelta::{Create, Delete, Modify};
 
-    assert_eq!(combine_delta_data(&Create('a'), Create('b')),      Err(Error::DeltaDataCreatedMultipleTimes));
-    assert_eq!(combine_delta_data(&Create('a'), Modify('a', 'b')), Ok(Some(Create('b'))));
-    assert_eq!(combine_delta_data(&Create('a'), Delete('a')),      Ok(None));
+    assert_eq!(combine_delta_data(Create('a'), Create('b')),      Err(Error::DeltaDataCreatedMultipleTimes));
+    assert_eq!(combine_delta_data(Create('a'), Modify('a', 'b')), Ok(Some(Create('b'))));
+    assert_eq!(combine_delta_data(Create('a'), Delete('a')),      Ok(None));
 
-    assert_eq!(combine_delta_data(&Modify('a', 'b'), Create('c')),      Err(Error::DeltaDataCreatedMultipleTimes));
-    assert_eq!(combine_delta_data(&Modify('a', 'b'), Modify('c', 'd')), Ok(Some(Modify('a', 'd'))));
-    assert_eq!(combine_delta_data(&Modify('a', 'b'), Modify('b', 'a')), Ok(None));
-    assert_eq!(combine_delta_data(&Modify('a', 'b'), Delete('b')),      Ok(Some(Delete('a'))));
+    assert_eq!(combine_delta_data(Modify('a', 'b'), Create('c')),      Err(Error::DeltaDataCreatedMultipleTimes));
+    assert_eq!(combine_delta_data(Modify('a', 'b'), Modify('b', 'c')), Ok(Some(Modify('a', 'c'))));
+    assert_eq!(combine_delta_data(Modify('a', 'b'), Modify('b', 'a')), Ok(None));
+    assert_eq!(combine_delta_data(Modify('a', 'b'), Delete('b')),      Ok(Some(Delete('a'))));
 
-    assert_eq!(combine_delta_data(&Delete('a'), Create('a')),      Ok(None));
-    assert_eq!(combine_delta_data(&Delete('a'), Create('b')),      Ok(Some(Modify('a', 'b'))));
-    assert_eq!(combine_delta_data(&Delete('a'), Modify('b', 'c')), Err(Error::DeltaDataModifyAfterDelete));
-    assert_eq!(combine_delta_data(&Delete('a'), Delete('b')),      Err(Error::DeltaDataDeletedMultipleTimes));
+    assert_eq!(combine_delta_data(Delete('a'), Create('a')),      Ok(None));
+    assert_eq!(combine_delta_data(Delete('a'), Create('b')),      Ok(Some(Modify('a', 'b'))));
+    assert_eq!(combine_delta_data(Delete('a'), Modify('b', 'c')), Err(Error::DeltaDataModifyAfterDelete));
+    assert_eq!(combine_delta_data(Delete('a'), Delete('b')),      Err(Error::DeltaDataDeletedMultipleTimes));
 }
 
 #[test]
 fn create_delta_undo_roundtrip() {
-    let check_undo = |delta1, delta2: DataDelta<char>| {
+    let check_undo = |delta1: DataDelta<char>, delta2: DataDelta<char>| {
         let undo = create_undo_delta(delta2.clone());
-        let combine_result = combine_delta_data(&delta1, delta2).unwrap().unwrap();
-        let undo_result = combine_delta_data(&combine_result, undo.0).unwrap().unwrap();
+        let combine_result = combine_delta_data(delta1.clone(), delta2).unwrap().unwrap();
+        let undo_result = combine_delta_data(combine_result, undo.0).unwrap().unwrap();
 
         assert_eq!(delta1, undo_result);
     };
@@ -59,9 +59,9 @@ fn create_delta_undo_roundtrip() {
 // Same as `create_delta_undo_roundtrip` but for deltas that produce No-op
 #[test]
 fn create_delta_undo_noop_roundtrip() {
-    let check_undo = |delta1, delta2: DataDelta<char>| {
+    let check_undo = |delta1: DataDelta<char>, delta2: DataDelta<char>| {
         let undo = create_undo_delta(delta2.clone());
-        let combine_result = combine_delta_data(&delta1, delta2).unwrap();
+        let combine_result = combine_delta_data(delta1.clone(), delta2).unwrap();
         assert!(combine_result.is_none());
         assert_eq!(delta1, undo.0);
     };

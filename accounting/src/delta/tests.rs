@@ -15,441 +15,292 @@
 
 use crate::{combine_data_with_delta, DataDelta, DeltaDataCollection};
 
-// None + Create('a') + Undo(Create('a')) = None
-#[test]
-fn none_create_undo() {
+use rstest::rstest;
+
+#[rstest]
+#[case(None, DataDelta::Create('a'))]
+#[case(Some('a'), DataDelta::Delete('a'))]
+#[case(Some('a'), DataDelta::Modify('a', 'b'))]
+fn data_delta_undo(#[case] origin_data: Option<char>, #[case] delta: DataDelta<char>) {
     let mut collection_with_delta = DeltaDataCollection::new();
-    let undo_create = collection_with_delta
-        .merge_delta_data_element(1, DataDelta::Create('a'))
-        .unwrap()
-        .unwrap();
+    let undo_create = collection_with_delta.merge_delta_data_element(1, delta).unwrap().unwrap();
 
     let mut collection_with_undo = DeltaDataCollection::new();
     collection_with_undo.undo_merge_delta_data_element(1, undo_create).unwrap();
 
-    let result = combine_data_with_delta(
-        None,
-        Some(collection_with_delta.data().iter().next().unwrap().1),
-    )
-    .unwrap();
-    assert_eq!(result, Some('a'));
-
-    let result = combine_data_with_delta(
-        result.as_ref(),
-        Some(collection_with_undo.data().iter().next().unwrap().1),
-    )
-    .unwrap();
-    assert_eq!(result, None);
-}
-
-// Some('a') + Delete('a') + Undo(Delete('a')) = Some('a')
-#[test]
-fn some_delete_undo() {
-    let initial_data = 'a';
-
-    let mut collection_with_delta = DeltaDataCollection::new();
-    let undo_delete = collection_with_delta
-        .merge_delta_data_element(1, DataDelta::Delete('a'))
-        .unwrap()
-        .unwrap();
-
-    let mut collection_with_undo = DeltaDataCollection::new();
-    collection_with_undo.undo_merge_delta_data_element(1, undo_delete).unwrap();
-
-    let result = combine_data_with_delta(
-        Some(&initial_data),
-        Some(collection_with_delta.data().iter().next().unwrap().1),
-    )
-    .unwrap();
-    assert_eq!(result, None);
-
-    let result = combine_data_with_delta(
-        result.as_ref(),
-        Some(collection_with_undo.data().iter().next().unwrap().1),
-    )
-    .unwrap();
-    assert_eq!(result, Some('a'));
-}
-
-// Some('a') + Modify'a', 'b' + Undo(Modify('b', 'a')) = Some('a')
-#[test]
-fn some_modify_undo() {
-    let initial_data = 'a';
-
-    let mut collection_with_modify = DeltaDataCollection::new();
-    let undo_modify = collection_with_modify
-        .merge_delta_data_element(1, DataDelta::Modify('a', 'b'))
-        .unwrap()
-        .unwrap();
-
-    let mut collection_with_undo = DeltaDataCollection::new();
-    collection_with_undo.undo_merge_delta_data_element(1, undo_modify).unwrap();
-
-    let result = combine_data_with_delta(
-        Some(&initial_data),
-        Some(collection_with_modify.data().iter().next().unwrap().1),
-    )
-    .unwrap();
-    assert_eq!(result, Some('b'));
-
-    let result = combine_data_with_delta(
-        result.as_ref(),
-        Some(collection_with_undo.data().iter().next().unwrap().1),
-    )
-    .unwrap();
-    assert_eq!(result, Some('a'));
-}
-
-#[test]
-fn none_create_delete() {
-    let collection_with_create =
-        DeltaDataCollection::from_iter([(1, DataDelta::Create('a'))].into_iter());
-
-    let collection_with_delete =
-        DeltaDataCollection::from_iter([(1, DataDelta::Delete('a'))].into_iter());
-
-    // None + Create('a') + Delete('a')  = None
+    // Data + Delta + Undo(Delta) = Data
     {
         let result = combine_data_with_delta(
-            None,
-            Some(collection_with_create.data().iter().next().unwrap().1),
+            origin_data.as_ref(),
+            Some(collection_with_delta.data().iter().next().unwrap().1),
         )
         .unwrap();
-        assert_eq!(result, Some('a'));
-
-        let result = combine_data_with_delta(
-            result.as_ref(),
-            Some(collection_with_delete.data().iter().next().unwrap().1),
-        )
-        .unwrap();
-        assert_eq!(result, None);
-    }
-
-    // None + (Create('a') + Delete('a'))  = None
-    {
-        let mut collection_with_create = collection_with_create;
-        let _ = collection_with_create.merge_delta_data(collection_with_delete).unwrap();
-        assert!(collection_with_create.data().is_empty());
-
-        let result: Option<char> = combine_data_with_delta(None, None).unwrap();
-        assert_eq!(result, None);
-    }
-}
-
-#[test]
-fn none_create_modify_delete() {
-    let collection_with_create =
-        DeltaDataCollection::from_iter([(1, DataDelta::Create('a'))].into_iter());
-
-    let collection_with_modify =
-        DeltaDataCollection::from_iter([(1, DataDelta::Modify('a', 'b'))].into_iter());
-
-    let collection_with_delete =
-        DeltaDataCollection::from_iter([(1, DataDelta::Delete('b'))].into_iter());
-
-    // None + Create('a') + Modify'a', 'b' + Delete('a')  = None
-    {
-        let result = combine_data_with_delta(
-            None,
-            Some(collection_with_create.data().iter().next().unwrap().1),
-        )
-        .unwrap();
-        assert_eq!(result, Some('a'));
-
-        let result = combine_data_with_delta(
-            result.as_ref(),
-            Some(collection_with_modify.data().iter().next().unwrap().1),
-        )
-        .unwrap();
-        assert_eq!(result, Some('b'));
-
-        let result = combine_data_with_delta(
-            result.as_ref(),
-            Some(collection_with_delete.data().iter().next().unwrap().1),
-        )
-        .unwrap();
-        assert_eq!(result, None);
-    }
-
-    // None + (Create('a') + Modify'a', 'b' + Delete('a'))  = None
-    {
-        let mut collection_with_create = collection_with_create.clone();
-        let _ = collection_with_create.merge_delta_data(collection_with_modify.clone()).unwrap();
-        let _ = collection_with_create.merge_delta_data(collection_with_delete.clone()).unwrap();
-        assert!(collection_with_create.data().is_empty());
-
-        let result: Option<char> = combine_data_with_delta(None, None).unwrap();
-        assert_eq!(result, None);
-    }
-
-    // None + (Create('a') + (Modify'a', 'b' + Delete('a')))  = None
-    {
-        let mut collection_with_create = collection_with_create;
-        let mut collection_with_modify = collection_with_modify;
-        let _ = collection_with_modify.merge_delta_data(collection_with_delete).unwrap();
-        let _ = collection_with_create.merge_delta_data(collection_with_modify).unwrap();
-        assert!(collection_with_create.data().is_empty());
-
-        let result: Option<char> = combine_data_with_delta(None, None).unwrap();
-        assert_eq!(result, None);
-    }
-}
-
-#[test]
-fn some_delete_create() {
-    let initial_data = 'a';
-
-    let collection_with_delete =
-        DeltaDataCollection::from_iter([(1, DataDelta::Delete('a'))].into_iter());
-
-    let collection_with_create =
-        DeltaDataCollection::from_iter([(1, DataDelta::Create('b'))].into_iter());
-
-    // Some('a') + Delete('a') + Create('b') = 'b'
-    {
-        let result = combine_data_with_delta(
-            Some(&initial_data),
-            Some(collection_with_delete.data().iter().next().unwrap().1),
-        )
-        .unwrap();
-        assert_eq!(result, None);
-
-        let result = combine_data_with_delta(
-            result.as_ref(),
-            Some(collection_with_create.data().iter().next().unwrap().1),
-        )
-        .unwrap();
-        assert_eq!(result, Some('b'));
-    }
-
-    // Some('a') + (Delete('a') + Create('b')) = 'b'
-    {
-        let mut collection_with_delete = collection_with_delete;
-        let _ = collection_with_delete.merge_delta_data(collection_with_create).unwrap();
-
-        let result = combine_data_with_delta(
-            Some(&initial_data),
-            Some(collection_with_delete.data().iter().next().unwrap().1),
-        )
-        .unwrap();
-        assert_eq!(result, Some('b'));
-    }
-}
-
-#[test]
-fn none_create_modify_undo() {
-    let collection_with_create =
-        DeltaDataCollection::from_iter([(1, DataDelta::Create('a'))].into_iter());
-
-    let mut collection_with_modify = DeltaDataCollection::new();
-    let undo_modify = collection_with_modify
-        .merge_delta_data_element(1, DataDelta::Modify('a', 'b'))
-        .unwrap()
-        .unwrap();
-
-    let mut collection_with_undo = DeltaDataCollection::new();
-    collection_with_undo.undo_merge_delta_data_element(1, undo_modify).unwrap();
-
-    // None + Create('a') + Modify'a', 'b' + Undo(Modify('b','a')) = 'a'
-    {
-        let result = combine_data_with_delta(
-            None,
-            Some(collection_with_create.data().iter().next().unwrap().1),
-        )
-        .unwrap();
-        assert_eq!(result, Some('a'));
-
-        let result = combine_data_with_delta(
-            result.as_ref(),
-            Some(collection_with_modify.data().iter().next().unwrap().1),
-        )
-        .unwrap();
-        assert_eq!(result, Some('b'));
 
         let result = combine_data_with_delta(
             result.as_ref(),
             Some(collection_with_undo.data().iter().next().unwrap().1),
         )
         .unwrap();
-        assert_eq!(result, Some('a'));
+        assert_eq!(result, origin_data);
     }
 
-    // None + ((Create('a') + Modify'a', 'b') + Undo(Modify('b','a'))) = 'a'
+    // Data + (Delta + Undo(Delta)) = Data + No-op = Data
     {
-        let mut collection_with_create = collection_with_create;
-        let _ = collection_with_create.merge_delta_data(collection_with_modify).unwrap();
-        let _ = collection_with_create.merge_delta_data(collection_with_undo).unwrap();
-
-        let result = combine_data_with_delta(
-            None,
-            Some(collection_with_create.data().iter().next().unwrap().1),
-        )
-        .unwrap();
-        assert_eq!(result, Some('a'));
+        let _ = collection_with_delta.merge_delta_data(collection_with_undo).unwrap();
+        assert!(collection_with_delta.data().is_empty());
     }
 }
 
-#[test]
-fn some_modify_delete_undo() {
-    let initial_data = 'a';
-
-    let collection_with_modify =
-        DeltaDataCollection::from_iter([(1, DataDelta::Modify('a', 'b'))].into_iter());
-
-    let mut collection_with_delete = DeltaDataCollection::new();
-    let undo_delete = collection_with_delete
-        .merge_delta_data_element(1, DataDelta::Delete('b'))
-        .unwrap()
-        .unwrap();
-
-    let mut collection_with_undo = DeltaDataCollection::new();
-    collection_with_undo.undo_merge_delta_data_element(1, undo_delete).unwrap();
-
-    // Some('a') + Modify'a', 'b' + Delete('b') + Undo(Delete('b')) = 'b'
+#[rstest]
+#[rustfmt::skip]
+#[case(None,      DataDelta::Create('a'),      DataDelta::Delete('a'),      None)]
+#[case(None,      DataDelta::Create('a'),      DataDelta::Modify('a', 'b'), Some('b'))]
+#[case(Some('a'), DataDelta::Modify('a', 'b'), DataDelta::Modify('b', 'c'), Some('c'))]
+#[case(Some('a'), DataDelta::Modify('a', 'b'), DataDelta::Delete('b'),      None)]
+#[case(Some('a'), DataDelta::Delete('a'),      DataDelta::Create('b'),      Some('b'))]
+fn data_delta_delta(
+    #[case] origin_data: Option<char>,
+    #[case] delta1: DataDelta<char>,
+    #[case] delta2: DataDelta<char>,
+    #[case] expected_data: Option<char>,
+) {
+    // Data + Delta + Delta = Data
     {
+        let collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
+        let collection2 = DeltaDataCollection::from_iter([(1, delta2.clone())]);
+
         let result = combine_data_with_delta(
-            Some(&initial_data),
-            Some(collection_with_modify.data().iter().next().unwrap().1),
+            origin_data.as_ref(),
+            Some(collection1.data().iter().next().unwrap().1),
         )
         .unwrap();
-        assert_eq!(result, Some('b'));
 
         let result = combine_data_with_delta(
             result.as_ref(),
-            Some(collection_with_delete.data().iter().next().unwrap().1),
+            Some(collection2.data().iter().next().unwrap().1),
         )
         .unwrap();
-        assert_eq!(result, None);
-
-        let result = combine_data_with_delta(
-            result.as_ref(),
-            Some(collection_with_undo.data().iter().next().unwrap().1),
-        )
-        .unwrap();
-        assert_eq!(result, Some('b'));
+        assert_eq!(result, expected_data);
     }
 
-    // Some('a') + ((Modify'a', 'b' + Delete('b')) + Undo(Delete('b'))) = 'b'
+    // Data + (Delta + Delta) = Data
     {
-        let mut collection_with_modify = collection_with_modify;
-        let _ = collection_with_modify.merge_delta_data(collection_with_delete).unwrap();
-        let _ = collection_with_modify.merge_delta_data(collection_with_undo).unwrap();
+        let mut collection1 = DeltaDataCollection::from_iter([(1, delta1)]);
+        let collection2 = DeltaDataCollection::from_iter([(1, delta2)]);
+
+        let _ = collection1.merge_delta_data(collection2).unwrap();
 
         let result = combine_data_with_delta(
-            Some(&initial_data),
-            Some(collection_with_modify.data().iter().next().unwrap().1),
+            origin_data.as_ref(),
+            Some(collection1.data().iter().next().unwrap().1),
         )
         .unwrap();
-        assert_eq!(result, Some('b'));
+        assert_eq!(result, expected_data);
     }
 }
 
-#[test]
-fn some_modify_modify_undo() {
-    let initial_data = 'a';
-
-    let collection_with_modify1 =
-        DeltaDataCollection::from_iter([(1, DataDelta::Modify('a', 'b'))].into_iter());
-
-    let mut collection_with_modify2 = DeltaDataCollection::new();
-    let undo_delete = collection_with_modify2
-        .merge_delta_data_element(1, DataDelta::Modify('b', 'c'))
-        .unwrap()
-        .unwrap();
-
-    let mut collection_with_undo = DeltaDataCollection::new();
-    collection_with_undo.undo_merge_delta_data_element(1, undo_delete).unwrap();
-
-    // Some('a') + Modify'a', 'b' + Modify('b', 'c') + Undo(Modify('c', 'b')) = 'b'
+#[rstest]
+#[rustfmt::skip]
+#[case(None,      DataDelta::Create('a'),      DataDelta::Modify('a', 'b'),  DataDelta::Delete('b'),      None)]
+#[case(None,      DataDelta::Create('a'),      DataDelta::Modify('a', 'b'),  DataDelta::Modify('b', 'c'), Some('c'))]
+#[case(None,      DataDelta::Create('a'),      DataDelta::Delete('a'),       DataDelta::Create('a'),      Some('a'))]
+#[case(Some('a'), DataDelta::Delete('a'),      DataDelta::Create('a'),       DataDelta::Delete('a'),      None)]
+#[case(Some('a'), DataDelta::Delete('a'),      DataDelta::Create('a'),       DataDelta::Modify('a', 'b'), Some('b'))]
+#[case(Some('a'), DataDelta::Modify('a', 'b'), DataDelta::Delete('a'),       DataDelta::Create('a'),      Some('b'))]
+#[case(Some('a'), DataDelta::Modify('a', 'b'), DataDelta::Modify('b', 'c'),  DataDelta::Delete('c'),      None)]
+#[case(Some('a'), DataDelta::Modify('a', 'b'), DataDelta::Modify('b', 'c'),  DataDelta::Modify('c', 'd'), Some('d'))]
+fn data_delta_delta_delta(
+    #[case] origin_data: Option<char>,
+    #[case] delta1: DataDelta<char>,
+    #[case] delta2: DataDelta<char>,
+    #[case] delta3: DataDelta<char>,
+    #[case] expected_data: Option<char>,
+) {
+    // Data + Delta + Delta + Delta = Data
     {
+        let collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
+        let collection2 = DeltaDataCollection::from_iter([(1, delta2.clone())]);
+        let collection3 = DeltaDataCollection::from_iter([(1, delta3.clone())]);
+
         let result = combine_data_with_delta(
-            Some(&initial_data),
-            Some(collection_with_modify1.data().iter().next().unwrap().1),
+            origin_data.as_ref(),
+            Some(collection1.data().iter().next().unwrap().1),
         )
         .unwrap();
-        assert_eq!(result, Some('b'));
 
         let result = combine_data_with_delta(
             result.as_ref(),
-            Some(collection_with_modify2.data().iter().next().unwrap().1),
+            Some(collection2.data().iter().next().unwrap().1),
         )
         .unwrap();
-        assert_eq!(result, Some('c'));
 
         let result = combine_data_with_delta(
             result.as_ref(),
-            Some(collection_with_undo.data().iter().next().unwrap().1),
+            Some(collection3.data().iter().next().unwrap().1),
         )
         .unwrap();
-        assert_eq!(result, Some('b'));
+        assert_eq!(result, expected_data);
     }
 
-    // Some('a') + ((Modify'a', 'b' + Modify('b', 'c')) + Undo(Modify('c', 'b'))) = 'b'
+    // Data + (Delta + Delta + Delta) = Data
     {
-        let mut collection_with_modify = collection_with_modify1;
-        let _ = collection_with_modify.merge_delta_data(collection_with_modify2).unwrap();
-        let _ = collection_with_modify.merge_delta_data(collection_with_undo).unwrap();
+        let mut collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
+        let collection2 = DeltaDataCollection::from_iter([(1, delta2.clone())]);
+        let collection3 = DeltaDataCollection::from_iter([(1, delta3.clone())]);
+
+        let _ = collection1.merge_delta_data(collection2).unwrap();
+        let _ = collection1.merge_delta_data(collection3).unwrap();
 
         let result = combine_data_with_delta(
-            Some(&initial_data),
-            Some(collection_with_modify.data().iter().next().unwrap().1),
+            origin_data.as_ref(),
+            Some(collection1.data().iter().next().unwrap().1),
         )
         .unwrap();
-        assert_eq!(result, Some('b'));
+        assert_eq!(result, expected_data);
+    }
+
+    // (Data + Delta) + (Delta + Delta) = Data
+    {
+        let collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
+        let mut collection2 = DeltaDataCollection::from_iter([(1, delta2.clone())]);
+        let collection3 = DeltaDataCollection::from_iter([(1, delta3.clone())]);
+
+        let result = combine_data_with_delta(
+            origin_data.as_ref(),
+            Some(collection1.data().iter().next().unwrap().1),
+        )
+        .unwrap();
+
+        let _ = collection2.merge_delta_data(collection3).unwrap();
+
+        let result = combine_data_with_delta(
+            result.as_ref(),
+            Some(collection2.data().iter().next().unwrap().1),
+        )
+        .unwrap();
+        assert_eq!(result, expected_data);
+    }
+
+    // Data + (Delta + (Delta + Delta)) = Data
+    {
+        let mut collection1 = DeltaDataCollection::from_iter([(1, delta1)]);
+        let mut collection2 = DeltaDataCollection::from_iter([(1, delta2)]);
+        let collection3 = DeltaDataCollection::from_iter([(1, delta3)]);
+
+        let _ = collection2.merge_delta_data(collection3).unwrap();
+        let _ = collection1.merge_delta_data(collection2).unwrap();
+
+        let result = combine_data_with_delta(
+            origin_data.as_ref(),
+            Some(collection1.data().iter().next().unwrap().1),
+        )
+        .unwrap();
+        assert_eq!(result, expected_data);
     }
 }
 
-#[test]
-fn some_delete_create_undo() {
-    let initial_data = 'a';
-
-    let collection_with_delete =
-        DeltaDataCollection::from_iter([(1, DataDelta::Delete('a'))].into_iter());
-
-    let mut collection_with_create = DeltaDataCollection::new();
-    let undo_create = collection_with_create
-        .merge_delta_data_element(1, DataDelta::Create('b'))
-        .unwrap()
-        .unwrap();
-
-    let mut collection_with_undo = DeltaDataCollection::new();
-    collection_with_undo.undo_merge_delta_data_element(1, undo_create).unwrap();
-
-    // Some('a') + Delete('a') + Create('b') + Undo(Create('b')) = None
+#[rstest]
+#[rustfmt::skip]
+#[case(None,      DataDelta::Create('a'),      DataDelta::Modify('a', 'b'), /* Undo(Modify), */ Some('a'))]
+#[case(None,      DataDelta::Create('a'),      DataDelta::Delete('a'),      /* Undo(Delete), */ Some('a'))]
+#[case(Some('a'), DataDelta::Delete('a'),      DataDelta::Create('a'),      /* Undo(Create), */ None)]
+#[case(Some('a'), DataDelta::Modify('a', 'b'), DataDelta::Delete('a'),      /* Undo(Delete), */ Some('b'))]
+#[case(Some('a'), DataDelta::Modify('a', 'b'), DataDelta::Modify('b', 'c'), /* Undo(Modify), */ Some('b'))]
+fn data_delta_delta_undo(
+    #[case] origin_data: Option<char>,
+    #[case] delta1: DataDelta<char>,
+    #[case] delta2: DataDelta<char>,
+    #[case] expected_data: Option<char>,
+) {
+    // Data + Delta + Delta + Undo = Data
     {
+
+        let collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
+        let mut collection2= DeltaDataCollection::new();
+        let undo= collection2.merge_delta_data_element(1, delta2.clone()).unwrap().unwrap();
+        let mut collection3= DeltaDataCollection::new();
+        collection3.undo_merge_delta_data_element(1, undo).unwrap();
+
+
         let result = combine_data_with_delta(
-            Some(&initial_data),
-            Some(collection_with_delete.data().iter().next().unwrap().1),
+            origin_data.as_ref(),
+            Some(collection1.data().iter().next().unwrap().1),
         )
         .unwrap();
-        assert_eq!(result, None);
 
         let result = combine_data_with_delta(
             result.as_ref(),
-            Some(collection_with_create.data().iter().next().unwrap().1),
+            Some(collection2.data().iter().next().unwrap().1),
         )
         .unwrap();
-        assert_eq!(result, Some('b'));
 
         let result = combine_data_with_delta(
             result.as_ref(),
-            Some(collection_with_undo.data().iter().next().unwrap().1),
+            Some(collection3.data().iter().next().unwrap().1),
         )
         .unwrap();
-        assert_eq!(result, None);
+        assert_eq!(result, expected_data);
     }
 
-    // Some('a') + ((Delete('a') + Create('b')) + Undo(Create('b'))) = None
+    // Data + (Delta + Delta + Undo) = Data
     {
-        let mut collection_with_modify = collection_with_delete;
-        let _ = collection_with_modify.merge_delta_data(collection_with_create).unwrap();
-        let _ = collection_with_modify.merge_delta_data(collection_with_undo).unwrap();
+        let mut collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
+        let mut collection2= DeltaDataCollection::new();
+        let undo= collection2.merge_delta_data_element(1, delta2.clone()).unwrap().unwrap();
+        let mut collection3= DeltaDataCollection::new();
+        collection3.undo_merge_delta_data_element(1, undo).unwrap();
+
+        let _ = collection1.merge_delta_data(collection2).unwrap();
+        let _ = collection1.merge_delta_data(collection3).unwrap();
 
         let result = combine_data_with_delta(
-            Some(&initial_data),
-            Some(collection_with_modify.data().iter().next().unwrap().1),
+            origin_data.as_ref(),
+            Some(collection1.data().iter().next().unwrap().1),
         )
         .unwrap();
-        assert_eq!(result, None);
+        assert_eq!(result, expected_data);
+    }
+
+    // (Data + Delta) + (Delta + Delta) = Data
+    {
+        let collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
+        let mut collection2= DeltaDataCollection::new();
+        let undo= collection2.merge_delta_data_element(1, delta2.clone()).unwrap().unwrap();
+        let mut collection3= DeltaDataCollection::new();
+        collection3.undo_merge_delta_data_element(1, undo).unwrap();
+
+        let result = combine_data_with_delta(
+            origin_data.as_ref(),
+            Some(collection1.data().iter().next().unwrap().1),
+        )
+        .unwrap();
+
+        let _ = collection2.merge_delta_data(collection3).unwrap();
+
+        let result = combine_data_with_delta(
+            result.as_ref(),
+            Some(collection2.data().iter().next().unwrap().1),
+        )
+        .unwrap();
+        assert_eq!(result, expected_data);
+    }
+
+    // Data + (Delta + (Delta + Delta)) = Data
+    {
+        let mut collection1 = DeltaDataCollection::from_iter([(1, delta1)]);
+        let mut collection2= DeltaDataCollection::new();
+        let undo= collection2.merge_delta_data_element(1, delta2).unwrap().unwrap();
+        let mut collection3= DeltaDataCollection::new();
+        collection3.undo_merge_delta_data_element(1, undo).unwrap();
+
+        let _ = collection2.merge_delta_data(collection3).unwrap();
+        let _ = collection1.merge_delta_data(collection2).unwrap();
+
+        let result = combine_data_with_delta(
+            origin_data.as_ref(),
+            Some(collection1.data().iter().next().unwrap().1),
+        )
+        .unwrap();
+        assert_eq!(result, expected_data);
     }
 }

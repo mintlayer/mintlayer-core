@@ -16,7 +16,7 @@
 pub mod undo;
 use self::undo::*;
 
-use std::collections::BTreeMap;
+use std::collections::{btree_map::Entry, BTreeMap};
 
 use serialization::{Decode, Encode};
 use utils::ensure;
@@ -24,6 +24,8 @@ use utils::ensure;
 use crate::error::Error;
 
 /// The outcome of combining two deltas for a given key upon the map that contains it.
+/// Every combine can produce either a new delta, that should be insert in the collection or a No-op
+/// in which case a delta is removed from the collection.
 enum DeltaMapOp<T> {
     /// Insert a specific value (for example, to write a Create or Modify operation)
     Insert(DeltaMapElement<T>),
@@ -31,16 +33,18 @@ enum DeltaMapOp<T> {
     Erase,
 }
 
+/// Basic primitive that represent a difference introduced to the data.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub enum DataDelta<T> {
-    // Stores new value
+    /// Stores new value
     Create(T),
-    // Stores prev and new values
+    /// Stores previous and new values
     Modify(T, T),
-    // Stores value to restore
+    /// Stores value to restore
     Delete(T),
 }
 
+/// Elements inside `DeltaDataCollection` can store either a delta or an undo.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub enum DeltaMapElement<T> {
     Delta(DataDelta<T>),
@@ -56,12 +60,15 @@ impl<T> DeltaMapElement<T> {
     }
 }
 
+/// `GetDataResult` is represented by 3 states instead of typical 2 states, because it is
+/// important to distinguish the case when data was explicitly deleted from the case when the data is just not there.
 pub enum GetDataResult<T> {
     Present(T),
     Deleted,
     Missing,
 }
-
+/// `DeltaDataCollection` is a container for deltas. It encapsulates all the logic of merging deltas and
+/// undoing them.
 #[must_use]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub struct DeltaDataCollection<K, T> {
@@ -126,9 +133,9 @@ impl<K: Ord + Copy, T: Clone + PartialEq> DeltaDataCollection<K, T> {
             DeltaMapElement::DeltaUndo(_) => None,
         };
 
-        let op = match self.data.get(&key) {
-            Some(current) => combine_delta_elements(current, other)?,
-            None => DeltaMapOp::Insert(other),
+        let op = match self.data.entry(key) {
+            Entry::Occupied(e) => combine_delta_elements(e.remove(), other)?,
+            Entry::Vacant(_) => DeltaMapOp::Insert(other),
         };
 
         match op {
@@ -187,7 +194,7 @@ fn create_undo_delta<T: Clone>(delta: DataDelta<T>) -> DataDeltaUndo<T> {
 }
 
 fn combine_delta_elements<T: Clone + PartialEq>(
-    lhs: &DeltaMapElement<T>,
+    lhs: DeltaMapElement<T>,
     rhs: DeltaMapElement<T>,
 ) -> Result<DeltaMapOp<T>, Error> {
     match (lhs, rhs) {
@@ -207,7 +214,7 @@ fn combine_delta_elements<T: Clone + PartialEq>(
             Err(Error::DeltaOverUndoApplied)
         }
         (DeltaMapElement::DeltaUndo(u1), DeltaMapElement::DeltaUndo(u2)) => {
-            match combine_delta_data(&u1.0, u2.0).map(|d| d.map(|d| DataDeltaUndo(d)))? {
+            match combine_delta_data(u1.0, u2.0).map(|d| d.map(|d| DataDeltaUndo(d)))? {
                 Some(d) => Ok(DeltaMapOp::Insert(DeltaMapElement::DeltaUndo(d))),
                 None => Ok(DeltaMapOp::Erase),
             }
@@ -217,39 +224,43 @@ fn combine_delta_elements<T: Clone + PartialEq>(
 
 /// Given two deltas, combine them into one delta, this is the basic delta data composability function
 fn combine_delta_data<T: Clone + PartialEq>(
-    lhs: &DataDelta<T>,
+    lhs: DataDelta<T>,
     rhs: DataDelta<T>,
 ) -> Result<Option<DataDelta<T>>, Error> {
     match (lhs, rhs) {
         (DataDelta::Create(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
         (DataDelta::Create(lhs), DataDelta::Modify(from, to)) => {
-            ensure!(lhs == &from, Error::DeltaDataMismatch);
+            ensure!(lhs == from, Error::DeltaDataMismatch);
             Ok(Some(DataDelta::Create(to)))
         }
         (DataDelta::Create(lhs), DataDelta::Delete(rhs)) => {
-            // if lhs had a creation, and we DataDeltaUndo::Delete, this means nothing is left and there's a net zero to return
-            ensure!(lhs == &rhs, Error::DeltaDataMismatch);
+            // if lhs was a creation, and rhs is deletion, this means nothing is left and there's a net zero to return
+            ensure!(lhs == rhs, Error::DeltaDataMismatch);
             Ok(None)
         }
         (DataDelta::Modify(_, _), DataDelta::Create(_)) => {
             Err(Error::DeltaDataCreatedMultipleTimes)
         }
         (DataDelta::Modify(lhs1, lhs2), DataDelta::Modify(rhs1, rhs2)) => {
-            if lhs1 == &rhs2 && lhs2 == &rhs1 {
+            // if modifications has no effect on the data (e.g. 1->2 + 2->1) then the result is No-op
+            if lhs1 == rhs2 && lhs2 == rhs1 {
                 Ok(None)
             } else {
-                Ok(Some(DataDelta::Modify(lhs1.clone(), rhs2)))
+                ensure!(lhs1 != rhs2 && lhs2 == rhs1, Error::DeltaDataMismatch);
+                Ok(Some(DataDelta::Modify(lhs1, rhs2)))
             }
         }
         (DataDelta::Modify(from, to), DataDelta::Delete(rhs)) => {
-            ensure!(to == &rhs, Error::DeltaDataMismatch);
-            Ok(Some(DataDelta::Delete(from.clone())))
+            ensure!(to == rhs, Error::DeltaDataMismatch);
+            Ok(Some(DataDelta::Delete(from)))
         }
         (DataDelta::Delete(lhs), DataDelta::Create(rhs)) => {
-            if lhs == &rhs {
+            // if lhs was a deletion, and rhs a recreation the same data,
+            // this means it has no effect and can be represented as No-op
+            if lhs == rhs {
                 Ok(None)
             } else {
-                Ok(Some(DataDelta::Modify(lhs.clone(), rhs)))
+                Ok(Some(DataDelta::Modify(lhs, rhs)))
             }
         }
         (DataDelta::Delete(_), DataDelta::Modify(_, _)) => Err(Error::DeltaDataModifyAfterDelete),
