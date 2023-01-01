@@ -5,7 +5,8 @@ if you fix a bug feel free to create a pr to merge your fix, if you want to add 
 
 ## Setup
 
-Follow [these instructions](https://www.rust-lang.org/tools/install) to install rust which is required to build Mintlayer.
+* Install `cmake`
+* Follow [these instructions](https://www.rust-lang.org/tools/install) to install Rust.
 
 ## MIPS
 
@@ -16,10 +17,10 @@ Mintlayer accepts improvement proposals in [this repo](https://github.com/mintla
 The first thing to do, once you know what you want to do, is to open an issue. If you think you'd found a bug open an issue so it can be discussed with the wider
 community. If you think you've got a snazzy new idea for a feature, open an issue and we'll discuss it as a community; maybe someone else is already working on it...
 
-Whatever it is you're working on you'll want to create a branch for your bug fix or feature from staging
+Whatever it is you're working on you'll want to create a branch for your bug fix or feature from master
  
  
-    git checkout staging
+    git checkout master
     git checkout -b my_new_branch
    
    

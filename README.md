@@ -16,4 +16,7 @@ Non-security related bugs should be opened as [issues](https://github.com/mintla
 [See this guide](https://github.com/mintlayer/mintlayer-core/blob/master/CONTRIBUTING.md)
 
 ## Building
-Install rust (instructions in the contributing guide), use `cargo build` to build and `cargo test` to run the tests.
+
+* Install `cmake`
+* Install Rust (instructions in the contributing guide)
+* Use `cargo build` to build, and `cargo test` to run the test.
