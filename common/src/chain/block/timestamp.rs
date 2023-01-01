@@ -42,7 +42,7 @@ impl BlockTimestamp {
     }
 
     pub fn as_duration_since_epoch(&self) -> Duration {
-        Duration::from_secs(self.timestamp as u64)
+        Duration::from_secs(self.timestamp)
     }
 
     pub fn as_int_seconds(&self) -> BlockTimestampInternalType {
