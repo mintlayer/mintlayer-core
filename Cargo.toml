@@ -12,19 +12,20 @@ edition = "2021"
 [workspace]
 members = [
   "accounting",                   # Accounting and balances abstractions
-  "common",                       # Everything else, until it's moved to another crate.
   "blockprod",                    # Block production with whatever consensus algorithm.
-  "crypto",                       # Cryptographic primitives and their interfaces.
-  "consensus",                    # Consensus related logic.
   "chainstate",                   # Code on chainstate of blocks and transactions.
   "chainstate/test-suite",        # Tests for the chainstate, separated to make use of the chainstate test framework.
-  "script",                       # Bitcoin script and its interfaces.
+  "common",                       # Everything else, until it's moved to another crate.
+  "consensus",                    # Consensus related logic.
+  "crypto",                       # Cryptographic primitives and their interfaces.
   "logging",                      # Logging engine and its interfaces.
   "mempool",                      # Mempool interface and implementation.
+  "node",                         # Node executable.
   "p2p",                          # P2p communication interfaces and protocols.
   "p2p/backend-test-suite",       # P2p backend agnostic tests.
   "pos_accounting",               # PoS accounting and balances abstractions
   "rpc",                          # Rpc abstraction and implementation.
+  "script",                       # Bitcoin script and its interfaces.
   "serialization",                # Full featured serialization interfaces and implementations.
   "serialization/core",           # Serialization core tools.
   "serialization/tagged",         # Serialization for direct/tagged encoding style.
@@ -35,46 +36,45 @@ members = [
   "storage/inmemory",             # In-memory storage backend implementation.
   "storage/lmdb",                 # LMDB-based persistent storage backend implementation.
   "subsystem",                    # Utilities for working with concurrent subsystems.
-  "node",                         # Node executable.
-  "wallet",                       # Wallet executable.
-  "utils",                        # Various utilities.
-  "utxo",                         # Utxo and related utilities (cache, undo, etc.).
   "test",                         # Integration tests.
   "test-utils",                   # Various utilities for tests.
+  "utils",                        # Various utilities.
+  "utxo",                         # Utxo and related utilities (cache, undo, etc.).
+  "wallet",                       # Wallet executable.
 ]
 
 default-members = [
+  "chainstate",
   "common",
   "crypto",
-  "chainstate",
-  "script",
   "logging",
   "mempool",
+  "node",
   "p2p",
   "rpc",
+  "script",
   "serialization",
   "storage",
   "subsystem",
-  "node",
-  "wallet",
+#  "test",
   "utils",
   "utxo",
-#  "test",
+  "wallet",
 ]
 
 [dependencies]
-common = { path = "common"}
-storage = { path = "storage"}
-chainstate-storage = { path = "chainstate/storage"}
-crypto = { path = "crypto"}
 chainstate = { path = "chainstate"}
+chainstate-storage = { path = "chainstate/storage"}
 chainstate-types = { path = "chainstate/types"}
-script = { path = "script"}
+common = { path = "common"}
+crypto = { path = "crypto"}
 logging = { path = "logging"}
 mempool = { path = "mempool"}
 p2p = { path = "p2p"}
 rpc = { path = "rpc"}
+script = { path = "script"}
 serialization = { path = "serialization"}
+storage = { path = "storage"}
 utxo = { path = "utxo"}
 
 [profile.release]
