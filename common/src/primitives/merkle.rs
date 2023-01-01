@@ -46,7 +46,7 @@ pub enum MerkleTreeFormError {
 }
 
 fn merkletree_get_pad_data(elements: &[H256]) -> Vec<H256> {
-    let orig_size = elements.len() as usize;
+    let orig_size = elements.len();
     let pow2_size = next_pow2(orig_size);
 
     assert!(pow2_size >= orig_size);

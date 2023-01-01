@@ -267,9 +267,8 @@ fn token_issue_test(#[case] seed: Seed) {
 
         // URI is too long
         {
-            let uri_len_range_to_use = (tf.chainstate.get_chain_config().token_max_uri_len()
-                as usize
-                + 1)..u16::MAX as usize;
+            let uri_len_range_to_use =
+                (tf.chainstate.get_chain_config().token_max_uri_len() + 1)..u16::MAX as usize;
 
             let result = tf
                 .make_block_builder()

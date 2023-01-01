@@ -170,7 +170,7 @@ mod test {
             let chain_config = Arc::new(create_unit_test_config());
 
             let current_time = Arc::new(std::sync::atomic::AtomicU64::new(
-                chain_config.genesis_block().timestamp().as_int_seconds() as u64,
+                chain_config.genesis_block().timestamp().as_int_seconds(),
             ));
 
             let chainstate_current_time = Arc::clone(&current_time);
