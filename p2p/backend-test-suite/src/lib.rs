@@ -55,8 +55,7 @@ where
     std::iter::empty()
         .chain(connect::tests::<A, S>())
         .chain(block_announcement::tests::<A, S>())
-        // TODO: FIXME:
-        //.chain(sync::tests::<A, S>())
+        .chain(sync::tests::<A, S>())
         .chain(ban::tests::<A, S>())
         .collect()
 }

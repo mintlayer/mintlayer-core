@@ -44,15 +44,15 @@ use p2p_test_utils::TestBlockInfo;
 
 tests![
     local_and_remote_in_sync,
-    remote_ahead_by_7_blocks,
-    local_ahead_by_12_blocks,
-    remote_local_diff_chains_local_higher,
-    remote_local_diff_chains_remote_higher,
-    two_remote_nodes_different_chains,
-    two_remote_nodes_same_chains,
-    two_remote_nodes_same_chains_new_blocks,
-    connect_disconnect_resyncing,
-    disconnect_unresponsive_peer,
+    // remote_ahead_by_7_blocks,
+    // local_ahead_by_12_blocks,
+    // remote_local_diff_chains_local_higher,
+    // remote_local_diff_chains_remote_higher,
+    // two_remote_nodes_different_chains,
+    // two_remote_nodes_same_chains,
+    // two_remote_nodes_same_chains_new_blocks,
+    // connect_disconnect_resyncing,
+    // disconnect_unresponsive_peer,
 ];
 
 async fn local_and_remote_in_sync<A, S>()

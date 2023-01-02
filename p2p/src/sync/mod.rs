@@ -29,10 +29,7 @@ use std::{
 use tokio::sync::{mpsc, oneshot};
 use void::Void;
 
-use chainstate::{
-    ban_score::BanScore, chainstate_interface, BlockError, ChainstateError, Locator,
-    PropertyQueryError,
-};
+use chainstate::{ban_score::BanScore, chainstate_interface, BlockError, ChainstateError, Locator};
 use common::{
     chain::{
         block::{Block, BlockHeader},
@@ -353,15 +350,10 @@ where
             return Ok(());
         }
 
-        let block_timestamp =
-            match self.chainstate_handle.call(|c| c.get_best_block_header()).await? {
-                // The genesis block has no header.
-                Err(ChainstateError::FailedToReadProperty(
-                    PropertyQueryError::GenesisHeaderRequested,
-                )) => return Ok(()),
-                res => res,
-            }?
-            .timestamp()
+        let block_timestamp = self
+            .chainstate_handle
+            .call(|c| c.get_best_block_timestamp())
+            .await??
             .as_duration_since_epoch();
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -631,6 +623,5 @@ where
     }
 }
 
-// TODO: FIXME:
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;

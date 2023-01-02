@@ -21,7 +21,7 @@ use crate::detail::calculate_median_time_past;
 use crate::detail::tx_verification_strategy::TransactionVerificationStrategy;
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, GenBlockIndex};
-use common::chain::block::BlockReward;
+use common::chain::block::{timestamp::BlockTimestamp, BlockReward};
 use common::chain::config::ChainConfig;
 use common::chain::tokens::OutputValue;
 use common::chain::tokens::TokenAuxiliaryData;
@@ -180,6 +180,14 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .get_best_block_header()
             .map_err(ChainstateError::FailedToReadProperty)?
             .expect("Best block header could not be found"))
+    }
+
+    fn get_best_block_timestamp(&self) -> Result<BlockTimestamp, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_best_block_timestamp()
+            .map_err(ChainstateError::FailedToReadProperty)
     }
 
     fn get_best_block_index(&self) -> Result<GenBlockIndex, ChainstateError> {
