@@ -1026,9 +1026,9 @@ where
     assert!(!mgr1.is_initial_block_download());
 }
 
-// // connect two nodes, they are in sync so no blocks are downloaded
-// // then disconnect them, add more blocks to remote chains and reconnect the nodes
-// // verify that local node downloads the blocks and after that they are in sync
+// connect two nodes, they are in sync so no blocks are downloaded
+// then disconnect them, add more blocks to remote chains and reconnect the nodes
+// verify that local node downloads the blocks and after that they are in sync
 async fn connect_disconnect_resyncing<A, S>()
 where
     A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
@@ -1202,6 +1202,8 @@ where
         e => panic!("Unexpected peer manager event: {e:?}"),
     }
 }
+
+// TODO: FIXME: Add the test for the is_initial_block_download function.
 
 async fn make_sync_manager<T>(
     transport: T::Transport,
