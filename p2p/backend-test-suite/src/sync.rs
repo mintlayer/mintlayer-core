@@ -29,7 +29,7 @@ use common::{
 
 use p2p::testing_utils::TestTransportMaker;
 use p2p::{
-    config::{MdnsConfig, NodeType, P2pConfig},
+    config::P2pConfig,
     error::P2pError,
     event::{PeerManagerEvent, SyncControlEvent},
     message::{BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response},
@@ -52,8 +52,6 @@ tests![
     two_remote_nodes_same_chains,
     two_remote_nodes_same_chains_new_blocks,
     connect_disconnect_resyncing,
-    // FIXME
-    //disconnect_unresponsive_peer,
 ];
 
 async fn local_and_remote_in_sync<A, S>()
@@ -1154,54 +1152,6 @@ where
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(!mgr1.is_initial_block_download());
-}
-
-// Check that the peer that ignores requests is disconnected.
-async fn disconnect_unresponsive_peer<A, T>()
-where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
-    T: NetworkingService + 'static + Debug,
-    T::ConnectivityHandle: ConnectivityService<T>,
-    T::SyncingMessagingHandle: SyncingMessagingService<T>,
-{
-    let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (chainstate1, chainstate2) = init_chainstate_2(Arc::clone(&config), 8).await;
-    let p2p_config = P2pConfig {
-        bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
-        ban_threshold: 100.into(),
-        ban_duration: Default::default(),
-        outbound_connection_timeout: 10.into(),
-        mdns_config: MdnsConfig::Disabled.into(),
-        node_type: NodeType::Full.into(),
-        max_tip_age: Default::default(),
-    };
-    let (mut mgr1, mut conn1, _sync1, mut pm1) = make_sync_manager::<T>(
-        A::make_transport(),
-        A::make_address(),
-        chainstate1,
-        p2p_config,
-    )
-    .await;
-    let (_mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(
-        A::make_transport(),
-        A::make_address(),
-        chainstate2,
-        P2pConfig::default(),
-    )
-    .await;
-
-    connect_services::<T>(&mut conn1, &mut conn2).await;
-    let peer2_id = *conn2.peer_id();
-
-    tokio::spawn(async move {
-        mgr1.register_peer(peer2_id).await.unwrap();
-        mgr1.run().await.unwrap();
-    });
-
-    match pm1.recv().await.unwrap() {
-        PeerManagerEvent::Disconnect(peer_id, _) => assert_eq!(peer_id, peer2_id),
-        e => panic!("Unexpected peer manager event: {e:?}"),
-    }
 }
 
 async fn make_sync_manager<T>(
