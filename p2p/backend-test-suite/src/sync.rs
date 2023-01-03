@@ -50,8 +50,7 @@ tests![
     remote_local_diff_chains_remote_higher,
     two_remote_nodes_different_chains,
     two_remote_nodes_same_chains,
-    // FIXME
-    // two_remote_nodes_same_chains_new_blocks,
+    two_remote_nodes_same_chains_new_blocks,
     connect_disconnect_resyncing,
     // FIXME
     //disconnect_unresponsive_peer,
@@ -889,29 +888,26 @@ where
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
 {
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (handle1, handle2, handle3) = init_chainstate_3(Arc::clone(&config), 8).await;
-    let mgr1_handle = handle1.clone();
-    let mgr2_handle = handle2.clone();
-    let mgr3_handle = handle3.clone();
+    let (mgr1_handle, mgr2_handle, mgr3_handle) = init_chainstate_3(Arc::clone(&config), 8).await;
 
     let (mut mgr1, mut conn1, _, _) = make_sync_manager::<S>(
         A::make_transport(),
         A::make_address(),
-        handle1,
+        mgr1_handle.clone(),
         P2pConfig::default(),
     )
     .await;
     let (mut mgr2, mut conn2, _, _) = make_sync_manager::<S>(
         A::make_transport(),
         A::make_address(),
-        handle2,
+        mgr2_handle.clone(),
         P2pConfig::default(),
     )
     .await;
     let (mut mgr3, mut conn3, _, _) = make_sync_manager::<S>(
         A::make_transport(),
         A::make_address(),
-        handle3,
+        mgr3_handle.clone(),
         P2pConfig::default(),
     )
     .await;
@@ -926,6 +922,13 @@ where
     p2p_test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
     p2p_test_utils::import_blocks(&mgr3_handle, blocks).await;
 
+    let additional_blocks = p2p_test_utils::create_n_blocks(
+        Arc::clone(&config),
+        TestBlockInfo::from_tip(&mgr2_handle, &config).await,
+        10,
+    );
+    let last_block_id = additional_blocks.last().unwrap().get_id();
+
     // connect remote peers to local peer
     connect_services::<S>(&mut conn1, &mut conn2).await;
     connect_services::<S>(&mut conn1, &mut conn3).await;
@@ -937,19 +940,19 @@ where
 
     let (tx, mut rx) = mpsc::unbounded_channel();
     let mut gethdr_received = HashSet::new();
-    let mut blocks = vec![];
 
     let handle = tokio::spawn(async move {
         loop {
             advance_mgr_state(&mut mgr1).await.unwrap();
 
-            if !mgr1.is_initial_block_download() {
+            let best_block_id = mgr1_handle.call(|c| c.get_best_block_id()).await.unwrap().unwrap();
+            if best_block_id == last_block_id {
                 break;
             }
         }
 
         tx.send(()).unwrap();
-        mgr1
+        (mgr1, mgr1_handle)
     });
 
     loop {
@@ -979,18 +982,12 @@ where
                 }
 
                 if gethdr_received.insert(dest_peer_id) {
-                    if blocks.is_empty() {
-                        blocks = p2p_test_utils::create_n_blocks(
-                            Arc::clone(&config),
-                            TestBlockInfo::from_tip(&mgr2_handle, &config).await,
-                            10,
-                        );
-                    }
-
                     if dest_peer_id == conn2.peer_id() {
-                        p2p_test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
+                        p2p_test_utils::import_blocks(&mgr2_handle, additional_blocks.clone())
+                            .await;
                     } else {
-                        p2p_test_utils::import_blocks(&mgr3_handle, blocks.clone()).await;
+                        p2p_test_utils::import_blocks(&mgr3_handle, additional_blocks.clone())
+                            .await;
                     }
                 }
             }
@@ -1022,7 +1019,7 @@ where
             msg => panic!("invalid message received: {:?}", msg),
         }
     }
-    let mut mgr1 = handle.await.unwrap();
+    let (mut mgr1, mgr1_handle) = handle.await.unwrap();
     mgr1.update_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
