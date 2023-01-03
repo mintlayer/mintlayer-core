@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// FIXME: revisit errors
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum Error {
     #[error("Arithmetic error; conversion to unsigned failed")]

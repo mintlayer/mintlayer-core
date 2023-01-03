@@ -60,7 +60,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
             .pool_data
             .merge_delta_data_element(
                 pool_id,
-                DataDelta::Create(PoolData::new(decommission_key, pledge_amount)),
+                DataDelta::Modify(None, Some(PoolData::new(decommission_key, pledge_amount))),
             )?
             .ok_or(Error::FailedToCreateDeltaUndo)?;
 
@@ -86,7 +86,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         let data_undo = self
             .data
             .pool_data
-            .merge_delta_data_element(pool_id, DataDelta::Delete(last_data))?
+            .merge_delta_data_element(pool_id, DataDelta::Modify(Some(last_data), None))?
             .ok_or(Error::FailedToCreateDeltaUndo)?;
 
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
@@ -117,7 +117,10 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
         let data_undo = self
             .data
             .delegation_data
-            .merge_delta_data_element(delegation_id, DataDelta::Create(delegation_data))?
+            .merge_delta_data_element(
+                delegation_id,
+                DataDelta::Modify(None, Some(delegation_data)),
+            )?
             .ok_or(Error::FailedToCreateDeltaUndo)?;
 
         Ok((

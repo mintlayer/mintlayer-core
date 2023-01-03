@@ -15,9 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use accounting::{
-    DataDelta, DataDeltaUndo, DeltaAmountCollection, DeltaDataCollection, DeltaMapElement,
-};
+use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection, DeltaMapElement};
 use common::primitives::{signed_amount::SignedAmount, Amount, H256};
 use crypto::key::{KeyKind, PrivateKey};
 use rstest::rstest;
@@ -55,7 +53,10 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
         pool_data: DeltaDataCollection::from_iter(
             [(
                 new_pool_id(1),
-                DataDelta::Create(PoolData::new(pub_key1.clone(), Amount::from_atoms(100))),
+                DataDelta::Modify(
+                    None,
+                    Some(PoolData::new(pub_key1.clone(), Amount::from_atoms(100))),
+                ),
             )]
             .into_iter(),
         ),
@@ -83,7 +84,10 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
         delegation_data: DeltaDataCollection::from_iter(
             [(
                 new_delegation_id(1),
-                DataDelta::Create(DelegationData::new(new_pool_id(1), pub_key1.clone())),
+                DataDelta::Modify(
+                    None,
+                    Some(DelegationData::new(new_pool_id(1), pub_key1.clone())),
+                ),
             )]
             .into_iter(),
         ),
@@ -97,13 +101,16 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
                 (
                     new_pool_id(1),
                     DataDelta::Modify(
-                        PoolData::new(pub_key1.clone(), Amount::from_atoms(100)),
-                        PoolData::new(pub_key1.clone(), Amount::from_atoms(300)),
+                        Some(PoolData::new(pub_key1.clone(), Amount::from_atoms(100))),
+                        Some(PoolData::new(pub_key1.clone(), Amount::from_atoms(300))),
                     ),
                 ),
                 (
                     new_pool_id(10),
-                    DataDelta::Create(PoolData::new(pub_key2.clone(), Amount::from_atoms(100))),
+                    DataDelta::Modify(
+                        None,
+                        Some(PoolData::new(pub_key2.clone(), Amount::from_atoms(100))),
+                    ),
                 ),
             ]
             .into_iter(),
@@ -132,7 +139,10 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
         delegation_data: DeltaDataCollection::from_iter(
             [(
                 new_delegation_id(1),
-                DataDelta::Delete(DelegationData::new(new_pool_id(1), pub_key1.clone())),
+                DataDelta::Modify(
+                    Some(DelegationData::new(new_pool_id(1), pub_key1.clone())),
+                    None,
+                ),
             )]
             .into_iter(),
         ),
@@ -145,11 +155,14 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
             [
                 (
                     new_pool_id(1),
-                    DataDelta::Create(PoolData::new(pub_key1.clone(), Amount::from_atoms(300))),
+                    DataDelta::Modify(
+                        None,
+                        Some(PoolData::new(pub_key1.clone(), Amount::from_atoms(300))),
+                    ),
                 ),
                 (
                     new_pool_id(10),
-                    DataDelta::Create(PoolData::new(pub_key2, Amount::from_atoms(100))),
+                    DataDelta::Modify(None, Some(PoolData::new(pub_key2, Amount::from_atoms(100)))),
                 ),
             ]
             .into_iter(),
@@ -173,7 +186,9 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
             ]
             .into_iter(),
         ),
-        delegation_data: DeltaDataCollection::new(),
+        delegation_data: DeltaDataCollection::from_iter(
+            [(new_delegation_id(1), DataDelta::Modify(None, None))].into_iter(),
+        ),
     };
 
     let undo_data = delta1.merge_with_delta(delta2.consume()).unwrap();
@@ -181,13 +196,19 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
 
     let expected_data_after_undo = PoSAccountingDeltaData {
         pool_data: DeltaDataCollection::from_iter(
-            [(
-                new_pool_id(1),
-                DeltaMapElement::Delta(DataDelta::Create(PoolData::new(
-                    pub_key1.clone(),
-                    Amount::from_atoms(100),
-                ))),
-            )]
+            [
+                (
+                    new_pool_id(1),
+                    DeltaMapElement::Delta(DataDelta::Modify(
+                        None,
+                        Some(PoolData::new(pub_key1.clone(), Amount::from_atoms(100))),
+                    )),
+                ),
+                (
+                    new_pool_id(10),
+                    DeltaMapElement::Delta(DataDelta::Modify(None, None)),
+                ),
+            ]
             .into_iter(),
         ),
         pool_balances: DeltaAmountCollection::from_iter(
@@ -214,10 +235,10 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
         delegation_data: DeltaDataCollection::from_iter(
             [(
                 new_delegation_id(1),
-                DeltaMapElement::DeltaUndo(DataDeltaUndo(DataDelta::Create(DelegationData::new(
-                    new_pool_id(1),
-                    pub_key1,
-                )))),
+                DeltaMapElement::Delta(DataDelta::Modify(
+                    None,
+                    Some(DelegationData::new(new_pool_id(1), pub_key1)),
+                )),
             )]
             .into_iter(),
         ),
@@ -268,13 +289,16 @@ fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
                     (
                         new_pool_id(1),
                         DataDelta::Modify(
-                            PoolData::new(pub_key1.clone(), Amount::from_atoms(100)),
-                            PoolData::new(pub_key1.clone(), Amount::from_atoms(300)),
+                            Some(PoolData::new(pub_key1.clone(), Amount::from_atoms(100))),
+                            Some(PoolData::new(pub_key1.clone(), Amount::from_atoms(300))),
                         ),
                     ),
                     (
                         new_pool_id(10),
-                        DataDelta::Create(PoolData::new(pub_key2.clone(), Amount::from_atoms(100))),
+                        DataDelta::Modify(
+                            None,
+                            Some(PoolData::new(pub_key2.clone(), Amount::from_atoms(100))),
+                        ),
                     ),
                 ]
                 .into_iter(),
@@ -303,7 +327,10 @@ fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
             delegation_data: DeltaDataCollection::from_iter(
                 [(
                     new_delegation_id(1),
-                    DataDelta::Delete(DelegationData::new(new_pool_id(1), pub_key1.clone())),
+                    DataDelta::Modify(
+                        Some(DelegationData::new(new_pool_id(1), pub_key1.clone())),
+                        None,
+                    ),
                 )]
                 .into_iter(),
             ),

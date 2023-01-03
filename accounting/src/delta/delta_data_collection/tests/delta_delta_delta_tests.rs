@@ -17,66 +17,55 @@ use super::*;
 
 use rstest::rstest;
 
-use DataDelta::{Create, Delete, Modify};
-
-type ThreeCollections = (
-    DeltaDataCollection<i32, char>,
-    DeltaDataCollection<i32, char>,
-    DeltaDataCollection<i32, char>,
-);
-
-fn make_expected_collection(delta: DataDelta<char>) -> DeltaDataCollection<i32, char> {
-    DeltaDataCollection::from_iter([(1, delta)])
-}
-
-fn make_three_collections(
-    delta1: DataDelta<char>,
-    delta2: DataDelta<char>,
-    delta3: DataDelta<char>,
-) -> ThreeCollections {
-    (
-        DeltaDataCollection::from_iter([(1, delta1)]),
-        DeltaDataCollection::from_iter([(1, delta2)]),
-        DeltaDataCollection::from_iter([(1, delta3)]),
-    )
-}
+use DataDelta::Modify;
 
 #[rstest]
-#[case(
-    make_expected_collection(DataDelta::Create('c')),
-    make_three_collections(Create('a'), Modify('a', 'b'), Modify('b', 'c'))
-)]
-#[case(
-    DeltaDataCollection::new(),
-    make_three_collections(Create('a'), Modify('a', 'b'), Delete('b'))
-)]
-#[case(
-    make_expected_collection(DataDelta::Create('b')),
-    make_three_collections(Create('a'), Delete('a'), Create('b'))
-)]
-#[case(
-    make_expected_collection(DataDelta::Delete('a')),
-    make_three_collections(Modify('a', 'b'), Modify('b', 'c'), Delete('c'))
-)]
+#[rustfmt::skip]
+#[case(Modify(None,      Some('a')), Modify(Some('a'), Some('b')), Modify(Some('b'), Some('c')), Modify(None, Some('c')))]
+#[case(Modify(None,      Some('a')), Modify(Some('a'), Some('b')), Modify(Some('b'), None),      Modify(None, None))]
+#[case(Modify(None,      Some('a')), Modify(Some('a'), None),      Modify(None,      Some('b')), Modify(None, Some('b')))]
+#[case(Modify(Some('a'), None),      Modify(None,      Some('b')), Modify(Some('b'), None),      Modify(Some('a'), None))]
+#[case(Modify(Some('a'), None),      Modify(None,      Some('b')), Modify(Some('b'), Some('c')), Modify(Some('a'), Some('c')))]
+#[case(Modify(Some('a'), Some('b')), Modify(Some('b'), Some('c')), Modify(Some('c'), None),      Modify(Some('a'), None))]
+#[case(Modify(Some('a'), Some('b')), Modify(Some('b'), None),      Modify(None, Some('c')),      Modify(Some('a'), Some('c')))]
 fn delta_delta_delta_associativity(
-    #[case] expected_collection: DeltaDataCollection<i32, char>,
-    #[case] collections: ThreeCollections,
+    #[case] delta1: DataDelta<char>,
+    #[case] delta2: DataDelta<char>,
+    #[case] delta3: DataDelta<char>,
+    #[case] expected_delta: DataDelta<char>,
 ) {
     {
-        // Deleta + Delta + Delta = Delta
-        let (mut collection1, collection2, collection3) = collections.clone();
+        // (Delta + Delta) + Delta = Delta
+        // every delta goes into separate collection
+        let mut collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
+        let collection2 = DeltaDataCollection::from_iter([(1, delta2.clone())]);
+        let collection3 = DeltaDataCollection::from_iter([(1, delta3.clone())]);
         let _ = collection1.merge_delta_data(collection2).unwrap();
         let _ = collection1.merge_delta_data(collection3).unwrap();
 
-        assert_eq!(collection1, expected_collection);
+        assert_eq!(collection1, DeltaDataCollection::from_iter([(1, expected_delta.clone())]));
     }
 
     {
-        // Deleta + (Delta + Delta) = Delta
-        let (mut collection1, mut collection2, collection3) = collections;
+        // Delta + (Delta + Delta) = Delta
+        // every delta goes into separate collection
+        let mut collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
+        let mut collection2 = DeltaDataCollection::from_iter([(1, delta2.clone())]);
+        let collection3 = DeltaDataCollection::from_iter([(1, delta3.clone())]);
         let _ = collection2.merge_delta_data(collection3).unwrap();
         let _ = collection1.merge_delta_data(collection2).unwrap();
 
-        assert_eq!(collection1, expected_collection);
+        assert_eq!(collection1, DeltaDataCollection::from_iter([(1, expected_delta.clone())]));
+    }
+
+    {
+        // (Delta + Delta) + Delta = Delta
+        // every delta is applied to the same collection
+        let mut collection = DeltaDataCollection::new();
+        let _ = collection.merge_delta_data_element(1, delta1).unwrap();
+        let _ = collection.merge_delta_data_element(1, delta2).unwrap();
+        let _ = collection.merge_delta_data_element(1, delta3).unwrap();
+
+        assert_eq!(collection, DeltaDataCollection::from_iter([(1, expected_delta)]));
     }
 }

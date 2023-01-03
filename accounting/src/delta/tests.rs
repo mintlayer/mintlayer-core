@@ -13,14 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{combine_data_with_delta, DataDelta, DeltaDataCollection};
+use crate::{combine_data_with_delta, DataDelta, DataDelta::Modify, DeltaDataCollection};
 
 use rstest::rstest;
 
 #[rstest]
-#[case(None, DataDelta::Create('a'))]
-#[case(Some('a'), DataDelta::Delete('a'))]
-#[case(Some('a'), DataDelta::Modify('a', 'b'))]
+#[rustfmt::skip]
+#[case(None,      Modify(None, Some('a')))]
+#[case(Some('a'), Modify(Some('a'), None))]
+#[case(Some('a'), Modify(Some('a'), Some('b')))]
 fn data_delta_undo(#[case] origin_data: Option<char>, #[case] delta: DataDelta<char>) {
     let mut collection_with_delta = DeltaDataCollection::new();
     let undo_create = collection_with_delta.merge_delta_data_element(1, delta).unwrap().unwrap();
@@ -28,7 +29,7 @@ fn data_delta_undo(#[case] origin_data: Option<char>, #[case] delta: DataDelta<c
     let mut collection_with_undo = DeltaDataCollection::new();
     collection_with_undo.undo_merge_delta_data_element(1, undo_create).unwrap();
 
-    // Data + Delta + Undo(Delta) = Data
+    // (Data + Delta) + Undo(Delta) = Data
     {
         let result = combine_data_with_delta(
             origin_data.as_ref(),
@@ -47,24 +48,29 @@ fn data_delta_undo(#[case] origin_data: Option<char>, #[case] delta: DataDelta<c
     // Data + (Delta + Undo(Delta)) = Data + No-op = Data
     {
         let _ = collection_with_delta.merge_delta_data(collection_with_undo).unwrap();
-        assert!(collection_with_delta.data().is_empty());
+        let result = combine_data_with_delta(
+            origin_data.as_ref(),
+            Some(collection_with_delta.data().iter().next().unwrap().1),
+        )
+        .unwrap();
+        assert_eq!(result, origin_data);
     }
 }
 
 #[rstest]
 #[rustfmt::skip]
-#[case(None,      DataDelta::Create('a'),      DataDelta::Delete('a'),      None)]
-#[case(None,      DataDelta::Create('a'),      DataDelta::Modify('a', 'b'), Some('b'))]
-#[case(Some('a'), DataDelta::Modify('a', 'b'), DataDelta::Modify('b', 'c'), Some('c'))]
-#[case(Some('a'), DataDelta::Modify('a', 'b'), DataDelta::Delete('b'),      None)]
-#[case(Some('a'), DataDelta::Delete('a'),      DataDelta::Create('b'),      Some('b'))]
+#[case(None,      Modify(None, Some('a')),      Modify(Some('a'), None),      None)]
+#[case(None,      Modify(None, Some('a')),      Modify(Some('a'), Some('b')), Some('b'))]
+#[case(Some('a'), Modify(Some('a'), Some('b')), Modify(Some('b'), Some('c')), Some('c'))]
+#[case(Some('a'), Modify(Some('a'), Some('b')), Modify(Some('b'), None),      None)]
+#[case(Some('a'), Modify(Some('a'), None),      Modify(None, Some('b')),      Some('b'))]
 fn data_delta_delta(
     #[case] origin_data: Option<char>,
     #[case] delta1: DataDelta<char>,
     #[case] delta2: DataDelta<char>,
     #[case] expected_data: Option<char>,
 ) {
-    // Data + Delta + Delta = Data
+    // (Data + Delta) + Delta = Data
     {
         let collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
         let collection2 = DeltaDataCollection::from_iter([(1, delta2.clone())]);
@@ -101,14 +107,14 @@ fn data_delta_delta(
 
 #[rstest]
 #[rustfmt::skip]
-#[case(None,      DataDelta::Create('a'),      DataDelta::Modify('a', 'b'),  DataDelta::Delete('b'),      None)]
-#[case(None,      DataDelta::Create('a'),      DataDelta::Modify('a', 'b'),  DataDelta::Modify('b', 'c'), Some('c'))]
-#[case(None,      DataDelta::Create('a'),      DataDelta::Delete('a'),       DataDelta::Create('a'),      Some('a'))]
-#[case(Some('a'), DataDelta::Delete('a'),      DataDelta::Create('a'),       DataDelta::Delete('a'),      None)]
-#[case(Some('a'), DataDelta::Delete('a'),      DataDelta::Create('a'),       DataDelta::Modify('a', 'b'), Some('b'))]
-#[case(Some('a'), DataDelta::Modify('a', 'b'), DataDelta::Delete('a'),       DataDelta::Create('a'),      Some('b'))]
-#[case(Some('a'), DataDelta::Modify('a', 'b'), DataDelta::Modify('b', 'c'),  DataDelta::Delete('c'),      None)]
-#[case(Some('a'), DataDelta::Modify('a', 'b'), DataDelta::Modify('b', 'c'),  DataDelta::Modify('c', 'd'), Some('d'))]
+#[case(None,      Modify(None, Some('a')),      Modify(Some('a'), Some('b')),  Modify(Some('b'), None),      None)]
+#[case(None,      Modify(None, Some('a')),      Modify(Some('a'), Some('b')),  Modify(Some('b'), Some('c')), Some('c'))]
+#[case(None,      Modify(None, Some('a')),      Modify(Some('a'), None),       Modify(None, Some('a')),      Some('a'))]
+#[case(Some('a'), Modify(Some('a'), None),      Modify(None, Some('a')),       Modify(Some('a'), None),      None)]
+#[case(Some('a'), Modify(Some('a'), None),      Modify(None, Some('a')),       Modify(Some('a'), Some('b')), Some('b'))]
+#[case(Some('a'), Modify(Some('a'), Some('b')), Modify(Some('b'), None),       Modify(None, Some('a')),      Some('a'))]
+#[case(Some('a'), Modify(Some('a'), Some('b')), Modify(Some('b'), Some('c')),  Modify(Some('c'), None),      None)]
+#[case(Some('a'), Modify(Some('a'), Some('b')), Modify(Some('b'), Some('c')),  Modify(Some('c'), Some('d')), Some('d'))]
 fn data_delta_delta_delta(
     #[case] origin_data: Option<char>,
     #[case] delta1: DataDelta<char>,
@@ -116,7 +122,7 @@ fn data_delta_delta_delta(
     #[case] delta3: DataDelta<char>,
     #[case] expected_data: Option<char>,
 ) {
-    // Data + Delta + Delta + Delta = Data
+    // ((Data + Delta) + Delta) + Delta = Data
     {
         let collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
         let collection2 = DeltaDataCollection::from_iter([(1, delta2.clone())]);
@@ -142,7 +148,7 @@ fn data_delta_delta_delta(
         assert_eq!(result, expected_data);
     }
 
-    // Data + (Delta + Delta + Delta) = Data
+    // Data + ((Delta + Delta) + Delta) = Data
     {
         let mut collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
         let collection2 = DeltaDataCollection::from_iter([(1, delta2.clone())]);
@@ -201,18 +207,18 @@ fn data_delta_delta_delta(
 
 #[rstest]
 #[rustfmt::skip]
-#[case(None,      DataDelta::Create('a'),      DataDelta::Modify('a', 'b'), /* Undo(Modify), */ Some('a'))]
-#[case(None,      DataDelta::Create('a'),      DataDelta::Delete('a'),      /* Undo(Delete), */ Some('a'))]
-#[case(Some('a'), DataDelta::Delete('a'),      DataDelta::Create('a'),      /* Undo(Create), */ None)]
-#[case(Some('a'), DataDelta::Modify('a', 'b'), DataDelta::Delete('a'),      /* Undo(Delete), */ Some('b'))]
-#[case(Some('a'), DataDelta::Modify('a', 'b'), DataDelta::Modify('b', 'c'), /* Undo(Modify), */ Some('b'))]
+#[case(None,      Modify(None,      Some('a')), Modify(Some('a'), Some('b')), /* Undo, */ Some('a'))]
+#[case(None,      Modify(None,      Some('a')), Modify(Some('a'), None),      /* Undo, */ Some('a'))]
+#[case(Some('a'), Modify(Some('a'), None),      Modify(None,      Some('a')), /* Undo, */ None)]
+#[case(Some('a'), Modify(Some('a'), Some('b')), Modify(Some('b'), None),      /* Undo, */ Some('b'))]
+#[case(Some('a'), Modify(Some('a'), Some('b')), Modify(Some('b'), Some('c')), /* Undo, */ Some('b'))]
 fn data_delta_delta_undo(
     #[case] origin_data: Option<char>,
     #[case] delta1: DataDelta<char>,
     #[case] delta2: DataDelta<char>,
     #[case] expected_data: Option<char>,
 ) {
-    // Data + Delta + Delta + Undo = Data
+    // ((Data + Delta) + Delta) + Undo = Data
     {
 
         let collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
@@ -242,7 +248,7 @@ fn data_delta_delta_undo(
         assert_eq!(result, expected_data);
     }
 
-    // Data + (Delta + Delta + Undo) = Data
+    // Data + ((Delta + Delta) + Undo) = Data
     {
         let mut collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
         let mut collection2= DeltaDataCollection::new();

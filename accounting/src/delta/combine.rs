@@ -22,22 +22,36 @@ use crate::{
 
 /// Combine data with an element of `DeltaDataCollection`.
 /// An element can be either a Delta or a result of delta undo.
-pub fn combine_data_with_delta<T: Clone>(
+pub fn combine_data_with_delta<T: Clone + PartialEq>(
     lhs: Option<&T>,
     rhs: Option<&DeltaMapElement<T>>,
 ) -> Result<Option<T>, Error> {
     match (lhs, rhs) {
         (None, None) => Ok(None),
         (None, Some(d)) => match d.get_data_delta() {
-            DataDelta::Create(d) => Ok(Some(d.clone())),
-            DataDelta::Modify(_, _) => Err(Error::ModifyNonexistingData),
-            DataDelta::Delete(_) => Err(Error::RemoveNonexistingData),
+            DataDelta::Mismatch => Err(Error::DeltaDataMismatch),
+            DataDelta::Modify(prev, new) => match (prev, new) {
+                (None, None) => Ok(None),
+                (None, Some(d)) => Ok(Some(d.clone())),
+                (Some(_), None) => Err(Error::DeltaDataMismatch),
+                (Some(_), Some(_)) => Err(Error::DeltaDataMismatch),
+            },
         },
         (Some(p), None) => Ok(Some(p.clone())),
-        (Some(_), Some(d)) => match d.get_data_delta() {
-            DataDelta::Create(_) => Err(Error::DataCreatedMultipleTimes),
-            DataDelta::Modify(_, d) => Ok(Some(d.clone())),
-            DataDelta::Delete(_) => Ok(None),
+        (Some(data), Some(delta)) => match delta.get_data_delta() {
+            DataDelta::Mismatch => Err(Error::DeltaDataMismatch),
+            DataDelta::Modify(prev, new) => match (prev, new) {
+                (None, None) => Err(Error::DeltaDataMismatch),
+                (None, Some(_)) => Err(Error::DeltaDataMismatch),
+                (Some(old), None) => {
+                    utils::ensure!(data == old, Error::DeltaDataMismatch);
+                    Ok(None)
+                }
+                (Some(old), Some(new)) => {
+                    utils::ensure!(data == old, Error::DeltaDataMismatch);
+                    Ok(Some(new.clone()))
+                }
+            },
         },
     }
 }
@@ -69,59 +83,73 @@ pub fn combine_amount_delta(
 
 #[cfg(test)]
 pub mod test {
-    use crate::DataDeltaUndo;
+    use crate::{DataDelta::Modify, DataDeltaUndo};
 
     use super::*;
     use common::primitives::{amount::UnsignedIntType, signed_amount::SignedIntType};
 
-    #[test]
-    #[rustfmt::skip]
-    fn test_combine_data_with_delta() {
-        let delta_create = Some(DeltaMapElement::Delta(DataDelta::Create('b')));
-        let delta_modify = Some(DeltaMapElement::Delta(DataDelta::Modify('a', 'b')));
-        let delta_delete= Some(DeltaMapElement::Delta(DataDelta::Delete('b')));
+    use rstest::rstest;
 
-        assert_eq!(combine_data_with_delta::<i32>(None, None),                  Ok(None));
-        assert_eq!(combine_data_with_delta(None,        delta_create.as_ref()), Ok(Some('b')));
-        assert_eq!(combine_data_with_delta(None,        delta_modify.as_ref()), Err(Error::ModifyNonexistingData));
-        assert_eq!(combine_data_with_delta(None,        delta_delete.as_ref()), Err(Error::RemoveNonexistingData));
-        assert_eq!(combine_data_with_delta(Some(&'a'),  None),                  Ok(Some('a')));
-        assert_eq!(combine_data_with_delta(Some(&'a'),  delta_create.as_ref()), Err(Error::DataCreatedMultipleTimes));
-        assert_eq!(combine_data_with_delta(Some(&'a'),  delta_modify.as_ref()), Ok(Some('b')));
-        assert_eq!(combine_data_with_delta(Some(&'a'),  delta_delete.as_ref()), Ok(None));
+    #[rstest]
+    #[rustfmt::skip]
+    #[case(None,      None,                               Ok(None))]
+    #[case(None,      Some(Modify(None, Some('a'))),      Ok(Some('a')))]
+    #[case(None,      Some(Modify(Some('a'), None)),      Err(Error::DeltaDataMismatch))]
+    #[case(None,      Some(Modify(Some('a'), Some('b'))), Err(Error::DeltaDataMismatch))]
+    #[case(Some('a'), None,                               Ok(Some('a')))]
+    #[case(Some('a'), Some(Modify(None, Some('a'))),      Err(Error::DeltaDataMismatch))]
+    #[case(Some('a'), Some(Modify(Some('a'), Some('a'))), Ok(Some('a')))]
+    #[case(Some('a'), Some(Modify(Some('a'), Some('b'))), Ok(Some('b')))]
+    #[case(Some('a'), Some(Modify(Some('b'), Some('c'))), Err(Error::DeltaDataMismatch))]
+    #[case(Some('a'), Some(Modify(Some('a'), None)),      Ok(None))]
+    #[case(Some('a'), Some(Modify(Some('b'), None)),      Err(Error::DeltaDataMismatch))]
+    fn test_combine_data_with_delta(
+        #[case] data: Option<char>,
+        #[case] delta: Option<DataDelta<char>>,
+        #[case] expected_result: Result<Option<char>, Error>,
+    ) {
+        assert_eq!(
+            combine_data_with_delta(
+                data.as_ref(),
+                delta.as_ref().map(|d| DeltaMapElement::Delta(d.clone())).as_ref()
+            ),
+            expected_result
+        );
+
+        assert_eq!(
+            combine_data_with_delta(
+                data.as_ref(),
+                delta.map(|d| DeltaMapElement::DeltaUndo(DataDeltaUndo(d))).as_ref()
+            ),
+            expected_result
+        );
     }
 
-    #[test]
+    #[rstest]
     #[rustfmt::skip]
-    fn test_combine_data_with_undo() {
-        let undo_delete = Some(DeltaMapElement::DeltaUndo(DataDeltaUndo(DataDelta::Create('b'))));
-        let undo_modify = Some(DeltaMapElement::DeltaUndo(DataDeltaUndo(DataDelta::Modify('a', 'b'))));
-        let undo_create= Some(DeltaMapElement::DeltaUndo(DataDeltaUndo(DataDelta::Delete('b'))));
-
-        assert_eq!(combine_data_with_delta::<i32>(None, None),                 Ok(None));
-        assert_eq!(combine_data_with_delta(None,        undo_delete.as_ref()), Ok(Some('b')));
-        assert_eq!(combine_data_with_delta(None,        undo_modify.as_ref()), Err(Error::ModifyNonexistingData));
-        assert_eq!(combine_data_with_delta(None,        undo_create.as_ref()), Err(Error::RemoveNonexistingData));
-        assert_eq!(combine_data_with_delta(Some(&'a'),  None),                 Ok(Some('a')));
-        assert_eq!(combine_data_with_delta(Some(&'a'),  undo_delete.as_ref()), Err(Error::DataCreatedMultipleTimes));
-        assert_eq!(combine_data_with_delta(Some(&'a'),  undo_modify.as_ref()), Ok(Some('b')));
-        assert_eq!(combine_data_with_delta(Some(&'a'),  undo_create.as_ref()), Ok(None));
-    }
-
-    #[test]
-    #[rustfmt::skip]
-    fn test_combine_amount_delta() {
-        let amount = |v| Some(Amount::from_atoms(v));
-        let s_amount = |v| Some(SignedAmount::from_atoms(v));
-
-        assert_eq!(combine_amount_delta(&None,      &None),         Ok(None));
-        assert_eq!(combine_amount_delta(&None,      &s_amount(1)),  Ok(amount(1)));
-        assert_eq!(combine_amount_delta(&amount(1), &None),         Ok(amount(1)));
-        assert_eq!(combine_amount_delta(&amount(1), &s_amount(1)),  Ok(amount(2)));
-
-        assert_eq!(combine_amount_delta(&None,                                           &s_amount(-1)), Err(Error::ArithmeticErrorToUnsignedFailed));
-        assert_eq!(combine_amount_delta(&amount(1),                                      &s_amount(-2)), Err(Error::ArithmeticErrorSumToUnsignedFailed));
-        assert_eq!(combine_amount_delta(&amount(UnsignedIntType::MAX),                   &s_amount(1)),  Err(Error::ArithmeticErrorToSignedFailed));
-        assert_eq!(combine_amount_delta(&amount(SignedIntType::MAX.try_into().unwrap()), &s_amount(1)),  Err(Error::ArithmeticErrorDeltaAdditionFailed));
+    #[case(None,    None,     Ok(None))]
+    #[case(None,    Some(1),  Ok(Some(Amount::from_atoms(1))))]
+    #[case(Some(1), None,     Ok(Some(Amount::from_atoms(1))))]
+    #[case(Some(2), Some(1),  Ok(Some(Amount::from_atoms(3))))]
+    #[case(Some(3), Some(-1), Ok(Some(Amount::from_atoms(2))))]
+    #[case(None,                       Some(-1),                 Err(Error::ArithmeticErrorToUnsignedFailed))]
+    #[case(Some(1),                    Some(SignedIntType::MIN), Err(Error::ArithmeticErrorSumToUnsignedFailed))]
+    #[case(Some(1),                    Some(SignedIntType::MAX), Err(Error::ArithmeticErrorDeltaAdditionFailed))]
+    #[case(Some(UnsignedIntType::MIN), Some(-1),                 Err(Error::ArithmeticErrorSumToUnsignedFailed))]
+    #[case(Some(UnsignedIntType::MAX), Some(1),                  Err(Error::ArithmeticErrorToSignedFailed))]
+    #[case(Some(1),                    Some(SignedIntType::MAX), Err(Error::ArithmeticErrorDeltaAdditionFailed))]
+    #[case(Some(SignedIntType::MAX.try_into().unwrap()), Some(1), Err(Error::ArithmeticErrorDeltaAdditionFailed))]
+    fn test_combine_amount_delta(
+        #[case] amount: Option<UnsignedIntType>,
+        #[case] delta: Option<SignedIntType>,
+        #[case] expected_result: Result<Option<Amount>, Error>,
+    ) {
+        assert_eq!(
+            combine_amount_delta(
+                &amount.map(Amount::from_atoms),
+                &delta.map(SignedAmount::from_atoms)
+            ),
+            expected_result
+        );
     }
 }

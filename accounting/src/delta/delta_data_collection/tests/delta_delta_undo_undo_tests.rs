@@ -17,6 +17,8 @@ use super::*;
 
 use rstest::rstest;
 
+use DataDelta::Modify;
+
 type FourCollections = (
     DeltaDataCollection<i32, char>,
     DeltaDataCollection<i32, char>,
@@ -25,17 +27,24 @@ type FourCollections = (
 );
 
 #[rstest]
-#[case(make_collections_with_undo(DataDelta::Create('a'), DataDelta::Delete('a')))]
-#[case(make_collections_with_undo(DataDelta::Create('a'), DataDelta::Modify('a', 'b')))]
-#[case(make_collections_with_undo(DataDelta::Modify('a', 'b'), DataDelta::Modify('b', 'c')))]
-#[case(make_collections_with_undo(DataDelta::Modify('a', 'b'), DataDelta::Delete('b')))]
-#[case(make_collections_with_undo(DataDelta::Delete('a'), DataDelta::Create('b')))]
-fn delta_delta_undo_undo_associativity(#[case] collections: FourCollections) {
-    let expected_collection = DeltaDataCollection::new();
+#[rustfmt::skip]
+#[case(Modify(None,      Some('a')), Modify(Some('a'), None),      Modify(None,      None))]
+#[case(Modify(None,      Some('a')), Modify(Some('a'), Some('b')), Modify(None,      None))]
+#[case(Modify(Some('a'), Some('b')), Modify(Some('b'), Some('c')), Modify(Some('a'), Some('a')))]
+#[case(Modify(Some('a'), Some('b')), Modify(Some('b'), None),      Modify(Some('a'), Some('a')))]
+#[case(Modify(Some('a'), None),      Modify(None,      Some('b')), Modify(Some('a'), Some('a')))]
+fn delta_delta_undo_undo_associativity(
+    #[case] delta1: DataDelta<char>,
+    #[case] delta2: DataDelta<char>,
+    #[case] expected_delta: DataDelta<char>,
+) {
+    let expected_collection = DeltaDataCollection::from_iter([(1, expected_delta)]);
 
     {
-        // Delta1 + Delta2 + Undo1 + Undo2 = No-op
-        let (mut collection1, collection2, collection3, collection4) = collections.clone();
+        // ((Delta1 + Delta2) + Undo1) + Undo2 = No-op
+        // every delta goes into separate collection
+        let (mut collection1, collection2, collection3, collection4) =
+            make_collections_with_undo(delta1.clone(), delta2.clone());
         let _ = collection1.merge_delta_data(collection2).unwrap();
         let _ = collection1.merge_delta_data(collection3).unwrap();
         let _ = collection1.merge_delta_data(collection4).unwrap();
@@ -45,7 +54,9 @@ fn delta_delta_undo_undo_associativity(#[case] collections: FourCollections) {
 
     {
         // (Delta1 + Delta2) + (Undo1 + Undo2) = No-op
-        let (mut collection1, collection2, mut collection3, collection4) = collections.clone();
+        // every delta goes into separate collection
+        let (mut collection1, collection2, mut collection3, collection4) =
+            make_collections_with_undo(delta1.clone(), delta2.clone());
         let _ = collection1.merge_delta_data(collection2).unwrap();
         let _ = collection3.merge_delta_data(collection4).unwrap();
         let _ = collection1.merge_delta_data(collection3).unwrap();
@@ -54,8 +65,10 @@ fn delta_delta_undo_undo_associativity(#[case] collections: FourCollections) {
     }
 
     {
-        // Delta1 + (Delta2 + Undo1 + Undo2) = No-op
-        let (mut collection1, mut collection2, collection3, collection4) = collections.clone();
+        // Delta1 + ((Delta2 + Undo1) + Undo2) = No-op
+        // every delta goes into separate collection
+        let (mut collection1, mut collection2, collection3, collection4) =
+            make_collections_with_undo(delta1.clone(), delta2.clone());
         let _ = collection2.merge_delta_data(collection3).unwrap();
         let _ = collection2.merge_delta_data(collection4).unwrap();
         let _ = collection1.merge_delta_data(collection2).unwrap();
@@ -65,12 +78,25 @@ fn delta_delta_undo_undo_associativity(#[case] collections: FourCollections) {
 
     {
         // Delta1 + (Delta2 + (Undo1 + Undo2)) = No-op
-        let (mut collection1, mut collection2, mut collection3, collection4) = collections;
+        let (mut collection1, mut collection2, mut collection3, collection4) =
+            make_collections_with_undo(delta1.clone(), delta2.clone());
         let _ = collection3.merge_delta_data(collection4).unwrap();
         let _ = collection2.merge_delta_data(collection3).unwrap();
         let _ = collection1.merge_delta_data(collection2).unwrap();
 
         assert_eq!(collection1, expected_collection);
+    }
+
+    {
+        // ((Delta1 + Delta2) + Undo1) + Undo2 = No-op
+        // every delta is applied to the same collection
+        let mut collection = DeltaDataCollection::new();
+        let undo1 = collection.merge_delta_data_element(1, delta1).unwrap().unwrap();
+        let undo2 = collection.merge_delta_data_element(1, delta2).unwrap().unwrap();
+        collection.undo_merge_delta_data_element(1, undo2).unwrap();
+        collection.undo_merge_delta_data_element(1, undo1).unwrap();
+
+        assert_eq!(collection, expected_collection);
     }
 }
 
