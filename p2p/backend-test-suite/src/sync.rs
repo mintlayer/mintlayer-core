@@ -49,8 +49,7 @@ tests![
     remote_local_diff_chains_local_higher,
     remote_local_diff_chains_remote_higher,
     two_remote_nodes_different_chains,
-    // FIXME
-    // two_remote_nodes_same_chains,
+    two_remote_nodes_same_chains,
     // FIXME
     // two_remote_nodes_same_chains_new_blocks,
     connect_disconnect_resyncing,
@@ -758,7 +757,7 @@ where
     let (mut mgr1, mut conn1, _, _) = make_sync_manager::<S>(
         A::make_transport(),
         A::make_address(),
-        handle1,
+        handle1.clone(),
         P2pConfig::default(),
     )
     .await;
@@ -783,6 +782,7 @@ where
         TestBlockInfo::from_tip(&mgr2_handle, &config).await,
         32,
     );
+    let last_block_id = blocks.last().unwrap().get_id();
 
     p2p_test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
     p2p_test_utils::import_blocks(&mgr3_handle, blocks).await;
@@ -808,7 +808,8 @@ where
         loop {
             advance_mgr_state(&mut mgr1).await.unwrap();
 
-            if !mgr1.is_initial_block_download() {
+            let best_block_id = handle1.call(|c| c.get_best_block_id()).await.unwrap().unwrap();
+            if best_block_id == last_block_id {
                 break;
             }
         }
@@ -1205,8 +1206,6 @@ where
         e => panic!("Unexpected peer manager event: {e:?}"),
     }
 }
-
-// TODO: FIXME: Add the test for the is_initial_block_download function.
 
 async fn make_sync_manager<T>(
     transport: T::Transport,
