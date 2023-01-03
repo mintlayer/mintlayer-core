@@ -15,7 +15,7 @@
 
 use std::ops::{Deref, DerefMut};
 
-use super::p2p_interface::P2pInterface;
+use super::p2p_interface::{ConnectedPeer, P2pInterface};
 
 #[async_trait::async_trait]
 impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> + Send + Sync>
@@ -37,7 +37,7 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
         self.deref().get_bind_address().await
     }
 
-    async fn get_connected_peers(&self) -> crate::Result<Vec<String>> {
+    async fn get_connected_peers(&self) -> crate::Result<Vec<ConnectedPeer>> {
         self.deref().get_connected_peers().await
     }
 }

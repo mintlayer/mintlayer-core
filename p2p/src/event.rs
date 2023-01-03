@@ -17,14 +17,14 @@ use tokio::sync::oneshot;
 
 use common::chain::block::Block;
 
-use crate::net::NetworkingService;
+use crate::{interface::p2p_interface::ConnectedPeer, net::NetworkingService};
 
 #[derive(Debug)]
 pub enum PeerManagerEvent<T: NetworkingService> {
     /// Try to establish connection with a remote peer
     Connect(T::Address, oneshot::Sender<crate::Result<()>>),
 
-    /// Disconnect node using peer ID or remote address
+    /// Disconnect node using peer ID
     Disconnect(T::PeerId, oneshot::Sender<crate::Result<()>>),
 
     /// Get the total number of peers local node has a connection with
@@ -33,8 +33,8 @@ pub enum PeerManagerEvent<T: NetworkingService> {
     /// Get the bind address of the local node
     GetBindAddress(oneshot::Sender<String>),
 
-    /// Get peer IDs of connected peers
-    GetConnectedPeers(oneshot::Sender<Vec<String>>),
+    /// Get peer IDs and addresses of connected peers
+    GetConnectedPeers(oneshot::Sender<Vec<ConnectedPeer>>),
 
     /// Adjust peer score
     AdjustPeerScore(T::PeerId, u32, oneshot::Sender<crate::Result<()>>),

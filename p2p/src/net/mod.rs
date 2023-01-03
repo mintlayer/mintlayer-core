@@ -113,7 +113,7 @@ where
     /// Disconnect active connection
     ///
     /// # Arguments
-    /// `id` - socket address of the peer or peer id
+    /// `peer_id` - Peer ID of the remote node
     async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()>;
 
     /// Return the socket address of the network service provider

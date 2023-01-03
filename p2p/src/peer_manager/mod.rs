@@ -43,6 +43,7 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
+    interface::p2p_interface::ConnectedPeer,
     net::{
         self,
         types::{Protocol, ProtocolType},
@@ -435,11 +436,11 @@ where
                         });
                         self.handle_result(None, res).await?;
                     }
-                    PeerManagerEvent::Disconnect(id, response) => {
-                        log::debug!("disconnect peer {id:?}");
+                    PeerManagerEvent::Disconnect(peer_id, response) => {
+                        log::debug!("disconnect peer {peer_id}");
 
                         response
-                            .send(self.peer_connectivity_handle.disconnect(id).await)
+                            .send(self.peer_connectivity_handle.disconnect(peer_id).await)
                             .map_err(|_| P2pError::ChannelClosed)?;
                     }
                     PeerManagerEvent::AdjustPeerScore(peer_id, score, response) => {
@@ -462,7 +463,9 @@ where
                         let peers = self.peerdb
                             .active_peers()
                             .iter()
-                            .filter_map(|(_id, info)| info.address.as_ref().map(|addr| addr.to_string()))
+                            .filter_map(|(peer_id, info)| info.address.as_ref().map(|addr| {
+                                ConnectedPeer{addr: addr.to_string(), peer_id: peer_id.to_string() }
+                            }))
                             .collect::<Vec<_>>();
                         response.send(peers).map_err(|_| P2pError::ChannelClosed)?
                     }

@@ -24,7 +24,7 @@ use crate::{
     P2p,
 };
 
-use super::p2p_interface::P2pInterface;
+use super::p2p_interface::{ConnectedPeer, P2pInterface};
 
 #[async_trait::async_trait]
 impl<T> P2pInterface for P2p<T>
@@ -77,7 +77,7 @@ where
         rx.await.map_err(P2pError::from)
     }
 
-    async fn get_connected_peers(&self) -> crate::Result<Vec<String>> {
+    async fn get_connected_peers(&self) -> crate::Result<Vec<ConnectedPeer>> {
         let (tx, rx) = oneshot::channel();
         self.tx_peer_manager
             .send(PeerManagerEvent::GetConnectedPeers(tx))

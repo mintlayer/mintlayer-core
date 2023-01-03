@@ -13,6 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[derive(Debug, serde::Serialize)]
+pub struct ConnectedPeer {
+    pub peer_id: String,
+    pub addr: String,
+}
+
 #[async_trait::async_trait]
 pub trait P2pInterface: Send + Sync {
     async fn connect(&mut self, addr: String) -> crate::Result<()>;
@@ -23,5 +29,5 @@ pub trait P2pInterface: Send + Sync {
 
     async fn get_bind_address(&self) -> crate::Result<String>;
 
-    async fn get_connected_peers(&self) -> crate::Result<Vec<String>>;
+    async fn get_connected_peers(&self) -> crate::Result<Vec<ConnectedPeer>>;
 }
