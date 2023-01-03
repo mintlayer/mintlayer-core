@@ -114,7 +114,7 @@ where
     ///
     /// # Arguments
     /// `id` - socket address of the peer or peer id
-    async fn disconnect(&mut self, id: DisconnectId<T::Address, T::PeerId>) -> crate::Result<()>;
+    async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()>;
 
     /// Return the socket address of the network service provider
     ///
@@ -192,10 +192,4 @@ pub trait AsBannableAddress {
 /// Checks if an address can be converted to bannable.
 pub trait IsBannableAddress {
     fn is_bannable(&self) -> bool;
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum DisconnectId<A, P> {
-    Address(A),
-    PeerId(P),
 }

@@ -62,8 +62,7 @@ use crate::{
 use super::peer::Role;
 
 /// Active peer data
-struct PeerContext<A> {
-    address: A,
+struct PeerContext {
     subscriptions: BTreeSet<PubSubTopic>,
     tx: mpsc::Sender<MockEvent>,
 }
@@ -95,7 +94,7 @@ pub struct Backend<T: TransportSocket> {
     cmd_rx: mpsc::Receiver<Command<T>>,
 
     /// Active peers
-    peers: HashMap<MockPeerId, PeerContext<T::Address>>,
+    peers: HashMap<MockPeerId, PeerContext>,
 
     /// Pending connections
     pending: HashMap<MockPeerId, PendingPeerContext<T::Address>>,
@@ -216,22 +215,6 @@ where
         } else {
             // TODO: Think about error handling. Currently we simply follow the libp2p behaviour.
             log::error!("{peer_id} peer doesn't exist");
-            Ok(())
-        }
-    }
-
-    /// Disconnect remote peer by address
-    async fn disconnect_addr(&mut self, address: &T::Address) -> crate::Result<()> {
-        let peer_id = self
-            .peers
-            .iter()
-            .find(|(_peer_id, peer)| peer.address == *address)
-            .map(|(peer_id, _peer)| *peer_id);
-        if let Some(peer_id) = peer_id {
-            self.disconnect_peer(&peer_id).await
-        } else {
-            // TODO: Think about error handling. Currently we simply follow the libp2p behaviour.
-            log::error!("Peer with address {address:?} doesn't exist");
             Ok(())
         }
     }
@@ -514,14 +497,7 @@ where
                     }
                 }
 
-                self.peers.insert(
-                    peer_id,
-                    PeerContext {
-                        address,
-                        subscriptions,
-                        tx,
-                    },
-                );
+                self.peers.insert(peer_id, PeerContext { subscriptions, tx });
                 let _ = self.request_mgr.register_peer(peer_id);
             }
             PeerEvent::MessageReceived { message } => {
@@ -568,15 +544,8 @@ where
             Command::Connect { address, response } => {
                 self.connect(address, response).await?;
             }
-            Command::Disconnect { id, response } => {
-                let res = match id {
-                    crate::net::DisconnectId::Address(address) => {
-                        self.disconnect_addr(&address).await
-                    }
-                    crate::net::DisconnectId::PeerId(peer_id) => {
-                        self.disconnect_peer(&peer_id).await
-                    }
-                };
+            Command::Disconnect { peer_id, response } => {
+                let res = self.disconnect_peer(&peer_id).await;
                 response.send(res).map_err(|_| P2pError::ChannelClosed)?
             }
             Command::SendRequest {

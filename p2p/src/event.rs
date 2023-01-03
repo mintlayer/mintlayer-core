@@ -17,7 +17,7 @@ use tokio::sync::oneshot;
 
 use common::chain::block::Block;
 
-use crate::net::{DisconnectId, NetworkingService};
+use crate::net::NetworkingService;
 
 #[derive(Debug)]
 pub enum PeerManagerEvent<T: NetworkingService> {
@@ -25,10 +25,7 @@ pub enum PeerManagerEvent<T: NetworkingService> {
     Connect(T::Address, oneshot::Sender<crate::Result<()>>),
 
     /// Disconnect node using peer ID or remote address
-    Disconnect(
-        DisconnectId<T::Address, T::PeerId>,
-        oneshot::Sender<crate::Result<()>>,
-    ),
+    Disconnect(T::PeerId, oneshot::Sender<crate::Result<()>>),
 
     /// Get the total number of peers local node has a connection with
     GetPeerCount(oneshot::Sender<usize>),

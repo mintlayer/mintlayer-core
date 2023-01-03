@@ -31,7 +31,6 @@ use crate::{
         self,
         mock::transport::TransportSocket,
         types::{Protocol, PubSubTopic},
-        DisconnectId,
     },
 };
 
@@ -41,7 +40,7 @@ pub enum Command<T: TransportSocket> {
         response: oneshot::Sender<crate::Result<()>>,
     },
     Disconnect {
-        id: DisconnectId<T::Address, MockPeerId>,
+        peer_id: MockPeerId,
         response: oneshot::Sender<crate::Result<()>>,
     },
     SendRequest {

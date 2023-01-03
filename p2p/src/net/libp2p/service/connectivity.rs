@@ -30,7 +30,7 @@ use crate::{
         self,
         libp2p::types,
         types::{ConnectivityEvent, Protocol, ProtocolType},
-        ConnectivityService, DisconnectId, NetworkingService,
+        ConnectivityService, NetworkingService,
     },
 };
 
@@ -192,15 +192,8 @@ where
         rx.await.map_err(P2pError::from)?.map_err(P2pError::from)
     }
 
-    async fn disconnect(&mut self, id: DisconnectId<T::Address, T::PeerId>) -> crate::Result<()> {
-        log::debug!("disconnect peer {:?}", id);
-
-        let peer_id = match id {
-            DisconnectId::PeerId(peer_id) => peer_id,
-            DisconnectId::Address(addr) => PeerId::try_from_multiaddr(&addr).ok_or_else(|| {
-                P2pError::ConversionError(ConversionError::InvalidAddress(addr.to_string()))
-            })?,
-        };
+    async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+        log::debug!("disconnect peer {}", peer_id);
 
         let (tx, rx) = oneshot::channel();
         self.cmd_tx.send(types::Command::Disconnect {

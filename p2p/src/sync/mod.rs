@@ -43,7 +43,7 @@ use crate::{
     message::{self, Announcement},
     net::{
         types::{SyncingEvent, ValidationResult},
-        DisconnectId, NetworkingService, SyncingMessagingService,
+        NetworkingService, SyncingMessagingService,
     },
 };
 
@@ -420,10 +420,7 @@ where
 
         let (tx, rx) = oneshot::channel();
         self.tx_peer_manager
-            .send(PeerManagerEvent::Disconnect(
-                DisconnectId::PeerId(peer_id),
-                tx,
-            ))
+            .send(PeerManagerEvent::Disconnect(peer_id, tx))
             .map_err(P2pError::from)?;
         rx.await.map_err(P2pError::from)?
     }
