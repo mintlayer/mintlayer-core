@@ -44,7 +44,7 @@ where
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id = P::random();
+    let peer_id = P::new();
 
     let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(A::make_transport(), addr).await;
     register_peer(&mut mgr, peer_id).await;
@@ -87,8 +87,8 @@ where
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id1 = P::random();
-    let peer_id2 = P::random();
+    let peer_id1 = P::new();
+    let peer_id2 = P::new();
 
     let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(A::make_transport(), addr).await;
 
