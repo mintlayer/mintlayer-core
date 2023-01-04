@@ -47,5 +47,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
-      - run: pip install toml
+      - run: pip install -r ./.github/scripts/requirements.txt
       - run: ./.github/scripts/codecheck.py
