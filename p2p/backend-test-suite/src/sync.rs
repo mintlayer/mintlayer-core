@@ -1129,8 +1129,6 @@ where
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
-            assert_eq!(id, peer2_id)
-        }
 
 async fn make_sync_manager<T>(
     transport: T::Transport,

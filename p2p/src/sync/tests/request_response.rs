@@ -19,11 +19,6 @@ use tokio::time::timeout;
 
 use chainstate::Locator;
 
-use crate::event::PeerManagerEvent;
-use crate::testing_utils::{
-    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
-    TestTransportTcp,
-};
 use crate::{
     message::{HeaderListRequest, HeaderListResponse, Request, Response},
     net::{
@@ -36,6 +31,10 @@ use crate::{
     },
     peer_manager::helpers::connect_services,
     sync::tests::make_sync_manager,
+    testing_utils::{
+        TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
+        TestTransportTcp,
+    },
     ConnectivityService, NetworkingService, SyncingMessagingService,
 };
 
