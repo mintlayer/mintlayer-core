@@ -82,8 +82,8 @@ where
     .await;
 
     // connect the two managers together so that they can exchange messages
-    connect_services::<S>(&mut conn1, &mut conn2).await;
-    assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
+    let (_address, _peer_info1, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
+    assert_eq!(mgr1.register_peer(peer_info2.peer_id).await, Ok(()));
 
     // ensure that only a header request is received from the remote and
     // as the nodes are tracking the same chain, no further messages are exchanged
@@ -136,8 +136,8 @@ where
     assert!(!same_tip(&mgr1_handle, &mgr2_handle).await);
 
     // add peer to the hashmap of known peers and send getheaders request to them
-    connect_services::<S>(&mut conn1, &mut conn2).await;
-    assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
+    let (_address, _peer_info1, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
+    assert_eq!(mgr1.register_peer(peer_info2.peer_id).await, Ok(()));
 
     let handle = tokio::spawn(async move {
         for _ in 0..9 {
@@ -228,9 +228,9 @@ where
     assert!(!same_tip(&mgr1_handle, &mgr2_handle).await);
 
     // add peer to the hashmap of known peers and send getheaders request to them
-    connect_services::<T>(&mut conn1, &mut conn2).await;
-    assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
-    assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
+    let (_address, peer_info, peer_info2) = connect_services::<T>(&mut conn1, &mut conn2).await;
+    assert_eq!(mgr1.register_peer(peer_info2.peer_id).await, Ok(()));
+    assert_eq!(mgr2.register_peer(peer_info.peer_id).await, Ok(()));
 
     let handle = tokio::spawn(async move {
         for _ in 0..14 {
@@ -351,9 +351,9 @@ where
     let remote_tip = get_tip(&mgr2_handle).await;
 
     // add peer to the hashmap of known peers and send getheaders request to them
-    connect_services::<S>(&mut conn1, &mut conn2).await;
-    assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
-    assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
+    let (_address, peer_info, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
+    assert_eq!(mgr1.register_peer(peer_info2.peer_id).await, Ok(()));
+    assert_eq!(mgr2.register_peer(peer_info.peer_id).await, Ok(()));
 
     let handle = tokio::spawn(async move {
         for _ in 0..24 {
@@ -493,9 +493,9 @@ where
     let remote_tip = get_tip(&mgr2_handle).await;
 
     // add peer to the hashmap of known peers and send getheaders request to them
-    connect_services::<S>(&mut conn1, &mut conn2).await;
-    assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
-    assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
+    let (_address, peer_info, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
+    assert_eq!(mgr1.register_peer(peer_info2.peer_id).await, Ok(()));
+    assert_eq!(mgr2.register_peer(peer_info.peer_id).await, Ok(()));
 
     let handle = tokio::spawn(async move {
         for _ in 0..20 {
@@ -645,13 +645,13 @@ where
     let mgr3_tip = get_tip(&mgr3_handle).await;
 
     // connect remote peers to local peer
-    connect_services::<S>(&mut conn1, &mut conn2).await;
-    connect_services::<S>(&mut conn1, &mut conn3).await;
+    let (_address, peer_info12, peer_info21) = connect_services::<S>(&mut conn1, &mut conn2).await;
+    let (_address, peer_info13, peer_info31) = connect_services::<S>(&mut conn1, &mut conn3).await;
 
-    assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
-    assert_eq!(mgr1.register_peer(*conn3.peer_id()).await, Ok(()));
-    assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
-    assert_eq!(mgr3.register_peer(*conn1.peer_id()).await, Ok(()));
+    assert_eq!(mgr1.register_peer(peer_info21.peer_id).await, Ok(()));
+    assert_eq!(mgr1.register_peer(peer_info31.peer_id).await, Ok(()));
+    assert_eq!(mgr2.register_peer(peer_info12.peer_id).await, Ok(()));
+    assert_eq!(mgr3.register_peer(peer_info13.peer_id).await, Ok(()));
 
     let handle = tokio::spawn(async move {
         for _ in 0..18 {
@@ -661,8 +661,8 @@ where
 
     for _ in 0..18 {
         let (event, dest_peer_id, mgr_handle) = tokio::select! {
-            event = mgr2.handle_mut().poll_next() => { (event.unwrap(), conn2.peer_id(), &mgr2_handle) },
-            event = mgr3.handle_mut().poll_next() => { (event.unwrap(), conn3.peer_id(), &mgr3_handle) },
+            event = mgr2.handle_mut().poll_next() => { (event.unwrap(), peer_info21.peer_id, &mgr2_handle) },
+            event = mgr3.handle_mut().poll_next() => { (event.unwrap(), peer_info31.peer_id, &mgr3_handle) },
         };
 
         match event {
@@ -678,7 +678,7 @@ where
                     .unwrap();
                 let msg = Response::HeaderListResponse(HeaderListResponse::new(headers));
 
-                if dest_peer_id == conn2.peer_id() {
+                if dest_peer_id == peer_info21.peer_id {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap()
                 } else {
                     mgr3.handle_mut().send_response(request_id, msg).await.unwrap()
@@ -698,7 +698,7 @@ where
                     .unwrap()
                     .unwrap()]));
 
-                if dest_peer_id == conn2.peer_id() {
+                if dest_peer_id == peer_info21.peer_id {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap();
                 } else {
                     mgr3.handle_mut().send_response(request_id, msg).await.unwrap();
@@ -774,13 +774,13 @@ where
     assert!(!same_tip(&mgr2_handle, &mgr1_handle).await);
 
     // connect remote peers to local peer
-    connect_services::<S>(&mut conn1, &mut conn2).await;
-    connect_services::<S>(&mut conn1, &mut conn3).await;
+    let (_address, peer_info12, peer_info21) = connect_services::<S>(&mut conn1, &mut conn2).await;
+    let (_address, peer_info13, peer_info31) = connect_services::<S>(&mut conn1, &mut conn3).await;
 
-    assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
-    assert_eq!(mgr1.register_peer(*conn3.peer_id()).await, Ok(()));
-    assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
-    assert_eq!(mgr3.register_peer(*conn1.peer_id()).await, Ok(()));
+    assert_eq!(mgr1.register_peer(peer_info21.peer_id).await, Ok(()));
+    assert_eq!(mgr1.register_peer(peer_info31.peer_id).await, Ok(()));
+    assert_eq!(mgr2.register_peer(peer_info12.peer_id).await, Ok(()));
+    assert_eq!(mgr3.register_peer(peer_info13.peer_id).await, Ok(()));
 
     let (tx, mut rx) = mpsc::unbounded_channel();
     let handle = tokio::spawn(async move {
@@ -798,8 +798,8 @@ where
 
     loop {
         let (event, dest_peer_id, mgr_handle) = tokio::select! {
-            event = mgr2.handle_mut().poll_next() => { (event.unwrap(), conn2.peer_id(), &mgr2_handle) },
-            event = mgr3.handle_mut().poll_next() => { (event.unwrap(), conn3.peer_id(), &mgr3_handle) },
+            event = mgr2.handle_mut().poll_next() => { (event.unwrap(), peer_info21.peer_id, &mgr2_handle) },
+            event = mgr3.handle_mut().poll_next() => { (event.unwrap(), peer_info31.peer_id, &mgr3_handle) },
             _event = rx.recv() => { break },
         };
 
@@ -816,7 +816,7 @@ where
                     .unwrap();
                 let msg = Response::HeaderListResponse(HeaderListResponse::new(headers));
 
-                if dest_peer_id == conn2.peer_id() {
+                if dest_peer_id == peer_info21.peer_id {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap()
                 } else {
                     mgr3.handle_mut().send_response(request_id, msg).await.unwrap()
@@ -836,7 +836,7 @@ where
                     .unwrap()
                     .unwrap()]));
 
-                if dest_peer_id == conn2.peer_id() {
+                if dest_peer_id == peer_info21.peer_id {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap();
                 } else {
                     mgr3.handle_mut().send_response(request_id, msg).await.unwrap();
@@ -908,13 +908,13 @@ where
     let last_block_id = additional_blocks.last().unwrap().get_id();
 
     // connect remote peers to local peer
-    connect_services::<S>(&mut conn1, &mut conn2).await;
-    connect_services::<S>(&mut conn1, &mut conn3).await;
+    let (_address, peer_info12, peer_info21) = connect_services::<S>(&mut conn1, &mut conn2).await;
+    let (_address, peer_info13, peer_info31) = connect_services::<S>(&mut conn1, &mut conn3).await;
 
-    assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
-    assert_eq!(mgr1.register_peer(*conn3.peer_id()).await, Ok(()));
-    assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
-    assert_eq!(mgr3.register_peer(*conn1.peer_id()).await, Ok(()));
+    assert_eq!(mgr1.register_peer(peer_info21.peer_id).await, Ok(()));
+    assert_eq!(mgr1.register_peer(peer_info31.peer_id).await, Ok(()));
+    assert_eq!(mgr2.register_peer(peer_info12.peer_id).await, Ok(()));
+    assert_eq!(mgr3.register_peer(peer_info13.peer_id).await, Ok(()));
 
     let (tx, mut rx) = mpsc::unbounded_channel();
     let mut gethdr_received = HashSet::new();
@@ -935,8 +935,8 @@ where
 
     loop {
         let (event, dest_peer_id, mgr_handle) = tokio::select! {
-            event = mgr2.handle_mut().poll_next() => { (event.unwrap(), conn2.peer_id(), &mgr2_handle) },
-            event = mgr3.handle_mut().poll_next() => { (event.unwrap(), conn3.peer_id(), &mgr3_handle) },
+            event = mgr2.handle_mut().poll_next() => { (event.unwrap(), peer_info21.peer_id, &mgr2_handle) },
+            event = mgr3.handle_mut().poll_next() => { (event.unwrap(), peer_info31.peer_id, &mgr3_handle) },
             _event = rx.recv() => { break },
         };
 
@@ -953,14 +953,14 @@ where
                     .unwrap();
                 let msg = Response::HeaderListResponse(HeaderListResponse::new(headers));
 
-                if dest_peer_id == conn2.peer_id() {
+                if dest_peer_id == peer_info21.peer_id {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap()
                 } else {
                     mgr3.handle_mut().send_response(request_id, msg).await.unwrap()
                 }
 
                 if gethdr_received.insert(dest_peer_id) {
-                    if dest_peer_id == conn2.peer_id() {
+                    if dest_peer_id == peer_info21.peer_id {
                         p2p_test_utils::import_blocks(&mgr2_handle, additional_blocks.clone())
                             .await;
                     } else {
@@ -983,7 +983,7 @@ where
                     .unwrap()
                     .unwrap()]));
 
-                if dest_peer_id == conn2.peer_id() {
+                if dest_peer_id == peer_info21.peer_id {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap();
                 } else {
                     mgr3.handle_mut().send_response(request_id, msg).await.unwrap();
@@ -1034,8 +1034,8 @@ where
     )
     .await;
 
-    connect_services::<S>(&mut conn1, &mut conn2).await;
-    assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
+    let (_address, _peer_info1, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
+    assert_eq!(mgr1.register_peer(peer_info2.peer_id).await, Ok(()));
 
     // ensure that only a header request is received from the remote and
     // as the nodes are tracking the same chain, no further messages are exchanged
@@ -1050,8 +1050,8 @@ where
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 
-    mgr1.unregister_peer(*conn2.peer_id());
-    assert_eq!(conn1.disconnect(*conn2.peer_id()).await, Ok(()));
+    mgr1.unregister_peer(peer_info2.peer_id);
+    assert_eq!(conn1.disconnect(peer_info2.peer_id).await, Ok(()));
     assert!(std::matches!(
         conn2.poll_next().await,
         Ok(ConnectivityEvent::ConnectionClosed { .. })
@@ -1065,8 +1065,8 @@ where
     let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&config), parent_info, 7);
     p2p_test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
 
-    connect_services::<S>(&mut conn1, &mut conn2).await;
-    assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
+    let (_address, _peer_info1, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
+    assert_eq!(mgr1.register_peer(peer_info2.peer_id).await, Ok(()));
 
     let handle = tokio::spawn(async move {
         for _ in 0..9 {
@@ -1129,6 +1129,8 @@ where
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
+            assert_eq!(id, peer2_id)
+        }
 
 async fn make_sync_manager<T>(
     transport: T::Transport,

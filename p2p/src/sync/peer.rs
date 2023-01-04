@@ -124,13 +124,9 @@ mod tests {
     use common::chain::block::{
         consensus_data::ConsensusData, timestamp::BlockTimestamp, BlockReward,
     };
-    use std::net::SocketAddr;
 
     fn new_mock_peersyncstate() -> PeerContext<MockService<TcpTransportSocket>> {
-        let addr: SocketAddr = "[::1]:8888".parse().unwrap();
-        PeerContext::<MockService<TcpTransportSocket>>::new(
-            types::MockPeerId::from_socket_address::<TcpTransportSocket>(&addr),
-        )
+        PeerContext::<MockService<TcpTransportSocket>>::new(types::MockPeerId::new())
     }
 
     #[test]

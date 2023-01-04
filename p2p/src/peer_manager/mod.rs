@@ -43,6 +43,7 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
+    interface::types::ConnectedPeer,
     net::{
         self,
         types::{Protocol, ProtocolType},
@@ -458,14 +459,13 @@ where
                         let addr = addr.await?.map_or("<unavailable>".to_string(), |addr| addr.to_string());
                         response.send(addr).map_err(|_| P2pError::ChannelClosed)?;
                     }
-                    PeerManagerEvent::GetPeerId(response) => response
-                        .send(self.peer_connectivity_handle.peer_id().to_string())
-                        .map_err(|_| P2pError::ChannelClosed)?,
                     PeerManagerEvent::GetConnectedPeers(response) => {
                         let peers = self.peerdb
                             .active_peers()
                             .iter()
-                            .map(|(id, _)| id.to_string())
+                            .filter_map(|(peer_id, info)| info.address.as_ref().map(|addr| {
+                                ConnectedPeer{addr: addr.to_string(), peer_id: peer_id.to_string() }
+                            }))
                             .collect::<Vec<_>>();
                         response.send(peers).map_err(|_| P2pError::ChannelClosed)?
                     }

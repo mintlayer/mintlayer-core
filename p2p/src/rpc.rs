@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::error::P2pError;
+use crate::{error::P2pError, interface::types::ConnectedPeer};
 use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, namespace = "p2p")]
@@ -34,13 +34,9 @@ trait P2pRpc {
     #[method(name = "get_bind_address")]
     async fn get_bind_address(&self) -> rpc::Result<String>;
 
-    /// Get peer ID of the local node
-    #[method(name = "get_peer_id")]
-    async fn get_peer_id(&self) -> rpc::Result<String>;
-
-    /// Get peer IDs of connected peers
+    /// Get details of connected peers
     #[method(name = "get_connected_peers")]
-    async fn get_connected_peers(&self) -> rpc::Result<Vec<String>>;
+    async fn get_connected_peers(&self) -> rpc::Result<Vec<ConnectedPeer>>;
 }
 
 #[async_trait::async_trait]
@@ -65,12 +61,7 @@ impl P2pRpcServer for super::P2pHandle {
         handle_error(res)
     }
 
-    async fn get_peer_id(&self) -> rpc::Result<String> {
-        let res = self.call_async(|this| Box::pin(this.get_peer_id())).await;
-        handle_error(res)
-    }
-
-    async fn get_connected_peers(&self) -> rpc::Result<Vec<String>> {
+    async fn get_connected_peers(&self) -> rpc::Result<Vec<ConnectedPeer>> {
         let res = self.call_async(|this| Box::pin(this.get_connected_peers())).await;
         handle_error(res)
     }

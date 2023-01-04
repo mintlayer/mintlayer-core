@@ -74,15 +74,14 @@ where
     .await
     .unwrap();
 
-    connect_services::<S>(&mut conn1, &mut conn2).await;
+    let (_address, _peer_info1, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
 
     // create few blocks so `sync2` has something to send to `sync1`
     let best_block = TestBlockInfo::from_genesis(chain_config.genesis_block());
     let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&chain_config), best_block, 3);
 
-    let peer = *conn2.peer_id();
     tokio::spawn(async move {
-        sync1.register_peer(peer).await.unwrap();
+        sync1.register_peer(peer_info2.peer_id).await.unwrap();
         sync1.run().await
     });
 
@@ -120,7 +119,7 @@ where
 
     match rx_peer_manager.recv().await {
         Some(PeerManagerEvent::AdjustPeerScore(peer_id, score, _)) => {
-            assert_eq!(&peer_id, conn2.peer_id());
+            assert_eq!(peer_id, peer_info2.peer_id);
             assert_eq!(score, 100);
         }
         e => panic!("invalid event received: {e:?}"),
@@ -167,7 +166,7 @@ where
         tx_peer_manager,
     );
 
-    connect_services::<S>(&mut conn1, &mut conn2).await;
+    let (_address, _peer_info, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
 
     // create few blocks and offer an orphan block to the `SyncManager`
     let best_block = TestBlockInfo::from_genesis(chain_config.genesis_block());
@@ -175,7 +174,7 @@ where
 
     // register `conn2` to the `SyncManager`, process a block response
     // and verify the `PeerManager` is notified of the protocol violation
-    let remote_id = *conn2.peer_id();
+    let remote_id = peer_info2.peer_id;
 
     tokio::spawn(async move {
         sync1.register_peer(remote_id).await.unwrap();

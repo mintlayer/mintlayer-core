@@ -121,9 +121,6 @@ where
     /// If the address isn't available yet, `None` is returned
     async fn local_addr(&self) -> crate::Result<Option<T::Address>>;
 
-    /// Return peer id of the local node
-    fn peer_id(&self) -> &T::PeerId;
-
     /// Poll events from the network service provider
     ///
     /// There are three types of events that can be received:

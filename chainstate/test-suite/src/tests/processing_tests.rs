@@ -1021,7 +1021,7 @@ fn blocks_from_the_future(#[case] seed: Seed) {
 
         // current time is genesis time
         let current_time = Arc::new(std::sync::atomic::AtomicU64::new(
-            config.genesis_block().timestamp().as_int_seconds() as u64,
+            config.genesis_block().timestamp().as_int_seconds(),
         ));
         let chainstate_current_time = Arc::clone(&current_time);
         let time_getter = TimeGetter::new(Arc::new(move || {

@@ -104,7 +104,7 @@ impl PoW {
     /// The difference (in block time) between the current block and 2016th block before the current one.
     fn actual_timespan(&self, prev_block_blocktime: u64, retarget_blocktime: u64) -> u64 {
         // TODO: this needs to be fixed because it could suffer from an underflow
-        let actual_timespan = (prev_block_blocktime - retarget_blocktime) as u64;
+        let actual_timespan = prev_block_blocktime - retarget_blocktime;
 
         num::clamp(
             actual_timespan,
