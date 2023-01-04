@@ -25,8 +25,8 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
         self.deref_mut().connect(addr).await
     }
 
-    async fn disconnect(&self, peer_id: String) -> crate::Result<()> {
-        self.deref().disconnect(peer_id).await
+    async fn disconnect(&mut self, peer_id: String) -> crate::Result<()> {
+        self.deref_mut().disconnect(peer_id).await
     }
 
     async fn get_peer_count(&self) -> crate::Result<usize> {

@@ -46,7 +46,7 @@ where
         rx.await.map_err(P2pError::from)?
     }
 
-    async fn disconnect(&self, peer_id: String) -> crate::Result<()>
+    async fn disconnect(&mut self, peer_id: String) -> crate::Result<()>
     where
         <T as NetworkingService>::PeerId: FromStr,
     {
