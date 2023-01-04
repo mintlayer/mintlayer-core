@@ -158,7 +158,7 @@ mod test {
         let message_len = 1 + rng.gen::<u32>() % 10000;
         let message = (0..message_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
         let encrypted = key.encrypt(&message, &mut rng, b"").unwrap();
-        let decrypted = key.decrypt(&encrypted, None).unwrap();
+        let decrypted = key.decrypt(encrypted, None).unwrap();
         assert_eq!(message, decrypted);
     }
 
@@ -171,7 +171,7 @@ mod test {
         let message = (0..message_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
         let aead = (0..aead_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
         let encrypted = key.encrypt(&message, &mut rng, &aead).unwrap();
-        let decrypted = key.decrypt(&encrypted, Some(&aead)).unwrap();
+        let decrypted = key.decrypt(encrypted, Some(&aead)).unwrap();
         assert_eq!(message, decrypted);
     }
 
@@ -181,7 +181,7 @@ mod test {
         let key = Chacha20poly1305Key::new_from_rng(&mut rng);
         let cipher_text_len = rng.gen::<usize>() % NONCE_LEN;
         let cipher_text = (0..cipher_text_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
-        let decrypt_err = key.decrypt(&cipher_text, None).unwrap_err();
+        let decrypt_err = key.decrypt(cipher_text, None).unwrap_err();
         assert_eq!(
             decrypt_err,
             Error::CipherTextTooShort(cipher_text_len, NONCE_LEN)
@@ -196,7 +196,7 @@ mod test {
         let key = Chacha20poly1305Key::decode_all(&mut key_bin.as_slice()).unwrap();
         let encrypted_hex = "83ad5caae9782309d0d3b74be26629f879d331ab069e54b7d7079d24e509cf5af08ff9cecb8b50693bbd4aa0b0114b0d25bd0f0a079c66868b8b86a7c3e592d71ce3a9a47fd9";
         let encrypted = Vec::from_hex(encrypted_hex).unwrap();
-        let decrypted = key.decrypt(&encrypted, None).unwrap();
+        let decrypted = key.decrypt(encrypted, None).unwrap();
         assert_eq!(message, decrypted);
     }
 
@@ -208,7 +208,7 @@ mod test {
         let key = Chacha20poly1305Key::new_from_array(key_bin.try_into().unwrap());
         let encrypted_hex = "83ad5caae9782309d0d3b74be26629f879d331ab069e54b7d7079d24e509cf5af08ff9cecb8b50693bbd4aa0b0114b0d25bd0f0a079c66868b8b86a7c3e592d71ce3a9a47fd9";
         let encrypted = Vec::from_hex(encrypted_hex).unwrap();
-        let decrypted = key.decrypt(&encrypted, None).unwrap();
+        let decrypted = key.decrypt(encrypted, None).unwrap();
         assert_eq!(message, decrypted);
     }
 
