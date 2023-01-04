@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{error::P2pError, interface::p2p_interface::ConnectedPeer};
+use crate::{error::P2pError, interface::types::ConnectedPeer};
 use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, namespace = "p2p")]
@@ -34,7 +34,7 @@ trait P2pRpc {
     #[method(name = "get_bind_address")]
     async fn get_bind_address(&self) -> rpc::Result<String>;
 
-    /// Get deatils of connected peers
+    /// Get details of connected peers
     #[method(name = "get_connected_peers")]
     async fn get_connected_peers(&self) -> rpc::Result<Vec<ConnectedPeer>>;
 }

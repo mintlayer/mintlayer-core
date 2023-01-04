@@ -24,7 +24,7 @@ use crate::{
     P2p,
 };
 
-use super::p2p_interface::{ConnectedPeer, P2pInterface};
+use super::{p2p_interface::P2pInterface, types::ConnectedPeer};
 
 #[async_trait::async_trait]
 impl<T> P2pInterface for P2p<T>

@@ -43,7 +43,7 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
-    interface::p2p_interface::ConnectedPeer,
+    interface::types::ConnectedPeer,
     net::{
         self,
         types::{Protocol, ProtocolType},

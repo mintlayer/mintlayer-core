@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,17 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::types::ConnectedPeer;
-
-#[async_trait::async_trait]
-pub trait P2pInterface: Send + Sync {
-    async fn connect(&mut self, addr: String) -> crate::Result<()>;
-
-    async fn disconnect(&mut self, peer_id: String) -> crate::Result<()>;
-
-    async fn get_peer_count(&self) -> crate::Result<usize>;
-
-    async fn get_bind_address(&self) -> crate::Result<String>;
-
-    async fn get_connected_peers(&self) -> crate::Result<Vec<ConnectedPeer>>;
+// TODO: Implement From PeerContext for ConnectedPeer
+#[derive(Debug, serde::Serialize)]
+pub struct ConnectedPeer {
+    // TODO: Replace String with actual type, once libp2p removed
+    pub peer_id: String,
+    // TODO: Replace String with actual type, once libp2p removed
+    pub addr: String,
 }

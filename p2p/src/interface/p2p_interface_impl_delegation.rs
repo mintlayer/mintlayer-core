@@ -15,7 +15,7 @@
 
 use std::ops::{Deref, DerefMut};
 
-use super::p2p_interface::{ConnectedPeer, P2pInterface};
+use super::{p2p_interface::P2pInterface, types::ConnectedPeer};
 
 #[async_trait::async_trait]
 impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> + Send + Sync>
