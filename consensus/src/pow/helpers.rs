@@ -99,7 +99,7 @@ pub mod special_rules {
         new_block_time: u64,
         prev_block_time: u64,
     ) -> bool {
-        new_block_time as u64 > (prev_block_time as u64 + (target_spacing_in_secs * 2))
+        new_block_time > (prev_block_time + (target_spacing_in_secs * 2))
     }
 }
 
