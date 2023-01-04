@@ -17,23 +17,23 @@ use super::*;
 
 use rstest::rstest;
 
-use DataDelta::Modify;
-
 #[rstest]
 #[rustfmt::skip]
-#[case(Modify(None,      Some('a')), Modify(Some('a'), Some('b')), Modify(Some('b'), Some('c')), Modify(None, Some('c')))]
-#[case(Modify(None,      Some('a')), Modify(Some('a'), Some('b')), Modify(Some('b'), None),      Modify(None, None))]
-#[case(Modify(None,      Some('a')), Modify(Some('a'), None),      Modify(None,      Some('b')), Modify(None, Some('b')))]
-#[case(Modify(Some('a'), None),      Modify(None,      Some('b')), Modify(Some('b'), None),      Modify(Some('a'), None))]
-#[case(Modify(Some('a'), None),      Modify(None,      Some('b')), Modify(Some('b'), Some('c')), Modify(Some('a'), Some('c')))]
-#[case(Modify(Some('a'), Some('b')), Modify(Some('b'), Some('c')), Modify(Some('c'), None),      Modify(Some('a'), None))]
-#[case(Modify(Some('a'), Some('b')), Modify(Some('b'), None),      Modify(None, Some('c')),      Modify(Some('a'), Some('c')))]
+#[case(DataDelta::new(None,      Some('a')), DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), Some('c')), DataDelta::new(None, Some('c')))]
+#[case(DataDelta::new(None,      Some('a')), DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), None),      DataDelta::new(None, None))]
+#[case(DataDelta::new(None,      Some('a')), DataDelta::new(Some('a'), None),      DataDelta::new(None,      Some('b')), DataDelta::new(None, Some('b')))]
+#[case(DataDelta::new(Some('a'), None),      DataDelta::new(None,      Some('b')), DataDelta::new(Some('b'), None),      DataDelta::new(Some('a'), None))]
+#[case(DataDelta::new(Some('a'), None),      DataDelta::new(None,      Some('b')), DataDelta::new(Some('b'), Some('c')), DataDelta::new(Some('a'), Some('c')))]
+#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), Some('c')), DataDelta::new(Some('c'), None),      DataDelta::new(Some('a'), None))]
+#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), None),      DataDelta::new(None, Some('c')),      DataDelta::new(Some('a'), Some('c')))]
 fn delta_delta_delta_associativity(
     #[case] delta1: DataDelta<char>,
     #[case] delta2: DataDelta<char>,
     #[case] delta3: DataDelta<char>,
     #[case] expected_delta: DataDelta<char>,
 ) {
+    let expected_collection = DeltaDataCollection::from_iter([(1, expected_delta)]);
+
     {
         // (Delta + Delta) + Delta = Delta
         // every delta goes into separate collection
@@ -43,7 +43,7 @@ fn delta_delta_delta_associativity(
         let _ = collection1.merge_delta_data(collection2).unwrap();
         let _ = collection1.merge_delta_data(collection3).unwrap();
 
-        assert_eq!(collection1, DeltaDataCollection::from_iter([(1, expected_delta.clone())]));
+        assert_eq!(collection1, expected_collection);
     }
 
     {
@@ -55,7 +55,7 @@ fn delta_delta_delta_associativity(
         let _ = collection2.merge_delta_data(collection3).unwrap();
         let _ = collection1.merge_delta_data(collection2).unwrap();
 
-        assert_eq!(collection1, DeltaDataCollection::from_iter([(1, expected_delta.clone())]));
+        assert_eq!(collection1, expected_collection);
     }
 
     {
@@ -66,6 +66,6 @@ fn delta_delta_delta_associativity(
         let _ = collection.merge_delta_data_element(1, delta2).unwrap();
         let _ = collection.merge_delta_data_element(1, delta3).unwrap();
 
-        assert_eq!(collection, DeltaDataCollection::from_iter([(1, expected_delta)]));
+        assert_eq!(collection, expected_collection);
     }
 }

@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// FIXME: revisit errors
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum Error {
     #[error("Arithmetic error; conversion to unsigned failed")]
@@ -42,6 +41,6 @@ pub enum Error {
     DeltaUndoNegationError,
     #[error("Applying Delta over Undo is not supported")]
     DeltaOverUndoApplied,
-    #[error("The data inside the DeltaData doesn't match")]
+    #[error("The data of two DeltaData doesn't match")]
     DeltaDataMismatch,
 }

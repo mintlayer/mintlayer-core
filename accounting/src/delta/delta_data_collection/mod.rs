@@ -22,22 +22,46 @@ use serialization::{Decode, Encode};
 
 use crate::error::Error;
 
-/// Basic primitive that represent a difference introduced to the data.
+///
+/// Basic primitive that represents a difference introduced to a data.
+///
+/// Following properties are defined for deltas:
+/// - Associativity:
+///   (d1 + d2) + d3 = d1 + (d2 + d3), where '+' is the combine operation implemented by `combine_delta_data`
+///
+///   Associativity property doesn't hold if a combine operation produces an error, e.g.:
+///   (Delta(Some, None) + Delta(Some, None)) + Delta(None, Some) = Error + Delta(None, Some)
+///   Delta(Some, None) + (Delta(Some, None) + Delta(None, Some)) = Delta(Some, None) + Delta(Some, Some) = Error
+///
+/// - Inversion in the sense that:
+///   (d + d.invert()) + d = d
+///
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
-pub enum DataDelta<T> {
-    // TODO: better error reporting?
-    Mismatch,
-    Modify(Option<T>, Option<T>),
+pub struct DataDelta<T> {
+    prev: Option<T>,
+    next: Option<T>,
 }
 
 impl<T: Clone> DataDelta<T> {
+    pub fn new(old: Option<T>, new: Option<T>) -> Self {
+        Self {
+            prev: old,
+            next: new,
+        }
+    }
+
+    pub fn prev(&self) -> &Option<T> {
+        &self.prev
+    }
+
+    pub fn next(&self) -> &Option<T> {
+        &self.next
+    }
+
     /// Returns an invert delta that has the opposite effect of the provided delta
     /// and serves as an undo object
     fn invert(self) -> DataDeltaUndo<T> {
-        match self {
-            DataDelta::Mismatch => DataDeltaUndo(DataDelta::Mismatch),
-            DataDelta::Modify(old, new) => DataDeltaUndo(DataDelta::Modify(new, old)),
-        }
+        DataDeltaUndo(Self::new(self.next, self.prev))
     }
 }
 
@@ -56,7 +80,7 @@ impl<T> DeltaMapElement<T> {
         }
     }
 
-    pub fn consume(self) -> DataDelta<T> {
+    fn consume(self) -> DataDelta<T> {
         match self {
             DeltaMapElement::Delta(d) => d,
             DeltaMapElement::DeltaUndo(d) => d.0,
@@ -92,15 +116,15 @@ impl<K: Ord + Copy, T: Clone + PartialEq> DeltaDataCollection<K, T> {
 
     pub fn get_data(&self, key: &K) -> Result<GetDataResult<&T>, Error> {
         match self.data.get(key) {
-            Some(d) => match d.get_data_delta() {
-                DataDelta::Mismatch => Err(Error::DeltaDataMismatch),
-                DataDelta::Modify(old, new) => match (old, new) {
+            Some(d) => {
+                let delta = d.get_data_delta();
+                match (&delta.prev, &delta.next) {
                     (None, None) => Ok(GetDataResult::Deleted),
                     (None, Some(d)) => Ok(GetDataResult::Present(d)),
                     (Some(_), None) => Ok(GetDataResult::Deleted),
                     (Some(_), Some(d)) => Ok(GetDataResult::Present(d)),
-                },
-            },
+                }
+            }
             None => Ok(GetDataResult::Missing),
         }
     }
@@ -143,7 +167,7 @@ impl<K: Ord + Copy, T: Clone + PartialEq> DeltaDataCollection<K, T> {
 
         let el = match self.data.entry(key) {
             Entry::Occupied(e) => {
-                DeltaMapElement::Delta(combine_delta_data(e.remove().consume(), other.consume()))
+                DeltaMapElement::Delta(combine_delta_data(e.remove().consume(), other.consume())?)
             }
             Entry::Vacant(_) => other,
         };
@@ -192,20 +216,12 @@ impl<K: Ord + Copy, T: Clone> FromIterator<(K, DataDelta<T>)> for DeltaDataColle
 }
 
 /// Given two deltas, combine them into one delta, this is the basic delta data composability function
-// FIXME: early mismatch reporting
-fn combine_delta_data<T: Clone + PartialEq>(lhs: DataDelta<T>, rhs: DataDelta<T>) -> DataDelta<T> {
-    match (lhs, rhs) {
-        (DataDelta::Modify(l1, l2), DataDelta::Modify(r1, r2)) => {
-            if l2 == r1 {
-                DataDelta::Modify(l1, r2)
-            } else {
-                DataDelta::Mismatch
-            }
-        }
-        (DataDelta::Mismatch, DataDelta::Mismatch) => DataDelta::Mismatch,
-        (DataDelta::Mismatch, DataDelta::Modify(_, _)) => DataDelta::Mismatch,
-        (DataDelta::Modify(_, _), DataDelta::Mismatch) => DataDelta::Mismatch,
-    }
+fn combine_delta_data<T: Clone + PartialEq>(
+    lhs: DataDelta<T>,
+    rhs: DataDelta<T>,
+) -> Result<DataDelta<T>, Error> {
+    utils::ensure!(lhs.next == rhs.prev, Error::DeltaDataMismatch);
+    Ok(DataDelta::new(lhs.prev, rhs.next))
 }
 
 #[cfg(test)]

@@ -17,8 +17,6 @@ use super::*;
 
 use rstest::rstest;
 
-use DataDelta::Modify;
-
 type FourCollections = (
     DeltaDataCollection<i32, char>,
     DeltaDataCollection<i32, char>,
@@ -28,11 +26,11 @@ type FourCollections = (
 
 #[rstest]
 #[rustfmt::skip]
-#[case(Modify(None,      Some('a')), Modify(Some('a'), None),      Modify(None,      None))]
-#[case(Modify(None,      Some('a')), Modify(Some('a'), Some('b')), Modify(None,      None))]
-#[case(Modify(Some('a'), Some('b')), Modify(Some('b'), Some('c')), Modify(Some('a'), Some('a')))]
-#[case(Modify(Some('a'), Some('b')), Modify(Some('b'), None),      Modify(Some('a'), Some('a')))]
-#[case(Modify(Some('a'), None),      Modify(None,      Some('b')), Modify(Some('a'), Some('a')))]
+#[case(DataDelta::new(None,      Some('a')), DataDelta::new(Some('a'), None),      DataDelta::new(None,      None))]
+#[case(DataDelta::new(None,      Some('a')), DataDelta::new(Some('a'), Some('b')), DataDelta::new(None,      None))]
+#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), Some('c')), DataDelta::new(Some('a'), Some('a')))]
+#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), None),      DataDelta::new(Some('a'), Some('a')))]
+#[case(DataDelta::new(Some('a'), None),      DataDelta::new(None,      Some('b')), DataDelta::new(Some('a'), Some('a')))]
 fn delta_delta_undo_undo_associativity(
     #[case] delta1: DataDelta<char>,
     #[case] delta2: DataDelta<char>,

@@ -13,15 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{combine_data_with_delta, DataDelta, DataDelta::Modify, DeltaDataCollection};
+use crate::{combine_data_with_delta, DataDelta, DeltaDataCollection};
 
 use rstest::rstest;
 
 #[rstest]
 #[rustfmt::skip]
-#[case(None,      Modify(None, Some('a')))]
-#[case(Some('a'), Modify(Some('a'), None))]
-#[case(Some('a'), Modify(Some('a'), Some('b')))]
+#[case(None,      DataDelta::new(None, Some('a')))]
+#[case(Some('a'), DataDelta::new(Some('a'), None))]
+#[case(Some('a'), DataDelta::new(Some('a'), Some('b')))]
 fn data_delta_undo(#[case] origin_data: Option<char>, #[case] delta: DataDelta<char>) {
     let mut collection_with_delta = DeltaDataCollection::new();
     let undo_create = collection_with_delta.merge_delta_data_element(1, delta).unwrap().unwrap();
@@ -59,11 +59,11 @@ fn data_delta_undo(#[case] origin_data: Option<char>, #[case] delta: DataDelta<c
 
 #[rstest]
 #[rustfmt::skip]
-#[case(None,      Modify(None, Some('a')),      Modify(Some('a'), None),      None)]
-#[case(None,      Modify(None, Some('a')),      Modify(Some('a'), Some('b')), Some('b'))]
-#[case(Some('a'), Modify(Some('a'), Some('b')), Modify(Some('b'), Some('c')), Some('c'))]
-#[case(Some('a'), Modify(Some('a'), Some('b')), Modify(Some('b'), None),      None)]
-#[case(Some('a'), Modify(Some('a'), None),      Modify(None, Some('b')),      Some('b'))]
+#[case(None,      DataDelta::new(None, Some('a')),      DataDelta::new(Some('a'), None),      None)]
+#[case(None,      DataDelta::new(None, Some('a')),      DataDelta::new(Some('a'), Some('b')), Some('b'))]
+#[case(Some('a'), DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), Some('c')), Some('c'))]
+#[case(Some('a'), DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), None),      None)]
+#[case(Some('a'), DataDelta::new(Some('a'), None),      DataDelta::new(None, Some('b')),      Some('b'))]
 fn data_delta_delta(
     #[case] origin_data: Option<char>,
     #[case] delta1: DataDelta<char>,
@@ -107,14 +107,14 @@ fn data_delta_delta(
 
 #[rstest]
 #[rustfmt::skip]
-#[case(None,      Modify(None, Some('a')),      Modify(Some('a'), Some('b')),  Modify(Some('b'), None),      None)]
-#[case(None,      Modify(None, Some('a')),      Modify(Some('a'), Some('b')),  Modify(Some('b'), Some('c')), Some('c'))]
-#[case(None,      Modify(None, Some('a')),      Modify(Some('a'), None),       Modify(None, Some('a')),      Some('a'))]
-#[case(Some('a'), Modify(Some('a'), None),      Modify(None, Some('a')),       Modify(Some('a'), None),      None)]
-#[case(Some('a'), Modify(Some('a'), None),      Modify(None, Some('a')),       Modify(Some('a'), Some('b')), Some('b'))]
-#[case(Some('a'), Modify(Some('a'), Some('b')), Modify(Some('b'), None),       Modify(None, Some('a')),      Some('a'))]
-#[case(Some('a'), Modify(Some('a'), Some('b')), Modify(Some('b'), Some('c')),  Modify(Some('c'), None),      None)]
-#[case(Some('a'), Modify(Some('a'), Some('b')), Modify(Some('b'), Some('c')),  Modify(Some('c'), Some('d')), Some('d'))]
+#[case(None,      DataDelta::new(None, Some('a')),      DataDelta::new(Some('a'), Some('b')),  DataDelta::new(Some('b'), None),      None)]
+#[case(None,      DataDelta::new(None, Some('a')),      DataDelta::new(Some('a'), Some('b')),  DataDelta::new(Some('b'), Some('c')), Some('c'))]
+#[case(None,      DataDelta::new(None, Some('a')),      DataDelta::new(Some('a'), None),       DataDelta::new(None, Some('a')),      Some('a'))]
+#[case(Some('a'), DataDelta::new(Some('a'), None),      DataDelta::new(None, Some('a')),       DataDelta::new(Some('a'), None),      None)]
+#[case(Some('a'), DataDelta::new(Some('a'), None),      DataDelta::new(None, Some('a')),       DataDelta::new(Some('a'), Some('b')), Some('b'))]
+#[case(Some('a'), DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), None),       DataDelta::new(None, Some('a')),      Some('a'))]
+#[case(Some('a'), DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), Some('c')),  DataDelta::new(Some('c'), None),      None)]
+#[case(Some('a'), DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), Some('c')),  DataDelta::new(Some('c'), Some('d')), Some('d'))]
 fn data_delta_delta_delta(
     #[case] origin_data: Option<char>,
     #[case] delta1: DataDelta<char>,
@@ -207,11 +207,11 @@ fn data_delta_delta_delta(
 
 #[rstest]
 #[rustfmt::skip]
-#[case(None,      Modify(None,      Some('a')), Modify(Some('a'), Some('b')), /* Undo, */ Some('a'))]
-#[case(None,      Modify(None,      Some('a')), Modify(Some('a'), None),      /* Undo, */ Some('a'))]
-#[case(Some('a'), Modify(Some('a'), None),      Modify(None,      Some('a')), /* Undo, */ None)]
-#[case(Some('a'), Modify(Some('a'), Some('b')), Modify(Some('b'), None),      /* Undo, */ Some('b'))]
-#[case(Some('a'), Modify(Some('a'), Some('b')), Modify(Some('b'), Some('c')), /* Undo, */ Some('b'))]
+#[case(None,      DataDelta::new(None,      Some('a')), DataDelta::new(Some('a'), Some('b')), /* Undo, */ Some('a'))]
+#[case(None,      DataDelta::new(None,      Some('a')), DataDelta::new(Some('a'), None),      /* Undo, */ Some('a'))]
+#[case(Some('a'), DataDelta::new(Some('a'), None),      DataDelta::new(None,      Some('a')), /* Undo, */ None)]
+#[case(Some('a'), DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), None),      /* Undo, */ Some('b'))]
+#[case(Some('a'), DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), Some('c')), /* Undo, */ Some('b'))]
 fn data_delta_delta_undo(
     #[case] origin_data: Option<char>,
     #[case] delta1: DataDelta<char>,

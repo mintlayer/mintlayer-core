@@ -15,8 +15,6 @@
 
 use super::*;
 
-use DataDelta::Modify;
-
 use rstest::rstest;
 
 type ThreeCollections = (
@@ -27,11 +25,11 @@ type ThreeCollections = (
 
 #[rstest]
 #[rustfmt::skip]
-#[case(Modify(None,      Some('a')), Modify(Some('a'), None))]
-#[case(Modify(None,      Some('a')), Modify(Some('a'), Some('b')))]
-#[case(Modify(Some('a'), Some('b')), Modify(Some('b'), Some('c')))]
-#[case(Modify(Some('a'), Some('b')), Modify(Some('b'), None))]
-#[case(Modify(Some('a'), None),      Modify(None,      Some('b')))]
+#[case(DataDelta::new(None,      Some('a')), DataDelta::new(Some('a'), None))]
+#[case(DataDelta::new(None,      Some('a')), DataDelta::new(Some('a'), Some('b')))]
+#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), Some('c')))]
+#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), None))]
+#[case(DataDelta::new(Some('a'), None),      DataDelta::new(None,      Some('b')))]
 fn delta_delta_undo_associativity(
     #[case] delta1: DataDelta<char>,
     #[case] delta2: DataDelta<char>,
