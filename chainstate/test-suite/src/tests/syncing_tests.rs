@@ -333,3 +333,24 @@ fn filter_already_existing_blocks_detached_headers(#[case] seed: Seed) {
         );
     });
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn initial_block_download(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        // Only genesis block, so is_initial_block_download should return true.
+        assert_eq!(true, tf.chainstate.is_initial_block_download().unwrap());
+
+        // The added block will have a very fresh timestamp.
+        tf.make_block_builder().build_and_process().unwrap();
+        assert_eq!(false, tf.chainstate.is_initial_block_download().unwrap());
+
+        // Add one more block.
+        tf.make_block_builder().build_and_process().unwrap();
+        assert_eq!(false, tf.chainstate.is_initial_block_download().unwrap());
+    });
+}

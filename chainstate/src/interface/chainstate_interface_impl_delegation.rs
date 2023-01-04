@@ -91,10 +91,6 @@ impl<
         self.deref().get_best_block_header()
     }
 
-    fn get_best_block_timestamp(&self) -> Result<BlockTimestamp, ChainstateError> {
-        self.deref().get_best_block_timestamp()
-    }
-
     fn get_block_id_from_height(
         &self,
         height: &BlockHeight,

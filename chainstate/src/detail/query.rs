@@ -17,7 +17,7 @@ use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockHeader, BlockReward},
+        block::{BlockHeader, BlockReward},
         tokens::{
             OutputValue, RPCFungibleTokenInfo, RPCNonFungibleTokenInfo, RPCTokenInfo,
             TokenAuxiliaryData, TokenData, TokenId,
@@ -107,14 +107,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
             GenBlockIndex::Block(b) => Ok(b.block_header().clone()),
             GenBlockIndex::Genesis(_) => Err(PropertyQueryError::GenesisHeaderRequested),
         }
-    }
-
-    pub fn get_best_block_timestamp(&self) -> Result<BlockTimestamp, PropertyQueryError> {
-        Ok(self
-            .chainstate_ref
-            .get_best_block_index()?
-            .ok_or(PropertyQueryError::BestBlockIndexNotFound)?
-            .block_timestamp())
     }
 
     pub fn get_locator(&self) -> Result<Locator, PropertyQueryError> {

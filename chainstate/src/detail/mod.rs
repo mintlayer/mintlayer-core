@@ -42,7 +42,6 @@ use tx_verifier::transaction_verifier;
 use std::{
     sync::atomic::{AtomicBool, Ordering},
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 use itertools::Itertools;
@@ -448,11 +447,14 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         // TODO: Add a check for the chain trust.
 
-        let tip_timestamp = self.query()?.get_best_block_timestamp()?.as_duration_since_epoch();
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            // This can fail only if `SystemTime::now()` returns the time before `UNIX_EPOCH`.
-            .expect("Invalid system time");
+        let tip_timestamp = match self.query()?.get_best_block_header() {
+            Ok(h) => Ok(h.timestamp()),
+            // There is only the genesis block, so the initial block download isn't finished yet.
+            Err(PropertyQueryError::GenesisHeaderRequested) => return Ok(true),
+            Err(e) => Err(e),
+        }?
+        .as_duration_since_epoch();
+        let now = self.time_getter.get_time();
         if tip_timestamp + self.chainstate_config.max_tip_age.clone().into() < now {
             return Ok(true);
         }
