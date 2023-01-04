@@ -132,7 +132,7 @@ impl Options {
         let options: Options = clap::Parser::try_parse_from(args)?;
 
         // We want to check earlier if directories can be created.
-        fs::create_dir_all(&options.data_dir()).with_context(|| {
+        fs::create_dir_all(options.data_dir()).with_context(|| {
             format!(
                 "Failed to create the '{:?}' data directory",
                 options.data_dir
