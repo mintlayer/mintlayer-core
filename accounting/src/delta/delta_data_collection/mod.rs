@@ -33,12 +33,10 @@ pub enum DataDelta<T> {
 impl<T: Clone> DataDelta<T> {
     /// Returns an invert delta that has the opposite effect of the provided delta
     /// and serves as an undo object
-    fn invert(&self) -> DataDeltaUndo<T> {
+    fn invert(self) -> DataDeltaUndo<T> {
         match self {
             DataDelta::Mismatch => DataDeltaUndo(DataDelta::Mismatch),
-            DataDelta::Modify(old, new) => {
-                DataDeltaUndo(DataDelta::Modify(new.clone(), old.clone()))
-            }
+            DataDelta::Modify(old, new) => DataDeltaUndo(DataDelta::Modify(new, old)),
         }
     }
 }
@@ -92,18 +90,18 @@ impl<K: Ord + Copy, T: Clone + PartialEq> DeltaDataCollection<K, T> {
         &self.data
     }
 
-    pub fn get_data(&self, key: &K) -> GetDataResult<&T> {
+    pub fn get_data(&self, key: &K) -> Result<GetDataResult<&T>, Error> {
         match self.data.get(key) {
             Some(d) => match d.get_data_delta() {
-                DataDelta::Mismatch => todo!(), // FIXME
+                DataDelta::Mismatch => Err(Error::DeltaDataMismatch),
                 DataDelta::Modify(old, new) => match (old, new) {
-                    (None, None) => GetDataResult::Deleted,
-                    (None, Some(d)) => GetDataResult::Present(d),
-                    (Some(_), None) => GetDataResult::Deleted,
-                    (Some(_), Some(d)) => GetDataResult::Present(d),
+                    (None, None) => Ok(GetDataResult::Deleted),
+                    (None, Some(d)) => Ok(GetDataResult::Present(d)),
+                    (Some(_), None) => Ok(GetDataResult::Deleted),
+                    (Some(_), Some(d)) => Ok(GetDataResult::Present(d)),
                 },
             },
-            None => GetDataResult::Missing,
+            None => Ok(GetDataResult::Missing),
         }
     }
 
@@ -139,7 +137,7 @@ impl<K: Ord + Copy, T: Clone + PartialEq> DeltaDataCollection<K, T> {
         other: DeltaMapElement<T>,
     ) -> Result<Option<DataDeltaUndo<T>>, Error> {
         let undo = match &other {
-            DeltaMapElement::Delta(other_delta) => Some(other_delta.invert()),
+            DeltaMapElement::Delta(other_delta) => Some(other_delta.clone().invert()),
             DeltaMapElement::DeltaUndo(_) => None,
         };
 

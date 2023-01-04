@@ -55,7 +55,7 @@ fn test_combine_deltas(#[case] delta1: DataDelta<char>, #[case] delta2: DataDelt
 fn test_delta_inversion(#[case] delta: DataDelta<char>) {
     // (Delta + Undo) + Delta = Delta
     let result = combine_delta_data(
-        combine_delta_data(delta.clone(), delta.invert().0),
+        combine_delta_data(delta.clone(), delta.clone().invert().0),
         delta.clone(),
     );
     assert_eq!(result, delta);

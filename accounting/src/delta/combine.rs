@@ -33,16 +33,16 @@ pub fn combine_data_with_delta<T: Clone + PartialEq>(
             DataDelta::Modify(prev, new) => match (prev, new) {
                 (None, None) => Ok(None),
                 (None, Some(d)) => Ok(Some(d.clone())),
-                (Some(_), None) => Err(Error::DeltaDataMismatch),
-                (Some(_), Some(_)) => Err(Error::DeltaDataMismatch),
+                (Some(_), None) => Err(Error::RemoveNonexistingData),
+                (Some(_), Some(_)) => Err(Error::ModifyNonexistingData),
             },
         },
         (Some(p), None) => Ok(Some(p.clone())),
         (Some(data), Some(delta)) => match delta.get_data_delta() {
             DataDelta::Mismatch => Err(Error::DeltaDataMismatch),
             DataDelta::Modify(prev, new) => match (prev, new) {
-                (None, None) => Err(Error::DeltaDataMismatch),
-                (None, Some(_)) => Err(Error::DeltaDataMismatch),
+                (None, None) => Err(Error::RemoveNonexistingData),
+                (None, Some(_)) => Err(Error::DataCreatedMultipleTimes),
                 (Some(old), None) => {
                     utils::ensure!(data == old, Error::DeltaDataMismatch);
                     Ok(None)
@@ -94,10 +94,11 @@ pub mod test {
     #[rustfmt::skip]
     #[case(None,      None,                               Ok(None))]
     #[case(None,      Some(Modify(None, Some('a'))),      Ok(Some('a')))]
-    #[case(None,      Some(Modify(Some('a'), None)),      Err(Error::DeltaDataMismatch))]
-    #[case(None,      Some(Modify(Some('a'), Some('b'))), Err(Error::DeltaDataMismatch))]
+    #[case(None,      Some(Modify(Some('a'), None)),      Err(Error::RemoveNonexistingData))]
+    #[case(None,      Some(Modify(Some('a'), Some('b'))), Err(Error::ModifyNonexistingData))]
     #[case(Some('a'), None,                               Ok(Some('a')))]
-    #[case(Some('a'), Some(Modify(None, Some('a'))),      Err(Error::DeltaDataMismatch))]
+    #[case(Some('a'), Some(Modify(None, None)),           Err(Error::RemoveNonexistingData))]
+    #[case(Some('a'), Some(Modify(None, Some('a'))),      Err(Error::DataCreatedMultipleTimes))]
     #[case(Some('a'), Some(Modify(Some('a'), Some('a'))), Ok(Some('a')))]
     #[case(Some('a'), Some(Modify(Some('a'), Some('b'))), Ok(Some('b')))]
     #[case(Some('a'), Some(Modify(Some('b'), Some('c'))), Err(Error::DeltaDataMismatch))]
