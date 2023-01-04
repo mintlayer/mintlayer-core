@@ -794,6 +794,7 @@ where
         }
 
         tx.send(()).unwrap();
+        mgr1
     });
 
     loop {

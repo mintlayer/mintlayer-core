@@ -343,14 +343,14 @@ fn initial_block_download(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         // Only genesis block, so is_initial_block_download should return true.
-        assert_eq!(true, tf.chainstate.is_initial_block_download().unwrap());
+        assert!(tf.chainstate.is_initial_block_download().unwrap());
 
         // The added block will have a very fresh timestamp.
         tf.make_block_builder().build_and_process().unwrap();
-        assert_eq!(false, tf.chainstate.is_initial_block_download().unwrap());
+        assert!(!tf.chainstate.is_initial_block_download().unwrap());
 
         // Add one more block.
         tf.make_block_builder().build_and_process().unwrap();
-        assert_eq!(false, tf.chainstate.is_initial_block_download().unwrap());
+        assert!(!tf.chainstate.is_initial_block_download().unwrap());
     });
 }
