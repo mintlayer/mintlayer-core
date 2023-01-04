@@ -98,12 +98,15 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
         self.chainstate_ref.get_best_block_index()
     }
 
-    pub fn get_best_block_header(&self) -> Result<Option<BlockHeader>, PropertyQueryError> {
+    pub fn get_best_block_header(&self) -> Result<BlockHeader, PropertyQueryError> {
         let best_block_index = self
             .chainstate_ref
             .get_best_block_index()?
             .ok_or(PropertyQueryError::BestBlockIndexNotFound)?;
-        self.chainstate_ref.get_header_from_height(&best_block_index.block_height())
+        match best_block_index {
+            GenBlockIndex::Block(b) => Ok(b.block_header().clone()),
+            GenBlockIndex::Genesis(_) => Err(PropertyQueryError::GenesisHeaderRequested),
+        }
     }
 
     pub fn get_best_block_timestamp(&self) -> Result<BlockTimestamp, PropertyQueryError> {

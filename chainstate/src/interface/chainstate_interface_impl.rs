@@ -173,13 +173,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
     }
 
     fn get_best_block_header(&self) -> Result<BlockHeader, ChainstateError> {
-        Ok(self
-            .chainstate
+        self.chainstate
             .query()
             .map_err(ChainstateError::from)?
             .get_best_block_header()
-            .map_err(ChainstateError::FailedToReadProperty)?
-            .expect("Best block header could not be found"))
+            .map_err(ChainstateError::FailedToReadProperty)
     }
 
     fn get_best_block_timestamp(&self) -> Result<BlockTimestamp, ChainstateError> {
