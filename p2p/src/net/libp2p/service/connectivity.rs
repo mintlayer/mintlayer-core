@@ -37,9 +37,6 @@ use crate::{
 /// Connectivity handle for libp2p
 #[derive(Debug)]
 pub struct Libp2pConnectivityHandle<T: NetworkingService> {
-    /// Peer Id of the local node
-    peer_id: PeerId,
-
     /// Channel for sending commands to libp2p backend
     cmd_tx: mpsc::UnboundedSender<types::Command>,
 
@@ -50,12 +47,10 @@ pub struct Libp2pConnectivityHandle<T: NetworkingService> {
 
 impl<T: NetworkingService> Libp2pConnectivityHandle<T> {
     pub fn new(
-        peer_id: PeerId,
         cmd_tx: mpsc::UnboundedSender<types::Command>,
         conn_rx: mpsc::UnboundedReceiver<types::ConnectivityEvent>,
     ) -> Self {
         Self {
-            peer_id,
             cmd_tx,
             conn_rx,
             _marker: Default::default(),
@@ -198,7 +193,7 @@ where
     }
 
     async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
-        log::debug!("disconnect peer {:?}", peer_id);
+        log::debug!("disconnect peer {}", peer_id);
 
         let (tx, rx) = oneshot::channel();
         self.cmd_tx.send(types::Command::Disconnect {
@@ -212,10 +207,6 @@ where
         let (tx, rx) = oneshot::channel();
         self.cmd_tx.send(types::Command::ListenAddress { response: tx })?;
         rx.await.map_err(P2pError::from)
-    }
-
-    fn peer_id(&self) -> &T::PeerId {
-        &self.peer_id
     }
 
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {

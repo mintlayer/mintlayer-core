@@ -17,7 +17,7 @@ use tokio::sync::oneshot;
 
 use common::chain::block::Block;
 
-use crate::net::NetworkingService;
+use crate::{interface::types::ConnectedPeer, net::NetworkingService};
 
 #[derive(Debug)]
 pub enum PeerManagerEvent<T: NetworkingService> {
@@ -33,11 +33,8 @@ pub enum PeerManagerEvent<T: NetworkingService> {
     /// Get the bind address of the local node
     GetBindAddress(oneshot::Sender<String>),
 
-    /// Get peer ID of the local node
-    GetPeerId(oneshot::Sender<String>),
-
-    /// Get peer IDs of connected peers
-    GetConnectedPeers(oneshot::Sender<Vec<String>>),
+    /// Get peer IDs and addresses of connected peers
+    GetConnectedPeers(oneshot::Sender<Vec<ConnectedPeer>>),
 
     /// Adjust peer score
     AdjustPeerScore(T::PeerId, u32, oneshot::Sender<crate::Result<()>>),

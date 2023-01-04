@@ -59,20 +59,19 @@ use crate::{
     },
 };
 
-#[derive(Debug)]
+use super::peer::Role;
+
+/// Active peer data
 struct PeerContext {
-    _peer_id: MockPeerId,
     subscriptions: BTreeSet<PubSubTopic>,
     tx: mpsc::Sender<MockEvent>,
 }
 
-#[derive(Debug)]
-enum ConnectionState<T: TransportSocket> {
-    /// Connection established for outbound connection
-    OutboundAccepted { address: T::Address },
-
-    /// Connection established for inbound connection
-    InboundAccepted { address: T::Address },
+/// Pending peer data (until handshake message is recevied)
+struct PendingPeerContext<A> {
+    address: A,
+    role: Role,
+    tx: mpsc::Sender<MockEvent>,
 }
 
 pub struct Backend<T: TransportSocket> {
@@ -98,7 +97,7 @@ pub struct Backend<T: TransportSocket> {
     peers: HashMap<MockPeerId, PeerContext>,
 
     /// Pending connections
-    pending: HashMap<MockPeerId, (mpsc::Sender<MockEvent>, ConnectionState<T>)>,
+    pending: HashMap<MockPeerId, PendingPeerContext<T::Address>>,
 
     /// RX channel for receiving events from peers
     #[allow(clippy::type_complexity)]
@@ -115,9 +114,6 @@ pub struct Backend<T: TransportSocket> {
 
     /// Timeout for outbound operations
     timeout: Duration,
-
-    /// Local peer ID
-    local_peer_id: MockPeerId,
 
     /// Request manager for managing inbound/outbound requests and responses
     request_mgr: request_manager::RequestManager,
@@ -149,8 +145,6 @@ where
         sync_tx: mpsc::Sender<SyncingEvent>,
         timeout: Duration,
     ) -> Self {
-        let local_peer_id = MockPeerId::from_socket_address::<T>(&address);
-
         Self {
             transport,
             address,
@@ -164,7 +158,6 @@ where
             peers: HashMap::new(),
             pending: HashMap::new(),
             peer_chan: mpsc::channel(64),
-            local_peer_id,
             request_mgr: request_manager::RequestManager::new(),
             pending_responses: HashMap::new(),
         }
@@ -188,13 +181,9 @@ where
 
         match timeout(self.timeout, self.transport.connect(address.clone())).await {
             Ok(event) => match event {
-                Ok(socket) => self.create_peer(
-                    socket,
-                    self.local_peer_id,
-                    MockPeerId::from_socket_address::<T>(&address),
-                    peer::Role::Outbound,
-                    ConnectionState::OutboundAccepted { address },
-                ),
+                Ok(socket) => {
+                    self.create_peer(socket, MockPeerId::new(), peer::Role::Outbound, address)
+                }
                 Err(err) => {
                     log::error!("Failed to establish connection: {err}");
 
@@ -218,7 +207,7 @@ where
         }
     }
 
-    /// Disconnect remote peer
+    /// Disconnect remote peer by id
     async fn disconnect_peer(&mut self, peer_id: &MockPeerId) -> crate::Result<()> {
         self.request_mgr.unregister_peer(peer_id);
         if let Some(context) = self.peers.remove(peer_id) {
@@ -257,10 +246,7 @@ where
         request_id: MockRequestId,
         response: message::Response,
     ) -> crate::Result<()> {
-        log::trace!(
-            "{}: try to send response to request, request id {request_id}",
-            self.local_peer_id
-        );
+        log::trace!("try to send response to request, request id {request_id}");
 
         if let Some((peer_id, response)) = self.request_mgr.make_response(&request_id, response) {
             return self
@@ -400,10 +386,9 @@ where
                     let (stream, address) = res.map_err(|_| P2pError::Other("accept() failed"))?;
                     self.create_peer(
                         stream,
-                        self.local_peer_id,
-                        MockPeerId::from_socket_address::<T>(&address),
+                        MockPeerId::new(),
                         peer::Role::Inbound,
-                        ConnectionState::InboundAccepted { address }
+                        address,
                     )?;
                 }
                 // Handle peer events.
@@ -430,14 +415,13 @@ where
     fn create_peer(
         &mut self,
         socket: T::Stream,
-        local_peer_id: MockPeerId,
         remote_peer_id: MockPeerId,
         role: peer::Role,
-        state: ConnectionState<T>,
+        address: T::Address,
     ) -> crate::Result<()> {
         let (tx, rx) = mpsc::channel(16);
 
-        self.pending.insert(remote_peer_id, (tx, state));
+        self.pending.insert(remote_peer_id, PendingPeerContext { address, role, tx });
 
         let tx = self.peer_chan.0.clone();
         let chain_config = Arc::clone(&self.chain_config);
@@ -445,7 +429,6 @@ where
 
         tokio::spawn(async move {
             let mut peer = peer::Peer::<T>::new(
-                local_peer_id,
                 remote_peer_id,
                 role,
                 chain_config,
@@ -471,21 +454,21 @@ where
     ) -> crate::Result<()> {
         match event {
             PeerEvent::PeerInfoReceived {
-                peer_id: received_id,
                 network,
                 version,
                 protocols,
                 subscriptions,
             } => {
-                let (tx, state) = self.pending.remove(&peer_id).expect("peer to exist");
+                let PendingPeerContext { address, role, tx } =
+                    self.pending.remove(&peer_id).expect("peer to exist");
 
-                match state {
-                    ConnectionState::OutboundAccepted { address } => {
+                match role {
+                    Role::Outbound => {
                         self.conn_tx
                             .send(ConnectivityEvent::OutboundAccepted {
-                                address,
+                                address: address.clone(),
                                 peer_info: MockPeerInfo {
-                                    peer_id: received_id,
+                                    peer_id,
                                     network,
                                     version,
                                     agent: None,
@@ -496,12 +479,12 @@ where
                             .await
                             .map_err(P2pError::from)?;
                     }
-                    ConnectionState::InboundAccepted { address } => {
+                    Role::Inbound => {
                         self.conn_tx
                             .send(ConnectivityEvent::InboundAccepted {
-                                address,
+                                address: address.clone(),
                                 peer_info: MockPeerInfo {
-                                    peer_id: received_id,
+                                    peer_id,
                                     network,
                                     version,
                                     agent: None,
@@ -514,15 +497,8 @@ where
                     }
                 }
 
-                self.peers.insert(
-                    received_id,
-                    PeerContext {
-                        _peer_id: received_id,
-                        subscriptions,
-                        tx,
-                    },
-                );
-                let _ = self.request_mgr.register_peer(received_id);
+                self.peers.insert(peer_id, PeerContext { subscriptions, tx });
+                let _ = self.request_mgr.register_peer(peer_id);
             }
             PeerEvent::MessageReceived { message } => {
                 self.handle_message(peer_id, message).await?;
@@ -568,9 +544,9 @@ where
             Command::Connect { address, response } => {
                 self.connect(address, response).await?;
             }
-            Command::Disconnect { peer_id, response } | Command::BanPeer { peer_id, response } => {
+            Command::Disconnect { peer_id, response } => {
                 let res = self.disconnect_peer(&peer_id).await;
-                response.send(res).map_err(|_| P2pError::ChannelClosed)?;
+                response.send(res).map_err(|_| P2pError::ChannelClosed)?
             }
             Command::SendRequest {
                 peer_id,

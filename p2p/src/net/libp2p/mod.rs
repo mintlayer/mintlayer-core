@@ -117,7 +117,7 @@ impl NetworkingService for Libp2pService {
             .map_err(|_| P2pError::DialError(DialError::IoError(std::io::ErrorKind::AddrInUse)))?;
 
         Ok((
-            Self::ConnectivityHandle::new(peer_id, cmd_tx.clone(), conn_rx),
+            Self::ConnectivityHandle::new(cmd_tx.clone(), conn_rx),
             Self::SyncingMessagingHandle::new(cmd_tx, sync_rx),
         ))
     }

@@ -51,7 +51,7 @@ where
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id = P::random();
+    let peer_id = P::new();
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(A::make_transport(), addr).await;
@@ -102,7 +102,7 @@ where
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id = P::random();
+    let peer_id = P::new();
 
     let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(A::make_transport(), addr).await;
     register_peer(&mut mgr, peer_id).await;
@@ -143,7 +143,7 @@ where
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id = P::random();
+    let peer_id = P::new();
 
     let mut rng = crypto::random::make_pseudo_rng();
     let config = Arc::new(common::chain::config::create_unit_test_config());
@@ -197,7 +197,7 @@ where
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id = P::random();
+    let peer_id = P::new();
 
     let mut rng = crypto::random::make_pseudo_rng();
     let config = Arc::new(common::chain::config::create_unit_test_config());
@@ -265,7 +265,7 @@ where
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id = P::random();
+    let peer_id = P::new();
 
     let mut rng = crypto::random::make_pseudo_rng();
     let config = Arc::new(common::chain::config::create_unit_test_config());
@@ -320,7 +320,7 @@ where
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id = P::random();
+    let peer_id = P::new();
 
     let mut rng = crypto::random::make_pseudo_rng();
     let config = Arc::new(common::chain::config::create_unit_test_config());
@@ -375,7 +375,7 @@ where
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id = P::random();
+    let peer_id = P::new();
 
     let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(A::make_transport(), addr).await;
 

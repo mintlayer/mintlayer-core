@@ -54,14 +54,14 @@ where
     let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
-    let (address, peer_info) = connect_services::<T>(
+    let (address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
     .await;
+    let peer_id = peer_info.peer_id;
     pm2.accept_inbound_connection(address, peer_info).unwrap();
 
-    let peer_id = *pm1.peer_connectivity_handle.peer_id();
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
     let addr1 = pm1.peer_connectivity_handle.local_addr().await.unwrap().unwrap().as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
@@ -106,14 +106,14 @@ where
     let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
-    let (address, peer_info) = connect_services::<T>(
+    let (address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
     .await;
+    let peer_id = peer_info.peer_id;
     pm2.accept_inbound_connection(address, peer_info).unwrap();
 
-    let peer_id = *pm1.peer_connectivity_handle.peer_id();
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
     let addr1 = pm1.peer_connectivity_handle.local_addr().await.unwrap().unwrap().as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
@@ -160,24 +160,23 @@ where
     let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
-    let (address, peer_info) = connect_services::<T>(
+    let (address, peer_info1, _peer_info2) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
     .await;
-    pm2.accept_inbound_connection(address, peer_info).unwrap();
+    let peer_id = peer_info1.peer_id;
+    pm2.accept_inbound_connection(address, peer_info1).unwrap();
 
-    let peer_id = *pm1.peer_connectivity_handle.peer_id();
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
     let addr1 = pm1.peer_connectivity_handle.local_addr().await.unwrap().unwrap().as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
-    assert!(std::matches!(
+    assert!(matches!(
         pm2.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
 
     let remote_addr = pm1.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
-    let remote_id = *pm1.peer_connectivity_handle.peer_id();
 
     tokio::spawn(async move {
         loop {
@@ -190,10 +189,10 @@ where
         pm2.peer_connectivity_handle.poll_next().await
     {
         assert_eq!(remote_addr, address);
-        assert_eq!(
+        assert!(matches!(
             error,
-            P2pError::PeerError(PeerError::BannedPeer(remote_id.to_string()))
-        );
+            P2pError::PeerError(PeerError::BannedPeer(_))
+        ));
     }
 }
 
@@ -310,7 +309,7 @@ async fn validate_invalid_outbound_connection_libp2p() {
 async fn validate_invalid_outbound_connection_mock_tcp() {
     validate_invalid_outbound_connection::<TestTransportTcp, MockService<TcpTransportSocket>>(
         "210.113.67.107:2525".parse().unwrap(),
-        MockPeerId::random(),
+        MockPeerId::new(),
     )
     .await;
 }
@@ -319,7 +318,7 @@ async fn validate_invalid_outbound_connection_mock_tcp() {
 async fn validate_invalid_outbound_connection_mock_channels() {
     validate_invalid_outbound_connection::<TestTransportChannel, MockService<MockChannelTransport>>(
         1,
-        MockPeerId::random(),
+        MockPeerId::new(),
     )
     .await;
 }
@@ -328,7 +327,7 @@ async fn validate_invalid_outbound_connection_mock_channels() {
 async fn validate_invalid_outbound_connection_mock_noise() {
     validate_invalid_outbound_connection::<TestTransportNoise, MockService<NoiseTcpTransport>>(
         "210.113.67.107:2525".parse().unwrap(),
-        MockPeerId::random(),
+        MockPeerId::new(),
     )
     .await;
 }
@@ -425,7 +424,7 @@ async fn validate_invalid_inbound_connection_libp2p() {
 async fn validate_invalid_inbound_connection_mock_tcp() {
     validate_invalid_inbound_connection::<TestTransportTcp, MockService<TcpTransportSocket>>(
         "210.113.67.107:2525".parse().unwrap(),
-        MockPeerId::random(),
+        MockPeerId::new(),
     )
     .await;
 }
@@ -434,7 +433,7 @@ async fn validate_invalid_inbound_connection_mock_tcp() {
 async fn validate_invalid_inbound_connection_mock_channels() {
     validate_invalid_inbound_connection::<TestTransportChannel, MockService<MockChannelTransport>>(
         1,
-        MockPeerId::random(),
+        MockPeerId::new(),
     )
     .await;
 }
@@ -443,7 +442,7 @@ async fn validate_invalid_inbound_connection_mock_channels() {
 async fn validate_invalid_inbound_connection_mock_noise() {
     validate_invalid_inbound_connection::<TestTransportNoise, MockService<NoiseTcpTransport>>(
         "210.113.67.107:2525".parse().unwrap(),
-        MockPeerId::random(),
+        MockPeerId::new(),
     )
     .await;
 }
@@ -472,12 +471,11 @@ where
     )
     .await;
 
-    connect_services::<T>(
+    let (_address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
     .await;
-    let pm1_id = *pm1.peer_connectivity_handle.peer_id();
 
     // run the first peer manager in the background and poll events from the peer manager
     // that tries to connect to the first manager
@@ -486,7 +484,7 @@ where
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) =
         pm2.peer_connectivity_handle.poll_next().await
     {
-        assert_eq!(peer_id, pm1_id);
+        assert_eq!(peer_id, peer_info.peer_id);
     } else {
         panic!("invalid event received");
     }

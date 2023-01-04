@@ -14,15 +14,15 @@
 // limitations under the License.
 
 use std::{
-    collections::{hash_map::DefaultHasher, BTreeSet},
-    hash::{Hash, Hasher},
+    collections::BTreeSet,
+    hash::Hash,
     str::FromStr,
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 use tokio::sync::oneshot;
 
 use common::primitives::semver;
-use crypto::random::{make_pseudo_rng, Rng};
 use serialization::{Decode, Encode};
 
 use crate::{
@@ -40,10 +40,6 @@ pub enum Command<T: TransportSocket> {
         response: oneshot::Sender<crate::Result<()>>,
     },
     Disconnect {
-        peer_id: MockPeerId,
-        response: oneshot::Sender<crate::Result<()>>,
-    },
-    BanPeer {
         peer_id: MockPeerId,
         response: oneshot::Sender<crate::Result<()>>,
     },
@@ -153,16 +149,12 @@ impl FromStr for MockPeerId {
     }
 }
 
-impl MockPeerId {
-    pub fn random() -> Self {
-        let mut rng = make_pseudo_rng();
-        Self(rng.gen::<u64>())
-    }
+static NEXT_PEER_ID: AtomicU64 = AtomicU64::new(1);
 
-    pub fn from_socket_address<T: TransportSocket>(addr: &T::Address) -> Self {
-        let mut hasher = DefaultHasher::new();
-        addr.hash(&mut hasher);
-        Self(hasher.finish())
+impl MockPeerId {
+    pub fn new() -> Self {
+        let id = NEXT_PEER_ID.fetch_add(1, Ordering::Relaxed);
+        Self(id)
     }
 }
 
@@ -191,7 +183,6 @@ pub struct MockPeerInfo {
 pub enum PeerEvent {
     /// Peer information received from remote
     PeerInfoReceived {
-        peer_id: MockPeerId,
         network: [u8; 4],
         version: semver::SemVer,
         protocols: Vec<Protocol>,
@@ -215,14 +206,12 @@ pub enum MockEvent {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum HandshakeMessage {
     Hello {
-        peer_id: MockPeerId,
         version: common::primitives::semver::SemVer,
         network: [u8; 4],
         protocols: Vec<Protocol>,
         subscriptions: BTreeSet<PubSubTopic>,
     },
     HelloAck {
-        peer_id: MockPeerId,
         version: common::primitives::semver::SemVer,
         network: [u8; 4],
         protocols: Vec<Protocol>,

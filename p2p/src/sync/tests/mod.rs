@@ -112,13 +112,13 @@ where
 pub trait MakeTestPeerId {
     type PeerId;
 
-    fn random() -> Self::PeerId;
+    fn new() -> Self::PeerId;
 }
 
 impl MakeTestPeerId for PeerId {
     type PeerId = Self;
 
-    fn random() -> Self::PeerId {
+    fn new() -> Self::PeerId {
         PeerId::random()
     }
 }
@@ -126,7 +126,7 @@ impl MakeTestPeerId for PeerId {
 impl MakeTestPeerId for MockPeerId {
     type PeerId = Self;
 
-    fn random() -> Self::PeerId {
-        MockPeerId::random()
+    fn new() -> Self::PeerId {
+        MockPeerId::new()
     }
 }

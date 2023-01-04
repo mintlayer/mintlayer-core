@@ -24,7 +24,7 @@ use crate::{
     P2p,
 };
 
-use super::p2p_interface::P2pInterface;
+use super::{p2p_interface::P2pInterface, types::ConnectedPeer};
 
 #[async_trait::async_trait]
 impl<T> P2pInterface for P2p<T>
@@ -37,18 +37,16 @@ where
         <T as NetworkingService>::PeerId: FromStr,
     {
         let (tx, rx) = oneshot::channel();
+        let addr = addr
+            .parse::<T::Address>()
+            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidAddress(addr)))?;
         self.tx_peer_manager
-            .send(PeerManagerEvent::Connect(
-                addr.parse::<T::Address>().map_err(|_| {
-                    P2pError::ConversionError(ConversionError::InvalidAddress(addr))
-                })?,
-                tx,
-            ))
+            .send(PeerManagerEvent::Connect(addr, tx))
             .map_err(|_| P2pError::ChannelClosed)?;
         rx.await.map_err(P2pError::from)?
     }
 
-    async fn disconnect(&self, peer_id: String) -> crate::Result<()>
+    async fn disconnect(&mut self, peer_id: String) -> crate::Result<()>
     where
         <T as NetworkingService>::PeerId: FromStr,
     {
@@ -79,15 +77,7 @@ where
         rx.await.map_err(P2pError::from)
     }
 
-    async fn get_peer_id(&self) -> crate::Result<String> {
-        let (tx, rx) = oneshot::channel();
-        self.tx_peer_manager
-            .send(PeerManagerEvent::GetPeerId(tx))
-            .map_err(P2pError::from)?;
-        rx.await.map_err(P2pError::from)
-    }
-
-    async fn get_connected_peers(&self) -> crate::Result<Vec<String>> {
+    async fn get_connected_peers(&self) -> crate::Result<Vec<ConnectedPeer>> {
         let (tx, rx) = oneshot::channel();
         self.tx_peer_manager
             .send(PeerManagerEvent::GetConnectedPeers(tx))

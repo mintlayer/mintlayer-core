@@ -51,9 +51,6 @@ pub struct MockConnectivityHandle<S: NetworkingService, T: TransportSocket> {
     /// The local address of a network service provider.
     local_addr: S::Address,
 
-    /// The peer ID of a local node.
-    peer_id: MockPeerId,
-
     /// TX channel for sending commands to mock backend
     cmd_tx: mpsc::Sender<types::Command<T>>,
 
@@ -152,12 +149,10 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
             }
         });
 
-        let peer_id = MockPeerId::from_socket_address::<T>(&local_addr);
         Ok((
             Self::ConnectivityHandle {
                 local_addr,
                 cmd_tx: cmd_tx.clone(),
-                peer_id,
                 conn_rx,
                 _marker: Default::default(),
             },
@@ -210,10 +205,6 @@ where
 
     async fn local_addr(&self) -> crate::Result<Option<S::Address>> {
         Ok(Some(self.local_addr.clone()))
-    }
-
-    fn peer_id(&self) -> &S::PeerId {
-        &self.peer_id
     }
 
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<S>> {
@@ -412,7 +403,7 @@ mod tests {
             assert_eq!(
                 peer_info,
                 net::types::PeerInfo {
-                    peer_id: *conn2.peer_id(),
+                    peer_id: peer_info.peer_id,
                     magic_bytes: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     agent: None,

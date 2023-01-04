@@ -94,7 +94,7 @@ async fn test_peer_manager_connect_libp2p() {
 
 // verify that the auto-connect functionality works if the number of active connections
 // is below the desired threshold and there are idle peers in the peerdb
-async fn test_auto_connect<A, T>()
+async fn test_auto_connect<A, T>(peer_id: T::PeerId)
 where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
@@ -110,7 +110,6 @@ where
     let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
     let addr = pm2.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
-    let peer_id = *pm2.peer_connectivity_handle.peer_id();
 
     tokio::spawn(async move {
         loop {
@@ -135,22 +134,24 @@ where
 
 #[tokio::test]
 async fn test_auto_connect_libp2p() {
-    test_auto_connect::<TestTransportLibp2p, Libp2pService>().await;
+    test_auto_connect::<TestTransportLibp2p, Libp2pService>(PeerId::random()).await;
 }
 
 #[tokio::test]
 async fn test_auto_connect_mock_tcp() {
-    test_auto_connect::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
+    test_auto_connect::<TestTransportTcp, MockService<TcpTransportSocket>>(MockPeerId::new()).await;
 }
 
 #[tokio::test]
 async fn test_auto_connect_mock_channels() {
-    test_auto_connect::<TestTransportChannel, MockService<MockChannelTransport>>().await;
+    test_auto_connect::<TestTransportChannel, MockService<MockChannelTransport>>(MockPeerId::new())
+        .await;
 }
 
 #[tokio::test]
 async fn test_auto_connect_mock_noise() {
-    test_auto_connect::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
+    test_auto_connect::<TestTransportNoise, MockService<NoiseTcpTransport>>(MockPeerId::new())
+        .await;
 }
 
 async fn connect_outbound_same_network<A, T>()
@@ -267,7 +268,7 @@ where
     )
     .await;
 
-    let (_address, peer_info) = connect_services::<T>(
+    let (_address, peer_info, _) = connect_services::<T>(
         &mut pm2.peer_connectivity_handle,
         &mut pm1.peer_connectivity_handle,
     )
@@ -312,7 +313,7 @@ where
     let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
-    let (address, peer_info) = connect_services::<T>(
+    let (address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
@@ -364,7 +365,7 @@ where
     )
     .await;
 
-    let (address, peer_info) = connect_services::<T>(
+    let (address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
@@ -424,16 +425,14 @@ where
     )
     .await;
 
-    let (_address, _peer_info) = connect_services::<T>(
+    let (_address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
     .await;
 
     assert_eq!(
-        pm2.peer_connectivity_handle
-            .disconnect(*pm1.peer_connectivity_handle.peer_id())
-            .await,
+        pm2.peer_connectivity_handle.disconnect(peer_info.peer_id).await,
         Ok(())
     );
     assert!(std::matches!(
@@ -486,12 +485,11 @@ where
         peer_manager::MAX_ACTIVE_CONNECTIONS
     );
 
-    let (_address, _peer_info) = connect_services::<T>(
+    let (_address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
     .await;
-    let pm1_id = *pm1.peer_connectivity_handle.peer_id();
 
     // run the first peer manager in the background and poll events from the peer manager
     // that tries to connect to the first manager
@@ -500,7 +498,7 @@ where
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) =
         pm2.peer_connectivity_handle.poll_next().await
     {
-        assert_eq!(peer_id, pm1_id);
+        assert_eq!(peer_id, peer_info.peer_id);
     } else {
         panic!("invalid event received");
     }
@@ -529,7 +527,7 @@ async fn inbound_connection_too_many_peers_mock_tcp() {
     let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
         .map(
             |_| net::types::PeerInfo::<MockService<TcpTransportSocket>> {
-                peer_id: MockPeerId::random(),
+                peer_id: MockPeerId::new(),
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
                 agent: None,
@@ -556,7 +554,7 @@ async fn inbound_connection_too_many_peers_mock_channels() {
     let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
         .map(
             |_| net::types::PeerInfo::<MockService<MockChannelTransport>> {
-                peer_id: MockPeerId::random(),
+                peer_id: MockPeerId::new(),
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
                 agent: None,
@@ -584,7 +582,7 @@ async fn inbound_connection_too_many_peers_mock_noise() {
     let config = Arc::new(config::create_mainnet());
     let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
         .map(|_| net::types::PeerInfo::<MockService<NoiseTcpTransport>> {
-            peer_id: MockPeerId::random(),
+            peer_id: MockPeerId::new(),
             magic_bytes: *config.magic_bytes(),
             version: common::primitives::semver::SemVer::new(0, 1, 0),
             agent: None,

@@ -34,6 +34,7 @@ libp2p = { version = "0.46", default-features = false, features = ["gossipsub", 
 tokio = { version = "1", default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 tokio-util = {version = "0.7", default-features = false, features = ["codec"] }
 snowstorm = "0.4.0"
+serde = "1.0"
 
 [dev-dependencies]
 chainstate-storage = { path = "../chainstate/storage" }
