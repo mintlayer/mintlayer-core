@@ -38,7 +38,7 @@ use common::{
     primitives::{Id, Idable},
 };
 use logging::log;
-use utils::ensure;
+use utils::{ensure, tap_error_log::LogError};
 
 use crate::{
     config::P2pConfig,
@@ -544,7 +544,9 @@ where
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
 
                     match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
-                        Some(block) => self.peer_sync_handle.make_announcement(Announcement::Block(block)).await?,
+                        Some(block) => {
+                            let _ = self.peer_sync_handle.make_announcement(Announcement::Block(block)).await.log_err();
+                        }
                         None => log::error!("CRITICAL: best block not available"),
                     }
                 }
