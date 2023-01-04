@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::key::secp256k1::extended_keys::{
+    Secp256k1ExtendedPrivateKey, Secp256k1ExtendedPublicKey,
+};
 use crate::key::secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey};
 use serialization::{Decode, Encode};
 
@@ -22,7 +25,7 @@ use super::rschnorr::{MLRistrettoPrivateKey, MLRistrettoPublicKey};
 pub enum PrivateKeyHolder {
     #[codec(index = 0)]
     Secp256k1Schnorr(Secp256k1PrivateKey),
-    #[codec(index = 2)]
+    #[codec(index = 1)]
     RistrettoSchnorr(MLRistrettoPrivateKey),
 }
 
@@ -30,6 +33,18 @@ pub enum PrivateKeyHolder {
 pub enum PublicKeyHolder {
     #[codec(index = 0)]
     Secp256k1Schnorr(Secp256k1PublicKey),
-    #[codec(index = 2)]
+    #[codec(index = 1)]
     RistrettoSchnorr(MLRistrettoPublicKey),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
+pub enum ExtendedPrivateKeyHolder {
+    #[codec(index = 0)]
+    Secp256k1Schnorr(Secp256k1ExtendedPrivateKey),
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Decode, Encode)]
+pub enum ExtendedPublicKeyHolder {
+    #[codec(index = 0)]
+    Secp256k1Schnorr(Secp256k1ExtendedPublicKey),
 }

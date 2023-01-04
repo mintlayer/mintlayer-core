@@ -10,6 +10,8 @@ authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh
 [dependencies]
 serialization = { path = "../serialization" }
 secp256k1 = { version = "0.24.2", default-features = false, features = ["global-context", "rand-std"] }
+hmac = "0.12.1"
+bip39 = { version = "1.0.1", default-features = false }
 sha-1 = "0.10"
 sha2 = "0.10"
 sha3 = "0.10"
