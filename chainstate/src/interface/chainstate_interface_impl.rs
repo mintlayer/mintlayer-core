@@ -441,4 +441,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         let utxo_view = chainstate_ref.make_utxo_view();
         Ok(utxo_view.utxo(outpoint))
     }
+
+    fn is_initial_block_download(&self) -> Result<bool, ChainstateError> {
+        self.chainstate.is_initial_block_download().map_err(ChainstateError::from)
+    }
 }

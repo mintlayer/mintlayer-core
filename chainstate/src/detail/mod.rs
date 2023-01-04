@@ -39,7 +39,11 @@ pub use transaction_verifier::{
 };
 use tx_verifier::transaction_verifier;
 
-use std::sync::Arc;
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use itertools::Itertools;
 
@@ -83,6 +87,7 @@ pub struct Chainstate<S, V> {
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     events_controller: EventsController<ChainstateEvent>,
     time_getter: TimeGetter,
+    is_initial_block_download_finished: AtomicBool,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -195,6 +200,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             custom_orphan_error_hook,
             events_controller: EventsController::new(),
             time_getter,
+            is_initial_block_download_finished: false.into(),
         }
     }
 
@@ -431,6 +437,28 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     pub fn events_controller(&self) -> &EventsController<ChainstateEvent> {
         &self.events_controller
+    }
+
+    pub fn is_initial_block_download(&self) -> Result<bool, PropertyQueryError> {
+        if self.is_initial_block_download_finished.load(Ordering::Relaxed) {
+            return Ok(false);
+        }
+
+        // TODO: Add a check for importing and reindex.
+
+        // TODO: Add a check for the chain trust.
+
+        let tip_timestamp = self.query()?.get_best_block_timestamp()?.as_duration_since_epoch();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            // This can fail only if `SystemTime::now()` returns the time before `UNIX_EPOCH`.
+            .expect("Invalid system time");
+        if tip_timestamp + self.chainstate_config.max_tip_age.clone().into() < now {
+            return Ok(true);
+        }
+
+        self.is_initial_block_download_finished.store(true, Ordering::Relaxed);
+        Ok(false)
     }
 }
 

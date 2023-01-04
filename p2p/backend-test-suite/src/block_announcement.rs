@@ -148,7 +148,6 @@ where
         outbound_connection_timeout: Default::default(),
         mdns_config: Default::default(),
         node_type: NodeType::Inactive.into(),
-        max_tip_age: Default::default(),
     });
     let (mut conn1, mut sync1) = S::start(
         A::make_transport(),

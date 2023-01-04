@@ -96,7 +96,7 @@ where
     assert_eq!(res2, Ok(()));
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert!(!mgr1.is_initial_block_download());
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 // local and remote nodes are in the same chain but remote is ahead 7 blocks
@@ -143,8 +143,6 @@ where
         for _ in 0..9 {
             advance_mgr_state(&mut mgr1).await.unwrap();
         }
-
-        mgr1
     });
 
     for _ in 0..9 {
@@ -197,11 +195,10 @@ where
         }
     }
 
-    let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
+    handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert!(!mgr1.is_initial_block_download());
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 // local and remote nodes are in the same chain but local is ahead of remote by 12 blocks
@@ -239,8 +236,6 @@ where
         for _ in 0..14 {
             advance_mgr_state(&mut mgr1).await.unwrap();
         }
-
-        mgr1
     });
 
     let mut work = VecDeque::new();
@@ -316,12 +311,10 @@ where
         }
     }
 
-    let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
-    mgr2.update_state().await.unwrap();
+    handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert!(!mgr1.is_initial_block_download());
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 // local and remote nodes are in the same chain but local is ahead of remote by 14 blocks
@@ -366,8 +359,6 @@ where
         for _ in 0..24 {
             advance_mgr_state(&mut mgr1).await.unwrap();
         }
-
-        mgr1
     });
 
     let mut work = VecDeque::new();
@@ -460,14 +451,12 @@ where
         }
     }
 
-    let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
-    mgr2.update_state().await.unwrap();
+    handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await == local_tip);
     assert!(get_tip(&mgr2_handle).await != remote_tip);
-    assert!(!mgr1.is_initial_block_download());
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 // local and remote nodes are in different chains and remote has longer chain
@@ -512,8 +501,6 @@ where
         for _ in 0..20 {
             advance_mgr_state(&mut mgr1).await.unwrap();
         }
-
-        mgr1
     });
 
     let mut work = VecDeque::new();
@@ -606,14 +593,12 @@ where
         }
     }
 
-    let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
-    mgr2.update_state().await.unwrap();
+    handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await != local_tip);
     assert!(get_tip(&mgr2_handle).await == remote_tip);
-    assert!(!mgr1.is_initial_block_download());
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 async fn two_remote_nodes_different_chains<A, S>()
@@ -672,8 +657,6 @@ where
         for _ in 0..18 {
             advance_mgr_state(&mut mgr1).await.unwrap();
         }
-
-        mgr1
     });
 
     for _ in 0..18 {
@@ -729,13 +712,12 @@ where
             msg => panic!("invalid message received: {:?}", msg),
         }
     }
-    let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
+    handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
     assert!(get_tip(&mgr3_handle).await == mgr3_tip);
-    assert!(!mgr1.is_initial_block_download());
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 async fn two_remote_nodes_same_chains<A, S>()
@@ -812,7 +794,6 @@ where
         }
 
         tx.send(()).unwrap();
-        mgr1
     });
 
     loop {
@@ -869,13 +850,12 @@ where
             msg => panic!("invalid message received: {:?}", msg),
         }
     }
-    let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
+    handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
     assert!(get_tip(&mgr3_handle).await == mgr3_tip);
-    assert!(!mgr1.is_initial_block_download());
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 async fn two_remote_nodes_same_chains_new_blocks<A, S>()
@@ -950,7 +930,7 @@ where
         }
 
         tx.send(()).unwrap();
-        (mgr1, mgr1_handle)
+        mgr1_handle
     });
 
     loop {
@@ -1017,12 +997,11 @@ where
             msg => panic!("invalid message received: {:?}", msg),
         }
     }
-    let (mut mgr1, mgr1_handle) = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
+    let mgr1_handle = handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(same_tip(&mgr2_handle, &mgr3_handle).await);
-    assert!(!mgr1.is_initial_block_download());
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 // connect two nodes, they are in sync so no blocks are downloaded
@@ -1069,7 +1048,7 @@ where
     assert_eq!(res2, Ok(()));
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert!(!mgr1.is_initial_block_download());
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 
     mgr1.unregister_peer(*conn2.peer_id());
     assert_eq!(conn1.disconnect(*conn2.peer_id()).await, Ok(()));
@@ -1093,8 +1072,6 @@ where
         for _ in 0..9 {
             advance_mgr_state(&mut mgr1).await.unwrap();
         }
-
-        mgr1
     });
 
     for _ in 0..9 {
@@ -1147,11 +1124,10 @@ where
         }
     }
 
-    let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state().await.unwrap();
+    handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert!(!mgr1.is_initial_block_download());
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 async fn make_sync_manager<T>(
@@ -1331,6 +1307,5 @@ where
         }
     }
 
-    mgr.update_state().await.unwrap();
     Ok(())
 }

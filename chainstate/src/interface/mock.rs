@@ -133,5 +133,6 @@ mockall::mock! {
             include_orphans: bool,
         ) -> Result<(), ChainstateError>;
         fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError>;
+        fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;
     }
 }

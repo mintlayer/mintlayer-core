@@ -108,7 +108,7 @@ pub struct RunOptions {
     /// The initial block download is finished if the difference between the current time and the
     /// tip time is less than this value.
     #[clap(long)]
-    pub p2p_max_tip_age: Option<u64>,
+    pub max_tip_age: Option<u64>,
 
     /// Address to bind http RPC to.
     #[clap(long, value_name = "ADDR")]

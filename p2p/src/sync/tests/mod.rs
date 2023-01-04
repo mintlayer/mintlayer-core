@@ -77,7 +77,6 @@ where
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
         node_type: NodeType::Full.into(),
-        max_tip_age: Default::default(),
     });
     let (conn, sync) = T::start(
         transport,

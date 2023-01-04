@@ -68,6 +68,7 @@ impl TestFrameworkBuilder {
             max_orphan_blocks: Default::default(),
             min_max_bootstrap_import_buffer_sizes: Default::default(),
             tx_index_enabled: rng.gen::<bool>().into(),
+            max_tip_age: Default::default(),
         };
         let chainstate_storage = TestStore::new_empty().unwrap();
         let time_getter = None;

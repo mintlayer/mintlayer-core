@@ -20,11 +20,7 @@ pub mod peer;
 
 mod request;
 
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{collections::HashMap, sync::Arc};
 
 use tokio::sync::{mpsc, oneshot};
 use void::Void;
@@ -70,10 +66,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     chain_config: Arc<ChainConfig>,
 
     /// The p2p configuration.
-    p2p_config: Arc<P2pConfig>,
-
-    /// Equals to false when the initial block download is finished.
-    is_initial_block_download: bool,
+    _p2p_config: Arc<P2pConfig>,
 
     /// Handle for sending/receiving syncing events
     peer_sync_handle: T::SyncingMessagingHandle,
@@ -109,19 +102,13 @@ where
     ) -> Self {
         Self {
             chain_config,
-            p2p_config,
+            _p2p_config: p2p_config,
             peer_sync_handle: handle,
             rx_sync,
             tx_peer_manager,
             chainstate_handle,
             peers: Default::default(),
-            is_initial_block_download: true,
         }
-    }
-
-    /// Returns true if the initial block download isn't finished yet.
-    pub fn is_initial_block_download(&self) -> bool {
-        self.is_initial_block_download
     }
 
     /// Get mutable reference to the handle
@@ -341,32 +328,6 @@ where
         }
     }
 
-    /// Checks the current state of syncing.
-    ///
-    /// The node is considered fully synced (its initial block download is done) if
-    /// `current time - config.max_tip_age` is less than the time of the best block.
-    pub async fn update_state(&mut self) -> crate::Result<()> {
-        if !self.is_initial_block_download {
-            return Ok(());
-        }
-
-        let block_timestamp = self
-            .chainstate_handle
-            .call(|c| c.get_best_block_timestamp())
-            .await??
-            .as_duration_since_epoch();
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            // This can fail only if `SystemTime::now()` returns the time before `UNIX_EPOCH`.
-            .expect("Invalid system time");
-
-        if block_timestamp + self.p2p_config.max_tip_age.clone().into() > now {
-            self.is_initial_block_download = false;
-        }
-
-        Ok(())
-    }
-
     pub async fn process_response(
         &mut self,
         peer_id: T::PeerId,
@@ -540,7 +501,7 @@ where
                         self.unregister_peer(peer_id)
                     }
                 },
-                block_id = block_rx.recv(), if !self.is_initial_block_download() => {
+                block_id = block_rx.recv(), if !self.chainstate_handle.call(|c| c.is_initial_block_download()).await?? => {
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
 
                     match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
@@ -551,8 +512,6 @@ where
                     }
                 }
             }
-
-            self.update_state().await?;
         }
     }
 

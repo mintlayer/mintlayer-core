@@ -106,13 +106,13 @@ fn read_config_override_values() {
         p2p_enable_mdns: Some(enable_mdns),
         p2p_mdns_query_interval: None,
         p2p_enable_ipv6_mdns_discovery: None,
-        p2p_max_tip_age: Some(max_tip_age),
         http_rpc_addr: Some(http_rpc_addr),
         http_rpc_enabled: Some(true),
         ws_rpc_addr: Some(ws_rpc_addr),
         ws_rpc_enabled: Some(false),
         storage_backend: Some(backend_type.clone()),
         node_type: Some(node_type),
+        max_tip_age: Some(max_tip_age),
     };
     let datadir_opt = Some(data_dir.path().into());
     let config = NodeConfigFile::read(&config_path, &datadir_opt, &options).unwrap();
@@ -131,12 +131,15 @@ fn read_config_override_values() {
         config.chainstate.chainstate_config.tx_index_enabled,
         Some(false)
     );
+    assert_eq!(
+        config.chainstate.chainstate_config.max_tip_age,
+        Some(max_tip_age)
+    );
 
     assert_eq!(config.p2p.bind_address, Some(p2p_addr.into()));
     assert_eq!(config.p2p.ban_threshold, Some(p2p_ban_threshold));
     assert_eq!(config.p2p.outbound_connection_timeout, Some(p2p_timeout));
     assert_eq!(config.p2p.node_type, Some(node_type));
-    assert_eq!(config.p2p.max_tip_age, Some(max_tip_age));
 
     assert_eq!(config.rpc.http_bind_address, Some(http_rpc_addr));
     assert!(config.rpc.http_enabled.unwrap());
@@ -203,12 +206,12 @@ fn default_run_options() -> RunOptions {
         p2p_enable_mdns: None,
         p2p_mdns_query_interval: None,
         p2p_enable_ipv6_mdns_discovery: None,
-        p2p_max_tip_age: None,
         http_rpc_addr: None,
         http_rpc_enabled: None,
         ws_rpc_addr: None,
         ws_rpc_enabled: None,
         storage_backend: None,
         node_type: None,
+        max_tip_age: None,
     }
 }

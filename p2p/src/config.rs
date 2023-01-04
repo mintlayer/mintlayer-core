@@ -36,7 +36,6 @@ make_config_setting!(
     [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
 );
 make_config_setting!(NodeTypeSetting, NodeType, NodeType::Full);
-make_config_setting!(MaxTipAge, Duration, Duration::from_secs(60 * 60 * 24));
 
 /// Multicast DNS configuration.
 #[derive(Debug, Clone)]
@@ -96,7 +95,4 @@ pub struct P2pConfig {
     pub mdns_config: MdnsConfigSetting,
     /// A node type.
     pub node_type: NodeTypeSetting,
-    /// The initial block download is finished if the difference between the current time and the
-    /// tip time is less than this value.
-    pub max_tip_age: MaxTipAge,
 }

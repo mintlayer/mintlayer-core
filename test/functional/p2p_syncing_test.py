@@ -13,7 +13,7 @@ class ExampleTest(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 2
-        self.extra_args = [["--p2p-max-tip-age=63070000"], ["--p2p-max-tip-age=63070000"]]
+        self.extra_args = [["--max-tip-age=63070000"], ["--max-tip-age=63070000"]]
 
     def setup_network(self):
         self.setup_nodes()

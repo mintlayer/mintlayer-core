@@ -157,4 +157,7 @@ pub trait ChainstateInterface: Send {
 
     /// Returns the UTXO for a specified OutPoint
     fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError>;
+
+    /// Returns true if the initial block download isn't finished yet.
+    fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;
 }

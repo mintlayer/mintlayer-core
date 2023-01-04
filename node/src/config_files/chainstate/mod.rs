@@ -13,8 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ::chainstate::ChainstateConfig;
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
+
+use chainstate::ChainstateConfig;
 
 /// The chainstate subsystem configuration.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -28,6 +31,11 @@ pub struct ChainstateConfigFile {
     pub min_max_bootstrap_import_buffer_sizes: Option<(usize, usize)>,
     /// Maintain a full transaction index.
     pub tx_index_enabled: Option<bool>,
+    /// A maximum tip age in seconds.
+    ///
+    /// The initial block download is finished if the difference between the current time and the
+    /// tip time is less than this value.
+    pub max_tip_age: Option<u64>,
 }
 
 impl From<ChainstateConfigFile> for ChainstateConfig {
@@ -37,6 +45,7 @@ impl From<ChainstateConfigFile> for ChainstateConfig {
             max_orphan_blocks: c.max_orphan_blocks.into(),
             min_max_bootstrap_import_buffer_sizes: c.min_max_bootstrap_import_buffer_sizes.into(),
             tx_index_enabled: c.tx_index_enabled.into(),
+            max_tip_age: c.max_tip_age.map(Duration::from_secs).into(),
         }
     }
 }
