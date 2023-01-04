@@ -26,6 +26,16 @@ const SEPARATOR: &str = "/";
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct DerivationPath(Vec<ChildNumber>);
 
+impl DerivationPath {
+    pub fn push(&mut self, num: ChildNumber) {
+        self.0.push(num);
+    }
+
+    pub fn pop(&mut self) -> Option<ChildNumber> {
+        self.0.pop()
+    }
+}
+
 impl From<Vec<ChildNumber>> for DerivationPath {
     fn from(path: Vec<ChildNumber>) -> Self {
         DerivationPath(path)
@@ -62,8 +72,8 @@ impl fmt::Display for DerivationPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(PREFIX, f)?;
         for child in self.0.iter() {
-            fmt::Display::fmt(child, f)?;
             fmt::Display::fmt(SEPARATOR, f)?;
+            fmt::Display::fmt(child, f)?;
         }
         Ok(())
     }
@@ -74,7 +84,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_derivation_path() {
+    fn parse_derivation_path() {
         assert_eq!(
             DerivationPath::from_str(""),
             Err(DerivationError::InvalidDerivationPathFormat)
@@ -164,45 +174,59 @@ mod tests {
         assert_eq!(DerivationPath::from_str("m"), Ok(vec![].into()));
         assert_eq!(
             DerivationPath::from_str("m/0'"),
-            Ok(vec![ChildNumber::from_hardened(0.try_into().unwrap()).unwrap()].into())
+            Ok(vec![ChildNumber::from_hardened(0.try_into().unwrap())].into())
         );
         assert_eq!(
             DerivationPath::from_str("m/0h/1'/2'"),
             Ok(vec![
-                ChildNumber::from_hardened(0.try_into().unwrap()).unwrap(),
-                ChildNumber::from_hardened(1.try_into().unwrap()).unwrap(),
-                ChildNumber::from_hardened(2.try_into().unwrap()).unwrap(),
+                ChildNumber::from_hardened(0.try_into().unwrap()),
+                ChildNumber::from_hardened(1.try_into().unwrap()),
+                ChildNumber::from_hardened(2.try_into().unwrap()),
             ]
             .into())
         );
         assert_eq!(
             DerivationPath::from_str("m/0'/1'/2h/2h"),
             Ok(vec![
-                ChildNumber::from_hardened(0.try_into().unwrap()).unwrap(),
-                ChildNumber::from_hardened(1.try_into().unwrap()).unwrap(),
-                ChildNumber::from_hardened(2.try_into().unwrap()).unwrap(),
-                ChildNumber::from_hardened(2.try_into().unwrap()).unwrap(),
+                ChildNumber::from_hardened(0.try_into().unwrap()),
+                ChildNumber::from_hardened(1.try_into().unwrap()),
+                ChildNumber::from_hardened(2.try_into().unwrap()),
+                ChildNumber::from_hardened(2.try_into().unwrap()),
             ]
             .into())
         );
         assert_eq!(
             DerivationPath::from_str("m/0'/1'/2'/2'/1000000000'"),
             Ok(vec![
-                ChildNumber::from_hardened(0.try_into().unwrap()).unwrap(),
-                ChildNumber::from_hardened(1.try_into().unwrap()).unwrap(),
-                ChildNumber::from_hardened(2.try_into().unwrap()).unwrap(),
-                ChildNumber::from_hardened(2.try_into().unwrap()).unwrap(),
-                ChildNumber::from_hardened(1000000000.try_into().unwrap()).unwrap(),
+                ChildNumber::from_hardened(0.try_into().unwrap()),
+                ChildNumber::from_hardened(1.try_into().unwrap()),
+                ChildNumber::from_hardened(2.try_into().unwrap()),
+                ChildNumber::from_hardened(2.try_into().unwrap()),
+                ChildNumber::from_hardened(1000000000.try_into().unwrap()),
             ]
             .into())
         );
         assert_eq!(
             DerivationPath::from_str("m/2147483647'"),
-            Ok(vec![ChildNumber::from_hardened(2147483647.try_into().unwrap()).unwrap()].into())
+            Ok(vec![ChildNumber::from_hardened(2147483647.try_into().unwrap())].into())
         );
         assert_eq!(
             DerivationPath::from_str("m/2147483648'"),
             Err(DerivationError::InvalidChildNumber(2147483648))
         );
+    }
+
+    #[test]
+    fn push_pop_path() {
+        let path_1_2 = DerivationPath::from_str("m/1'/2'").unwrap();
+        let mut path = path_1_2.clone();
+        let index_3 = ChildNumber::from_hardened(3.try_into().unwrap());
+        path.push(index_3);
+        assert_eq!(path, DerivationPath::from_str("m/1'/2'/3'").unwrap());
+        assert_eq!(path.pop(), Some(index_3));
+        assert_eq!(path, path_1_2);
+        path.pop();
+        path.pop();
+        assert_eq!(path.pop(), None);
     }
 }

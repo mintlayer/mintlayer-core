@@ -144,10 +144,6 @@ impl From<super::hdkd::chain_code::ChainCode> for schnorrkel::derive::ChainCode 
 
 impl Derivable for MLRistrettoPrivateKey {
     fn derive_child(self, num: ChildNumber) -> Result<Self, DerivationError> {
-        // We can perform only hard derivations
-        if !num.is_hardened() {
-            return Err(DerivationError::UnsupportedDerivationType);
-        }
         let chaincode: super::hdkd::chain_code::ChainCode = num.into();
         let mini_key = self.as_native().hard_derive_mini_secret_key(Some(chaincode.into()), b"").0;
         let key = MLRistrettoPrivateKey::from_native(mini_key.expand(Ed25519));
@@ -363,7 +359,7 @@ mod test {
         assert_eq!(hex::encode(child_sk.encode()), "010118959f5bfcde4299d177763c94c30b56cd8a7df22d6fc4861d45067c4dccd0470957e0852e2b4af0d8d44a29ad8fdf17db6cf0f5f7feef9d268790b326bda500");
 
         let child_sk_final = child_sk
-            .derive_child(ChildNumber::from_hardened(1.try_into().unwrap()).unwrap())
+            .derive_child(ChildNumber::from_hardened(1.try_into().unwrap()))
             .unwrap();
 
         let path = DerivationPath::from_str("m/0'/1'").unwrap();

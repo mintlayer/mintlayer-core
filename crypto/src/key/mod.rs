@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod extended;
 pub mod hdkd;
 mod key_holder;
 pub mod rschnorr;
@@ -43,7 +44,7 @@ pub enum SignatureError {
 pub enum KeyKind {
     #[codec(index = 0)]
     Secp256k1Schnorr,
-    #[codec(index = 2)]
+    #[codec(index = 1)]
     RistrettoSchnorr,
 }
 
@@ -202,7 +203,7 @@ mod test {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn sign_and_verify(#[case] seed: Seed) {
+    fn sign_and_verify_secp256k1schnorr(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let (sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         assert_eq!(sk.kind(), KeyKind::Secp256k1Schnorr);
@@ -228,19 +229,15 @@ mod test {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn derive(#[case] seed: Seed) {
+    fn derive_ristretto(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let (sk, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let sk1 = sk
             .clone()
-            .derive_child(ChildNumber::from_hardened(123.try_into().unwrap()).unwrap())
+            .derive_child(ChildNumber::from_hardened(123.try_into().unwrap()))
             .unwrap();
-        let sk2 = sk1
-            .derive_child(ChildNumber::from_hardened(456.try_into().unwrap()).unwrap())
-            .unwrap();
-        let sk3 = sk2
-            .derive_child(ChildNumber::from_hardened(789.try_into().unwrap()).unwrap())
-            .unwrap();
+        let sk2 = sk1.derive_child(ChildNumber::from_hardened(456.try_into().unwrap())).unwrap();
+        let sk3 = sk2.derive_child(ChildNumber::from_hardened(789.try_into().unwrap())).unwrap();
         let sk4 = sk.derive_path(&DerivationPath::from_str("m/123h/456h/789h").unwrap()).unwrap();
         assert_eq!(sk3, sk4);
     }
