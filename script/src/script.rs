@@ -373,7 +373,7 @@ impl Script {
                         match read_uint(&script[index..], 1) {
                             Ok(n) => {
                                 index += push_opc.data_size_bytes();
-                                n as usize
+                                n
                             }
                             Err(_) => {
                                 f.write_str("<bad length>")?;
