@@ -143,6 +143,8 @@ where
         for _ in 0..9 {
             advance_mgr_state(&mut mgr1).await.unwrap();
         }
+
+        mgr1
     });
 
     for _ in 0..9 {
@@ -236,6 +238,8 @@ where
         for _ in 0..14 {
             advance_mgr_state(&mut mgr1).await.unwrap();
         }
+
+        mgr1
     });
 
     let mut work = VecDeque::new();
@@ -359,6 +363,8 @@ where
         for _ in 0..24 {
             advance_mgr_state(&mut mgr1).await.unwrap();
         }
+
+        mgr1
     });
 
     let mut work = VecDeque::new();
@@ -501,6 +507,8 @@ where
         for _ in 0..20 {
             advance_mgr_state(&mut mgr1).await.unwrap();
         }
+
+        mgr1
     });
 
     let mut work = VecDeque::new();
@@ -657,6 +665,8 @@ where
         for _ in 0..18 {
             advance_mgr_state(&mut mgr1).await.unwrap();
         }
+
+        mgr1
     });
 
     for _ in 0..18 {
@@ -931,7 +941,7 @@ where
         }
 
         tx.send(()).unwrap();
-        mgr1_handle
+        (mgr1_handle, mgr1)
     });
 
     loop {
@@ -998,7 +1008,7 @@ where
             msg => panic!("invalid message received: {:?}", msg),
         }
     }
-    let mgr1_handle = handle.await.unwrap();
+    let (mgr1_handle, _) = handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(same_tip(&mgr2_handle, &mgr3_handle).await);
