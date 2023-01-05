@@ -136,7 +136,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
     // create the TxInputs for spending.
     let expected_tx_inputs = create_tx_inputs(&mut rng, &outpoints);
     // create the UtxosDB.
-    let mut db = UtxosDBMut::new(&mut db_impl);
+    let mut db = UtxosDB::new(&mut db_impl);
 
     // let's check that each tx_input exists in the db. Secure the spent utxos.
     let spent_utxos = expected_tx_inputs
@@ -152,7 +152,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
     // test the spend
     let (block, block_undo) = {
         // create a cache based on the db.
-        let mut cache = UtxosCache::from_borrowed_parent(&db);
+        let mut cache = UtxosCache::new(&db);
 
         // create a new block to spend.
         let block = create_block(
@@ -242,7 +242,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         assert_eq!(block_undo.tx_undos().len(), expected_tx_inputs.len());
 
         // let's create a view.
-        let mut cache = UtxosCache::from_borrowed_parent(&db);
+        let mut cache = UtxosCache::new(&db);
 
         // get the block tx inputs, and add them to the view.
         block.transactions().iter().enumerate().for_each(|(_idx, tx)| {
@@ -301,7 +301,7 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
 
     // Create a block with 1 tx and 0 outputs in txs
     let block = create_block(&mut rng, id, tx_inputs, 0, num_of_txs as usize);
-    let mut view = UtxosCache::from_borrowed_parent(&db);
+    let mut view = UtxosCache::new(&db);
     let tx = block.transactions().get(0).unwrap();
 
     assert_eq!(
@@ -319,7 +319,7 @@ fn test_batch_write(#[case] seed: Seed) {
     let new_best_block_hash = Id::new(H256::random_using(&mut rng));
 
     let mut db_interface = UtxosDBInMemoryImpl::new(new_best_block_hash, Default::default());
-    let mut utxo_db = UtxosDBMut::new(&mut db_interface);
+    let mut utxo_db = UtxosDB::new(&mut db_interface);
 
     let utxos = ConsumedUtxoCache {
         container: utxos,
@@ -353,7 +353,7 @@ fn try_flush_non_dirty_utxo(#[case] seed: Seed) {
 
     let mut db_interface =
         UtxosDBInMemoryImpl::new(Id::new(H256::random_using(&mut rng)), Default::default());
-    let mut utxo_db = UtxosDBMut::new(&mut db_interface);
+    let mut utxo_db = UtxosDB::new(&mut db_interface);
 
     let (utxo, outpoint) = create_utxo(&mut rng, 1);
     let mut map = BTreeMap::new();
@@ -378,7 +378,7 @@ fn try_flush_spent_utxo(#[case] seed: Seed) {
 
     let mut db_interface =
         UtxosDBInMemoryImpl::new(Id::new(H256::random_using(&mut rng)), Default::default());
-    let mut utxo_db = UtxosDBMut::new(&mut db_interface);
+    let mut utxo_db = UtxosDB::new(&mut db_interface);
 
     let outpoint = OutPoint::new(
         OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng))),

@@ -24,7 +24,7 @@ mod view;
 pub use crate::{
     cache::{ConsumedUtxoCache, UtxosCache},
     error::Error,
-    storage::{UtxosDB, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite},
+    storage::{UtxosDB, UtxosStorageRead, UtxosStorageWrite},
     undo::{BlockRewardUndo, BlockUndo, BlockUndoError, TxUndo, TxUndoWithSources},
     utxo::{Utxo, UtxoSource},
     view::{flush_to_base, FlushableUtxoView, UtxosView},

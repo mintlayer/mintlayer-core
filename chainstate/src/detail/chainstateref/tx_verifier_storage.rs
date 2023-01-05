@@ -34,7 +34,7 @@ use common::{
     primitives::Id,
 };
 use tx_verifier::transaction_verifier::TransactionSource;
-use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDBMut, UtxosStorageRead};
+use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDB, UtxosStorageRead};
 
 impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
     TransactionVerifierStorageRef for ChainstateRef<'a, S, O, V>
@@ -115,7 +115,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
     FlushableUtxoView for ChainstateRef<'a, S, O, V>
 {
     fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error> {
-        let mut db = UtxosDBMut::new(&mut self.db_tx);
+        let mut db = UtxosDB::new(&mut self.db_tx);
         db.batch_write(utxos)
     }
 }

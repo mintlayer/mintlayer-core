@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{UtxosDB, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
+use super::{UtxosDB, UtxosStorageRead, UtxosStorageWrite};
 use crate::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosView};
 use common::{
     chain::{GenBlock, OutPoint},
@@ -46,7 +46,7 @@ mod utxosdb_utxosview_impls {
     }
 }
 
-impl<'a, S: UtxosStorageRead> UtxosView for UtxosDB<'a, S> {
+impl<S: UtxosStorageRead> UtxosView for UtxosDB<S> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
         utxosdb_utxosview_impls::utxo(self, outpoint)
     }
@@ -64,25 +64,7 @@ impl<'a, S: UtxosStorageRead> UtxosView for UtxosDB<'a, S> {
     }
 }
 
-impl<'a, S: UtxosStorageWrite> UtxosView for UtxosDBMut<'a, S> {
-    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
-        utxosdb_utxosview_impls::utxo(self, outpoint)
-    }
-
-    fn has_utxo(&self, outpoint: &OutPoint) -> bool {
-        utxosdb_utxosview_impls::has_utxo(self, outpoint)
-    }
-
-    fn best_block_hash(&self) -> Id<GenBlock> {
-        utxosdb_utxosview_impls::best_block_hash(self)
-    }
-
-    fn estimated_size(&self) -> Option<usize> {
-        utxosdb_utxosview_impls::estimated_size(self)
-    }
-}
-
-impl<'a, S: UtxosStorageWrite> FlushableUtxoView for UtxosDBMut<'a, S> {
+impl<S: UtxosStorageWrite> FlushableUtxoView for UtxosDB<S> {
     fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), crate::Error> {
         // check each entry if it's dirty. Only then will the db be updated.
         for (key, entry) in utxos.container {
