@@ -25,21 +25,22 @@ type ThreeCollections = (
 
 #[rstest]
 #[rustfmt::skip]
-#[case(DataDelta::new(None,      Some('a')), DataDelta::new(Some('a'), None))]
-#[case(DataDelta::new(None,      Some('a')), DataDelta::new(Some('a'), Some('b')))]
-#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), Some('c')))]
-#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), None))]
-#[case(DataDelta::new(Some('a'), None),      DataDelta::new(None,      Some('b')))]
+#[case(new_delta(None,      Some('a')), new_delta(Some('a'), None))]
+#[case(new_delta(None,      Some('a')), new_delta(Some('a'), Some('b')))]
+#[case(new_delta(Some('a'), Some('b')), new_delta(Some('b'), Some('c')))]
+#[case(new_delta(Some('a'), Some('b')), new_delta(Some('b'), None))]
+#[case(new_delta(Some('a'), None),      new_delta(None,      Some('b')))]
 fn delta_delta_undo_associativity(
     #[case] delta1: DataDelta<char>,
     #[case] delta2: DataDelta<char>,
 ) {
+    let expected_collection = DeltaDataCollection::from_iter([(1, delta1.clone())]);
+
     {
         // (Delta1 + Delta2) + Undo = Delta1
         // every delta goes into separate collection
         let (mut collection1, collection2, collection3) =
             make_collections_with_undo(delta1.clone(), delta2.clone());
-        let expected_collection = collection1.clone();
 
         let _ = collection1.merge_delta_data(collection2).unwrap();
         let _ = collection1.merge_delta_data(collection3).unwrap();
@@ -52,7 +53,6 @@ fn delta_delta_undo_associativity(
         // every delta goes into separate collection
         let (mut collection1, mut collection2, collection3) =
             make_collections_with_undo(delta1.clone(), delta2.clone());
-        let expected_collection = collection1.clone();
 
         let _ = collection2.merge_delta_data(collection3).unwrap();
         let _ = collection1.merge_delta_data(collection2).unwrap();
@@ -65,7 +65,6 @@ fn delta_delta_undo_associativity(
         // every delta is applied to the same collection
         let mut collection = DeltaDataCollection::new();
         let _ = collection.merge_delta_data_element(1, delta1).unwrap();
-        let expected_collection = collection.clone();
 
         let undo = collection.merge_delta_data_element(1, delta2).unwrap().unwrap();
         collection.undo_merge_delta_data_element(1, undo).unwrap();

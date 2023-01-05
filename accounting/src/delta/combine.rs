@@ -19,34 +19,28 @@ use crate::{delta::delta_data_collection::DeltaMapElement, error::Error};
 
 /// Combine data with an element of `DeltaDataCollection`.
 /// An element can be either a Delta or a result of delta undo.
-pub fn combine_data_with_delta<T: Clone + PartialEq>(
-    lhs: Option<&T>,
-    rhs: Option<&DeltaMapElement<T>>,
+pub fn combine_data_with_delta<T: Clone + Eq>(
+    lhs: Option<T>,
+    rhs: Option<DeltaMapElement<T>>,
 ) -> Result<Option<T>, Error> {
     match (lhs, rhs) {
-        (None, None) => Ok(None),
+        (lhs, None) => Ok(lhs),
         (None, Some(d)) => {
-            let delta = d.get_data_delta();
-            match (&delta.prev(), &delta.next()) {
-                (None, None) => Ok(None),
-                (None, Some(d)) => Ok(Some(d.clone())),
+            let (prev, next) = d.consume().consume();
+            match (prev, next) {
+                (None, next) => Ok(next),
                 (Some(_), None) => Err(Error::RemoveNonexistingData),
                 (Some(_), Some(_)) => Err(Error::ModifyNonexistingData),
             }
         }
-        (Some(p), None) => Ok(Some(p.clone())),
-        (Some(data), Some(delta)) => {
-            let delta = delta.get_data_delta();
-            match (&delta.prev(), &delta.next()) {
-                (None, None) => Err(Error::RemoveNonexistingData),
+        (Some(data), Some(d)) => {
+            let (prev, next) = d.consume().consume();
+            match (prev, next) {
+                (None, None) => Err(Error::DeltaDataMismatch),
                 (None, Some(_)) => Err(Error::DataCreatedMultipleTimes),
-                (Some(old), None) => {
+                (Some(old), new) => {
                     utils::ensure!(data == old, Error::DeltaDataMismatch);
-                    Ok(None)
-                }
-                (Some(old), Some(new)) => {
-                    utils::ensure!(data == old, Error::DeltaDataMismatch);
-                    Ok(Some(new.clone()))
+                    Ok(new)
                 }
             }
         }
@@ -94,7 +88,7 @@ pub mod test {
     #[case(None,      Some(DataDelta::new(Some('a'), None)),      Err(Error::RemoveNonexistingData))]
     #[case(None,      Some(DataDelta::new(Some('a'), Some('b'))), Err(Error::ModifyNonexistingData))]
     #[case(Some('a'), None,                                       Ok(Some('a')))]
-    #[case(Some('a'), Some(DataDelta::new(None, None)),           Err(Error::RemoveNonexistingData))]
+    #[case(Some('a'), Some(DataDelta::new(None, None)),           Err(Error::DeltaDataMismatch))]
     #[case(Some('a'), Some(DataDelta::new(None, Some('a'))),      Err(Error::DataCreatedMultipleTimes))]
     #[case(Some('a'), Some(DataDelta::new(Some('a'), Some('a'))), Ok(Some('a')))]
     #[case(Some('a'), Some(DataDelta::new(Some('a'), Some('b'))), Ok(Some('b')))]
@@ -107,17 +101,14 @@ pub mod test {
         #[case] expected_result: Result<Option<char>, Error>,
     ) {
         assert_eq!(
-            combine_data_with_delta(
-                data.as_ref(),
-                delta.as_ref().map(|d| DeltaMapElement::Delta(d.clone())).as_ref()
-            ),
+            combine_data_with_delta(data, delta.clone().map(DeltaMapElement::Delta)),
             expected_result
         );
 
         assert_eq!(
             combine_data_with_delta(
-                data.as_ref(),
-                delta.map(|d| DeltaMapElement::DeltaUndo(DataDeltaUndo(d))).as_ref()
+                data,
+                delta.map(|d| DeltaMapElement::DeltaUndo(DataDeltaUndo::new(d)))
             ),
             expected_result
         );

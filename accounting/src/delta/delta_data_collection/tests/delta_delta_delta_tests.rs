@@ -19,13 +19,13 @@ use rstest::rstest;
 
 #[rstest]
 #[rustfmt::skip]
-#[case(DataDelta::new(None,      Some('a')), DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), Some('c')), DataDelta::new(None, Some('c')))]
-#[case(DataDelta::new(None,      Some('a')), DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), None),      DataDelta::new(None, None))]
-#[case(DataDelta::new(None,      Some('a')), DataDelta::new(Some('a'), None),      DataDelta::new(None,      Some('b')), DataDelta::new(None, Some('b')))]
-#[case(DataDelta::new(Some('a'), None),      DataDelta::new(None,      Some('b')), DataDelta::new(Some('b'), None),      DataDelta::new(Some('a'), None))]
-#[case(DataDelta::new(Some('a'), None),      DataDelta::new(None,      Some('b')), DataDelta::new(Some('b'), Some('c')), DataDelta::new(Some('a'), Some('c')))]
-#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), Some('c')), DataDelta::new(Some('c'), None),      DataDelta::new(Some('a'), None))]
-#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), None),      DataDelta::new(None, Some('c')),      DataDelta::new(Some('a'), Some('c')))]
+#[case(new_delta(None,      Some('a')), new_delta(Some('a'), Some('b')), new_delta(Some('b'), Some('c')), new_delta(None, Some('c')))]
+#[case(new_delta(None,      Some('a')), new_delta(Some('a'), Some('b')), new_delta(Some('b'), None),      new_delta(None, None))]
+#[case(new_delta(None,      Some('a')), new_delta(Some('a'), None),      new_delta(None,      Some('b')), new_delta(None, Some('b')))]
+#[case(new_delta(Some('a'), None),      new_delta(None,      Some('b')), new_delta(Some('b'), None),      new_delta(Some('a'), None))]
+#[case(new_delta(Some('a'), None),      new_delta(None,      Some('b')), new_delta(Some('b'), Some('c')), new_delta(Some('a'), Some('c')))]
+#[case(new_delta(Some('a'), Some('b')), new_delta(Some('b'), Some('c')), new_delta(Some('c'), None),      new_delta(Some('a'), None))]
+#[case(new_delta(Some('a'), Some('b')), new_delta(Some('b'), None),      new_delta(None, Some('c')),      new_delta(Some('a'), Some('c')))]
 fn delta_delta_delta_associativity(
     #[case] delta1: DataDelta<char>,
     #[case] delta2: DataDelta<char>,

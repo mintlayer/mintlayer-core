@@ -20,7 +20,21 @@ use serialization::{Decode, Encode};
 use super::DataDelta;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
-pub struct DataDeltaUndo<T>(pub DataDelta<T>);
+pub struct DataDeltaUndo<T>(DataDelta<T>);
+
+impl<T> DataDeltaUndo<T> {
+    pub fn new(delta: DataDelta<T>) -> Self {
+        Self(delta)
+    }
+
+    pub fn as_delta(&self) -> &DataDelta<T> {
+        &self.0
+    }
+
+    pub fn consume(self) -> DataDelta<T> {
+        self.0
+    }
+}
 
 #[must_use]
 #[derive(Clone, Debug, PartialEq, Eq)]

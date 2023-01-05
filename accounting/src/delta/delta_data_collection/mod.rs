@@ -34,34 +34,27 @@ use crate::error::Error;
 ///   Delta(Some, None) + (Delta(Some, None) + Delta(None, Some)) = Delta(Some, None) + Delta(Some, Some) = Error
 ///
 /// - Inversion in the sense that:
-///   (d + d.invert()) + d = d
+///   d + d.invert() + d = d
 ///
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub struct DataDelta<T> {
-    prev: Option<T>,
-    next: Option<T>,
+    old: Option<T>,
+    new: Option<T>,
 }
 
 impl<T: Clone> DataDelta<T> {
     pub fn new(old: Option<T>, new: Option<T>) -> Self {
-        Self {
-            prev: old,
-            next: new,
-        }
-    }
-
-    pub fn prev(&self) -> &Option<T> {
-        &self.prev
-    }
-
-    pub fn next(&self) -> &Option<T> {
-        &self.next
+        Self { old, new }
     }
 
     /// Returns an invert delta that has the opposite effect of the provided delta
     /// and serves as an undo object
     fn invert(self) -> DataDeltaUndo<T> {
-        DataDeltaUndo(Self::new(self.next, self.prev))
+        DataDeltaUndo::new(Self::new(self.new, self.old))
+    }
+
+    pub fn consume(self) -> (Option<T>, Option<T>) {
+        (self.old, self.new)
     }
 }
 
@@ -76,14 +69,14 @@ impl<T> DeltaMapElement<T> {
     pub fn get_data_delta(&self) -> &DataDelta<T> {
         match self {
             DeltaMapElement::Delta(d) => d,
-            DeltaMapElement::DeltaUndo(d) => &d.0,
+            DeltaMapElement::DeltaUndo(d) => d.as_delta(),
         }
     }
 
-    fn consume(self) -> DataDelta<T> {
+    pub fn consume(self) -> DataDelta<T> {
         match self {
             DeltaMapElement::Delta(d) => d,
-            DeltaMapElement::DeltaUndo(d) => d.0,
+            DeltaMapElement::DeltaUndo(u) => u.consume(),
         }
     }
 }
@@ -103,7 +96,7 @@ pub struct DeltaDataCollection<K, T> {
     data: BTreeMap<K, DeltaMapElement<T>>,
 }
 
-impl<K: Ord + Copy, T: Clone + PartialEq> DeltaDataCollection<K, T> {
+impl<K: Ord + Copy, T: Clone + Eq> DeltaDataCollection<K, T> {
     pub fn new() -> Self {
         Self {
             data: BTreeMap::new(),
@@ -114,18 +107,20 @@ impl<K: Ord + Copy, T: Clone + PartialEq> DeltaDataCollection<K, T> {
         &self.data
     }
 
-    pub fn get_data(&self, key: &K) -> Result<GetDataResult<&T>, Error> {
+    pub fn consume(self) -> BTreeMap<K, DeltaMapElement<T>> {
+        self.data
+    }
+
+    pub fn get_data(&self, key: &K) -> GetDataResult<&T> {
         match self.data.get(key) {
             Some(d) => {
                 let delta = d.get_data_delta();
-                match (&delta.prev, &delta.next) {
-                    (None, None) => Ok(GetDataResult::Deleted),
-                    (None, Some(d)) => Ok(GetDataResult::Present(d)),
-                    (Some(_), None) => Ok(GetDataResult::Deleted),
-                    (Some(_), Some(d)) => Ok(GetDataResult::Present(d)),
+                match &delta.new {
+                    None => GetDataResult::Deleted,
+                    Some(d) => GetDataResult::Present(d),
                 }
             }
-            None => Ok(GetDataResult::Missing),
+            None => GetDataResult::Missing,
         }
     }
 
@@ -216,12 +211,12 @@ impl<K: Ord + Copy, T: Clone> FromIterator<(K, DataDelta<T>)> for DeltaDataColle
 }
 
 /// Given two deltas, combine them into one delta, this is the basic delta data composability function
-fn combine_delta_data<T: Clone + PartialEq>(
+fn combine_delta_data<T: Clone + Eq>(
     lhs: DataDelta<T>,
     rhs: DataDelta<T>,
 ) -> Result<DataDelta<T>, Error> {
-    utils::ensure!(lhs.next == rhs.prev, Error::DeltaDataMismatch);
-    Ok(DataDelta::new(lhs.prev, rhs.next))
+    utils::ensure!(lhs.new == rhs.old, Error::DeltaDataMismatch);
+    Ok(DataDelta::new(lhs.old, rhs.new))
 }
 
 #[cfg(test)]

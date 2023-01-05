@@ -21,39 +21,44 @@ mod delta_delta_delta_tests;
 mod delta_delta_undo_tests;
 mod delta_delta_undo_undo_tests;
 
+fn new_delta<T: Clone>(prev: Option<T>, next: Option<T>) -> DataDelta<T> {
+    DataDelta::new(prev, next)
+}
+
 #[rstest]
 #[rustfmt::skip]
-#[case(DataDelta::new(None, None),           DataDelta::new(None, None),           Ok(DataDelta::new(None, None)))]
-#[case(DataDelta::new(None, None),           DataDelta::new(None, Some('a')),      Ok(DataDelta::new(None, Some('a'))))]
-#[case(DataDelta::new(None, None),           DataDelta::new(Some('a'), None),      Err(Error::DeltaDataMismatch))]
-#[case(DataDelta::new(None, None),           DataDelta::new(Some('a'), Some('b')), Err(Error::DeltaDataMismatch))]
-#[case(DataDelta::new(None, Some('a')),      DataDelta::new(None, None),           Err(Error::DeltaDataMismatch))]
-#[case(DataDelta::new(None, Some('a')),      DataDelta::new(None, Some('b')),      Err(Error::DeltaDataMismatch))]
-#[case(DataDelta::new(None, Some('a')),      DataDelta::new(Some('a'), None),      Ok(DataDelta::new(None, None)))]
-#[case(DataDelta::new(None, Some('a')),      DataDelta::new(Some('a'), Some('b')), Ok(DataDelta::new(None, Some('b'))))]
-#[case(DataDelta::new(None, Some('a')),      DataDelta::new(Some('b'), Some('c')), Err(Error::DeltaDataMismatch))]
-#[case(DataDelta::new(Some('a'), None),      DataDelta::new(None, None),           Ok(DataDelta::new(Some('a'), None)))]
-#[case(DataDelta::new(Some('a'), None),      DataDelta::new(None, Some('c')),      Ok(DataDelta::new(Some('a'), Some('c'))))]
-#[case(DataDelta::new(Some('a'), None),      DataDelta::new(Some('b'), None),      Err(Error::DeltaDataMismatch))]
-#[case(DataDelta::new(Some('a'), None),      DataDelta::new(Some('b'), Some('c')), Err(Error::DeltaDataMismatch))]
-#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(None, None),           Err(Error::DeltaDataMismatch))]
-#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(None, Some('c')),      Err(Error::DeltaDataMismatch))]
-#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), None),      Ok(DataDelta::new(Some('a'), None)))]
-#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), Some('c')), Ok(DataDelta::new(Some('a'), Some('c'))))]
-#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('c'), Some('d')), Err(Error::DeltaDataMismatch))]
+#[case(new_delta(None, None),           new_delta(None, None),           Ok(new_delta(None, None)))]
+#[case(new_delta(None, None),           new_delta(None, Some('a')),      Ok(new_delta(None, Some('a'))))]
+#[case(new_delta(None, None),           new_delta(Some('a'), None),      Err(Error::DeltaDataMismatch))]
+#[case(new_delta(None, None),           new_delta(Some('a'), Some('b')), Err(Error::DeltaDataMismatch))]
+#[case(new_delta(None, Some('a')),      new_delta(None, None),           Err(Error::DeltaDataMismatch))]
+#[case(new_delta(None, Some('a')),      new_delta(None, Some('b')),      Err(Error::DeltaDataMismatch))]
+#[case(new_delta(None, Some('a')),      new_delta(Some('a'), None),      Ok(new_delta(None, None)))]
+#[case(new_delta(None, Some('a')),      new_delta(Some('a'), Some('b')), Ok(new_delta(None, Some('b'))))]
+#[case(new_delta(None, Some('a')),      new_delta(Some('b'), Some('c')), Err(Error::DeltaDataMismatch))]
+#[case(new_delta(Some('a'), None),      new_delta(None, None),           Ok(new_delta(Some('a'), None)))]
+#[case(new_delta(Some('a'), None),      new_delta(None, Some('c')),      Ok(new_delta(Some('a'), Some('c'))))]
+#[case(new_delta(Some('a'), None),      new_delta(Some('b'), None),      Err(Error::DeltaDataMismatch))]
+#[case(new_delta(Some('a'), None),      new_delta(Some('b'), Some('c')), Err(Error::DeltaDataMismatch))]
+#[case(new_delta(Some('a'), Some('b')), new_delta(None, None),           Err(Error::DeltaDataMismatch))]
+#[case(new_delta(Some('a'), Some('b')), new_delta(None, Some('c')),      Err(Error::DeltaDataMismatch))]
+#[case(new_delta(Some('a'), Some('b')), new_delta(Some('b'), None),      Ok(new_delta(Some('a'), None)))]
+#[case(new_delta(Some('a'), Some('b')), new_delta(Some('b'), Some('c')), Ok(new_delta(Some('a'), Some('c'))))]
+#[case(new_delta(Some('a'), Some('b')), new_delta(Some('c'), Some('d')), Err(Error::DeltaDataMismatch))]
 fn test_combine_deltas(#[case] delta1: DataDelta<char>, #[case] delta2: DataDelta<char>, #[case] result: Result<DataDelta<char>,Error> ) {
     assert_eq!(combine_delta_data(delta1, delta2), result);
 }
 
 #[rstest]
-#[case(DataDelta::new(None, None))]
-#[case(DataDelta::new(None, Some('a')))]
-#[case(DataDelta::new(Some('a'), None))]
-#[case(DataDelta::new(Some('a'), Some('b')))]
+#[case(new_delta(None, None))]
+#[case(new_delta(None, Some('a')))]
+#[case(new_delta(Some('a'), None))]
+#[case(new_delta(Some('a'), Some('a')))]
+#[case(new_delta(Some('a'), Some('b')))]
 fn test_delta_inversion(#[case] delta: DataDelta<char>) {
     // (Delta + Undo) + Delta = Delta
     let result = combine_delta_data(
-        combine_delta_data(delta.clone(), delta.clone().invert().0).unwrap(),
+        combine_delta_data(delta.clone(), delta.clone().invert().consume()).unwrap(),
         delta.clone(),
     )
     .unwrap();
@@ -62,27 +67,27 @@ fn test_delta_inversion(#[case] delta: DataDelta<char>) {
 
 #[rstest]
 #[rustfmt::skip]
-#[case(DataDelta::new(None, Some('a')),      DataDelta::new(Some('a'), Some('b')))]
-#[case(DataDelta::new(None, Some('a')),      DataDelta::new(Some('a'), None))]
-#[case(DataDelta::new(Some('a'), None),      DataDelta::new(None, Some('b')))]
-#[case(DataDelta::new(Some('a'), None),      DataDelta::new(None, Some('a')))]
-#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), None))]
-#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), Some('c')))]
-#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), Some('a')))]
+#[case(new_delta(None, Some('a')),      new_delta(Some('a'), Some('b')))]
+#[case(new_delta(None, Some('a')),      new_delta(Some('a'), None))]
+#[case(new_delta(Some('a'), None),      new_delta(None, Some('b')))]
+#[case(new_delta(Some('a'), None),      new_delta(None, Some('a')))]
+#[case(new_delta(Some('a'), Some('b')), new_delta(Some('b'), None))]
+#[case(new_delta(Some('a'), Some('b')), new_delta(Some('b'), Some('c')))]
+#[case(new_delta(Some('a'), Some('b')), new_delta(Some('b'), Some('a')))]
 fn test_delta_undo(#[case] delta1: DataDelta<char>, #[case] delta2: DataDelta<char>) {
     // (Delta1 + Delta2) + Undo(Delta2) = Delta1
     let result = combine_delta_data(
         combine_delta_data(delta1.clone(), delta2.clone()).unwrap(),
-        delta2.invert().0,
+        delta2.invert().consume(),
     ).unwrap();
     assert_eq!(delta1, result);
 }
 
 #[rstest]
-#[case(DataDelta::new(None, None))]
-#[case(DataDelta::new(None, Some('a')))]
-#[case(DataDelta::new(Some('a'), None))]
-#[case(DataDelta::new(Some('a'), Some('b')))]
+#[case(new_delta(None, None))]
+#[case(new_delta(None, Some('a')))]
+#[case(new_delta(Some('a'), None))]
+#[case(new_delta(Some('a'), Some('b')))]
 fn merge_delta_into_empty_collection(#[case] delta: DataDelta<char>) {
     let mut collection: DeltaDataCollection<i32, char> = DeltaDataCollection::new();
     collection.merge_delta_data_element(0, delta.clone()).unwrap();
@@ -95,14 +100,14 @@ fn merge_delta_into_empty_collection(#[case] delta: DataDelta<char>) {
 }
 
 #[rstest]
-#[case(DataDelta::new(None, None))]
-#[case(DataDelta::new(None, Some('a')))]
-#[case(DataDelta::new(Some('a'), None))]
-#[case(DataDelta::new(Some('a'), Some('b')))]
+#[case(new_delta(None, None))]
+#[case(new_delta(None, Some('a')))]
+#[case(new_delta(Some('a'), None))]
+#[case(new_delta(Some('a'), Some('b')))]
 fn merge_delta_undo_into_empty_collection(#[case] delta: DataDelta<char>) {
     let mut collection: DeltaDataCollection<i32, char> = DeltaDataCollection::new();
     collection
-        .undo_merge_delta_data_element(0, DataDeltaUndo(delta.clone()))
+        .undo_merge_delta_data_element(0, DataDeltaUndo::new(delta.clone()))
         .unwrap();
 
     assert_eq!(collection.data.len(), 1);
@@ -114,12 +119,12 @@ fn merge_delta_undo_into_empty_collection(#[case] delta: DataDelta<char>) {
 
 #[rstest]
 #[rustfmt::skip]
-#[case(DataDelta::new(None, Some('a')),      DataDelta::new(Some('a'), None))]
-#[case(DataDelta::new(None, Some('a')),      DataDelta::new(Some('a'), Some('b')))]
-#[case(DataDelta::new(Some('a'), None),      DataDelta::new(None, None))]
-#[case(DataDelta::new(Some('a'), None),      DataDelta::new(None, Some('c')))]
-#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), None))]
-#[case(DataDelta::new(Some('a'), Some('b')), DataDelta::new(Some('b'), Some('c')))]
+#[case(new_delta(None, Some('a')),      new_delta(Some('a'), None))]
+#[case(new_delta(None, Some('a')),      new_delta(Some('a'), Some('b')))]
+#[case(new_delta(Some('a'), None),      new_delta(None, None))]
+#[case(new_delta(Some('a'), None),      new_delta(None, Some('c')))]
+#[case(new_delta(Some('a'), Some('b')), new_delta(Some('b'), None))]
+#[case(new_delta(Some('a'), Some('b')), new_delta(Some('b'), Some('c')))]
 fn delta_over_undo_is_an_error(#[case] delta1: DataDelta<char>, #[case] delta2: DataDelta<char>) {
     let mut collection1 = DeltaDataCollection::new();
     let undo = collection1.merge_delta_data_element(1, delta1).unwrap().unwrap();
