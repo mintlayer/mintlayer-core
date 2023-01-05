@@ -25,7 +25,7 @@ mod test {
     use crypto::random::{CryptoRng, Rng};
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
-    use utxo::{Utxo, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
+    use utxo::{Utxo, UtxosDB, UtxosStorageRead, UtxosStorageWrite};
 
     fn create_utxo(
         rng: &mut (impl Rng + CryptoRng),
@@ -58,7 +58,7 @@ mod test {
         store
             .set_best_block_for_utxos(&H256::random_using(&mut rng).into())
             .expect("Setting best block cannot fail");
-        let mut db_interface = UtxosDBMut::new(&mut store);
+        let mut db_interface = UtxosDB::new(&mut store);
 
         // utxo checking
         let val = rng.gen_range(0..u128::MAX);

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{UtxosDB, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
+use super::{UtxosDB, UtxosStorageRead, UtxosStorageWrite};
 use crate::{BlockUndo, Utxo};
 use chainstate_types::storage_result::Error as StorageError;
 use common::{
@@ -21,21 +21,7 @@ use common::{
     primitives::Id,
 };
 
-impl<S: UtxosStorageRead> UtxosStorageRead for UtxosDBMut<S> {
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
-        self.0.get_utxo(outpoint)
-    }
-
-    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
-        self.0.get_best_block_for_utxos()
-    }
-
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, StorageError> {
-        self.0.get_undo_data(id)
-    }
-}
-
-impl<S: UtxosStorageWrite> UtxosStorageWrite for UtxosDBMut<S> {
+impl<S: UtxosStorageWrite> UtxosStorageWrite for UtxosDB<S> {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError> {
         self.0.set_utxo(outpoint, entry)
     }

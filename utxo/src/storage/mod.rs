@@ -57,22 +57,7 @@ impl<S: UtxosStorageRead> UtxosDB<S> {
     }
 }
 
-#[must_use]
-pub struct UtxosDBMut<S>(S);
-
-impl<S: UtxosStorageWrite> UtxosDBMut<S> {
-    pub fn new(store: S) -> Self {
-        let utxos_db = Self(store);
-        debug_assert!(
-            utxos_db
-                .get_best_block_for_utxos()
-                .expect("Database error while reading utxos best block")
-                .is_some(),
-            "Attempted to load an uninitialized utxos db"
-        );
-        utxos_db
-    }
-
+impl<S: UtxosStorageWrite> UtxosDB<S> {
     pub fn initialize_db(store: S, chain_config: &ChainConfig) {
         let genesis = chain_config.genesis_block();
         let genesis_id = chain_config.genesis_block_id();

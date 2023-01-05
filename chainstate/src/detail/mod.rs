@@ -55,7 +55,7 @@ use utils::{
     eventhandler::{EventHandler, EventsController},
     tap_error_log::LogError,
 };
-use utxo::UtxosDBMut;
+use utxo::UtxosDB;
 
 use self::{
     orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut},
@@ -396,7 +396,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         }
 
         // initialize the utxo-set by adding genesis outputs to it
-        UtxosDBMut::initialize_db(&mut db_tx, &self.chain_config);
+        UtxosDB::initialize_db(&mut db_tx, &self.chain_config);
 
         db_tx.commit().expect("Genesis database initialization failed");
         Ok(())
