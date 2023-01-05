@@ -39,17 +39,18 @@ pub use transaction_verifier::{
 };
 use tx_verifier::transaction_verifier;
 
-use std::{
-    sync::atomic::{AtomicBool, Ordering},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use itertools::Itertools;
 
 use chainstate_storage::{BlockchainStorage, BlockchainStorageRead, Transactional};
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
-    chain::{block::BlockHeader, config::ChainConfig, Block},
+    chain::{
+        block::{timestamp::BlockTimestamp, BlockHeader},
+        config::ChainConfig,
+        Block,
+    },
     primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
@@ -86,7 +87,7 @@ pub struct Chainstate<S, V> {
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     events_controller: EventsController<ChainstateEvent>,
     time_getter: TimeGetter,
-    is_initial_block_download_finished: AtomicBool,
+    is_initial_block_download_finished: bool,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -199,7 +200,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             custom_orphan_error_hook,
             events_controller: EventsController::new(),
             time_getter,
-            is_initial_block_download_finished: false.into(),
+            is_initial_block_download_finished: false,
         }
     }
 
@@ -356,6 +357,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 bi.block_id(),
                 bi.block_height()
             );
+
+            self.is_initial_block_download_finished = self.is_fresh_block(&bi.block_timestamp());
         }
 
         Ok(result)
@@ -439,7 +442,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     }
 
     pub fn is_initial_block_download(&self) -> Result<bool, PropertyQueryError> {
-        if self.is_initial_block_download_finished.load(Ordering::Relaxed) {
+        if self.is_initial_block_download_finished {
             return Ok(false);
         }
 
@@ -452,15 +455,14 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             // There is only the genesis block, so the initial block download isn't finished yet.
             Err(PropertyQueryError::GenesisHeaderRequested) => return Ok(true),
             Err(e) => Err(e),
-        }?
-        .as_duration_since_epoch();
-        let now = self.time_getter.get_time();
-        if tip_timestamp + self.chainstate_config.max_tip_age.clone().into() < now {
-            return Ok(true);
-        }
+        }?;
+        Ok(!self.is_fresh_block(&tip_timestamp))
+    }
 
-        self.is_initial_block_download_finished.store(true, Ordering::Relaxed);
-        Ok(false)
+    /// Returns true if the given block timestamp is newer than `ChainstateConfig::max_tip_age`.
+    fn is_fresh_block(&self, time: &BlockTimestamp) -> bool {
+        let now = self.time_getter.get_time();
+        time.as_duration_since_epoch() + self.chainstate_config.max_tip_age.clone().into() > now
     }
 }
 
