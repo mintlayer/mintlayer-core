@@ -163,13 +163,13 @@ pub struct TransactionVerifier<'a, S, U> {
     storage_ref: &'a S,
     verifier_config: TransactionVerifierConfig,
     tx_index_cache: TxIndexCache,
-    utxo_cache: UtxosCache<'a, U>,
+    utxo_cache: UtxosCache<U>,
     utxo_block_undo: BTreeMap<TransactionSource, BlockUndoEntry>,
     token_issuance_cache: TokenIssuanceCache,
     best_block: Id<GenBlock>,
 }
 
-impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S, UtxosDB<'a, S>> {
+impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S, UtxosDB<&'a S>> {
     pub fn new(
         storage_ref: &'a S,
         chain_config: &'a ChainConfig,
@@ -180,7 +180,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S, UtxosDB<'a
             chain_config,
             verifier_config,
             tx_index_cache: TxIndexCache::new(),
-            utxo_cache: UtxosCache::from_owned_parent(UtxosDB::new(storage_ref)),
+            utxo_cache: UtxosCache::new(UtxosDB::new(storage_ref)),
             utxo_block_undo: BTreeMap::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
             best_block: storage_ref
@@ -204,7 +204,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView + Send + Sync>
             storage_ref,
             chain_config,
             tx_index_cache: TxIndexCache::new(),
-            utxo_cache: UtxosCache::from_owned_parent(utxos), // TODO: take utxos from handle
+            utxo_cache: UtxosCache::new(utxos), // TODO: take utxos from handle
             utxo_block_undo: BTreeMap::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
             best_block: storage_ref
@@ -217,13 +217,13 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView + Send + Sync>
 }
 
 impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a, S, U> {
-    pub fn derive_child(&'a self) -> TransactionVerifier<'a, Self, UtxosCache<U>> {
+    pub fn derive_child(&'a self) -> TransactionVerifier<'a, Self, &'a UtxosCache<U>> {
         TransactionVerifier {
             storage_ref: self,
             chain_config: self.chain_config,
             verifier_config: self.verifier_config.clone(),
             tx_index_cache: TxIndexCache::new(),
-            utxo_cache: UtxosCache::from_borrowed_parent(&self.utxo_cache),
+            utxo_cache: UtxosCache::new(&self.utxo_cache),
             utxo_block_undo: BTreeMap::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
             best_block: self.best_block,

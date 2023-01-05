@@ -21,7 +21,7 @@ use common::{
     primitives::Id,
 };
 
-impl<'a, S: UtxosStorageRead> UtxosStorageRead for UtxosDBMut<'a, S> {
+impl<S: UtxosStorageRead> UtxosStorageRead for UtxosDBMut<S> {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
         self.0.get_utxo(outpoint)
     }
@@ -35,7 +35,7 @@ impl<'a, S: UtxosStorageRead> UtxosStorageRead for UtxosDBMut<'a, S> {
     }
 }
 
-impl<'a, S: UtxosStorageWrite> UtxosStorageWrite for UtxosDBMut<'a, S> {
+impl<S: UtxosStorageWrite> UtxosStorageWrite for UtxosDBMut<S> {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError> {
         self.0.set_utxo(outpoint, entry)
     }
@@ -56,7 +56,7 @@ impl<'a, S: UtxosStorageWrite> UtxosStorageWrite for UtxosDBMut<'a, S> {
     }
 }
 
-impl<'a, S: UtxosStorageRead> UtxosStorageRead for UtxosDB<'a, S> {
+impl<S: UtxosStorageRead> UtxosStorageRead for UtxosDB<S> {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
         self.0.get_utxo(outpoint)
     }

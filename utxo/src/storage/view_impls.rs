@@ -46,7 +46,7 @@ mod utxosdb_utxosview_impls {
     }
 }
 
-impl<'a, S: UtxosStorageRead> UtxosView for UtxosDB<'a, S> {
+impl<S: UtxosStorageRead> UtxosView for UtxosDB<S> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
         utxosdb_utxosview_impls::utxo(self, outpoint)
     }
@@ -64,7 +64,7 @@ impl<'a, S: UtxosStorageRead> UtxosView for UtxosDB<'a, S> {
     }
 }
 
-impl<'a, S: UtxosStorageWrite> UtxosView for UtxosDBMut<'a, S> {
+impl<S: UtxosStorageWrite> UtxosView for UtxosDBMut<S> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
         utxosdb_utxosview_impls::utxo(self, outpoint)
     }
@@ -82,7 +82,7 @@ impl<'a, S: UtxosStorageWrite> UtxosView for UtxosDBMut<'a, S> {
     }
 }
 
-impl<'a, S: UtxosStorageWrite> FlushableUtxoView for UtxosDBMut<'a, S> {
+impl<S: UtxosStorageWrite> FlushableUtxoView for UtxosDBMut<S> {
     fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), crate::Error> {
         // check each entry if it's dirty. Only then will the db be updated.
         for (key, entry) in utxos.container {

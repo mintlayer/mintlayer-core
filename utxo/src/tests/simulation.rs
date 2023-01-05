@@ -35,7 +35,7 @@ fn cache_simulation_test(
     let mut rng = make_seedable_rng(seed);
     let mut result: Vec<OutPoint> = Vec::new();
     let test_view = empty_test_utxos_view(common::primitives::H256::zero().into());
-    let mut base = UtxosCache::from_owned_parent(test_view);
+    let mut base = UtxosCache::new(test_view);
 
     let new_consumed_cache = simulation_step(
         &mut rng,
@@ -78,7 +78,7 @@ fn simulation_step<P: UtxosView>(
 
     // notice that we're using a reference of a reference
     let parent: &dyn UtxosView = parent_cache;
-    let mut current_cache = UtxosCache::from_borrowed_parent(&parent);
+    let mut current_cache = UtxosCache::new(&parent);
 
     // fill a global list of outputs
     let mut current_cache_outputs =

@@ -22,6 +22,7 @@ use common::{
     chain::{Block, ChainConfig, GenBlock, OutPoint},
     primitives::{BlockHeight, Id},
 };
+use std::ops::{Deref, DerefMut};
 
 pub trait UtxosStorageRead {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Error>;
@@ -40,10 +41,10 @@ pub trait UtxosStorageWrite: UtxosStorageRead {
 }
 
 #[must_use]
-pub struct UtxosDB<'a, S>(&'a S);
+pub struct UtxosDB<S>(S);
 
-impl<'a, S: UtxosStorageRead> UtxosDB<'a, S> {
-    pub fn new(store: &'a S) -> Self {
+impl<S: UtxosStorageRead> UtxosDB<S> {
+    pub fn new(store: S) -> Self {
         let utxos_db = Self(store);
         debug_assert!(
             utxos_db
@@ -57,10 +58,10 @@ impl<'a, S: UtxosStorageRead> UtxosDB<'a, S> {
 }
 
 #[must_use]
-pub struct UtxosDBMut<'a, S>(&'a mut S);
+pub struct UtxosDBMut<S>(S);
 
-impl<'a, S: UtxosStorageWrite> UtxosDBMut<'a, S> {
-    pub fn new(store: &'a mut S) -> Self {
+impl<S: UtxosStorageWrite> UtxosDBMut<S> {
+    pub fn new(store: S) -> Self {
         let utxos_db = Self(store);
         debug_assert!(
             utxos_db
@@ -72,7 +73,7 @@ impl<'a, S: UtxosStorageWrite> UtxosDBMut<'a, S> {
         utxos_db
     }
 
-    pub fn initialize_db(store: &'a mut S, chain_config: &ChainConfig) {
+    pub fn initialize_db(store: S, chain_config: &ChainConfig) {
         let genesis = chain_config.genesis_block();
         let genesis_id = chain_config.genesis_block_id();
 
@@ -81,7 +82,7 @@ impl<'a, S: UtxosStorageWrite> UtxosDBMut<'a, S> {
         // before deriving cache, there has to be a best block
         utxos_db.set_best_block_for_utxos(&genesis_id).expect("Setting genesis failed");
 
-        let mut utxos_cache = UtxosCache::from_borrowed_parent(&utxos_db);
+        let mut utxos_cache = UtxosCache::new(&utxos_db);
 
         for (index, output) in genesis.utxos().iter().enumerate() {
             utxos_cache
@@ -98,6 +99,50 @@ impl<'a, S: UtxosStorageWrite> UtxosDBMut<'a, S> {
         utxos_db
             .batch_write(consumed_utxos_cache)
             .expect("Writing genesis utxos failed");
+    }
+}
+
+impl<T> UtxosStorageRead for T
+where
+    T: Deref,
+    <T as Deref>::Target: UtxosStorageRead,
+{
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Error> {
+        self.deref().get_utxo(outpoint)
+    }
+
+    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, Error> {
+        self.deref().get_best_block_for_utxos()
+    }
+
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, Error> {
+        self.deref().get_undo_data(id)
+    }
+}
+
+impl<T> UtxosStorageWrite for T
+where
+    T: DerefMut,
+    <T as Deref>::Target: UtxosStorageWrite,
+{
+    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), Error> {
+        self.deref_mut().set_utxo(outpoint, entry)
+    }
+
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), Error> {
+        self.deref_mut().del_utxo(outpoint)
+    }
+
+    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), Error> {
+        self.deref_mut().set_best_block_for_utxos(block_id)
+    }
+
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), Error> {
+        self.deref_mut().set_undo_data(id, undo)
+    }
+
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Error> {
+        self.deref_mut().del_undo_data(id)
     }
 }
 
