@@ -61,7 +61,8 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStor
         tx_id: &OutPointSourceId,
     ) -> Result<Option<TxMainChainIndex>, TransactionVerifierStorageError> {
         let tx_index_cache = self
-            .get_tx_cache_ref()
+            .tx_index_cache
+            .as_ref()
             .ok_or(TransactionVerifierStorageError::TransactionIndexDisabled)?;
         match tx_index_cache.get_from_cached(tx_id) {
             Some(v) => match v {
@@ -119,7 +120,8 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStor
         tx_index: &TxMainChainIndex,
     ) -> Result<(), TransactionVerifierStorageError> {
         let tx_index_cache = self
-            .get_tx_cache_mut()
+            .tx_index_cache
+            .as_mut()
             .ok_or(TransactionVerifierStorageError::TransactionIndexDisabled)?;
         tx_index_cache
             .set_tx_index(tx_id, tx_index.clone())
@@ -131,7 +133,8 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStor
         tx_id: &OutPointSourceId,
     ) -> Result<(), TransactionVerifierStorageError> {
         let tx_index_cache = self
-            .get_tx_cache_mut()
+            .tx_index_cache
+            .as_mut()
             .ok_or(TransactionVerifierStorageError::TransactionIndexDisabled)?;
         tx_index_cache
             .remove_tx_index_by_id(tx_id.clone())
