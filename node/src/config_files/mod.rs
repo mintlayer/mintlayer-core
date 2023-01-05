@@ -112,18 +112,21 @@ fn chainstate_config(
         max_orphan_blocks,
         min_max_bootstrap_import_buffer_sizes,
         tx_index_enabled,
+        max_tip_age,
     } = chainstate_config;
 
     let storage_backend = options.storage_backend.clone().unwrap_or(storage_backend);
     let max_db_commit_attempts = options.max_db_commit_attempts.or(max_db_commit_attempts);
     let max_orphan_blocks = options.max_orphan_blocks.or(max_orphan_blocks);
     let tx_index_enabled = options.tx_index_enabled.or(tx_index_enabled);
+    let max_tip_age = options.max_tip_age.or(max_tip_age);
 
     let chainstate_config = ChainstateConfigFile {
         max_db_commit_attempts,
         max_orphan_blocks,
         min_max_bootstrap_import_buffer_sizes,
         tx_index_enabled,
+        max_tip_age,
     };
     ChainstateLauncherConfigFile {
         storage_backend,
@@ -138,7 +141,6 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         ban_duration,
         outbound_connection_timeout,
         mdns_config: _,
-        request_timeout,
         node_type,
     } = config;
 
@@ -146,7 +148,6 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let ban_threshold = options.p2p_ban_threshold.or(ban_threshold);
     let outbound_connection_timeout =
         options.p2p_outbound_connection_timeout.or(outbound_connection_timeout);
-    let request_timeout = options.p2p_request_timeout.or(request_timeout);
     let node_type = options.node_type.or(node_type);
 
     let mdns_config = MdnsConfigFile::from_options(
@@ -161,7 +162,6 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         ban_duration,
         outbound_connection_timeout,
         mdns_config,
-        request_timeout,
         node_type,
     }
 }

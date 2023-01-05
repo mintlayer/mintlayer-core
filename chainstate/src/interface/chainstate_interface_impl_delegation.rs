@@ -87,6 +87,10 @@ impl<
         self.deref().get_best_block_height()
     }
 
+    fn get_best_block_header(&self) -> Result<BlockHeader, ChainstateError> {
+        self.deref().get_best_block_header()
+    }
+
     fn get_block_id_from_height(
         &self,
         height: &BlockHeight,
@@ -249,6 +253,10 @@ impl<
     fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError> {
         self.deref().utxo(outpoint)
     }
+
+    fn is_initial_block_download(&self) -> Result<bool, ChainstateError> {
+        self.deref().is_initial_block_download()
+    }
 }
 
 #[cfg(test)]
@@ -299,6 +307,7 @@ mod tests {
                 max_orphan_blocks: 0.into(),
                 min_max_bootstrap_import_buffer_sizes: Default::default(),
                 tx_index_enabled: Default::default(),
+                max_tip_age: Default::default(),
             };
             let chainstate_storage = Store::new_empty().unwrap();
 

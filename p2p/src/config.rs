@@ -31,12 +31,6 @@ make_config_setting!(MdnsConfigSetting, MdnsConfig, MdnsConfig::Disabled);
 make_config_setting!(MdnsQueryInterval, u64, MDNS_DEFAULT_QUERY_INTERVAL);
 make_config_setting!(MdnsEnableIpV6Discovery, bool, MDNS_DEFAULT_IPV6_STATE);
 make_config_setting!(
-    /// The request timeout value.
-    RequestTimeout,
-    Duration,
-    Duration::from_secs(10)
-);
-make_config_setting!(
     AnnouncementSubscriptions,
     BTreeSet<PubSubTopic>,
     [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
@@ -99,10 +93,6 @@ pub struct P2pConfig {
     pub outbound_connection_timeout: OutboundConnectionTimeout,
     /// Multicast DNS configuration.
     pub mdns_config: MdnsConfigSetting,
-    /// The request timeout value.
-    ///
-    /// The peers that failed to respond before this timeout are disconnected.
-    pub request_timeout: RequestTimeout,
     /// A node type.
     pub node_type: NodeTypeSetting,
 }

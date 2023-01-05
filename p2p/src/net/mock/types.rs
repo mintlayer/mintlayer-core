@@ -72,10 +72,6 @@ pub enum SyncingEvent {
         request_id: MockRequestId,
         response: message::Response,
     },
-    RequestTimeout {
-        peer_id: MockPeerId,
-        request_id: MockRequestId,
-    },
     Announcement {
         peer_id: MockPeerId,
         announcement: Box<message::Announcement>,

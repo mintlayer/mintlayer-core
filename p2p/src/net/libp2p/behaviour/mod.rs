@@ -25,6 +25,7 @@ use std::{
     num::NonZeroU32,
     sync::Arc,
     task::{Context, Poll, Waker},
+    time::Duration,
 };
 
 use libp2p::{
@@ -128,7 +129,7 @@ impl Libp2pBehaviour {
             chain_config.magic_bytes_as_u32(),
         );
         let mut req_cfg = RequestResponseConfig::default();
-        req_cfg.set_request_timeout(p2p_config.request_timeout.clone().into());
+        req_cfg.set_request_timeout(Duration::from_secs(10));
 
         let mut gossipsub = Gossipsub::new(
             MessageAuthenticity::Signed(id_keys.clone()),
@@ -353,12 +354,6 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
             } => match error {
                 OutboundFailure::Timeout => {
                     log::debug!("OutboundFailure::Timeout for {peer} for {request_id:?}: {error}");
-                    self.add_event(Libp2pBehaviourEvent::Syncing(
-                        SyncingEvent::RequestTimeout {
-                            peer_id: peer,
-                            request_id,
-                        },
-                    ));
                 }
                 OutboundFailure::ConnectionClosed => {
                     if let Err(err) = self.connmgr.handle_connection_closed(&peer) {
@@ -383,12 +378,6 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
             } => match error {
                 InboundFailure::Timeout => {
                     log::debug!("InboundFailure::Timeout for {peer} for {request_id:?}: {error}");
-                    self.add_event(Libp2pBehaviourEvent::Syncing(
-                        SyncingEvent::RequestTimeout {
-                            peer_id: peer,
-                            request_id,
-                        },
-                    ));
                 }
                 InboundFailure::ConnectionClosed => {
                     if let Err(err) = self.connmgr.handle_connection_closed(&peer) {

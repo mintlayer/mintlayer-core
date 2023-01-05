@@ -34,7 +34,7 @@ use common::{
     primitives::{Id, Idable},
 };
 use logging::log;
-use utils::ensure;
+use utils::{ensure, tap_error_log::LogError};
 
 use crate::{
     config::P2pConfig,
@@ -53,19 +53,6 @@ const HEADER_LIMIT: usize = 2000;
 // TODO: add more tests
 // TODO: cache locator and invalidate it when `NewTip` event is received
 
-/// Syncing state of the local node
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum SyncState {
-    /// Local node's state is uninitialized
-    Uninitialized,
-
-    /// Downloading blocks from remote node(s)
-    DownloadingBlocks,
-
-    /// The local block index is fully synced.
-    Done,
-}
-
 /// Sync manager is responsible for syncing the local blockchain to the chain with most trust
 /// and keeping up with updates to different branches of the blockchain.
 ///
@@ -80,9 +67,6 @@ pub struct BlockSyncManager<T: NetworkingService> {
 
     /// The p2p configuration.
     _p2p_config: Arc<P2pConfig>,
-
-    /// Syncing state of the local node
-    state: SyncState,
 
     /// Handle for sending/receiving syncing events
     peer_sync_handle: T::SyncingMessagingHandle,
@@ -124,13 +108,7 @@ where
             tx_peer_manager,
             chainstate_handle,
             peers: Default::default(),
-            state: SyncState::Uninitialized,
         }
-    }
-
-    /// Get current sync state
-    pub fn state(&self) -> &SyncState {
-        &self.state
     }
 
     /// Get mutable reference to the handle
@@ -350,35 +328,6 @@ where
         }
     }
 
-    /// Checks the current state of syncing.
-    ///
-    /// The node is considered fully synced (its initial block download is done) if all its peers
-    /// are in the `Done` state.
-    pub fn update_state(&mut self) {
-        // TODO: improve "initial block download done" check
-
-        if self.peers.is_empty() {
-            self.state = SyncState::Uninitialized;
-            return;
-        }
-
-        for peer in self.peers.values() {
-            match peer.state() {
-                peer::PeerSyncState::UploadingBlocks(_) => {
-                    self.state = SyncState::DownloadingBlocks;
-                    return;
-                }
-                peer::PeerSyncState::UploadingHeaders(_) | peer::PeerSyncState::Unknown => {
-                    self.state = SyncState::Uninitialized;
-                    return;
-                }
-                peer::PeerSyncState::Idle => {}
-            }
-        }
-
-        self.state = SyncState::Done;
-    }
-
     pub async fn process_response(
         &mut self,
         peer_id: T::PeerId,
@@ -407,22 +356,6 @@ where
         }
 
         Ok(())
-    }
-
-    pub async fn process_timeout(
-        &mut self,
-        peer_id: T::PeerId,
-        request_id: T::SyncingPeerRequestId,
-    ) -> crate::Result<()> {
-        log::debug!("{request_id:?} request timeout, unregistering {peer_id:?} peer");
-
-        self.unregister_peer(peer_id);
-
-        let (tx, rx) = oneshot::channel();
-        self.tx_peer_manager
-            .send(PeerManagerEvent::Disconnect(peer_id, tx))
-            .map_err(P2pError::from)?;
-        rx.await.map_err(P2pError::from)?
     }
 
     pub async fn process_announcement(
@@ -553,11 +486,6 @@ where
                     } => {
                         self.process_response(peer_id, request_id, response).await?;
                     },
-                    SyncingEvent::RequestTimeout {
-                        peer_id, request_id
-                    } => {
-                        self.process_timeout(peer_id, request_id).await?;
-                    },
                     SyncingEvent::Announcement{ peer_id, message_id, announcement } => {
                         self.process_announcement(peer_id, message_id, announcement).await?;
                     }
@@ -573,17 +501,17 @@ where
                         self.unregister_peer(peer_id)
                     }
                 },
-                block_id = block_rx.recv(), if self.state == SyncState::Done => {
+                block_id = block_rx.recv(), if !self.chainstate_handle.call(|c| c.is_initial_block_download()).await?? => {
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
 
                     match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
-                        Some(block) => self.peer_sync_handle.make_announcement(Announcement::Block(block)).await?,
+                        Some(block) => {
+                            let _ = self.peer_sync_handle.make_announcement(Announcement::Block(block)).await.log_err();
+                        }
                         None => log::error!("CRITICAL: best block not available"),
                     }
                 }
             }
-
-            self.update_state();
         }
     }
 

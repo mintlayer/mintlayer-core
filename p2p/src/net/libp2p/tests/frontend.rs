@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use libp2p::{core::PeerId, multiaddr::Protocol, Multiaddr};
 use tokio::net::TcpListener;
@@ -242,7 +242,6 @@ async fn test_connect_with_timeout() {
             ban_duration: Default::default(),
             outbound_connection_timeout: 2.into(),
             mdns_config: MdnsConfig::Disabled.into(),
-            request_timeout: Duration::from_secs(10).into(),
             node_type: NodeType::Full.into(),
         }),
     )

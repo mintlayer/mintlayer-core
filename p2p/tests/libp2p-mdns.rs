@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use libp2p::multiaddr::Protocol;
 
@@ -43,7 +43,6 @@ async fn test_libp2p_peer_discovery() {
                 enable_ipv6_mdns_discovery: Default::default(),
             }
             .into(),
-            request_timeout: Duration::from_secs(10).into(),
             node_type: NodeType::Full.into(),
         }),
     )
@@ -64,7 +63,6 @@ async fn test_libp2p_peer_discovery() {
                 enable_ipv6_mdns_discovery: Default::default(),
             }
             .into(),
-            request_timeout: Duration::from_secs(10).into(),
             node_type: NodeType::Full.into(),
         }),
     )

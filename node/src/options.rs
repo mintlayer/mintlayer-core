@@ -103,9 +103,12 @@ pub struct RunOptions {
     #[clap(long)]
     pub p2p_outbound_connection_timeout: Option<u64>,
 
-    /// The p2p request timeout value in seconds.
+    /// A maximum tip age in seconds.
+    ///
+    /// The initial block download is finished if the difference between the current time and the
+    /// tip time is less than this value.
     #[clap(long)]
-    pub p2p_request_timeout: Option<u64>,
+    pub max_tip_age: Option<u64>,
 
     /// Address to bind http RPC to.
     #[clap(long, value_name = "ADDR")]

@@ -13,21 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter;
+use std::{iter, time::Duration};
 
-use chainstate::BlockSource;
+use rstest::rstest;
 
-use chainstate::ChainstateError;
-use chainstate::HEADER_LIMIT;
+use chainstate::{BlockSource, ChainstateConfig, ChainstateError, HEADER_LIMIT};
 use chainstate_test_framework::TestFramework;
 use chainstate_types::PropertyQueryError;
-use common::chain::GenBlock;
-use common::primitives::BlockDistance;
-use common::primitives::BlockHeight;
-use common::primitives::Id;
-use common::primitives::Idable;
+use common::{
+    chain::{block::timestamp::BlockTimestamp, GenBlock},
+    primitives::{BlockDistance, BlockHeight, Id, Idable},
+};
 use crypto::random::Rng;
-use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 #[rstest]
@@ -331,5 +328,43 @@ fn filter_already_existing_blocks_detached_headers(#[case] seed: Seed) {
                 PropertyQueryError::BlockNotFound(Id::new(headers[1].prev_block_id().get()))
             ))
         );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn initial_block_download(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chainstate_config(ChainstateConfig {
+                max_db_commit_attempts: Default::default(),
+                max_orphan_blocks: Default::default(),
+                min_max_bootstrap_import_buffer_sizes: Default::default(),
+                tx_index_enabled: Default::default(),
+                max_tip_age: Duration::from_secs(1).into(),
+            })
+            .build();
+
+        // Only genesis block, so is_initial_block_download should return true.
+        assert!(tf.chainstate.is_initial_block_download().unwrap());
+
+        // Create a block with an "old" timestamp.
+        let now = tf.current_time();
+        tf.progress_time_seconds_since_epoch(3);
+        tf.make_block_builder()
+            .with_timestamp(BlockTimestamp::from_duration_since_epoch(now))
+            .build_and_process()
+            .unwrap();
+        assert!(tf.chainstate.is_initial_block_download().unwrap());
+
+        // Create a block with fresh timestamp.
+        tf.make_block_builder().build_and_process().unwrap();
+        assert!(!tf.chainstate.is_initial_block_download().unwrap());
+
+        // Add one more block.
+        tf.make_block_builder().build_and_process().unwrap();
+        assert!(!tf.chainstate.is_initial_block_download().unwrap());
     });
 }

@@ -171,12 +171,6 @@ pub enum SyncingEvent<T: NetworkingService> {
         /// Received response
         response: message::Response,
     },
-    // TODO: Perhaps timeouts can be removed. See https://github.com/mintlayer/mintlayer-core/issues/583 for details.
-    /// A request timeout.
-    RequestTimeout {
-        peer_id: T::PeerId,
-        request_id: T::SyncingPeerRequestId,
-    },
     /// An announcement that is broadcast to all peers.
     Announcement {
         peer_id: T::PeerId,

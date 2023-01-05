@@ -18,7 +18,7 @@ mod connection;
 mod header_response;
 mod request_response;
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use libp2p::PeerId;
 use tokio::sync::mpsc;
@@ -76,7 +76,6 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: 10.into(),
         mdns_config: MdnsConfig::Disabled.into(),
-        request_timeout: Duration::from_secs(1).into(),
         node_type: NodeType::Full.into(),
     });
     let (conn, sync) = T::start(

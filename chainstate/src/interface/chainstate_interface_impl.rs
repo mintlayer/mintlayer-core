@@ -172,6 +172,14 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         Ok(best_block_index.block_height())
     }
 
+    fn get_best_block_header(&self) -> Result<BlockHeader, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_best_block_header()
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
     fn get_best_block_index(&self) -> Result<GenBlockIndex, ChainstateError> {
         Ok(self
             .chainstate
@@ -424,5 +432,9 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?;
         let utxo_view = chainstate_ref.make_utxo_view();
         Ok(utxo_view.utxo(outpoint))
+    }
+
+    fn is_initial_block_download(&self) -> Result<bool, ChainstateError> {
+        self.chainstate.is_initial_block_download().map_err(ChainstateError::from)
     }
 }

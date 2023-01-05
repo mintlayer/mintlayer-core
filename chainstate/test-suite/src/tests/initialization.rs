@@ -59,6 +59,7 @@ fn genesis_check_ok(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
         max_orphan_blocks: Default::default(),
         min_max_bootstrap_import_buffer_sizes: Default::default(),
         tx_index_enabled: tx_index_enabled.map(Into::into).unwrap_or_default(),
+        max_tip_age: Default::default(),
     };
 
     // Initialize a different test framework with given storage.
@@ -118,6 +119,7 @@ fn genesis_check_err(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
         max_orphan_blocks: Default::default(),
         min_max_bootstrap_import_buffer_sizes: Default::default(),
         tx_index_enabled: tx_index_enabled.map(Into::into).unwrap_or_default(),
+        max_tip_age: Default::default(),
     };
 
     // Start another chain with different genesis using the previous storage

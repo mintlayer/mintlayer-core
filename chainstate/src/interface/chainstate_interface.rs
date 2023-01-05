@@ -49,6 +49,7 @@ pub trait ChainstateInterface: Send {
         block_id: &Id<GenBlock>,
     ) -> Result<Option<BlockHeight>, ChainstateError>;
     fn get_best_block_height(&self) -> Result<BlockHeight, ChainstateError>;
+    fn get_best_block_header(&self) -> Result<BlockHeader, ChainstateError>;
     fn get_block_id_from_height(
         &self,
         height: &BlockHeight,
@@ -155,4 +156,7 @@ pub trait ChainstateInterface: Send {
 
     /// Returns the UTXO for a specified OutPoint
     fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError>;
+
+    /// Returns true if the initial block download isn't finished yet.
+    fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;
 }

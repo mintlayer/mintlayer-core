@@ -17,7 +17,6 @@ use std::{
     collections::{HashSet, VecDeque},
     fmt::Debug,
     sync::Arc,
-    time::Duration,
 };
 
 use tokio::sync::mpsc;
@@ -30,7 +29,7 @@ use common::{
 
 use p2p::testing_utils::TestTransportMaker;
 use p2p::{
-    config::{MdnsConfig, NodeType, P2pConfig},
+    config::P2pConfig,
     error::P2pError,
     event::{PeerManagerEvent, SyncControlEvent},
     message::{BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response},
@@ -40,7 +39,6 @@ use p2p::{
     },
     peer_manager::helpers::connect_services,
     sync::BlockSyncManager,
-    sync::SyncState,
 };
 use p2p_test_utils::TestBlockInfo;
 
@@ -54,7 +52,6 @@ tests![
     two_remote_nodes_same_chains,
     two_remote_nodes_same_chains_new_blocks,
     connect_disconnect_resyncing,
-    disconnect_unresponsive_peer,
 ];
 
 async fn local_and_remote_in_sync<A, S>()
@@ -99,7 +96,7 @@ where
     assert_eq!(res2, Ok(()));
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 // local and remote nodes are in the same chain but remote is ahead 7 blocks
@@ -200,11 +197,10 @@ where
         }
     }
 
-    let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state();
+    handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 // local and remote nodes are in the same chain but local is ahead of remote by 12 blocks
@@ -319,12 +315,10 @@ where
         }
     }
 
-    let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state();
-    mgr2.update_state();
+    handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 // local and remote nodes are in the same chain but local is ahead of remote by 14 blocks
@@ -463,14 +457,12 @@ where
         }
     }
 
-    let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state();
-    mgr2.update_state();
+    handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await == local_tip);
     assert!(get_tip(&mgr2_handle).await != remote_tip);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 // local and remote nodes are in different chains and remote has longer chain
@@ -609,14 +601,12 @@ where
         }
     }
 
-    let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state();
-    mgr2.update_state();
+    handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await != local_tip);
     assert!(get_tip(&mgr2_handle).await == remote_tip);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 async fn two_remote_nodes_different_chains<A, S>()
@@ -732,13 +722,12 @@ where
             msg => panic!("invalid message received: {:?}", msg),
         }
     }
-    let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state();
+    handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
     assert!(get_tip(&mgr3_handle).await == mgr3_tip);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 async fn two_remote_nodes_same_chains<A, S>()
@@ -757,7 +746,7 @@ where
     let (mut mgr1, mut conn1, _, _) = make_sync_manager::<S>(
         A::make_transport(),
         A::make_address(),
-        handle1,
+        handle1.clone(),
         P2pConfig::default(),
     )
     .await;
@@ -782,6 +771,7 @@ where
         TestBlockInfo::from_tip(&mgr2_handle, &config).await,
         32,
     );
+    let last_block_id = blocks.last().unwrap().get_id();
 
     p2p_test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
     p2p_test_utils::import_blocks(&mgr3_handle, blocks).await;
@@ -807,7 +797,8 @@ where
         loop {
             advance_mgr_state(&mut mgr1).await.unwrap();
 
-            if mgr1.state() == &SyncState::Done {
+            let best_block_id = handle1.call(|c| c.get_best_block_id()).await.unwrap().unwrap();
+            if best_block_id == last_block_id {
                 break;
             }
         }
@@ -870,13 +861,12 @@ where
             msg => panic!("invalid message received: {:?}", msg),
         }
     }
-    let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state();
+    handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
     assert!(get_tip(&mgr3_handle).await == mgr3_tip);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 async fn two_remote_nodes_same_chains_new_blocks<A, S>()
@@ -887,29 +877,26 @@ where
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
 {
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (handle1, handle2, handle3) = init_chainstate_3(Arc::clone(&config), 8).await;
-    let mgr1_handle = handle1.clone();
-    let mgr2_handle = handle2.clone();
-    let mgr3_handle = handle3.clone();
+    let (mgr1_handle, mgr2_handle, mgr3_handle) = init_chainstate_3(Arc::clone(&config), 8).await;
 
     let (mut mgr1, mut conn1, _, _) = make_sync_manager::<S>(
         A::make_transport(),
         A::make_address(),
-        handle1,
+        mgr1_handle.clone(),
         P2pConfig::default(),
     )
     .await;
     let (mut mgr2, mut conn2, _, _) = make_sync_manager::<S>(
         A::make_transport(),
         A::make_address(),
-        handle2,
+        mgr2_handle.clone(),
         P2pConfig::default(),
     )
     .await;
     let (mut mgr3, mut conn3, _, _) = make_sync_manager::<S>(
         A::make_transport(),
         A::make_address(),
-        handle3,
+        mgr3_handle.clone(),
         P2pConfig::default(),
     )
     .await;
@@ -924,6 +911,13 @@ where
     p2p_test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
     p2p_test_utils::import_blocks(&mgr3_handle, blocks).await;
 
+    let additional_blocks = p2p_test_utils::create_n_blocks(
+        Arc::clone(&config),
+        TestBlockInfo::from_tip(&mgr2_handle, &config).await,
+        10,
+    );
+    let last_block_id = additional_blocks.last().unwrap().get_id();
+
     // connect remote peers to local peer
     let (_address, peer_info12, peer_info21) = connect_services::<S>(&mut conn1, &mut conn2).await;
     let (_address, peer_info13, peer_info31) = connect_services::<S>(&mut conn1, &mut conn3).await;
@@ -935,19 +929,19 @@ where
 
     let (tx, mut rx) = mpsc::unbounded_channel();
     let mut gethdr_received = HashSet::new();
-    let mut blocks = vec![];
 
     let handle = tokio::spawn(async move {
         loop {
             advance_mgr_state(&mut mgr1).await.unwrap();
 
-            if mgr1.state() == &SyncState::Done {
+            let best_block_id = mgr1_handle.call(|c| c.get_best_block_id()).await.unwrap().unwrap();
+            if best_block_id == last_block_id {
                 break;
             }
         }
 
         tx.send(()).unwrap();
-        mgr1
+        (mgr1_handle, mgr1)
     });
 
     loop {
@@ -977,18 +971,12 @@ where
                 }
 
                 if gethdr_received.insert(dest_peer_id) {
-                    if blocks.is_empty() {
-                        blocks = p2p_test_utils::create_n_blocks(
-                            Arc::clone(&config),
-                            TestBlockInfo::from_tip(&mgr2_handle, &config).await,
-                            10,
-                        );
-                    }
-
                     if dest_peer_id == peer_info21.peer_id {
-                        p2p_test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
+                        p2p_test_utils::import_blocks(&mgr2_handle, additional_blocks.clone())
+                            .await;
                     } else {
-                        p2p_test_utils::import_blocks(&mgr3_handle, blocks.clone()).await;
+                        p2p_test_utils::import_blocks(&mgr3_handle, additional_blocks.clone())
+                            .await;
                     }
                 }
             }
@@ -1020,17 +1008,16 @@ where
             msg => panic!("invalid message received: {:?}", msg),
         }
     }
-    let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state();
+    let (mgr1_handle, _) = handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(same_tip(&mgr2_handle, &mgr3_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
-// // connect two nodes, they are in sync so no blocks are downloaded
-// // then disconnect them, add more blocks to remote chains and reconnect the nodes
-// // verify that local node downloads the blocks and after that they are in sync
+// connect two nodes, they are in sync so no blocks are downloaded
+// then disconnect them, add more blocks to remote chains and reconnect the nodes
+// verify that local node downloads the blocks and after that they are in sync
 async fn connect_disconnect_resyncing<A, S>()
 where
     A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
@@ -1072,7 +1059,7 @@ where
     assert_eq!(res2, Ok(()));
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Done);
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 
     mgr1.unregister_peer(peer_info2.peer_id);
     assert_eq!(conn1.disconnect(peer_info2.peer_id).await, Ok(()));
@@ -1096,8 +1083,6 @@ where
         for _ in 0..9 {
             advance_mgr_state(&mut mgr1).await.unwrap();
         }
-
-        mgr1
     });
 
     for _ in 0..9 {
@@ -1150,61 +1135,10 @@ where
         }
     }
 
-    let mut mgr1 = handle.await.unwrap();
-    mgr1.update_state();
+    handle.await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    assert_eq!(mgr1.state(), &SyncState::Done);
-}
-
-// Check that the peer that ignores requests is disconnected.
-async fn disconnect_unresponsive_peer<A, T>()
-where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
-    T: NetworkingService + 'static + Debug,
-    T::ConnectivityHandle: ConnectivityService<T>,
-    T::SyncingMessagingHandle: SyncingMessagingService<T>,
-{
-    let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (chainstate1, chainstate2) = init_chainstate_2(Arc::clone(&config), 8).await;
-    let p2p_config = P2pConfig {
-        bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
-        ban_threshold: 100.into(),
-        ban_duration: Default::default(),
-        outbound_connection_timeout: 10.into(),
-        mdns_config: MdnsConfig::Disabled.into(),
-        request_timeout: Duration::from_secs(1).into(),
-        node_type: NodeType::Full.into(),
-    };
-    let (mut mgr1, mut conn1, _sync1, mut pm1) = make_sync_manager::<T>(
-        A::make_transport(),
-        A::make_address(),
-        chainstate1,
-        p2p_config,
-    )
-    .await;
-    let (_mgr2, mut conn2, _sync2, _pm2) = make_sync_manager::<T>(
-        A::make_transport(),
-        A::make_address(),
-        chainstate2,
-        P2pConfig::default(),
-    )
-    .await;
-
-    let (_address, _peer_info1, peer_info2) = connect_services::<T>(&mut conn1, &mut conn2).await;
-    let peer2_id = peer_info2.peer_id;
-
-    tokio::spawn(async move {
-        mgr1.register_peer(peer2_id).await.unwrap();
-        mgr1.run().await.unwrap();
-    });
-
-    match pm1.recv().await.unwrap() {
-        PeerManagerEvent::Disconnect(id, _) => {
-            assert_eq!(id, peer2_id)
-        }
-        e => panic!("Unexpected peer manager event: {e:?}"),
-    }
+    assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
 async fn make_sync_manager<T>(
@@ -1375,12 +1309,6 @@ where
                 mgr.process_block_response(peer_id, response.into_blocks()).await?;
             }
         },
-        SyncingEvent::RequestTimeout {
-            peer_id,
-            request_id: _,
-        } => {
-            mgr.unregister_peer(peer_id);
-        }
         SyncingEvent::Announcement {
             peer_id,
             message_id,
@@ -1390,6 +1318,5 @@ where
         }
     }
 
-    mgr.update_state();
     Ok(())
 }

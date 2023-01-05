@@ -688,6 +688,7 @@ fn reorg_store_coin_no_tx_index(#[case] seed: Seed, #[case] tx_index_enabled: bo
                 max_db_commit_attempts: Default::default(),
                 max_orphan_blocks: Default::default(),
                 min_max_bootstrap_import_buffer_sizes: Default::default(),
+                max_tip_age: Default::default(),
             };
 
             let tf_build_error = TestFramework::builder(&mut rng)

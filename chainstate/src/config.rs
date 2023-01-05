@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use utils::make_config_setting;
 
 const DEFAULT_MIN_IMPORT_BUFFER_SIZE: usize = 1 << 22; // 4 MB
@@ -29,6 +31,7 @@ make_config_setting!(
     )
 );
 make_config_setting!(TxIndexEnabled, bool, false);
+make_config_setting!(MaxTipAge, Duration, Duration::from_secs(60 * 60 * 24));
 
 /// The chainstate subsystem configuration.
 #[derive(Debug, Clone, Default)]
@@ -41,6 +44,9 @@ pub struct ChainstateConfig {
     /// (see bootstrap import function for more information)
     pub min_max_bootstrap_import_buffer_sizes: MinMaxBootstrapImportBufferSizes,
     pub tx_index_enabled: TxIndexEnabled,
+    /// The initial block download is finished if the difference between the current time and the
+    /// tip time is less than this value.
+    pub max_tip_age: MaxTipAge,
 }
 
 impl ChainstateConfig {
