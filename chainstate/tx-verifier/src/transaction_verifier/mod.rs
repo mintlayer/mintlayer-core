@@ -157,36 +157,76 @@ pub struct TransactionVerifierDelta {
     token_issuance_cache: ConsumedTokenIssuanceCache,
 }
 
+/// [`TxIndexCache`] that can be enabled or disabled (using a config).
+pub struct GuardedTxIndexCache {
+    enabled: bool,
+    inner: TxIndexCache,
+}
+
+impl GuardedTxIndexCache {
+    fn new(enabled: bool) -> Self {
+        let inner = TxIndexCache::new();
+        Self { enabled, inner }
+    }
+
+    fn from_config(config: &TransactionVerifierConfig) -> Self {
+        Self::new(config.tx_index_enabled)
+    }
+
+    #[cfg(test)]
+    fn new_for_test(map: BTreeMap<OutPointSourceId, CachedInputsOperation>) -> Self {
+        let inner = TxIndexCache::new_for_test(map);
+        let enabled = true;
+        Self { enabled, inner }
+    }
+
+    fn as_ref(&self) -> Option<&TxIndexCache> {
+        self.enabled.then(|| &self.inner)
+    }
+
+    fn as_mut(&mut self) -> Option<&mut TxIndexCache> {
+        self.enabled.then(|| &mut self.inner)
+    }
+
+    /// Take the inner cache, even if disabled
+    fn take_always(self) -> TxIndexCache {
+        self.inner
+    }
+}
+
 /// The tool used to verify transaction and cache their updated states in memory
 pub struct TransactionVerifier<'a, S, U> {
     chain_config: &'a ChainConfig,
-    storage_ref: &'a S,
+    storage_ref: S,
     verifier_config: TransactionVerifierConfig,
-    tx_index_cache: TxIndexCache,
+    tx_index_cache: GuardedTxIndexCache,
     utxo_cache: UtxosCache<U>,
     utxo_block_undo: BTreeMap<TransactionSource, BlockUndoEntry>,
     token_issuance_cache: TokenIssuanceCache,
     best_block: Id<GenBlock>,
 }
 
-impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S, UtxosDB<&'a S>> {
+impl<'a, S: TransactionVerifierStorageRef + Clone> TransactionVerifier<'a, S, UtxosDB<S>> {
     pub fn new(
-        storage_ref: &'a S,
+        storage_ref: S,
         chain_config: &'a ChainConfig,
         verifier_config: TransactionVerifierConfig,
     ) -> Self {
+        let utxo_cache = UtxosCache::new(UtxosDB::new(S::clone(&storage_ref)));
+        let best_block = storage_ref
+            .get_best_block_for_utxos()
+            .expect("Database error while reading utxos best block")
+            .expect("best block should be some");
+        let tx_index_cache = GuardedTxIndexCache::from_config(&verifier_config);
         Self {
             storage_ref,
             chain_config,
             verifier_config,
-            tx_index_cache: TxIndexCache::new(),
-            utxo_cache: UtxosCache::new(UtxosDB::new(storage_ref)),
+            tx_index_cache,
+            utxo_cache,
             utxo_block_undo: BTreeMap::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
-            best_block: storage_ref
-                .get_best_block_for_utxos()
-                .expect("Database error while reading utxos best block")
-                .expect("best block should be some"),
+            best_block,
         }
     }
 }
@@ -195,34 +235,36 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView + Send + Sync>
     TransactionVerifier<'a, S, U>
 {
     pub fn new_from_handle(
-        storage_ref: &'a S,
+        storage_ref: S,
         chain_config: &'a ChainConfig,
         utxos: U, // TODO: Replace this parameter with handle
         verifier_config: TransactionVerifierConfig,
     ) -> Self {
+        let best_block = storage_ref
+            .get_best_block_for_utxos()
+            .expect("Database error while reading utxos best block")
+            .expect("best block should be some");
+        let tx_index_cache = GuardedTxIndexCache::from_config(&verifier_config);
         Self {
             storage_ref,
             chain_config,
-            tx_index_cache: TxIndexCache::new(),
+            tx_index_cache,
             utxo_cache: UtxosCache::new(utxos), // TODO: take utxos from handle
             utxo_block_undo: BTreeMap::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
-            best_block: storage_ref
-                .get_best_block_for_utxos()
-                .expect("Database error while reading utxos best block")
-                .expect("best block should be some"),
+            best_block,
             verifier_config,
         }
     }
 }
 
 impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a, S, U> {
-    pub fn derive_child(&'a self) -> TransactionVerifier<'a, Self, &'a UtxosCache<U>> {
+    pub fn derive_child(&'a self) -> TransactionVerifier<'a, &'a Self, &'a UtxosCache<U>> {
         TransactionVerifier {
             storage_ref: self,
             chain_config: self.chain_config,
             verifier_config: self.verifier_config.clone(),
-            tx_index_cache: TxIndexCache::new(),
+            tx_index_cache: GuardedTxIndexCache::new(self.tx_index_cache.enabled),
             utxo_cache: UtxosCache::new(&self.utxo_cache),
             utxo_block_undo: BTreeMap::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
@@ -488,7 +530,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
 
                 let source_block_index = block_index_ancestor_getter(
                     block_index_getter,
-                    self.storage_ref,
+                    &self.storage_ref,
                     self.chain_config,
                     (&starting_point.clone().into_gen_block_index()).into(),
                     height,
@@ -584,22 +626,6 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
             .undo
     }
 
-    fn get_tx_cache_ref(&self) -> Option<&TxIndexCache> {
-        if self.verifier_config.tx_index_enabled {
-            Some(&self.tx_index_cache)
-        } else {
-            None
-        }
-    }
-
-    fn get_tx_cache_mut(&mut self) -> Option<&mut TxIndexCache> {
-        if self.verifier_config.tx_index_enabled {
-            Some(&mut self.tx_index_cache)
-        } else {
-            None
-        }
-    }
-
     pub fn connect_transaction(
         &mut self,
         tx_source: &TransactionSourceForConnect,
@@ -639,13 +665,12 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
             TransactionSourceForConnect::Chain {
                 new_block_index: block_index,
             } => {
-                let tx_index_fetcher =
-                    |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
-
                 // update tx index only for txs from main chain
-                if let Some(tx_index_cache) = self.get_tx_cache_mut() {
+                if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
                     // pre-cache all inputs
-                    tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
+                    tx_index_cache.precache_inputs(tx.inputs(), |tx_id: &OutPointSourceId| {
+                        self.storage_ref.get_mainchain_tx_index(tx_id)
+                    })?;
 
                     // mark tx index as spent
                     tx_index_cache
@@ -678,7 +703,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
                 |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
 
             // pre-cache all inputs
-            if let Some(tx_index_cache) = self.get_tx_cache_mut() {
+            if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
                 tx_index_cache.precache_inputs(inputs, tx_index_fetcher)?;
             }
 
@@ -706,7 +731,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
         }
 
         if let (Some(inputs), Some(tx_index_cache)) =
-            (reward_transactable.inputs(), self.get_tx_cache_mut())
+            (reward_transactable.inputs(), self.tx_index_cache.as_mut())
         {
             // mark tx index as spend
             tx_index_cache.spend_tx_index_inputs(inputs, block_id.into())?;
@@ -742,12 +767,12 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
             }
         };
         // add tx index to the cache
-        self.verifier_config.if_tx_index_enabled(|| {
-            self.tx_index_cache.add_tx_index(
+        if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
+            tx_index_cache.add_tx_index(
                 spend_ref.without_tx_index(),
                 spend_ref.take_tx_index().expect("Guaranteed by verifier_config"),
-            )
-        })?;
+            )?;
+        }
 
         Ok(fee)
     }
@@ -797,7 +822,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
                     |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
 
                 // update tx index only for txs from main chain
-                if let Some(tx_index_cache) = self.get_tx_cache_mut() {
+                if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
                     // pre-cache all inputs
                     tx_index_cache.precache_inputs(tx.inputs(), tx_index_fetcher)?;
 
@@ -836,7 +861,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
         &mut self,
         spend_ref: BlockTransactableRef,
     ) -> Result<(), ConnectTransactionError> {
-        if let Some(tx_index_cache) = self.get_tx_cache_mut() {
+        if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
             // Delete TxMainChainIndex for the current tx
             tx_index_cache.remove_tx_index(spend_ref)?;
         }
@@ -864,7 +889,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
                     |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
 
                 if let (Some(inputs), Some(tx_index_cache)) =
-                    (reward_transactable.inputs(), self.get_tx_cache_mut())
+                    (reward_transactable.inputs(), self.tx_index_cache.as_mut())
                 {
                     // pre-cache all inputs
                     tx_index_cache.precache_inputs(inputs, tx_index_fetcher)?;
@@ -884,7 +909,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {
         Ok(TransactionVerifierDelta {
-            tx_index_cache: self.tx_index_cache.consume(),
+            tx_index_cache: self.tx_index_cache.take_always().consume(),
             utxo_cache: self.utxo_cache.consume(),
             utxo_block_undo: self.utxo_block_undo,
             token_issuance_cache: self.token_issuance_cache.consume(),
