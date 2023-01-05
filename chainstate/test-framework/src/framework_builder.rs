@@ -63,7 +63,7 @@ impl TestFrameworkBuilder {
             .net_upgrades(NetUpgrades::unit_tests())
             .genesis_unittest(Destination::AnyoneCanSpend)
             .build();
-        let chainstate_config = chainstate::ChainstateConfig {
+        let chainstate_config = ChainstateConfig {
             max_db_commit_attempts: Default::default(),
             max_orphan_blocks: Default::default(),
             min_max_bootstrap_import_buffer_sizes: Default::default(),
