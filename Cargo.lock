@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
  "common",
  "parity-scale-codec",
+ "proptest",
  "rstest",
  "serialization",
  "thiserror",

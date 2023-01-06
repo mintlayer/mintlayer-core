@@ -15,11 +15,37 @@
 
 use super::*;
 
+use proptest::prelude::*;
 use rstest::rstest;
 
 mod delta_delta_delta_tests;
 mod delta_delta_undo_tests;
 mod delta_delta_undo_undo_tests;
+
+impl<T: Arbitrary + Clone + 'static> Arbitrary for DataDelta<T> {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+        let none = Just(DataDelta {
+            old: None,
+            new: None,
+        });
+        let none_some = any::<T>().prop_map(|v| DataDelta {
+            old: None,
+            new: Some(v),
+        });
+        let some_none = any::<T>().prop_map(|v| DataDelta {
+            old: Some(v),
+            new: None,
+        });
+        let some_some = (any::<T>(), any::<T>()).prop_map(|(old, new)| DataDelta {
+            old: Some(old),
+            new: Some(new),
+        });
+        prop_oneof![none, none_some, some_none, some_some].boxed()
+    }
+}
 
 fn new_delta<T: Clone>(prev: Option<T>, next: Option<T>) -> DataDelta<T> {
     DataDelta::new(prev, next)
