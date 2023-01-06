@@ -68,21 +68,17 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         &self,
         tx_verifier_maker: M,
         block_index_handle: &'a H,
-        storage_backend: &'a S,
+        storage_backend: S,
         chain_config: &'a ChainConfig,
         verifier_config: TransactionVerifierConfig,
         block_index: &'a BlockIndex,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, &'a S, U>, BlockError>
+    ) -> Result<TransactionVerifier<'a, S, U>, BlockError>
     where
         H: BlockIndexHandle,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(
-            &'a S,
-            &'a ChainConfig,
-            TransactionVerifierConfig,
-        ) -> TransactionVerifier<'a, &'a S, U>,
+        M: Fn(S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>,
     {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past =
@@ -113,19 +109,15 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
     fn disconnect_block<'a, S, M, U>(
         &self,
         tx_verifier_maker: M,
-        storage_backend: &'a S,
+        storage_backend: S,
         chain_config: &'a ChainConfig,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, &'a S, U>, BlockError>
+    ) -> Result<TransactionVerifier<'a, S, U>, BlockError>
     where
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(
-            &'a S,
-            &'a ChainConfig,
-            TransactionVerifierConfig,
-        ) -> TransactionVerifier<'a, &'a S, U>,
+        M: Fn(S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>,
     {
         let mut tx_verifier = self.disconnect_with_base(
             tx_verifier_maker,
@@ -146,21 +138,17 @@ impl RandomizedTransactionVerificationStrategy {
     fn connect_with_base<'a, S, M, U>(
         &self,
         tx_verifier_maker: M,
-        storage_backend: &'a S,
+        storage_backend: S,
         chain_config: &'a ChainConfig,
         verifier_config: TransactionVerifierConfig,
         block_index: &'a BlockIndex,
         block: &WithId<Block>,
         median_time_past: &BlockTimestamp,
-    ) -> Result<(TransactionVerifier<'a, &'a S, U>, Amount), ConnectTransactionError>
+    ) -> Result<(TransactionVerifier<'a, S, U>, Amount), ConnectTransactionError>
     where
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(
-            &'a S,
-            &'a ChainConfig,
-            TransactionVerifierConfig,
-        ) -> TransactionVerifier<'a, &'a S, U>,
+        M: Fn(S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>,
     {
         let mut tx_indices = construct_tx_indices(&verifier_config, block)?;
         let block_reward_tx_index = construct_reward_tx_indices(&verifier_config, block)?;
@@ -258,19 +246,15 @@ impl RandomizedTransactionVerificationStrategy {
     fn disconnect_with_base<'a, S, M, U>(
         &self,
         tx_verifier_maker: M,
-        storage_backend: &'a S,
+        storage_backend: S,
         chain_config: &'a ChainConfig,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, &'a S, U>, ConnectTransactionError>
+    ) -> Result<TransactionVerifier<'a, S, U>, ConnectTransactionError>
     where
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(
-            &'a S,
-            &'a ChainConfig,
-            TransactionVerifierConfig,
-        ) -> TransactionVerifier<'a, &'a S, U>,
+        M: Fn(S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>,
     {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
         let mut tx_num = i32::try_from(block.transactions().len()).unwrap() - 1;

@@ -42,21 +42,17 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         &self,
         tx_verifier_maker: M,
         block_index_handle: &'a H,
-        storage_backend: &'a S,
+        storage_backend: S,
         chain_config: &'a ChainConfig,
         verifier_config: TransactionVerifierConfig,
         block_index: &'a BlockIndex,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, &'a S, U>, BlockError>
+    ) -> Result<TransactionVerifier<'a, S, U>, BlockError>
     where
         H: BlockIndexHandle,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(
-            &'a S,
-            &'a ChainConfig,
-            TransactionVerifierConfig,
-        ) -> TransactionVerifier<'a, &'a S, U>;
+        M: Fn(S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>;
 
     /// Disconnect the transactions given by block and block_index,
     /// and return a TransactionVerifier with an internal state
@@ -67,17 +63,13 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     fn disconnect_block<'a, S, M, U>(
         &self,
         tx_verifier_maker: M,
-        storage_backend: &'a S,
+        storage_backend: S,
         chain_config: &'a ChainConfig,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, &'a S, U>, BlockError>
+    ) -> Result<TransactionVerifier<'a, S, U>, BlockError>
     where
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(
-            &'a S,
-            &'a ChainConfig,
-            TransactionVerifierConfig,
-        ) -> TransactionVerifier<'a, &'a S, U>;
+        M: Fn(S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>;
 }
