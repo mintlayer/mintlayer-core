@@ -63,7 +63,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
             pool_id,
             PoSAccountingUndo::CreatePool(CreatePoolUndo {
                 pool_id,
-                data_undo: PoolDataUndo::Data(pool_data),
+                data_undo: PoolDataUndo::Data(Box::new(pool_data)),
             }),
         ))
     }
@@ -79,7 +79,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
 
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
             pool_id,
-            data_undo: PoolDataUndo::Data(pool_data),
+            data_undo: PoolDataUndo::Data(Box::new(pool_data)),
         }))
     }
 

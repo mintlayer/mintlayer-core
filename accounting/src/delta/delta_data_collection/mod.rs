@@ -14,52 +14,128 @@
 // limitations under the License.
 
 pub mod undo;
+use self::undo::*;
 
-use std::collections::BTreeMap;
+use std::collections::{btree_map::Entry, BTreeMap};
 
 use serialization::{Decode, Encode};
 
 use crate::error::Error;
 
-use self::undo::*;
-
-/// The outcome of combining two deltas for a given key upon the map that contains it
-#[derive(PartialEq, Eq, Debug)]
-enum DeltaMapOp<T> {
-    /// Write a specific value (for example, to write a Create or Modify operation)
-    Write(T),
-    /// Erase the value at the relevant key spot (for example, a modify followed by Erase yields nothing)
-    Delete,
-}
-
+///
+/// Basic primitive that represents a difference introduced to a data.
+///
+/// Following properties are defined for deltas:
+/// - Associativity:
+///   (d1 + d2) + d3 = d1 + (d2 + d3), where '+' is the combine operation implemented by `combine_delta_data`
+///
+///   Associativity property doesn't hold if a combine operation produces an error, e.g.:
+///   (Delta(Some, None) + Delta(Some, None)) + Delta(None, Some) = Error + Delta(None, Some)
+///   Delta(Some, None) + (Delta(Some, None) + Delta(None, Some)) = Delta(Some, None) + Delta(Some, Some) = Error
+///
+/// - Inversion in the sense that:
+///   d + d.invert() + d = d
+///
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
-pub enum DataDelta<T> {
-    Create(Box<T>),
-    Modify(Box<T>),
-    Delete,
+pub struct DataDelta<T> {
+    old: Option<T>,
+    new: Option<T>,
 }
 
+impl<T: Clone> DataDelta<T> {
+    pub fn new(old: Option<T>, new: Option<T>) -> Self {
+        Self { old, new }
+    }
+
+    /// Returns an invert delta that has the opposite effect of the provided delta
+    /// and serves as an undo object
+    fn invert(self) -> DataDeltaUndo<T> {
+        DataDeltaUndo::new(Self::new(self.new, self.old))
+    }
+
+    pub fn consume(self) -> (Option<T>, Option<T>) {
+        (self.old, self.new)
+    }
+}
+
+/// Elements inside `DeltaDataCollection` can store either a delta or an undo.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
-pub struct DeltaDataCollection<K: Ord, T> {
-    data: BTreeMap<K, DataDelta<T>>,
+pub enum DeltaMapElement<T> {
+    Delta(DataDelta<T>),
+    DeltaUndo(DataDeltaUndo<T>),
 }
 
-impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
+impl<T> DeltaMapElement<T> {
+    pub fn get_data_delta(&self) -> &DataDelta<T> {
+        match self {
+            DeltaMapElement::Delta(d) => d,
+            DeltaMapElement::DeltaUndo(d) => d.as_delta(),
+        }
+    }
+
+    pub fn consume(self) -> DataDelta<T> {
+        match self {
+            DeltaMapElement::Delta(d) => d,
+            DeltaMapElement::DeltaUndo(u) => u.consume(),
+        }
+    }
+}
+
+/// `GetDataResult` is represented by 3 states instead of typical 2 states, because it is
+/// important to distinguish the case when data was explicitly deleted from the case when the data is just not there.
+pub enum GetDataResult<T> {
+    Present(T),
+    Deleted,
+    Missing,
+}
+/// `DeltaDataCollection` is a container for deltas. It encapsulates all the logic of merging deltas and
+/// undoing them.
+#[must_use]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
+pub struct DeltaDataCollection<K, T> {
+    data: BTreeMap<K, DeltaMapElement<T>>,
+}
+
+impl<K: Ord + Copy, T: Clone + Eq> DeltaDataCollection<K, T> {
     pub fn new() -> Self {
         Self {
             data: BTreeMap::new(),
         }
     }
 
+    pub fn data(&self) -> &BTreeMap<K, DeltaMapElement<T>> {
+        &self.data
+    }
+
+    pub fn consume(self) -> BTreeMap<K, DeltaMapElement<T>> {
+        self.data
+    }
+
+    pub fn get_data(&self, key: &K) -> GetDataResult<&T> {
+        match self.data.get(key) {
+            Some(d) => {
+                let delta = d.get_data_delta();
+                match &delta.new {
+                    None => GetDataResult::Deleted,
+                    Some(d) => GetDataResult::Present(d),
+                }
+            }
+            None => GetDataResult::Missing,
+        }
+    }
+
     pub fn merge_delta_data(
         &mut self,
-        delta_to_apply: Self,
+        other: Self,
     ) -> Result<DeltaDataUndoCollection<K, T>, Error> {
-        let data_undo = delta_to_apply
+        let data_undo = other
             .data
             .into_iter()
-            .map(|(key, other_pool_data)| {
-                self.merge_delta_data_element(key, other_pool_data).map(|v| (key, v))
+            .filter_map(|(key, other_pool_data)| {
+                match self.merge_delta_data_element_impl(key, other_pool_data) {
+                    Ok(delta_op) => delta_op.map(|d| Ok((key, d))),
+                    Err(e) => Some(Err(e)),
+                }
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
 
@@ -69,30 +145,29 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
     pub fn merge_delta_data_element(
         &mut self,
         key: K,
-        other_data: DataDelta<T>,
-    ) -> Result<DataDeltaUndoOp<T>, Error> {
-        let current = self.data.get(&key);
+        other: DataDelta<T>,
+    ) -> Result<Option<DataDeltaUndo<T>>, Error> {
+        self.merge_delta_data_element_impl(key, DeltaMapElement::Delta(other))
+    }
 
-        // create the operation/change that would modify the current delta and do the merge
-        let new_data = match current {
-            Some(current_data) => combine_delta_data(current_data, other_data)?,
-            None => DeltaMapOp::Write(other_data),
+    fn merge_delta_data_element_impl(
+        &mut self,
+        key: K,
+        other: DeltaMapElement<T>,
+    ) -> Result<Option<DataDeltaUndo<T>>, Error> {
+        let undo = match &other {
+            DeltaMapElement::Delta(other_delta) => Some(other_delta.clone().invert()),
+            DeltaMapElement::DeltaUndo(_) => None,
         };
 
-        // apply the change to the current map and create the undo data
-        let undo = match new_data {
-            // when we insert to a map, undoing is restoring what was there beforehand, and erasing if it was empty
-            DeltaMapOp::Write(v) => match self.data.insert(key, v) {
-                Some(prev_value) => DataDeltaUndoOp(DataDeltaUndoOpInternal::Write(prev_value)),
-                None => DataDeltaUndoOp(DataDeltaUndoOpInternal::Erase),
-            },
-            // when we remove from a map, undoing is rewriting what we removed
-            DeltaMapOp::Delete => self
-                .data
-                .remove(&key)
-                .map(|v| DataDeltaUndoOp(DataDeltaUndoOpInternal::Write(v)))
-                .expect("key should always be present"),
+        let el = match self.data.entry(key) {
+            Entry::Occupied(e) => {
+                DeltaMapElement::Delta(combine_delta_data(e.remove().consume(), other.consume())?)
+            }
+            Entry::Vacant(_) => other,
         };
+
+        self.data.insert(key, el);
 
         Ok(undo)
     }
@@ -101,134 +176,48 @@ impl<K: Ord + Copy, T> DeltaDataCollection<K, T> {
         &mut self,
         undo_data: DeltaDataUndoCollection<K, T>,
     ) -> Result<(), Error> {
-        for (key, data) in undo_data.consume().into_iter() {
-            self.undo_merge_delta_data_element(key, data)?
-        }
-        Ok(())
+        undo_data
+            .consume()
+            .into_iter()
+            .try_for_each(|(key, data)| self.undo_merge_delta_data_element(key, data))
     }
 
     pub fn undo_merge_delta_data_element(
         &mut self,
         key: K,
-        data: DataDeltaUndoOp<T>,
+        undo: DataDeltaUndo<T>,
     ) -> Result<(), Error> {
-        match data.0 {
-            DataDeltaUndoOpInternal::Write(undo) => self.data.insert(key, undo),
-            DataDeltaUndoOpInternal::Erase => self.data.remove(&key),
-        };
-        Ok(())
-    }
-
-    pub fn data(&self) -> &BTreeMap<K, DataDelta<T>> {
-        &self.data
-    }
-
-    pub fn consume(self) -> BTreeMap<K, DataDelta<T>> {
-        self.data
+        self.merge_delta_data_element_impl(key, DeltaMapElement::DeltaUndo(undo))
+            .map(|_| ())
     }
 }
 
-impl<K: Ord, T> Default for DeltaDataCollection<K, T> {
-    fn default() -> Self {
-        Self {
-            data: Default::default(),
+impl<K: Ord + Copy, T: Clone> FromIterator<(K, DeltaMapElement<T>)> for DeltaDataCollection<K, T> {
+    fn from_iter<I: IntoIterator<Item = (K, DeltaMapElement<T>)>>(iter: I) -> Self {
+        DeltaDataCollection {
+            data: BTreeMap::<K, DeltaMapElement<T>>::from_iter(iter),
         }
     }
 }
 
-impl<K: Ord + Copy, T> FromIterator<(K, DataDelta<T>)> for DeltaDataCollection<K, T> {
+impl<K: Ord + Copy, T: Clone> FromIterator<(K, DataDelta<T>)> for DeltaDataCollection<K, T> {
     fn from_iter<I: IntoIterator<Item = (K, DataDelta<T>)>>(iter: I) -> Self {
         DeltaDataCollection {
-            data: BTreeMap::<K, DataDelta<T>>::from_iter(iter),
+            data: BTreeMap::<K, DeltaMapElement<T>>::from_iter(
+                iter.into_iter().map(|(k, d)| (k, DeltaMapElement::Delta(d))),
+            ),
         }
     }
 }
 
 /// Given two deltas, combine them into one delta, this is the basic delta data composability function
-fn combine_delta_data<T>(
-    lhs: &DataDelta<T>,
+fn combine_delta_data<T: Clone + Eq>(
+    lhs: DataDelta<T>,
     rhs: DataDelta<T>,
-) -> Result<DeltaMapOp<DataDelta<T>>, Error> {
-    match (lhs, rhs) {
-        (DataDelta::Create(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
-        (DataDelta::Create(_), DataDelta::Modify(d)) => Ok(DeltaMapOp::Write(DataDelta::Create(d))),
-        (DataDelta::Create(_), DataDelta::Delete) => {
-            // if lhs had a creation, and we delete, this means nothing is left and there's a net zero to return
-            Ok(DeltaMapOp::Delete)
-        }
-        (DataDelta::Modify(_), DataDelta::Create(_)) => Err(Error::DeltaDataCreatedMultipleTimes),
-        (DataDelta::Modify(_), DataDelta::Modify(d)) => Ok(DeltaMapOp::Write(DataDelta::Modify(d))),
-        (DataDelta::Modify(_), DataDelta::Delete) => {
-            // if lhs had a modification, and we delete, this means nothing is left and there's a net zero to return
-            Ok(DeltaMapOp::Delete)
-        }
-        (DataDelta::Delete, DataDelta::Create(d)) => Ok(DeltaMapOp::Write(DataDelta::Create(d))),
-        (DataDelta::Delete, DataDelta::Modify(_)) => Err(Error::DeltaDataModifyAfterDelete),
-        (DataDelta::Delete, DataDelta::Delete) => Err(Error::DeltaDataDeletedMultipleTimes),
-    }
+) -> Result<DataDelta<T>, Error> {
+    utils::ensure!(lhs.new == rhs.old, Error::DeltaDataMismatch);
+    Ok(DataDelta::new(lhs.old, rhs.new))
 }
 
 #[cfg(test)]
-pub mod test {
-    use super::*;
-
-    #[test]
-    #[rustfmt::skip]
-    fn test_combine_delta_data() {
-        use DataDelta::{Create, Delete, Modify};
-
-        assert_eq!(combine_delta_data(&Create(Box::new('a')), Create(Box::new('b'))), Err(Error::DeltaDataCreatedMultipleTimes));
-        assert_eq!(combine_delta_data(&Create(Box::new('a')), Modify(Box::new('b'))), Ok(DeltaMapOp::Write(DataDelta::Create(Box::new('b')))));
-        assert_eq!(combine_delta_data(&Create(Box::new('a')), Delete),                Ok(DeltaMapOp::Delete));
-
-        assert_eq!(combine_delta_data(&Modify(Box::new('a')), Create(Box::new('b'))), Err(Error::DeltaDataCreatedMultipleTimes));
-        assert_eq!(combine_delta_data(&Modify(Box::new('a')), Modify(Box::new('b'))), Ok(DeltaMapOp::Write(DataDelta::Modify(Box::new('b')))));
-        assert_eq!(combine_delta_data(&Modify(Box::new('a')), Delete),                Ok(DeltaMapOp::Delete));
-
-        assert_eq!(combine_delta_data(&Delete,                Create(Box::new('b'))), Ok(DeltaMapOp::Write(DataDelta::Create(Box::new('b')))));
-        assert_eq!(combine_delta_data(&Delete,                Modify(Box::new('b'))), Err(Error::DeltaDataModifyAfterDelete));
-        assert_eq!(combine_delta_data::<char>(&Delete,        Delete),                Err(Error::DeltaDataDeletedMultipleTimes));
-    }
-
-    #[test]
-    fn test_merge_collections() {
-        let mut collection1 = DeltaDataCollection::from_iter(
-            [
-                (1, DataDelta::Create(Box::new('a'))),
-                (2, DataDelta::Modify(Box::new('b'))),
-                (3, DataDelta::Delete),
-                (4, DataDelta::Create(Box::new('d'))),
-            ]
-            .into_iter(),
-        );
-        let collection1_origin = collection1.clone();
-
-        let collection2 = DeltaDataCollection::from_iter(
-            [
-                (1, DataDelta::Modify(Box::new('f'))),
-                (2, DataDelta::Modify(Box::new('g'))),
-                (4, DataDelta::Delete),
-                (5, DataDelta::Delete),
-            ]
-            .into_iter(),
-        );
-
-        let expected_data = BTreeMap::from_iter(
-            [
-                (1, DataDelta::Create(Box::new('f'))),
-                (2, DataDelta::Modify(Box::new('g'))),
-                (3, DataDelta::Delete),
-                (5, DataDelta::Delete),
-            ]
-            .into_iter(),
-        );
-
-        let undo_data = collection1.merge_delta_data(collection2).unwrap();
-        assert_eq!(collection1.data, expected_data);
-
-        collection1.undo_merge_delta_data(undo_data).unwrap();
-        assert_eq!(collection1.data, collection1_origin.data);
-    }
-
-    // TODO: increase test coverage (consider using proptest)
-}
+mod tests;

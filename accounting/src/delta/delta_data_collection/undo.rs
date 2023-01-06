@@ -15,30 +15,43 @@
 
 use std::collections::BTreeMap;
 
+use serialization::{Decode, Encode};
+
 use super::DataDelta;
 
-/// The operations we have to do in order to undo a delta
-pub(super) enum DataDeltaUndoOpInternal<T> {
-    Write(DataDelta<T>),
-    Erase,
+#[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
+pub struct DataDeltaUndo<T>(DataDelta<T>);
+
+impl<T> DataDeltaUndo<T> {
+    pub fn new(delta: DataDelta<T>) -> Self {
+        Self(delta)
+    }
+
+    pub fn as_delta(&self) -> &DataDelta<T> {
+        &self.0
+    }
+
+    pub fn consume(self) -> DataDelta<T> {
+        self.0
+    }
 }
 
-pub struct DataDeltaUndoOp<T>(pub(super) DataDeltaUndoOpInternal<T>);
-
-pub struct DeltaDataUndoCollection<K: Ord, T> {
-    data: BTreeMap<K, DataDeltaUndoOp<T>>,
+#[must_use]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeltaDataUndoCollection<K, T> {
+    data: BTreeMap<K, DataDeltaUndo<T>>,
 }
 
-impl<K: Ord, T> DeltaDataUndoCollection<K, T> {
-    pub fn new(data: BTreeMap<K, DataDeltaUndoOp<T>>) -> Self {
+impl<K: Ord, T: Clone> DeltaDataUndoCollection<K, T> {
+    pub fn new(data: BTreeMap<K, DataDeltaUndo<T>>) -> Self {
         Self { data }
     }
 
-    pub fn data(&self) -> &BTreeMap<K, DataDeltaUndoOp<T>> {
+    pub fn data(&self) -> &BTreeMap<K, DataDeltaUndo<T>> {
         &self.data
     }
 
-    pub fn consume(self) -> BTreeMap<K, DataDeltaUndoOp<T>> {
+    pub fn consume(self) -> BTreeMap<K, DataDeltaUndo<T>> {
         self.data
     }
 }

@@ -27,6 +27,10 @@ use crate::{
 use super::PoSAccountingDBMut;
 
 impl<'a, S: PoSAccountingStorageRead> PoSAccountingView for PoSAccountingDBMut<'a, S> {
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
+        self.get_pool_data(pool_id).map(|v| v.is_some())
+    }
+
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
         self.store.get_pool_balance(pool_id).map_err(Error::from)
     }

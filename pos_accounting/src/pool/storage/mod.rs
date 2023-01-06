@@ -184,7 +184,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         })
     }
 
-    fn merge_data_generic<K: Ord + Copy, T: Clone, Getter, Setter, Deleter>(
+    fn merge_data_generic<K: Ord + Copy, T: Clone + Eq, Getter, Setter, Deleter>(
         &mut self,
         delta: DeltaDataCollection<K, T>,
         getter: Getter,
@@ -198,15 +198,15 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
     {
         let mut store = BorrowedStorageValue::new(self.store, getter, setter, deleter);
         delta
-            .data()
-            .iter()
+            .consume()
+            .into_iter()
             .map(|(id, delta)| -> Result<_, Error> {
-                let data = store.get(*id)?;
-                match combine_data_with_delta(data.as_ref(), Some(delta))? {
-                    Some(result) => store.set(*id, &result)?,
-                    None => store.delete(*id)?,
-                }
-                Ok((*id, data))
+                let old_data = store.get(id)?;
+                match combine_data_with_delta(old_data.clone(), Some(delta))? {
+                    Some(result) => store.set(id, &result)?,
+                    None => store.delete(id)?,
+                };
+                Ok((id, old_data))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()
     }
