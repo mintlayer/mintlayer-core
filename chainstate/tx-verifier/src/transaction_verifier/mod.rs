@@ -195,8 +195,8 @@ impl GuardedTxIndexCache {
 }
 
 /// The tool used to verify transaction and cache their updated states in memory
-pub struct TransactionVerifier<'a, S, U> {
-    chain_config: &'a ChainConfig,
+pub struct TransactionVerifier<CC, S, U> {
+    chain_config: CC,
     storage_ref: S,
     tx_index_cache: GuardedTxIndexCache,
     utxo_cache: UtxosCache<U>,
@@ -205,10 +205,10 @@ pub struct TransactionVerifier<'a, S, U> {
     best_block: Id<GenBlock>,
 }
 
-impl<'a, S: TransactionVerifierStorageRef + Clone> TransactionVerifier<'a, S, UtxosDB<S>> {
+impl<CC, S: TransactionVerifierStorageRef + Clone> TransactionVerifier<CC, S, UtxosDB<S>> {
     pub fn new(
         storage_ref: S,
-        chain_config: &'a ChainConfig,
+        chain_config: CC,
         verifier_config: TransactionVerifierConfig,
     ) -> Self {
         let utxo_cache = UtxosCache::new(UtxosDB::new(S::clone(&storage_ref)));
@@ -229,12 +229,12 @@ impl<'a, S: TransactionVerifierStorageRef + Clone> TransactionVerifier<'a, S, Ut
     }
 }
 
-impl<'a, S: TransactionVerifierStorageRef, U: UtxosView + Send + Sync>
-    TransactionVerifier<'a, S, U>
+impl<CC, S: TransactionVerifierStorageRef, U: UtxosView + Send + Sync>
+    TransactionVerifier<CC, S, U>
 {
     pub fn new_from_handle(
         storage_ref: S,
-        chain_config: &'a ChainConfig,
+        chain_config: CC,
         utxos: U, // TODO: Replace this parameter with handle
         verifier_config: TransactionVerifierConfig,
     ) -> Self {
@@ -255,11 +255,18 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView + Send + Sync>
     }
 }
 
-impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a, S, U> {
-    pub fn derive_child(&'a self) -> TransactionVerifier<'a, &'a Self, &'a UtxosCache<U>> {
+impl<CC, S, U> TransactionVerifier<CC, S, U>
+where
+    CC: AsRef<ChainConfig>,
+    S: TransactionVerifierStorageRef,
+    U: UtxosView,
+{
+    pub fn derive_child<'a>(
+        &'a self,
+    ) -> TransactionVerifier<&'a ChainConfig, &'a Self, &'a UtxosCache<U>> {
         TransactionVerifier {
             storage_ref: self,
-            chain_config: self.chain_config,
+            chain_config: self.chain_config.as_ref(),
             tx_index_cache: GuardedTxIndexCache::new(self.tx_index_cache.enabled),
             utxo_cache: UtxosCache::new(&self.utxo_cache),
             utxo_block_undo: BTreeMap::new(),
@@ -267,9 +274,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
             best_block: self.best_block,
         }
     }
-}
 
-impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a, S, U> {
     fn amount_from_outpoint(
         &self,
         tx_id: OutPointSourceId,
@@ -350,7 +355,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
                 (so_far + v).ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))
             })?;
 
-        if total_burned < self.chain_config.token_min_issuance_fee() {
+        if total_burned < self.chain_config.as_ref().token_min_issuance_fee() {
             return Err(ConnectTransactionError::TokensError(
                 TokensError::InsufficientTokenFees(
                     tx.get_id(),
@@ -527,7 +532,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
                 let source_block_index = block_index_ancestor_getter(
                     block_index_getter,
                     &self.storage_ref,
-                    self.chain_config,
+                    self.chain_config.as_ref(),
                     (&starting_point.clone().into_gen_block_index()).into(),
                     height,
                 )

@@ -38,21 +38,22 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     /// state. It just returns a TransactionVerifier that can be
     /// used to update the database/storage state.
     #[allow(clippy::too_many_arguments)]
-    fn connect_block<'a, H, S, M, U>(
+    fn connect_block<CC, H, S, M, U>(
         &self,
         tx_verifier_maker: M,
-        block_index_handle: &'a H,
+        block_index_handle: &H,
         storage_backend: S,
-        chain_config: &'a ChainConfig,
+        chain_config: CC,
         verifier_config: TransactionVerifierConfig,
-        block_index: &'a BlockIndex,
+        block_index: &BlockIndex,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S, U>, BlockError>
+    ) -> Result<TransactionVerifier<CC, S, U>, BlockError>
     where
         H: BlockIndexHandle,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>;
+        CC: AsRef<ChainConfig>,
+        M: Fn(S, CC, TransactionVerifierConfig) -> TransactionVerifier<CC, S, U>;
 
     /// Disconnect the transactions given by block and block_index,
     /// and return a TransactionVerifier with an internal state
@@ -60,16 +61,17 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     /// Notice that this doesn't modify the internal database/storage
     /// state. It just returns a TransactionVerifier that can be
     /// used to update the database/storage state.
-    fn disconnect_block<'a, S, M, U>(
+    fn disconnect_block<CC, S, M, U>(
         &self,
         tx_verifier_maker: M,
         storage_backend: S,
-        chain_config: &'a ChainConfig,
+        chain_config: CC,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S, U>, BlockError>
+    ) -> Result<TransactionVerifier<CC, S, U>, BlockError>
     where
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>;
+        CC: AsRef<ChainConfig>,
+        M: Fn(S, CC, TransactionVerifierConfig) -> TransactionVerifier<CC, S, U>;
 }
