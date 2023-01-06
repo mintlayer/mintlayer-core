@@ -198,7 +198,6 @@ impl GuardedTxIndexCache {
 pub struct TransactionVerifier<'a, S, U> {
     chain_config: &'a ChainConfig,
     storage_ref: S,
-    verifier_config: TransactionVerifierConfig,
     tx_index_cache: GuardedTxIndexCache,
     utxo_cache: UtxosCache<U>,
     utxo_block_undo: BTreeMap<TransactionSource, BlockUndoEntry>,
@@ -221,7 +220,6 @@ impl<'a, S: TransactionVerifierStorageRef + Clone> TransactionVerifier<'a, S, Ut
         Self {
             storage_ref,
             chain_config,
-            verifier_config,
             tx_index_cache,
             utxo_cache,
             utxo_block_undo: BTreeMap::new(),
@@ -253,7 +251,6 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView + Send + Sync>
             utxo_block_undo: BTreeMap::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
             best_block,
-            verifier_config,
         }
     }
 }
@@ -263,7 +260,6 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifier<'a,
         TransactionVerifier {
             storage_ref: self,
             chain_config: self.chain_config,
-            verifier_config: self.verifier_config.clone(),
             tx_index_cache: GuardedTxIndexCache::new(self.tx_index_cache.enabled),
             utxo_cache: UtxosCache::new(&self.utxo_cache),
             utxo_block_undo: BTreeMap::new(),
