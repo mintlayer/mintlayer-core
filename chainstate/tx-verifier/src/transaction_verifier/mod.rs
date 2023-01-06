@@ -181,11 +181,11 @@ impl GuardedTxIndexCache {
     }
 
     fn as_ref(&self) -> Option<&TxIndexCache> {
-        self.enabled.then(|| &self.inner)
+        self.enabled.then_some(&self.inner)
     }
 
     fn as_mut(&mut self) -> Option<&mut TxIndexCache> {
-        self.enabled.then(|| &mut self.inner)
+        self.enabled.then_some(&mut self.inner)
     }
 
     /// Take the inner cache, even if disabled
@@ -257,9 +257,7 @@ where
     S: TransactionVerifierStorageRef,
     U: UtxosView,
 {
-    pub fn derive_child<'a>(
-        &'a self,
-    ) -> TransactionVerifier<&'a ChainConfig, &'a Self, &'a UtxosCache<U>> {
+    pub fn derive_child(&self) -> TransactionVerifier<&ChainConfig, &Self, &UtxosCache<U>> {
         TransactionVerifier {
             storage: self,
             chain_config: self.chain_config.as_ref(),
