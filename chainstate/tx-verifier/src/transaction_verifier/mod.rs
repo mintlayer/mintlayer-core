@@ -197,7 +197,7 @@ impl GuardedTxIndexCache {
 /// The tool used to verify transaction and cache their updated states in memory
 pub struct TransactionVerifier<CC, S, U> {
     chain_config: CC,
-    storage_ref: S,
+    storage: S,
     tx_index_cache: GuardedTxIndexCache,
     utxo_cache: UtxosCache<U>,
     utxo_block_undo: BTreeMap<TransactionSource, BlockUndoEntry>,
@@ -206,19 +206,15 @@ pub struct TransactionVerifier<CC, S, U> {
 }
 
 impl<CC, S: TransactionVerifierStorageRef + Clone> TransactionVerifier<CC, S, UtxosDB<S>> {
-    pub fn new(
-        storage_ref: S,
-        chain_config: CC,
-        verifier_config: TransactionVerifierConfig,
-    ) -> Self {
-        let utxo_cache = UtxosCache::new(UtxosDB::new(S::clone(&storage_ref)));
-        let best_block = storage_ref
+    pub fn new(storage: S, chain_config: CC, verifier_config: TransactionVerifierConfig) -> Self {
+        let utxo_cache = UtxosCache::new(UtxosDB::new(S::clone(&storage)));
+        let best_block = storage
             .get_best_block_for_utxos()
             .expect("Database error while reading utxos best block")
             .expect("best block should be some");
         let tx_index_cache = GuardedTxIndexCache::from_config(&verifier_config);
         Self {
-            storage_ref,
+            storage,
             chain_config,
             tx_index_cache,
             utxo_cache,
@@ -233,18 +229,18 @@ impl<CC, S: TransactionVerifierStorageRef, U: UtxosView + Send + Sync>
     TransactionVerifier<CC, S, U>
 {
     pub fn new_from_handle(
-        storage_ref: S,
+        storage: S,
         chain_config: CC,
         utxos: U, // TODO: Replace this parameter with handle
         verifier_config: TransactionVerifierConfig,
     ) -> Self {
-        let best_block = storage_ref
+        let best_block = storage
             .get_best_block_for_utxos()
             .expect("Database error while reading utxos best block")
             .expect("best block should be some");
         let tx_index_cache = GuardedTxIndexCache::from_config(&verifier_config);
         Self {
-            storage_ref,
+            storage,
             chain_config,
             tx_index_cache,
             utxo_cache: UtxosCache::new(utxos), // TODO: take utxos from handle
@@ -265,7 +261,7 @@ where
         &'a self,
     ) -> TransactionVerifier<&'a ChainConfig, &'a Self, &'a UtxosCache<U>> {
         TransactionVerifier {
-            storage_ref: self,
+            storage: self,
             chain_config: self.chain_config.as_ref(),
             tx_index_cache: GuardedTxIndexCache::new(self.tx_index_cache.enabled),
             utxo_cache: UtxosCache::new(&self.utxo_cache),
@@ -531,7 +527,7 @@ where
 
                 let source_block_index = block_index_ancestor_getter(
                     block_index_getter,
-                    &self.storage_ref,
+                    &self.storage,
                     self.chain_config.as_ref(),
                     (&starting_point.clone().into_gen_block_index()).into(),
                     height,
@@ -563,7 +559,7 @@ where
             None => match tx_source {
                 TransactionSource::Chain(block_id) => {
                     let block_undo = self
-                        .storage_ref
+                        .storage
                         .get_undo_data(*block_id)?
                         .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
                     Ok(block_undo)
@@ -582,7 +578,7 @@ where
             Entry::Vacant(entry) => match tx_source {
                 TransactionSource::Chain(block_id) => {
                     let block_undo = self
-                        .storage_ref
+                        .storage
                         .get_undo_data(*block_id)?
                         .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
                     Ok(&mut entry
@@ -636,10 +632,8 @@ where
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 
         // pre-cache token ids to check ensure it's not in the db when issuing
-        self.token_issuance_cache.precache_token_issuance(
-            |id| self.storage_ref.get_token_aux_data(id),
-            tx.transaction(),
-        )?;
+        self.token_issuance_cache
+            .precache_token_issuance(|id| self.storage.get_token_aux_data(id), tx.transaction())?;
 
         // check for attempted money printing
         let fee = Some(self.check_transferred_amounts_and_get_fee(tx.transaction())?);
@@ -670,7 +664,7 @@ where
                 if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
                     // pre-cache all inputs
                     tx_index_cache.precache_inputs(tx.inputs(), |tx_id: &OutPointSourceId| {
-                        self.storage_ref.get_mainchain_tx_index(tx_id)
+                        self.storage.get_mainchain_tx_index(tx_id)
                     })?;
 
                     // mark tx index as spent
@@ -701,7 +695,7 @@ where
         // TODO: test spending block rewards from chains outside the mainchain
         if let Some(inputs) = reward_transactable.inputs() {
             let tx_index_fetcher =
-                |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
+                |tx_id: &OutPointSourceId| self.storage.get_mainchain_tx_index(tx_id);
 
             // pre-cache all inputs
             if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
@@ -786,14 +780,14 @@ where
         match tx_source {
             TransactionSource::Chain(block_id) => {
                 let current_block_height = self
-                    .storage_ref
+                    .storage
                     .get_gen_block_index(&(*block_id).into())?
                     .ok_or_else(|| {
                         ConnectTransactionError::BlockIndexCouldNotBeLoaded((*block_id).into())
                     })?
                     .block_height();
                 let best_block_height = self
-                    .storage_ref
+                    .storage
                     .get_gen_block_index(&self.best_block)?
                     .ok_or(ConnectTransactionError::BlockIndexCouldNotBeLoaded(
                         self.best_block,
@@ -820,7 +814,7 @@ where
         let tx_undo = match tx_source {
             TransactionSource::Chain(_) => {
                 let tx_index_fetcher =
-                    |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
+                    |tx_id: &OutPointSourceId| self.storage.get_mainchain_tx_index(tx_id);
 
                 // update tx index only for txs from main chain
                 if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
@@ -847,10 +841,8 @@ where
         self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
 
         // pre-cache token ids before removing them
-        self.token_issuance_cache.precache_token_issuance(
-            |id| self.storage_ref.get_token_aux_data(id),
-            tx.transaction(),
-        )?;
+        self.token_issuance_cache
+            .precache_token_issuance(|id| self.storage.get_token_aux_data(id), tx.transaction())?;
 
         // Remove issued tokens
         self.token_issuance_cache.unregister(tx.transaction())?;
@@ -887,7 +879,7 @@ where
                 )?;
 
                 let tx_index_fetcher =
-                    |tx_id: &OutPointSourceId| self.storage_ref.get_mainchain_tx_index(tx_id);
+                    |tx_id: &OutPointSourceId| self.storage.get_mainchain_tx_index(tx_id);
 
                 if let (Some(inputs), Some(tx_index_cache)) =
                     (reward_transactable.inputs(), self.tx_index_cache.as_mut())

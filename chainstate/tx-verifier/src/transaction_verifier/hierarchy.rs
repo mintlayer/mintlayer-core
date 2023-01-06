@@ -45,7 +45,7 @@ impl<CC, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStor
                 CachedTokenIndexOp::Read(id) => Ok(Some(*id)),
                 CachedTokenIndexOp::Erase => Ok(None),
             },
-            None => self.storage_ref.get_token_id_from_issuance_tx(tx_id),
+            None => self.storage.get_token_id_from_issuance_tx(tx_id),
         }
     }
 
@@ -53,7 +53,7 @@ impl<CC, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStor
         &self,
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
-        self.storage_ref.get_gen_block_index(block_id)
+        self.storage.get_gen_block_index(block_id)
     }
 
     fn get_mainchain_tx_index(
@@ -70,7 +70,7 @@ impl<CC, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStor
                 CachedInputsOperation::Read(idx) => Ok(Some(idx.clone())),
                 CachedInputsOperation::Erase => Ok(None),
             },
-            None => self.storage_ref.get_mainchain_tx_index(tx_id),
+            None => self.storage.get_mainchain_tx_index(tx_id),
         }
     }
 
@@ -84,7 +84,7 @@ impl<CC, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStor
                 CachedAuxDataOp::Read(t) => Ok(Some(t.clone())),
                 CachedAuxDataOp::Erase => Ok(None),
             },
-            None => self.storage_ref.get_token_aux_data(token_id),
+            None => self.storage.get_token_aux_data(token_id),
         }
     }
 }
@@ -106,7 +106,7 @@ impl<CC, S: TransactionVerifierStorageRef, U: UtxosView> UtxosStorageRead
     ) -> Result<Option<utxo::BlockUndo>, storage_result::Error> {
         match self.utxo_block_undo.get(&TransactionSource::Chain(id)) {
             Some(v) => Ok(Some(v.undo.clone())),
-            None => self.storage_ref.get_undo_data(id),
+            None => self.storage.get_undo_data(id),
         }
     }
 }
