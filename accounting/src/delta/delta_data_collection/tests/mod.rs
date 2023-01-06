@@ -27,23 +27,9 @@ impl<T: Arbitrary + Clone + 'static> Arbitrary for DataDelta<T> {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
-        let none = Just(DataDelta {
-            old: None,
-            new: None,
-        });
-        let none_some = any::<T>().prop_map(|v| DataDelta {
-            old: None,
-            new: Some(v),
-        });
-        let some_none = any::<T>().prop_map(|v| DataDelta {
-            old: Some(v),
-            new: None,
-        });
-        let some_some = (any::<T>(), any::<T>()).prop_map(|(old, new)| DataDelta {
-            old: Some(old),
-            new: Some(new),
-        });
-        prop_oneof![none, none_some, some_none, some_some].boxed()
+        any::<(Option<T>, Option<T>)>()
+            .prop_map(|(x0, x1)| DataDelta::new(x0, x1))
+            .boxed()
     }
 }
 

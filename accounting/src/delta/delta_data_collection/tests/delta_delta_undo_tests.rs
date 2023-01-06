@@ -93,29 +93,26 @@ proptest! {
     // and it is only expected that both sequences must produce either the same valid result
     // or both fail with some error.
     #[test]
-    fn random_delta_associativity(
-        delta1 in any::<DataDelta<char>>(),
-        delta2 in any::<DataDelta<char>>(),
-    ) {
-         let result1 = {
-             // (Delta + Delta) + Undo = [Delta|Error]
-             let (mut collection1, collection2, collection3) =
-                 make_collections_with_undo(delta1.clone(), delta2.clone());
-             collection1
-                 .merge_delta_data(collection2)
-                 .ok()
-                 .and_then(|_| collection1.merge_delta_data(collection3).ok().and(Some(collection1)))
-         };
+    fn random_delta_associativity(delta1: DataDelta<char>, delta2: DataDelta<char>) {
+        let result1 = {
+            // (Delta + Delta) + Undo = [Delta|Error]
+            let (mut collection1, collection2, collection3) =
+                make_collections_with_undo(delta1.clone(), delta2.clone());
+            collection1
+                .merge_delta_data(collection2)
+                .ok()
+                .and_then(|_| collection1.merge_delta_data(collection3).ok().and(Some(collection1)))
+        };
 
-         let result2 = {
-             // Delta + (Delta + Undo) = [Delta|Error]
-             let (mut collection1, mut collection2, collection3) =
-                 make_collections_with_undo(delta1, delta2);
-             collection2
-                 .merge_delta_data(collection3)
-                 .ok()
-                 .and_then(|_| collection1.merge_delta_data(collection2).ok().and(Some(collection1)))
-         };
-         assert_eq!(result1, result2);
+        let result2 = {
+            // Delta + (Delta + Undo) = [Delta|Error]
+            let (mut collection1, mut collection2, collection3) =
+                make_collections_with_undo(delta1, delta2);
+            collection2
+                .merge_delta_data(collection3)
+                .ok()
+                .and_then(|_| collection1.merge_delta_data(collection2).ok().and(Some(collection1)))
+        };
+        assert_eq!(result1, result2);
     }
 }

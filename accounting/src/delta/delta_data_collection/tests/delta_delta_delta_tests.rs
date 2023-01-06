@@ -77,9 +77,9 @@ proptest! {
     // or both fail with some error.
     #[test]
     fn random_delta_associativity(
-        delta1 in any::<DataDelta<char>>(),
-        delta2 in any::<DataDelta<char>>(),
-        delta3 in any::<DataDelta<char>>(),
+        delta1: DataDelta<char>,
+        delta2: DataDelta<char>,
+        delta3: DataDelta<char>,
     ) {
         let result1 = {
             // (Delta + Delta) + Delta = [Delta|Error]

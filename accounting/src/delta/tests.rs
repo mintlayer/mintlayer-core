@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{combine_data_with_delta, DataDelta, DeltaDataCollection};
+use crate::{combine_data_with_delta, DataDelta, DeltaDataCollection, DeltaMapElement};
 
 use rstest::rstest;
 
@@ -306,4 +306,38 @@ fn data_delta_delta_undo_associativity(
         .unwrap();
         assert_eq!(result, expected_data);
     }
+}
+
+#[rstest]
+#[case(None,      None,      /* x2, */ None)]
+#[case(None,      None,      /* x2, */ Some('a'))]
+#[case(None,      Some('a'), /* x2, */ None)]
+#[case(None,      Some('a'), /* x2, */ Some('a'))]
+#[case(Some('a'), None,      /* x2, */ None)]
+#[case(Some('a'), None,      /* x2, */ Some('a'))]
+#[case(Some('a'), Some('b'), /* x2, */ None)]
+#[case(Some('a'), Some('b'), /* x2, */ Some('a'))]
+fn data_and_delta_gives_error_as_delta_and_delta(
+    #[case] x0: Option<char>,
+    #[case] x1: Option<char>,
+    #[case] x3: Option<char>,
+) {
+    let x2 = match x1 {
+        Some(_) => None,
+        None => Some('a'),
+    };
+
+    let delta1 = DataDelta::new(x0, x1);
+    let delta2 = DataDelta::new(x2, x3);
+
+    let is_err_1 =
+        combine_data_with_delta(x1, Some(DeltaMapElement::Delta(delta2.clone()))).is_err();
+
+    let is_err_2 = {
+        let mut collection = DeltaDataCollection::from_iter([(1, delta1)]);
+        collection.merge_delta_data_element(1, delta2).is_err()
+    };
+
+    assert!(is_err_1);
+    assert!(is_err_2);
 }

@@ -120,10 +120,7 @@ proptest! {
     // and it is only expected that both sequences must produce either the same valid result
     // or both fail with some error.
     #[test]
-    fn random_delta_associativity(
-        delta1 in any::<DataDelta<char>>(),
-        delta2 in any::<DataDelta<char>>(),
-    ) {
+    fn random_delta_associativity(delta1: DataDelta<char>, delta2: DataDelta<char>) {
         let result1 = {
             // ((Delta1 + Delta2) + Undo1) + Undo2 = [Delta|Error]
             let (mut collection1, collection2, collection3, collection4) =
