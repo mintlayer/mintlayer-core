@@ -395,7 +395,7 @@ mod tests {
             assert_eq!(address, conn2.local_addr().await.unwrap().unwrap());
             assert_eq!(
                 peer_info,
-                net::types::PeerInfo {
+                PeerInfo {
                     peer_id: peer_info.peer_id,
                     magic_bytes: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),

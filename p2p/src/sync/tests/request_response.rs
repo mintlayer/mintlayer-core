@@ -22,7 +22,6 @@ use chainstate::Locator;
 use crate::{
     message::{HeaderListRequest, HeaderListResponse, Request, Response},
     net::{
-        libp2p::Libp2pService,
         mock::{
             transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             MockService,
@@ -32,8 +31,7 @@ use crate::{
     peer_manager::helpers::connect_services,
     sync::tests::make_sync_manager,
     testing_utils::{
-        TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
-        TestTransportTcp,
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
     ConnectivityService, NetworkingService, SyncingMessagingService,
 };
@@ -82,11 +80,6 @@ where
     } else {
         panic!("invalid data received");
     }
-}
-
-#[tokio::test]
-async fn request_response_libp2p() {
-    request_response::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
@@ -176,11 +169,6 @@ where
     }
 
     assert!(request_ids.is_empty());
-}
-
-#[tokio::test]
-async fn multiple_requests_and_responses_libp2p() {
-    multiple_requests_and_responses::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]

@@ -20,7 +20,6 @@ mod request_response;
 
 use std::sync::Arc;
 
-use libp2p::PeerId;
 use tokio::sync::mpsc;
 
 use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
@@ -112,14 +111,6 @@ pub trait MakeTestPeerId {
     type PeerId;
 
     fn new() -> Self::PeerId;
-}
-
-impl MakeTestPeerId for PeerId {
-    type PeerId = Self;
-
-    fn new() -> Self::PeerId {
-        PeerId::random()
-    }
 }
 
 impl MakeTestPeerId for MockPeerId {

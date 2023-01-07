@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use libp2p::Multiaddr;
 use std::net::SocketAddr;
 
 /// An interface for creating transports and addresses used in tests.
@@ -34,23 +33,6 @@ pub trait TestTransportMaker {
     ///
     /// This should work similar to requesting a port of number 0 when opening a TCP connection.
     fn make_address() -> Self::Address;
-}
-
-pub struct TestTransportLibp2p {}
-
-impl TestTransportMaker for TestTransportLibp2p {
-    type Transport = crate::net::libp2p::Libp2pTransport;
-
-    type Address = Multiaddr;
-
-    fn make_transport() -> Self::Transport {
-        let p2p_config = Default::default();
-        crate::net::libp2p::make_transport(&p2p_config)
-    }
-
-    fn make_address() -> Self::Address {
-        "/ip6/::1/tcp/0".parse().expect("valid address")
-    }
 }
 
 pub struct TestTransportTcp {}

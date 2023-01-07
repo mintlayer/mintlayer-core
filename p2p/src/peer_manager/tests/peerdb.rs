@@ -15,12 +15,9 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use libp2p::{multiaddr, Multiaddr, PeerId};
-
 use crate::{
     config::{MdnsConfig, NodeType, P2pConfig},
     net::{
-        libp2p::Libp2pService,
         types::{AddrInfo, PeerInfo, PubSubTopic},
         AsBannableAddress,
     },

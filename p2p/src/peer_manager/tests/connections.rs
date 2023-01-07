@@ -15,12 +15,10 @@
 
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
-use libp2p::{Multiaddr, PeerId};
 use tokio::{sync::oneshot, time::timeout};
 
 use crate::testing_utils::{
-    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
-    TestTransportTcp,
+    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
 };
 use common::{chain::config, primitives::semver::SemVer};
 
@@ -29,7 +27,6 @@ use crate::{
     event::PeerManagerEvent,
     net::{
         self,
-        libp2p::Libp2pService,
         mock::{
             transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             types::MockPeerId,
@@ -38,11 +35,7 @@ use crate::{
         types::{Protocol, ProtocolType, PubSubTopic},
         ConnectivityService, NetworkingService,
     },
-    peer_manager::{
-        self,
-        helpers::connect_services,
-        tests::{default_protocols, make_peer_manager},
-    },
+    peer_manager::{self, helpers::connect_services, tests::make_peer_manager},
 };
 
 // try to connect to an address that no one listening on and verify it fails
@@ -78,18 +71,6 @@ async fn test_peer_manager_connect_mock() {
 
     test_peer_manager_connect::<MockService<TcpTransportSocket>>(transport, bind_addr, remote_addr)
         .await;
-}
-
-#[tokio::test]
-async fn test_peer_manager_connect_libp2p() {
-    let transport = TestTransportLibp2p::make_transport();
-    let bind_addr = TestTransportLibp2p::make_address();
-    let remote_addr: Multiaddr =
-        "/ip6/::1/tcp/6666/p2p/12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ"
-            .parse()
-            .unwrap();
-
-    test_peer_manager_connect::<Libp2pService>(transport, bind_addr, remote_addr).await;
 }
 
 // verify that the auto-connect functionality works if the number of active connections
@@ -133,11 +114,6 @@ where
 }
 
 #[tokio::test]
-async fn test_auto_connect_libp2p() {
-    test_auto_connect::<TestTransportLibp2p, Libp2pService>(PeerId::random()).await;
-}
-
-#[tokio::test]
 async fn test_auto_connect_mock_tcp() {
     test_auto_connect::<TestTransportTcp, MockService<TcpTransportSocket>>(MockPeerId::new()).await;
 }
@@ -177,11 +153,6 @@ where
 }
 
 #[tokio::test]
-async fn connect_outbound_same_network_libp2p() {
-    connect_outbound_same_network::<TestTransportLibp2p, Libp2pService>().await;
-}
-
-#[tokio::test]
 async fn connect_outbound_same_network_mock_tcp() {
     connect_outbound_same_network::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
 }
@@ -195,57 +166,6 @@ async fn connect_outbound_same_network_mock_channels() {
 #[tokio::test]
 async fn connect_outbound_same_network_mock_noise() {
     connect_outbound_same_network::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
-}
-
-#[tokio::test]
-async fn test_validate_supported_protocols() {
-    let config = Arc::new(config::create_mainnet());
-    let peer_manager = make_peer_manager::<Libp2pService>(
-        TestTransportLibp2p::make_transport(),
-        TestTransportLibp2p::make_address(),
-        config,
-    )
-    .await;
-
-    // all needed protocols
-    assert!(peer_manager.validate_supported_protocols(&default_protocols()));
-
-    // all needed protocols + 2 extra
-    assert!(peer_manager.validate_supported_protocols(
-        &[
-            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-            Protocol::new(ProtocolType::Ping, SemVer::new(2, 0, 0)),
-            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-            Protocol::new(ProtocolType::Sync, SemVer::new(3, 1, 2)),
-        ]
-        .into_iter()
-        .collect()
-    ));
-
-    // all needed protocols but wrong version for sync
-    assert!(!peer_manager.validate_supported_protocols(
-        &[
-            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-            Protocol::new(ProtocolType::Sync, SemVer::new(0, 2, 0)),
-        ]
-        .into_iter()
-        .collect()
-    ));
-
-    // ping protocol missing
-    assert!(!peer_manager.validate_supported_protocols(
-        &[
-            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-        ]
-        .into_iter()
-        .collect()
-    ));
 }
 
 async fn connect_outbound_different_network<A, T>()
@@ -274,11 +194,6 @@ where
     )
     .await;
     assert_ne!(peer_info.magic_bytes, *config.magic_bytes());
-}
-
-#[tokio::test]
-async fn connect_outbound_different_network_libp2p() {
-    connect_outbound_different_network::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
@@ -319,11 +234,6 @@ where
     )
     .await;
     assert_eq!(pm2.accept_inbound_connection(address, peer_info), Ok(()));
-}
-
-#[tokio::test]
-async fn connect_inbound_same_network_libp2p() {
-    connect_inbound_same_network::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
@@ -378,11 +288,6 @@ where
             *config::create_mainnet().magic_bytes(),
         )))
     );
-}
-
-#[tokio::test]
-async fn connect_inbound_different_network_libp2p() {
-    connect_inbound_different_network::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
@@ -442,11 +347,6 @@ where
 }
 
 #[tokio::test]
-async fn remote_closes_connection_libp2p() {
-    remote_closes_connection::<TestTransportLibp2p, Libp2pService>().await;
-}
-
-#[tokio::test]
 async fn remote_closes_connection_mock_tcp() {
     remote_closes_connection::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
 }
@@ -502,23 +402,6 @@ where
     } else {
         panic!("invalid event received");
     }
-}
-
-#[tokio::test]
-async fn inbound_connection_too_many_peers_libp2p() {
-    let config = Arc::new(config::create_mainnet());
-    let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
-        .map(|_| net::types::PeerInfo {
-            peer_id: PeerId::random(),
-            magic_bytes: *config.magic_bytes(),
-            version: common::primitives::semver::SemVer::new(0, 1, 0),
-            agent: None,
-            protocols: default_protocols(),
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
-        })
-        .collect::<Vec<_>>();
-
-    inbound_connection_too_many_peers::<TestTransportLibp2p, Libp2pService>(peers).await;
 }
 
 #[tokio::test]
@@ -630,18 +513,6 @@ where
 }
 
 #[tokio::test]
-async fn connection_timeout_libp2p() {
-    connection_timeout::<Libp2pService>(
-        TestTransportLibp2p::make_transport(),
-        TestTransportLibp2p::make_address(),
-        format!("/ip4/255.255.255.255/tcp/8888/p2p/{}", PeerId::random())
-            .parse()
-            .unwrap(),
-    )
-    .await;
-}
-
-#[tokio::test]
 async fn connection_timeout_mock_tcp() {
     connection_timeout::<MockService<TcpTransportSocket>>(
         TestTransportTcp::make_transport(),
@@ -726,18 +597,6 @@ async fn connection_timeout_rpc_notified<T>(
 }
 
 #[tokio::test]
-async fn connection_timeout_rpc_notified_libp2p() {
-    connection_timeout_rpc_notified::<Libp2pService>(
-        TestTransportLibp2p::make_transport(),
-        TestTransportLibp2p::make_address(),
-        format!("/ip4/255.255.255.255/tcp/8888/p2p/{}", PeerId::random())
-            .parse()
-            .unwrap(),
-    )
-    .await;
-}
-
-#[tokio::test]
 async fn connection_timeout_rpc_notified_mock_tcp() {
     connection_timeout_rpc_notified::<MockService<TcpTransportSocket>>(
         TestTransportTcp::make_transport(),
@@ -765,32 +624,4 @@ async fn connection_timeout_rpc_notified_mock_noise() {
         TestTransportNoise::make_address(),
     )
     .await;
-}
-
-// Only libp2p addresses can contain no IP address.
-#[tokio::test]
-async fn connect_no_ip_in_address_libp2p() {
-    let config = Arc::new(config::create_mainnet());
-    let bind_address = TestTransportLibp2p::make_address();
-    let mut peer_manager = make_peer_manager::<Libp2pService>(
-        TestTransportLibp2p::make_transport(),
-        bind_address,
-        config,
-    )
-    .await;
-
-    let no_ip_addresses = [
-        Multiaddr::empty(),
-        "/p2p/QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N".parse().unwrap(),
-        "/tcp/4242/p2p/QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N".parse().unwrap(),
-    ];
-
-    for address in no_ip_addresses {
-        assert_eq!(
-            peer_manager.connect(address.clone()).await.unwrap_err(),
-            P2pError::ProtocolError(ProtocolError::UnableToConvertAddressToBannable(format!(
-                "{address:?}"
-            )))
-        );
-    }
 }
