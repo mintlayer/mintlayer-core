@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashMap, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use crate::{
     config::{MdnsConfig, NodeType, P2pConfig},
@@ -116,65 +116,68 @@ where
     add_banned_peer_address::<S, P>(peerdb, A::new())
 }
 
-// #[test]
-// fn num_active_peers() {
-//     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(P2pConfig::default()));
-//
-//     assert_eq!(peerdb.idle_peer_count(), 0);
-//     assert_eq!(peerdb.active_peer_count(), 0);
-//
-//     // add three active peers
-//     for _ in 0..3 {
-//         let _id = add_active_peer(&mut peerdb);
-//     }
-//     assert_eq!(peerdb.idle_peer_count(), 0);
-//     assert_eq!(peerdb.active_peer_count(), 3);
-//     assert_eq!(peerdb.peers().len(), 3);
-//
-//     // add 2 idle peers
-//     for _ in 0..2 {
-//         let _id = add_idle_peer(&mut peerdb);
-//     }
-//     assert_eq!(peerdb.idle_peer_count(), 2);
-//     assert_eq!(peerdb.active_peer_count(), 3);
-//     assert_eq!(peerdb.peers().len(), 5);
-//
-//     // add 4 discovered peers
-//     for _ in 0..2 {
-//         let _id = add_discovered_peer(&mut peerdb);
-//     }
-//     assert_eq!(peerdb.idle_peer_count(), 4);
-//     assert_eq!(peerdb.active_peer_count(), 3);
-//     assert_eq!(peerdb.peers().len(), 7);
-//
-//     // add 5 banned peers
-//     let addresses = [
-//         "/ip4/160.9.112.1",
-//         "/ip4/160.9.112.2",
-//         "/ip4/160.9.112.3",
-//         "/ip4/160.9.112.4",
-//         "/ip4/160.9.112.5",
-//     ];
-//     for address in addresses {
-//         let _id = add_banned_peer_address(&mut peerdb, address.parse().unwrap());
-//     }
-//     assert_eq!(peerdb.idle_peer_count(), 4);
-//     assert_eq!(peerdb.active_peer_count(), 3);
-//     assert_eq!(peerdb.peers().len(), 12);
-// }
-
-/*
-async fn connection_timeout_rpc_notified<T>(
-    transport: T::Transport,
-    addr1: T::Address,
-    addr2: T::Address,
-) where
-    T: NetworkingService + 'static + std::fmt::Debug,
-    T::ConnectivityHandle: ConnectivityService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+fn num_active_peers<S, P, A>()
+where
+    S: NetworkingService,
+    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    A: RandomAddressMaker<Address = S::Address>,
 {
- */
+    let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
+
+    assert_eq!(peerdb.idle_peer_count(), 0);
+    assert_eq!(peerdb.active_peer_count(), 0);
+
+    // add three active peers
+    for _ in 0..3 {
+        let _id = add_active_peer::<S, P, A>(&mut peerdb);
+    }
+    assert_eq!(peerdb.idle_peer_count(), 0);
+    assert_eq!(peerdb.active_peer_count(), 3);
+    assert_eq!(peerdb.peers().len(), 3);
+
+    // add 2 idle peers
+    for _ in 0..2 {
+        let _id = add_idle_peer::<S, P, A>(&mut peerdb);
+    }
+    assert_eq!(peerdb.idle_peer_count(), 2);
+    assert_eq!(peerdb.active_peer_count(), 3);
+    assert_eq!(peerdb.peers().len(), 5);
+
+    // add 4 discovered peers
+    for _ in 0..2 {
+        let _id = add_discovered_peer::<S, P>(&mut peerdb);
+    }
+    assert_eq!(peerdb.idle_peer_count(), 4);
+    assert_eq!(peerdb.active_peer_count(), 3);
+    assert_eq!(peerdb.peers().len(), 7);
+
+    // add 5 banned peers
+    for _ in 0..5 {
+        let _id = add_banned_peer_address::<S, P>(&mut peerdb, A::new());
+    }
+    assert_eq!(peerdb.idle_peer_count(), 4);
+    assert_eq!(peerdb.active_peer_count(), 3);
+    assert_eq!(peerdb.peers().len(), 12);
+}
+
+#[test]
+fn num_active_peers_mock_tcp() {
+    num_active_peers::<MockService<TcpTransportSocket>, TestMockPeerIdMaker, TestTcpAddressMaker>();
+}
+
+#[test]
+fn num_active_peers_mock_channels() {
+    num_active_peers::<
+        MockService<MockChannelTransport>,
+        TestMockPeerIdMaker,
+        TestChannelAddressMaker,
+    >();
+}
+
+#[test]
+fn num_active_peers_mock_noise() {
+    num_active_peers::<MockService<NoiseTcpTransport>, TestMockPeerIdMaker, TestTcpAddressMaker>();
+}
 
 fn is_active_peer<S, P, A>()
 where
@@ -1094,121 +1097,6 @@ fn register_peer_info_banned_mock_noise() {
         TestTcpAddressMaker,
     >();
 }
-// TODO: FIXME:
-/*
-#[test]
-fn peer_discovered_libp2p() {
-    let mut peerdb = PeerDb::new(Arc::new(P2pConfig::default()));
-
-    let id_1: libp2p::PeerId = PeerId::random();
-    let id_2: libp2p::PeerId = PeerId::random();
-    let id_3: libp2p::PeerId = PeerId::random();
-
-    // check that peer with `id` has the correct ipv4 and ipv6 addresses
-    let check_peer =
-        |peers: &HashMap<<Libp2pService as NetworkingService>::PeerId, Peer<Libp2pService>>,
-         peer_id: PeerId,
-         ip4: Vec<Multiaddr>,
-         ip6: Vec<Multiaddr>| {
-            let (p_ip4, p_ip6) = {
-                match peers.get(&peer_id).unwrap() {
-                    Peer::Idle(_) => panic!("invalid peer type"),
-                    Peer::Active(_) => panic!("invalid peer type"),
-                    Peer::Banned(_) => panic!("invalid peer type"),
-                    Peer::Discovered(info) => {
-                        let mut ip4 = vec![];
-                        let mut ip6 = vec![];
-
-                        for addr in info {
-                            let components = addr.iter().collect::<Vec<_>>();
-                            if std::matches!(components[0], multiaddr::Protocol::Ip6(_)) {
-                                ip6.push(addr.clone());
-                            } else {
-                                ip4.push(addr.clone());
-                            }
-                        }
-
-                        (ip4, ip6)
-                    }
-                }
-            };
-
-            assert_eq!(ip4.len(), p_ip4.len());
-            assert_eq!(ip6.len(), p_ip6.len());
-
-            for ip in ip4.iter() {
-                assert!(p_ip4.contains(ip));
-            }
-
-            for ip in ip6.iter() {
-                assert!(p_ip6.contains(ip));
-            }
-        };
-
-    // first add two new peers, both with ipv4 and ipv6 address
-    peerdb.peer_discovered(&AddrInfo {
-        peer_id: id_1,
-        ip4: vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
-        ip6: vec!["/ip6/::1/tcp/9091".parse().unwrap()],
-    });
-    peerdb.peer_discovered(&AddrInfo {
-        peer_id: id_2,
-        ip4: vec!["/ip4/127.0.0.1/tcp/9092".parse().unwrap()],
-        ip6: vec!["/ip6/::1/tcp/9093".parse().unwrap()],
-    });
-
-    assert_eq!(peerdb.peers().len(), 2);
-    assert_eq!(
-        peerdb.peers().iter().filter(|x| std::matches!(x.1, Peer::Idle(_))).count(),
-        0
-    );
-    assert_eq!(peerdb.available().len(), 2);
-
-    check_peer(
-        peerdb.peers(),
-        id_1,
-        vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
-        vec!["/ip6/::1/tcp/9091".parse().unwrap()],
-    );
-
-    check_peer(
-        peerdb.peers(),
-        id_2,
-        vec!["/ip4/127.0.0.1/tcp/9092".parse().unwrap()],
-        vec!["/ip6/::1/tcp/9093".parse().unwrap()],
-    );
-
-    // then discover one new peer and two additional ipv6 addresses for peer 1
-    peerdb.peer_discovered(&AddrInfo {
-        peer_id: id_1,
-        ip4: vec![],
-        ip6: vec!["/ip6/::1/tcp/9094".parse().unwrap(), "/ip6/::1/tcp/9095".parse().unwrap()],
-    });
-    peerdb.peer_discovered(&AddrInfo {
-        peer_id: id_3,
-        ip4: vec!["/ip4/127.0.0.1/tcp/9096".parse().unwrap()],
-        ip6: vec!["/ip6/::1/tcp/9097".parse().unwrap()],
-    });
-
-    check_peer(
-        peerdb.peers(),
-        id_1,
-        vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
-        vec![
-            "/ip6/::1/tcp/9091".parse().unwrap(),
-            "/ip6/::1/tcp/9094".parse().unwrap(),
-            "/ip6/::1/tcp/9095".parse().unwrap(),
-        ],
-    );
-
-    check_peer(
-        peerdb.peers(),
-        id_3,
-        vec!["/ip4/127.0.0.1/tcp/9096".parse().unwrap()],
-        vec!["/ip6/::1/tcp/9097".parse().unwrap()],
-    );
-}
-*/
 
 async fn unban_peer<S, P, A>()
 where
