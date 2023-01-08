@@ -46,7 +46,7 @@ pub struct AddrInfo<T: NetworkingService> {
 /// (both are Mintlayer nodes and that both support mandatory protocols). If those checks pass,
 /// the information is passed on to [crate::peer_manager::PeerManager] which decides whether it
 /// wants to keep the connection open or close it and possibly ban the peer from.
-#[derive(Debug)]
+#[derive(Debug, Eq)]
 pub struct PeerInfo<T: NetworkingService> {
     /// Unique ID of the peer
     pub peer_id: T::PeerId,
@@ -85,6 +85,43 @@ impl<T: NetworkingService> Display for PeerInfo<T> {
         }
 
         Ok(())
+    }
+}
+
+/// This implementation is needed because the derive macro adds the `NetworkingService: PartialEq`
+/// requirement instead of `<T as NetworkingService>::PeerId: PartialEq`.
+///
+/// See https://github.com/rust-lang/rust/issues/26925 for details.
+impl<T> PartialEq for PeerInfo<T>
+where
+    T: NetworkingService,
+    T::PeerId: PartialEq,
+{
+    fn eq(&self, right: &Self) -> bool {
+        let PeerInfo {
+            peer_id: left_peer_id,
+            magic_bytes: left_magic_bytes,
+            version: left_version,
+            agent: left_agent,
+            protocols: left_protocols,
+            subscriptions: left_subscriptions,
+        } = self;
+
+        let PeerInfo {
+            peer_id: right_peer_id,
+            magic_bytes: right_magic_bytes,
+            version: right_version,
+            agent: right_agent,
+            protocols: right_protocols,
+            subscriptions: right_subscriptions,
+        } = right;
+
+        left_peer_id == right_peer_id
+            && left_magic_bytes == right_magic_bytes
+            && left_version == right_version
+            && left_agent == right_agent
+            && left_protocols == right_protocols
+            && left_subscriptions == right_subscriptions
     }
 }
 

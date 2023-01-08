@@ -392,26 +392,25 @@ mod tests {
             conn1.poll_next().await
         {
             assert_eq!(address, conn2.local_addr().await.unwrap().unwrap());
-            // TODO: FIXME:
-            // assert_eq!(
-            //     peer_info,
-            //     PeerInfo {
-            //         peer_id: peer_info.peer_id,
-            //         magic_bytes: *config.magic_bytes(),
-            //         version: SemVer::new(0, 1, 0),
-            //         agent: None,
-            //         protocols: [
-            //             Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-            //             Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-            //             Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-            //         ]
-            //         .into_iter()
-            //         .collect(),
-            //         subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
-            //             .into_iter()
-            //             .collect(),
-            //     }
-            // );
+            assert_eq!(
+                peer_info,
+                PeerInfo {
+                    peer_id: peer_info.peer_id,
+                    magic_bytes: *config.magic_bytes(),
+                    version: SemVer::new(0, 1, 0),
+                    agent: None,
+                    protocols: [
+                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
+                        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+                        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                        .into_iter()
+                        .collect(),
+                }
+            );
         } else {
             panic!("invalid event received");
         }
