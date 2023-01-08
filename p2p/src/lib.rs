@@ -76,7 +76,7 @@ where
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         _mempool_handle: mempool::MempoolHandle,
-    ) -> crate::Result<Self>
+    ) -> Result<Self>
     where
         <T as NetworkingService>::Address: FromStr,
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
