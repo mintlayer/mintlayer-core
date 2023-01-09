@@ -30,12 +30,10 @@ use crate::{
         view::PoSAccountingView,
     },
     storage::PoSAccountingStorageWrite,
-    DelegationId, PoolId,
+    DelegationId, PoSAccountingDB, PoolId,
 };
 
-use super::PoSAccountingDBMut;
-
-impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperations for PoSAccountingDBMut<'a, S> {
+impl<S: PoSAccountingStorageWrite> PoSAccountingOperations for PoSAccountingDB<S> {
     fn create_pool(
         &mut self,
         input0_outpoint: &OutPoint,
@@ -169,7 +167,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperations for PoSAccounting
     }
 }
 
-impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
+impl<S: PoSAccountingStorageWrite> PoSAccountingDB<S> {
     fn undo_create_pool(&mut self, undo: CreatePoolUndo) -> Result<(), Error> {
         let amount = self.store.get_pool_balance(undo.pool_id)?;
 

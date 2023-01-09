@@ -28,22 +28,8 @@ pub mod data;
 pub mod operator_impls;
 mod view_impl;
 
-enum PoSAccountingViewCow<'a, P> {
-    Borrowed(&'a P),
-    Owned(P),
-}
-
-impl<'a, P: PoSAccountingView> PoSAccountingViewCow<'a, P> {
-    fn as_bounded_ref(&self) -> &P {
-        match self {
-            PoSAccountingViewCow::Borrowed(r) => r,
-            PoSAccountingViewCow::Owned(o) => o,
-        }
-    }
-}
-
-pub struct PoSAccountingDelta<'a, P> {
-    parent: PoSAccountingViewCow<'a, P>,
+pub struct PoSAccountingDelta<P> {
+    parent: P,
     data: PoSAccountingDeltaData,
 }
 
@@ -53,27 +39,17 @@ pub struct DeltaMergeUndo {
     delegation_data_undo: DeltaDataUndoCollection<DelegationId, DelegationData>,
 }
 
-impl<'a, P: PoSAccountingView> PoSAccountingDelta<'a, P> {
-    pub fn from_borrowed_parent(parent: &'a P) -> Self {
+impl<P: PoSAccountingView> PoSAccountingDelta<P> {
+    pub fn new(parent: P) -> Self {
         Self {
-            parent: PoSAccountingViewCow::Borrowed(parent),
-            data: PoSAccountingDeltaData::new(),
-        }
-    }
-
-    pub fn from_owned_parent(parent: P) -> Self {
-        Self {
-            parent: PoSAccountingViewCow::Owned(parent),
+            parent,
             data: PoSAccountingDeltaData::new(),
         }
     }
 
     #[cfg(test)]
-    pub fn from_data(parent: &'a P, data: PoSAccountingDeltaData) -> Self {
-        Self {
-            parent: PoSAccountingViewCow::Borrowed(parent),
-            data,
-        }
+    pub fn from_data(parent: P, data: PoSAccountingDeltaData) -> Self {
+        Self { parent, data }
     }
 
     pub fn consume(self) -> PoSAccountingDeltaData {

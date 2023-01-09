@@ -28,7 +28,7 @@ use crate::{
         delegation::DelegationData,
         delta::{data::PoSAccountingDeltaData, PoSAccountingDelta},
         pool_data::PoolData,
-        storage::PoSAccountingDBMut,
+        storage::PoSAccountingDB,
     },
     storage::in_memory::InMemoryPoSAccounting,
 };
@@ -39,7 +39,7 @@ use crate::{
 fn merge_deltas_check_undo_check(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let db = PoSAccountingDBMut::new(&mut storage);
+    let mut db = PoSAccountingDB::new(&mut storage);
 
     let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let data1 = PoSAccountingDeltaData {
@@ -85,7 +85,7 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
             .into_iter(),
         ),
     };
-    let mut delta1 = PoSAccountingDelta::from_data(&db, data1);
+    let mut delta1 = PoSAccountingDelta::from_data(&mut db, data1);
 
     let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let data2 = PoSAccountingDeltaData {
@@ -140,7 +140,7 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
             .into_iter(),
         ),
     };
-    let delta2 = PoSAccountingDelta::from_data(&db, data2);
+    let delta2 = PoSAccountingDelta::from_data(&delta1, data2);
     let delta2_origin_data = delta2.data().clone();
 
     let expected_data_after_merge = PoSAccountingDeltaData {
@@ -274,7 +274,7 @@ fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
     let original_storage = storage.clone();
 
     let (delta_origin, undo_data) = {
-        let mut db = PoSAccountingDBMut::new(&mut storage);
+        let mut db = PoSAccountingDB::new(&mut storage);
 
         let delta_data = PoSAccountingDeltaData {
             pool_data: DeltaDataCollection::from_iter(
@@ -362,7 +362,7 @@ fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
 
     assert_eq!(storage, expected_storage);
 
-    let mut db = PoSAccountingDBMut::new(&mut storage);
+    let mut db = PoSAccountingDB::new(&mut storage);
     db.undo_merge_with_delta(delta_origin, undo_data).unwrap();
     assert_eq!(storage, original_storage);
 }

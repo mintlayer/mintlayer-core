@@ -28,7 +28,7 @@ use crate::{
     DelegationId, PoolId,
 };
 
-use super::{data::PoSAccountingDeltaData, PoSAccountingDelta, PoSAccountingViewCow};
+use super::{data::PoSAccountingDeltaData, PoSAccountingDelta};
 
 fn signed_to_unsigned_pair(
     (k, v): (DelegationId, SignedAmount),
@@ -60,47 +60,7 @@ fn sum_maps<K: Ord + Copy>(
     Ok(m1)
 }
 
-impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingViewCow<'a, P> {
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
-        self.as_bounded_ref().pool_exists(pool_id)
-    }
-
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
-        self.as_bounded_ref().get_pool_balance(pool_id)
-    }
-
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
-        self.as_bounded_ref().get_pool_data(pool_id)
-    }
-
-    fn get_pool_delegations_shares(
-        &self,
-        pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Error> {
-        self.as_bounded_ref().get_pool_delegations_shares(pool_id)
-    }
-
-    fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Option<Amount>, Error> {
-        self.as_bounded_ref().get_delegation_balance(delegation_id)
-    }
-
-    fn get_delegation_data(
-        &self,
-        delegation_id: DelegationId,
-    ) -> Result<Option<DelegationData>, Error> {
-        self.as_bounded_ref().get_delegation_data(delegation_id)
-    }
-
-    fn get_pool_delegation_share(
-        &self,
-        pool_id: PoolId,
-        delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Error> {
-        self.as_bounded_ref().get_pool_delegation_share(pool_id, delegation_id)
-    }
-}
-
-impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<'a, P> {
+impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
         Ok(self
             .get_pool_data(pool_id)?
@@ -170,7 +130,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<'a, P> {
     }
 }
 
-impl<'a, P: PoSAccountingView> FlushablePoSAccountingView for PoSAccountingDelta<'a, P> {
+impl<P: PoSAccountingView> FlushablePoSAccountingView for PoSAccountingDelta<P> {
     fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<(), Error> {
         self.merge_with_delta(data).map(|_| ())
     }

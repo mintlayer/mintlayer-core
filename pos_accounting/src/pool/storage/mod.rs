@@ -32,22 +32,12 @@ pub mod view_impls;
 mod helpers;
 use helpers::BorrowedStorageValue;
 
-pub struct PoSAccountingDB<'a, S> {
-    store: &'a S,
+pub struct PoSAccountingDB<S> {
+    store: S,
 }
 
-impl<'a, S> PoSAccountingDB<'a, S> {
-    pub fn new(store: &'a S) -> Self {
-        Self { store }
-    }
-}
-
-pub struct PoSAccountingDBMut<'a, S> {
-    store: &'a mut S,
-}
-
-impl<'a, S> PoSAccountingDBMut<'a, S> {
-    pub fn new(store: &'a mut S) -> Self {
+impl<S> PoSAccountingDB<S> {
+    pub fn new(store: S) -> Self {
         Self { store }
     }
 }
@@ -57,7 +47,7 @@ pub struct DataMergeUndo {
     delegation_data_undo: BTreeMap<DelegationId, Option<DelegationData>>,
 }
 
-impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
+impl<S: PoSAccountingStorageWrite> PoSAccountingDB<S> {
     pub fn merge_with_delta(
         &mut self,
         other: PoSAccountingDeltaData,
@@ -175,7 +165,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         Setter: FnMut(&mut S, K, Amount) -> Result<(), storage_result::Error>,
         Deleter: FnMut(&mut S, K) -> Result<(), storage_result::Error>,
     {
-        let mut store = BorrowedStorageValue::new(self.store, getter, setter, deleter);
+        let mut store = BorrowedStorageValue::new(&mut self.store, getter, setter, deleter);
         iter.try_for_each(|(id, delta)| -> Result<(), Error> {
             let balance = store.get(id)?;
             match combine_amount_delta(&balance, &Some(delta))? {
@@ -204,7 +194,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         Setter: FnMut(&mut S, K, &T) -> Result<(), storage_result::Error>,
         Deleter: FnMut(&mut S, K) -> Result<(), storage_result::Error>,
     {
-        let mut store = BorrowedStorageValue::new(self.store, getter, setter, deleter);
+        let mut store = BorrowedStorageValue::new(&mut self.store, getter, setter, deleter);
         delta
             .consume()
             .into_iter()
@@ -232,7 +222,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         Setter: FnMut(&mut S, K, &T) -> Result<(), storage_result::Error>,
         Deleter: FnMut(&mut S, K) -> Result<(), storage_result::Error>,
     {
-        let mut store = BorrowedStorageValue::new(self.store, getter, setter, deleter);
+        let mut store = BorrowedStorageValue::new(&mut self.store, getter, setter, deleter);
         iter.try_for_each(|(key, undo_data)| match undo_data {
             Some(data) => store.set(key, &data),
             None => store.delete(key),

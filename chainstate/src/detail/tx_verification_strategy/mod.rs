@@ -31,12 +31,12 @@ use tx_verifier::transaction_verifier::{
 };
 
 // TODO: replace with trait_alias when stabilized
-pub trait TransactionVerifierMakerFn<'a, S: 'a, U: 'a, A: 'a>:
+pub trait TransactionVerifierMakerFn<'a, S: 'a, U, A>:
     Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U, A>
 {
 }
 
-impl<'a, S: 'a, U: 'a, A: 'a, T: 'a> TransactionVerifierMakerFn<'a, S, U, A> for T where
+impl<'a, S: 'a, U, A, T: 'a> TransactionVerifierMakerFn<'a, S, U, A> for T where
     T: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U, A>
 {
 }

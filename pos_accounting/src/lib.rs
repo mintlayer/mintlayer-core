@@ -39,7 +39,7 @@ pub use crate::{
         helpers::make_pool_id,
         operations::{PoSAccountingOperations, PoSAccountingUndo},
         pool_data::PoolData,
-        storage::{PoSAccountingDB, PoSAccountingDBMut},
+        storage::PoSAccountingDB,
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
     storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},

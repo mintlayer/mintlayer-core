@@ -33,7 +33,7 @@ use crate::{
         delta::PoSAccountingDelta,
         operations::{PoSAccountingOperations, PoSAccountingUndo},
         pool_data::PoolData,
-        storage::PoSAccountingDBMut,
+        storage::PoSAccountingDB,
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
     storage::in_memory::InMemoryPoSAccounting,
@@ -74,7 +74,7 @@ fn create_delegation_id(
 fn create_pool_storage_undo_no_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let mut db = PoSAccountingDBMut::new(&mut storage);
+    let mut db = PoSAccountingDB::new(&mut storage);
 
     create_pool_check_undo_check(&mut rng, &mut db);
 }
@@ -85,8 +85,8 @@ fn create_pool_storage_undo_no_flush(#[case] seed: Seed) {
 fn create_pool_delta_undo_no_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let db = PoSAccountingDBMut::new(&mut storage);
-    let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
+    let db = PoSAccountingDB::new(&mut storage);
+    let mut delta = PoSAccountingDelta::new(&db);
 
     create_pool_check_undo_check(&mut rng, &mut delta);
 }
@@ -121,8 +121,8 @@ fn create_pool_check_undo_check(
 fn create_pool_flush_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let mut db = PoSAccountingDBMut::new(&mut storage);
-    let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
+    let mut db = PoSAccountingDB::new(&mut storage);
+    let mut delta = PoSAccountingDelta::new(&db);
 
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pub_key, delta_undo) = create_pool(&mut rng, &mut delta, pledged_amount).unwrap();
@@ -139,8 +139,8 @@ fn create_pool_flush_undo(#[case] seed: Seed) {
     assert_eq!(storage, expected_storage);
 
     {
-        let mut db = PoSAccountingDBMut::new(&mut storage);
-        let mut new_delta = PoSAccountingDelta::from_borrowed_parent(&db);
+        let mut db = PoSAccountingDB::new(&mut storage);
+        let mut new_delta = PoSAccountingDelta::new(&db);
         new_delta.undo(delta_undo).unwrap();
 
         db.batch_write_delta(new_delta.consume()).unwrap();
@@ -155,8 +155,8 @@ fn create_pool_flush_undo(#[case] seed: Seed) {
 fn create_pool_undo_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let mut db = PoSAccountingDBMut::new(&mut storage);
-    let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
+    let mut db = PoSAccountingDB::new(&mut storage);
+    let mut delta = PoSAccountingDelta::new(&db);
 
     let pledged_amount = Amount::from_atoms(100);
     let (_, _, delta_undo) = create_pool(&mut rng, &mut delta, pledged_amount).unwrap();
@@ -173,7 +173,7 @@ fn create_pool_undo_flush(#[case] seed: Seed) {
 fn decommission_pool_storage_undo_no_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let mut db = PoSAccountingDBMut::new(&mut storage);
+    let mut db = PoSAccountingDB::new(&mut storage);
 
     decommission_pool_check_undo_check(&mut rng, &mut db);
 }
@@ -184,8 +184,8 @@ fn decommission_pool_storage_undo_no_flush(#[case] seed: Seed) {
 fn decommission_pool_delta_undo_no_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let db = PoSAccountingDBMut::new(&mut storage);
-    let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
+    let db = PoSAccountingDB::new(&mut storage);
+    let mut delta = PoSAccountingDelta::new(&db);
 
     decommission_pool_check_undo_check(&mut rng, &mut delta);
 }
@@ -222,12 +222,12 @@ fn decommission_pool_check_undo_check(
 fn decommission_pool_flush_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let mut db = PoSAccountingDBMut::new(&mut storage);
+    let mut db = PoSAccountingDB::new(&mut storage);
 
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pub_key, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
 
-    let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
+    let mut delta = PoSAccountingDelta::new(&db);
     let delta_undo = delta.decommission_pool(pool_id).unwrap();
 
     db.batch_write_delta(delta.consume()).unwrap();
@@ -235,8 +235,8 @@ fn decommission_pool_flush_undo(#[case] seed: Seed) {
     assert_eq!(storage, InMemoryPoSAccounting::new());
 
     {
-        let mut db = PoSAccountingDBMut::new(&mut storage);
-        let mut new_delta = PoSAccountingDelta::from_borrowed_parent(&db);
+        let mut db = PoSAccountingDB::new(&mut storage);
+        let mut new_delta = PoSAccountingDelta::new(&db);
         new_delta.undo(delta_undo).unwrap();
 
         db.batch_write_delta(new_delta.consume()).unwrap();
@@ -258,12 +258,12 @@ fn decommission_pool_flush_undo(#[case] seed: Seed) {
 fn decommission_pool_undo_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let mut db = PoSAccountingDBMut::new(&mut storage);
+    let mut db = PoSAccountingDB::new(&mut storage);
 
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pub_key, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
 
-    let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
+    let mut delta = PoSAccountingDelta::new(&db);
     let delta_undo = delta.decommission_pool(pool_id).unwrap();
     delta.undo(delta_undo).unwrap();
 
@@ -285,7 +285,7 @@ fn decommission_pool_undo_flush(#[case] seed: Seed) {
 fn create_delegation_id_storage_undo_no_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let mut db = PoSAccountingDBMut::new(&mut storage);
+    let mut db = PoSAccountingDB::new(&mut storage);
 
     check_delegation_id(&mut rng, &mut db);
 }
@@ -296,8 +296,8 @@ fn create_delegation_id_storage_undo_no_flush(#[case] seed: Seed) {
 fn create_delegation_id_delta_undo_no_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let db = PoSAccountingDBMut::new(&mut storage);
-    let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
+    let db = PoSAccountingDB::new(&mut storage);
+    let mut delta = PoSAccountingDelta::new(&db);
 
     check_delegation_id(&mut rng, &mut delta);
 }
@@ -345,12 +345,12 @@ fn check_delegation_id(
 fn create_delegation_id_flush_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let mut db = PoSAccountingDBMut::new(&mut storage);
+    let mut db = PoSAccountingDB::new(&mut storage);
 
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pub_key, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
 
-    let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
+    let mut delta = PoSAccountingDelta::new(&db);
     let (delegation_id, del_pub_key, delta_undo) =
         create_delegation_id(&mut rng, &mut delta, pool_id).unwrap();
 
@@ -366,8 +366,8 @@ fn create_delegation_id_flush_undo(#[case] seed: Seed) {
     assert_eq!(storage, expected_storage);
 
     {
-        let mut db = PoSAccountingDBMut::new(&mut storage);
-        let mut new_delta = PoSAccountingDelta::from_borrowed_parent(&db);
+        let mut db = PoSAccountingDB::new(&mut storage);
+        let mut new_delta = PoSAccountingDelta::new(&db);
         new_delta.undo(delta_undo).unwrap();
 
         db.batch_write_delta(new_delta.consume()).unwrap();
@@ -389,12 +389,12 @@ fn create_delegation_id_flush_undo(#[case] seed: Seed) {
 fn create_delegation_id_undo_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let mut db = PoSAccountingDBMut::new(&mut storage);
+    let mut db = PoSAccountingDB::new(&mut storage);
 
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pub_key, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
 
-    let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
+    let mut delta = PoSAccountingDelta::new(&db);
     let (_, _, delta_undo) = create_delegation_id(&mut rng, &mut delta, pool_id).unwrap();
 
     delta.undo(delta_undo).unwrap();
@@ -417,7 +417,7 @@ fn create_delegation_id_undo_flush(#[case] seed: Seed) {
 fn delegate_staking_storage_undo_no_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let mut db = PoSAccountingDBMut::new(&mut storage);
+    let mut db = PoSAccountingDB::new(&mut storage);
 
     check_delegate_staking(&mut rng, &mut db);
 }
@@ -428,8 +428,8 @@ fn delegate_staking_storage_undo_no_flush(#[case] seed: Seed) {
 fn delegate_staking_delta_undo_no_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let db = PoSAccountingDBMut::new(&mut storage);
-    let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
+    let db = PoSAccountingDB::new(&mut storage);
+    let mut delta = PoSAccountingDelta::new(&db);
 
     check_delegate_staking(&mut rng, &mut delta);
 }
@@ -481,13 +481,13 @@ fn check_delegate_staking(
 fn delegate_staking_delta_flush_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let mut db = PoSAccountingDBMut::new(&mut storage);
+    let mut db = PoSAccountingDB::new(&mut storage);
 
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pub_key, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
     let (delegation_id, del_pub_key, _) = create_delegation_id(&mut rng, &mut db, pool_id).unwrap();
 
-    let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
+    let mut delta = PoSAccountingDelta::new(&db);
     let delegated_amount = Amount::from_atoms(300);
     let delta_undo = delta.delegate_staking(delegation_id, delegated_amount).unwrap();
 
@@ -506,8 +506,8 @@ fn delegate_staking_delta_flush_undo(#[case] seed: Seed) {
     assert_eq!(storage, expected_storage);
 
     {
-        let mut db = PoSAccountingDBMut::new(&mut storage);
-        let mut new_delta = PoSAccountingDelta::from_borrowed_parent(&db);
+        let mut db = PoSAccountingDB::new(&mut storage);
+        let mut new_delta = PoSAccountingDelta::new(&db);
         new_delta.undo(delta_undo).unwrap();
 
         db.batch_write_delta(new_delta.consume()).unwrap();
@@ -529,13 +529,13 @@ fn delegate_staking_delta_flush_undo(#[case] seed: Seed) {
 fn delegate_staking_delta_undo_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let mut db = PoSAccountingDBMut::new(&mut storage);
+    let mut db = PoSAccountingDB::new(&mut storage);
 
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pub_key, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
     let (delegation_id, del_pub_key, _) = create_delegation_id(&mut rng, &mut db, pool_id).unwrap();
 
-    let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
+    let mut delta = PoSAccountingDelta::new(&db);
     let delegated_amount = Amount::from_atoms(300);
     let delta_undo = delta.delegate_staking(delegation_id, delegated_amount).unwrap();
     delta.undo(delta_undo).unwrap();
@@ -558,7 +558,7 @@ fn delegate_staking_delta_undo_flush(#[case] seed: Seed) {
 fn spend_share_storage_undo_no_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let mut db = PoSAccountingDBMut::new(&mut storage);
+    let mut db = PoSAccountingDB::new(&mut storage);
 
     check_delegate_staking(&mut rng, &mut db);
 }
@@ -569,8 +569,8 @@ fn spend_share_storage_undo_no_flush(#[case] seed: Seed) {
 fn spend_share_delta_undo_no_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let db = PoSAccountingDBMut::new(&mut storage);
-    let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
+    let db = PoSAccountingDB::new(&mut storage);
+    let mut delta = PoSAccountingDelta::new(&db);
 
     check_spend_share(&mut rng, &mut delta);
 }
@@ -640,7 +640,7 @@ fn check_spend_share(
 fn spend_share_delta_flush_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let mut db = PoSAccountingDBMut::new(&mut storage);
+    let mut db = PoSAccountingDB::new(&mut storage);
 
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pub_key, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
@@ -648,7 +648,7 @@ fn spend_share_delta_flush_undo(#[case] seed: Seed) {
     let delegated_amount = Amount::from_atoms(300);
     let _ = db.delegate_staking(delegation_id, delegated_amount).unwrap();
 
-    let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
+    let mut delta = PoSAccountingDelta::new(&db);
     let spent_amount = Amount::from_atoms(50);
     let delta_undo = delta.spend_share_from_delegation_id(delegation_id, spent_amount).unwrap();
 
@@ -673,8 +673,8 @@ fn spend_share_delta_flush_undo(#[case] seed: Seed) {
     assert_eq!(storage, expected_storage);
 
     {
-        let mut db = PoSAccountingDBMut::new(&mut storage);
-        let mut new_delta = PoSAccountingDelta::from_borrowed_parent(&db);
+        let mut db = PoSAccountingDB::new(&mut storage);
+        let mut new_delta = PoSAccountingDelta::new(&db);
         new_delta.undo(delta_undo).unwrap();
 
         db.batch_write_delta(new_delta.consume()).unwrap();
@@ -696,7 +696,7 @@ fn spend_share_delta_flush_undo(#[case] seed: Seed) {
 fn spend_share_delta_undo_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
-    let mut db = PoSAccountingDBMut::new(&mut storage);
+    let mut db = PoSAccountingDB::new(&mut storage);
 
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pub_key, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
@@ -704,7 +704,7 @@ fn spend_share_delta_undo_flush(#[case] seed: Seed) {
     let delegated_amount = Amount::from_atoms(300);
     let _ = db.delegate_staking(delegation_id, delegated_amount).unwrap();
 
-    let mut delta = PoSAccountingDelta::from_borrowed_parent(&db);
+    let mut delta = PoSAccountingDelta::new(&db);
     let spent_amount = Amount::from_atoms(50);
     let delta_undo = delta.spend_share_from_delegation_id(delegation_id, spent_amount).unwrap();
     delta.undo(delta_undo).unwrap();

@@ -182,11 +182,11 @@ pub struct TransactionVerifier<'a, S, U, A> {
     utxo_cache: UtxosCache<U>,
     utxo_block_undo: UtxosBlockUndoCache,
 
-    accounting_delta: PoSAccountingDelta<'a, A>,
+    accounting_delta: PoSAccountingDelta<A>,
     accounting_delta_undo: AccountingBlockUndoCache,
 }
 
-impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S, UtxosDB<&'a S>, S> {
+impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S, UtxosDB<&'a S>, &'a S> {
     pub fn new(
         storage_ref: &'a S,
         chain_config: &'a ChainConfig,
@@ -200,7 +200,7 @@ impl<'a, S: TransactionVerifierStorageRef> TransactionVerifier<'a, S, UtxosDB<&'
             utxo_cache: UtxosCache::new(UtxosDB::new(storage_ref)),
             utxo_block_undo: UtxosBlockUndoCache::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
-            accounting_delta: PoSAccountingDelta::from_borrowed_parent(storage_ref),
+            accounting_delta: PoSAccountingDelta::new(storage_ref),
             accounting_delta_undo: AccountingBlockUndoCache::new(),
             best_block: storage_ref
                 .get_best_block_for_utxos()
@@ -230,7 +230,7 @@ where
             utxo_cache: UtxosCache::new(utxos), // TODO: take utxos from handle
             utxo_block_undo: UtxosBlockUndoCache::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
-            accounting_delta: PoSAccountingDelta::from_owned_parent(accounting),
+            accounting_delta: PoSAccountingDelta::new(accounting),
             accounting_delta_undo: AccountingBlockUndoCache::new(),
             best_block: storage_ref
                 .get_best_block_for_utxos()
@@ -246,7 +246,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
 {
     pub fn derive_child(
         &'a self,
-    ) -> TransactionVerifier<'a, Self, &'a UtxosCache<U>, PoSAccountingDelta<A>> {
+    ) -> TransactionVerifier<'a, Self, &'a UtxosCache<U>, &'a PoSAccountingDelta<A>> {
         TransactionVerifier {
             storage_ref: self,
             chain_config: self.chain_config,
@@ -255,7 +255,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
             utxo_cache: UtxosCache::new(&self.utxo_cache),
             utxo_block_undo: UtxosBlockUndoCache::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
-            accounting_delta: PoSAccountingDelta::from_borrowed_parent(&self.accounting_delta),
+            accounting_delta: PoSAccountingDelta::new(&self.accounting_delta),
             accounting_delta_undo: AccountingBlockUndoCache::new(),
             best_block: self.best_block,
         }
