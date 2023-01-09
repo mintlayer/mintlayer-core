@@ -158,12 +158,12 @@ pub struct TransactionVerifierDelta {
 }
 
 /// [`TxIndexCache`] that can be enabled or disabled (using a config).
-pub struct GuardedTxIndexCache {
+pub struct OptionalTxIndexCache {
     enabled: bool,
     inner: TxIndexCache,
 }
 
-impl GuardedTxIndexCache {
+impl OptionalTxIndexCache {
     fn new(enabled: bool) -> Self {
         let inner = TxIndexCache::new();
         Self { enabled, inner }
@@ -198,7 +198,7 @@ impl GuardedTxIndexCache {
 pub struct TransactionVerifier<C, S, U> {
     chain_config: C,
     storage: S,
-    tx_index_cache: GuardedTxIndexCache,
+    tx_index_cache: OptionalTxIndexCache,
     utxo_cache: UtxosCache<U>,
     utxo_block_undo: BTreeMap<TransactionSource, BlockUndoEntry>,
     token_issuance_cache: TokenIssuanceCache,
@@ -212,7 +212,7 @@ impl<C, S: TransactionVerifierStorageRef + Clone> TransactionVerifier<C, S, Utxo
             .get_best_block_for_utxos()
             .expect("Database error while reading utxos best block")
             .expect("best block should be some");
-        let tx_index_cache = GuardedTxIndexCache::from_config(&verifier_config);
+        let tx_index_cache = OptionalTxIndexCache::from_config(&verifier_config);
         Self {
             storage,
             chain_config,
@@ -236,7 +236,7 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView + Send + Sync> Transactio
             .get_best_block_for_utxos()
             .expect("Database error while reading utxos best block")
             .expect("best block should be some");
-        let tx_index_cache = GuardedTxIndexCache::from_config(&verifier_config);
+        let tx_index_cache = OptionalTxIndexCache::from_config(&verifier_config);
         Self {
             storage,
             chain_config,
@@ -259,7 +259,7 @@ where
         TransactionVerifier {
             storage: self,
             chain_config: self.chain_config.as_ref(),
-            tx_index_cache: GuardedTxIndexCache::new(self.tx_index_cache.enabled),
+            tx_index_cache: OptionalTxIndexCache::new(self.tx_index_cache.enabled),
             utxo_cache: UtxosCache::new(&self.utxo_cache),
             utxo_block_undo: BTreeMap::new(),
             token_issuance_cache: TokenIssuanceCache::new(),

@@ -251,7 +251,7 @@ fn hierarchy_test_tx_index(#[case] seed: Seed) {
     let verifier1 = {
         let mut verifier =
             TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
-        verifier.tx_index_cache = GuardedTxIndexCache::new_for_test(BTreeMap::from([(
+        verifier.tx_index_cache = OptionalTxIndexCache::new_for_test(BTreeMap::from([(
             outpoint1.clone(),
             CachedInputsOperation::Read(tx_index_1.clone()),
         )]));
@@ -260,7 +260,7 @@ fn hierarchy_test_tx_index(#[case] seed: Seed) {
 
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
-        verifier.tx_index_cache = GuardedTxIndexCache::new_for_test(BTreeMap::from([(
+        verifier.tx_index_cache = OptionalTxIndexCache::new_for_test(BTreeMap::from([(
             outpoint2.clone(),
             CachedInputsOperation::Read(tx_index_2.clone()),
         )]));
