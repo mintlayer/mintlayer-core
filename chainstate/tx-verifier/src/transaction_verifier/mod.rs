@@ -29,7 +29,7 @@ use self::{
     token_issuance_cache::{CoinOrTokenId, ConsumedTokenIssuanceCache},
     tx_index_cache::TxIndexCache,
 };
-use ::utils::ensure;
+use ::utils::{ensure, shallow_clone::ShallowClone};
 use cached_operation::CachedInputsOperation;
 
 use std::collections::{btree_map::Entry, BTreeMap};
@@ -205,7 +205,7 @@ pub struct TransactionVerifier<C, S, U> {
     best_block: Id<GenBlock>,
 }
 
-impl<C, S: TransactionVerifierStorageRef + Clone> TransactionVerifier<C, S, UtxosDB<S>> {
+impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, S, UtxosDB<S>> {
     pub fn new(storage: S, chain_config: C, verifier_config: TransactionVerifierConfig) -> Self {
         let utxo_cache = UtxosCache::new(UtxosDB::new(S::clone(&storage)));
         let best_block = storage
