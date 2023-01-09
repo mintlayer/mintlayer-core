@@ -237,7 +237,7 @@ where
     A: RandomAddressMaker<Address = S::Address>,
 {
     let config = P2pConfig {
-        bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
+        bind_address: "[::1]:3031".to_owned().into(),
         ban_threshold: 200.into(),
         ban_duration: Default::default(),
         outbound_connection_timeout: 10.into(),
@@ -275,7 +275,7 @@ where
     A: RandomAddressMaker<Address = S::Address>,
 {
     let config = P2pConfig {
-        bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
+        bind_address: "[::1]:3031".to_owned().into(),
         ban_threshold: 20.into(),
         ban_duration: Default::default(),
         outbound_connection_timeout: 10.into(),

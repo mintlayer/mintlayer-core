@@ -44,9 +44,6 @@ pub trait NetworkingService {
     /// # Examples
     /// For an implementation built on `TcpListener`, the address format is:
     ///     `0.0.0.0:8888`
-    ///
-    /// For an implementation built on libp2p, the address format is:
-    ///     `/ip4/0.0.0.0/tcp/8888/p2p/<peer ID>`
     type Address: Clone
         + Debug
         + Eq
