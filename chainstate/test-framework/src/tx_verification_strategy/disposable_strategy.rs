@@ -51,22 +51,22 @@ impl Default for DisposableTransactionVerificationStrategy {
 }
 
 impl TransactionVerificationStrategy for DisposableTransactionVerificationStrategy {
-    fn connect_block<CC, H, S, M, U>(
+    fn connect_block<C, H, S, M, U>(
         &self,
         tx_verifier_maker: M,
         block_index_handle: &H,
         storage_backend: S,
-        chain_config: CC,
+        chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block_index: &BlockIndex,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<CC, S, U>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U>, BlockError>
     where
-        CC: AsRef<ChainConfig>,
+        C: AsRef<ChainConfig>,
         H: BlockIndexHandle,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(S, CC, TransactionVerifierConfig) -> TransactionVerifier<CC, S, U>,
+        M: Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U>,
     {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past =
@@ -129,19 +129,19 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         Ok(base_tx_verifier)
     }
 
-    fn disconnect_block<CC, S, M, U>(
+    fn disconnect_block<C, S, M, U>(
         &self,
         tx_verifier_maker: M,
         storage_backend: S,
-        chain_config: CC,
+        chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<CC, S, U>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U>, BlockError>
     where
-        CC: AsRef<ChainConfig>,
+        C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(S, CC, TransactionVerifierConfig) -> TransactionVerifier<CC, S, U>,
+        M: Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U>,
     {
         let mut base_tx_verifier =
             tx_verifier_maker(storage_backend, chain_config, verifier_config);
