@@ -19,15 +19,17 @@ pub mod config;
 pub mod error;
 pub mod flush;
 pub mod hierarchy;
+mod optional_tx_index_cache;
 pub mod storage;
 mod tx_index_cache;
+
 use self::{
     amounts_map::AmountsMap,
     config::TransactionVerifierConfig,
     error::{ConnectTransactionError, TokensError},
+    optional_tx_index_cache::OptionalTxIndexCache,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{CoinOrTokenId, ConsumedTokenIssuanceCache},
-    tx_index_cache::TxIndexCache,
 };
 use ::utils::{ensure, shallow_clone::ShallowClone};
 use cached_operation::CachedInputsOperation;
@@ -157,43 +159,6 @@ pub struct TransactionVerifierDelta {
     token_issuance_cache: ConsumedTokenIssuanceCache,
 }
 
-/// [`TxIndexCache`] that can be enabled or disabled (using a config).
-pub struct OptionalTxIndexCache {
-    enabled: bool,
-    inner: TxIndexCache,
-}
-
-impl OptionalTxIndexCache {
-    fn new(enabled: bool) -> Self {
-        let inner = TxIndexCache::new();
-        Self { enabled, inner }
-    }
-
-    fn from_config(config: &TransactionVerifierConfig) -> Self {
-        Self::new(config.tx_index_enabled)
-    }
-
-    #[cfg(test)]
-    fn new_for_test(map: BTreeMap<OutPointSourceId, CachedInputsOperation>) -> Self {
-        let inner = TxIndexCache::new_for_test(map);
-        let enabled = true;
-        Self { enabled, inner }
-    }
-
-    fn as_ref(&self) -> Option<&TxIndexCache> {
-        self.enabled.then_some(&self.inner)
-    }
-
-    fn as_mut(&mut self) -> Option<&mut TxIndexCache> {
-        self.enabled.then_some(&mut self.inner)
-    }
-
-    /// Take the inner cache, even if disabled
-    fn take_always(self) -> TxIndexCache {
-        self.inner
-    }
-}
-
 /// The tool used to verify transaction and cache their updated states in memory
 pub struct TransactionVerifier<C, S, U> {
     chain_config: C,
@@ -259,7 +224,7 @@ where
         TransactionVerifier {
             storage: self,
             chain_config: self.chain_config.as_ref(),
-            tx_index_cache: OptionalTxIndexCache::new(self.tx_index_cache.enabled),
+            tx_index_cache: OptionalTxIndexCache::new(self.tx_index_cache.enabled()),
             utxo_cache: UtxosCache::new(&self.utxo_cache),
             utxo_block_undo: BTreeMap::new(),
             token_issuance_cache: TokenIssuanceCache::new(),

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::btree_map::Entry;
 
 use super::{
     error::{ConnectTransactionError, TxIndexError},
@@ -25,23 +25,25 @@ use common::{
     primitives::Idable,
 };
 
+pub type TxIndexMap = std::collections::BTreeMap<OutPointSourceId, CachedInputsOperation>;
+
 pub struct TxIndexCache {
-    data: BTreeMap<OutPointSourceId, CachedInputsOperation>,
+    data: TxIndexMap,
 }
 
 impl TxIndexCache {
     pub fn new() -> Self {
         Self {
-            data: BTreeMap::new(),
+            data: TxIndexMap::new(),
         }
     }
 
     #[cfg(test)]
-    pub fn new_for_test(data: BTreeMap<OutPointSourceId, CachedInputsOperation>) -> Self {
+    pub fn new_for_test(data: TxIndexMap) -> Self {
         Self { data }
     }
 
-    pub fn consume(self) -> BTreeMap<OutPointSourceId, CachedInputsOperation> {
+    pub fn consume(self) -> TxIndexMap {
         self.data
     }
 
