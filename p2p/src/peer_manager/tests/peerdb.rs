@@ -20,6 +20,7 @@ use crate::{
     net::{
         mock::{
             transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
+            types::MockPeerId,
             MockService,
         },
         types::{AddrInfo, PeerInfo, PubSubTopic},
@@ -29,19 +30,15 @@ use crate::{
         peerdb::{Peer, PeerDb},
         tests::default_protocols,
     },
-    testing_utils::{
-        RandomAddressMaker, RandomPeerIdMaker, TestChannelAddressMaker, TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    },
+    testing_utils::{RandomAddressMaker, TestChannelAddressMaker, TestTcpAddressMaker},
     NetworkingService,
 };
 
-fn make_peer_info<S, P>() -> (S::PeerId, PeerInfo<S>)
+fn make_peer_info<S>() -> (S::PeerId, PeerInfo<S>)
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
 {
-    let peer_id = P::new();
+    let peer_id = MockPeerId::new();
 
     (
         peer_id,
@@ -56,36 +53,33 @@ where
     )
 }
 
-fn add_active_peer<S, P, A>(peerdb: &mut PeerDb<S>) -> S::PeerId
+fn add_active_peer<S, A>(peerdb: &mut PeerDb<S>) -> S::PeerId
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
-    let (id, info) = make_peer_info::<S, P>();
+    let (id, info) = make_peer_info::<S>();
     peerdb.peer_connected(A::new(), info);
 
     id
 }
 
-fn add_idle_peer<S, P, A>(peerdb: &mut PeerDb<S>) -> S::PeerId
+fn add_idle_peer<S, A>(peerdb: &mut PeerDb<S>) -> S::PeerId
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
-    let (id, info) = make_peer_info::<S, P>();
+    let (id, info) = make_peer_info::<S>();
     peerdb.register_peer_info(A::new(), info);
 
     id
 }
 
-fn add_discovered_peer<S, P>(peerdb: &mut PeerDb<S>) -> S::PeerId
+fn add_discovered_peer<S>(peerdb: &mut PeerDb<S>) -> S::PeerId
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
 {
-    let peer_id = P::new();
+    let peer_id = MockPeerId::new();
     peerdb.peer_discovered(&AddrInfo {
         peer_id,
         ip4: vec![],
@@ -95,31 +89,28 @@ where
     peer_id
 }
 
-fn add_banned_peer_address<S, P>(peerdb: &mut PeerDb<S>, address: S::Address) -> S::PeerId
+fn add_banned_peer_address<S>(peerdb: &mut PeerDb<S>, address: S::Address) -> S::PeerId
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
 {
-    let (id, info) = make_peer_info::<S, P>();
+    let (id, info) = make_peer_info::<S>();
     peerdb.register_peer_info(address, info);
     peerdb.ban_peer(&id);
 
     id
 }
 
-fn add_banned_peer<S, P, A>(peerdb: &mut PeerDb<S>) -> S::PeerId
+fn add_banned_peer<S, A>(peerdb: &mut PeerDb<S>) -> S::PeerId
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
-    add_banned_peer_address::<S, P>(peerdb, A::new())
+    add_banned_peer_address::<S>(peerdb, A::new())
 }
 
-fn num_active_peers<S, P, A>()
+fn num_active_peers<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
@@ -129,7 +120,7 @@ where
 
     // add three active peers
     for _ in 0..3 {
-        let _id = add_active_peer::<S, P, A>(&mut peerdb);
+        let _id = add_active_peer::<S, A>(&mut peerdb);
     }
     assert_eq!(peerdb.idle_peer_count(), 0);
     assert_eq!(peerdb.active_peer_count(), 3);
@@ -137,7 +128,7 @@ where
 
     // add 2 idle peers
     for _ in 0..2 {
-        let _id = add_idle_peer::<S, P, A>(&mut peerdb);
+        let _id = add_idle_peer::<S, A>(&mut peerdb);
     }
     assert_eq!(peerdb.idle_peer_count(), 2);
     assert_eq!(peerdb.active_peer_count(), 3);
@@ -145,7 +136,7 @@ where
 
     // add 4 discovered peers
     for _ in 0..2 {
-        let _id = add_discovered_peer::<S, P>(&mut peerdb);
+        let _id = add_discovered_peer::<S>(&mut peerdb);
     }
     assert_eq!(peerdb.idle_peer_count(), 4);
     assert_eq!(peerdb.active_peer_count(), 3);
@@ -153,7 +144,7 @@ where
 
     // add 5 banned peers
     for _ in 0..5 {
-        let _id = add_banned_peer_address::<S, P>(&mut peerdb, A::new());
+        let _id = add_banned_peer_address::<S>(&mut peerdb, A::new());
     }
     assert_eq!(peerdb.idle_peer_count(), 4);
     assert_eq!(peerdb.active_peer_count(), 3);
@@ -162,69 +153,62 @@ where
 
 #[test]
 fn num_active_peers_mock_tcp() {
-    num_active_peers::<MockService<TcpTransportSocket>, TestMockPeerIdMaker, TestTcpAddressMaker>();
+    num_active_peers::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn num_active_peers_mock_channels() {
-    num_active_peers::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    num_active_peers::<MockService<MockChannelTransport>, TestChannelAddressMaker>();
 }
 
 #[test]
 fn num_active_peers_mock_noise() {
-    num_active_peers::<MockService<NoiseTcpTransport>, TestMockPeerIdMaker, TestTcpAddressMaker>();
+    num_active_peers::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn is_active_peer<S, P, A>()
+fn is_active_peer<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
 
-    let id1 = add_active_peer::<S, P, A>(&mut peerdb);
+    let id1 = add_active_peer::<S, A>(&mut peerdb);
     assert!(peerdb.is_active_peer(&id1));
 
-    let id2 = add_idle_peer::<S, P, A>(&mut peerdb);
+    let id2 = add_idle_peer::<S, A>(&mut peerdb);
     assert!(!peerdb.is_active_peer(&id2));
 
-    let id3 = add_discovered_peer::<S, P>(&mut peerdb);
+    let id3 = add_discovered_peer::<S>(&mut peerdb);
     assert!(!peerdb.is_active_peer(&id3));
 
-    let id4 = add_banned_peer::<S, P, A>(&mut peerdb);
+    let id4 = add_banned_peer::<S, A>(&mut peerdb);
     assert!(!peerdb.is_active_peer(&id4));
 }
 
 #[test]
 fn is_active_peer_mock_tcp() {
-    is_active_peer::<MockService<TcpTransportSocket>, TestMockPeerIdMaker, TestTcpAddressMaker>();
+    is_active_peer::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn is_active_peer_mock_channels() {
-    is_active_peer::<MockService<MockChannelTransport>, TestMockPeerIdMaker, TestChannelAddressMaker>(
-    );
+    is_active_peer::<MockService<MockChannelTransport>, TestChannelAddressMaker>();
 }
 
 #[test]
 fn is_active_peer_mock_noise() {
-    is_active_peer::<MockService<NoiseTcpTransport>, TestMockPeerIdMaker, TestTcpAddressMaker>();
+    is_active_peer::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn adjust_peer_score_normal_threshold<S, P, A>()
+fn adjust_peer_score_normal_threshold<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
 
-    let id = add_active_peer::<S, P, A>(&mut peerdb);
+    let id = add_active_peer::<S, A>(&mut peerdb);
     assert!(peerdb.adjust_peer_score(&id, 100));
 
     let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable();
@@ -233,35 +217,23 @@ where
 
 #[test]
 fn adjust_peer_score_normal_threshold_mock_tcp() {
-    adjust_peer_score_normal_threshold::<
-        MockService<TcpTransportSocket>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    adjust_peer_score_normal_threshold::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn adjust_peer_score_normal_threshold_mock_channels() {
-    adjust_peer_score_normal_threshold::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    adjust_peer_score_normal_threshold::<MockService<MockChannelTransport>, TestChannelAddressMaker>(
+    );
 }
 
 #[test]
 fn adjust_peer_score_normal_threshold_mock_noise() {
-    adjust_peer_score_normal_threshold::<
-        MockService<NoiseTcpTransport>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    adjust_peer_score_normal_threshold::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn adjust_peer_score_higher_threshold<S, P, A>()
+fn adjust_peer_score_higher_threshold<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let config = P2pConfig {
@@ -274,7 +246,7 @@ where
     };
     let mut peerdb = PeerDb::<S>::new(Arc::new(config));
 
-    let id = add_active_peer::<S, P, A>(&mut peerdb);
+    let id = add_active_peer::<S, A>(&mut peerdb);
     assert!(!peerdb.adjust_peer_score(&id, 100));
 
     let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable();
@@ -283,35 +255,23 @@ where
 
 #[test]
 fn adjust_peer_score_higher_threshold_mock_tcp() {
-    adjust_peer_score_higher_threshold::<
-        MockService<TcpTransportSocket>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    adjust_peer_score_higher_threshold::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn adjust_peer_score_higher_threshold_mock_channels() {
-    adjust_peer_score_higher_threshold::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    adjust_peer_score_higher_threshold::<MockService<MockChannelTransport>, TestChannelAddressMaker>(
+    );
 }
 
 #[test]
 fn adjust_peer_score_higher_threshold_mock_noise() {
-    adjust_peer_score_higher_threshold::<
-        MockService<NoiseTcpTransport>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    adjust_peer_score_higher_threshold::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn adjust_peer_score_lower_threshold<S, P, A>()
+fn adjust_peer_score_lower_threshold<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let config = P2pConfig {
@@ -324,7 +284,7 @@ where
     };
     let mut peerdb = PeerDb::<S>::new(Arc::new(config));
 
-    let id = add_active_peer::<S, P, A>(&mut peerdb);
+    let id = add_active_peer::<S, A>(&mut peerdb);
     assert!(peerdb.adjust_peer_score(&id, 30));
     let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable();
     assert!(peerdb.is_address_banned(&address));
@@ -332,41 +292,29 @@ where
 
 #[test]
 fn adjust_peer_score_lower_threshold_mock_tcp() {
-    adjust_peer_score_lower_threshold::<
-        MockService<TcpTransportSocket>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    adjust_peer_score_lower_threshold::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn adjust_peer_score_lower_threshold_mock_channels() {
-    adjust_peer_score_lower_threshold::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    adjust_peer_score_lower_threshold::<MockService<MockChannelTransport>, TestChannelAddressMaker>(
+    );
 }
 
 #[test]
 fn adjust_peer_score_lower_threshold_mock_noise() {
-    adjust_peer_score_lower_threshold::<
-        MockService<NoiseTcpTransport>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    adjust_peer_score_lower_threshold::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn ban_peer<S, P, A>()
+fn ban_peer<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
 
     // idle peer
-    let id = add_banned_peer::<S, P, A>(&mut peerdb);
+    let id = add_banned_peer::<S, A>(&mut peerdb);
     peerdb.ban_peer(&id);
 
     assert!(std::matches!(
@@ -378,7 +326,7 @@ where
     assert!(!peerdb.available().contains(&id));
 
     // active peer
-    let id = add_active_peer::<S, P, A>(&mut peerdb);
+    let id = add_active_peer::<S, A>(&mut peerdb);
     peerdb.ban_peer(&id);
 
     assert!(std::matches!(
@@ -390,7 +338,7 @@ where
     assert!(!peerdb.available().contains(&id));
 
     // discovered peer
-    let id = add_discovered_peer::<S, P>(&mut peerdb);
+    let id = add_discovered_peer::<S>(&mut peerdb);
     peerdb.ban_peer(&id);
 
     assert!(std::matches!(
@@ -402,57 +350,55 @@ where
 
 #[test]
 fn ban_peer_mock_tcp() {
-    ban_peer::<MockService<TcpTransportSocket>, TestMockPeerIdMaker, TestTcpAddressMaker>();
+    ban_peer::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn ban_peer_mock_channels() {
-    ban_peer::<MockService<MockChannelTransport>, TestMockPeerIdMaker, TestChannelAddressMaker>();
+    ban_peer::<MockService<MockChannelTransport>, TestChannelAddressMaker>();
 }
 
 #[test]
 fn ban_peer_mock_noise() {
-    ban_peer::<MockService<NoiseTcpTransport>, TestMockPeerIdMaker, TestTcpAddressMaker>();
+    ban_peer::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn peer_disconnected_unknown<S, P>()
+fn peer_disconnected_unknown<S>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
 
     // unknown peer doesn't cause any changes
     assert_eq!(peerdb.peers().len(), 0);
-    peerdb.peer_disconnected(&P::new());
+    peerdb.peer_disconnected(&MockPeerId::new());
     assert_eq!(peerdb.peers().len(), 0);
 }
 
 #[test]
 fn peer_disconnected_unknown_mock_tcp() {
-    peer_disconnected_unknown::<MockService<TcpTransportSocket>, TestMockPeerIdMaker>();
+    peer_disconnected_unknown::<MockService<TcpTransportSocket>>();
 }
 
 #[test]
 fn peer_disconnected_unknown_mock_channels() {
-    peer_disconnected_unknown::<MockService<MockChannelTransport>, TestMockPeerIdMaker>();
+    peer_disconnected_unknown::<MockService<MockChannelTransport>>();
 }
 
 #[test]
 fn peer_disconnected_unknown_mock_noise() {
-    peer_disconnected_unknown::<MockService<NoiseTcpTransport>, TestMockPeerIdMaker>();
+    peer_disconnected_unknown::<MockService<NoiseTcpTransport>>();
 }
 
-fn peer_disconnected_idle<S, P, A>()
+fn peer_disconnected_idle<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
 
     // idle peer
-    let id = add_idle_peer::<S, P, A>(&mut peerdb);
+    let id = add_idle_peer::<S, A>(&mut peerdb);
     peerdb.peer_disconnected(&id);
     assert!(std::matches!(peerdb.peers().get(&id), Some(Peer::Idle(_))));
     assert!(peerdb.available().contains(&id));
@@ -460,39 +406,26 @@ where
 
 #[test]
 fn peer_disconnected_idle_mock_tcp() {
-    peer_disconnected_idle::<
-        MockService<TcpTransportSocket>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    peer_disconnected_idle::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn peer_disconnected_idle_mock_channels() {
-    peer_disconnected_idle::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    peer_disconnected_idle::<MockService<MockChannelTransport>, TestChannelAddressMaker>();
 }
 
 #[test]
 fn peer_disconnected_idle_mock_noise() {
-    peer_disconnected_idle::<
-        MockService<NoiseTcpTransport>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    peer_disconnected_idle::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn peer_disconnected_discovered<S, P>()
+fn peer_disconnected_discovered<S>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
 
-    let id = add_discovered_peer::<S, P>(&mut peerdb);
+    let id = add_discovered_peer::<S>(&mut peerdb);
     peerdb.peer_disconnected(&id);
     assert!(std::matches!(
         peerdb.peers().get(&id),
@@ -503,28 +436,27 @@ where
 
 #[test]
 fn peer_disconnected_discovered_mock_tcp() {
-    peer_disconnected_discovered::<MockService<TcpTransportSocket>, TestMockPeerIdMaker>();
+    peer_disconnected_discovered::<MockService<TcpTransportSocket>>();
 }
 
 #[test]
 fn peer_disconnected_discovered_mock_channels() {
-    peer_disconnected_discovered::<MockService<MockChannelTransport>, TestMockPeerIdMaker>();
+    peer_disconnected_discovered::<MockService<MockChannelTransport>>();
 }
 
 #[test]
 fn peer_disconnected_discovered_mock_noise() {
-    peer_disconnected_discovered::<MockService<NoiseTcpTransport>, TestMockPeerIdMaker>();
+    peer_disconnected_discovered::<MockService<NoiseTcpTransport>>();
 }
 
-fn peer_disconnected_banned<S, P, A>()
+fn peer_disconnected_banned<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
 
-    let id = add_banned_peer::<S, P, A>(&mut peerdb);
+    let id = add_banned_peer::<S, A>(&mut peerdb);
     peerdb.peer_disconnected(&id);
     assert!(std::matches!(
         peerdb.peers().get(&id),
@@ -534,40 +466,27 @@ where
 
 #[test]
 fn peer_disconnected_banned_mock_tcp() {
-    peer_disconnected_banned::<
-        MockService<TcpTransportSocket>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    peer_disconnected_banned::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn peer_disconnected_banned_mock_channels() {
-    peer_disconnected_banned::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    peer_disconnected_banned::<MockService<MockChannelTransport>, TestChannelAddressMaker>();
 }
 
 #[test]
 fn peer_disconnected_banned_mock_noise() {
-    peer_disconnected_banned::<
-        MockService<NoiseTcpTransport>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    peer_disconnected_banned::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn peer_disconnected_active<S, P, A>()
+fn peer_disconnected_active<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
 
-    let id = add_active_peer::<S, P, A>(&mut peerdb);
+    let id = add_active_peer::<S, A>(&mut peerdb);
     peerdb.peer_disconnected(&id);
     assert!(std::matches!(peerdb.peers().get(&id), Some(Peer::Idle(_))));
     assert!(peerdb.available().contains(&id));
@@ -575,42 +494,29 @@ where
 
 #[test]
 fn peer_disconnected_active_mock_tcp() {
-    peer_disconnected_active::<
-        MockService<TcpTransportSocket>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    peer_disconnected_active::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn peer_disconnected_active_mock_channels() {
-    peer_disconnected_active::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    peer_disconnected_active::<MockService<MockChannelTransport>, TestChannelAddressMaker>();
 }
 
 #[test]
 fn peer_disconnected_active_mock_noise() {
-    peer_disconnected_active::<
-        MockService<NoiseTcpTransport>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    peer_disconnected_active::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn peer_connected_discovered<S, P, A>()
+fn peer_connected_discovered<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
     let remote_addr = A::new();
 
     // register information for a discovered peer
-    let (peer_id, info) = make_peer_info::<S, P>();
+    let (peer_id, info) = make_peer_info::<S>();
     peerdb.peer_discovered(&AddrInfo {
         peer_id,
         ip4: vec![],
@@ -635,42 +541,29 @@ where
 
 #[test]
 fn peer_connected_discovered_mock_tcp() {
-    peer_connected_discovered::<
-        MockService<TcpTransportSocket>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    peer_connected_discovered::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn peer_connected_discovered_mock_channels() {
-    peer_connected_discovered::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    peer_connected_discovered::<MockService<MockChannelTransport>, TestChannelAddressMaker>();
 }
 
 #[test]
 fn peer_connected_discovered_mock_noise() {
-    peer_connected_discovered::<
-        MockService<NoiseTcpTransport>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    peer_connected_discovered::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn peer_connected_idle<S, P, A>()
+fn peer_connected_idle<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
     let remote_addr = A::new();
 
-    let (id, info) = make_peer_info::<S, P>();
-    let (_id, mut new_info) = make_peer_info::<S, P>();
+    let (id, info) = make_peer_info::<S>();
+    let (_id, mut new_info) = make_peer_info::<S>();
     new_info.peer_id = id;
 
     peerdb.register_peer_info(A::new(), info);
@@ -688,35 +581,28 @@ where
 
 #[test]
 fn peer_connected_idle_mock_tcp() {
-    peer_connected_idle::<MockService<TcpTransportSocket>, TestMockPeerIdMaker, TestTcpAddressMaker>(
-    );
+    peer_connected_idle::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn peer_connected_idle_mock_channels() {
-    peer_connected_idle::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    peer_connected_idle::<MockService<MockChannelTransport>, TestChannelAddressMaker>();
 }
 
 #[test]
 fn peer_connected_idle_mock_noise() {
-    peer_connected_idle::<MockService<NoiseTcpTransport>, TestMockPeerIdMaker, TestTcpAddressMaker>(
-    );
+    peer_connected_idle::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn peer_connected_unknown<S, P, A>()
+fn peer_connected_unknown<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
     let remote_addr = A::new();
 
-    let (id, info) = make_peer_info::<S, P>();
+    let (id, info) = make_peer_info::<S>();
 
     assert!(!peerdb.available().contains(&id));
     assert!(!peerdb.peers().contains_key(&id));
@@ -734,42 +620,29 @@ where
 
 #[test]
 fn peer_connected_unknown_mock_tcp() {
-    peer_connected_unknown::<
-        MockService<TcpTransportSocket>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    peer_connected_unknown::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn peer_connected_unknown_mock_channels() {
-    peer_connected_unknown::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    peer_connected_unknown::<MockService<MockChannelTransport>, TestChannelAddressMaker>();
 }
 
 #[test]
 fn peer_connected_unknown_mock_noise() {
-    peer_connected_unknown::<
-        MockService<NoiseTcpTransport>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    peer_connected_unknown::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn peer_connected_active<S, P, A>()
+fn peer_connected_active<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
 
     // active peer
-    let id1 = add_active_peer::<S, P, A>(&mut peerdb);
-    let (_id, mut info1) = make_peer_info::<S, P>();
+    let id1 = add_active_peer::<S, A>(&mut peerdb);
+    let (_id, mut info1) = make_peer_info::<S>();
     info1.peer_id = id1;
 
     peerdb.peer_connected(A::new(), info1);
@@ -782,38 +655,28 @@ where
 
 #[test]
 fn peer_connected_active_mock_tcp() {
-    peer_connected_active::<
-        MockService<TcpTransportSocket>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    peer_connected_active::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn peer_connected_active_mock_channels() {
-    peer_connected_active::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    peer_connected_active::<MockService<MockChannelTransport>, TestChannelAddressMaker>();
 }
 
 #[test]
 fn peer_connected_active_mock_noise() {
-    peer_connected_active::<MockService<NoiseTcpTransport>, TestMockPeerIdMaker, TestTcpAddressMaker>(
-    );
+    peer_connected_active::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn peer_connected_banned<S, P, A>()
+fn peer_connected_banned<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
 
-    let id2 = add_banned_peer::<S, P, A>(&mut peerdb);
-    let (_id, mut info2) = make_peer_info::<S, P>();
+    let id2 = add_banned_peer::<S, A>(&mut peerdb);
+    let (_id, mut info2) = make_peer_info::<S>();
     info2.peer_id = id2;
 
     peerdb.peer_connected(A::new(), info2);
@@ -826,39 +689,29 @@ where
 
 #[test]
 fn peer_connected_banned_mock_tcp() {
-    peer_connected_banned::<
-        MockService<TcpTransportSocket>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    peer_connected_banned::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn peer_connected_banned_mock_channels() {
-    peer_connected_banned::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    peer_connected_banned::<MockService<MockChannelTransport>, TestChannelAddressMaker>();
 }
 
 #[test]
 fn peer_connected_banned_mock_noise() {
-    peer_connected_banned::<MockService<NoiseTcpTransport>, TestMockPeerIdMaker, TestTcpAddressMaker>(
-    );
+    peer_connected_banned::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn register_peer_info_discovered_peer<S, P, A>()
+fn register_peer_info_discovered_peer<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
     let remote_addr = A::new();
 
     // register information for a discovered peer
-    let (peer_id, info) = make_peer_info::<S, P>();
+    let (peer_id, info) = make_peer_info::<S>();
     peerdb.peer_discovered(&AddrInfo {
         peer_id,
         ip4: vec![],
@@ -881,48 +734,36 @@ where
 
 #[test]
 fn register_peer_info_discovered_peer_mock_tcp() {
-    register_peer_info_discovered_peer::<
-        MockService<TcpTransportSocket>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    register_peer_info_discovered_peer::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn register_peer_info_discovered_peer_mock_channels() {
-    register_peer_info_discovered_peer::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    register_peer_info_discovered_peer::<MockService<MockChannelTransport>, TestChannelAddressMaker>(
+    );
 }
 
 #[test]
 fn register_peer_info_discovered_peer_mock_noise() {
-    register_peer_info_discovered_peer::<
-        MockService<NoiseTcpTransport>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    register_peer_info_discovered_peer::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
 // for idle peers the information is updated
-fn register_peer_info_idle_peer<S, P, A>()
+fn register_peer_info_idle_peer<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
 
-    let id = add_idle_peer::<S, P, A>(&mut peerdb);
+    let id = add_idle_peer::<S, A>(&mut peerdb);
     if let Some(Peer::Idle(ctx)) = peerdb.peers().get(&id) {
         assert_eq!(ctx.info.magic_bytes, [1, 2, 3, 4]);
     } else {
         panic!("invalid peer type");
     }
 
-    let (_id, mut info) = make_peer_info::<S, P>();
+    let (_id, mut info) = make_peer_info::<S>();
     info.peer_id = id;
     info.magic_bytes = [13, 37, 13, 38];
     peerdb.register_peer_info(A::new(), info);
@@ -938,40 +779,27 @@ where
 
 #[test]
 fn register_peer_info_idle_peer_mock_tcp() {
-    register_peer_info_idle_peer::<
-        MockService<TcpTransportSocket>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    register_peer_info_idle_peer::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn register_peer_info_idle_peer_mock_channels() {
-    register_peer_info_idle_peer::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    register_peer_info_idle_peer::<MockService<MockChannelTransport>, TestChannelAddressMaker>();
 }
 
 #[test]
 fn register_peer_info_idle_peer_mock_noise() {
-    register_peer_info_idle_peer::<
-        MockService<NoiseTcpTransport>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    register_peer_info_idle_peer::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn register_peer_info_unknown_peer<S, P, A>()
+fn register_peer_info_unknown_peer<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
 
-    let (id, info) = make_peer_info::<S, P>();
+    let (id, info) = make_peer_info::<S>();
     assert!(peerdb.peers().get(&id).is_none());
     peerdb.register_peer_info(A::new(), info);
     assert!(std::matches!(peerdb.peers().get(&id), Some(Peer::Idle(_))));
@@ -980,41 +808,28 @@ where
 
 #[test]
 fn register_peer_info_unknown_peer_mock_tcp() {
-    register_peer_info_unknown_peer::<
-        MockService<TcpTransportSocket>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    register_peer_info_unknown_peer::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn register_peer_info_unknown_peer_mock_channels() {
-    register_peer_info_unknown_peer::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    register_peer_info_unknown_peer::<MockService<MockChannelTransport>, TestChannelAddressMaker>();
 }
 
 #[test]
 fn register_peer_info_unknown_peer_mock_noise() {
-    register_peer_info_unknown_peer::<
-        MockService<NoiseTcpTransport>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    register_peer_info_unknown_peer::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn register_peer_info_active<S, P, A>()
+fn register_peer_info_active<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
 
-    let id1 = add_active_peer::<S, P, A>(&mut peerdb);
-    let (_id, info1) = make_peer_info::<S, P>();
+    let id1 = add_active_peer::<S, A>(&mut peerdb);
+    let (_id, info1) = make_peer_info::<S>();
 
     peerdb.register_peer_info(A::new(), info1);
     assert!(std::matches!(
@@ -1026,42 +841,29 @@ where
 
 #[test]
 fn register_peer_info_active_mock_tcp() {
-    register_peer_info_active::<
-        MockService<TcpTransportSocket>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    register_peer_info_active::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn register_peer_info_active_mock_channels() {
-    register_peer_info_active::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    register_peer_info_active::<MockService<MockChannelTransport>, TestChannelAddressMaker>();
 }
 
 #[test]
 fn register_peer_info_active_mock_noise() {
-    register_peer_info_active::<
-        MockService<NoiseTcpTransport>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    register_peer_info_active::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-fn register_peer_info_banned<S, P, A>()
+fn register_peer_info_banned<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default()));
 
     // banned peer
-    let id2 = add_banned_peer::<S, P, A>(&mut peerdb);
-    let (_id, info2) = make_peer_info::<S, P>();
+    let id2 = add_banned_peer::<S, A>(&mut peerdb);
+    let (_id, info2) = make_peer_info::<S>();
 
     peerdb.register_peer_info(A::new(), info2);
     assert!(std::matches!(
@@ -1073,35 +875,22 @@ where
 
 #[test]
 fn register_peer_info_banned_mock_tcp() {
-    register_peer_info_banned::<
-        MockService<TcpTransportSocket>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    register_peer_info_banned::<MockService<TcpTransportSocket>, TestTcpAddressMaker>();
 }
 
 #[test]
 fn register_peer_info_banned_mock_channels() {
-    register_peer_info_banned::<
-        MockService<MockChannelTransport>,
-        TestMockPeerIdMaker,
-        TestChannelAddressMaker,
-    >();
+    register_peer_info_banned::<MockService<MockChannelTransport>, TestChannelAddressMaker>();
 }
 
 #[test]
 fn register_peer_info_banned_mock_noise() {
-    register_peer_info_banned::<
-        MockService<NoiseTcpTransport>,
-        TestMockPeerIdMaker,
-        TestTcpAddressMaker,
-    >();
+    register_peer_info_banned::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>();
 }
 
-async fn unban_peer<S, P, A>()
+async fn unban_peer<S, A>()
 where
-    S: NetworkingService,
-    P: RandomPeerIdMaker<PeerId = S::PeerId>,
+    S: NetworkingService<PeerId = MockPeerId>,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig {
@@ -1113,7 +902,7 @@ where
         node_type: Default::default(),
     }));
 
-    let id = add_banned_peer::<S, P, A>(&mut peerdb);
+    let id = add_banned_peer::<S, A>(&mut peerdb);
     let address = peerdb.peers().get(&id).unwrap().address().unwrap().as_bannable();
 
     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -1125,16 +914,15 @@ where
 
 #[tokio::test]
 async fn unban_peer_mock_tcp() {
-    unban_peer::<MockService<TcpTransportSocket>, TestMockPeerIdMaker, TestTcpAddressMaker>().await;
+    unban_peer::<MockService<TcpTransportSocket>, TestTcpAddressMaker>().await;
 }
 
 #[tokio::test]
 async fn unban_peer_mock_channels() {
-    unban_peer::<MockService<MockChannelTransport>, TestMockPeerIdMaker, TestChannelAddressMaker>()
-        .await;
+    unban_peer::<MockService<MockChannelTransport>, TestChannelAddressMaker>().await;
 }
 
 #[tokio::test]
 async fn unban_peer_mock_noise() {
-    unban_peer::<MockService<NoiseTcpTransport>, TestMockPeerIdMaker, TestTcpAddressMaker>().await;
+    unban_peer::<MockService<NoiseTcpTransport>, TestTcpAddressMaker>().await;
 }

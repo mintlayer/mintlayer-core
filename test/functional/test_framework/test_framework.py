@@ -564,6 +564,8 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         addr_a = p2p_url(a)
         ret = self.nodes[b].p2p_connect(addr_a)
 
+        # TODO: Fix this condition.
+        # See https://github.com/mintlayer/mintlayer-core/issues/624 for more details.
         wait_until_helper(lambda:
             self.nodes[a].p2p_get_peer_count() == count_a + 1 and
             self.nodes[b].p2p_get_peer_count() == count_b + 1, timeout=60)

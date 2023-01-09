@@ -17,11 +17,8 @@ use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 
 use crypto::random::{make_pseudo_rng, Rng};
 
-use crate::net::mock::{
-    transport::{
-        MockChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
-    },
-    types::MockPeerId,
+use crate::net::mock::transport::{
+    MockChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
 };
 
 /// An interface for creating transports and addresses used in tests.
@@ -91,27 +88,6 @@ impl TestTransportMaker for TestTransportNoise {
 
     fn make_address() -> Self::Address {
         TestTransportTcp::make_address()
-    }
-}
-
-/// An interface for creating peer identifiers.
-///
-/// The resulting identifier must be unique or random.
-pub trait RandomPeerIdMaker {
-    /// An identifier type.
-    type PeerId;
-
-    /// Creates a new peer identifier.
-    fn new() -> Self::PeerId;
-}
-
-pub struct TestMockPeerIdMaker {}
-
-impl RandomPeerIdMaker for TestMockPeerIdMaker {
-    type PeerId = MockPeerId;
-
-    fn new() -> Self::PeerId {
-        MockPeerId::new()
     }
 }
 
