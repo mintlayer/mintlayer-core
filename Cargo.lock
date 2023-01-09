@@ -3639,6 +3639,7 @@ dependencies = [
  "loom",
  "num-traits",
  "slave-pool",
+ "static_assertions",
 ]
 
 [[package]]
