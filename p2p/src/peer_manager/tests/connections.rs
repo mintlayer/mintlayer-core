@@ -20,7 +20,7 @@ use tokio::{sync::oneshot, time::timeout};
 use crate::testing_utils::{
     TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
 };
-use common::{chain::config, primitives::semver::SemVer};
+use common::chain::config;
 
 use crate::{
     error::{DialError, P2pError, ProtocolError},
@@ -32,7 +32,7 @@ use crate::{
             types::MockPeerId,
             MockService,
         },
-        types::{Protocol, ProtocolType, PubSubTopic},
+        types::PubSubTopic,
         ConnectivityService, NetworkingService,
     },
     peer_manager::{self, helpers::connect_services, tests::make_peer_manager},
@@ -46,8 +46,8 @@ async fn test_peer_manager_connect<T: NetworkingService>(
 ) where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+    <T as NetworkingService>::Address: std::str::FromStr,
+    <<T as NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let config = Arc::new(config::create_mainnet());
     let mut peer_manager = make_peer_manager::<T>(transport, bind_addr, config).await;
@@ -80,8 +80,8 @@ where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+    <T as NetworkingService>::Address: std::str::FromStr,
+    <<T as NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let addr1 = A::make_address();
     let addr2 = A::make_address();
@@ -135,8 +135,8 @@ where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+    <T as NetworkingService>::Address: std::str::FromStr,
+    <<T as NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let addr1 = A::make_address();
     let addr2 = A::make_address();
@@ -173,8 +173,8 @@ where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+    <T as NetworkingService>::Address: std::str::FromStr,
+    <<T as NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let addr1 = A::make_address();
     let addr2 = A::make_address();
@@ -218,8 +218,8 @@ where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+    <T as NetworkingService>::Address: std::str::FromStr,
+    <<T as NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let addr1 = A::make_address();
     let addr2 = A::make_address();
@@ -256,8 +256,8 @@ where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+    <T as NetworkingService>::Address: std::str::FromStr,
+    <<T as NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let addr1 = A::make_address();
     let addr2 = A::make_address();
@@ -311,8 +311,8 @@ where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+    <T as NetworkingService>::Address: std::str::FromStr,
+    <<T as NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let addr1 = A::make_address();
     let addr2 = A::make_address();
@@ -366,8 +366,8 @@ where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+    <T as NetworkingService>::Address: std::str::FromStr,
+    <<T as NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let addr1 = A::make_address();
     let addr2 = A::make_address();
@@ -414,12 +414,6 @@ async fn inbound_connection_too_many_peers_mock_tcp() {
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
                 agent: None,
-                protocols: [
-                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                    Protocol::new(ProtocolType::Sync, SemVer::new(1, 0, 0)),
-                ]
-                .into_iter()
-                .collect(),
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
@@ -441,12 +435,6 @@ async fn inbound_connection_too_many_peers_mock_channels() {
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
                 agent: None,
-                protocols: [
-                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                    Protocol::new(ProtocolType::Sync, SemVer::new(1, 0, 0)),
-                ]
-                .into_iter()
-                .collect(),
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
@@ -469,12 +457,6 @@ async fn inbound_connection_too_many_peers_mock_noise() {
             magic_bytes: *config.magic_bytes(),
             version: common::primitives::semver::SemVer::new(0, 1, 0),
             agent: None,
-            protocols: [
-                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                Protocol::new(ProtocolType::Sync, SemVer::new(1, 0, 0)),
-            ]
-            .into_iter()
-            .collect(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         })
         .collect::<Vec<_>>();
@@ -487,8 +469,8 @@ async fn connection_timeout<T>(transport: T::Transport, addr1: T::Address, addr2
 where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+    <T as NetworkingService>::Address: std::str::FromStr,
+    <<T as NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let config = Arc::new(config::create_mainnet());
     let mut pm1 = make_peer_manager::<T>(transport, addr1, Arc::clone(&config)).await;
@@ -550,8 +532,8 @@ async fn connection_timeout_rpc_notified<T>(
 ) where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+    <T as NetworkingService>::Address: std::str::FromStr,
+    <<T as NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(Default::default());

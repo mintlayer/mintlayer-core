@@ -29,11 +29,10 @@ use crate::{
             types::MockPeerId,
             MockService,
         },
-        types::{Protocol, ProtocolType, PubSubTopic},
+        types::PubSubTopic,
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
-    peer_manager::helpers::connect_services,
-    peer_manager::tests::{default_protocols, make_peer_manager},
+    peer_manager::{helpers::connect_services, tests::make_peer_manager},
 };
 
 // ban peer whose connected to us
@@ -217,9 +216,8 @@ where
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
-            version: common::primitives::semver::SemVer::new(0, 1, 0),
+            version: SemVer::new(0, 1, 0),
             agent: None,
-            protocols: default_protocols(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
@@ -233,9 +231,8 @@ where
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: [1, 2, 3, 4],
-            version: common::primitives::semver::SemVer::new(0, 1, 0),
+            version: SemVer::new(0, 1, 0),
             agent: None,
-            protocols: default_protocols(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
@@ -248,9 +245,8 @@ where
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
-            version: common::primitives::semver::SemVer::new(1, 1, 1),
+            version: SemVer::new(1, 1, 1),
             agent: None,
-            protocols: default_protocols(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
@@ -263,15 +259,8 @@ where
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
-            version: common::primitives::semver::SemVer::new(0, 1, 0),
+            version: SemVer::new(0, 1, 0),
             agent: None,
-            protocols: [
-                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-            ]
-            .into_iter()
-            .collect(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
@@ -324,9 +313,8 @@ where
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: [1, 2, 3, 4],
-            version: common::primitives::semver::SemVer::new(0, 1, 0),
+            version: SemVer::new(0, 1, 0),
             agent: None,
-            protocols: default_protocols(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
@@ -339,9 +327,8 @@ where
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
-            version: common::primitives::semver::SemVer::new(1, 1, 1),
+            version: SemVer::new(1, 1, 1),
             agent: None,
-            protocols: default_protocols(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
@@ -356,13 +343,6 @@ where
             magic_bytes: *config.magic_bytes(),
             version: common::primitives::semver::SemVer::new(0, 1, 0),
             agent: None,
-            protocols: [
-                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-            ]
-            .into_iter()
-            .collect(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
@@ -375,9 +355,8 @@ where
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
-            version: common::primitives::semver::SemVer::new(0, 1, 0),
+            version: SemVer::new(0, 1, 0),
             agent: None,
-            protocols: default_protocols(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );

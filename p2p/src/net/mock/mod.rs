@@ -100,7 +100,6 @@ where
             magic_bytes: self.network,
             version: self.version,
             agent: None,
-            protocols: self.protocols.into_iter().collect(),
             subscriptions: self.subscriptions,
         })
     }
@@ -350,10 +349,7 @@ mod tests {
     use super::{transport::NoiseTcpTransport, *};
     use crate::testing_utils::{TestTransportChannel, TestTransportMaker, TestTransportTcp};
     use crate::{
-        net::{
-            mock::transport::{MockChannelTransport, TcpTransportSocket},
-            types::{Protocol, ProtocolType},
-        },
+        net::mock::transport::{MockChannelTransport, TcpTransportSocket},
         testing_utils::TestTransportNoise,
     };
     use common::primitives::semver::SemVer;
@@ -395,16 +391,6 @@ mod tests {
             assert_eq!(&peer_info.magic_bytes, config.magic_bytes());
             assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
             assert_eq!(peer_info.agent, None);
-            assert_eq!(
-                peer_info.protocols,
-                [
-                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                    Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-                ]
-                .into_iter()
-                .collect()
-            );
             assert_eq!(
                 peer_info.subscriptions,
                 [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
@@ -468,16 +454,6 @@ mod tests {
                     common::primitives::semver::SemVer::new(0, 1, 0),
                 );
                 assert_eq!(peer_info.agent, None);
-                assert_eq!(
-                    peer_info.protocols,
-                    [
-                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-                    ]
-                    .into_iter()
-                    .collect()
-                );
             }
             _ => panic!("invalid event received, expected incoming connection"),
         }

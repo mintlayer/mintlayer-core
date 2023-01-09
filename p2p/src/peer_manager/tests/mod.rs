@@ -17,15 +17,10 @@ mod ban;
 mod connections;
 mod peerdb;
 
-use std::{collections::BTreeSet, fmt::Debug, str::FromStr, sync::Arc};
-
-use common::primitives::semver::SemVer;
+use std::{fmt::Debug, str::FromStr, sync::Arc};
 
 use crate::{
-    net::{
-        types::{Protocol, ProtocolType},
-        ConnectivityService, NetworkingService,
-    },
+    net::{ConnectivityService, NetworkingService},
     peer_manager::PeerManager,
     P2pConfig,
 };
@@ -56,16 +51,4 @@ where
 
     let p2p_config = Arc::new(P2pConfig::default());
     PeerManager::<T>::new(chain_config, p2p_config, conn, rx, tx_sync)
-}
-
-/// Returns a set of minimal required protocols.
-pub fn default_protocols() -> BTreeSet<Protocol> {
-    [
-        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-    ]
-    .into_iter()
-    .collect()
 }

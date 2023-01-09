@@ -424,7 +424,6 @@ where
             PeerEvent::PeerInfoReceived {
                 network,
                 version,
-                protocols,
                 subscriptions,
             } => {
                 let PendingPeerContext { address, role, tx } =
@@ -440,7 +439,6 @@ where
                                     network,
                                     version,
                                     agent: None,
-                                    protocols,
                                     subscriptions: subscriptions.clone(),
                                 },
                             })
@@ -456,7 +454,6 @@ where
                                     network,
                                     version,
                                     agent: None,
-                                    protocols,
                                     subscriptions: subscriptions.clone(),
                                 },
                             })
