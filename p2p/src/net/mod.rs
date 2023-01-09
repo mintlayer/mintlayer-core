@@ -72,9 +72,6 @@ pub trait NetworkingService {
     /// Handle for sending/receiving request-response messages
     type SyncingMessagingHandle: Send;
 
-    /// Unique ID assigned to each pubsub message
-    type SyncingMessageId: Clone + Debug + Send;
-
     /// Initialize the network service provider
     ///
     /// # Arguments
@@ -156,16 +153,6 @@ where
 
     /// Publishes an announcement on the network.
     async fn make_announcement(&mut self, announcement: Announcement) -> crate::Result<()>;
-
-    /// Reports a message validation result back to the backend.
-    ///
-    /// This function must be called as a result of an announcement processing.
-    async fn report_validation_result(
-        &mut self,
-        source: T::PeerId,
-        msg_id: T::SyncingMessageId,
-        result: types::ValidationResult,
-    ) -> crate::Result<()>;
 
     /// Poll syncing-related event from the networking service
     async fn poll_next(&mut self) -> crate::Result<types::SyncingEvent<T>>;

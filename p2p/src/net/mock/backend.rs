@@ -331,8 +331,8 @@ where
                 .send(ConnectivityEvent::Misbehaved {
                     peer_id,
                     error: P2pError::PublishError(PublishError::MessageTooLarge(
-                        Some(size),
-                        Some(ANNOUNCEMENT_MAX_SIZE),
+                        size,
+                        ANNOUNCEMENT_MAX_SIZE,
                     )),
                 })
                 .await

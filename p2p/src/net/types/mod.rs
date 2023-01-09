@@ -162,7 +162,6 @@ pub enum SyncingEvent<T: NetworkingService> {
     /// An announcement that is broadcast to all peers.
     Announcement {
         peer_id: T::PeerId,
-        message_id: T::SyncingMessageId,
         announcement: message::Announcement,
     },
 }
@@ -175,17 +174,4 @@ pub enum PubSubTopic {
 
     /// Blocks
     Blocks,
-}
-
-/// Validation result for an incoming PubSub message
-#[derive(Debug)]
-pub enum ValidationResult {
-    /// Message was valid and can be forwarded to other peers
-    Accept,
-
-    /// Message was invalid and mustn't be forwarded to other peers
-    Reject,
-
-    /// Message is not invalid but it shouldn't be forwarded to other peers
-    Ignore,
 }

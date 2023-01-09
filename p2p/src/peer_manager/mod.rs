@@ -402,7 +402,7 @@ where
                             .active_peers()
                             .iter()
                             .filter_map(|(peer_id, info)| info.address.as_ref().map(|addr| {
-                                ConnectedPeer{addr: addr.to_string(), peer_id: peer_id.to_string() }
+                                ConnectedPeer { addr: addr.to_string(), peer_id: peer_id.to_string() }
                             }))
                             .collect::<Vec<_>>();
                         response.send(peers).map_err(|_| P2pError::ChannelClosed)?

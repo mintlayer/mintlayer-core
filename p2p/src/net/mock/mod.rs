@@ -36,9 +36,9 @@ use crate::{
         mock::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             transport::{TransportListener, TransportSocket},
-            types::{MockMessageId, MockPeerId, MockPeerInfo, MockRequestId},
+            types::{MockPeerId, MockPeerInfo, MockRequestId},
         },
-        types::{ConnectivityEvent, PeerInfo, PubSubTopic, SyncingEvent, ValidationResult},
+        types::{ConnectivityEvent, PeerInfo, PubSubTopic, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
 };
@@ -112,7 +112,6 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
     type BannableAddress = T::BannableAddress;
     type PeerId = MockPeerId;
     type SyncingPeerRequestId = MockRequestId;
-    type SyncingMessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self, T>;
     type SyncingMessagingHandle = MockSyncingMessagingHandle<Self, T>;
 
@@ -236,11 +235,7 @@ where
 #[async_trait]
 impl<S, T> SyncingMessagingService<S> for MockSyncingMessagingHandle<S, T>
 where
-    S: NetworkingService<
-            PeerId = MockPeerId,
-            SyncingPeerRequestId = MockRequestId,
-            SyncingMessageId = MockMessageId,
-        > + Send,
+    S: NetworkingService<PeerId = MockPeerId, SyncingPeerRequestId = MockRequestId> + Send,
     T: TransportSocket,
 {
     async fn send_request(
@@ -283,8 +278,8 @@ where
         let message = announcement.encode();
         if message.len() > ANNOUNCEMENT_MAX_SIZE {
             return Err(P2pError::PublishError(PublishError::MessageTooLarge(
-                Some(message.len()),
-                Some(ANNOUNCEMENT_MAX_SIZE),
+                message.len(),
+                ANNOUNCEMENT_MAX_SIZE,
             )));
         }
 
@@ -301,15 +296,6 @@ where
             })
             .await?;
         receiver.await?
-    }
-
-    async fn report_validation_result(
-        &mut self,
-        _source: S::PeerId,
-        _message_id: S::SyncingMessageId,
-        _result: ValidationResult,
-    ) -> crate::Result<()> {
-        Ok(())
     }
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent<S>> {
@@ -337,7 +323,6 @@ where
                 announcement,
             } => Ok(SyncingEvent::Announcement {
                 peer_id,
-                message_id: MockMessageId,
                 announcement: *announcement,
             }),
         }

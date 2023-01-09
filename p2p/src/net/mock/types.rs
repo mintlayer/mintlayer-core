@@ -156,11 +156,6 @@ impl std::fmt::Display for MockPeerId {
     }
 }
 
-// This type is only needed to satisfy the `NetworkingService` trait requirements. It should be
-// removed along with the libp2p backend.
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct MockMessageId;
-
 #[derive(Debug, PartialEq, Eq)]
 pub struct MockPeerInfo {
     pub peer_id: MockPeerId,

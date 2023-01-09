@@ -102,7 +102,6 @@ where
     let block = match sync2.poll_next().await.unwrap() {
         SyncingEvent::Announcement {
             peer_id: _,
-            message_id: _,
             announcement: Announcement::Block(block),
         } => block,
         _ => panic!("Unexpected event"),
@@ -125,7 +124,6 @@ where
     let block = match sync1.poll_next().await.unwrap() {
         SyncingEvent::Announcement {
             peer_id: _,
-            message_id: _,
             announcement: Announcement::Block(block),
         } => block,
         _ => panic!("Unexpected event"),
@@ -244,8 +242,8 @@ where
     assert_eq!(
         sync1.make_announcement(message).await,
         Err(P2pError::PublishError(PublishError::MessageTooLarge(
-            Some(encoded_size),
-            Some(ANNOUNCEMENT_MAX_SIZE)
+            encoded_size,
+            ANNOUNCEMENT_MAX_SIZE
         )))
     );
 }
