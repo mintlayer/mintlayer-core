@@ -782,7 +782,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
             .connect_block(
                 TransactionVerifier::new,
                 self,
-                self,
+                &*self,
                 self.chain_config,
                 verifier_config,
                 block_index,
@@ -802,7 +802,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         };
         let cached_inputs = self.tx_verification_strategy.disconnect_block(
             TransactionVerifier::new,
-            self,
+            &*self,
             self.chain_config,
             verifier_config,
             block,
