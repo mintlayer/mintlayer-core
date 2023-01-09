@@ -26,8 +26,6 @@ pub mod peerdb;
 
 use std::{
     collections::{BTreeSet, HashMap},
-    fmt::Debug,
-    str::FromStr,
     sync::Arc,
     time::Duration,
 };
@@ -43,10 +41,9 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
-    interface::types::ConnectedPeer,
     net::{
         self,
-        types::{Protocol, ProtocolType},
+        types::{Protocol, ProtocolType, Role},
         AsBannableAddress, ConnectivityService, IsBannableAddress, NetworkingService,
     },
 };
@@ -87,8 +84,6 @@ impl<T> PeerManager<T>
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as NetworkingService>::Address: FromStr,
-    <<T as NetworkingService>::Address as FromStr>::Err: Debug,
 {
     pub fn new(
         chain_config: Arc<ChainConfig>,
@@ -96,28 +91,30 @@ where
         handle: T::ConnectivityHandle,
         rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
         tx_sync: mpsc::UnboundedSender<SyncControlEvent<T>>,
-    ) -> Self {
-        Self {
+    ) -> crate::Result<Self> {
+        Ok(Self {
             peer_connectivity_handle: handle,
             rx_peer_manager,
             tx_sync,
-            peerdb: peerdb::PeerDb::new(Arc::clone(&p2p_config)),
+            peerdb: peerdb::PeerDb::new(Arc::clone(&p2p_config))?,
             pending: HashMap::new(),
             chain_config,
             _p2p_config: p2p_config,
-        }
+        })
     }
 
     /// Update the list of known peers or known peer's list of addresses
-    fn peer_discovered(&mut self, peers: &[net::types::AddrInfo<T>]) {
-        peers.iter().for_each(|peer| {
+    fn peer_discovered(&mut self, addresses: &[T::Address]) {
+        addresses.iter().for_each(|peer| {
             self.peerdb.peer_discovered(peer);
         })
     }
 
     /// Update the list of known peers or known peer's list of addresses
-    fn peer_expired(&mut self, peers: &[net::types::AddrInfo<T>]) {
-        self.peerdb.expire_peers(peers)
+    fn peer_expired(&mut self, addresses: &[T::Address]) {
+        addresses.iter().for_each(|peer| {
+            self.peerdb.peer_expired(peer);
+        })
     }
 
     /// Verifies the protocols compatibility.
@@ -171,10 +168,10 @@ where
     fn accept_connection(
         &mut self,
         address: T::Address,
+        role: Role,
         info: net::types::PeerInfo<T>,
     ) -> crate::Result<()> {
         let peer_id = info.peer_id;
-        log::debug!("peer {peer_id} connected, address {address:?}, {info}");
 
         ensure!(
             info.magic_bytes == *self.chain_config.magic_bytes(),
@@ -198,8 +195,13 @@ where
             !self.peerdb.is_active_peer(&info.peer_id),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
+        ensure!(
+            !self.peerdb.is_address_connected(&address),
+            P2pError::PeerError(PeerError::PeerAlreadyExists),
+        );
 
-        self.peerdb.peer_connected(address, info);
+        log::debug!("peer {peer_id} connected, address {address:?}, {info}");
+        self.peerdb.peer_connected(address, role, info);
         self.tx_sync.send(SyncControlEvent::Connected(peer_id)).map_err(P2pError::from)
     }
 
@@ -230,6 +232,7 @@ where
                 ProtocolError::UnableToConvertAddressToBannable(format!("{address:?}")),
             ));
         }
+
         let bannable_address = address.as_bannable();
         ensure!(
             !self.peerdb.is_address_banned(&bannable_address),
@@ -241,11 +244,10 @@ where
         // knows of all peers and later on if the number of connections falls below
         // the desired threshold, `PeerManager::heartbeat()` may connect to this peer.
         if self.peerdb.active_peer_count() >= MAX_ACTIVE_CONNECTIONS {
-            self.peerdb.register_peer_info(address, info);
             return Err(P2pError::PeerError(PeerError::TooManyPeers));
         }
 
-        self.accept_connection(address, info)
+        self.accept_connection(address, Role::Inbound, info)
     }
 
     /// Close connection to a remote peer
@@ -254,10 +256,14 @@ where
     /// or by the [`PeerManager::heartbeat()`] function which has decided to cull
     /// this connection in favor of another potential connection.
     fn close_connection(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
-        log::debug!("connection closed for peer {peer_id}");
+        // Mock backend is always sending ConnectionClosed event when somebody disconnects, ensure that the peer is active
+        if self.peerdb.is_active_peer(&peer_id) {
+            log::debug!("connection closed for peer {peer_id}");
 
-        self.tx_sync.send(SyncControlEvent::Disconnected(peer_id))?;
-        self.peerdb.peer_disconnected(&peer_id);
+            self.tx_sync.send(SyncControlEvent::Disconnected(peer_id))?;
+
+            self.peerdb.peer_disconnected(&peer_id);
+        }
         Ok(())
     }
 
@@ -346,14 +352,14 @@ where
         // TODO: check when was the last update and exit early if this update is to soon
 
         let npeers = std::cmp::min(
-            self.peerdb.idle_peer_count(),
+            self.peerdb.available_addresses_count(),
             MAX_ACTIVE_CONNECTIONS
-                .saturating_sub(self.peerdb.idle_peer_count())
+                .saturating_sub(self.peerdb.available_addresses_count())
                 .saturating_sub(self.pending.len()),
         );
 
         for _ in 0..npeers {
-            if let Some(addr) = self.peerdb.take_best_peer_addr()? {
+            if let Some(addr) = self.peerdb.take_best_peer_addr() {
                 match self.connect(addr.clone()).await {
                     Ok(_) => {
                         self.pending.insert(addr, None);
@@ -454,19 +460,12 @@ where
                         response.send(self.peerdb.active_peer_count()).map_err(|_| P2pError::ChannelClosed)?;
                     }
                     PeerManagerEvent::GetBindAddress(response) => {
-                        let addr = self.peer_connectivity_handle.local_addr();
-                        // TODO: change the return to Option<String> and avoid using special values for None
-                        let addr = addr.await?.map_or("<unavailable>".to_string(), |addr| addr.to_string());
+                        let addr = self.peer_connectivity_handle.local_addresses();
+                        let addr = addr.await.unwrap_or_default().into_iter().map(|addr| addr.to_string()).collect();
                         response.send(addr).map_err(|_| P2pError::ChannelClosed)?;
                     }
                     PeerManagerEvent::GetConnectedPeers(response) => {
-                        let peers = self.peerdb
-                            .active_peers()
-                            .iter()
-                            .filter_map(|(peer_id, info)| info.address.as_ref().map(|addr| {
-                                ConnectedPeer{addr: addr.to_string(), peer_id: peer_id.to_string() }
-                            }))
-                            .collect::<Vec<_>>();
+                        let peers = self.peerdb.get_connected_peers();
                         response.send(peers).map_err(|_| P2pError::ChannelClosed)?
                     }
                 },
@@ -493,7 +492,7 @@ where
                         }
                         net::types::ConnectivityEvent::OutboundAccepted { address, peer_info } => {
                             let peer_id = peer_info.peer_id;
-                            let res = self.accept_connection(address.clone(), peer_info);
+                            let res = self.accept_connection(address.clone(), Role::Outbound, peer_info);
                             self.handle_result(Some(peer_id), res).await?;
 
                             match self.pending.remove(&address) {
@@ -510,11 +509,11 @@ where
                             let res = self.handle_outbound_error(address, error);
                             self.handle_result(None, res).await?;
                         }
-                        net::types::ConnectivityEvent::Discovered { peers } => {
-                            self.peer_discovered(&peers);
+                        net::types::ConnectivityEvent::Discovered { addresses } => {
+                            self.peer_discovered(&addresses);
                         }
-                        net::types::ConnectivityEvent::Expired { peers } => {
-                            self.peer_expired(&peers);
+                        net::types::ConnectivityEvent::Expired { addresses } => {
+                            self.peer_expired(&addresses);
                         }
                         net::types::ConnectivityEvent::Misbehaved { peer_id, error } => {
                             let res = self.adjust_peer_score(peer_id, error.ban_score()).await;

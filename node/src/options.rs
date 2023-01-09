@@ -81,7 +81,11 @@ pub struct RunOptions {
 
     /// Address to bind P2P to.
     #[clap(long, value_name = "ADDR")]
-    pub p2p_addr: Option<String>,
+    pub p2p_addr: Option<Vec<String>>,
+
+    /// Optional list of initial node addresses to connect.
+    #[clap(long, value_name = "NODE")]
+    pub p2p_add_node: Option<Vec<String>>,
 
     /// The p2p score threshold after which a peer is baned.
     #[clap(long)]

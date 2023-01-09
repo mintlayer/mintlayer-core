@@ -15,13 +15,14 @@
 
 mod ban;
 mod connections;
-mod peerdb;
 
-use std::{collections::BTreeSet, fmt::Debug, str::FromStr, sync::Arc};
+use std::{collections::BTreeSet, sync::Arc};
 
 use common::primitives::semver::SemVer;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
+    event::PeerManagerEvent,
     net::{
         types::{Protocol, ProtocolType},
         ConnectivityService, NetworkingService,
@@ -29,6 +30,33 @@ use crate::{
     peer_manager::PeerManager,
     P2pConfig,
 };
+async fn make_peer_manager_custom<T>(
+    transport: T::Transport,
+    addr: T::Address,
+    chain_config: Arc<common::chain::ChainConfig>,
+    p2p_config: Arc<P2pConfig>,
+) -> (PeerManager<T>, UnboundedSender<PeerManagerEvent<T>>)
+where
+    T: NetworkingService + 'static,
+    T::ConnectivityHandle: ConnectivityService<T>,
+{
+    let (conn, _) = T::start(
+        transport,
+        vec![addr],
+        Arc::clone(&chain_config),
+        Default::default(),
+    )
+    .await
+    .unwrap();
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
+
+    tokio::spawn(async move { while rx_sync.recv().await.is_some() {} });
+
+    let peer_manager = PeerManager::<T>::new(chain_config, p2p_config, conn, rx, tx_sync).unwrap();
+
+    (peer_manager, tx)
+}
 
 async fn make_peer_manager<T>(
     transport: T::Transport,
@@ -38,24 +66,29 @@ async fn make_peer_manager<T>(
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as NetworkingService>::Address: FromStr,
-    <<T as NetworkingService>::Address as FromStr>::Err: Debug,
 {
-    let (conn, _) = T::start(
-        transport,
-        addr,
-        Arc::clone(&chain_config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
-    let (_, rx) = tokio::sync::mpsc::unbounded_channel();
-    let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
-
-    tokio::spawn(async move { while rx_sync.recv().await.is_some() {} });
-
     let p2p_config = Arc::new(P2pConfig::default());
-    PeerManager::<T>::new(chain_config, p2p_config, conn, rx, tx_sync)
+    let (peer_manager, _tx) =
+        make_peer_manager_custom::<T>(transport, addr, chain_config, p2p_config).await;
+    peer_manager
+}
+
+async fn run_peer_manager<T>(
+    transport: T::Transport,
+    addr: T::Address,
+    chain_config: Arc<common::chain::ChainConfig>,
+    p2p_config: Arc<P2pConfig>,
+) -> UnboundedSender<PeerManagerEvent<T>>
+where
+    T: NetworkingService + 'static,
+    T::ConnectivityHandle: ConnectivityService<T>,
+{
+    let (mut peer_manager, tx) =
+        make_peer_manager_custom::<T>(transport, addr, chain_config, p2p_config).await;
+    tokio::spawn(async move {
+        peer_manager.run().await.unwrap();
+    });
+    tx
 }
 
 /// Returns a set of minimal required protocols.

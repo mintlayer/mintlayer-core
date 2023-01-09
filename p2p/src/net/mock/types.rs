@@ -100,6 +100,9 @@ pub enum ConnectivityEvent<T: TransportSocket> {
         peer_id: MockPeerId,
         error: error::P2pError,
     },
+    AddressDiscovered {
+        address: T::Address,
+    },
 }
 
 // TODO: use two events, one for txs and one for blocks?
@@ -183,6 +186,9 @@ pub enum PeerEvent {
         version: semver::SemVer,
         protocols: Vec<Protocol>,
         subscriptions: BTreeSet<PubSubTopic>,
+
+        /// Listening port of the remote peer, only set for incoming connection and only if shared by the remote peer
+        listening_port: Option<u16>,
     },
 
     /// Connection closed to remote
@@ -199,6 +205,8 @@ pub enum MockEvent {
     SendMessage(Box<Message>),
 }
 
+// TODO: Decide what to do about protocol upgrades.
+// For example adding new address type to PeerAddress might break handshakes with older nodes.
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum HandshakeMessage {
     Hello {
@@ -206,6 +214,11 @@ pub enum HandshakeMessage {
         network: [u8; 4],
         protocols: Vec<Protocol>,
         subscriptions: BTreeSet<PubSubTopic>,
+
+        // Specify on which port this node can be reached for incoming connections.
+        // If not set, then this node does not want incoming connections.
+        // Actual IP is taken from the remote socket address.
+        listening_port: Option<u16>,
     },
     HelloAck {
         version: common::primitives::semver::SemVer,

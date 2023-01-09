@@ -33,12 +33,11 @@ where
     T: NetworkingService + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let addr = timeout(Duration::from_secs(5), conn2.local_addr())
+    let addr = timeout(Duration::from_secs(5), conn2.local_addresses())
         .await
         .expect("local address fetch not to timeout")
-        .unwrap()
         .unwrap();
-    conn1.connect(addr).await.expect("dial to succeed");
+    conn1.connect(addr[0].clone()).await.expect("dial to succeed");
 
     let (address, peer_info1) = match timeout(Duration::from_secs(5), conn2.poll_next()).await {
         Ok(event) => match event.unwrap() {
@@ -60,4 +59,28 @@ where
     };
 
     (address, peer_info1, peer_info2)
+}
+
+/// Return first event that is accepted by predicate.
+///
+/// Used to skip events that are not of interest or that are different between backends
+/// (for example ConnectivityEvent::Discovered).
+/// Can be used in tests only, will panic in case of errors.
+pub async fn filter_connectivity_event<T, F>(
+    conn: &mut T::ConnectivityHandle,
+    predicate: F,
+) -> crate::Result<ConnectivityEvent<T>>
+where
+    T: NetworkingService,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    F: Fn(&crate::Result<ConnectivityEvent<T>>) -> bool,
+{
+    loop {
+        let result = timeout(Duration::from_secs(10), conn.poll_next())
+            .await
+            .expect("unexpected timeout receiving connectivity event");
+        if predicate(&result) {
+            return result;
+        }
+    }
 }

@@ -16,15 +16,30 @@
 use std::net::{IpAddr, SocketAddr};
 
 use async_trait::async_trait;
+use futures::{stream::FuturesUnordered, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::{
+    config::DEFAULT_BIND_PORT,
     net::{
-        mock::transport::{PeerStream, TransportListener, TransportSocket},
+        mock::transport::{
+            traits::TransportAddress, PeerStream, TransportListener, TransportSocket,
+        },
         AsBannableAddress, IsBannableAddress,
     },
+    types::peer_address::PeerAddress,
     Result,
 };
+
+impl TransportAddress for SocketAddr {
+    fn as_peer_address(&self) -> PeerAddress {
+        (*self).into()
+    }
+
+    fn from_peer_address(address: &PeerAddress) -> Option<Self> {
+        Some(address.into())
+    }
+}
 
 #[derive(Debug)]
 pub struct TcpTransportSocket;
@@ -42,8 +57,8 @@ impl TransportSocket for TcpTransportSocket {
     type Listener = TcpTransportListener;
     type Stream = TcpTransportStream;
 
-    async fn bind(&self, address: Self::Address) -> Result<Self::Listener> {
-        TcpTransportListener::new(address).await
+    async fn bind(&self, addresses: Vec<Self::Address>) -> Result<Self::Listener> {
+        TcpTransportListener::new(addresses)
     }
 
     async fn connect(&self, address: Self::Address) -> Result<Self::Stream> {
@@ -53,26 +68,76 @@ impl TransportSocket for TcpTransportSocket {
 }
 
 pub struct TcpTransportListener {
-    listener: TcpListener,
+    listeners: Vec<TcpListener>,
 }
 
 impl TcpTransportListener {
-    async fn new(address: SocketAddr) -> Result<Self> {
-        let listener = TcpListener::bind(address).await?;
+    fn new(addresses: Vec<SocketAddr>) -> Result<Self> {
+        let addresses = if addresses.is_empty() {
+            vec![
+                SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), DEFAULT_BIND_PORT),
+                SocketAddr::new(std::net::Ipv6Addr::UNSPECIFIED.into(), DEFAULT_BIND_PORT),
+            ]
+        } else {
+            addresses
+        };
 
-        Ok(Self { listener })
+        let listeners = addresses
+            .into_iter()
+            .map(|address| -> Result<TcpListener> {
+                // Use socket2 crate because we need consistent behavior between platforms.
+                // See https://github.com/tokio-rs/tokio-core/issues/227
+                let socket = socket2::Socket::new(
+                    socket2::Domain::for_address(address),
+                    socket2::Type::STREAM,
+                    None,
+                )?;
+
+                socket.set_nonblocking(true)?;
+
+                if address.is_ipv6() {
+                    // When IPV6_V6ONLY is disabled listening IPv6 socket will also accept incoming connections from IPv4.
+                    // Remote address will be reported as IPv4 mapped to IPv6 (for example ::ffff:192.168.1.2).
+                    // Enable IPV6_V6ONLY explicitly because default value differs between platforms
+                    // (true on windows and false on most other OSs).
+                    // Bitcoin and libp2p work same way.
+                    socket.set_only_v6(true)?;
+                }
+
+                // Allow faster app restarts on *nix (same way it's done in tokio/mio)
+                #[cfg(not(windows))]
+                socket.set_reuse_address(true)?;
+
+                socket.bind(&address.into())?;
+
+                // Set max count of pending TCP connections, we don't need a lot
+                socket.listen(32)?;
+
+                let listener = TcpListener::from_std(socket.into())?;
+
+                Ok(listener)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(Self { listeners })
     }
 }
 
 #[async_trait]
 impl TransportListener<TcpTransportStream, SocketAddr> for TcpTransportListener {
     async fn accept(&mut self) -> Result<(TcpTransportStream, SocketAddr)> {
-        let (stream, address) = self.listener.accept().await?;
+        let mut tasks: FuturesUnordered<_> =
+            self.listeners.iter().map(|listener| listener.accept()).collect();
+        let (stream, address) = tasks.select_next_some().await?;
         Ok((stream, address))
     }
 
-    fn local_address(&self) -> Result<SocketAddr> {
-        let local_addr = self.listener.local_addr()?;
+    fn local_addresses(&self) -> Result<Vec<SocketAddr>> {
+        let local_addr = self
+            .listeners
+            .iter()
+            .map(|listener| listener.local_addr())
+            .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(local_addr)
     }
 }
@@ -93,7 +158,6 @@ impl IsBannableAddress for SocketAddr {
 
 pub type TcpTransportStream = TcpStream;
 
-#[async_trait]
 impl PeerStream for TcpTransportStream {}
 
 #[cfg(test)]
@@ -112,8 +176,8 @@ mod tests {
     #[tokio::test]
     async fn send_recv() {
         let transport = TcpTransportSocket::new();
-        let mut server = transport.bind(TestTransportTcp::make_address()).await.unwrap();
-        let peer_fut = transport.connect(server.local_address().unwrap());
+        let mut server = transport.bind(vec![TestTransportTcp::make_address()]).await.unwrap();
+        let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let server_stream = server_res.unwrap().0;
@@ -143,8 +207,8 @@ mod tests {
     #[tokio::test]
     async fn send_2_reqs() {
         let transport = TcpTransportSocket::new();
-        let mut server = transport.bind(TestTransportTcp::make_address()).await.unwrap();
-        let peer_fut = transport.connect(server.local_address().unwrap());
+        let mut server = transport.bind(vec![TestTransportTcp::make_address()]).await.unwrap();
+        let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let server_stream = server_res.unwrap().0;

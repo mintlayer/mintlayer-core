@@ -15,8 +15,12 @@
 
 use std::sync::Arc;
 
-use crate::testing_utils::{
-    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+use crate::{
+    net::types::Role,
+    peer_manager::helpers::filter_connectivity_event,
+    testing_utils::{
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+    },
 };
 use common::{chain::config, primitives::semver::SemVer};
 
@@ -42,8 +46,6 @@ where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let addr1 = A::make_address();
     let addr2 = A::make_address();
@@ -61,10 +63,16 @@ where
     pm2.accept_inbound_connection(address, peer_info).unwrap();
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
-    let addr1 = pm1.peer_connectivity_handle.local_addr().await.unwrap().unwrap().as_bannable();
+    let addr1 = pm1.peer_connectivity_handle.local_addresses().await.unwrap()[0]
+        .clone()
+        .as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
+    let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
+        !std::matches!(event, Ok(net::types::ConnectivityEvent::Discovered { .. }))
+    })
+    .await;
     assert!(std::matches!(
-        pm2.peer_connectivity_handle.poll_next().await,
+        event,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
 }
@@ -89,8 +97,6 @@ where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let addr1 = A::make_address();
     let addr2 = A::make_address();
@@ -108,10 +114,16 @@ where
     pm2.accept_inbound_connection(address, peer_info).unwrap();
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
-    let addr1 = pm1.peer_connectivity_handle.local_addr().await.unwrap().unwrap().as_bannable();
+    let addr1 = pm1.peer_connectivity_handle.local_addresses().await.unwrap()[0]
+        .clone()
+        .as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
+    let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
+        !std::matches!(event, Ok(net::types::ConnectivityEvent::Discovered { .. }))
+    })
+    .await;
     assert!(std::matches!(
-        pm2.peer_connectivity_handle.poll_next().await,
+        event,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
 }
@@ -138,8 +150,6 @@ where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let addr1 = A::make_address();
     let addr2 = A::make_address();
@@ -157,14 +167,20 @@ where
     pm2.accept_inbound_connection(address, peer_info1).unwrap();
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
-    let addr1 = pm1.peer_connectivity_handle.local_addr().await.unwrap().unwrap().as_bannable();
+    let addr1 = pm1.peer_connectivity_handle.local_addresses().await.unwrap()[0]
+        .clone()
+        .as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
+    let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
+        !std::matches!(event, Ok(net::types::ConnectivityEvent::Discovered { .. }))
+    })
+    .await;
     assert!(matches!(
-        pm2.peer_connectivity_handle.poll_next().await,
+        event,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
 
-    let remote_addr = pm1.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
+    let remote_addr = pm1.peer_connectivity_handle.local_addresses().await.unwrap()[0].clone();
 
     tokio::spawn(async move {
         loop {
@@ -214,6 +230,7 @@ where
     // valid connection
     let res = peer_manager.accept_connection(
         peer_address.clone(),
+        Role::Inbound,
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
@@ -230,6 +247,7 @@ where
     // invalid magic bytes
     let res = peer_manager.accept_connection(
         peer_address.clone(),
+        Role::Inbound,
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: [1, 2, 3, 4],
@@ -245,6 +263,7 @@ where
     // invalid version
     let res = peer_manager.accept_connection(
         peer_address.clone(),
+        Role::Inbound,
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
@@ -260,6 +279,7 @@ where
     // protocol missing
     let res = peer_manager.accept_connection(
         peer_address,
+        Role::Inbound,
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
@@ -417,8 +437,6 @@ where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
-    <T as net::NetworkingService>::Address: std::str::FromStr,
-    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
 {
     let addr1 = A::make_address();
     let addr2 = A::make_address();
@@ -446,9 +464,11 @@ where
     // that tries to connect to the first manager
     tokio::spawn(async move { pm1.run().await });
 
-    if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) =
-        pm2.peer_connectivity_handle.poll_next().await
-    {
+    let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
+        !std::matches!(event, Ok(net::types::ConnectivityEvent::Discovered { .. }))
+    })
+    .await;
+    if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) = event {
         assert_eq!(peer_id, peer_info.peer_id);
     } else {
         panic!("invalid event received");

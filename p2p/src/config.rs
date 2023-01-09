@@ -19,11 +19,12 @@ use utils::make_config_setting;
 
 use crate::net::types::PubSubTopic;
 
+pub const DEFAULT_BIND_PORT: u16 = 3031;
+
 // TODO: does this constant make sense to be zero? Find the justification for it.
 pub const MDNS_DEFAULT_QUERY_INTERVAL: u64 = 0;
 pub const MDNS_DEFAULT_IPV6_STATE: bool = false;
 
-make_config_setting!(P2pBindAddress, String, "[::1]:3031".into());
 make_config_setting!(BanThreshold, u32, 100);
 make_config_setting!(BanDuration, Duration, Duration::from_secs(60 * 60 * 24));
 make_config_setting!(OutboundConnectionTimeout, u64, 10);
@@ -84,7 +85,9 @@ impl From<NodeType> for BTreeSet<PubSubTopic> {
 #[derive(Debug, Default)]
 pub struct P2pConfig {
     /// Address to bind P2P to.
-    pub bind_address: P2pBindAddress,
+    pub bind_address: Vec<String>,
+    /// Optional list of initial node addresses, could be used to specify boot nodes for example.
+    pub add_node: Vec<String>,
     /// The score threshold after which a peer is banned.
     pub ban_threshold: BanThreshold,
     /// Duration of bans in seconds.

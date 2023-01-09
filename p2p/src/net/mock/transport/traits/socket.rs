@@ -22,7 +22,7 @@ use crate::{
     Result,
 };
 
-use super::{listener::TransportListener, stream::PeerStream};
+use super::{listener::TransportListener, stream::PeerStream, TransportAddress};
 
 /// An abstraction layer for the transport layer at the highest level, which is responsible for:
 /// 1. Binding to a socket at a specific port, where we listen to connections.
@@ -31,7 +31,8 @@ use super::{listener::TransportListener, stream::PeerStream};
 #[async_trait]
 pub trait TransportSocket: Send + Sync + 'static {
     /// An address type.
-    type Address: Clone
+    type Address: TransportAddress
+        + Clone
         + Debug
         + Eq
         + Hash
@@ -52,7 +53,7 @@ pub trait TransportSocket: Send + Sync + 'static {
     type Stream: PeerStream;
 
     /// Creates a new listener bound to the specified address.
-    async fn bind(&self, address: Self::Address) -> Result<Self::Listener>;
+    async fn bind(&self, address: Vec<Self::Address>) -> Result<Self::Listener>;
 
     /// Open a connection to the given address.
     async fn connect(&self, address: Self::Address) -> Result<Self::Stream>;

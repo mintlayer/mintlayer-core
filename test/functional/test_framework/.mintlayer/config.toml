@@ -5,7 +5,7 @@ max_db_commit_attempts = 10
 max_orphan_blocks = 512
 
 [p2p]
-bind_address = "[::1]:3031"
+bind_address = ["[::1]:3031"]
 ban_threshold = 100
 outbound_connection_timeout = 10
 

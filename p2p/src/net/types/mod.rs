@@ -24,17 +24,10 @@ use serialization::{Decode, Encode};
 
 use crate::{message, NetworkingService, P2pError};
 
-/// Discovered peer address information
-#[derive(Debug, PartialEq, Eq)]
-pub struct AddrInfo<T: NetworkingService> {
-    /// Unique ID of the peer
-    pub peer_id: T::PeerId,
-
-    /// List of discovered IPv4 addresses
-    pub ip4: Vec<T::Address>,
-
-    /// List of discovered IPv6 addresses
-    pub ip6: Vec<T::Address>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    Inbound,
+    Outbound,
 }
 
 // TODO: Introduce and check the maximum allowed peer information size. See
@@ -127,13 +120,13 @@ pub enum ConnectivityEvent<T: NetworkingService> {
     /// One or more peers discovered (libp2p defines discovering as finding new addresses through mDNS or otherwise)
     Discovered {
         /// Address information
-        peers: Vec<AddrInfo<T>>,
+        addresses: Vec<T::Address>,
     },
 
     /// One one more peers have expired (libp2p defines expired addresses as addresses that haven't appeared in later refreshes of available addresses)
     Expired {
         /// Address information
-        peers: Vec<AddrInfo<T>>,
+        addresses: Vec<T::Address>,
     },
 
     /// Protocol violation

@@ -28,19 +28,13 @@ use crate::{
             transport::TransportSocket,
             types::{self, MockEvent, MockPeerId, PeerEvent},
         },
-        types::{Protocol, ProtocolType},
+        types::{Protocol, ProtocolType, Role},
     },
 };
 
 use super::transport::BufferedTranscoder;
 
 const PEER_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
-
-#[derive(Debug, Clone, Copy)]
-pub enum Role {
-    Inbound,
-    Outbound,
-}
 
 pub struct Peer<T: TransportSocket> {
     /// Peer ID of the remote node
@@ -56,6 +50,9 @@ pub struct Peer<T: TransportSocket> {
 
     /// Peer socket
     socket: BufferedTranscoder<T::Stream>,
+
+    /// Listening port of this node that is possible reachable by the remote peer
+    listening_port: Option<u16>,
 
     /// TX channel for communicating with backend
     tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
@@ -75,6 +72,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         socket: T::Stream,
+        listening_port: Option<u16>,
         tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
         rx: mpsc::Receiver<MockEvent>,
     ) -> Self {
@@ -85,6 +83,7 @@ where
             chain_config,
             p2p_config,
             socket,
+            listening_port,
             tx,
             rx,
         }
@@ -98,6 +97,7 @@ where
                     network,
                     protocols,
                     subscriptions,
+                    listening_port,
                 })) = self.socket.recv().await
                 else {
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
@@ -129,12 +129,11 @@ where
                             version,
                             protocols,
                             subscriptions,
+                            listening_port,
                         },
                     ))
                     .await
                     .map_err(P2pError::from)?;
-
-                Ok(())
             }
             Role::Outbound => {
                 self.socket
@@ -149,6 +148,7 @@ where
                         .into_iter()
                         .collect(),
                         subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
+                        listening_port: self.listening_port,
                     }))
                     .await?;
 
@@ -170,14 +170,15 @@ where
                             version,
                             protocols,
                             subscriptions,
+                            listening_port: None,
                         },
                     ))
                     .await
                     .map_err(P2pError::from)?;
-
-                Ok(())
             }
         }
+
+        Ok(())
     }
 
     pub async fn destroy(self) {
@@ -267,6 +268,7 @@ mod tests {
             Arc::clone(&chain_config),
             p2p_config,
             socket1,
+            None,
             tx1,
             rx2,
         );
@@ -292,11 +294,12 @@ mod tests {
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
+                listening_port: None,
             }))
             .await
             .is_ok());
 
-        let _peer = handle.await;
+        let _peer = handle.await.unwrap();
         assert_eq!(
             rx1.try_recv().unwrap().1,
             types::PeerEvent::PeerInfoReceived {
@@ -312,6 +315,7 @@ mod tests {
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
+                listening_port: None,
             }
         );
     }
@@ -349,6 +353,7 @@ mod tests {
             Arc::clone(&chain_config),
             p2p_config,
             socket1,
+            None,
             tx1,
             rx2,
         );
@@ -380,7 +385,7 @@ mod tests {
             .await
             .is_ok());
 
-        let _peer = handle.await;
+        let _peer = handle.await.unwrap();
         assert_eq!(
             rx1.try_recv(),
             Ok((
@@ -398,6 +403,7 @@ mod tests {
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
+                    listening_port: None,
                 }
             ))
         );
@@ -436,6 +442,7 @@ mod tests {
             Arc::clone(&chain_config),
             p2p_config,
             socket1,
+            None,
             tx1,
             rx2,
         );
@@ -458,6 +465,7 @@ mod tests {
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
+                listening_port: None,
             }))
             .await
             .is_ok());
@@ -498,6 +506,7 @@ mod tests {
             chain_config,
             p2p_config,
             socket1,
+            None,
             tx1,
             rx2,
         );
@@ -544,8 +553,8 @@ mod tests {
     {
         let transport = A::make_transport();
         let addr = A::make_address();
-        let mut server = transport.bind(addr).await.unwrap();
-        let peer_fut = transport.connect(server.local_address().unwrap());
+        let mut server = transport.bind(vec![addr]).await.unwrap();
+        let peer_fut = transport.connect(server.local_addresses().unwrap()[0].clone());
 
         let (res1, res2) = tokio::join!(server.accept(), peer_fut);
         (res1.unwrap().0, res2.unwrap())

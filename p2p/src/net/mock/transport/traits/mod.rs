@@ -13,10 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod address;
 mod listener;
 mod socket;
 mod stream;
 
+pub use address::TransportAddress;
 pub use listener::TransportListener;
 pub use socket::TransportSocket;
 pub use stream::PeerStream;

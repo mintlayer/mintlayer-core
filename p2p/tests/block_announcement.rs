@@ -49,7 +49,7 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut conn1, mut sync1) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&config),
         Default::default(),
     )
@@ -60,7 +60,7 @@ where
         let mut peers = futures::future::join_all((0..3).map(|_| async {
             let res = S::start(
                 A::make_transport(),
-                A::make_address(),
+                vec![A::make_address()],
                 Arc::clone(&config),
                 Default::default(),
             )

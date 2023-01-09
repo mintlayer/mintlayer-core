@@ -53,12 +53,13 @@ use crate::{
                 MockRequestId, PeerEvent, SyncingEvent,
             },
         },
-        types::PubSubTopic,
+        types::{PubSubTopic, Role},
         Announcement,
     },
+    types::peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
 };
 
-use super::peer::Role;
+use super::transport::TransportAddress;
 
 /// Active peer data
 struct PeerContext {
@@ -78,7 +79,7 @@ pub struct Backend<T: TransportSocket> {
     transport: T,
 
     /// Socket address of the backend
-    address: T::Address,
+    addresses: Vec<T::Address>,
 
     /// Socket for listening to incoming connections
     socket: T::Listener,
@@ -125,7 +126,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         transport: T,
-        address: T::Address,
+        addresses: Vec<T::Address>,
         socket: T::Listener,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
@@ -136,7 +137,7 @@ where
     ) -> Self {
         Self {
             transport,
-            address,
+            addresses,
             socket,
             cmd_rx,
             conn_tx,
@@ -157,7 +158,10 @@ where
         address: T::Address,
         response: oneshot::Sender<crate::Result<()>>,
     ) -> crate::Result<()> {
-        if self.address == address {
+        // TODO: This is not very robust. Send random nonce in handshake
+        // to determine if we connect to ourselves (like it's done in bitcoin).
+        // local_address can be removed then as it's not used otherwise.
+        if self.addresses.iter().any(|a| *a == address) {
             response
                 .send(Err(P2pError::DialError(DialError::IoError(
                     ErrorKind::AddrNotAvailable,
@@ -169,9 +173,7 @@ where
 
         match timeout(self.timeout, self.transport.connect(address.clone())).await {
             Ok(event) => match event {
-                Ok(socket) => {
-                    self.create_peer(socket, MockPeerId::new(), peer::Role::Outbound, address)
-                }
+                Ok(socket) => self.create_peer(socket, MockPeerId::new(), Role::Outbound, address),
                 Err(err) => {
                     log::error!("Failed to establish connection: {err}");
 
@@ -358,7 +360,7 @@ where
                     self.create_peer(
                         stream,
                         MockPeerId::new(),
-                        peer::Role::Inbound,
+                        Role::Inbound,
                         address,
                     )?;
                 }
@@ -375,6 +377,63 @@ where
         }
     }
 
+    /// Return on which port this node might be accessible for the specific peer (if possible)
+    fn get_listening_port(&self, peer_address: &T::Address) -> Option<u16> {
+        let peer_address = peer_address.clone().as_peer_address();
+
+        for listening_address in self.addresses.iter() {
+            let listening_address = listening_address.clone().as_peer_address();
+
+            // Check that same IP version is used.
+            // Probably only non-routable listening IP addresses should be considered here (like 0.0.0.0, 127.0.0.1, 192.168.0.1).
+            // Routable IP addresses might be shared with peers directly.
+            match listening_address {
+                PeerAddress::Ip4(socket4) => {
+                    if matches!(peer_address, PeerAddress::Ip4(_)) {
+                        return Some(socket4.port);
+                    }
+                }
+                PeerAddress::Ip6(socket6) => {
+                    if matches!(peer_address, PeerAddress::Ip6(_)) {
+                        return Some(socket6.port);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Handle received listening port from inbound remote peer
+    async fn handle_listening_port_from_inbound(
+        &mut self,
+        peer_address: &T::Address,
+        port: u16,
+    ) -> crate::Result<()> {
+        let possible_peer_address = match peer_address.clone().as_peer_address() {
+            PeerAddress::Ip4(socket4) => PeerAddress::Ip4(PeerAddressIp4 {
+                ip: socket4.ip,
+                port,
+            }),
+            PeerAddress::Ip6(socket6) => PeerAddress::Ip6(PeerAddressIp6 {
+                ip: socket6.ip,
+                port,
+            }),
+        };
+
+        log::debug!("new possible peer address: {possible_peer_address}");
+
+        // TODO: Commented out because it breaks p2p_syncing_test.py: two connections are made but only one is disconnected
+        // if let Some(address) = T::Address::from_peer_address(&possible_peer_address) {
+        //     self.conn_tx
+        //         .send(ConnectivityEvent::AddressDiscovered { address })
+        //         .await
+        //         .map_err(P2pError::from)?;
+        // }
+
+        Ok(())
+    }
+
     /// Create new peer
     ///
     /// Move the connection to `pending` where it stays until either the connection is closed
@@ -384,10 +443,12 @@ where
         &mut self,
         socket: T::Stream,
         remote_peer_id: MockPeerId,
-        role: peer::Role,
+        role: Role,
         address: T::Address,
     ) -> crate::Result<()> {
         let (tx, rx) = mpsc::channel(16);
+
+        let listening_port = self.get_listening_port(&address);
 
         self.pending.insert(remote_peer_id, PendingPeerContext { address, role, tx });
 
@@ -402,6 +463,7 @@ where
                 chain_config,
                 p2p_config,
                 socket,
+                listening_port,
                 tx,
                 rx,
             );
@@ -426,6 +488,7 @@ where
                 version,
                 protocols,
                 subscriptions,
+                listening_port,
             } => {
                 let PendingPeerContext { address, role, tx } =
                     self.pending.remove(&peer_id).expect("peer to exist");
@@ -434,7 +497,7 @@ where
                     Role::Outbound => {
                         self.conn_tx
                             .send(ConnectivityEvent::OutboundAccepted {
-                                address: address.clone(),
+                                address,
                                 peer_info: MockPeerInfo {
                                     peer_id,
                                     network,
@@ -462,6 +525,11 @@ where
                             })
                             .await
                             .map_err(P2pError::from)?;
+
+                        if let Some(listening_port) = listening_port {
+                            self.handle_listening_port_from_inbound(&address, listening_port)
+                                .await?;
+                        }
                     }
                 }
 

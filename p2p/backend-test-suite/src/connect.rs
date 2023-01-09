@@ -40,7 +40,7 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         config,
         Default::default(),
     )
@@ -61,15 +61,15 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     let (connectivity, _sync) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&config),
         Default::default(),
     )
     .await
     .unwrap();
 
-    let address = connectivity.local_addr().await.unwrap().unwrap();
-    let res = S::start(A::make_transport(), address, config, Default::default())
+    let addresses = connectivity.local_addresses().await.unwrap();
+    let res = S::start(A::make_transport(), addresses, config, Default::default())
         .await
         .expect_err("address is not in use");
     assert!(matches!(
@@ -92,7 +92,7 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut service1, _) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&config),
         Default::default(),
     )
@@ -100,15 +100,15 @@ where
     .unwrap();
     let (mut service2, _) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&config),
         Default::default(),
     )
     .await
     .unwrap();
 
-    let conn_addr = service1.local_addr().await.unwrap().unwrap();
-    let (res1, res2) = tokio::join!(service1.poll_next(), service2.connect(conn_addr));
+    let conn_addr = service1.local_addresses().await.unwrap();
+    let (res1, res2) = tokio::join!(service1.poll_next(), service2.connect(conn_addr[0].clone()));
     res1.unwrap();
     res2.unwrap();
 }

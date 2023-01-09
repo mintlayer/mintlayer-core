@@ -62,7 +62,7 @@ pub struct TestTransportChannel {}
 impl TestTransportMaker for TestTransportChannel {
     type Transport = MockChannelTransport;
 
-    type Address = u64;
+    type Address = u32;
 
     fn make_transport() -> Self::Transport {
         MockChannelTransport::new()
@@ -124,7 +124,7 @@ impl RandomAddressMaker for TestTcpAddressMaker {
 pub struct TestChannelAddressMaker {}
 
 impl RandomAddressMaker for TestChannelAddressMaker {
-    type Address = u64;
+    type Address = u32;
 
     fn new() -> Self::Address {
         let mut rng = make_pseudo_rng();

@@ -20,11 +20,11 @@ use futures::{
 };
 
 use crate::{
-    net::mock::{
-        peer::Role,
-        transport::{
+    net::{
+        mock::transport::{
             impls::stream_adapter::traits::StreamAdapter, TransportListener, TransportSocket,
         },
+        types::Role,
     },
     Result,
 };
@@ -91,7 +91,7 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener<S::Strea
         }
     }
 
-    fn local_address(&self) -> Result<T::Address> {
-        self.listener.local_address()
+    fn local_addresses(&self) -> Result<Vec<T::Address>> {
+        self.listener.local_addresses()
     }
 }

@@ -69,7 +69,7 @@ where
         rx.await.map_err(P2pError::from)
     }
 
-    async fn get_bind_address(&self) -> crate::Result<String> {
+    async fn get_bind_address(&self) -> crate::Result<Vec<String>> {
         let (tx, rx) = oneshot::channel();
         self.tx_peer_manager
             .send(PeerManagerEvent::GetBindAddress(tx))

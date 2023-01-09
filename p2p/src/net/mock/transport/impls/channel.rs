@@ -16,7 +16,7 @@
 use std::{
     collections::BTreeMap,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicU32, Ordering},
         Mutex,
     },
 };
@@ -34,13 +34,31 @@ use tokio::{
 use crate::{
     error::DialError,
     net::{
-        mock::transport::{PeerStream, TransportListener, TransportSocket},
+        mock::transport::{
+            traits::TransportAddress, PeerStream, TransportListener, TransportSocket,
+        },
         AsBannableAddress, IsBannableAddress,
     },
+    types::peer_address::{PeerAddress, PeerAddressIp4},
     P2pError, Result,
 };
 
-type Address = u64;
+type Address = u32;
+
+impl TransportAddress for Address {
+    fn as_peer_address(&self) -> PeerAddress {
+        PeerAddress::Ip4(PeerAddressIp4 {
+            // Address of the first "host" will be 0.0.0.1
+            ip: std::net::Ipv4Addr::from(*self).into(),
+            // There is only "port" in MockChannelTransport per "host", use arbitrary value
+            port: 10000,
+        })
+    }
+
+    fn from_peer_address(_address: &PeerAddress) -> Option<Self> {
+        None
+    }
+}
 
 /// Zero address has special meaning: bind to a free address.
 const ZERO_ADDRESS: Address = 0;
@@ -53,7 +71,7 @@ type IncomingConnection = (Address, Sender<DuplexStream>);
 static CONNECTIONS: Lazy<Mutex<BTreeMap<Address, UnboundedSender<IncomingConnection>>>> =
     Lazy::new(Default::default);
 
-static NEXT_ADDRESS: AtomicU64 = AtomicU64::new(1);
+static NEXT_ADDRESS: AtomicU32 = AtomicU32::new(1);
 
 // Creating new transport is like attaching new "host" to the network.
 // New unique address is registered for the new "host".
@@ -78,13 +96,15 @@ impl TransportSocket for MockChannelTransport {
     type Listener = MockChannelListener;
     type Stream = ChannelMockStream;
 
-    async fn bind(&self, address: Self::Address) -> Result<Self::Listener> {
+    async fn bind(&self, addresses: Vec<Self::Address>) -> Result<Self::Listener> {
         // It's not possible to bind to random address
-        if address != ZERO_ADDRESS && address != self.local_address {
-            return Err(P2pError::DialError(DialError::IoError(
-                std::io::ErrorKind::AddrNotAvailable,
-            )));
-        };
+        for address in addresses.iter() {
+            if *address != ZERO_ADDRESS && *address != self.local_address {
+                return Err(P2pError::DialError(DialError::IoError(
+                    std::io::ErrorKind::AddrNotAvailable,
+                )));
+            };
+        }
 
         let mut connections = CONNECTIONS.lock().expect("Connections mutex is poisoned");
 
@@ -145,8 +165,8 @@ impl TransportListener<ChannelMockStream, Address> for MockChannelListener {
         Ok((server, remote_address))
     }
 
-    fn local_address(&self) -> Result<Address> {
-        Ok(self.address)
+    fn local_addresses(&self) -> Result<Vec<Address>> {
+        Ok(vec![self.address])
     }
 }
 
@@ -160,7 +180,6 @@ impl Drop for MockChannelListener {
 
 pub type ChannelMockStream = tokio::io::DuplexStream;
 
-#[async_trait]
 impl PeerStream for ChannelMockStream {}
 
 impl AsBannableAddress for Address {
@@ -192,8 +211,8 @@ mod tests {
     async fn send_recv() {
         let transport = MockChannelTransport::new();
         let address = ZERO_ADDRESS;
-        let mut server = transport.bind(address).await.unwrap();
-        let peer_fut = transport.connect(server.local_address().unwrap());
+        let mut server = transport.bind(vec![address]).await.unwrap();
+        let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         let server_stream = server_res.unwrap().0;

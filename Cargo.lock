@@ -2059,6 +2059,7 @@ dependencies = [
  "serde",
  "serialization",
  "snowstorm",
+ "socket2",
  "sscanf",
  "subsystem",
  "tap",

@@ -49,7 +49,7 @@ where
 
     let (mut conn1, sync1) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&chain_config),
         Default::default(),
     )
@@ -67,7 +67,7 @@ where
 
     let (mut conn2, mut sync2) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
     )
@@ -141,7 +141,7 @@ where
 
     let (mut conn1, sync1) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&chain_config),
         Default::default(),
     )
@@ -150,7 +150,7 @@ where
 
     let (mut conn2, _sync2) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&chain_config),
         Default::default(),
     )
