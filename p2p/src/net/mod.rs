@@ -52,8 +52,7 @@ pub trait NetworkingService {
         + Sync
         + ToString
         + FromStr
-        + AsBannableAddress<BannableAddress = Self::BannableAddress>
-        + IsBannableAddress;
+        + AsBannableAddress<BannableAddress = Self::BannableAddress>;
 
     /// An address type that can be banned.
     ///
@@ -182,10 +181,4 @@ pub trait AsBannableAddress {
 
     /// Returns a bannable part of an address.
     fn as_bannable(&self) -> Self::BannableAddress;
-}
-
-// TODO: This is only needed because `libp2p::MultiAddr` can contain no IP address.
-/// Checks if an address can be converted to bannable.
-pub trait IsBannableAddress {
-    fn is_bannable(&self) -> bool;
 }

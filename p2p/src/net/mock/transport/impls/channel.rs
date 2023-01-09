@@ -35,7 +35,7 @@ use crate::{
     error::DialError,
     net::{
         mock::transport::{PeerStream, TransportListener, TransportSocket},
-        AsBannableAddress, IsBannableAddress,
+        AsBannableAddress,
     },
     P2pError, Result,
 };
@@ -168,12 +168,6 @@ impl AsBannableAddress for Address {
 
     fn as_bannable(&self) -> Self::BannableAddress {
         *self
-    }
-}
-
-impl IsBannableAddress for Address {
-    fn is_bannable(&self) -> bool {
-        true
     }
 }
 

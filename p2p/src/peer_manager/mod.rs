@@ -38,7 +38,7 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
     interface::types::ConnectedPeer,
-    net::{self, AsBannableAddress, ConnectivityService, IsBannableAddress, NetworkingService},
+    net::{self, AsBannableAddress, ConnectivityService, NetworkingService},
 };
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
@@ -175,12 +175,6 @@ where
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
 
-        // TODO: This can and should be removed after getting rid if libp2p.
-        if !address.is_bannable() {
-            return Err(P2pError::ProtocolError(
-                ProtocolError::UnableToConvertAddressToBannable(format!("{address:?}")),
-            ));
-        }
         let bannable_address = address.as_bannable();
         ensure!(
             !self.peerdb.is_address_banned(&bannable_address),
@@ -255,13 +249,6 @@ where
             !self.pending.contains_key(&address),
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
-
-        // TODO: This can and should be removed after getting rid if libp2p.
-        if !address.is_bannable() {
-            return Err(P2pError::ProtocolError(
-                ProtocolError::UnableToConvertAddressToBannable(format!("{address:?}")),
-            ));
-        }
 
         let bannable_address = address.as_bannable();
         ensure!(
