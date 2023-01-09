@@ -16,8 +16,7 @@
 use std::sync::Arc;
 
 use crate::testing_utils::{
-    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
-    TestTransportTcp,
+    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
 };
 use common::{chain::config, primitives::semver::SemVer};
 
@@ -25,7 +24,6 @@ use crate::{
     error::{P2pError, PeerError},
     net::{
         self,
-        libp2p::Libp2pService,
         mock::{
             transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             types::MockPeerId,
@@ -69,11 +67,6 @@ where
         pm2.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
-}
-
-#[tokio::test]
-async fn ban_connected_peer_libp2p() {
-    ban_connected_peer::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
@@ -121,11 +114,6 @@ where
         pm2.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
-}
-
-#[tokio::test]
-async fn banned_peer_attempts_to_connect_libp2p() {
-    banned_peer_attempts_to_connect::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
@@ -194,11 +182,6 @@ where
             P2pError::PeerError(PeerError::BannedPeer(_))
         ));
     }
-}
-
-#[tokio::test]
-async fn connect_to_banned_peer_libp2p() {
-    connect_to_banned_peer::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]
@@ -294,15 +277,6 @@ where
     );
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(!peer_manager.peerdb.is_active_peer(&peer_id));
-}
-
-#[tokio::test]
-async fn validate_invalid_outbound_connection_libp2p() {
-    validate_invalid_outbound_connection::<TestTransportLibp2p, Libp2pService>(
-        "/ip4/175.69.140.46".parse().unwrap(),
-        libp2p::PeerId::random(),
-    )
-    .await;
 }
 
 #[tokio::test]
@@ -412,15 +386,6 @@ where
 }
 
 #[tokio::test]
-async fn validate_invalid_inbound_connection_libp2p() {
-    validate_invalid_inbound_connection::<TestTransportLibp2p, Libp2pService>(
-        "/ip4/175.69.140.46".parse().unwrap(),
-        libp2p::PeerId::random(),
-    )
-    .await;
-}
-
-#[tokio::test]
 async fn validate_invalid_inbound_connection_mock_tcp() {
     validate_invalid_inbound_connection::<TestTransportTcp, MockService<TcpTransportSocket>>(
         "210.113.67.107:2525".parse().unwrap(),
@@ -488,11 +453,6 @@ where
     } else {
         panic!("invalid event received");
     }
-}
-
-#[tokio::test]
-async fn inbound_connection_invalid_magic_libp2p() {
-    inbound_connection_invalid_magic::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 #[tokio::test]

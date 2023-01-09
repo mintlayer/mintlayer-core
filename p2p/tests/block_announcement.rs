@@ -21,14 +21,12 @@ use common::{
 };
 
 use p2p::testing_utils::{
-    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
-    TestTransportTcp,
+    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
 };
 use p2p::{
     error::{P2pError, PublishError},
     message::Announcement,
     net::{
-        libp2p::Libp2pService,
         mock::{
             transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             MockService,
@@ -181,11 +179,6 @@ where
         res.unwrap(),
         SyncingEvent::Announcement { .. }
     ));
-}
-
-#[tokio::test]
-async fn block_announcement_3_peers_libp2p() {
-    block_announcement_3_peers::<TestTransportLibp2p, Libp2pService>().await;
 }
 
 // TODO: Implement announcements resending in partially connected networks.

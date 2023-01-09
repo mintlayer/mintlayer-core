@@ -23,7 +23,7 @@ use crate::net::types::PubSubTopic;
 pub const MDNS_DEFAULT_QUERY_INTERVAL: u64 = 0;
 pub const MDNS_DEFAULT_IPV6_STATE: bool = false;
 
-make_config_setting!(P2pBindAddress, String, "/ip6/::1/tcp/3031".into());
+make_config_setting!(P2pBindAddress, String, "[::1]:3031".into());
 make_config_setting!(BanThreshold, u32, 100);
 make_config_setting!(BanDuration, Duration, Duration::from_secs(60 * 60 * 24));
 make_config_setting!(OutboundConnectionTimeout, u64, 10);

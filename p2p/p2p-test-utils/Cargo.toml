@@ -14,4 +14,3 @@ subsystem = { path = "../../subsystem/" }
 
 portpicker = "0.1"
 tokio = { version = "1", default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
-libp2p = { version = "0.46", default-features = false, features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "tcp-async-io"] }

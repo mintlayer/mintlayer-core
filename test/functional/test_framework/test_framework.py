@@ -557,22 +557,15 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
     def wait_for_node_exit(self, i, timeout):
         self.nodes[i].process.wait(timeout)
 
-    def get_node_addr_libp2p(self, a):
-        # Call p2p_get_bind_address just to get node id
-        id_a = self.nodes[a].p2p_get_bind_address().split("/p2p/")[1]
-        return p2p_url(a) + "/p2p/" + id_a
-
-    def get_node_addr_mock(a):
-        return p2p_url(a)
-
     def connect_nodes(self, a, b):
         count_a = self.nodes[a].p2p_get_peer_count()
         count_b = self.nodes[b].p2p_get_peer_count()
 
-        # TODO: Replace with get_node_addr_mock once libp2p removed
-        addr_a = self.get_node_addr_libp2p(a)
+        addr_a = p2p_url(a)
         ret = self.nodes[b].p2p_connect(addr_a)
 
+        # TODO: Fix this condition.
+        # See https://github.com/mintlayer/mintlayer-core/issues/624 for more details.
         wait_until_helper(lambda:
             self.nodes[a].p2p_get_peer_count() == count_a + 1 and
             self.nodes[b].p2p_get_peer_count() == count_b + 1, timeout=60)
@@ -582,8 +575,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         count_b = self.nodes[b].p2p_get_peer_count()
 
         connected = self.nodes[b].p2p_get_connected_peers()
-        # TODO: Replace with get_node_addr_mock once libp2p removed
-        addr_a = self.get_node_addr_libp2p(a)
+        addr_a = p2p_url(a)
         peer_id = next(item["peer_id"] for item in connected if item["addr"] == addr_a)
         ret = self.nodes[b].p2p_disconnect(peer_id)
 
