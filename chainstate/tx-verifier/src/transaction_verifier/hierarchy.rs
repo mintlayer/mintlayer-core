@@ -32,8 +32,8 @@ use common::{
 };
 use utxo::{BlockUndo, ConsumedUtxoCache, FlushableUtxoView, UtxosStorageRead, UtxosView};
 
-impl<CC, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStorageRef
-    for TransactionVerifier<CC, S, U>
+impl<C, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStorageRef
+    for TransactionVerifier<C, S, U>
 {
     fn get_token_id_from_issuance_tx(
         &self,
@@ -89,8 +89,8 @@ impl<CC, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStor
     }
 }
 
-impl<CC, S: TransactionVerifierStorageRef, U: UtxosView> UtxosStorageRead
-    for TransactionVerifier<CC, S, U>
+impl<C, S: TransactionVerifierStorageRef, U: UtxosView> UtxosStorageRead
+    for TransactionVerifier<C, S, U>
 {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<utxo::Utxo>, storage_result::Error> {
         Ok(self.utxo_cache.utxo(outpoint))
@@ -111,8 +111,8 @@ impl<CC, S: TransactionVerifierStorageRef, U: UtxosView> UtxosStorageRead
     }
 }
 
-impl<CC, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStorageMut
-    for TransactionVerifier<CC, S, U>
+impl<C, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStorageMut
+    for TransactionVerifier<C, S, U>
 {
     fn set_mainchain_tx_index(
         &mut self,
@@ -217,8 +217,8 @@ impl<CC, S: TransactionVerifierStorageRef, U: UtxosView> TransactionVerifierStor
     }
 }
 
-impl<CC, S: TransactionVerifierStorageRef, U: UtxosView> FlushableUtxoView
-    for TransactionVerifier<CC, S, U>
+impl<C, S: TransactionVerifierStorageRef, U: UtxosView> FlushableUtxoView
+    for TransactionVerifier<C, S, U>
 {
     fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error> {
         self.utxo_cache.batch_write(utxos)

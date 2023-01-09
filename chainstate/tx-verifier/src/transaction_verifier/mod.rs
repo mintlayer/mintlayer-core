@@ -195,8 +195,8 @@ impl GuardedTxIndexCache {
 }
 
 /// The tool used to verify transaction and cache their updated states in memory
-pub struct TransactionVerifier<CC, S, U> {
-    chain_config: CC,
+pub struct TransactionVerifier<C, S, U> {
+    chain_config: C,
     storage: S,
     tx_index_cache: GuardedTxIndexCache,
     utxo_cache: UtxosCache<U>,
@@ -205,8 +205,8 @@ pub struct TransactionVerifier<CC, S, U> {
     best_block: Id<GenBlock>,
 }
 
-impl<CC, S: TransactionVerifierStorageRef + Clone> TransactionVerifier<CC, S, UtxosDB<S>> {
-    pub fn new(storage: S, chain_config: CC, verifier_config: TransactionVerifierConfig) -> Self {
+impl<C, S: TransactionVerifierStorageRef + Clone> TransactionVerifier<C, S, UtxosDB<S>> {
+    pub fn new(storage: S, chain_config: C, verifier_config: TransactionVerifierConfig) -> Self {
         let utxo_cache = UtxosCache::new(UtxosDB::new(S::clone(&storage)));
         let best_block = storage
             .get_best_block_for_utxos()
@@ -225,12 +225,10 @@ impl<CC, S: TransactionVerifierStorageRef + Clone> TransactionVerifier<CC, S, Ut
     }
 }
 
-impl<CC, S: TransactionVerifierStorageRef, U: UtxosView + Send + Sync>
-    TransactionVerifier<CC, S, U>
-{
+impl<C, S: TransactionVerifierStorageRef, U: UtxosView + Send + Sync> TransactionVerifier<C, S, U> {
     pub fn new_from_handle(
         storage: S,
-        chain_config: CC,
+        chain_config: C,
         utxos: U, // TODO: Replace this parameter with handle
         verifier_config: TransactionVerifierConfig,
     ) -> Self {
@@ -251,9 +249,9 @@ impl<CC, S: TransactionVerifierStorageRef, U: UtxosView + Send + Sync>
     }
 }
 
-impl<CC, S, U> TransactionVerifier<CC, S, U>
+impl<C, S, U> TransactionVerifier<C, S, U>
 where
-    CC: AsRef<ChainConfig>,
+    C: AsRef<ChainConfig>,
     S: TransactionVerifierStorageRef,
     U: UtxosView,
 {
