@@ -692,12 +692,11 @@ where
     ) -> Result<(), ConnectTransactionError> {
         // TODO: test spending block rewards from chains outside the mainchain
         if let Some(inputs) = reward_transactable.inputs() {
-            let tx_index_fetcher =
-                |tx_id: &OutPointSourceId| self.storage.get_mainchain_tx_index(tx_id);
-
             // pre-cache all inputs
             if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
-                tx_index_cache.precache_inputs(inputs, tx_index_fetcher)?;
+                tx_index_cache.precache_inputs(inputs, |tx_id: &OutPointSourceId| {
+                    self.storage.get_mainchain_tx_index(tx_id)
+                })?;
             }
 
             // verify input signatures
