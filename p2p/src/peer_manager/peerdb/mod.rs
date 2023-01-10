@@ -188,6 +188,12 @@ impl<T: NetworkingService> PeerDb<T> {
     /// After `PeerManager` has established either an inbound or an outbound connection,
     /// it informs the `PeerDb` about it.
     pub fn peer_connected(&mut self, address: T::Address, role: Role, info: types::PeerInfo<T>) {
+        log::info!(
+            "peer connected, peer_id: {}, address: {address:?}, {:?}",
+            info.peer_id,
+            role
+        );
+
         let old_value = self.peers.insert(
             info.peer_id,
             PeerContext {
@@ -212,6 +218,12 @@ impl<T: NetworkingService> PeerDb<T> {
 
         let removed = self.addresses.remove(&peer.address);
         assert!(removed);
+
+        log::info!(
+            "peer disconnected, peer_id: {}, address: {:?}",
+            peer.info.peer_id,
+            peer.address
+        );
     }
 
     /// Changes the peer state to `Peer::Banned` and bans it for 24 hours.
