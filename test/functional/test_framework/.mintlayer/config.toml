@@ -9,8 +9,5 @@ bind_address = ["[::1]:3031"]
 ban_threshold = 100
 outbound_connection_timeout = 10
 
-[p2p.mdns_config]
-state = "Disabled"
-
 [rpc]
 bind_address = "127.0.0.1:3030"

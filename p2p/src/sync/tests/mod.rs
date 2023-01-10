@@ -25,7 +25,7 @@ use tokio::sync::mpsc;
 use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
 
 use crate::{
-    config::{MdnsConfig, NodeType, P2pConfig},
+    config::{NodeType, P2pConfig},
     event::{PeerManagerEvent, SyncControlEvent},
     net::{mock::types::MockPeerId, ConnectivityService},
     sync::{peer, BlockSyncManager},
@@ -75,7 +75,6 @@ where
         ban_threshold: 100.into(),
         ban_duration: Default::default(),
         outbound_connection_timeout: 10.into(),
-        mdns_config: MdnsConfig::Disabled.into(),
         node_type: NodeType::Full.into(),
     });
     let (conn, sync) = T::start(

@@ -144,7 +144,6 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
-        mdns_config: Default::default(),
         node_type: NodeType::Inactive.into(),
     });
     let (mut conn1, mut sync1) = S::start(
