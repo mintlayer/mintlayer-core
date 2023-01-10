@@ -23,7 +23,7 @@ use p2p::{
     net::{ConnectivityService, NetworkingService, SyncingMessagingService},
 };
 
-tests![
+tests_async![
     connect,
     #[cfg(not(target_os = "windows"))]
     connect_address_in_use,

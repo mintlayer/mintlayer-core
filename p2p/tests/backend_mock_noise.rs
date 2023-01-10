@@ -13,15 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p::net::mock::{
-    transport::{NoiseEncryptionAdapter, TcpTransportSocket, WrappedTransportSocket},
-    MockService,
+use p2p::{
+    net::mock::{
+        transport::{NoiseEncryptionAdapter, TcpTransportSocket, WrappedTransportSocket},
+        MockService,
+    },
+    testing_utils::{TestTcpAddressMaker, TestTransportNoise},
 };
-use p2p::testing_utils::TestTransportNoise;
 
 fn main() {
     p2p_backend_test_suite::run::<
         TestTransportNoise,
         MockService<WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>>,
+        TestTcpAddressMaker,
     >();
 }

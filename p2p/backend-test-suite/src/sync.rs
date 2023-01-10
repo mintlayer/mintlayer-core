@@ -42,7 +42,7 @@ use p2p::{
 };
 use p2p_test_utils::TestBlockInfo;
 
-tests![
+tests_async![
     local_and_remote_in_sync,
     remote_ahead_by_7_blocks,
     local_ahead_by_12_blocks,

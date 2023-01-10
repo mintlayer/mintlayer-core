@@ -44,7 +44,7 @@ use p2p::{
     peer_manager::helpers::connect_services,
 };
 
-tests![
+tests_async![
     block_announcement,
     block_announcement_no_subscription,
     block_announcement_too_big_message,

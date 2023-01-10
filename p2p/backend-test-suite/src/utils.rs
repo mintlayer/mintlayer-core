@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-macro_rules! tests {
+macro_rules! tests_async {
     ($($(#[$meta:meta])* $name:ident,)+) => {
         pub fn tests<A, S>() -> impl Iterator<Item = libtest_mimic::Trial>
         where
@@ -34,6 +34,26 @@ macro_rules! tests {
                         .block_on(async {
                             $name::<A, S>().await;
                         });
+                    Ok(())
+                }
+            ),)*].into_iter()
+        }
+    }
+}
+
+macro_rules! tests {
+    ($($(#[$meta:meta])* $name:ident,)+) => {
+        pub fn tests<S, A>() -> impl Iterator<Item = libtest_mimic::Trial>
+        where
+            S: p2p::net::NetworkingService<PeerId = MockPeerId>,
+            A: RandomAddressMaker<Address = S::Address>,
+        {
+            [
+                $($(#[$meta])*
+                libtest_mimic::Trial::test(
+                concat!(module_path!(), "::", stringify!($name)),
+                || {
+                    $name::<S, A>();
                     Ok(())
                 }
             ),)*].into_iter()

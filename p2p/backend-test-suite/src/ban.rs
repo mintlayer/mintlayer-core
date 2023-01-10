@@ -29,7 +29,7 @@ use p2p::{
 };
 use p2p_test_utils::TestBlockInfo;
 
-tests![invalid_pubsub_block, invalid_sync_block,];
+tests_async![invalid_pubsub_block, invalid_sync_block,];
 
 // Start two network services, spawn a `SyncMessageHandler` for the first service, publish an
 // invalid block from the first service and verify that the `SyncManager` of the first service
