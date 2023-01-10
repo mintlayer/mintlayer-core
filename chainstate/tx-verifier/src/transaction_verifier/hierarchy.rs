@@ -38,8 +38,8 @@ use pos_accounting::{
 };
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosStorageRead, UtxosView};
 
-impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
-    TransactionVerifierStorageRef for TransactionVerifier<'a, S, U, A>
+impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
+    TransactionVerifierStorageRef for TransactionVerifier<C, S, U, A>
 {
     fn get_token_id_from_issuance_tx(
         &self,
@@ -51,7 +51,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
                 CachedTokenIndexOp::Read(id) => Ok(Some(*id)),
                 CachedTokenIndexOp::Erase => Ok(None),
             },
-            None => self.storage_ref.get_token_id_from_issuance_tx(tx_id),
+            None => self.storage.get_token_id_from_issuance_tx(tx_id),
         }
     }
 
@@ -59,7 +59,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
         &self,
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
-        self.storage_ref.get_gen_block_index(block_id)
+        self.storage.get_gen_block_index(block_id)
     }
 
     fn get_mainchain_tx_index(
@@ -67,7 +67,8 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
         tx_id: &OutPointSourceId,
     ) -> Result<Option<TxMainChainIndex>, TransactionVerifierStorageError> {
         let tx_index_cache = self
-            .get_tx_cache_ref()
+            .tx_index_cache
+            .as_ref()
             .ok_or(TransactionVerifierStorageError::TransactionIndexDisabled)?;
         match tx_index_cache.get_from_cached(tx_id) {
             Some(v) => match v {
@@ -75,7 +76,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
                 CachedInputsOperation::Read(idx) => Ok(Some(idx.clone())),
                 CachedInputsOperation::Erase => Ok(None),
             },
-            None => self.storage_ref.get_mainchain_tx_index(tx_id),
+            None => self.storage.get_mainchain_tx_index(tx_id),
         }
     }
 
@@ -89,7 +90,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
                 CachedAuxDataOp::Read(t) => Ok(Some(t.clone())),
                 CachedAuxDataOp::Erase => Ok(None),
             },
-            None => self.storage_ref.get_token_aux_data(token_id),
+            None => self.storage.get_token_aux_data(token_id),
         }
     }
 
@@ -99,13 +100,13 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
     ) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError> {
         match self.accounting_delta_undo.data().get(&TransactionSource::Chain(id)) {
             Some(v) => Ok(Some(v.undo.clone())),
-            None => self.storage_ref.get_accounting_undo(id),
+            None => self.storage.get_accounting_undo(id),
         }
     }
 }
 
-impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> UtxosStorageRead
-    for TransactionVerifier<'a, S, U, A>
+impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> UtxosStorageRead
+    for TransactionVerifier<C, S, U, A>
 {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<utxo::Utxo>, storage_result::Error> {
         Ok(self.utxo_cache.utxo(outpoint))
@@ -121,13 +122,13 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> U
     ) -> Result<Option<UtxosBlockUndo>, storage_result::Error> {
         match self.utxo_block_undo.data().get(&TransactionSource::Chain(id)) {
             Some(v) => Ok(Some(v.undo.clone())),
-            None => self.storage_ref.get_undo_data(id),
+            None => self.storage.get_undo_data(id),
         }
     }
 }
 
-impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
-    TransactionVerifierStorageMut for TransactionVerifier<'a, S, U, A>
+impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
+    TransactionVerifierStorageMut for TransactionVerifier<C, S, U, A>
 {
     fn set_mainchain_tx_index(
         &mut self,
@@ -135,7 +136,8 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
         tx_index: &TxMainChainIndex,
     ) -> Result<(), TransactionVerifierStorageError> {
         let tx_index_cache = self
-            .get_tx_cache_mut()
+            .tx_index_cache
+            .as_mut()
             .ok_or(TransactionVerifierStorageError::TransactionIndexDisabled)?;
         tx_index_cache
             .set_tx_index(tx_id, tx_index.clone())
@@ -147,7 +149,8 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
         tx_id: &OutPointSourceId,
     ) -> Result<(), TransactionVerifierStorageError> {
         let tx_index_cache = self
-            .get_tx_cache_mut()
+            .tx_index_cache
+            .as_mut()
             .ok_or(TransactionVerifierStorageError::TransactionIndexDisabled)?;
         tx_index_cache
             .remove_tx_index_by_id(tx_id.clone())
@@ -231,16 +234,16 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
     }
 }
 
-impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> FlushableUtxoView
-    for TransactionVerifier<'a, S, U, A>
+impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> FlushableUtxoView
+    for TransactionVerifier<C, S, U, A>
 {
     fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error> {
         self.utxo_cache.batch_write(utxos)
     }
 }
 
-impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> PoSAccountingView
-    for TransactionVerifier<'a, S, U, A>
+impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> PoSAccountingView
+    for TransactionVerifier<C, S, U, A>
 {
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
         self.accounting_delta.pool_exists(pool_id)
@@ -284,9 +287,7 @@ impl<'a, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> P
     }
 }
 
-impl<'a, S, U, A: PoSAccountingView> FlushablePoSAccountingView
-    for TransactionVerifier<'a, S, U, A>
-{
+impl<C, S, U, A: PoSAccountingView> FlushablePoSAccountingView for TransactionVerifier<C, S, U, A> {
     fn batch_write_delta(
         &mut self,
         data: PoSAccountingDeltaData,

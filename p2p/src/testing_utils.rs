@@ -13,8 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use libp2p::Multiaddr;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+
+use crypto::random::{make_pseudo_rng, Rng};
+
+use crate::net::mock::transport::{
+    MockChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
+};
 
 /// An interface for creating transports and addresses used in tests.
 ///
@@ -36,32 +41,15 @@ pub trait TestTransportMaker {
     fn make_address() -> Self::Address;
 }
 
-pub struct TestTransportLibp2p {}
-
-impl TestTransportMaker for TestTransportLibp2p {
-    type Transport = crate::net::libp2p::Libp2pTransport;
-
-    type Address = Multiaddr;
-
-    fn make_transport() -> Self::Transport {
-        let p2p_config = Default::default();
-        crate::net::libp2p::make_transport(&p2p_config)
-    }
-
-    fn make_address() -> Self::Address {
-        "/ip6/::1/tcp/0".parse().expect("valid address")
-    }
-}
-
 pub struct TestTransportTcp {}
 
 impl TestTransportMaker for TestTransportTcp {
-    type Transport = crate::net::mock::transport::TcpTransportSocket;
+    type Transport = TcpTransportSocket;
 
     type Address = SocketAddr;
 
     fn make_transport() -> Self::Transport {
-        crate::net::mock::transport::TcpTransportSocket::new()
+        TcpTransportSocket::new()
     }
 
     fn make_address() -> Self::Address {
@@ -72,12 +60,12 @@ impl TestTransportMaker for TestTransportTcp {
 pub struct TestTransportChannel {}
 
 impl TestTransportMaker for TestTransportChannel {
-    type Transport = crate::net::mock::transport::MockChannelTransport;
+    type Transport = MockChannelTransport;
 
     type Address = u64;
 
     fn make_transport() -> Self::Transport {
-        crate::net::mock::transport::MockChannelTransport::new()
+        MockChannelTransport::new()
     }
 
     fn make_address() -> Self::Address {
@@ -88,17 +76,58 @@ impl TestTransportMaker for TestTransportChannel {
 pub struct TestTransportNoise {}
 
 impl TestTransportMaker for TestTransportNoise {
-    type Transport = crate::net::mock::transport::NoiseTcpTransport;
+    type Transport = NoiseTcpTransport;
 
     type Address = SocketAddr;
 
     fn make_transport() -> Self::Transport {
-        let stream_adapter = crate::net::mock::transport::NoiseEncryptionAdapter::gen_new();
-        let base_transport = crate::net::mock::transport::TcpTransportSocket::new();
-        crate::net::mock::transport::NoiseTcpTransport::new(stream_adapter, base_transport)
+        let stream_adapter = NoiseEncryptionAdapter::gen_new();
+        let base_transport = TcpTransportSocket::new();
+        NoiseTcpTransport::new(stream_adapter, base_transport)
     }
 
     fn make_address() -> Self::Address {
         TestTransportTcp::make_address()
+    }
+}
+
+/// An interface for creating random addresses.
+pub trait RandomAddressMaker {
+    /// An address type.
+    type Address;
+
+    /// Creates a new random address
+    fn new() -> Self::Address;
+}
+
+pub struct TestTcpAddressMaker {}
+
+impl RandomAddressMaker for TestTcpAddressMaker {
+    type Address = SocketAddr;
+
+    fn new() -> Self::Address {
+        let mut rng = make_pseudo_rng();
+        let ip = Ipv6Addr::new(
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+        );
+        SocketAddr::new(IpAddr::V6(ip), rng.gen())
+    }
+}
+
+pub struct TestChannelAddressMaker {}
+
+impl RandomAddressMaker for TestChannelAddressMaker {
+    type Address = u64;
+
+    fn new() -> Self::Address {
+        let mut rng = make_pseudo_rng();
+        rng.gen()
     }
 }

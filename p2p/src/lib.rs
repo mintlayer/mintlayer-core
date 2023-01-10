@@ -40,7 +40,13 @@ use crate::{
     config::P2pConfig,
     error::{ConversionError, P2pError},
     event::{PeerManagerEvent, SyncEvent},
-    net::{ConnectivityService, NetworkingService, SyncingMessagingService},
+    net::{
+        mock::{
+            transport::{NoiseEncryptionAdapter, NoiseTcpTransport},
+            MockService,
+        },
+        ConnectivityService, NetworkingService, SyncingMessagingService,
+    },
 };
 
 /// Result type with P2P errors
@@ -70,7 +76,7 @@ where
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         _mempool_handle: mempool::MempoolHandle,
-    ) -> crate::Result<Self>
+    ) -> Result<Self>
     where
         <T as NetworkingService>::Address: FromStr,
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
@@ -151,10 +157,12 @@ pub async fn make_p2p(
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     mempool_handle: mempool::MempoolHandle,
-) -> crate::Result<Box<dyn P2pInterface>> {
-    let transport = net::libp2p::make_transport(&p2p_config);
+) -> Result<Box<dyn P2pInterface>> {
+    let stream_adapter = NoiseEncryptionAdapter::gen_new();
+    let base_transport = net::mock::transport::TcpTransportSocket::new();
+    let transport = NoiseTcpTransport::new(stream_adapter, base_transport);
 
-    let p2p = P2p::<net::libp2p::Libp2pService>::new(
+    let p2p = P2p::<MockService<NoiseTcpTransport>>::new(
         transport,
         chain_config,
         p2p_config,

@@ -20,7 +20,6 @@ mod request_response;
 
 use std::sync::Arc;
 
-use libp2p::PeerId;
 use tokio::sync::mpsc;
 
 use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
@@ -71,7 +70,7 @@ where
 
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(P2pConfig {
-        bind_address: "/ip6/::1/tcp/3031".to_owned().into(),
+        bind_address: "[::1]:3031".to_owned().into(),
         ban_threshold: 100.into(),
         ban_duration: Default::default(),
         outbound_connection_timeout: 10.into(),
@@ -112,14 +111,6 @@ pub trait MakeTestPeerId {
     type PeerId;
 
     fn new() -> Self::PeerId;
-}
-
-impl MakeTestPeerId for PeerId {
-    type PeerId = Self;
-
-    fn new() -> Self::PeerId {
-        PeerId::random()
-    }
 }
 
 impl MakeTestPeerId for MockPeerId {

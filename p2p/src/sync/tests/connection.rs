@@ -13,22 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use libp2p::PeerId;
-
 use crate::testing_utils::{
-    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
-    TestTransportTcp,
+    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
 };
 
 use crate::{
     error::{P2pError, PeerError},
-    net::{
-        libp2p::Libp2pService,
-        mock::{
-            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-            types::MockPeerId,
-            MockService,
-        },
+    net::mock::{
+        transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
+        types::MockPeerId,
+        MockService,
     },
     sync::tests::{make_sync_manager, register_peer, MakeTestPeerId},
     ConnectivityService, NetworkingService, SyncingMessagingService,
@@ -54,11 +48,6 @@ where
         mgr.register_peer(peer_id).await,
         Err(P2pError::PeerError(PeerError::PeerAlreadyExists))
     );
-}
-
-#[tokio::test]
-async fn test_peer_reconnected_libp2p() {
-    test_peer_reconnected::<TestTransportLibp2p, PeerId, Libp2pService>().await;
 }
 
 #[tokio::test]
@@ -102,11 +91,6 @@ where
 
     mgr.unregister_peer(peer_id1);
     assert!(mgr.peers.is_empty());
-}
-
-#[tokio::test]
-async fn test_peer_disconnected_libp2p() {
-    test_peer_disconnected::<TestTransportLibp2p, PeerId, Libp2pService>().await;
 }
 
 #[tokio::test]

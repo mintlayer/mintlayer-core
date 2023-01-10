@@ -166,14 +166,14 @@ fn tx_index_set_hierarchy(#[case] seed: Seed) {
 
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
-    verifier1.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
+    verifier1.tx_index_cache = OptionalTxIndexCache::new_for_test(BTreeMap::from([(
         outpoint1,
         CachedInputsOperation::Write(tx_index_1),
     )]));
 
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
-        verifier.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
+        verifier.tx_index_cache = OptionalTxIndexCache::new_for_test(BTreeMap::from([(
             outpoint2,
             CachedInputsOperation::Write(tx_index_2),
         )]));
@@ -389,13 +389,17 @@ fn tx_index_del_hierarchy(#[case] seed: Seed) {
 
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
-    verifier1.tx_index_cache =
-        TxIndexCache::new_for_test(BTreeMap::from([(outpoint1, CachedInputsOperation::Erase)]));
+    verifier1.tx_index_cache = OptionalTxIndexCache::new_for_test(BTreeMap::from([(
+        outpoint1,
+        CachedInputsOperation::Erase,
+    )]));
 
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
-        verifier.tx_index_cache =
-            TxIndexCache::new_for_test(BTreeMap::from([(outpoint2, CachedInputsOperation::Erase)]));
+        verifier.tx_index_cache = OptionalTxIndexCache::new_for_test(BTreeMap::from([(
+            outpoint2,
+            CachedInputsOperation::Erase,
+        )]));
         verifier
     };
 
@@ -640,14 +644,14 @@ fn tx_index_conflict_hierarchy(#[case] seed: Seed) {
 
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
-    verifier1.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
+    verifier1.tx_index_cache = OptionalTxIndexCache::new_for_test(BTreeMap::from([(
         outpoint1.clone(),
         CachedInputsOperation::Write(tx_index_1),
     )]));
 
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
-        verifier.tx_index_cache = TxIndexCache::new_for_test(BTreeMap::from([(
+        verifier.tx_index_cache = OptionalTxIndexCache::new_for_test(BTreeMap::from([(
             outpoint1,
             CachedInputsOperation::Write(tx_index_2),
         )]));

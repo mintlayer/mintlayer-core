@@ -30,7 +30,6 @@ void = "1.0"
 tap = "1.0"
 once_cell = "1.13"
 jsonrpsee = { version = "0.16", features = ["macros"]}
-libp2p = { version = "0.46", default-features = false, features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "request-response", "tcp-tokio"] }
 tokio = { version = "1", default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 tokio-util = {version = "0.7", default-features = false, features = ["codec"] }
 snowstorm = "0.4.0"
@@ -43,10 +42,6 @@ p2p-test-utils = { path = "p2p-test-utils" }
 p2p-backend-test-suite = { path = "backend-test-suite" }
 
 portpicker = "0.1"
-
-[[test]]
-name = "backend_libp2p"
-harness = false
 
 [[test]]
 name = "backend_mock_tcp"

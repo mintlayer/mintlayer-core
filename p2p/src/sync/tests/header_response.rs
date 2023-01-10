@@ -16,23 +16,18 @@
 use std::sync::Arc;
 
 use crypto::random::{Rng, SliceRandom};
-use libp2p::PeerId;
 
 use crate::testing_utils::{
-    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
-    TestTransportTcp,
+    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
 };
 use p2p_test_utils::TestBlockInfo;
 
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
-    net::{
-        libp2p::Libp2pService,
-        mock::{
-            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-            types::MockPeerId,
-            MockService,
-        },
+    net::mock::{
+        transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
+        types::MockPeerId,
+        MockService,
     },
     sync::{
         peer,
@@ -73,11 +68,6 @@ where
 }
 
 #[tokio::test]
-async fn too_many_headers_libp2p() {
-    too_many_headers::<TestTransportLibp2p, PeerId, Libp2pService>().await;
-}
-
-#[tokio::test]
 async fn too_many_headers_mock_tcp() {
     too_many_headers::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
@@ -111,11 +101,6 @@ where
         mgr.validate_header_response(&peer_id, vec![]).await,
         Ok(None),
     );
-}
-
-#[tokio::test]
-async fn empty_response_libp2p() {
-    empty_response::<TestTransportLibp2p, PeerId, Libp2pService>().await;
 }
 
 #[tokio::test]
@@ -168,11 +153,6 @@ where
 }
 
 #[tokio::test]
-async fn valid_response_libp2p() {
-    valid_response::<TestTransportLibp2p, PeerId, Libp2pService>().await;
-}
-
-#[tokio::test]
 async fn valid_response_mock_tcp() {
     valid_response::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
@@ -218,11 +198,6 @@ where
         mgr.validate_header_response(&peer_id, headers[1..].to_vec()).await,
         Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)),
     );
-}
-
-#[tokio::test]
-async fn header_doesnt_attach_to_local_chain_libp2p() {
-    header_doesnt_attach_to_local_chain::<TestTransportLibp2p, PeerId, Libp2pService>().await;
 }
 
 #[tokio::test]
@@ -290,11 +265,6 @@ where
 }
 
 #[tokio::test]
-async fn headers_not_in_order_libp2p() {
-    headers_not_in_order::<TestTransportLibp2p, PeerId, Libp2pService>().await;
-}
-
-#[tokio::test]
 async fn headers_not_in_order_mock_tcp() {
     headers_not_in_order::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
@@ -346,11 +316,6 @@ where
 }
 
 #[tokio::test]
-async fn invalid_state_libp2p() {
-    invalid_state::<TestTransportLibp2p, PeerId, Libp2pService>().await;
-}
-
-#[tokio::test]
 async fn invalid_state_mock_tcp() {
     invalid_state::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
@@ -383,11 +348,6 @@ where
         mgr.validate_header_response(&peer_id, vec![]).await,
         Err(P2pError::PeerError(PeerError::PeerDoesntExist)),
     );
-}
-
-#[tokio::test]
-async fn peer_doesnt_exist_libp2p() {
-    peer_doesnt_exist::<TestTransportLibp2p, PeerId, Libp2pService>().await;
 }
 
 #[tokio::test]

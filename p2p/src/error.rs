@@ -15,12 +15,6 @@
 
 use chainstate::ban_score::BanScore;
 use common::primitives::semver::SemVer;
-use libp2p::{
-    gossipsub::error::{
-        PublishError as GossipsubPublishError, SubscriptionError as GossipsubSubscriptionError,
-    },
-    swarm::{handler::ConnectionHandlerUpgrErr, DialError::*},
-};
 use thiserror::Error;
 
 /// Errors related to invalid data/peer information that results in connection getting closed
@@ -203,70 +197,6 @@ impl From<subsystem::subsystem::CallError> for P2pError {
 impl From<chainstate::ChainstateError> for P2pError {
     fn from(e: chainstate::ChainstateError) -> P2pError {
         P2pError::ChainstateError(e)
-    }
-}
-
-impl From<libp2p::gossipsub::error::PublishError> for PublishError {
-    fn from(err: libp2p::gossipsub::error::PublishError) -> PublishError {
-        match err {
-            GossipsubPublishError::Duplicate => PublishError::Duplicate,
-            GossipsubPublishError::SigningError(_) => PublishError::SigningFailed,
-            GossipsubPublishError::InsufficientPeers => PublishError::InsufficientPeers,
-            GossipsubPublishError::MessageTooLarge => PublishError::MessageTooLarge(None, None),
-            GossipsubPublishError::TransformFailed(_) => PublishError::TransformFailed,
-        }
-    }
-}
-
-impl From<libp2p::gossipsub::error::PublishError> for P2pError {
-    fn from(err: libp2p::gossipsub::error::PublishError) -> P2pError {
-        P2pError::PublishError(PublishError::from(err))
-    }
-}
-
-impl From<libp2p::gossipsub::error::SubscriptionError> for P2pError {
-    fn from(err: libp2p::gossipsub::error::SubscriptionError) -> P2pError {
-        match err {
-            GossipsubSubscriptionError::PublishError(error) => P2pError::SubscriptionError(
-                SubscriptionError::FailedToPublish(PublishError::from(error)),
-            ),
-            GossipsubSubscriptionError::NotAllowed => {
-                P2pError::SubscriptionError(SubscriptionError::NotAllowed)
-            }
-        }
-    }
-}
-
-impl From<libp2p::swarm::DialError> for P2pError {
-    fn from(err: libp2p::swarm::DialError) -> P2pError {
-        match err {
-            Banned => P2pError::DialError(DialError::Banned),
-            ConnectionLimit(limit) => {
-                P2pError::DialError(DialError::ConnectionLimit(limit.limit as usize))
-            }
-            LocalPeerId => P2pError::DialError(DialError::AttemptToDialSelf),
-            NoAddresses => P2pError::DialError(DialError::NoAddresses),
-            DialPeerConditionFalse(_) => P2pError::DialError(DialError::DialPeerConditionFalse),
-            Aborted => P2pError::DialError(DialError::Aborted),
-            InvalidPeerId(_) => P2pError::DialError(DialError::InvalidPeerId),
-            WrongPeerId { .. } => P2pError::DialError(DialError::WrongPeerId),
-            ConnectionIo(error) => P2pError::DialError(DialError::IoError(error.kind())),
-            Transport(_) => P2pError::DialError(DialError::Transport),
-        }
-    }
-}
-
-impl<T> From<ConnectionHandlerUpgrErr<T>> for P2pError {
-    fn from(err: ConnectionHandlerUpgrErr<T>) -> P2pError {
-        match err {
-            ConnectionHandlerUpgrErr::Timeout => {
-                P2pError::ConnectionError(ConnectionError::Timeout)
-            }
-            ConnectionHandlerUpgrErr::Timer => P2pError::ConnectionError(ConnectionError::Timer),
-            ConnectionHandlerUpgrErr::Upgrade(_) => {
-                P2pError::ConnectionError(ConnectionError::Upgrade)
-            }
-        }
     }
 }
 

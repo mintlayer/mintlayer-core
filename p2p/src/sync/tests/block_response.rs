@@ -15,25 +15,20 @@
 
 use std::sync::Arc;
 
-use libp2p::PeerId;
 use p2p_test_utils::TestBlockInfo;
 
 use crate::testing_utils::{
-    TestTransportChannel, TestTransportLibp2p, TestTransportMaker, TestTransportNoise,
-    TestTransportTcp,
+    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
 };
 use chainstate::ChainstateError;
 use common::{chain::block::consensus_data::PoWData, primitives::Idable};
 
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
-    net::{
-        libp2p::Libp2pService,
-        mock::{
-            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-            types::MockPeerId,
-            MockService,
-        },
+    net::mock::{
+        transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
+        types::MockPeerId,
+        MockService,
     },
     sync::{
         peer,
@@ -60,11 +55,6 @@ where
         mgr.validate_header_response(&peer_id, vec![]).await,
         Err(P2pError::PeerError(PeerError::PeerDoesntExist)),
     );
-}
-
-#[tokio::test]
-async fn peer_doesnt_exist_libp2p() {
-    peer_doesnt_exist::<TestTransportLibp2p, PeerId, Libp2pService>().await;
 }
 
 #[tokio::test]
@@ -118,11 +108,6 @@ where
 }
 
 #[tokio::test]
-async fn valid_block_libp2p() {
-    valid_block::<TestTransportLibp2p, PeerId, Libp2pService>().await;
-}
-
-#[tokio::test]
 async fn valid_block_mock_tcp() {
     valid_block::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
 }
@@ -163,11 +148,6 @@ where
         mgr.validate_block_response(&peer_id, blocks).await,
         Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)),
     );
-}
-
-#[tokio::test]
-async fn valid_block_invalid_state_libp2p() {
-    valid_block_invalid_state::<TestTransportLibp2p, PeerId, Libp2pService>().await;
 }
 
 #[tokio::test]
@@ -225,11 +205,6 @@ where
         mgr.validate_block_response(&peer_id, blocks).await,
         Ok(None),
     );
-}
-
-#[tokio::test]
-async fn valid_block_resubmitted_chainstate_libp2p() {
-    valid_block_resubmitted_chainstate::<TestTransportLibp2p, PeerId, Libp2pService>().await;
 }
 
 #[tokio::test]
@@ -300,11 +275,6 @@ where
             ChainstateError::ProcessBlockError(_)
         ))
     ));
-}
-
-#[tokio::test]
-async fn invalid_block_libp2p() {
-    invalid_block::<TestTransportLibp2p, PeerId, Libp2pService>().await;
 }
 
 #[tokio::test]

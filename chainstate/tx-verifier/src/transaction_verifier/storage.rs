@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
+
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
@@ -147,4 +149,44 @@ pub trait TransactionVerifierStorageMut:
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), TransactionVerifierStorageError>;
+}
+
+impl<T: Deref> TransactionVerifierStorageRef for T
+where
+    T::Target: TransactionVerifierStorageRef,
+{
+    fn get_token_id_from_issuance_tx(
+        &self,
+        tx_id: Id<Transaction>,
+    ) -> Result<Option<TokenId>, TransactionVerifierStorageError> {
+        self.deref().get_token_id_from_issuance_tx(tx_id)
+    }
+
+    fn get_gen_block_index(
+        &self,
+        block_id: &Id<GenBlock>,
+    ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
+        self.deref().get_gen_block_index(block_id)
+    }
+
+    fn get_mainchain_tx_index(
+        &self,
+        tx_id: &OutPointSourceId,
+    ) -> Result<Option<TxMainChainIndex>, TransactionVerifierStorageError> {
+        self.deref().get_mainchain_tx_index(tx_id)
+    }
+
+    fn get_token_aux_data(
+        &self,
+        token_id: &TokenId,
+    ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError> {
+        self.deref().get_token_aux_data(token_id)
+    }
+
+    fn get_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError> {
+        self.deref().get_accounting_undo(id)
+    }
 }

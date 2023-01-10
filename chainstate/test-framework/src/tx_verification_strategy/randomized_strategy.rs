@@ -65,26 +65,29 @@ impl RandomizedTransactionVerificationStrategy {
 }
 
 impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrategy {
-    fn connect_block<'a, H, S, M, U, A>(
+    fn connect_block<C, H, S, M, U, A>(
         &self,
         tx_verifier_maker: M,
-        block_index_handle: &'a H,
-        storage_backend: &'a S,
-        chain_config: &'a ChainConfig,
+        block_index_handle: &H,
+        storage_backend: S,
+        chain_config: C,
         verifier_config: TransactionVerifierConfig,
-        block_index: &'a BlockIndex,
+        block_index: &BlockIndex,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S, U, A>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
     where
+        C: AsRef<ChainConfig>,
         H: BlockIndexHandle,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
         A: PoSAccountingView,
-        M: TransactionVerifierMakerFn<'a, S, U, A>,
+        M: TransactionVerifierMakerFn<C, S, U, A>,
     {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past =
             calculate_median_time_past(block_index_handle, &block.prev_block_id());
+        let block_subsidy =
+            chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
 
         let (mut tx_verifier, total_fees) = self
             .connect_with_base(
@@ -98,7 +101,6 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
             )
             .log_err()?;
 
-        let block_subsidy = chain_config.block_subsidy_at_height(&block_index.block_height());
         tx_verifier
             .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
             .log_err()?;
@@ -108,19 +110,20 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         Ok(tx_verifier)
     }
 
-    fn disconnect_block<'a, S, M, U, A>(
+    fn disconnect_block<C, S, M, U, A>(
         &self,
         tx_verifier_maker: M,
-        storage_backend: &'a S,
-        chain_config: &'a ChainConfig,
+        storage_backend: S,
+        chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S, U, A>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
     where
+        C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
         A: PoSAccountingView,
-        M: TransactionVerifierMakerFn<'a, S, U, A>,
+        M: TransactionVerifierMakerFn<C, S, U, A>,
     {
         let mut tx_verifier = self.disconnect_with_base(
             tx_verifier_maker,
@@ -137,22 +140,22 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
 }
 
 impl RandomizedTransactionVerificationStrategy {
-    #[allow(clippy::too_many_arguments)]
-    fn connect_with_base<'a, S, M, U, A>(
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    fn connect_with_base<C: AsRef<ChainConfig>, S, M, U, A>(
         &self,
         tx_verifier_maker: M,
-        storage_backend: &'a S,
-        chain_config: &'a ChainConfig,
+        storage_backend: S,
+        chain_config: C,
         verifier_config: TransactionVerifierConfig,
-        block_index: &'a BlockIndex,
+        block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: &BlockTimestamp,
-    ) -> Result<(TransactionVerifier<'a, S, U, A>, Amount), ConnectTransactionError>
+    ) -> Result<(TransactionVerifier<C, S, U, A>, Amount), ConnectTransactionError>
     where
         S: TransactionVerifierStorageRef,
         U: UtxosView,
         A: PoSAccountingView,
-        M: TransactionVerifierMakerFn<'a, S, U, A>,
+        M: TransactionVerifierMakerFn<C, S, U, A>,
     {
         let mut tx_indices = construct_tx_indices(&verifier_config, block)?;
         let block_reward_tx_index = construct_reward_tx_indices(&verifier_config, block)?;
@@ -206,16 +209,17 @@ impl RandomizedTransactionVerificationStrategy {
         Ok((tx_verifier, total_fee))
     }
 
-    fn connect_with_derived<'a, S, U, A>(
+    fn connect_with_derived<C, S, U, A>(
         &self,
-        base_tx_verifier: &TransactionVerifier<'a, S, U, A>,
+        base_tx_verifier: &TransactionVerifier<C, S, U, A>,
         block: &WithId<Block>,
-        block_index: &'a BlockIndex,
+        block_index: &BlockIndex,
         median_time_past: &BlockTimestamp,
         tx_indices: &mut Option<VecDeque<TxMainChainIndex>>,
         mut tx_num: usize,
     ) -> Result<(TransactionVerifierDelta, Amount, usize), ConnectTransactionError>
     where
+        C: AsRef<ChainConfig>,
         U: UtxosView,
         A: PoSAccountingView,
         S: TransactionVerifierStorageRef,
@@ -248,19 +252,20 @@ impl RandomizedTransactionVerificationStrategy {
         Ok((cache, total_fee, tx_num))
     }
 
-    fn disconnect_with_base<'a, S, M, U, A>(
+    fn disconnect_with_base<C, S, M, U, A>(
         &self,
         tx_verifier_maker: M,
-        storage_backend: &'a S,
-        chain_config: &'a ChainConfig,
+        storage_backend: S,
+        chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S, U, A>, ConnectTransactionError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
     where
+        C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
         A: PoSAccountingView,
-        M: TransactionVerifierMakerFn<'a, S, U, A>,
+        M: TransactionVerifierMakerFn<C, S, U, A>,
     {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
         let mut tx_num = i32::try_from(block.transactions().len()).unwrap() - 1;
@@ -290,13 +295,14 @@ impl RandomizedTransactionVerificationStrategy {
         Ok(tx_verifier)
     }
 
-    fn disconnect_with_derived<'a, S, U, A>(
+    fn disconnect_with_derived<C, S, U, A>(
         &self,
-        base_tx_verifier: &TransactionVerifier<'a, S, U, A>,
+        base_tx_verifier: &TransactionVerifier<C, S, U, A>,
         block: &WithId<Block>,
         mut tx_num: i32,
     ) -> Result<(TransactionVerifierDelta, i32), ConnectTransactionError>
     where
+        C: AsRef<ChainConfig>,
         U: UtxosView,
         A: PoSAccountingView,
         S: TransactionVerifierStorageRef,
