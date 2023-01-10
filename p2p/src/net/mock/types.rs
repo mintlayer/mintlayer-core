@@ -22,16 +22,12 @@ use std::{
 
 use tokio::sync::oneshot;
 
-use common::primitives::semver;
+use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
 
 use crate::{
     error, message,
-    net::{
-        self,
-        mock::transport::TransportSocket,
-        types::{Protocol, PubSubTopic},
-    },
+    net::{self, mock::transport::TransportSocket, types::PubSubTopic},
 };
 
 pub enum Command<T: TransportSocket> {
@@ -163,18 +159,12 @@ impl std::fmt::Display for MockPeerId {
     }
 }
 
-// This type is only needed to satisfy the `NetworkingService` trait requirements. It should be
-// removed along with the libp2p backend.
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct MockMessageId;
-
 #[derive(Debug, PartialEq, Eq)]
 pub struct MockPeerInfo {
     pub peer_id: MockPeerId,
     pub network: [u8; 4],
-    pub version: common::primitives::semver::SemVer,
+    pub version: SemVer,
     pub agent: Option<String>,
-    pub protocols: Vec<Protocol>,
     pub subscriptions: BTreeSet<PubSubTopic>,
 }
 
@@ -183,8 +173,7 @@ pub enum PeerEvent {
     /// Peer information received from remote
     PeerInfoReceived {
         network: [u8; 4],
-        version: semver::SemVer,
-        protocols: Vec<Protocol>,
+        version: SemVer,
         subscriptions: BTreeSet<PubSubTopic>,
 
         /// Listening port of the remote peer, only set for incoming connection and only if shared by the remote peer
@@ -210,9 +199,8 @@ pub enum MockEvent {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum HandshakeMessage {
     Hello {
-        version: common::primitives::semver::SemVer,
+        version: SemVer,
         network: [u8; 4],
-        protocols: Vec<Protocol>,
         subscriptions: BTreeSet<PubSubTopic>,
 
         // Specify on which port this node can be reached for incoming connections.
@@ -221,9 +209,8 @@ pub enum HandshakeMessage {
         listening_port: Option<u16>,
     },
     HelloAck {
-        version: common::primitives::semver::SemVer,
+        version: SemVer,
         network: [u8; 4],
-        protocols: Vec<Protocol>,
         subscriptions: BTreeSet<PubSubTopic>,
     },
 }

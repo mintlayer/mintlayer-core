@@ -41,10 +41,7 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
     message::{self, Announcement},
-    net::{
-        types::{SyncingEvent, ValidationResult},
-        NetworkingService, SyncingMessagingService,
-    },
+    net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
 };
 
 // TODO: from config? global constant?
@@ -361,16 +358,13 @@ where
     pub async fn process_announcement(
         &mut self,
         peer_id: T::PeerId,
-        message_id: T::SyncingMessageId,
         announcement: Announcement,
     ) -> crate::Result<()> {
         // TODO: Discuss if we should announce blocks or headers, because announcing
         // blocks seems wasteful, in the sense that it's possible for peers to get
         // blocks again, and again, wasting their bandwidth.
         match announcement {
-            Announcement::Block(block) => {
-                self.process_block_announcement(peer_id, message_id, block).await
-            }
+            Announcement::Block(block) => self.process_block_announcement(peer_id, block).await,
         }
     }
 
@@ -486,8 +480,8 @@ where
                     } => {
                         self.process_response(peer_id, request_id, response).await?;
                     },
-                    SyncingEvent::Announcement{ peer_id, message_id, announcement } => {
-                        self.process_announcement(peer_id, message_id, announcement).await?;
+                    SyncingEvent::Announcement{ peer_id, announcement } => {
+                        self.process_announcement(peer_id, announcement).await?;
                     }
                 },
                 event = self.rx_sync.recv() => match event.ok_or(P2pError::ChannelClosed)? {
@@ -543,7 +537,6 @@ where
     async fn process_block_announcement(
         &mut self,
         peer_id: T::PeerId,
-        message_id: T::SyncingMessageId,
         block: Block,
     ) -> crate::Result<()> {
         let result = match self
@@ -578,9 +571,7 @@ where
             let _ = rx.await.map_err(P2pError::from)?;
         }
 
-        self.peer_sync_handle
-            .report_validation_result(peer_id, message_id, ValidationResult::Ignore)
-            .await
+        Ok(())
     }
 }
 

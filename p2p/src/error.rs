@@ -27,16 +27,8 @@ pub enum ProtocolError {
     InvalidVersion(SemVer, SemVer),
     #[error("Peer sent an invalid message")]
     InvalidMessage,
-    #[error("Peer is incompatible")]
-    Incompatible,
     #[error("Peer is unresponsive")]
     Unresponsive,
-    #[error("Peer uses an invalid protocol")]
-    InvalidProtocol,
-    #[error("Peer state is invalid for this operation. State is {0} but should be {1}")]
-    InvalidState(&'static str, &'static str),
-    #[error("Unable to convert the address to a bannable form: {0}")]
-    UnableToConvertAddressToBannable(String),
 }
 
 /// Peer state errors (Errors either for an individual peer or for the [`PeerManager`])
@@ -63,15 +55,12 @@ pub enum PeerError {
 /// PubSub errors for announcements
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum PublishError {
-    #[error("Message has already been published")]
-    Duplicate,
     #[error("Failed to sign message")]
     SigningFailed,
     #[error("No peers in topic")]
     InsufficientPeers,
-    // TODO: The sizes are optional for now only because libp2p hides this information.
     #[error("Message is too large. Tried to send {0:?} bytes when limit is {1:?}")]
-    MessageTooLarge(Option<usize>, Option<usize>),
+    MessageTooLarge(usize, usize),
     #[error("Failed to compress the message")]
     TransformFailed,
 }
@@ -108,19 +97,6 @@ pub enum DialError {
     ConnectionRefusedOrTimedOut,
     #[error("I/O error: `{0:?}`")]
     IoError(std::io::ErrorKind),
-    #[error("Failed to negotiate transport protocol")]
-    Transport,
-}
-
-/// Low-level connection errors caused by libp2p
-#[derive(Error, Debug, PartialEq, Eq)]
-pub enum ConnectionError {
-    #[error("Timeout")]
-    Timeout,
-    #[error("Timer failed")]
-    Timer,
-    #[error("Failed to upgrade protocol")]
-    Upgrade,
 }
 
 /// Conversion errors
@@ -142,8 +118,6 @@ pub enum P2pError {
     PublishError(PublishError),
     #[error("Failed to subscribe to pubsub topic: `{0}`")]
     SubscriptionError(SubscriptionError),
-    #[error("Failed to upgrade connection: `{0}`")]
-    ConnectionError(ConnectionError),
     #[error("Failed to dial peer: `{0}`")]
     DialError(DialError),
     #[error("Connection to other task lost")]
@@ -206,7 +180,6 @@ impl BanScore for P2pError {
             P2pError::ProtocolError(err) => err.ban_score(),
             P2pError::PublishError(err) => err.ban_score(),
             P2pError::SubscriptionError(err) => err.ban_score(),
-            P2pError::ConnectionError(_) => 0,
             P2pError::DialError(_) => 0,
             P2pError::ChannelClosed => 0,
             P2pError::PeerError(_) => 0,
@@ -227,11 +200,7 @@ impl BanScore for ProtocolError {
             ProtocolError::DifferentNetwork(_, _) => 100,
             ProtocolError::InvalidVersion(_, _) => 100,
             ProtocolError::InvalidMessage => 100,
-            ProtocolError::Incompatible => 100,
             ProtocolError::Unresponsive => 100,
-            ProtocolError::InvalidProtocol => 100,
-            ProtocolError::InvalidState(_, _) => 100,
-            ProtocolError::UnableToConvertAddressToBannable(_) => 100,
         }
     }
 }
@@ -239,7 +208,6 @@ impl BanScore for ProtocolError {
 impl BanScore for PublishError {
     fn ban_score(&self) -> u32 {
         match self {
-            PublishError::Duplicate => 0,
             PublishError::SigningFailed => 0,
             PublishError::InsufficientPeers => 0,
             PublishError::MessageTooLarge(_, _) => 100,

@@ -333,8 +333,8 @@ where
                 .send(ConnectivityEvent::Misbehaved {
                     peer_id,
                     error: P2pError::PublishError(PublishError::MessageTooLarge(
-                        Some(size),
-                        Some(ANNOUNCEMENT_MAX_SIZE),
+                        size,
+                        ANNOUNCEMENT_MAX_SIZE,
                     )),
                 })
                 .await
@@ -485,7 +485,6 @@ where
             PeerEvent::PeerInfoReceived {
                 network,
                 version,
-                protocols,
                 subscriptions,
                 listening_port,
             } => {
@@ -502,7 +501,6 @@ where
                                     network,
                                     version,
                                     agent: None,
-                                    protocols,
                                     subscriptions: subscriptions.clone(),
                                 },
                             })
@@ -518,7 +516,6 @@ where
                                     network,
                                     version,
                                     agent: None,
-                                    protocols,
                                     subscriptions: subscriptions.clone(),
                                 },
                             })

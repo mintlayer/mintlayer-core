@@ -17,10 +17,7 @@ use std::{fmt::Debug, hash::Hash, str::FromStr};
 
 use async_trait::async_trait;
 
-use crate::{
-    net::{AsBannableAddress, IsBannableAddress},
-    Result,
-};
+use crate::{net::AsBannableAddress, Result};
 
 use super::{listener::TransportListener, stream::PeerStream, TransportAddress};
 
@@ -40,8 +37,7 @@ pub trait TransportSocket: Send + Sync + 'static {
         + Sync
         + ToString
         + FromStr
-        + AsBannableAddress<BannableAddress = Self::BannableAddress>
-        + IsBannableAddress;
+        + AsBannableAddress<BannableAddress = Self::BannableAddress>;
 
     /// A bannable address format.
     type BannableAddress: Debug + Eq + Ord + Send;

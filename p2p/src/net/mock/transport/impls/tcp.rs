@@ -25,7 +25,7 @@ use crate::{
         mock::transport::{
             traits::TransportAddress, PeerStream, TransportListener, TransportSocket,
         },
-        AsBannableAddress, IsBannableAddress,
+        AsBannableAddress,
     },
     types::peer_address::PeerAddress,
     Result,
@@ -147,12 +147,6 @@ impl AsBannableAddress for SocketAddr {
 
     fn as_bannable(&self) -> Self::BannableAddress {
         self.ip()
-    }
-}
-
-impl IsBannableAddress for SocketAddr {
-    fn is_bannable(&self) -> bool {
-        true
     }
 }
 

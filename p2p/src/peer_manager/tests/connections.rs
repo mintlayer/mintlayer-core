@@ -29,7 +29,7 @@ use crate::{
         TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
 };
-use common::{chain::config, primitives::semver::SemVer};
+use common::chain::config;
 
 use crate::{
     error::{DialError, P2pError, ProtocolError},
@@ -41,7 +41,7 @@ use crate::{
             types::MockPeerId,
             MockService,
         },
-        types::{Protocol, ProtocolType, PubSubTopic},
+        types::PubSubTopic,
         ConnectivityService, NetworkingService,
     },
     peer_manager::{self, helpers::connect_services, tests::make_peer_manager},
@@ -404,12 +404,6 @@ async fn inbound_connection_too_many_peers_mock_tcp() {
                     magic_bytes: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     agent: None,
-                    protocols: [
-                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                        Protocol::new(ProtocolType::Sync, SemVer::new(1, 0, 0)),
-                    ]
-                    .into_iter()
-                    .collect(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -434,12 +428,6 @@ async fn inbound_connection_too_many_peers_mock_channels() {
                     magic_bytes: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     agent: None,
-                    protocols: [
-                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                        Protocol::new(ProtocolType::Sync, SemVer::new(1, 0, 0)),
-                    ]
-                    .into_iter()
-                    .collect(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -466,12 +454,6 @@ async fn inbound_connection_too_many_peers_mock_noise() {
                     magic_bytes: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     agent: None,
-                    protocols: [
-                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-                        Protocol::new(ProtocolType::Sync, SemVer::new(1, 0, 0)),
-                    ]
-                    .into_iter()
-                    .collect(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),

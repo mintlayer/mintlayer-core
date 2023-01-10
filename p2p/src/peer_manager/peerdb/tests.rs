@@ -26,7 +26,7 @@ use crate::{
         types::{PeerInfo, PubSubTopic, Role},
         AsBannableAddress, NetworkingService,
     },
-    peer_manager::{peerdb::PeerDb, tests::default_protocols},
+    peer_manager::peerdb::PeerDb,
     testing_utils::{RandomAddressMaker, TestChannelAddressMaker, TestTcpAddressMaker},
 };
 
@@ -45,7 +45,6 @@ where
             magic_bytes: [1, 2, 3, 4],
             version: common::primitives::semver::SemVer::new(0, 1, 0),
             agent: None,
-            protocols: default_protocols(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     )
