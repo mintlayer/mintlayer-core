@@ -13,10 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use protocol::{Protocol, ProtocolType};
-
-mod protocol;
-
 use std::{collections::BTreeSet, fmt::Display};
 
 use common::primitives::semver::SemVer;
@@ -60,9 +56,6 @@ pub struct PeerInfo<T: NetworkingService> {
     /// User agent of the peer
     pub agent: Option<String>,
 
-    /// A set of supported protocols.
-    pub protocols: BTreeSet<Protocol>,
-
     /// The announcements list that a peer interested is.
     pub subscriptions: BTreeSet<PubSubTopic>,
 }
@@ -78,11 +71,6 @@ impl<T: NetworkingService> Display for PeerInfo<T> {
             "--> User agent: {}",
             self.agent.as_ref().unwrap_or(&"No user agent".to_string())
         )?;
-        write!(f, "--> Protocols: ")?;
-
-        for protocol in &self.protocols {
-            write!(f, "{} ", protocol)?;
-        }
 
         Ok(())
     }
@@ -174,7 +162,6 @@ pub enum SyncingEvent<T: NetworkingService> {
     /// An announcement that is broadcast to all peers.
     Announcement {
         peer_id: T::PeerId,
-        message_id: T::SyncingMessageId,
         announcement: message::Announcement,
     },
 }
@@ -187,17 +174,4 @@ pub enum PubSubTopic {
 
     /// Blocks
     Blocks,
-}
-
-/// Validation result for an incoming PubSub message
-#[derive(Debug)]
-pub enum ValidationResult {
-    /// Message was valid and can be forwarded to other peers
-    Accept,
-
-    /// Message was invalid and mustn't be forwarded to other peers
-    Reject,
-
-    /// Message is not invalid but it shouldn't be forwarded to other peers
-    Ignore,
 }

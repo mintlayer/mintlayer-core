@@ -1311,10 +1311,9 @@ where
         },
         SyncingEvent::Announcement {
             peer_id,
-            message_id,
             announcement,
         } => {
-            mgr.process_announcement(peer_id, message_id, announcement).await?;
+            mgr.process_announcement(peer_id, announcement).await?;
         }
     }
 

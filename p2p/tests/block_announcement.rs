@@ -31,7 +31,7 @@ use p2p::{
             transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             MockService,
         },
-        types::{SyncingEvent, ValidationResult},
+        types::SyncingEvent,
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
     peer_manager::helpers::connect_services,
@@ -108,17 +108,14 @@ where
     }
 
     // Verify that all peers received the message even though they weren't directly connected.
-    let res = peer1.1.poll_next().await;
-    let (peer_id, message_id) = if let Ok(SyncingEvent::Announcement {
-        peer_id,
-        message_id,
-        ..
-    }) = res
-    {
-        (peer_id, message_id)
-    } else {
-        panic!("invalid message received");
-    };
+    let event = peer1.1.poll_next().await.unwrap();
+    assert!(matches!(
+        event,
+        SyncingEvent::Announcement {
+            peer_id: _,
+            announcement: _
+        }
+    ));
 
     // try to poll the other gossipsubs and verify that as `peer1` hasn't registered
     // the message as valid, it is not forwarded and the code instead timeouts
@@ -136,26 +133,15 @@ where
         }
     }
 
-    assert_eq!(
-        peer1
-            .1
-            .report_validation_result(peer_id, message_id, ValidationResult::Accept)
-            .await,
-        Ok(())
-    );
-
     // verify that the peer2 gets the message
-    let res = peer2.1.poll_next().await;
-    let (peer_id, message_id) = if let Ok(SyncingEvent::Announcement {
-        peer_id,
-        message_id,
-        ..
-    }) = res
-    {
-        (peer_id, message_id)
-    } else {
-        panic!("invalid message received");
-    };
+    let event = peer2.1.poll_next().await.unwrap();
+    assert!(matches!(
+        event,
+        SyncingEvent::Announcement {
+            peer_id: _,
+            announcement: _
+        }
+    ));
 
     // verify that peer3 didn't get the message until peer2 validated it
     tokio::select! {
@@ -165,14 +151,6 @@ where
             panic!("peer3 received message")
         }
     }
-
-    assert_eq!(
-        peer2
-            .1
-            .report_validation_result(peer_id, message_id, ValidationResult::Accept)
-            .await,
-        Ok(())
-    );
 
     let res = peer3.1.poll_next().await;
     assert!(std::matches!(

@@ -24,13 +24,7 @@
 pub mod helpers;
 pub mod peerdb;
 
-use std::{
-    collections::{BTreeSet, HashMap},
-    fmt::Debug,
-    str::FromStr,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 
 use tokio::sync::{mpsc, oneshot};
 
@@ -44,11 +38,7 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
     interface::types::ConnectedPeer,
-    net::{
-        self,
-        types::{Protocol, ProtocolType},
-        AsBannableAddress, ConnectivityService, IsBannableAddress, NetworkingService,
-    },
+    net::{self, AsBannableAddress, ConnectivityService, NetworkingService},
 };
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
@@ -120,41 +110,6 @@ where
         self.peerdb.expire_peers(peers)
     }
 
-    /// Verifies the protocols compatibility.
-    ///
-    /// Checks that the given set of protocols contains the following protocols with the exact
-    /// versions:
-    ///
-    /// - PubSub 1.1.0 or PubSub 1.0.0
-    /// - Ping 1.0.0
-    /// - Sync 0.1.0
-    ///
-    /// If any of the protocols are missing or if any of them have a different version,
-    /// the validation fails and connection must be closed.
-    ///
-    /// Either peer may support additional protocols which are not known to the other
-    /// peer and that is totally fine. As long as the aforementioned protocols with
-    /// matching versions are found, the protocol set has been validated successfully.
-    fn validate_supported_protocols(&self, protocols: &BTreeSet<Protocol>) -> bool {
-        // We can work with any of these pubsub versions.
-        const ONE_OF: &[Protocol] = &[
-            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 0, 0)),
-            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-        ];
-
-        // All of these protocols are required.
-        const REQUIRED: &[Protocol] = &[
-            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-        ];
-
-        if !ONE_OF.iter().any(|p| protocols.contains(p)) {
-            return false;
-        }
-
-        REQUIRED.iter().all(|p| protocols.contains(p))
-    }
-
     /// Verify software version compatibility
     ///
     /// Make sure that local and remote peer have the same software version
@@ -191,10 +146,6 @@ where
             ))
         );
         ensure!(
-            self.validate_supported_protocols(&info.protocols),
-            P2pError::ProtocolError(ProtocolError::Incompatible),
-        );
-        ensure!(
             !self.peerdb.is_active_peer(&info.peer_id),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
@@ -224,12 +175,6 @@ where
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
 
-        // TODO: This can and should be removed after getting rid if libp2p.
-        if !address.is_bannable() {
-            return Err(P2pError::ProtocolError(
-                ProtocolError::UnableToConvertAddressToBannable(format!("{address:?}")),
-            ));
-        }
         let bannable_address = address.as_bannable();
         ensure!(
             !self.peerdb.is_address_banned(&bannable_address),
@@ -304,13 +249,6 @@ where
             !self.pending.contains_key(&address),
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
-
-        // TODO: This can and should be removed after getting rid if libp2p.
-        if !address.is_bannable() {
-            return Err(P2pError::ProtocolError(
-                ProtocolError::UnableToConvertAddressToBannable(format!("{address:?}")),
-            ));
-        }
 
         let bannable_address = address.as_bannable();
         ensure!(
@@ -464,7 +402,7 @@ where
                             .active_peers()
                             .iter()
                             .filter_map(|(peer_id, info)| info.address.as_ref().map(|addr| {
-                                ConnectedPeer{addr: addr.to_string(), peer_id: peer_id.to_string() }
+                                ConnectedPeer { addr: addr.to_string(), peer_id: peer_id.to_string() }
                             }))
                             .collect::<Vec<_>>();
                         response.send(peers).map_err(|_| P2pError::ChannelClosed)?

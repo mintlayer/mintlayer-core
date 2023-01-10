@@ -17,18 +17,15 @@ use std::{sync::Arc, time::Duration};
 
 use tokio::{sync::mpsc, time::timeout};
 
-use common::{chain::ChainConfig, primitives::semver::SemVer};
+use common::chain::ChainConfig;
 use logging::log;
 
 use crate::{
     config::P2pConfig,
     error::{P2pError, ProtocolError},
-    net::{
-        mock::{
-            transport::TransportSocket,
-            types::{self, MockEvent, MockPeerId, PeerEvent},
-        },
-        types::{Protocol, ProtocolType},
+    net::mock::{
+        transport::TransportSocket,
+        types::{self, MockEvent, MockPeerId, PeerEvent},
     },
 };
 
@@ -96,7 +93,6 @@ where
                 let Ok(types::Message::Handshake(types::HandshakeMessage::Hello {
                     version,
                     network,
-                    protocols,
                     subscriptions,
                 })) = self.socket.recv().await
                 else {
@@ -108,14 +104,6 @@ where
                         types::HandshakeMessage::HelloAck {
                             version: *self.chain_config.version(),
                             network: *self.chain_config.magic_bytes(),
-                            // TODO: Replace the hard-coded values when ping and pubsub protocols are implemented for the mock interface.
-                            protocols: [
-                                Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                                Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                                Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-                            ]
-                            .into_iter()
-                            .collect(),
                             subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
                         },
                     ))
@@ -127,7 +115,6 @@ where
                         types::PeerEvent::PeerInfoReceived {
                             network,
                             version,
-                            protocols,
                             subscriptions,
                         },
                     ))
@@ -141,13 +128,6 @@ where
                     .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                         version: *self.chain_config.version(),
                         network: *self.chain_config.magic_bytes(),
-                        protocols: [
-                            Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-                        ]
-                        .into_iter()
-                        .collect(),
                         subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
                     }))
                     .await?;
@@ -155,7 +135,6 @@ where
                 let Ok(types::Message::Handshake(types::HandshakeMessage::HelloAck {
                     version,
                     network,
-                    protocols,
                     subscriptions,
                 })) = self.socket.recv().await
                 else {
@@ -168,7 +147,6 @@ where
                         types::PeerEvent::PeerInfoReceived {
                             network,
                             version,
-                            protocols,
                             subscriptions,
                         },
                     ))
@@ -246,7 +224,6 @@ mod tests {
         },
     };
     use chainstate::Locator;
-    use common::primitives::semver::SemVer;
     use futures::FutureExt;
 
     async fn handshake_inbound<A, T>()
@@ -282,13 +259,6 @@ mod tests {
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                 version: *chain_config.version(),
                 network: *chain_config.magic_bytes(),
-                protocols: [
-                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                    Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-                ]
-                .into_iter()
-                .collect(),
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
@@ -302,13 +272,6 @@ mod tests {
             types::PeerEvent::PeerInfoReceived {
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
-                protocols: [
-                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                    Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-                ]
-                .into_iter()
-                .collect(),
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
@@ -365,13 +328,6 @@ mod tests {
                 types::HandshakeMessage::HelloAck {
                     version: *chain_config.version(),
                     network: *chain_config.magic_bytes(),
-                    protocols: [
-                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-                    ]
-                    .into_iter()
-                    .collect(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -385,16 +341,9 @@ mod tests {
             rx1.try_recv(),
             Ok((
                 peer_id3,
-                types::PeerEvent::PeerInfoReceived {
+                PeerEvent::PeerInfoReceived {
                     network: *chain_config.magic_bytes(),
                     version: *chain_config.version(),
-                    protocols: [
-                        Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                        Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                        Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-                    ]
-                    .into_iter()
-                    .collect(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -448,13 +397,6 @@ mod tests {
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                 version: *chain_config.version(),
                 network: [1, 2, 3, 4],
-                protocols: [
-                    Protocol::new(ProtocolType::PubSub, SemVer::new(1, 1, 0)),
-                    Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
-                    Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
-                ]
-                .into_iter()
-                .collect(),
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
