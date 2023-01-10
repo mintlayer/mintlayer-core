@@ -49,25 +49,29 @@ impl Default for DefaultTransactionVerificationStrategy {
 }
 
 impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy {
-    fn connect_block<'a, H, S, M, U>(
+    fn connect_block<C, H, S, M, U>(
         &self,
         tx_verifier_maker: M,
-        block_index_handle: &'a H,
-        storage_backend: &'a S,
-        chain_config: &'a ChainConfig,
+        block_index_handle: &H,
+        storage_backend: S,
+        chain_config: C,
         verifier_config: TransactionVerifierConfig,
-        block_index: &'a BlockIndex,
+        block_index: &BlockIndex,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S, U>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U>, BlockError>
     where
+        C: AsRef<ChainConfig>,
         H: BlockIndexHandle,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>,
+        M: Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U>,
     {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past =
             calculate_median_time_past(block_index_handle, &block.prev_block_id());
+
+        let block_subsidy =
+            chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
 
         let mut tx_indices = construct_tx_indices(&verifier_config, block)?;
         let block_reward_tx_index = construct_reward_tx_indices(&verifier_config, block)?;
@@ -105,7 +109,6 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
             })
             .log_err()?;
 
-        let block_subsidy = chain_config.block_subsidy_at_height(&block_index.block_height());
         tx_verifier
             .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
             .log_err()?;
@@ -115,18 +118,19 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         Ok(tx_verifier)
     }
 
-    fn disconnect_block<'a, S, M, U>(
+    fn disconnect_block<C, S, M, U>(
         &self,
         tx_verifier_maker: M,
-        storage_backend: &'a S,
-        chain_config: &'a ChainConfig,
+        storage_backend: S,
+        chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<'a, S, U>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U>, BlockError>
     where
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(&'a S, &'a ChainConfig, TransactionVerifierConfig) -> TransactionVerifier<'a, S, U>,
+        C: AsRef<ChainConfig>,
+        M: Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U>,
     {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
 

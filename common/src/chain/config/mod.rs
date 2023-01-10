@@ -203,6 +203,12 @@ impl ChainConfig {
     }
 }
 
+impl AsRef<ChainConfig> for ChainConfig {
+    fn as_ref(&self) -> &ChainConfig {
+        self
+    }
+}
+
 // DSA allows us to have blocks up to 1mb
 const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 524_288;

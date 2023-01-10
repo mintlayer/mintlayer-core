@@ -11,5 +11,8 @@ atomic-traits = "0.3"
 num-traits = "0.2"
 slave-pool = "0.2"
 
+[dev-dependencies]
+static_assertions = "1.1"
+
 [target.'cfg(loom)'.dependencies]
 loom = "0.5"
