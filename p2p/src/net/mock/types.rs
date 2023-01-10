@@ -28,6 +28,7 @@ use serialization::{Decode, Encode};
 use crate::{
     error, message,
     net::{self, mock::transport::TransportSocket, types::PubSubTopic},
+    types::peer_address::PeerAddress,
 };
 
 pub enum Command<T: TransportSocket> {
@@ -175,9 +176,7 @@ pub enum PeerEvent {
         network: [u8; 4],
         version: SemVer,
         subscriptions: BTreeSet<PubSubTopic>,
-
-        /// Listening port of the remote peer, only set for incoming connection and only if shared by the remote peer
-        listening_port: Option<u16>,
+        receiver_address: Option<PeerAddress>,
     },
 
     /// Connection closed to remote
@@ -203,15 +202,16 @@ pub enum HandshakeMessage {
         network: [u8; 4],
         subscriptions: BTreeSet<PubSubTopic>,
 
-        // Specify on which port this node can be reached for incoming connections.
-        // If not set, then this node does not want incoming connections.
-        // Actual IP is taken from the remote socket address.
-        listening_port: Option<u16>,
+        /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
+        receiver_address: Option<PeerAddress>,
     },
     HelloAck {
         version: SemVer,
         network: [u8; 4],
         subscriptions: BTreeSet<PubSubTopic>,
+
+        /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
+        receiver_address: Option<PeerAddress>,
     },
 }
 

@@ -56,7 +56,7 @@ use crate::{
         types::{PubSubTopic, Role},
         Announcement,
     },
-    types::peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
+    types::peer_address::PeerAddress,
 };
 
 use super::transport::TransportAddress;
@@ -377,58 +377,15 @@ where
         }
     }
 
-    /// Return on which port this node might be accessible for the specific peer (if possible)
-    fn get_listening_port(&self, peer_address: &T::Address) -> Option<u16> {
-        let peer_address = peer_address.clone().as_peer_address();
-
-        for listening_address in self.addresses.iter() {
-            let listening_address = listening_address.clone().as_peer_address();
-
-            // Check that same IP version is used.
-            // Probably only non-routable listening IP addresses should be considered here (like 0.0.0.0, 127.0.0.1, 192.168.0.1).
-            // Routable IP addresses might be shared with peers directly.
-            match listening_address {
-                PeerAddress::Ip4(socket4) => {
-                    if matches!(peer_address, PeerAddress::Ip4(_)) {
-                        return Some(socket4.port);
-                    }
-                }
-                PeerAddress::Ip6(socket6) => {
-                    if matches!(peer_address, PeerAddress::Ip6(_)) {
-                        return Some(socket6.port);
-                    }
-                }
-            }
-        }
-
-        None
-    }
-
     /// Handle received listening port from inbound remote peer
-    async fn handle_listening_port_from_inbound(
+    fn handle_own_receiver_address(
         &mut self,
-        peer_address: &T::Address,
-        port: u16,
+        receiver_address: PeerAddress,
+        role: Role,
     ) -> crate::Result<()> {
-        let possible_peer_address = match peer_address.clone().as_peer_address() {
-            PeerAddress::Ip4(socket4) => PeerAddress::Ip4(PeerAddressIp4 {
-                ip: socket4.ip,
-                port,
-            }),
-            PeerAddress::Ip6(socket6) => PeerAddress::Ip6(PeerAddressIp6 {
-                ip: socket6.ip,
-                port,
-            }),
-        };
+        log::debug!("new own receiver address {receiver_address} found from {role:?} connection");
 
-        log::debug!("new possible peer address: {possible_peer_address}");
-
-        if let Some(address) = T::Address::from_peer_address(&possible_peer_address) {
-            self.conn_tx
-                .send(ConnectivityEvent::AddressDiscovered { address })
-                .await
-                .map_err(P2pError::from)?;
-        }
+        // TODO: Handle receiver address
 
         Ok(())
     }
@@ -447,7 +404,7 @@ where
     ) -> crate::Result<()> {
         let (tx, rx) = mpsc::channel(16);
 
-        let listening_port = self.get_listening_port(&address);
+        let receiver_address = Some(address.as_peer_address());
 
         self.pending.insert(remote_peer_id, PendingPeerContext { address, role, tx });
 
@@ -462,7 +419,7 @@ where
                 chain_config,
                 p2p_config,
                 socket,
-                listening_port,
+                receiver_address,
                 tx,
                 rx,
             );
@@ -486,7 +443,7 @@ where
                 network,
                 version,
                 subscriptions,
-                listening_port,
+                receiver_address,
             } => {
                 let PendingPeerContext { address, role, tx } =
                     self.pending.remove(&peer_id).expect("peer to exist");
@@ -521,12 +478,11 @@ where
                             })
                             .await
                             .map_err(P2pError::from)?;
-
-                        if let Some(listening_port) = listening_port {
-                            self.handle_listening_port_from_inbound(&address, listening_port)
-                                .await?;
-                        }
                     }
+                }
+
+                if let Some(receiver_address) = receiver_address {
+                    self.handle_own_receiver_address(receiver_address, role)?;
                 }
 
                 self.peers.insert(peer_id, PeerContext { subscriptions, tx });

@@ -30,6 +30,7 @@ use crate::{
         },
         types::Role,
     },
+    types::peer_address::PeerAddress,
 };
 
 use super::transport::BufferedTranscoder;
@@ -51,8 +52,8 @@ pub struct Peer<T: TransportSocket> {
     /// Peer socket
     socket: BufferedTranscoder<T::Stream>,
 
-    /// Listening port of this node that is possible reachable by the remote peer
-    listening_port: Option<u16>,
+    /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
+    receiver_address: Option<PeerAddress>,
 
     /// TX channel for communicating with backend
     tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
@@ -72,7 +73,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         socket: T::Stream,
-        listening_port: Option<u16>,
+        receiver_address: Option<PeerAddress>,
         tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
         rx: mpsc::Receiver<MockEvent>,
     ) -> Self {
@@ -83,7 +84,7 @@ where
             chain_config,
             p2p_config,
             socket,
-            listening_port,
+            receiver_address,
             tx,
             rx,
         }
@@ -96,7 +97,7 @@ where
                     version,
                     network,
                     subscriptions,
-                    listening_port,
+                    receiver_address,
                 })) = self.socket.recv().await
                 else {
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
@@ -108,6 +109,7 @@ where
                             version: *self.chain_config.version(),
                             network: *self.chain_config.magic_bytes(),
                             subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
+                            receiver_address: self.receiver_address.clone(),
                         },
                     ))
                     .await?;
@@ -119,7 +121,7 @@ where
                             network,
                             version,
                             subscriptions,
-                            listening_port,
+                            receiver_address,
                         },
                     ))
                     .await
@@ -131,7 +133,7 @@ where
                         version: *self.chain_config.version(),
                         network: *self.chain_config.magic_bytes(),
                         subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
-                        listening_port: self.listening_port,
+                        receiver_address: self.receiver_address.clone(),
                     }))
                     .await?;
 
@@ -139,6 +141,7 @@ where
                     version,
                     network,
                     subscriptions,
+                    receiver_address,
                 })) = self.socket.recv().await
                 else {
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
@@ -151,7 +154,7 @@ where
                             network,
                             version,
                             subscriptions,
-                            listening_port: None,
+                            receiver_address,
                         },
                     ))
                     .await
@@ -267,7 +270,7 @@ mod tests {
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
-                listening_port: None,
+                receiver_address: None,
             }))
             .await
             .is_ok());
@@ -281,7 +284,7 @@ mod tests {
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
-                listening_port: None,
+                receiver_address: None,
             }
         );
     }
@@ -339,6 +342,7 @@ mod tests {
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
+                    receiver_address: None,
                 }
             ))
             .await
@@ -355,7 +359,7 @@ mod tests {
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
-                    listening_port: None,
+                    receiver_address: None,
                 }
             ))
         );
@@ -410,7 +414,7 @@ mod tests {
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
-                listening_port: None,
+                receiver_address: None,
             }))
             .await
             .is_ok());
