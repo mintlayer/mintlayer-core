@@ -19,7 +19,8 @@ use crate::{
     net::types::Role,
     peer_manager::helpers::filter_connectivity_event,
     testing_utils::{
-        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        RandomAddressMaker, TestChannelAddressMaker, TestTcpAddressMaker, TestTransportChannel,
+        TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
 };
 use common::{chain::config, primitives::semver::SemVer};
@@ -214,36 +215,21 @@ async fn connect_to_banned_peer_mock_noise() {
     connect_to_banned_peer::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
 }
 
-async fn validate_invalid_outbound_connection<A, S>(peer_address: S::Address, peer_id: S::PeerId)
+async fn validate_invalid_outbound_connection<A, S, B>(peer_id: S::PeerId)
 where
     A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + std::fmt::Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
+    B: RandomAddressMaker<Address = S::Address>,
 {
     let config = Arc::new(config::create_mainnet());
     let mut peer_manager =
         make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config)).await;
 
-    // valid connection
-    let res = peer_manager.accept_connection(
-        peer_address.clone(),
-        Role::Inbound,
-        net::types::PeerInfo::<S> {
-            peer_id,
-            magic_bytes: *config.magic_bytes(),
-            version: SemVer::new(0, 1, 0),
-            agent: None,
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
-        },
-    );
-    assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(peer_manager.peerdb.is_active_peer(&peer_id));
-    assert!(!peer_manager.peerdb.is_address_banned(&peer_address.as_bannable()));
-
     // invalid magic bytes
     let res = peer_manager.accept_connection(
-        peer_address.clone(),
-        Role::Inbound,
+        B::new(),
+        Role::Outbound,
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: [1, 2, 3, 4],
@@ -257,8 +243,8 @@ where
 
     // invalid version
     let res = peer_manager.accept_connection(
-        peer_address.clone(),
-        Role::Inbound,
+        B::new(),
+        Role::Outbound,
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
@@ -270,10 +256,11 @@ where
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(!peer_manager.peerdb.is_active_peer(&peer_id));
 
-    // protocol missing
+    // valid connection
+    let address = B::new();
     let res = peer_manager.accept_connection(
-        peer_address,
-        Role::Inbound,
+        address.clone(),
+        Role::Outbound,
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
@@ -282,42 +269,48 @@ where
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
+    assert!(res.is_ok());
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(!peer_manager.peerdb.is_active_peer(&peer_id));
+    assert!(peer_manager.peerdb.is_active_peer(&peer_id));
+    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()));
 }
 
 #[tokio::test]
 async fn validate_invalid_outbound_connection_mock_tcp() {
-    validate_invalid_outbound_connection::<TestTransportTcp, MockService<TcpTransportSocket>>(
-        "210.113.67.107:2525".parse().unwrap(),
-        MockPeerId::new(),
-    )
+    validate_invalid_outbound_connection::<
+        TestTransportTcp,
+        MockService<TcpTransportSocket>,
+        TestTcpAddressMaker,
+    >(MockPeerId::new())
     .await;
 }
 
 #[tokio::test]
 async fn validate_invalid_outbound_connection_mock_channels() {
-    validate_invalid_outbound_connection::<TestTransportChannel, MockService<MockChannelTransport>>(
-        1,
-        MockPeerId::new(),
-    )
+    validate_invalid_outbound_connection::<
+        TestTransportChannel,
+        MockService<MockChannelTransport>,
+        TestChannelAddressMaker,
+    >(MockPeerId::new())
     .await;
 }
 
 #[tokio::test]
 async fn validate_invalid_outbound_connection_mock_noise() {
-    validate_invalid_outbound_connection::<TestTransportNoise, MockService<NoiseTcpTransport>>(
-        "210.113.67.107:2525".parse().unwrap(),
-        MockPeerId::new(),
-    )
+    validate_invalid_outbound_connection::<
+        TestTransportNoise,
+        MockService<NoiseTcpTransport>,
+        TestTcpAddressMaker,
+    >(MockPeerId::new())
     .await;
 }
 
-async fn validate_invalid_inbound_connection<A, S>(peer_address: S::Address, peer_id: S::PeerId)
+async fn validate_invalid_inbound_connection<A, S, B>(peer_id: S::PeerId)
 where
     A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + std::fmt::Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
+    B: RandomAddressMaker<Address = S::Address>,
 {
     let config = Arc::new(config::create_mainnet());
     let mut peer_manager =
@@ -325,7 +318,7 @@ where
 
     // invalid magic bytes
     let res = peer_manager.accept_inbound_connection(
-        peer_address.clone(),
+        B::new(),
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: [1, 2, 3, 4],
@@ -339,7 +332,7 @@ where
 
     // invalid version
     let res = peer_manager.accept_inbound_connection(
-        peer_address.clone(),
+        B::new(),
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
@@ -351,23 +344,10 @@ where
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(!peer_manager.peerdb.is_active_peer(&peer_id));
 
-    // protocol missing
-    let res = peer_manager.accept_inbound_connection(
-        peer_address.clone(),
-        net::types::PeerInfo::<S> {
-            peer_id,
-            magic_bytes: *config.magic_bytes(),
-            version: common::primitives::semver::SemVer::new(0, 1, 0),
-            agent: None,
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
-        },
-    );
-    assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(!peer_manager.peerdb.is_active_peer(&peer_id));
-
     // valid connection
+    let address = B::new();
     let res = peer_manager.accept_inbound_connection(
-        peer_address.clone(),
+        address.clone(),
         net::types::PeerInfo::<S> {
             peer_id,
             magic_bytes: *config.magic_bytes(),
@@ -376,34 +356,39 @@ where
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
     );
+    assert!(res.is_ok());
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(!peer_manager.peerdb.is_address_banned(&peer_address.as_bannable()));
+    assert!(peer_manager.peerdb.is_active_peer(&peer_id));
+    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()));
 }
 
 #[tokio::test]
 async fn validate_invalid_inbound_connection_mock_tcp() {
-    validate_invalid_inbound_connection::<TestTransportTcp, MockService<TcpTransportSocket>>(
-        "210.113.67.107:2525".parse().unwrap(),
-        MockPeerId::new(),
-    )
+    validate_invalid_inbound_connection::<
+        TestTransportTcp,
+        MockService<TcpTransportSocket>,
+        TestTcpAddressMaker,
+    >(MockPeerId::new())
     .await;
 }
 
 #[tokio::test]
 async fn validate_invalid_inbound_connection_mock_channels() {
-    validate_invalid_inbound_connection::<TestTransportChannel, MockService<MockChannelTransport>>(
-        1,
-        MockPeerId::new(),
-    )
+    validate_invalid_inbound_connection::<
+        TestTransportChannel,
+        MockService<MockChannelTransport>,
+        TestChannelAddressMaker,
+    >(MockPeerId::new())
     .await;
 }
 
 #[tokio::test]
 async fn validate_invalid_inbound_connection_mock_noise() {
-    validate_invalid_inbound_connection::<TestTransportNoise, MockService<NoiseTcpTransport>>(
-        "210.113.67.107:2525".parse().unwrap(),
-        MockPeerId::new(),
-    )
+    validate_invalid_inbound_connection::<
+        TestTransportNoise,
+        MockService<NoiseTcpTransport>,
+        TestTcpAddressMaker,
+    >(MockPeerId::new())
     .await;
 }
 
