@@ -27,7 +27,7 @@ pub mod peerdb;
 use std::{
     collections::{BTreeSet, HashMap},
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use tokio::sync::{mpsc, oneshot};
@@ -52,7 +52,9 @@ use crate::{
 const MAX_ACTIVE_CONNECTIONS: usize = 128;
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
-const PEER_MGR_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
+const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
+/// Upper bound for how often [`PeerManager::heartbeat()`] is called
+const PEER_MGR_HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
 
 pub struct PeerManager<T>
 where
@@ -78,6 +80,8 @@ where
 
     /// Peer database
     peerdb: peerdb::PeerDb<T>,
+
+    last_heartbeat: Instant,
 }
 
 impl<T> PeerManager<T>
@@ -100,6 +104,7 @@ where
             pending: HashMap::new(),
             chain_config,
             _p2p_config: p2p_config,
+            last_heartbeat: Instant::now(),
         })
     }
 
@@ -349,8 +354,6 @@ where
     /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
     async fn heartbeat(&mut self) -> crate::Result<()> {
-        // TODO: check when was the last update and exit early if this update is to soon
-
         let npeers = std::cmp::min(
             self.peerdb.available_addresses_count(),
             MAX_ACTIVE_CONNECTIONS
@@ -525,11 +528,15 @@ where
                         self.handle_result(None, Err(err)).await?;
                     }
                 },
-                _event = tokio::time::sleep(PEER_MGR_HEARTBEAT_INTERVAL) => {}
+                _event = tokio::time::sleep(PEER_MGR_HEARTBEAT_INTERVAL_MAX) => {}
             }
 
             // finally update peer manager state
-            self.heartbeat().await?;
+            let now = Instant::now();
+            if now.duration_since(self.last_heartbeat) > PEER_MGR_HEARTBEAT_INTERVAL_MIN {
+                self.heartbeat().await?;
+                self.last_heartbeat = now;
+            }
         }
     }
 }

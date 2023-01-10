@@ -423,13 +423,12 @@ where
 
         log::debug!("new possible peer address: {possible_peer_address}");
 
-        // TODO: Commented out because it breaks p2p_syncing_test.py: two connections are made but only one is disconnected
-        // if let Some(address) = T::Address::from_peer_address(&possible_peer_address) {
-        //     self.conn_tx
-        //         .send(ConnectivityEvent::AddressDiscovered { address })
-        //         .await
-        //         .map_err(P2pError::from)?;
-        // }
+        if let Some(address) = T::Address::from_peer_address(&possible_peer_address) {
+            self.conn_tx
+                .send(ConnectivityEvent::AddressDiscovered { address })
+                .await
+                .map_err(P2pError::from)?;
+        }
 
         Ok(())
     }
