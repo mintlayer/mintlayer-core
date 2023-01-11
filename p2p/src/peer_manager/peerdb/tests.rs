@@ -100,7 +100,6 @@ where
         ban_threshold: 200.into(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
-        mdns_config: Default::default(),
         node_type: Default::default(),
     };
     let mut peerdb = PeerDb::<S>::new(Arc::new(config)).unwrap();
@@ -139,7 +138,6 @@ where
         ban_threshold: 20.into(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
-        mdns_config: Default::default(),
         node_type: Default::default(),
     };
     let mut peerdb = PeerDb::<S>::new(Arc::new(config)).unwrap();
@@ -177,7 +175,6 @@ where
         ban_threshold: Default::default(),
         ban_duration: Duration::from_secs(2).into(),
         outbound_connection_timeout: Default::default(),
-        mdns_config: Default::default(),
         node_type: Default::default(),
     }))
     .unwrap();

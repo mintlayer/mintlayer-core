@@ -35,10 +35,8 @@ use serde::{Deserialize, Serialize};
 use crate::RunOptions;
 
 use self::{
-    chainstate::ChainstateConfigFile,
-    chainstate_launcher::ChainstateLauncherConfigFile,
-    p2p::{MdnsConfigFile, P2pConfigFile},
-    rpc::RpcConfigFile,
+    chainstate::ChainstateConfigFile, chainstate_launcher::ChainstateLauncherConfigFile,
+    p2p::P2pConfigFile, rpc::RpcConfigFile,
 };
 
 /// The node configuration.
@@ -141,7 +139,6 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         ban_threshold,
         ban_duration,
         outbound_connection_timeout,
-        mdns_config: _,
         node_type,
     } = config;
 
@@ -152,19 +149,12 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         options.p2p_outbound_connection_timeout.or(outbound_connection_timeout);
     let node_type = options.node_type.or(node_type);
 
-    let mdns_config = MdnsConfigFile::from_options(
-        options.p2p_enable_mdns,
-        options.p2p_mdns_query_interval,
-        options.p2p_enable_ipv6_mdns_discovery,
-    );
-
     P2pConfigFile {
         bind_addresses,
         added_nodes,
         ban_threshold,
         ban_duration,
         outbound_connection_timeout,
-        mdns_config,
         node_type,
     }
 }
