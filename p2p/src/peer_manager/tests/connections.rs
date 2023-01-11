@@ -24,9 +24,10 @@ use tokio::{sync::oneshot, time::timeout};
 use crate::{
     config::P2pConfig,
     net::types::Role,
-    peer_manager::{helpers::filter_connectivity_event, tests::run_peer_manager},
+    peer_manager::tests::run_peer_manager,
     testing_utils::{
-        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        filter_connectivity_event, TestTransportChannel, TestTransportMaker, TestTransportNoise,
+        TestTransportTcp,
     },
 };
 use common::chain::config;

@@ -17,10 +17,10 @@ use std::sync::Arc;
 
 use crate::{
     net::types::Role,
-    peer_manager::helpers::filter_connectivity_event,
     testing_utils::{
-        RandomAddressMaker, TestChannelAddressMaker, TestTcpAddressMaker, TestTransportChannel,
-        TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        filter_connectivity_event, RandomAddressMaker, TestChannelAddressMaker,
+        TestTcpAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportNoise,
+        TestTransportTcp,
     },
 };
 use common::{chain::config, primitives::semver::SemVer};

@@ -13,12 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+use std::{
+    net::{IpAddr, Ipv6Addr, SocketAddr},
+    time::Duration,
+};
 
 use crypto::random::{make_pseudo_rng, Rng};
+use tokio::time::timeout;
 
-use crate::net::mock::transport::{
-    MockChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
+use crate::net::{
+    mock::transport::{
+        MockChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
+    },
+    types::ConnectivityEvent,
+    ConnectivityService, NetworkingService,
 };
 
 /// An interface for creating transports and addresses used in tests.
@@ -129,5 +137,29 @@ impl RandomAddressMaker for TestChannelAddressMaker {
     fn new() -> Self::Address {
         let mut rng = make_pseudo_rng();
         rng.gen()
+    }
+}
+
+/// Return first event that is accepted by predicate.
+///
+/// Used to skip events that are not of interest or that are different between backends
+/// (for example ConnectivityEvent::Discovered).
+/// Can be used in tests only, will panic in case of errors.
+pub async fn filter_connectivity_event<T, F>(
+    conn: &mut T::ConnectivityHandle,
+    predicate: F,
+) -> crate::Result<ConnectivityEvent<T>>
+where
+    T: NetworkingService,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    F: Fn(&crate::Result<ConnectivityEvent<T>>) -> bool,
+{
+    loop {
+        let result = timeout(Duration::from_secs(10), conn.poll_next())
+            .await
+            .expect("unexpected timeout receiving connectivity event");
+        if predicate(&result) {
+            return result;
+        }
     }
 }
