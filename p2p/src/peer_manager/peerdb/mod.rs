@@ -93,12 +93,12 @@ pub struct PeerDb<T: NetworkingService> {
 
 impl<T: NetworkingService> PeerDb<T> {
     pub fn new(p2p_config: Arc<config::P2pConfig>) -> crate::Result<Self> {
-        let add_node = p2p_config
-            .add_node
+        let added_nodes = p2p_config
+            .added_nodes
             .iter()
-            .map(|add_node| {
-                add_node.parse::<T::Address>().map_err(|_err| {
-                    P2pError::ConversionError(ConversionError::InvalidAddress(add_node.clone()))
+            .map(|addr| {
+                addr.parse::<T::Address>().map_err(|_err| {
+                    P2pError::ConversionError(ConversionError::InvalidAddress(addr.clone()))
                 })
             })
             .collect::<Result<HashSet<_>, _>>()?;
@@ -107,7 +107,7 @@ impl<T: NetworkingService> PeerDb<T> {
             addresses: Default::default(),
             // TODO: We need to handle added nodes differently from ordinary nodes.
             // There are peers that we want to persistently have, and others that we want to just give a "shot" at connecting at.
-            available: add_node,
+            available: added_nodes,
             banned: Default::default(),
             p2p_config,
         })

@@ -95,8 +95,8 @@ where
     A: RandomAddressMaker<Address = S::Address>,
 {
     let config = P2pConfig {
-        bind_address: Default::default(),
-        add_node: Default::default(),
+        bind_addresses: Default::default(),
+        added_nodes: Default::default(),
         ban_threshold: 200.into(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -134,8 +134,8 @@ where
     A: RandomAddressMaker<Address = S::Address>,
 {
     let config = P2pConfig {
-        bind_address: Default::default(),
-        add_node: Default::default(),
+        bind_addresses: Default::default(),
+        added_nodes: Default::default(),
         ban_threshold: 20.into(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -172,8 +172,8 @@ where
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig {
-        bind_address: Default::default(),
-        add_node: Default::default(),
+        bind_addresses: Default::default(),
+        added_nodes: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Duration::from_secs(2).into(),
         outbound_connection_timeout: Default::default(),

@@ -60,7 +60,7 @@ fn create_default_config() {
     );
     assert_eq!(config.chainstate.chainstate_config.max_orphan_blocks, None);
 
-    assert!(config.p2p.bind_address.unwrap_or_default().is_empty());
+    assert!(config.p2p.bind_addresses.unwrap_or_default().is_empty());
     assert_eq!(config.p2p.ban_threshold, None);
     assert_eq!(config.p2p.outbound_connection_timeout, None);
 
@@ -138,8 +138,8 @@ fn read_config_override_values() {
         Some(max_tip_age)
     );
 
-    assert_eq!(config.p2p.bind_address, Some(vec!(p2p_addr.to_owned())));
-    assert_eq!(config.p2p.add_node, Some(vec!(p2p_add_node.to_owned())));
+    assert_eq!(config.p2p.bind_addresses, Some(vec!(p2p_addr.to_owned())));
+    assert_eq!(config.p2p.added_nodes, Some(vec!(p2p_add_node.to_owned())));
     assert_eq!(config.p2p.ban_threshold, Some(p2p_ban_threshold));
     assert_eq!(config.p2p.outbound_connection_timeout, Some(p2p_timeout));
     assert_eq!(config.p2p.node_type, Some(node_type));

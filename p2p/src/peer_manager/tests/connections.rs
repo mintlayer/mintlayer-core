@@ -631,10 +631,10 @@ where
     let bind_addresses = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
 
-    // Start second peer manager and let it know about first manager via add_node
+    // Start second peer manager and let it know about first manager via added_nodes
     let p2p_config_2 = Arc::new(P2pConfig {
-        bind_address: Default::default(),
-        add_node: bind_addresses,
+        bind_addresses: Default::default(),
+        added_nodes: bind_addresses,
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),

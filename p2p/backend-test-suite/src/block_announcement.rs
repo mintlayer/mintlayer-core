@@ -140,8 +140,8 @@ where
 {
     let chain_config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(P2pConfig {
-        bind_address: Vec::new(),
-        add_node: Vec::new(),
+        bind_addresses: Vec::new(),
+        added_nodes: Vec::new(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),

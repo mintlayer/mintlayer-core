@@ -79,7 +79,7 @@ where
         _mempool_handle: mempool::MempoolHandle,
     ) -> crate::Result<Self> {
         let bind_addresses = p2p_config
-            .bind_address
+            .bind_addresses
             .iter()
             .map(|address| {
                 address.parse::<T::Address>().map_err(|_| {

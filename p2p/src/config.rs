@@ -85,9 +85,9 @@ impl From<NodeType> for BTreeSet<PubSubTopic> {
 #[derive(Debug, Default)]
 pub struct P2pConfig {
     /// Address to bind P2P to.
-    pub bind_address: Vec<String>,
+    pub bind_addresses: Vec<String>,
     /// Optional list of initial node addresses, could be used to specify boot nodes for example.
-    pub add_node: Vec<String>,
+    pub added_nodes: Vec<String>,
     /// The score threshold after which a peer is banned.
     pub ban_threshold: BanThreshold,
     /// Duration of bans in seconds.

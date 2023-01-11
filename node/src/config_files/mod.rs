@@ -136,8 +136,8 @@ fn chainstate_config(
 
 fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let P2pConfigFile {
-        bind_address,
-        add_node,
+        bind_addresses,
+        added_nodes,
         ban_threshold,
         ban_duration,
         outbound_connection_timeout,
@@ -145,8 +145,8 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         node_type,
     } = config;
 
-    let bind_address = options.p2p_addr.clone().or(bind_address);
-    let add_node = options.p2p_add_node.clone().or(add_node);
+    let bind_addresses = options.p2p_addr.clone().or(bind_addresses);
+    let added_nodes = options.p2p_add_node.clone().or(added_nodes);
     let ban_threshold = options.p2p_ban_threshold.or(ban_threshold);
     let outbound_connection_timeout =
         options.p2p_outbound_connection_timeout.or(outbound_connection_timeout);
@@ -159,8 +159,8 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     );
 
     P2pConfigFile {
-        bind_address,
-        add_node,
+        bind_addresses,
+        added_nodes,
         ban_threshold,
         ban_duration,
         outbound_connection_timeout,
