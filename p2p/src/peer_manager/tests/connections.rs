@@ -26,8 +26,8 @@ use crate::{
     net::types::Role,
     peer_manager::tests::run_peer_manager,
     testing_utils::{
-        filter_connectivity_event, TestTransportChannel, TestTransportMaker, TestTransportNoise,
-        TestTransportTcp,
+        connect_services, filter_connectivity_event, TestTransportChannel, TestTransportMaker,
+        TestTransportNoise, TestTransportTcp,
     },
 };
 use common::chain::config;
@@ -45,7 +45,7 @@ use crate::{
         types::PubSubTopic,
         ConnectivityService, NetworkingService,
     },
-    peer_manager::{self, helpers::connect_services, tests::make_peer_manager},
+    peer_manager::{self, tests::make_peer_manager},
 };
 
 // try to connect to an address that no one listening on and verify it fails

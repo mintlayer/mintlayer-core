@@ -18,7 +18,7 @@ use std::sync::Arc;
 use crate::{
     net::types::Role,
     testing_utils::{
-        filter_connectivity_event, RandomAddressMaker, TestChannelAddressMaker,
+        connect_services, filter_connectivity_event, RandomAddressMaker, TestChannelAddressMaker,
         TestTcpAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp,
     },
@@ -37,7 +37,7 @@ use crate::{
         types::PubSubTopic,
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
-    peer_manager::{helpers::connect_services, tests::make_peer_manager},
+    peer_manager::tests::make_peer_manager,
 };
 
 // ban peer whose connected to us

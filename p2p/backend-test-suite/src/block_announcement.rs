@@ -32,7 +32,7 @@ use common::{
 };
 use serialization::Encode;
 
-use p2p::testing_utils::TestTransportMaker;
+use p2p::testing_utils::{connect_services, TestTransportMaker};
 use p2p::{
     config::{NodeType, P2pConfig},
     error::{P2pError, PublishError},
@@ -41,7 +41,6 @@ use p2p::{
         mock::constants::ANNOUNCEMENT_MAX_SIZE, types::SyncingEvent, ConnectivityService,
         NetworkingService, SyncingMessagingService,
     },
-    peer_manager::helpers::connect_services,
 };
 
 tests![

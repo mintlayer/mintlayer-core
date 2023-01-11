@@ -17,14 +17,13 @@ use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::mpsc;
 
-use p2p::testing_utils::TestTransportMaker;
+use p2p::testing_utils::{connect_services, TestTransportMaker};
 use p2p::{
     config::P2pConfig,
     error::{P2pError, PublishError},
     event::PeerManagerEvent,
     message::{Announcement, HeaderListResponse, Request, Response},
     net::{types::SyncingEvent, ConnectivityService, NetworkingService, SyncingMessagingService},
-    peer_manager::helpers::connect_services,
     sync::BlockSyncManager,
 };
 use p2p_test_utils::TestBlockInfo;

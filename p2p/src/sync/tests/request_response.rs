@@ -28,10 +28,10 @@ use crate::{
         },
         types::SyncingEvent,
     },
-    peer_manager::helpers::connect_services,
     sync::tests::make_sync_manager,
     testing_utils::{
-        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        connect_services, TestTransportChannel, TestTransportMaker, TestTransportNoise,
+        TestTransportTcp,
     },
     ConnectivityService, NetworkingService, SyncingMessagingService,
 };

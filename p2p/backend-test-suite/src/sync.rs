@@ -27,7 +27,7 @@ use common::{
     primitives::{Id, Idable},
 };
 
-use p2p::testing_utils::{filter_connectivity_event, TestTransportMaker};
+use p2p::testing_utils::{connect_services, filter_connectivity_event, TestTransportMaker};
 use p2p::{
     config::P2pConfig,
     error::P2pError,
@@ -37,7 +37,6 @@ use p2p::{
         types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
-    peer_manager::helpers::connect_services,
     sync::BlockSyncManager,
 };
 use p2p_test_utils::TestBlockInfo;
