@@ -25,5 +25,5 @@ pub trait TransportListener<Stream, Address>: Send {
     async fn accept(&mut self) -> Result<(Stream, Address)>;
 
     /// Returns the local address of the listener.
-    fn local_address(&self) -> Result<Address>;
+    fn local_addresses(&self) -> Result<Vec<Address>>;
 }

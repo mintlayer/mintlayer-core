@@ -122,7 +122,9 @@ impl FromStr for NodeTypeConfigFile {
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct P2pConfigFile {
     /// Address to bind P2P to.
-    pub bind_address: Option<String>,
+    pub bind_addresses: Option<Vec<String>>,
+    /// Optional list of initial node addresses to connect.
+    pub added_nodes: Option<Vec<String>>,
     /// The score threshold after which a peer is banned.
     pub ban_threshold: Option<u32>,
     /// Duration of bans in seconds.
@@ -139,7 +141,8 @@ impl From<P2pConfigFile> for P2pConfig {
     fn from(c: P2pConfigFile) -> Self {
         let mdns_config: Option<MdnsConfig> = c.mdns_config.map(|v| v.into());
         P2pConfig {
-            bind_address: c.bind_address.into(),
+            bind_addresses: c.bind_addresses.clone().unwrap_or_default(),
+            added_nodes: c.added_nodes.clone().unwrap_or_default(),
             ban_threshold: c.ban_threshold.into(),
             ban_duration: c.ban_duration.map(Duration::from_secs).into(),
             outbound_connection_timeout: c.outbound_connection_timeout.into(),

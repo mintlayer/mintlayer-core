@@ -17,14 +17,13 @@ use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::mpsc;
 
-use p2p::testing_utils::TestTransportMaker;
+use p2p::testing_utils::{connect_services, TestTransportMaker};
 use p2p::{
     config::P2pConfig,
     error::{P2pError, PublishError},
     event::PeerManagerEvent,
     message::{Announcement, HeaderListResponse, Request, Response},
     net::{types::SyncingEvent, ConnectivityService, NetworkingService, SyncingMessagingService},
-    peer_manager::helpers::connect_services,
     sync::BlockSyncManager,
 };
 use p2p_test_utils::TestBlockInfo;
@@ -49,7 +48,7 @@ where
 
     let (mut conn1, sync1) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&chain_config),
         Default::default(),
     )
@@ -67,7 +66,7 @@ where
 
     let (mut conn2, mut sync2) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
     )
@@ -141,7 +140,7 @@ where
 
     let (mut conn1, sync1) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&chain_config),
         Default::default(),
     )
@@ -150,7 +149,7 @@ where
 
     let (mut conn2, _sync2) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&chain_config),
         Default::default(),
     )

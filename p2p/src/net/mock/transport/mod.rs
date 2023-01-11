@@ -27,7 +27,7 @@ pub use self::{
         wrapped_transport::wrapped_socket::WrappedTransportSocket,
     },
     tcp::TcpTransportSocket,
-    traits::{PeerStream, TransportListener, TransportSocket},
+    traits::{PeerStream, TransportAddress, TransportListener, TransportSocket},
 };
 
 pub type NoiseTcpTransport = WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>;

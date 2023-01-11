@@ -52,8 +52,8 @@ async fn send_recv<T: PeerStream>(sender: &mut T, receiver: &mut T, len: usize) 
 }
 
 async fn test<A: TestTransportMaker<Address = T::Address>, T: TransportSocket>(transport: T) {
-    let mut server = transport.bind(A::make_address()).await.unwrap();
-    let peer_fut = transport.connect(server.local_address().unwrap());
+    let mut server = transport.bind(vec![A::make_address()]).await.unwrap();
+    let peer_fut = transport.connect(server.local_addresses().unwrap()[0].clone());
 
     let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
     let mut server_stream = server_res.unwrap().0;
@@ -136,8 +136,8 @@ impl TransportSocket for TestMockTransport {
     type Listener = TestMockListener;
     type Stream = <MockChannelTransport as TransportSocket>::Stream;
 
-    async fn bind(&self, address: Self::Address) -> crate::Result<Self::Listener> {
-        let listener = self.transport.bind(address).await.unwrap();
+    async fn bind(&self, addresses: Vec<Self::Address>) -> crate::Result<Self::Listener> {
+        let listener = self.transport.bind(addresses).await.unwrap();
         *self.port_open.lock().unwrap() = true;
         Ok(TestMockListener {
             listener,
@@ -166,8 +166,10 @@ impl
         self.listener.accept().await
     }
 
-    fn local_address(&self) -> crate::Result<<MockChannelTransport as TransportSocket>::Address> {
-        self.listener.local_address()
+    fn local_addresses(
+        &self,
+    ) -> crate::Result<Vec<<MockChannelTransport as TransportSocket>::Address>> {
+        self.listener.local_addresses()
     }
 }
 
@@ -186,7 +188,7 @@ async fn test_bind_port_closed() {
     );
     assert!(!*transport.base_transport.port_open.lock().unwrap());
 
-    let listener = transport.bind(0).await.unwrap();
+    let listener = transport.bind(vec![0]).await.unwrap();
     assert!(*transport.base_transport.port_open.lock().unwrap());
 
     drop(listener);
@@ -199,8 +201,8 @@ async fn send_2_reqs() {
         NoiseEncryptionAdapter::gen_new(),
         TcpTransportSocket::new(),
     );
-    let mut server = transport.bind(TestTransportTcp::make_address()).await.unwrap();
-    let peer_fut = transport.connect(server.local_address().unwrap());
+    let mut server = transport.bind(vec![TestTransportTcp::make_address()]).await.unwrap();
+    let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
 
     let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
     let server_stream = server_res.unwrap().0;
@@ -249,8 +251,8 @@ async fn pending_handshakes() {
         NoiseEncryptionAdapter::gen_new(),
         TcpTransportSocket::new(),
     );
-    let mut server = transport.bind(TestTransportTcp::make_address()).await.unwrap();
-    let local_addr = server.local_address().unwrap();
+    let mut server = transport.bind(vec![TestTransportTcp::make_address()]).await.unwrap();
+    let local_addr = server.local_addresses().unwrap();
 
     let join_handle = tokio::spawn(async move {
         loop {
@@ -260,19 +262,19 @@ async fn pending_handshakes() {
 
     // Connect MAX_CONCURRENT_HANDSHAKES amount of idle clients
     let mut sockets = futures::stream::iter(0..MAX_CONCURRENT_HANDSHAKES)
-        .then(|_| async { tokio::net::TcpStream::connect(local_addr).await.unwrap() })
+        .then(|_| async { tokio::net::TcpStream::connect(local_addr[0]).await.unwrap() })
         .collect::<Vec<_>>()
         .await;
 
     // Noise connection will fail because of too many connected idle TCP clients
-    let pending_fut = timeout(Duration::from_millis(100), transport.connect(local_addr)).await;
+    let pending_fut = timeout(Duration::from_millis(100), transport.connect(local_addr[0])).await;
     assert!(matches!(pending_fut, Err(_)));
 
     // Disconnect one idle client
     sockets.pop();
 
     // Noise connection should succeed now
-    let pending_fut = timeout(Duration::from_millis(100), transport.connect(local_addr)).await;
+    let pending_fut = timeout(Duration::from_millis(100), transport.connect(local_addr[0])).await;
     assert!(matches!(pending_fut, Ok(Ok(_))));
 
     join_handle.abort();
@@ -284,8 +286,8 @@ async fn handshake_timeout() {
         NoiseEncryptionAdapter::gen_new(),
         TcpTransportSocket::new(),
     );
-    let mut server = transport.bind(TestTransportTcp::make_address()).await.unwrap();
-    let local_addr = server.local_address().unwrap();
+    let mut server = transport.bind(vec![TestTransportTcp::make_address()]).await.unwrap();
+    let local_addr = server.local_addresses().unwrap();
 
     let join_handle = tokio::spawn(async move {
         loop {
@@ -293,7 +295,7 @@ async fn handshake_timeout() {
         }
     });
 
-    let mut bad_client = tokio::net::TcpStream::connect(local_addr).await.unwrap();
+    let mut bad_client = tokio::net::TcpStream::connect(local_addr[0]).await.unwrap();
     // Server should disconnect the bad client because of handshake timeout
     let read_res = bad_client.read_u8().await;
     assert!(read_res.is_err());

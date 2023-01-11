@@ -60,7 +60,7 @@ fn create_default_config() {
     );
     assert_eq!(config.chainstate.chainstate_config.max_orphan_blocks, None);
 
-    assert_eq!(config.p2p.bind_address, None);
+    assert!(config.p2p.bind_addresses.unwrap_or_default().is_empty());
     assert_eq!(config.p2p.ban_threshold, None);
     assert_eq!(config.p2p.outbound_connection_timeout, None);
 
@@ -87,6 +87,7 @@ fn read_config_override_values() {
     let max_db_commit_attempts = 1;
     let max_orphan_blocks = 2;
     let p2p_addr = "address";
+    let p2p_add_node = "add_node";
     let p2p_ban_threshold = 3;
     let p2p_timeout = 10000;
     let http_rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
@@ -100,7 +101,8 @@ fn read_config_override_values() {
         max_db_commit_attempts: Some(max_db_commit_attempts),
         max_orphan_blocks: Some(max_orphan_blocks),
         tx_index_enabled: Some(false),
-        p2p_addr: Some(p2p_addr.into()),
+        p2p_addr: Some(vec![p2p_addr.to_owned()]),
+        p2p_add_node: Some(vec![p2p_add_node.to_owned()]),
         p2p_ban_threshold: Some(p2p_ban_threshold),
         p2p_outbound_connection_timeout: Some(p2p_timeout),
         p2p_enable_mdns: Some(enable_mdns),
@@ -136,7 +138,8 @@ fn read_config_override_values() {
         Some(max_tip_age)
     );
 
-    assert_eq!(config.p2p.bind_address, Some(p2p_addr.into()));
+    assert_eq!(config.p2p.bind_addresses, Some(vec!(p2p_addr.to_owned())));
+    assert_eq!(config.p2p.added_nodes, Some(vec!(p2p_add_node.to_owned())));
     assert_eq!(config.p2p.ban_threshold, Some(p2p_ban_threshold));
     assert_eq!(config.p2p.outbound_connection_timeout, Some(p2p_timeout));
     assert_eq!(config.p2p.node_type, Some(node_type));
@@ -201,6 +204,7 @@ fn default_run_options() -> RunOptions {
         max_orphan_blocks: None,
         tx_index_enabled: None,
         p2p_addr: None,
+        p2p_add_node: None,
         p2p_ban_threshold: None,
         p2p_outbound_connection_timeout: None,
         p2p_enable_mdns: None,

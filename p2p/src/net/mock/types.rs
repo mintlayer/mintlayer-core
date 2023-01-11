@@ -28,6 +28,7 @@ use serialization::{Decode, Encode};
 use crate::{
     error, message,
     net::{self, mock::transport::TransportSocket, types::PubSubTopic},
+    types::peer_address::PeerAddress,
 };
 
 pub enum Command<T: TransportSocket> {
@@ -95,6 +96,9 @@ pub enum ConnectivityEvent<T: TransportSocket> {
     Misbehaved {
         peer_id: MockPeerId,
         error: error::P2pError,
+    },
+    AddressDiscovered {
+        address: T::Address,
     },
 }
 
@@ -172,6 +176,7 @@ pub enum PeerEvent {
         network: [u8; 4],
         version: SemVer,
         subscriptions: BTreeSet<PubSubTopic>,
+        receiver_address: Option<PeerAddress>,
     },
 
     /// Connection closed to remote
@@ -188,17 +193,25 @@ pub enum MockEvent {
     SendMessage(Box<Message>),
 }
 
+// TODO: Decide what to do about protocol upgrades.
+// For example adding new address type to PeerAddress might break handshakes with older nodes.
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum HandshakeMessage {
     Hello {
         version: SemVer,
         network: [u8; 4],
         subscriptions: BTreeSet<PubSubTopic>,
+
+        /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
+        receiver_address: Option<PeerAddress>,
     },
     HelloAck {
         version: SemVer,
         network: [u8; 4],
         subscriptions: BTreeSet<PubSubTopic>,
+
+        /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
+        receiver_address: Option<PeerAddress>,
     },
 }
 

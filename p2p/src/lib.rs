@@ -25,8 +25,9 @@ pub mod rpc;
 pub mod sync;
 #[cfg(feature = "testing_utils")]
 pub mod testing_utils;
+pub mod types;
 
-use std::{fmt::Debug, str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use interface::p2p_interface::P2pInterface;
 use tap::TapFallible;
@@ -76,18 +77,20 @@ where
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         _mempool_handle: mempool::MempoolHandle,
-    ) -> Result<Self>
-    where
-        <T as NetworkingService>::Address: FromStr,
-        <<T as NetworkingService>::Address as FromStr>::Err: Debug,
-    {
+    ) -> crate::Result<Self> {
+        let bind_addresses = p2p_config
+            .bind_addresses
+            .iter()
+            .map(|address| {
+                address.parse::<T::Address>().map_err(|_| {
+                    P2pError::ConversionError(ConversionError::InvalidAddress(address.clone()))
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
         let (conn, sync) = T::start(
             transport,
-            p2p_config.bind_address.parse::<T::Address>().map_err(|_| {
-                P2pError::ConversionError(ConversionError::InvalidAddress(
-                    p2p_config.bind_address.clone().into(),
-                ))
-            })?,
+            bind_addresses,
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
         )
@@ -105,22 +108,17 @@ where
         let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
         let (_tx_sync, _rx_sync) = mpsc::unbounded_channel();
 
-        {
-            let chain_config = Arc::clone(&chain_config);
-            let p2p_config = Arc::clone(&p2p_config);
-            tokio::spawn(async move {
-                peer_manager::PeerManager::<T>::new(
-                    chain_config,
-                    p2p_config,
-                    conn,
-                    rx_peer_manager,
-                    tx_p2p_sync,
-                )
-                .run()
-                .await
-                .tap_err(|err| log::error!("PeerManager failed: {err}"))
-            });
-        }
+        let mut peer_manager = peer_manager::PeerManager::<T>::new(
+            Arc::clone(&chain_config),
+            Arc::clone(&p2p_config),
+            conn,
+            rx_peer_manager,
+            tx_p2p_sync,
+        )?;
+        tokio::spawn(async move {
+            peer_manager.run().await.tap_err(|err| log::error!("PeerManager failed: {err}"))
+        });
+
         {
             let chainstate_handle = chainstate_handle.clone();
             let tx_peer_manager = tx_peer_manager.clone();

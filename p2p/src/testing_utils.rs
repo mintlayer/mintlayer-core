@@ -13,12 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+#![allow(clippy::unwrap_used)]
+
+use std::{
+    net::{IpAddr, Ipv6Addr, SocketAddr},
+    time::Duration,
+};
 
 use crypto::random::{make_pseudo_rng, Rng};
+use tokio::time::timeout;
 
-use crate::net::mock::transport::{
-    MockChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
+use crate::net::{
+    mock::transport::{
+        MockChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
+    },
+    types::{ConnectivityEvent, PeerInfo},
+    ConnectivityService, NetworkingService,
 };
 
 /// An interface for creating transports and addresses used in tests.
@@ -53,7 +63,7 @@ impl TestTransportMaker for TestTransportTcp {
     }
 
     fn make_address() -> Self::Address {
-        "[::1]:0".parse().expect("valid address")
+        "[::1]:0".parse().unwrap()
     }
 }
 
@@ -62,7 +72,7 @@ pub struct TestTransportChannel {}
 impl TestTransportMaker for TestTransportChannel {
     type Transport = MockChannelTransport;
 
-    type Address = u64;
+    type Address = u32;
 
     fn make_transport() -> Self::Transport {
         MockChannelTransport::new()
@@ -124,10 +134,71 @@ impl RandomAddressMaker for TestTcpAddressMaker {
 pub struct TestChannelAddressMaker {}
 
 impl RandomAddressMaker for TestChannelAddressMaker {
-    type Address = u64;
+    type Address = u32;
 
     fn new() -> Self::Address {
         let mut rng = make_pseudo_rng();
         rng.gen()
+    }
+}
+
+/// Can be used in tests only, will panic in case of errors
+pub async fn connect_services<T>(
+    conn1: &mut T::ConnectivityHandle,
+    conn2: &mut T::ConnectivityHandle,
+) -> (T::Address, PeerInfo<T>, PeerInfo<T>)
+where
+    T: NetworkingService + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+{
+    let addr = timeout(Duration::from_secs(5), conn2.local_addresses())
+        .await
+        .expect("local address fetch not to timeout")
+        .unwrap();
+    conn1.connect(addr[0].clone()).await.expect("dial to succeed");
+
+    let (address, peer_info1) = match timeout(Duration::from_secs(5), conn2.poll_next()).await {
+        Ok(event) => match event.unwrap() {
+            ConnectivityEvent::InboundAccepted { address, peer_info } => (address, peer_info),
+            event => panic!("expected `InboundAccepted`, got {event:?}"),
+        },
+        Err(_err) => panic!("did not receive `InboundAccepted` in time"),
+    };
+
+    let peer_info2 = match timeout(Duration::from_secs(5), conn1.poll_next()).await {
+        Ok(event) => match event.unwrap() {
+            ConnectivityEvent::OutboundAccepted {
+                address: _,
+                peer_info,
+            } => peer_info,
+            event => panic!("expected `OutboundAccepted`, got {event:?}"),
+        },
+        Err(_err) => panic!("did not receive `OutboundAccepted` in time"),
+    };
+
+    (address, peer_info1, peer_info2)
+}
+
+/// Return first event that is accepted by predicate.
+///
+/// Used to skip events that are not of interest or that are different between backends
+/// (for example ConnectivityEvent::Discovered).
+/// Can be used in tests only, will panic in case of errors.
+pub async fn filter_connectivity_event<T, F>(
+    conn: &mut T::ConnectivityHandle,
+    predicate: F,
+) -> crate::Result<ConnectivityEvent<T>>
+where
+    T: NetworkingService,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    F: Fn(&crate::Result<ConnectivityEvent<T>>) -> bool,
+{
+    loop {
+        let result = timeout(Duration::from_secs(10), conn.poll_next())
+            .await
+            .expect("unexpected timeout receiving connectivity event");
+        if predicate(&result) {
+            return result;
+        }
     }
 }

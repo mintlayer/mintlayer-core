@@ -13,15 +13,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Debug, serde::Serialize)]
-pub struct ConnectedPeer {
-    // TODO: Replace String with actual type, once libp2p removed
-    pub peer_id: String,
-
-    // TODO: Replace String with actual type, once libp2p removed
-    pub address: String,
-
-    pub inbound: bool,
-
-    pub ban_score: u32,
-}
+pub mod peer_address;

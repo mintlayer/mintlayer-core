@@ -576,7 +576,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
 
         connected = self.nodes[b].p2p_get_connected_peers()
         addr_a = p2p_url(a)
-        peer_id = next(item["peer_id"] for item in connected if item["addr"] == addr_a)
+        peer_id = next(item["peer_id"] for item in connected if item["address"] == addr_a)
         ret = self.nodes[b].p2p_disconnect(peer_id)
 
         wait_until_helper(lambda:

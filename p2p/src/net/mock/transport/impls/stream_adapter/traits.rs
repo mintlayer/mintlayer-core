@@ -16,7 +16,7 @@
 use futures::future::BoxFuture;
 
 use crate::{
-    net::mock::{peer::Role, transport::PeerStream},
+    net::{mock::transport::PeerStream, types::Role},
     Result,
 };
 

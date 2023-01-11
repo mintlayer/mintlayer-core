@@ -15,7 +15,7 @@
 
 use futures::future::{ready, BoxFuture};
 
-use crate::net::mock::{peer::Role, transport::PeerStream};
+use crate::net::{mock::transport::PeerStream, types::Role};
 
 use super::StreamAdapter;
 

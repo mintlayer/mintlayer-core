@@ -21,7 +21,8 @@ use common::{
 };
 
 use p2p::testing_utils::{
-    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+    connect_services, TestTransportChannel, TestTransportMaker, TestTransportNoise,
+    TestTransportTcp,
 };
 use p2p::{
     error::{P2pError, PublishError},
@@ -34,7 +35,6 @@ use p2p::{
         types::SyncingEvent,
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
-    peer_manager::helpers::connect_services,
 };
 
 // Test announcements with multiple peers and verify that the message validation is done and peers
@@ -49,7 +49,7 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut conn1, mut sync1) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&config),
         Default::default(),
     )
@@ -60,7 +60,7 @@ where
         let mut peers = futures::future::join_all((0..3).map(|_| async {
             let res = S::start(
                 A::make_transport(),
-                A::make_address(),
+                vec![A::make_address()],
                 Arc::clone(&config),
                 Default::default(),
             )

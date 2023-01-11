@@ -27,7 +27,7 @@ use common::{
     primitives::{Id, Idable},
 };
 
-use p2p::testing_utils::TestTransportMaker;
+use p2p::testing_utils::{connect_services, filter_connectivity_event, TestTransportMaker};
 use p2p::{
     config::P2pConfig,
     error::P2pError,
@@ -37,7 +37,6 @@ use p2p::{
         types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
-    peer_manager::helpers::connect_services,
     sync::BlockSyncManager,
 };
 use p2p_test_utils::TestBlockInfo;
@@ -1063,8 +1062,13 @@ where
 
     mgr1.unregister_peer(peer_info2.peer_id);
     assert_eq!(conn1.disconnect(peer_info2.peer_id).await, Ok(()));
+
+    let event = filter_connectivity_event::<S, _>(&mut conn2, |event| {
+        !std::matches!(event, Ok(ConnectivityEvent::Discovered { .. }))
+    })
+    .await;
     assert!(std::matches!(
-        conn2.poll_next().await,
+        event,
         Ok(ConnectivityEvent::ConnectionClosed { .. })
     ));
     assert!(std::matches!(
@@ -1166,7 +1170,7 @@ where
     let p2p_config = Arc::new(p2p_config);
     let (conn, sync) = T::start(
         transport,
-        addr,
+        vec![addr],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
     )

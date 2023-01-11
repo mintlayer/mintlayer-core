@@ -15,9 +15,9 @@
 
 use async_trait::async_trait;
 
-use crate::net::mock::{
-    peer::Role,
-    transport::{impls::stream_adapter::traits::StreamAdapter, TransportSocket},
+use crate::net::{
+    mock::transport::{impls::stream_adapter::traits::StreamAdapter, TransportSocket},
+    types::Role,
 };
 
 use super::wrapped_listener::AdaptedListener;
@@ -52,9 +52,9 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
     type Listener = AdaptedListener<S, T>;
     type Stream = S::Stream;
 
-    async fn bind(&self, address: Self::Address) -> Result<Self::Listener> {
+    async fn bind(&self, addresses: Vec<Self::Address>) -> Result<Self::Listener> {
         let stream_adapter = self.stream_adapter.clone();
-        let listener = self.base_transport.bind(address).await?;
+        let listener = self.base_transport.bind(addresses).await?;
         Ok(AdaptedListener::new(stream_adapter, listener))
     }
 

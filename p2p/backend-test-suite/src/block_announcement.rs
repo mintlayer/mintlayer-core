@@ -32,7 +32,7 @@ use common::{
 };
 use serialization::Encode;
 
-use p2p::testing_utils::TestTransportMaker;
+use p2p::testing_utils::{connect_services, TestTransportMaker};
 use p2p::{
     config::{NodeType, P2pConfig},
     error::{P2pError, PublishError},
@@ -41,7 +41,6 @@ use p2p::{
         mock::constants::ANNOUNCEMENT_MAX_SIZE, types::SyncingEvent, ConnectivityService,
         NetworkingService, SyncingMessagingService,
     },
-    peer_manager::helpers::connect_services,
 };
 
 tests![
@@ -60,7 +59,7 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut conn1, mut sync1) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&config),
         Default::default(),
     )
@@ -68,7 +67,7 @@ where
     .unwrap();
     let (mut conn2, mut sync2) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&config),
         Default::default(),
     )
@@ -140,7 +139,8 @@ where
 {
     let chain_config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(P2pConfig {
-        bind_address: Default::default(),
+        bind_addresses: Vec::new(),
+        added_nodes: Vec::new(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -149,7 +149,7 @@ where
     });
     let (mut conn1, mut sync1) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
     )
@@ -157,7 +157,7 @@ where
     .unwrap();
     let (mut conn2, _sync2) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         chain_config,
         p2p_config,
     )
@@ -197,7 +197,7 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut conn1, mut sync1) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&config),
         Default::default(),
     )
@@ -206,7 +206,7 @@ where
 
     let (mut conn2, _sync2) = S::start(
         A::make_transport(),
-        A::make_address(),
+        vec![A::make_address()],
         Arc::clone(&config),
         Default::default(),
     )

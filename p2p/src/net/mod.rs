@@ -79,7 +79,7 @@ pub trait NetworkingService {
     /// `chain_config` - chain config of the node
     async fn start(
         transport: Self::Transport,
-        bind_addr: Self::Address,
+        bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)>;
@@ -111,7 +111,7 @@ where
     /// Return the socket address of the network service provider
     ///
     /// If the address isn't available yet, `None` is returned
-    async fn local_addr(&self) -> crate::Result<Option<T::Address>>;
+    async fn local_addresses(&self) -> crate::Result<Vec<T::Address>>;
 
     /// Poll events from the network service provider
     ///

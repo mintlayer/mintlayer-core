@@ -48,8 +48,8 @@ pub struct MockService<T: TransportSocket>(PhantomData<T>);
 
 #[derive(Debug)]
 pub struct MockConnectivityHandle<S: NetworkingService, T: TransportSocket> {
-    /// The local address of a network service provider.
-    local_addr: S::Address,
+    /// The local addresses of a network service provider.
+    local_addresses: Vec<S::Address>,
 
     /// TX channel for sending commands to mock backend
     cmd_tx: mpsc::Sender<types::Command<T>>,
@@ -117,22 +117,22 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
 
     async fn start(
         transport: Self::Transport,
-        addr: Self::Address,
+        bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (sync_tx, sync_rx) = mpsc::channel(16);
-        let socket = transport.bind(addr).await?;
-        let local_addr = socket.local_address().expect("to have bind address available");
+        let socket = transport.bind(bind_addresses).await?;
+        let local_addresses = socket.local_addresses().expect("to have bind address available");
 
-        let address = local_addr.clone();
+        let addresses = local_addresses.clone();
         tokio::spawn(async move {
             let timeout = *p2p_config.outbound_connection_timeout;
             let mut backend = backend::Backend::<T>::new(
                 transport,
-                address,
+                addresses,
                 socket,
                 chain_config,
                 p2p_config,
@@ -149,7 +149,7 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
 
         Ok((
             Self::ConnectivityHandle {
-                local_addr,
+                local_addresses,
                 cmd_tx: cmd_tx.clone(),
                 conn_rx,
                 _marker: Default::default(),
@@ -201,8 +201,8 @@ where
         rx.await?
     }
 
-    async fn local_addr(&self) -> crate::Result<Option<S::Address>> {
-        Ok(Some(self.local_addr.clone()))
+    async fn local_addresses(&self) -> crate::Result<Vec<S::Address>> {
+        Ok(self.local_addresses.clone())
     }
 
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<S>> {
@@ -227,6 +227,11 @@ where
             }
             types::ConnectivityEvent::Misbehaved { peer_id, error } => {
                 Ok(ConnectivityEvent::Misbehaved { peer_id, error })
+            }
+            types::ConnectivityEvent::AddressDiscovered { address } => {
+                Ok(ConnectivityEvent::Discovered {
+                    addresses: vec![address],
+                })
             }
         }
     }
@@ -350,7 +355,7 @@ mod tests {
 
         let (mut conn1, _) = MockService::<T>::start(
             A::make_transport(),
-            A::make_address(),
+            vec![A::make_address()],
             Arc::clone(&config),
             Arc::clone(&p2p_config),
         )
@@ -359,20 +364,20 @@ mod tests {
 
         let (conn2, _) = MockService::<T>::start(
             A::make_transport(),
-            A::make_address(),
+            vec![A::make_address()],
             Arc::clone(&config),
             Arc::clone(&p2p_config),
         )
         .await
         .unwrap();
 
-        let addr = conn2.local_addr().await.unwrap().unwrap();
-        assert_eq!(conn1.connect(addr).await, Ok(()));
+        let addr = conn2.local_addresses().await.unwrap();
+        assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
 
         if let Ok(ConnectivityEvent::OutboundAccepted { address, peer_info }) =
             conn1.poll_next().await
         {
-            assert_eq!(address, conn2.local_addr().await.unwrap().unwrap());
+            assert_eq!(address, conn2.local_addresses().await.unwrap()[0]);
             assert_eq!(&peer_info.magic_bytes, config.magic_bytes());
             assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
             assert_eq!(peer_info.agent, None);
@@ -410,7 +415,7 @@ mod tests {
 
         let (mut conn1, _) = MockService::<T>::start(
             A::make_transport(),
-            A::make_address(),
+            vec![A::make_address()],
             Arc::clone(&config),
             Arc::clone(&p2p_config),
         )
@@ -419,15 +424,15 @@ mod tests {
 
         let (mut conn2, _) = MockService::<T>::start(
             A::make_transport(),
-            A::make_address(),
+            vec![A::make_address()],
             Arc::clone(&config),
             Arc::clone(&p2p_config),
         )
         .await
         .unwrap();
 
-        let bind_address = conn2.local_addr().await.unwrap().unwrap();
-        let (_res1, res2) = tokio::join!(conn1.connect(bind_address), conn2.poll_next());
+        let bind_address = conn2.local_addresses().await.unwrap();
+        let (_res1, res2) = tokio::join!(conn1.connect(bind_address[0].clone()), conn2.poll_next());
         match res2.unwrap() {
             ConnectivityEvent::InboundAccepted {
                 address: _,
@@ -469,19 +474,23 @@ mod tests {
 
         let (mut conn1, _) = MockService::<T>::start(
             A::make_transport(),
-            A::make_address(),
+            vec![A::make_address()],
             Arc::clone(&config),
             Arc::clone(&p2p_config),
         )
         .await
         .unwrap();
-        let (mut conn2, _) =
-            MockService::<T>::start(A::make_transport(), A::make_address(), config, p2p_config)
-                .await
-                .unwrap();
+        let (mut conn2, _) = MockService::<T>::start(
+            A::make_transport(),
+            vec![A::make_address()],
+            config,
+            p2p_config,
+        )
+        .await
+        .unwrap();
 
         let (_res1, res2) = tokio::join!(
-            conn1.connect(conn2.local_addr().await.unwrap().unwrap()),
+            conn1.connect(conn2.local_addresses().await.unwrap()[0].clone()),
             conn2.poll_next()
         );
 

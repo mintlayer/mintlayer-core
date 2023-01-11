@@ -13,15 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Debug, serde::Serialize)]
-pub struct ConnectedPeer {
-    // TODO: Replace String with actual type, once libp2p removed
-    pub peer_id: String,
+use crate::types::peer_address::PeerAddress;
 
-    // TODO: Replace String with actual type, once libp2p removed
-    pub address: String,
+/// Allow working with abstract socket address types.
+/// For example change socket port or encode for sending on wire.
+/// It's might better to completely replace abstract socket types with PeerAddress.
+pub trait TransportAddress: Sized {
+    /// Convert abstract socket address to concrete type (PeerAddress)
+    fn as_peer_address(&self) -> PeerAddress;
 
-    pub inbound: bool,
-
-    pub ban_score: u32,
+    /// Try get address back from PeerAddress.
+    ///
+    /// This might fail if an address is from some other transport.
+    fn from_peer_address(address: &PeerAddress) -> Option<Self>;
 }

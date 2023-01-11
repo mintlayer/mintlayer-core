@@ -70,7 +70,8 @@ where
 
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(P2pConfig {
-        bind_address: "[::1]:3031".to_owned().into(),
+        bind_addresses: vec!["/ip6/::1/tcp/3031".to_owned()],
+        added_nodes: Vec::new(),
         ban_threshold: 100.into(),
         ban_duration: Default::default(),
         outbound_connection_timeout: 10.into(),
@@ -79,7 +80,7 @@ where
     });
     let (conn, sync) = T::start(
         transport,
-        addr,
+        vec![addr],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
     )
