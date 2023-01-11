@@ -139,7 +139,7 @@ pub enum SyncingEvent<T: NetworkingService> {
         request_id: T::SyncingPeerRequestId,
 
         /// Received request
-        request: message::Request,
+        request: message::SyncRequest,
     },
     /// An incoming response.
     Response {
@@ -150,7 +150,7 @@ pub enum SyncingEvent<T: NetworkingService> {
         request_id: T::SyncingPeerRequestId,
 
         /// Received response
-        response: message::Response,
+        response: message::SyncResponse,
     },
     /// An announcement that is broadcast to all peers.
     Announcement {

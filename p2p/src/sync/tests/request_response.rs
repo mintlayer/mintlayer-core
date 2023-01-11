@@ -20,7 +20,7 @@ use tokio::time::timeout;
 use chainstate::Locator;
 
 use crate::{
-    message::{HeaderListRequest, HeaderListResponse, Request, Response},
+    message::{HeaderListRequest, HeaderListResponse, Request, Response, SyncRequest},
     net::{
         mock::{
             transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
@@ -67,7 +67,7 @@ where
     {
         assert_eq!(
             request,
-            Request::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![])))
+            SyncRequest::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![])))
         );
 
         mgr2.peer_sync_handle

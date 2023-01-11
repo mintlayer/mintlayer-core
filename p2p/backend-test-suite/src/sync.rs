@@ -32,7 +32,10 @@ use p2p::{
     config::P2pConfig,
     error::P2pError,
     event::{PeerManagerEvent, SyncControlEvent},
-    message::{BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response},
+    message::{
+        BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response, SyncRequest,
+        SyncResponse,
+    },
     net::{
         types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
@@ -151,7 +154,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::HeaderListRequest(request),
+                request: SyncRequest::HeaderListRequest(request),
             } => {
                 let headers = mgr2_handle
                     .call(move |this| this.get_headers(request.into_locator()))
@@ -169,7 +172,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::BlockListRequest(request),
+                request: SyncRequest::BlockListRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
@@ -190,7 +193,7 @@ where
             SyncingEvent::Response {
                 peer_id: _,
                 request_id: _,
-                response: Response::HeaderListResponse(_response),
+                response: SyncResponse::HeaderListResponse(_response),
             } => {}
             msg => panic!("invalid message received: {:?}", msg),
         }
@@ -248,7 +251,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::HeaderListRequest(request),
+                request: SyncRequest::HeaderListRequest(request),
             } => {
                 let headers = mgr2_handle
                     .call(move |this| this.get_headers(request.into_locator()))
@@ -266,7 +269,7 @@ where
             SyncingEvent::Response {
                 peer_id,
                 request_id: _,
-                response: Response::BlockListResponse(response),
+                response: SyncResponse::BlockListResponse(response),
             } => {
                 assert_eq!(response.blocks().len(), 1);
                 let block = response.blocks()[0].clone();
@@ -292,7 +295,7 @@ where
             SyncingEvent::Response {
                 peer_id,
                 request_id: _,
-                response: Response::HeaderListResponse(response),
+                response: SyncResponse::HeaderListResponse(response),
             } => {
                 assert_eq!(response.headers().len(), 12);
                 let headers = mgr2_handle
@@ -373,7 +376,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::HeaderListRequest(request),
+                request: SyncRequest::HeaderListRequest(request),
             } => {
                 let headers = mgr2_handle
                     .call(move |this| this.get_headers(request.into_locator()))
@@ -391,7 +394,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::BlockListRequest(request),
+                request: SyncRequest::BlockListRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
@@ -412,7 +415,7 @@ where
             SyncingEvent::Response {
                 peer_id,
                 request_id: _,
-                response: Response::BlockListResponse(response),
+                response: SyncResponse::BlockListResponse(response),
             } => {
                 assert_eq!(response.blocks().len(), 1);
                 let block = response.blocks()[0].clone();
@@ -435,7 +438,7 @@ where
             SyncingEvent::Response {
                 peer_id,
                 request_id: _,
-                response: Response::HeaderListResponse(response),
+                response: SyncResponse::HeaderListResponse(response),
             } => {
                 let headers = mgr2_handle
                     .call(move |this| this.filter_already_existing_blocks(response.into_headers()))
@@ -517,7 +520,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::HeaderListRequest(request),
+                request: SyncRequest::HeaderListRequest(request),
             } => {
                 let headers = mgr2_handle
                     .call(move |this| this.get_headers(request.into_locator()))
@@ -535,7 +538,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::BlockListRequest(request),
+                request: SyncRequest::BlockListRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
@@ -556,7 +559,7 @@ where
             SyncingEvent::Response {
                 peer_id,
                 request_id: _,
-                response: Response::BlockListResponse(response),
+                response: SyncResponse::BlockListResponse(response),
             } => {
                 assert_eq!(response.blocks().len(), 1);
                 let block = response.blocks()[0].clone();
@@ -579,7 +582,7 @@ where
             SyncingEvent::Response {
                 peer_id,
                 request_id: _,
-                response: Response::HeaderListResponse(response),
+                response: SyncResponse::HeaderListResponse(response),
             } => {
                 let headers = mgr2_handle
                     .call(move |this| this.filter_already_existing_blocks(response.into_headers()))
@@ -678,7 +681,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::HeaderListRequest(request),
+                request: SyncRequest::HeaderListRequest(request),
             } => {
                 let headers = mgr_handle
                     .call(move |this| this.get_headers(request.into_locator()))
@@ -696,7 +699,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::BlockListRequest(request),
+                request: SyncRequest::BlockListRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
@@ -716,7 +719,7 @@ where
             SyncingEvent::Response {
                 peer_id: _,
                 request_id: _,
-                response: Response::HeaderListResponse(_response),
+                response: SyncResponse::HeaderListResponse(_response),
             } => {}
             msg => panic!("invalid message received: {:?}", msg),
         }
@@ -817,7 +820,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::HeaderListRequest(request),
+                request: SyncRequest::HeaderListRequest(request),
             } => {
                 let headers = mgr_handle
                     .call(move |this| this.get_headers(request.into_locator()))
@@ -835,7 +838,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::BlockListRequest(request),
+                request: SyncRequest::BlockListRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
@@ -855,7 +858,7 @@ where
             SyncingEvent::Response {
                 peer_id: _,
                 request_id: _,
-                response: Response::HeaderListResponse(_response),
+                response: SyncResponse::HeaderListResponse(_response),
             } => {}
             msg => panic!("invalid message received: {:?}", msg),
         }
@@ -954,7 +957,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::HeaderListRequest(request),
+                request: SyncRequest::HeaderListRequest(request),
             } => {
                 let headers = mgr_handle
                     .call(move |this| this.get_headers(request.into_locator()))
@@ -982,7 +985,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::BlockListRequest(request),
+                request: SyncRequest::BlockListRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
@@ -1002,7 +1005,7 @@ where
             SyncingEvent::Response {
                 peer_id: _,
                 request_id: _,
-                response: Response::HeaderListResponse(_response),
+                response: SyncResponse::HeaderListResponse(_response),
             } => {}
             msg => panic!("invalid message received: {:?}", msg),
         }
@@ -1094,7 +1097,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::HeaderListRequest(request),
+                request: SyncRequest::HeaderListRequest(request),
             } => {
                 let headers = mgr2_handle
                     .call(move |this| this.get_headers(request.into_locator()))
@@ -1112,7 +1115,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::BlockListRequest(request),
+                request: SyncRequest::BlockListRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
@@ -1133,7 +1136,7 @@ where
             SyncingEvent::Response {
                 peer_id: _,
                 request_id: _,
-                response: Response::HeaderListResponse(_response),
+                response: SyncResponse::HeaderListResponse(_response),
             } => {}
             msg => panic!("invalid message received: {:?}", msg),
         }
@@ -1263,7 +1266,7 @@ where
         SyncingEvent::Request {
             peer_id: _,
             request_id,
-            request: Request::HeaderListRequest(request),
+            request: SyncRequest::HeaderListRequest(request),
         } => {
             let headers = handle
                 .call(move |this| this.get_headers(request.into_locator()))
@@ -1294,10 +1297,10 @@ where
             request_id,
             request,
         } => match request {
-            Request::HeaderListRequest(request) => {
+            SyncRequest::HeaderListRequest(request) => {
                 mgr.process_header_request(peer_id, request_id, request.into_locator()).await?;
             }
-            Request::BlockListRequest(request) => {
+            SyncRequest::BlockListRequest(request) => {
                 mgr.process_block_request(peer_id, request_id, request.into_block_ids()).await?;
             }
         },
@@ -1306,10 +1309,10 @@ where
             request_id: _,
             response,
         } => match response {
-            Response::HeaderListResponse(response) => {
+            SyncResponse::HeaderListResponse(response) => {
                 mgr.process_header_response(peer_id, response.into_headers()).await?;
             }
-            Response::BlockListResponse(response) => {
+            SyncResponse::BlockListResponse(response) => {
                 mgr.process_block_response(peer_id, response.into_blocks()).await?;
             }
         },

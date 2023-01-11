@@ -62,12 +62,12 @@ pub enum SyncingEvent {
     Request {
         peer_id: MockPeerId,
         request_id: MockRequestId,
-        request: message::Request,
+        request: message::SyncRequest,
     },
     Response {
         peer_id: MockPeerId,
         request_id: MockRequestId,
-        response: message::Response,
+        response: message::SyncResponse,
     },
     Announcement {
         peer_id: MockPeerId,

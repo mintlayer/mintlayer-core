@@ -329,17 +329,17 @@ where
         &mut self,
         peer_id: T::PeerId,
         request_id: T::SyncingPeerRequestId,
-        response: message::Response,
+        response: message::SyncResponse,
     ) -> crate::Result<()> {
         match response {
-            message::Response::HeaderListResponse(response) => {
+            message::SyncResponse::HeaderListResponse(response) => {
                 log::debug!("process header response (id {request_id:?}) from peer {peer_id}");
                 log::trace!("received headers: {:#?}", response.headers());
 
                 let result = self.process_header_response(peer_id, response.into_headers()).await;
                 self.handle_error(peer_id, result).await?;
             }
-            message::Response::BlockListResponse(response) => {
+            message::SyncResponse::BlockListResponse(response) => {
                 log::debug!("process block response (id {request_id:?}) from peer {peer_id}");
                 log::trace!(
                     "# of received blocks: {}, block ids: {:#?}",
@@ -450,7 +450,7 @@ where
                         request_id,
                         request,
                     } => match request {
-                        message::Request::HeaderListRequest(request) => {
+                        message::SyncRequest::HeaderListRequest(request) => {
                             log::debug!("process header request (id {request_id:?}) from peer {peer_id}");
                             log::trace!("locator: {:#?}", request.locator());
 
@@ -461,7 +461,7 @@ where
                             ).await;
                             self.handle_error(peer_id, result).await?;
                         }
-                        message::Request::BlockListRequest(request) => {
+                        message::SyncRequest::BlockListRequest(request) => {
                             log::debug!("process block request (id {request_id:?}) from peer {peer_id}");
                             log::trace!("requested block ids: {:#?}", request.block_ids());
 

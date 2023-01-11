@@ -119,7 +119,6 @@ impl RequestManager {
         &mut self,
         peer_id: &types::MockPeerId,
         request_id: &types::MockRequestId,
-        _request: &message::Request,
     ) -> crate::Result<types::MockRequestId> {
         let peer_ephemerals = self
             .ephemerals

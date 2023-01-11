@@ -20,6 +20,8 @@ use common::{
 };
 use serialization::{Decode, Encode};
 
+use crate::types::peer_address::PeerAddress;
+
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub struct HeaderListRequest {
     locator: Locator,
@@ -59,10 +61,21 @@ impl BlockListRequest {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub struct AddrListRequest {}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Request {
     #[codec(index = 0)]
     HeaderListRequest(HeaderListRequest),
     #[codec(index = 1)]
+    BlockListRequest(BlockListRequest),
+    #[codec(index = 2)]
+    AddrListRequest(AddrListRequest),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum SyncRequest {
+    HeaderListRequest(HeaderListRequest),
     BlockListRequest(BlockListRequest),
 }
 
@@ -105,10 +118,23 @@ impl BlockListResponse {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub struct AddrListResponse {
+    addresses: Vec<PeerAddress>,
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Response {
     #[codec(index = 0)]
     HeaderListResponse(HeaderListResponse),
     #[codec(index = 1)]
+    BlockListResponse(BlockListResponse),
+    #[codec(index = 2)]
+    AddrListResponse(AddrListResponse),
+}
+
+#[derive(Debug)]
+pub enum SyncResponse {
+    HeaderListResponse(HeaderListResponse),
     BlockListResponse(BlockListResponse),
 }
 

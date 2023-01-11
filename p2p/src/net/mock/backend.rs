@@ -42,7 +42,7 @@ use serialization::{Decode, Encode};
 use crate::{
     config::P2pConfig,
     error::{DialError, P2pError, PeerError, PublishError},
-    message,
+    message::{self, SyncRequest, SyncResponse},
     net::{
         mock::{
             constants::ANNOUNCEMENT_MAX_SIZE,
@@ -278,7 +278,37 @@ where
     ) -> crate::Result<()> {
         log::trace!("request received from peer {peer_id}, request id {request_id}");
 
-        let request_id = self.request_mgr.register_request(&peer_id, &request_id, &request)?;
+        match request {
+            message::Request::HeaderListRequest(request) => {
+                self.handle_incoming_sync_request(
+                    peer_id,
+                    request_id,
+                    SyncRequest::HeaderListRequest(request),
+                )
+                .await
+            }
+            message::Request::BlockListRequest(request) => {
+                self.handle_incoming_sync_request(
+                    peer_id,
+                    request_id,
+                    SyncRequest::BlockListRequest(request),
+                )
+                .await
+            }
+            message::Request::AddrListRequest(_request) => {
+                // TODO(PR): Handle request
+                Ok(())
+            }
+        }
+    }
+
+    async fn handle_incoming_sync_request(
+        &mut self,
+        peer_id: MockPeerId,
+        request_id: MockRequestId,
+        request: message::SyncRequest,
+    ) -> crate::Result<()> {
+        let request_id = self.request_mgr.register_request(&peer_id, &request_id)?;
 
         self.sync_tx
             .send(SyncingEvent::Request {
@@ -298,6 +328,37 @@ where
         response: message::Response,
     ) -> crate::Result<()> {
         log::trace!("response received from peer {peer_id}, request id {request_id}");
+
+        match response {
+            message::Response::HeaderListResponse(response) => {
+                self.handle_incoming_sync_response(
+                    peer_id,
+                    request_id,
+                    SyncResponse::HeaderListResponse(response),
+                )
+                .await
+            }
+            message::Response::BlockListResponse(response) => {
+                self.handle_incoming_sync_response(
+                    peer_id,
+                    request_id,
+                    SyncResponse::BlockListResponse(response),
+                )
+                .await
+            }
+            message::Response::AddrListResponse(_response) => {
+                // TODO(PR): Handle received addresses
+                Ok(())
+            }
+        }
+    }
+
+    async fn handle_incoming_sync_response(
+        &mut self,
+        peer_id: MockPeerId,
+        request_id: MockRequestId,
+        response: message::SyncResponse,
+    ) -> crate::Result<()> {
         self.sync_tx
             .send(SyncingEvent::Response {
                 peer_id,

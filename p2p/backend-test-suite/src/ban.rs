@@ -21,7 +21,7 @@ use p2p::{
     config::P2pConfig,
     error::{P2pError, PublishError},
     event::PeerManagerEvent,
-    message::{Announcement, HeaderListResponse, Request, Response},
+    message::{Announcement, HeaderListResponse, Response, SyncRequest},
     net::{types::SyncingEvent, ConnectivityService, NetworkingService, SyncingMessagingService},
     sync::BlockSyncManager,
     testing_utils::{connect_services, TestTransportMaker},
@@ -90,7 +90,7 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::HeaderListRequest(_),
+                request: SyncRequest::HeaderListRequest(_),
             } => request_id,
             e => panic!("Unexpected event type: {e:?}"),
         };
