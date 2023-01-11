@@ -22,40 +22,48 @@ mod utils;
 mod ban;
 mod block_announcement;
 mod connect;
+mod peer_manager_peerdb;
 mod sync;
 
 use std::fmt::Debug;
 
 use libtest_mimic::{Arguments, Trial};
 
-use p2p::net::{ConnectivityService, NetworkingService, SyncingMessagingService};
-use p2p::testing_utils::TestTransportMaker;
+use p2p::{
+    net::{
+        mock::types::MockPeerId, ConnectivityService, NetworkingService, SyncingMessagingService,
+    },
+    testing_utils::{RandomAddressMaker, TestTransportMaker},
+};
 
 /// Runs all tests.
-pub fn run<A, S>()
+pub fn run<T, S, A>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
-    S: NetworkingService + Debug + 'static,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    S: NetworkingService<PeerId = MockPeerId> + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S> + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S> + Debug,
+    A: RandomAddressMaker<Address = S::Address>,
 {
     logging::init_logging::<&str>(None);
     let args = Arguments::from_args();
-    libtest_mimic::run(&args, tests::<A, S>()).exit();
+    libtest_mimic::run(&args, tests::<T, S, A>()).exit();
 }
 
 /// Collects all backend agnostic tests.
-fn tests<A, S>() -> Vec<Trial>
+fn tests<T, S, A>() -> Vec<Trial>
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
-    S: NetworkingService + Debug + 'static,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    S: NetworkingService<PeerId = MockPeerId> + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S> + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S> + Debug,
+    A: RandomAddressMaker<Address = S::Address>,
 {
     std::iter::empty()
-        .chain(connect::tests::<A, S>())
-        .chain(block_announcement::tests::<A, S>())
-        .chain(sync::tests::<A, S>())
-        .chain(ban::tests::<A, S>())
+        .chain(connect::tests::<T, S, A>())
+        .chain(block_announcement::tests::<T, S, A>())
+        .chain(sync::tests::<T, S, A>())
+        .chain(ban::tests::<T, S, A>())
+        .chain(peer_manager_peerdb::tests::<T, S, A>())
         .collect()
 }

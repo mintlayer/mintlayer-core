@@ -32,7 +32,6 @@ use common::{
 };
 use serialization::Encode;
 
-use p2p::testing_utils::{connect_services, TestTransportMaker};
 use p2p::{
     config::{NodeType, P2pConfig},
     error::{P2pError, PublishError},
@@ -41,6 +40,7 @@ use p2p::{
         mock::constants::ANNOUNCEMENT_MAX_SIZE, types::SyncingEvent, ConnectivityService,
         NetworkingService, SyncingMessagingService,
     },
+    testing_utils::{connect_services, TestTransportMaker},
 };
 
 tests![
@@ -49,25 +49,25 @@ tests![
     block_announcement_too_big_message,
 ];
 
-async fn block_announcement<A, S>()
+async fn block_announcement<T, S, A>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
     S::ConnectivityHandle: ConnectivityService<S>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut conn1, mut sync1) = S::start(
-        A::make_transport(),
-        vec![A::make_address()],
+        T::make_transport(),
+        vec![T::make_address()],
         Arc::clone(&config),
         Default::default(),
     )
     .await
     .unwrap();
     let (mut conn2, mut sync2) = S::start(
-        A::make_transport(),
-        vec![A::make_address()],
+        T::make_transport(),
+        vec![T::make_address()],
         Arc::clone(&config),
         Default::default(),
     )
@@ -130,9 +130,9 @@ where
     assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));
 }
 
-async fn block_announcement_no_subscription<A, S>()
+async fn block_announcement_no_subscription<T, S, A>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
     S::ConnectivityHandle: ConnectivityService<S>,
@@ -148,16 +148,16 @@ where
         node_type: NodeType::Inactive.into(),
     });
     let (mut conn1, mut sync1) = S::start(
-        A::make_transport(),
-        vec![A::make_address()],
+        T::make_transport(),
+        vec![T::make_address()],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
     )
     .await
     .unwrap();
     let (mut conn2, _sync2) = S::start(
-        A::make_transport(),
-        vec![A::make_address()],
+        T::make_transport(),
+        vec![T::make_address()],
         chain_config,
         p2p_config,
     )
@@ -187,17 +187,17 @@ where
     }
 }
 
-async fn block_announcement_too_big_message<A, S>()
+async fn block_announcement_too_big_message<T, S, A>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
     S::ConnectivityHandle: ConnectivityService<S>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut conn1, mut sync1) = S::start(
-        A::make_transport(),
-        vec![A::make_address()],
+        T::make_transport(),
+        vec![T::make_address()],
         Arc::clone(&config),
         Default::default(),
     )
@@ -205,8 +205,8 @@ where
     .unwrap();
 
     let (mut conn2, _sync2) = S::start(
-        A::make_transport(),
-        vec![A::make_address()],
+        T::make_transport(),
+        vec![T::make_address()],
         Arc::clone(&config),
         Default::default(),
     )

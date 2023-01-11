@@ -53,9 +53,9 @@ tests![
     connect_disconnect_resyncing,
 ];
 
-async fn local_and_remote_in_sync<A, S>()
+async fn local_and_remote_in_sync<T, S, A>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -66,15 +66,15 @@ where
     let mgr2_handle = handle2.clone();
 
     let (mut mgr1, mut conn1, _, _) = make_sync_manager::<S>(
-        A::make_transport(),
-        A::make_address(),
+        T::make_transport(),
+        T::make_address(),
         handle1,
         P2pConfig::default(),
     )
     .await;
     let (mut mgr2, mut conn2, _, _) = make_sync_manager::<S>(
-        A::make_transport(),
-        A::make_address(),
+        T::make_transport(),
+        T::make_address(),
         handle2,
         P2pConfig::default(),
     )
@@ -102,9 +102,9 @@ where
 //
 // this the remote node is synced first and as it's ahead of local node,
 // no blocks are downloaded whereas local node downloads the 7 new blocks from remote
-async fn remote_ahead_by_7_blocks<A, S>()
+async fn remote_ahead_by_7_blocks<T, S, A>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -115,15 +115,15 @@ where
     let mgr2_handle = handle2.clone();
 
     let (mut mgr1, mut conn1, _, _) = make_sync_manager::<S>(
-        A::make_transport(),
-        A::make_address(),
+        T::make_transport(),
+        T::make_address(),
         handle1,
         P2pConfig::default(),
     )
     .await;
     let (mut mgr2, mut conn2, _, _) = make_sync_manager::<S>(
-        A::make_transport(),
-        A::make_address(),
+        T::make_transport(),
+        T::make_address(),
         handle2,
         P2pConfig::default(),
     )
@@ -203,15 +203,15 @@ where
 }
 
 // local and remote nodes are in the same chain but local is ahead of remote by 12 blocks
-async fn local_ahead_by_12_blocks<A, T>()
+async fn local_ahead_by_12_blocks<T, S, A>()
 where
-    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
-    T: NetworkingService + 'static + Debug,
-    T::ConnectivityHandle: ConnectivityService<T>,
-    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    S: NetworkingService + 'static + Debug,
+    S::ConnectivityHandle: ConnectivityService<S>,
+    S::SyncingMessagingHandle: SyncingMessagingService<S>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
+    let addr1 = T::make_address();
+    let addr2 = T::make_address();
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
@@ -219,9 +219,9 @@ where
     let mgr2_handle = handle2.clone();
 
     let (mut mgr1, mut conn1, _, _) =
-        make_sync_manager::<T>(A::make_transport(), addr1, handle1, P2pConfig::default()).await;
+        make_sync_manager::<S>(T::make_transport(), addr1, handle1, P2pConfig::default()).await;
     let (mut mgr2, mut conn2, _, _) =
-        make_sync_manager::<T>(A::make_transport(), addr2, handle2, P2pConfig::default()).await;
+        make_sync_manager::<S>(T::make_transport(), addr2, handle2, P2pConfig::default()).await;
 
     // add 12 more blocks on top of the best block (which is also known by mgr2)
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
@@ -229,7 +229,7 @@ where
     assert!(!same_tip(&mgr1_handle, &mgr2_handle).await);
 
     // add peer to the hashmap of known peers and send getheaders request to them
-    let (_address, peer_info, peer_info2) = connect_services::<T>(&mut conn1, &mut conn2).await;
+    let (_address, peer_info, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
     assert_eq!(mgr1.register_peer(peer_info2.peer_id).await, Ok(()));
     assert_eq!(mgr2.register_peer(peer_info.peer_id).await, Ok(()));
 
@@ -322,15 +322,15 @@ where
 
 // local and remote nodes are in the same chain but local is ahead of remote by 14 blocks
 // verify that remote nodes does a reorg
-async fn remote_local_diff_chains_local_higher<A, S>()
+async fn remote_local_diff_chains_local_higher<T, S, A>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
+    let addr1 = T::make_address();
+    let addr2 = T::make_address();
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
@@ -338,9 +338,9 @@ where
     let mgr2_handle = handle2.clone();
 
     let (mut mgr1, mut conn1, _, _) =
-        make_sync_manager::<S>(A::make_transport(), addr1, handle1, P2pConfig::default()).await;
+        make_sync_manager::<S>(T::make_transport(), addr1, handle1, P2pConfig::default()).await;
     let (mut mgr2, mut conn2, _, _) =
-        make_sync_manager::<S>(A::make_transport(), addr2, handle2, P2pConfig::default()).await;
+        make_sync_manager::<S>(T::make_transport(), addr2, handle2, P2pConfig::default()).await;
 
     // add 14 more blocks to local chain and 7 more blocks to remote chain
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
@@ -466,15 +466,15 @@ where
 
 // local and remote nodes are in different chains and remote has longer chain
 // verify that local node does a reorg
-async fn remote_local_diff_chains_remote_higher<A, S>()
+async fn remote_local_diff_chains_remote_higher<T, S, A>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
+    let addr1 = T::make_address();
+    let addr2 = T::make_address();
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
@@ -482,9 +482,9 @@ where
     let mgr2_handle = handle2.clone();
 
     let (mut mgr1, mut conn1, _, _) =
-        make_sync_manager::<S>(A::make_transport(), addr1, handle1, P2pConfig::default()).await;
+        make_sync_manager::<S>(T::make_transport(), addr1, handle1, P2pConfig::default()).await;
     let (mut mgr2, mut conn2, _, _) =
-        make_sync_manager::<S>(A::make_transport(), addr2, handle2, P2pConfig::default()).await;
+        make_sync_manager::<S>(T::make_transport(), addr2, handle2, P2pConfig::default()).await;
 
     // add 5 more blocks to local chain and 12 more blocks to remote chain
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
@@ -608,9 +608,9 @@ where
     assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
-async fn two_remote_nodes_different_chains<A, S>()
+async fn two_remote_nodes_different_chains<T, S, A>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -622,22 +622,22 @@ where
     let mgr3_handle = handle3.clone();
 
     let (mut mgr1, mut conn1, _, _) = make_sync_manager::<S>(
-        A::make_transport(),
-        A::make_address(),
+        T::make_transport(),
+        T::make_address(),
         handle1,
         P2pConfig::default(),
     )
     .await;
     let (mut mgr2, mut conn2, _, _) = make_sync_manager::<S>(
-        A::make_transport(),
-        A::make_address(),
+        T::make_transport(),
+        T::make_address(),
         handle2,
         P2pConfig::default(),
     )
     .await;
     let (mut mgr3, mut conn3, _, _) = make_sync_manager::<S>(
-        A::make_transport(),
-        A::make_address(),
+        T::make_transport(),
+        T::make_address(),
         handle3,
         P2pConfig::default(),
     )
@@ -729,9 +729,9 @@ where
     assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
-async fn two_remote_nodes_same_chains<A, S>()
+async fn two_remote_nodes_same_chains<T, S, A>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -743,22 +743,22 @@ where
     let mgr3_handle = handle3.clone();
 
     let (mut mgr1, mut conn1, _, _) = make_sync_manager::<S>(
-        A::make_transport(),
-        A::make_address(),
+        T::make_transport(),
+        T::make_address(),
         handle1.clone(),
         P2pConfig::default(),
     )
     .await;
     let (mut mgr2, mut conn2, _, _) = make_sync_manager::<S>(
-        A::make_transport(),
-        A::make_address(),
+        T::make_transport(),
+        T::make_address(),
         handle2,
         P2pConfig::default(),
     )
     .await;
     let (mut mgr3, mut conn3, _, _) = make_sync_manager::<S>(
-        A::make_transport(),
-        A::make_address(),
+        T::make_transport(),
+        T::make_address(),
         handle3,
         P2pConfig::default(),
     )
@@ -868,9 +868,9 @@ where
     assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 }
 
-async fn two_remote_nodes_same_chains_new_blocks<A, S>()
+async fn two_remote_nodes_same_chains_new_blocks<T, S, A>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -879,22 +879,22 @@ where
     let (mgr1_handle, mgr2_handle, mgr3_handle) = init_chainstate_3(Arc::clone(&config), 8).await;
 
     let (mut mgr1, mut conn1, _, _) = make_sync_manager::<S>(
-        A::make_transport(),
-        A::make_address(),
+        T::make_transport(),
+        T::make_address(),
         mgr1_handle.clone(),
         P2pConfig::default(),
     )
     .await;
     let (mut mgr2, mut conn2, _, _) = make_sync_manager::<S>(
-        A::make_transport(),
-        A::make_address(),
+        T::make_transport(),
+        T::make_address(),
         mgr2_handle.clone(),
         P2pConfig::default(),
     )
     .await;
     let (mut mgr3, mut conn3, _, _) = make_sync_manager::<S>(
-        A::make_transport(),
-        A::make_address(),
+        T::make_transport(),
+        T::make_address(),
         mgr3_handle.clone(),
         P2pConfig::default(),
     )
@@ -1017,9 +1017,9 @@ where
 // connect two nodes, they are in sync so no blocks are downloaded
 // then disconnect them, add more blocks to remote chains and reconnect the nodes
 // verify that local node downloads the blocks and after that they are in sync
-async fn connect_disconnect_resyncing<A, S>()
+async fn connect_disconnect_resyncing<T, S, A>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
@@ -1030,15 +1030,15 @@ where
     let mgr2_handle = handle2.clone();
 
     let (mut mgr1, mut conn1, _, _) = make_sync_manager::<S>(
-        A::make_transport(),
-        A::make_address(),
+        T::make_transport(),
+        T::make_address(),
         handle1,
         P2pConfig::default(),
     )
     .await;
     let (mut mgr2, mut conn2, _, _) = make_sync_manager::<S>(
-        A::make_transport(),
-        A::make_address(),
+        T::make_transport(),
+        T::make_address(),
         handle2,
         P2pConfig::default(),
     )
