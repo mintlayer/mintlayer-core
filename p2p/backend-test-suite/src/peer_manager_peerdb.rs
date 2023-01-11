@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Test functions need to be marked async because of the `tests!` macro.
+#![allow(clippy::unused_async)]
+
 use std::{sync::Arc, time::Duration};
 
 use p2p::{
