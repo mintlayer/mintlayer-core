@@ -50,7 +50,7 @@ impl TransportAddress for Address {
         PeerAddress::Ip4(PeerAddressIp4 {
             // Address of the first "host" will be 0.0.0.1
             ip: std::net::Ipv4Addr::from(*self).into(),
-            // There is only "port" in MockChannelTransport per "host", use arbitrary value
+            // There is only one "port" in MockChannelTransport per "host", use arbitrary value
             port: 10000,
         })
     }

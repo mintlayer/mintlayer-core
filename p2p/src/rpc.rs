@@ -57,7 +57,7 @@ impl P2pRpcServer for super::P2pHandle {
     }
 
     async fn get_bind_addresses(&self) -> rpc::Result<Vec<String>> {
-        let res = self.call_async(|this| Box::pin(this.get_bind_address())).await;
+        let res = self.call_async(|this| Box::pin(this.get_bind_addresses())).await;
         handle_error(res)
     }
 

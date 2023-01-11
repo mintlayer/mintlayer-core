@@ -15,13 +15,17 @@
 
 use serialization::{Decode, Encode};
 
-/// IPv4 address
+/// IPv4 address.
+///
+/// Use custom type to be able implement Encode and Decode.
 #[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash, Decode, Encode)]
 pub struct Ip4 {
     inner: [u8; 4],
 }
 
 /// IPv6 address
+///
+/// Use custom type to be able implement Encode and Decode.
 #[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash, Decode, Encode)]
 pub struct Ip6 {
     inner: [u8; 16],

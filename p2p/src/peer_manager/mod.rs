@@ -405,7 +405,7 @@ where
                     PeerManagerEvent::GetPeerCount(response) => {
                         response.send(self.peerdb.active_peer_count()).map_err(|_| P2pError::ChannelClosed)?;
                     }
-                    PeerManagerEvent::GetBindAddress(response) => {
+                    PeerManagerEvent::GetBindAddresses(response) => {
                         let addr = self.peer_connectivity_handle.local_addresses();
                         let addr = addr.await.unwrap_or_default().into_iter().map(|addr| addr.to_string()).collect();
                         response.send(addr).map_err(|_| P2pError::ChannelClosed)?;

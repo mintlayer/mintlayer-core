@@ -31,7 +31,7 @@ pub enum PeerManagerEvent<T: NetworkingService> {
     GetPeerCount(oneshot::Sender<usize>),
 
     /// Get the bind address of the local node
-    GetBindAddress(oneshot::Sender<Vec<String>>),
+    GetBindAddresses(oneshot::Sender<Vec<String>>),
 
     /// Get peer IDs and addresses of connected peers
     GetConnectedPeers(oneshot::Sender<Vec<ConnectedPeer>>),
