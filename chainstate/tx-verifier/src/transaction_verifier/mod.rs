@@ -183,7 +183,7 @@ pub struct TransactionVerifier<C, S, U, A> {
     utxo_block_undo: UtxosBlockUndoCache,
 
     accounting_delta: PoSAccountingDelta<A>,
-    accounting_delta_undo: AccountingBlockUndoCache,
+    accounting_block_undo: AccountingBlockUndoCache,
 }
 
 impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, S, UtxosDB<S>, S> {
@@ -204,7 +204,7 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, 
             utxo_cache,
             utxo_block_undo: UtxosBlockUndoCache::new(),
             accounting_delta,
-            accounting_delta_undo: AccountingBlockUndoCache::new(),
+            accounting_block_undo: AccountingBlockUndoCache::new(),
         }
     }
 }
@@ -236,7 +236,7 @@ where
             utxo_cache: UtxosCache::new(utxos), // TODO: take utxos from handle
             utxo_block_undo: UtxosBlockUndoCache::new(),
             accounting_delta: PoSAccountingDelta::new(accounting),
-            accounting_delta_undo: AccountingBlockUndoCache::new(),
+            accounting_block_undo: AccountingBlockUndoCache::new(),
         }
     }
 }
@@ -259,7 +259,7 @@ where
             utxo_block_undo: UtxosBlockUndoCache::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
             accounting_delta: PoSAccountingDelta::new(&self.accounting_delta),
-            accounting_delta_undo: AccountingBlockUndoCache::new(),
+            accounting_block_undo: AccountingBlockUndoCache::new(),
             best_block: self.best_block,
         }
     }
@@ -548,6 +548,7 @@ where
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
+        let input0 = tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
         let tx_undo = tx
             .outputs()
             .iter()
@@ -560,10 +561,8 @@ where
             .map(
                 |(pool_data, output_value)| -> Result<PoSAccountingUndo, ConnectTransactionError> {
                     // TODO: check StakePoolData fields
-                    let input0 =
-                        tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
                     let delegation_amount = output_value.coin_amount().ok_or_else(|| {
-                        ConnectTransactionError::TokenOutputForPoSAccountingOperation(tx.get_id())
+                        ConnectTransactionError::TokenOutputInPoSAccountingOperation(tx.get_id())
                     })?;
 
                     let (_, undo) = self
@@ -581,7 +580,7 @@ where
             .collect::<Result<Vec<_>, _>>()?;
 
         if !tx_undo.is_empty() {
-            self.accounting_delta_undo
+            self.accounting_block_undo
                 .get_or_create_block_undo(&tx_source)
                 .insert_tx_undo(tx.get_id(), pos_accounting::AccountingTxUndo::new(tx_undo))
                 .map_err(ConnectTransactionError::AccountingBlockUndoError)
@@ -598,7 +597,7 @@ where
         tx.outputs().iter().try_for_each(|output| match output.purpose() {
             OutputPurpose::StakePool(_) => {
                 let block_undo_fetcher = |id: Id<Block>| self.storage.get_accounting_undo(id);
-                self.accounting_delta_undo
+                self.accounting_block_undo
                     .take_tx_undo(&tx_source, &tx.get_id(), block_undo_fetcher)?
                     .into_inner()
                     .into_iter()
@@ -641,7 +640,7 @@ where
         // verify input signatures
         self.verify_signatures(tx)?;
 
-        self.connect_pos_accounting_outputs(TransactionSource::from(tx_source), tx.transaction())?;
+        self.connect_pos_accounting_outputs(tx_source.into(), tx.transaction())?;
 
         // spend utxos
         let tx_undo = self
@@ -656,8 +655,6 @@ where
 
         match tx_source {
             TransactionSourceForConnect::Chain { new_block_index: _ } => {
-                // update tx index only for txs from main chain
-
                 // update tx index only for txs from main chain
                 if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
                     // pre-cache all inputs
@@ -902,7 +899,7 @@ where
             utxo_block_undo: self.utxo_block_undo.consume(),
             token_issuance_cache: self.token_issuance_cache.consume(),
             accounting_delta: self.accounting_delta.consume(),
-            accounting_delta_undo: self.accounting_delta_undo.consume(),
+            accounting_delta_undo: self.accounting_block_undo.consume(),
         })
     }
 }

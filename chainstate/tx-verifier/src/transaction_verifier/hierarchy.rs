@@ -98,7 +98,7 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
         &self,
         id: Id<Block>,
     ) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError> {
-        match self.accounting_delta_undo.data().get(&TransactionSource::Chain(id)) {
+        match self.accounting_block_undo.data().get(&TransactionSource::Chain(id)) {
             Some(v) => Ok(Some(v.undo.clone())),
             None => self.storage.get_accounting_undo(id),
         }
@@ -219,7 +219,7 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
         tx_source: TransactionSource,
         new_undo: &AccountingBlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.accounting_delta_undo
+        self.accounting_block_undo
             .set_undo_data(tx_source, new_undo)
             .map_err(TransactionVerifierStorageError::AccountingBlockUndoError)
     }
@@ -228,7 +228,7 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), TransactionVerifierStorageError> {
-        self.accounting_delta_undo
+        self.accounting_block_undo
             .del_undo_data(tx_source)
             .map_err(TransactionVerifierStorageError::AccountingBlockUndoError)
     }

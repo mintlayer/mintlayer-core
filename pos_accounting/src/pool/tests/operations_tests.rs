@@ -20,13 +20,16 @@ use common::{
     primitives::{Amount, Id, H256},
 };
 use crypto::{
-    key::{KeyKind, PrivateKey, PublicKey},
-    random::{CryptoRng, Rng, RngCore},
+    key::{KeyKind, PrivateKey},
+    random::RngCore,
 };
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
-use super::{new_delegation_id, new_pool_id};
+use super::{
+    create_storage_with_pool, create_storage_with_pool_and_delegation, new_delegation_id,
+    new_pool_id,
+};
 
 use crate::{
     pool::{
@@ -34,54 +37,8 @@ use crate::{
         view::FlushablePoSAccountingView,
     },
     storage::in_memory::InMemoryPoSAccounting,
-    DelegationData, DelegationId, Error, PoSAccountingOperations, PoolId,
+    Error, PoSAccountingOperations,
 };
-
-fn create_storage_with_pool(
-    rng: &mut (impl Rng + CryptoRng),
-    pledged_amount: Amount,
-) -> (PoolId, PublicKey, InMemoryPoSAccounting) {
-    let pool_id = new_pool_id(rng.next_u64());
-    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
-
-    let storage = InMemoryPoSAccounting::from_values(
-        BTreeMap::from([(pool_id, PoolData::new(pub_key.clone(), pledged_amount))]),
-        BTreeMap::from([(pool_id, pledged_amount)]),
-        BTreeMap::new(),
-        BTreeMap::new(),
-        BTreeMap::new(),
-    );
-    (pool_id, pub_key, storage)
-}
-
-fn create_storage_with_pool_and_delegation(
-    rng: &mut (impl Rng + CryptoRng),
-    pledged_amount: Amount,
-    delegated_amount: Amount,
-) -> (
-    PoolId,
-    PublicKey,
-    DelegationId,
-    PublicKey,
-    InMemoryPoSAccounting,
-) {
-    let pool_id = new_pool_id(rng.next_u64());
-    let delegation_id = new_delegation_id(rng.next_u64());
-    let (_, pub_key_pool) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
-    let (_, pub_key_del) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
-
-    let storage = InMemoryPoSAccounting::from_values(
-        BTreeMap::from([(pool_id, PoolData::new(pub_key_pool.clone(), pledged_amount))]),
-        BTreeMap::from([(pool_id, (pledged_amount + delegated_amount).unwrap())]),
-        BTreeMap::from([((pool_id, delegation_id), delegated_amount)]),
-        BTreeMap::from([(delegation_id, delegated_amount)]),
-        BTreeMap::from([(
-            delegation_id,
-            DelegationData::new(pool_id, pub_key_del.clone()),
-        )]),
-    );
-    (pool_id, pub_key_pool, delegation_id, pub_key_del, storage)
-}
 
 #[rstest]
 #[trace]

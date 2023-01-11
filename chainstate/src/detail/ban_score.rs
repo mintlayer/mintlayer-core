@@ -100,8 +100,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToSpendBurnedAmount => 100,
             ConnectTransactionError::MissingPoSAccountingUndo(_) => 0,
             ConnectTransactionError::PoSAccountingError(err) => err.ban_score(),
-            ConnectTransactionError::TokenInputForPoSAccountingOperation(_) => 100,
-            ConnectTransactionError::TokenOutputForPoSAccountingOperation(_) => 100,
+            ConnectTransactionError::TokenOutputInPoSAccountingOperation(_) => 100,
             ConnectTransactionError::AccountingBlockUndoError(_) => 100,
         }
     }

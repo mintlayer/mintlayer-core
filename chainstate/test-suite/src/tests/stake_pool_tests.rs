@@ -315,7 +315,7 @@ fn stake_pool_with_tokens_as_input_value(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokenOutputForPoSAccountingOperation(tx1_id)
+                ConnectTransactionError::TokenOutputInPoSAccountingOperation(tx1_id)
             ))
         );
     });

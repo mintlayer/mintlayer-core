@@ -556,7 +556,7 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
         let block_undo =
             AccountingBlockUndo::new(BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]));
 
-        verifier.accounting_delta_undo =
+        verifier.accounting_block_undo =
             AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
                 AccountingBlockUndoEntry {
@@ -578,7 +578,7 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
         let block_undo =
             AccountingBlockUndo::new(BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]));
 
-        verifier.accounting_delta_undo =
+        verifier.accounting_block_undo =
             AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
                 AccountingBlockUndoEntry {

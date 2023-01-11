@@ -93,10 +93,8 @@ pub enum ConnectTransactionError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("PoS accounting undo is missing for transaction {0}")]
     MissingPoSAccountingUndo(Id<Transaction>),
-    #[error("No token inputs is allowed for PoS accounting operations {0}")]
-    TokenInputForPoSAccountingOperation(Id<Transaction>),
-    #[error("No token outputs is allowed for PoS accounting operations {0}")]
-    TokenOutputForPoSAccountingOperation(Id<Transaction>),
+    #[error("No token outputs are allowed in PoS accounting operations {0}")]
+    TokenOutputInPoSAccountingOperation(Id<Transaction>),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

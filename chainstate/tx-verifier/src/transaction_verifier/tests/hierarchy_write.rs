@@ -854,7 +854,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
         let block_undo =
             AccountingBlockUndo::new(BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]));
 
-        verifier.accounting_delta_undo =
+        verifier.accounting_block_undo =
             AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
                 AccountingBlockUndoEntry {
@@ -876,7 +876,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
         let block_undo =
             AccountingBlockUndo::new(BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]));
 
-        verifier.accounting_delta_undo =
+        verifier.accounting_block_undo =
             AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
                 AccountingBlockUndoEntry {
@@ -929,7 +929,7 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
         let mut verifier =
             TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
 
-        verifier.accounting_delta_undo =
+        verifier.accounting_block_undo =
             AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
                 AccountingBlockUndoEntry {
@@ -943,7 +943,7 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
 
-        verifier.accounting_delta_undo =
+        verifier.accounting_block_undo =
             AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
                 AccountingBlockUndoEntry {
