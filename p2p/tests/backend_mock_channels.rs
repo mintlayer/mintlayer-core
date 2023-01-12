@@ -13,9 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p::net::mock::{transport::MockChannelTransport, MockService};
-use p2p::testing_utils::TestTransportChannel;
+use p2p::{
+    net::mock::{transport::MockChannelTransport, MockService},
+    testing_utils::{TestChannelAddressMaker, TestTransportChannel},
+};
 
 fn main() {
-    p2p_backend_test_suite::run::<TestTransportChannel, MockService<MockChannelTransport>>();
+    p2p_backend_test_suite::run::<
+        TestTransportChannel,
+        MockService<MockChannelTransport>,
+        TestChannelAddressMaker,
+    >();
 }

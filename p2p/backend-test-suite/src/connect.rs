@@ -30,17 +30,17 @@ tests![
     connect_accept,
 ];
 
-async fn connect<A, S>()
+async fn connect<T, S, A>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     S::start(
-        A::make_transport(),
-        vec![A::make_address()],
+        T::make_transport(),
+        vec![T::make_address()],
         config,
         Default::default(),
     )
@@ -51,17 +51,17 @@ where
 // Check that connecting twice to the same address isn't possible.
 // TODO: Investigate why this test fails on Windows.
 #[cfg(not(target_os = "windows"))]
-async fn connect_address_in_use<A, S>()
+async fn connect_address_in_use<T, S, A>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S> + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S> + Debug,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (connectivity, _sync) = S::start(
-        A::make_transport(),
-        vec![A::make_address()],
+        T::make_transport(),
+        vec![T::make_address()],
         Arc::clone(&config),
         Default::default(),
     )
@@ -69,7 +69,7 @@ where
     .unwrap();
 
     let addresses = connectivity.local_addresses().await.unwrap();
-    let res = S::start(A::make_transport(), addresses, config, Default::default())
+    let res = S::start(T::make_transport(), addresses, config, Default::default())
         .await
         .expect_err("address is not in use");
     assert!(matches!(
@@ -82,25 +82,25 @@ where
 
 // Try to connect two nodes by having `service1` listen for network events and having `service2`
 // trying to connect to `service1`.
-async fn connect_accept<A, S>()
+async fn connect_accept<T, S, A>()
 where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
+    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + std::fmt::Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S>,
     S::SyncingMessagingHandle: SyncingMessagingService<S>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut service1, _) = S::start(
-        A::make_transport(),
-        vec![A::make_address()],
+        T::make_transport(),
+        vec![T::make_address()],
         Arc::clone(&config),
         Default::default(),
     )
     .await
     .unwrap();
     let (mut service2, _) = S::start(
-        A::make_transport(),
-        vec![A::make_address()],
+        T::make_transport(),
+        vec![T::make_address()],
         Arc::clone(&config),
         Default::default(),
     )

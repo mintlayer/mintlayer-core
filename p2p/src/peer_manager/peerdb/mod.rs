@@ -264,7 +264,8 @@ impl<T: NetworkingService> PeerDb<T> {
 
         false
     }
-}
 
-#[cfg(test)]
-mod tests;
+    pub fn peer_address(&self, id: &T::PeerId) -> Option<&T::Address> {
+        self.peers.get(id).map(|c| &c.address)
+    }
+}

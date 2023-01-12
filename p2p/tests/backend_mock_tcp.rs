@@ -13,9 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p::net::mock::{transport::TcpTransportSocket, MockService};
-use p2p::testing_utils::TestTransportTcp;
+use p2p::{
+    net::mock::{transport::TcpTransportSocket, MockService},
+    testing_utils::{TestTcpAddressMaker, TestTransportTcp},
+};
 
 fn main() {
-    p2p_backend_test_suite::run::<TestTransportTcp, MockService<TcpTransportSocket>>();
+    p2p_backend_test_suite::run::<
+        TestTransportTcp,
+        MockService<TcpTransportSocket>,
+        TestTcpAddressMaker,
+    >();
 }
