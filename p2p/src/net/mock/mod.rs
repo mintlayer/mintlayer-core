@@ -264,15 +264,13 @@ where
         request_id: S::SyncingPeerRequestId,
         response: message::Response,
     ) -> crate::Result<()> {
-        let (tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(types::Command::SendResponse {
                 request_id,
                 message: response,
-                response: tx,
             })
             .await?;
-        rx.await?
+        Ok(())
     }
 
     async fn make_announcement(

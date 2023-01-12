@@ -238,7 +238,7 @@ where
 
     /// Sends the announcement to all peers.
     ///
-    /// It not an error if there are no peers that subscribed to the related topic.
+    /// It is not an error if there are no peers that subscribed to the related topic.
     async fn announce_data(&mut self, topic: PubSubTopic, message: Vec<u8>) -> crate::Result<()> {
         let announcement = message::Announcement::decode(&mut &message[..])?;
 
@@ -684,8 +684,8 @@ where
             } => async move {
                 boxed_cb(move |this| {
                     async move {
-                        let res = this.send_request(peer_id, message).await;
-                        response.send(res).map_err(|_| P2pError::ChannelClosed)
+                        let _res = this.send_request(request_id, peer_id, message).await;
+                        Ok(())
                     }
                     .boxed()
                 })
@@ -694,26 +694,21 @@ where
             Command::SendResponse {
                 request_id,
                 message,
-                response,
             } => async move {
                 boxed_cb(move |this| {
                     async move {
-                        let res = this.send_response(request_id, message).await;
-                        response.send(res).map_err(|_| P2pError::ChannelClosed)
+                        let _res = this.send_response(request_id, message).await;
+                        Ok(())
                     }
                     .boxed()
                 })
             }
             .boxed(),
-            Command::AnnounceData {
-                topic,
-                message,
-                response,
-            } => async move {
+            Command::AnnounceData { topic, message } => async move {
                 boxed_cb(move |this| {
                     async move {
-                        let res = this.announce_data(topic, message).await;
-                        response.send(res).map_err(|_| P2pError::ChannelClosed)
+                        let _res = this.announce_data(topic, message).await;
+                        Ok(())
                     }
                     .boxed()
                 })

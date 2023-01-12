@@ -49,7 +49,6 @@ pub enum Command<T: TransportSocket> {
     SendResponse {
         request_id: MockRequestId,
         message: message::Response,
-        response: oneshot::Sender<crate::Result<()>>,
     },
     AnnounceData {
         topic: PubSubTopic,
