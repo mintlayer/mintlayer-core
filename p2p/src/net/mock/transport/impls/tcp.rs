@@ -179,7 +179,7 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let request_id = MockRequestId::new(1337u64);
+        let request_id = MockRequestId::new();
         let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
         let mut peer_stream = BufferedTranscoder::new(peer_stream);
         peer_stream
@@ -210,7 +210,7 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let id_1 = MockRequestId::new(1337u64);
+        let id_1 = MockRequestId::new();
         let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
         let mut peer_stream = BufferedTranscoder::new(peer_stream);
         peer_stream
@@ -221,7 +221,7 @@ mod tests {
             .await
             .unwrap();
 
-        let id_2 = MockRequestId::new(1338u64);
+        let id_2 = MockRequestId::new();
         peer_stream
             .send(Message::Request {
                 request_id: id_2,

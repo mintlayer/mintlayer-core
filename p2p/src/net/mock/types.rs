@@ -112,18 +112,14 @@ pub enum PubSubEvent<T: TransportSocket> {
     },
 }
 
+static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Encode, Decode, Default)]
 pub struct MockRequestId(u64);
 
 impl MockRequestId {
-    pub fn new(request_id: u64) -> Self {
-        Self(request_id)
-    }
-
-    pub fn fetch_and_inc(&mut self) -> Self {
-        let id = self.0;
-        self.0 += 1;
-
+    pub fn new() -> Self {
+        let id = NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed);
         Self(id)
     }
 }

@@ -493,7 +493,7 @@ mod tests {
         assert!(socket2.recv().now_or_never().is_none());
         socket2
             .send(types::Message::Request {
-                request_id: types::MockRequestId::new(1337u64),
+                request_id: types::MockRequestId::new(),
                 request: message::Request::HeaderListRequest(message::HeaderListRequest::new(
                     Locator::new(vec![]),
                 )),

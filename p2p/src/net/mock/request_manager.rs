@@ -36,12 +36,6 @@ pub struct RequestManager {
     /// Active ephemeral IDs
     ephemerals: HashMap<types::MockPeerId, HashSet<types::MockRequestId>>,
 
-    /// The next ID for an outbound request.
-    next_request_id: types::MockRequestId,
-
-    /// Next ephemeral request ID
-    next_ephemeral_id: types::MockRequestId,
-
     /// Ephemeral requests IDs which are mapped to remote peer ID/request ID pair
     ephemeral: HashMap<types::MockRequestId, (types::MockPeerId, types::MockRequestId)>,
 }
@@ -78,7 +72,7 @@ impl RequestManager {
         &mut self,
         request: message::Request,
     ) -> crate::Result<(types::MockRequestId, Box<types::Message>)> {
-        let request_id = self.next_request_id.fetch_and_inc();
+        let request_id = types::MockRequestId::new();
 
         Ok((
             request_id,
@@ -125,7 +119,7 @@ impl RequestManager {
             .get_mut(peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        let ephemeral_id = self.next_ephemeral_id.fetch_and_inc();
+        let ephemeral_id = types::MockRequestId::new();
 
         peer_ephemerals.insert(ephemeral_id);
         self.ephemeral.insert(ephemeral_id, (*peer_id, *request_id));
