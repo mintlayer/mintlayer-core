@@ -111,7 +111,7 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         addresses: Vec<T::Address>,
     },
 
-    /// One one more peers have expired (libp2p defines expired addresses as addresses that haven't appeared in later refreshes of available addresses)
+    /// One one more peers have expired
     Expired {
         /// Address information
         addresses: Vec<T::Address>,
