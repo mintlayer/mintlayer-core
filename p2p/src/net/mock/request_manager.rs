@@ -70,17 +70,13 @@ impl RequestManager {
     /// Create new outgoing request
     pub fn make_request(
         &mut self,
+        request_id: types::MockRequestId,
         request: message::Request,
-    ) -> crate::Result<(types::MockRequestId, Box<types::Message>)> {
-        let request_id = types::MockRequestId::new();
-
-        Ok((
+    ) -> crate::Result<Box<types::Message>> {
+        Ok(Box::new(types::Message::Request {
             request_id,
-            Box::new(types::Message::Request {
-                request_id,
-                request,
-            }),
-        ))
+            request,
+        }))
     }
 
     /// Create new outgoing response

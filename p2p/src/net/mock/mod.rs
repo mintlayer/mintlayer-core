@@ -246,16 +246,17 @@ where
         peer_id: S::PeerId,
         request: message::Request,
     ) -> crate::Result<S::SyncingPeerRequestId> {
-        let (tx, rx) = oneshot::channel();
+        let request_id = MockRequestId::new();
 
         self.cmd_tx
             .send(types::Command::SendRequest {
                 peer_id,
+                request_id,
                 message: request,
-                response: tx,
             })
             .await?;
-        rx.await?
+
+        Ok(request_id)
     }
 
     async fn send_response(

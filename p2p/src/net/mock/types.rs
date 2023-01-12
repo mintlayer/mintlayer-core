@@ -42,8 +42,8 @@ pub enum Command<T: TransportSocket> {
     },
     SendRequest {
         peer_id: MockPeerId,
+        request_id: MockRequestId,
         message: message::Request,
-        response: oneshot::Sender<crate::Result<MockRequestId>>,
     },
     /// Send response to remote peer
     SendResponse {

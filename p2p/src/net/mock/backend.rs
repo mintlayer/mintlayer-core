@@ -198,18 +198,19 @@ where
     /// Sends a request to the remote peer.
     async fn send_request(
         &mut self,
+        request_id: MockRequestId,
         peer_id: MockPeerId,
         request: message::Request,
-    ) -> crate::Result<MockRequestId> {
+    ) -> crate::Result<()> {
         let peer = self
             .peers
             .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        let (request_id, request) = self.request_mgr.make_request(request)?;
+        let request = self.request_mgr.make_request(request_id, request)?;
         peer.tx.send(MockEvent::SendMessage(request)).await.map_err(P2pError::from)?;
 
-        Ok(request_id)
+        Ok(())
     }
 
     /// Send response to a request
@@ -684,8 +685,8 @@ where
             .boxed(),
             Command::SendRequest {
                 peer_id,
+                request_id,
                 message,
-                response,
             } => async move {
                 boxed_cb(move |this| {
                     async move {
