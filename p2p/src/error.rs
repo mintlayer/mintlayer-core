@@ -57,8 +57,6 @@ pub enum PeerError {
 pub enum PublishError {
     #[error("Failed to sign message")]
     SigningFailed,
-    #[error("No peers in topic")]
-    InsufficientPeers,
     #[error("Message is too large. Tried to send {0:?} bytes when limit is {1:?}")]
     MessageTooLarge(usize, usize),
     #[error("Failed to compress the message")]
@@ -209,7 +207,6 @@ impl BanScore for PublishError {
     fn ban_score(&self) -> u32 {
         match self {
             PublishError::SigningFailed => 0,
-            PublishError::InsufficientPeers => 0,
             PublishError::MessageTooLarge(_, _) => 100,
             PublishError::TransformFailed => 0,
         }

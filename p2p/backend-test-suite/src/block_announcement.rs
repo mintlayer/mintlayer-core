@@ -15,8 +15,6 @@
 
 use std::{fmt::Debug, sync::Arc};
 
-use tokio::{pin, select, time::Duration};
-
 use common::{
     chain::{
         block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
@@ -77,25 +75,19 @@ where
     connect_services::<S>(&mut conn1, &mut conn2).await;
 
     // Spam the message until until we have a peer.
-    loop {
-        let res = sync1
-            .make_announcement(Announcement::Block(
-                Block::new(
-                    vec![],
-                    Id::new(H256([0x01; 32])),
-                    BlockTimestamp::from_int_seconds(1337u64),
-                    ConsensusData::None,
-                    BlockReward::new(Vec::new()),
-                )
-                .unwrap(),
-            ))
-            .await;
-
-        match res {
-            Ok(()) => break,
-            Err(e) => assert_eq!(e, P2pError::PublishError(PublishError::InsufficientPeers)),
-        }
-    }
+    let res = sync1
+        .make_announcement(Announcement::Block(
+            Block::new(
+                vec![],
+                Id::new(H256([0x01; 32])),
+                BlockTimestamp::from_int_seconds(1337u64),
+                ConsensusData::None,
+                BlockReward::new(Vec::new()),
+            )
+            .unwrap(),
+        ))
+        .await;
+    assert!(res.is_ok());
 
     // Poll an event from the network for server2.
     let block = match sync2.poll_next().await.unwrap() {
@@ -165,25 +157,19 @@ where
 
     connect_services::<S>(&mut conn1, &mut conn2).await;
 
-    let timeout = tokio::time::sleep(Duration::from_secs(1));
-    pin!(timeout);
-    loop {
-        select! {
-            res = sync1.make_announcement(Announcement::Block(
-                Block::new(
-                    vec![],
-                    Id::new(H256([0x01; 32])),
-                    BlockTimestamp::from_int_seconds(1337u64),
-                    ConsensusData::None,
-                    BlockReward::new(Vec::new()),
-                )
-                .unwrap(),
-            )) => {
-                assert_eq!(Err(P2pError::PublishError(PublishError::InsufficientPeers)), res);
-            }
-            _ = &mut timeout => break,
-        }
-    }
+    let res = sync1
+        .make_announcement(Announcement::Block(
+            Block::new(
+                vec![],
+                Id::new(H256([0x01; 32])),
+                BlockTimestamp::from_int_seconds(1337u64),
+                ConsensusData::None,
+                BlockReward::new(Vec::new()),
+            )
+            .unwrap(),
+        ))
+        .await;
+    assert!(res.is_ok());
 }
 
 async fn block_announcement_too_big_message<T, S, A>()

@@ -54,7 +54,6 @@ pub enum Command<T: TransportSocket> {
     AnnounceData {
         topic: PubSubTopic,
         message: Vec<u8>,
-        response: oneshot::Sender<crate::Result<()>>,
     },
 }
 

@@ -238,8 +238,7 @@ where
 
     /// Sends the announcement to all peers.
     ///
-    /// Returns the `InsufficientPeers` error if there are no peers that subscribed to the related
-    /// topic.
+    /// It not an error if there are no peers that subscribed to the related topic.
     async fn announce_data(&mut self, topic: PubSubTopic, message: Vec<u8>) -> crate::Result<()> {
         let announcement = message::Announcement::decode(&mut &message[..])?;
 
@@ -260,14 +259,9 @@ where
             .collect();
         futures.shuffle(&mut make_pseudo_rng());
 
-        // TODO: We don't really need to return an error here. It is only needed temporarily in
-        // order to mimic the libp2p behavior.
-        if futures.is_empty() {
-            Err(P2pError::PublishError(PublishError::InsufficientPeers))
-        } else {
-            join_all(futures).await;
-            Ok(())
-        }
+        join_all(futures).await;
+
+        Ok(())
     }
 
     /// Handle incoming request

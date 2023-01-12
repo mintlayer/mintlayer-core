@@ -291,15 +291,9 @@ where
             message::Announcement::Block(_) => PubSubTopic::Blocks,
         };
 
-        let (response, receiver) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::AnnounceData {
-                topic,
-                message,
-                response,
-            })
-            .await?;
-        receiver.await?
+        self.cmd_tx.send(types::Command::AnnounceData { topic, message }).await?;
+
+        Ok(())
     }
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent<S>> {
