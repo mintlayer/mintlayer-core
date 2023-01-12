@@ -639,7 +639,6 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
-        mdns_config: Default::default(),
         node_type: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(

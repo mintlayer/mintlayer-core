@@ -105,7 +105,7 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         peer_id: T::PeerId,
     },
 
-    /// One or more peers discovered (libp2p defines discovering as finding new addresses through mDNS or otherwise)
+    /// One or more peers discovered
     Discovered {
         /// Address information
         addresses: Vec<T::Address>,

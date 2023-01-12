@@ -92,7 +92,6 @@ fn read_config_override_values() {
     let p2p_timeout = 10000;
     let http_rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
     let ws_rpc_addr = SocketAddr::from_str("127.0.0.1:5433").unwrap();
-    let enable_mdns = false;
     let backend_type = StorageBackendConfigFile::InMemory;
     let node_type = NodeTypeConfigFile::FullNode;
     let max_tip_age = 1000;
@@ -105,9 +104,6 @@ fn read_config_override_values() {
         p2p_add_node: Some(vec![p2p_add_node.to_owned()]),
         p2p_ban_threshold: Some(p2p_ban_threshold),
         p2p_outbound_connection_timeout: Some(p2p_timeout),
-        p2p_enable_mdns: Some(enable_mdns),
-        p2p_mdns_query_interval: None,
-        p2p_enable_ipv6_mdns_discovery: None,
         http_rpc_addr: Some(http_rpc_addr),
         http_rpc_enabled: Some(true),
         ws_rpc_addr: Some(ws_rpc_addr),
@@ -207,9 +203,6 @@ fn default_run_options() -> RunOptions {
         p2p_add_node: None,
         p2p_ban_threshold: None,
         p2p_outbound_connection_timeout: None,
-        p2p_enable_mdns: None,
-        p2p_mdns_query_interval: None,
-        p2p_enable_ipv6_mdns_discovery: None,
         http_rpc_addr: None,
         http_rpc_enabled: None,
         ws_rpc_addr: None,

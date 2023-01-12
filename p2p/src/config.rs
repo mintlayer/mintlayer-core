@@ -21,40 +21,15 @@ use crate::net::types::PubSubTopic;
 
 pub const DEFAULT_BIND_PORT: u16 = 3031;
 
-// TODO: does this constant make sense to be zero? Find the justification for it.
-pub const MDNS_DEFAULT_QUERY_INTERVAL: u64 = 0;
-pub const MDNS_DEFAULT_IPV6_STATE: bool = false;
-
 make_config_setting!(BanThreshold, u32, 100);
 make_config_setting!(BanDuration, Duration, Duration::from_secs(60 * 60 * 24));
 make_config_setting!(OutboundConnectionTimeout, u64, 10);
-make_config_setting!(MdnsConfigSetting, MdnsConfig, MdnsConfig::Disabled);
-make_config_setting!(MdnsQueryInterval, u64, MDNS_DEFAULT_QUERY_INTERVAL);
-make_config_setting!(MdnsEnableIpV6Discovery, bool, MDNS_DEFAULT_IPV6_STATE);
 make_config_setting!(
     AnnouncementSubscriptions,
     BTreeSet<PubSubTopic>,
     [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
 );
 make_config_setting!(NodeTypeSetting, NodeType, NodeType::Full);
-
-/// Multicast DNS configuration.
-#[derive(Debug, Clone)]
-pub enum MdnsConfig {
-    Enabled {
-        /// Interval (in milliseconds) at which to poll the network for new peers.
-        query_interval: MdnsQueryInterval,
-        /// Use IPv6 for multicast DNS
-        enable_ipv6_mdns_discovery: MdnsEnableIpV6Discovery,
-    },
-    Disabled,
-}
-
-impl Default for MdnsConfig {
-    fn default() -> Self {
-        MdnsConfig::Disabled
-    }
-}
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]
@@ -94,8 +69,6 @@ pub struct P2pConfig {
     pub ban_duration: BanDuration,
     /// The outbound connection timeout value in seconds.
     pub outbound_connection_timeout: OutboundConnectionTimeout,
-    /// Multicast DNS configuration.
-    pub mdns_config: MdnsConfigSetting,
     /// A node type.
     pub node_type: NodeTypeSetting,
 }
