@@ -170,11 +170,6 @@ impl<T: NetworkingService> PeerDb<T> {
         self.available.insert(address.clone());
     }
 
-    /// Expire discovered peer addresses
-    pub fn peer_expired(&mut self, address: &T::Address) {
-        self.available.remove(address);
-    }
-
     /// Report outbound connection failure
     ///
     /// When [`crate::peer_manager::PeerManager::heartbeat()`] has initiated an outbound connection

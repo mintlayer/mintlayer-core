@@ -110,13 +110,6 @@ where
         })
     }
 
-    /// Update the list of known peers or known peer's list of addresses
-    fn peer_expired(&mut self, addresses: &[T::Address]) {
-        addresses.iter().for_each(|peer| {
-            self.peerdb.peer_expired(peer);
-        })
-    }
-
     /// Verify software version compatibility
     ///
     /// Make sure that local and remote peer have the same software version
@@ -456,9 +449,6 @@ where
                         }
                         net::types::ConnectivityEvent::Discovered { addresses } => {
                             self.peer_discovered(&addresses);
-                        }
-                        net::types::ConnectivityEvent::Expired { addresses } => {
-                            self.peer_expired(&addresses);
                         }
                         net::types::ConnectivityEvent::Misbehaved { peer_id, error } => {
                             let res = self.adjust_peer_score(peer_id, error.ban_score()).await;

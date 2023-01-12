@@ -111,12 +111,6 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         addresses: Vec<T::Address>,
     },
 
-    /// One one more peers have expired
-    Expired {
-        /// Address information
-        addresses: Vec<T::Address>,
-    },
-
     /// Protocol violation
     Misbehaved {
         /// Unique ID of the peer
