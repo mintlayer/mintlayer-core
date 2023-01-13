@@ -24,7 +24,7 @@ use crate::detail::{
     },
     tx_verification_strategy::TransactionVerificationStrategy,
 };
-use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
+use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TipStorageTag};
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
@@ -35,7 +35,7 @@ use common::{
 };
 use pos_accounting::{
     AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, FlushablePoSAccountingView,
-    PoSAccountingDB, PoSAccountingDeltaData, PoSAccountingView, PoolData, PoolId,
+    PoSAccountingDeltaData, PoSAccountingStorageRead, PoSAccountingView, PoolData, PoolId,
 };
 use tx_verifier::transaction_verifier::TransactionSource;
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosDB, UtxosStorageRead};
@@ -261,37 +261,35 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
     PoSAccountingView for ChainstateRef<'a, S, O, V>
 {
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
-        self.db_tx
-            .get_pool_data(pool_id)
-            .map(|v| v.is_some())
-            .map_err(pos_accounting::Error::StorageError)
+        self.get_pool_data(pool_id).map(|v| v.is_some())
     }
 
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error> {
-        self.db_tx
-            .get_pool_balance(pool_id)
+        PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&self.db_tx, pool_id)
             .map_err(pos_accounting::Error::StorageError)
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error> {
-        self.db_tx.get_pool_data(pool_id).map_err(pos_accounting::Error::StorageError)
+        PoSAccountingStorageRead::<TipStorageTag>::get_pool_data(&self.db_tx, pool_id)
+            .map_err(pos_accounting::Error::StorageError)
     }
 
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, pos_accounting::Error> {
-        self.db_tx
-            .get_delegation_balance(delegation_id)
-            .map_err(pos_accounting::Error::StorageError)
+        PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
+            &self.db_tx,
+            delegation_id,
+        )
+        .map_err(pos_accounting::Error::StorageError)
     }
 
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, pos_accounting::Error> {
-        self.db_tx
-            .get_delegation_data(delegation_id)
+        PoSAccountingStorageRead::<TipStorageTag>::get_delegation_data(&self.db_tx, delegation_id)
             .map_err(pos_accounting::Error::StorageError)
     }
 
@@ -299,8 +297,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
         &self,
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, pos_accounting::Error> {
-        self.db_tx
-            .get_pool_delegations_shares(pool_id)
+        PoSAccountingStorageRead::<TipStorageTag>::get_pool_delegations_shares(&self.db_tx, pool_id)
             .map_err(pos_accounting::Error::StorageError)
     }
 
@@ -309,9 +306,12 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, pos_accounting::Error> {
-        self.db_tx
-            .get_pool_delegation_share(pool_id, delegation_id)
-            .map_err(pos_accounting::Error::StorageError)
+        PoSAccountingStorageRead::<TipStorageTag>::get_pool_delegation_share(
+            &self.db_tx,
+            pool_id,
+            delegation_id,
+        )
+        .map_err(pos_accounting::Error::StorageError)
     }
 }
 
@@ -322,7 +322,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
         &mut self,
         data: PoSAccountingDeltaData,
     ) -> Result<DeltaMergeUndo, pos_accounting::Error> {
-        let mut db = PoSAccountingDB::new(&mut self.db_tx);
+        let mut db = PoSAccountingDB::<_, TipStorageTag>::new(&mut self.db_tx);
         db.batch_write_delta(data)
     }
 }

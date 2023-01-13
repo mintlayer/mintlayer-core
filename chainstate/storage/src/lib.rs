@@ -42,8 +42,18 @@ pub mod inmemory {
     pub type Store = super::Store<storage::inmemory::InMemory>;
 }
 
+pub struct TipStorageTag;
+impl pos_accounting::StorageTag for TipStorageTag {}
+
+pub struct SealedStorageTag;
+impl pos_accounting::StorageTag for SealedStorageTag {}
+
 /// Queries on persistent blockchain data
-pub trait BlockchainStorageRead: UtxosStorageRead + PoSAccountingStorageRead {
+pub trait BlockchainStorageRead:
+    UtxosStorageRead
+    + PoSAccountingStorageRead<SealedStorageTag>
+    + PoSAccountingStorageRead<TipStorageTag>
+{
     /// Get storage version
     fn get_storage_version(&self) -> crate::Result<u32>;
 
@@ -89,7 +99,10 @@ pub trait BlockchainStorageRead: UtxosStorageRead + PoSAccountingStorageRead {
 
 /// Modifying operations on persistent blockchain data
 pub trait BlockchainStorageWrite:
-    BlockchainStorageRead + UtxosStorageWrite + PoSAccountingStorageWrite
+    BlockchainStorageRead
+    + UtxosStorageWrite
+    + PoSAccountingStorageWrite<SealedStorageTag>
+    + PoSAccountingStorageWrite<TipStorageTag>
 {
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;

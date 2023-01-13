@@ -78,22 +78,6 @@ mockall::mock! {
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
     }
 
-    impl PoSAccountingStorageRead for Store {
-        fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
-        fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>>;
-        fn get_delegation_balance(&self, delegation_id: DelegationId) -> crate::Result<Option<Amount>>;
-        fn get_delegation_data(&self, delegation_id: DelegationId) -> crate::Result<Option<DelegationData>>;
-        fn get_pool_delegations_shares(
-            &self,
-            pool_id: PoolId,
-        ) -> crate::Result<Option<BTreeMap<DelegationId, Amount>>>;
-        fn get_pool_delegation_share(
-            &self,
-            pool_id: PoolId,
-            delegation_id: DelegationId,
-        ) -> crate::Result<Option<Amount>>;
-    }
-
     impl crate::BlockchainStorageWrite for Store {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
@@ -135,7 +119,7 @@ mockall::mock! {
         fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 
-    impl PoSAccountingStorageWrite for Store {
+    impl PoSAccountingStorageWrite<crate::TipStorageTag> for Store {
         fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()>;
         fn del_pool_balance(&mut self, pool_id: PoolId) -> crate::Result<()>;
 
@@ -189,6 +173,62 @@ mockall::mock! {
     impl crate::BlockchainStorage for Store {}
 }
 
+impl PoSAccountingStorageRead<crate::SealedStorageTag> for MockStore {
+    fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
+    fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>> {
+        todo!()
+    }
+    fn get_delegation_balance(
+        &self,
+        delegation_target: DelegationId,
+    ) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
+    fn get_delegation_data(
+        &self,
+        delegation_id: DelegationId,
+    ) -> crate::Result<Option<DelegationData>> {
+        todo!()
+    }
+    fn get_pool_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
+}
+
+impl PoSAccountingStorageRead<crate::TipStorageTag> for MockStoreTxRw {
+    fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
+    fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>> {
+        todo!()
+    }
+    fn get_delegation_balance(
+        &self,
+        delegation_target: DelegationId,
+    ) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
+    fn get_delegation_data(
+        &self,
+        delegation_id: DelegationId,
+    ) -> crate::Result<Option<DelegationData>> {
+        todo!()
+    }
+    fn get_pool_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
+}
+
 mockall::mock! {
     /// A mock object for blockchain storage transaction
     pub StoreTxRo {}
@@ -231,27 +271,68 @@ mockall::mock! {
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
     }
 
-    impl PoSAccountingStorageRead for StoreTxRo {
-        fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
-        fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>>;
-        fn get_delegation_balance(&self, delegation_id: DelegationId) -> crate::Result<Option<Amount>>;
-        fn get_delegation_data(&self, delegation_id: DelegationId) -> crate::Result<Option<DelegationData>>;
-        fn get_pool_delegations_shares(
-            &self,
-            pool_id: PoolId,
-        ) -> crate::Result<Option<BTreeMap<DelegationId, Amount>>>;
-        fn get_pool_delegation_share(
-            &self,
-            pool_id: PoolId,
-            delegation_id: DelegationId,
-        ) -> crate::Result<Option<Amount>>;
-    }
 
     impl crate::TransactionRo for StoreTxRo {
         fn close(self);
     }
 
     impl crate::IsTransaction for StoreTxRo {}
+}
+
+impl PoSAccountingStorageRead<crate::SealedStorageTag> for MockStoreTxRo {
+    fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
+    fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>> {
+        todo!()
+    }
+    fn get_delegation_balance(
+        &self,
+        delegation_target: DelegationId,
+    ) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
+    fn get_delegation_data(
+        &self,
+        delegation_id: DelegationId,
+    ) -> crate::Result<Option<DelegationData>> {
+        todo!()
+    }
+    fn get_pool_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
+}
+
+impl PoSAccountingStorageRead<crate::TipStorageTag> for MockStoreTxRo {
+    fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
+    fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>> {
+        todo!()
+    }
+    fn get_delegation_balance(
+        &self,
+        delegation_target: DelegationId,
+    ) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
+    fn get_delegation_data(
+        &self,
+        delegation_id: DelegationId,
+    ) -> crate::Result<Option<DelegationData>> {
+        todo!()
+    }
+    fn get_pool_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
 }
 
 mockall::mock! {
@@ -297,22 +378,6 @@ mockall::mock! {
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
     }
 
-    impl PoSAccountingStorageRead for StoreTxRw {
-        fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
-        fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>>;
-        fn get_delegation_balance(&self, delegation_id: DelegationId) -> crate::Result<Option<Amount>>;
-        fn get_delegation_data(&self, delegation_id: DelegationId) -> crate::Result<Option<DelegationData>>;
-        fn get_pool_delegations_shares(
-            &self,
-            pool_id: PoolId,
-        ) -> crate::Result<Option<BTreeMap<DelegationId, Amount>>>;
-        fn get_pool_delegation_share(
-            &self,
-            pool_id: PoolId,
-            delegation_id: DelegationId,
-        ) -> crate::Result<Option<Amount>>;
-    }
-
     impl crate::BlockchainStorageWrite for StoreTxRw {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
@@ -355,7 +420,7 @@ mockall::mock! {
         fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 
-    impl PoSAccountingStorageWrite for StoreTxRw {
+    impl PoSAccountingStorageWrite<crate::TipStorageTag> for StoreTxRw {
         fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()>;
         fn del_pool_balance(&mut self, pool_id: PoolId) -> crate::Result<()>;
 
@@ -404,6 +469,34 @@ mockall::mock! {
     }
 
     impl crate::IsTransaction for StoreTxRw {}
+}
+
+impl PoSAccountingStorageRead<crate::TipStorageTag> for MockStoreTxRw {
+    fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
+    fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>> {
+        todo!()
+    }
+    fn get_delegation_balance(
+        &self,
+        delegation_target: DelegationId,
+    ) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
+    fn get_delegation_data(
+        &self,
+        delegation_id: DelegationId,
+    ) -> crate::Result<Option<DelegationData>> {
+        todo!()
+    }
+    fn get_pool_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> crate::Result<Option<Amount>> {
+        todo!()
+    }
 }
 
 #[cfg(test)]

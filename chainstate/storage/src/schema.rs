@@ -50,15 +50,27 @@ storage::decl_schema! {
 
         /// Store for accounting BlockUndo
         pub DBAccountingBlockUndo: Map<Id<Block>, AccountingBlockUndo>,
+
         /// Store for accounting pool data
-        pub DBAccountingPoolData: Map<PoolId, PoolData>,
+        pub DBAccountingPoolDataTip: Map<PoolId, PoolData>,
         /// Store for accounting pool balances
-        pub DBAccountingPoolBalances: Map<PoolId, Amount>,
+        pub DBAccountingPoolBalancesTip: Map<PoolId, Amount>,
         /// Store for accounting delegation data
-        pub DBAccountingDelegationData: Map<DelegationId, DelegationData>,
+        pub DBAccountingDelegationDataTip: Map<DelegationId, DelegationData>,
         /// Store for accounting delegation data
-        pub DBAccountingDelegationBalances: Map<DelegationId, Amount>,
+        pub DBAccountingDelegationBalancesTip: Map<DelegationId, Amount>,
         /// Store for accounting pool delegations balances
-        pub DBAccountingPoolDelegationShares: Map<(PoolId, DelegationId), Amount>,
+        pub DBAccountingPoolDelegationSharesTip: Map<(PoolId, DelegationId), Amount>,
+
+        /// Store for accounting pool data
+        pub DBAccountingPoolDataSealed: Map<PoolId, PoolData>,
+        /// Store for accounting pool balances
+        pub DBAccountingPoolBalancesSealed: Map<PoolId, Amount>,
+        /// Store for accounting delegation data
+        pub DBAccountingDelegationDataSealed: Map<DelegationId, DelegationData>,
+        /// Store for accounting delegation data
+        pub DBAccountingDelegationBalancesSealed: Map<DelegationId, Amount>,
+        /// Store for accounting pool delegations balances
+        pub DBAccountingPoolDelegationSharesSealed: Map<(PoolId, DelegationId), Amount>,
     }
 }
