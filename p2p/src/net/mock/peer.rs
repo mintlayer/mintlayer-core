@@ -33,9 +33,24 @@ use crate::{
     types::peer_address::PeerAddress,
 };
 
-use super::transport::BufferedTranscoder;
+use super::{transport::BufferedTranscoder, types::HandshakeNonce};
 
 const PEER_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PeerRole {
+    Inbound,
+    Outbound { handshake_nonce: HandshakeNonce },
+}
+
+impl From<PeerRole> for Role {
+    fn from(role: PeerRole) -> Self {
+        match role {
+            PeerRole::Inbound => Role::Inbound,
+            PeerRole::Outbound { handshake_nonce: _ } => Role::Outbound,
+        }
+    }
+}
 
 pub struct Peer<T: TransportSocket> {
     /// Peer ID of the remote node
@@ -47,7 +62,7 @@ pub struct Peer<T: TransportSocket> {
     p2p_config: Arc<P2pConfig>,
 
     /// Is the connection inbound or outbound
-    role: Role,
+    peer_role: PeerRole,
 
     /// Peer socket
     socket: BufferedTranscoder<T::Stream>,
@@ -69,7 +84,7 @@ where
     #![allow(clippy::too_many_arguments)]
     pub fn new(
         peer_id: MockPeerId,
-        role: Role,
+        peer_role: PeerRole,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         socket: T::Stream,
@@ -78,9 +93,10 @@ where
         rx: mpsc::Receiver<MockEvent>,
     ) -> Self {
         let socket = BufferedTranscoder::new(socket);
+
         Self {
             peer_id,
-            role,
+            peer_role,
             chain_config,
             p2p_config,
             socket,
@@ -91,17 +107,35 @@ where
     }
 
     async fn handshake(&mut self) -> crate::Result<()> {
-        match self.role {
-            Role::Inbound => {
+        match self.peer_role {
+            PeerRole::Inbound => {
                 let Ok(types::Message::Handshake(types::HandshakeMessage::Hello {
                     version,
                     network,
                     subscriptions,
                     receiver_address,
+                    handshake_nonce,
                 })) = self.socket.recv().await
                 else {
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
                 };
+
+                // Send PeerInfoReceived before sending handshake to remote peer!
+                // Backend is expected to receive PeerInfoReceived before outgoing connection has chance to complete handshake,
+                // It's required to reliable detect self-connects.
+                self.tx
+                    .send((
+                        self.peer_id,
+                        types::PeerEvent::PeerInfoReceived {
+                            network,
+                            version,
+                            subscriptions,
+                            receiver_address,
+                            handshake_nonce,
+                        },
+                    ))
+                    .await
+                    .map_err(P2pError::from)?;
 
                 self.socket
                     .send(types::Message::Handshake(
@@ -113,27 +147,15 @@ where
                         },
                     ))
                     .await?;
-
-                self.tx
-                    .send((
-                        self.peer_id,
-                        types::PeerEvent::PeerInfoReceived {
-                            network,
-                            version,
-                            subscriptions,
-                            receiver_address,
-                        },
-                    ))
-                    .await
-                    .map_err(P2pError::from)?;
             }
-            Role::Outbound => {
+            PeerRole::Outbound { handshake_nonce } => {
                 self.socket
                     .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                         version: *self.chain_config.version(),
                         network: *self.chain_config.magic_bytes(),
                         subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
                         receiver_address: self.receiver_address.clone(),
+                        handshake_nonce,
                     }))
                     .await?;
 
@@ -155,6 +177,7 @@ where
                             version,
                             subscriptions,
                             receiver_address,
+                            handshake_nonce,
                         },
                     ))
                     .await
@@ -247,7 +270,7 @@ mod tests {
 
         let mut peer = Peer::<T>::new(
             peer_id2,
-            Role::Inbound,
+            PeerRole::Inbound,
             Arc::clone(&chain_config),
             p2p_config,
             socket1,
@@ -271,6 +294,7 @@ mod tests {
                     .into_iter()
                     .collect(),
                 receiver_address: None,
+                handshake_nonce: 123,
             }))
             .await
             .is_ok());
@@ -285,6 +309,7 @@ mod tests {
                     .into_iter()
                     .collect(),
                 receiver_address: None,
+                handshake_nonce: 123,
             }
         );
     }
@@ -318,7 +343,7 @@ mod tests {
 
         let mut peer = Peer::<T>::new(
             peer_id3,
-            Role::Outbound,
+            PeerRole::Outbound { handshake_nonce: 1 },
             Arc::clone(&chain_config),
             p2p_config,
             socket1,
@@ -360,6 +385,7 @@ mod tests {
                         .into_iter()
                         .collect(),
                     receiver_address: None,
+                    handshake_nonce: 1,
                 }
             ))
         );
@@ -394,7 +420,7 @@ mod tests {
 
         let mut peer = Peer::<T>::new(
             peer_id3,
-            Role::Inbound,
+            PeerRole::Inbound,
             Arc::clone(&chain_config),
             p2p_config,
             socket1,
@@ -415,6 +441,7 @@ mod tests {
                     .into_iter()
                     .collect(),
                 receiver_address: None,
+                handshake_nonce: 123,
             }))
             .await
             .is_ok());
@@ -451,7 +478,7 @@ mod tests {
 
         let mut peer = Peer::<T>::new(
             peer_id2,
-            Role::Inbound,
+            PeerRole::Inbound,
             chain_config,
             p2p_config,
             socket1,

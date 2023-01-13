@@ -23,7 +23,6 @@
 
 use std::{
     collections::{BTreeSet, HashMap},
-    io::ErrorKind,
     sync::Arc,
     time::Duration,
 };
@@ -35,7 +34,7 @@ use tokio::{
 };
 
 use common::chain::ChainConfig;
-use crypto::random::{make_pseudo_rng, SliceRandom};
+use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use logging::log;
 use serialization::{Decode, Encode};
 
@@ -59,7 +58,7 @@ use crate::{
     types::peer_address::PeerAddress,
 };
 
-use super::transport::TransportAddress;
+use super::{peer::PeerRole, transport::TransportAddress, types::HandshakeNonce};
 
 /// Active peer data
 struct PeerContext {
@@ -67,19 +66,16 @@ struct PeerContext {
     tx: mpsc::Sender<MockEvent>,
 }
 
-/// Pending peer data (until handshake message is recevied)
+/// Pending peer data (until handshake message is received)
 struct PendingPeerContext<A> {
     address: A,
-    role: Role,
+    peer_role: PeerRole,
     tx: mpsc::Sender<MockEvent>,
 }
 
 pub struct Backend<T: TransportSocket> {
     /// Transport of the backend
     transport: T,
-
-    /// Socket address of the backend
-    addresses: Vec<T::Address>,
 
     /// Socket for listening to incoming connections
     socket: T::Listener,
@@ -126,7 +122,6 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         transport: T,
-        addresses: Vec<T::Address>,
         socket: T::Listener,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
@@ -137,7 +132,6 @@ where
     ) -> Self {
         Self {
             transport,
-            addresses,
             socket,
             cmd_rx,
             conn_tx,
@@ -158,22 +152,21 @@ where
         address: T::Address,
         response: oneshot::Sender<crate::Result<()>>,
     ) -> crate::Result<()> {
-        // TODO: This is not very robust. Send random nonce in handshake
-        // to determine if we connect to ourselves (like it's done in bitcoin).
-        // local_address can be removed then as it's not used otherwise.
-        if self.addresses.iter().any(|a| *a == address) {
-            response
-                .send(Err(P2pError::DialError(DialError::IoError(
-                    ErrorKind::AddrNotAvailable,
-                ))))
-                .map_err(|_| P2pError::ChannelClosed)?;
-        } else {
-            response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
-        }
+        // For now we always respond with success
+        response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
 
         match timeout(self.timeout, self.transport.connect(address.clone())).await {
             Ok(event) => match event {
-                Ok(socket) => self.create_peer(socket, MockPeerId::new(), Role::Outbound, address),
+                Ok(socket) => {
+                    let handshake_nonce = make_pseudo_rng().gen();
+
+                    self.create_peer(
+                        socket,
+                        MockPeerId::new(),
+                        PeerRole::Outbound { handshake_nonce },
+                        address,
+                    )
+                }
                 Err(err) => {
                     log::error!("Failed to establish connection: {err}");
 
@@ -357,10 +350,11 @@ where
                 // Accept a new peer connection.
                 res = self.socket.accept() => {
                     let (stream, address) = res.map_err(|_| P2pError::Other("accept() failed"))?;
+
                     self.create_peer(
                         stream,
                         MockPeerId::new(),
-                        Role::Inbound,
+                        PeerRole::Inbound,
                         address,
                     )?;
                 }
@@ -371,6 +365,13 @@ where
                 },
                 // Handle commands.
                 command = self.cmd_rx.recv() => {
+                    // TODO: commands running here will block, which means (maybe) these commands in the
+                    //       below function should be short-lived. The issue is that connect/disconnect
+                    //       functions are part of the handling and they could take a relatively long time
+                    //       we should try to figure out how to handle this problem. Maybe we need a separate
+                    //       pipeline for commands that are slow, or maybe everything here should go into a new
+                    //       task (which sounds excessive).
+                    //       Once fixed enable self_connect_channels and self_connect_noise tests.
                     self.handle_command(command.ok_or(P2pError::ChannelClosed)?).await?;
                 }
             }
@@ -399,14 +400,21 @@ where
         &mut self,
         socket: T::Stream,
         remote_peer_id: MockPeerId,
-        role: Role,
+        peer_role: PeerRole,
         address: T::Address,
     ) -> crate::Result<()> {
         let (tx, rx) = mpsc::channel(16);
 
         let receiver_address = Some(address.as_peer_address());
 
-        self.pending.insert(remote_peer_id, PendingPeerContext { address, role, tx });
+        self.pending.insert(
+            remote_peer_id,
+            PendingPeerContext {
+                address,
+                peer_role,
+                tx,
+            },
+        );
 
         let tx = self.peer_chan.0.clone();
         let chain_config = Arc::clone(&self.chain_config);
@@ -415,7 +423,7 @@ where
         tokio::spawn(async move {
             let mut peer = peer::Peer::<T>::new(
                 remote_peer_id,
-                role,
+                peer_role,
                 chain_config,
                 p2p_config,
                 socket,
@@ -433,6 +441,50 @@ where
         Ok(())
     }
 
+    async fn is_connection_from_self(
+        &mut self,
+        peer_role: PeerRole,
+        incoming_nonce: HandshakeNonce,
+    ) -> crate::Result<bool> {
+        if peer_role == PeerRole::Inbound {
+            // Look for own outbound connection with same nonce
+            let outbound_peer_id = self
+                .pending
+                .iter()
+                .find(|(_peer_id, pending)| {
+                    pending.peer_role
+                        == PeerRole::Outbound {
+                            handshake_nonce: incoming_nonce,
+                        }
+                })
+                .map(|(peer_id, _pending)| *peer_id);
+
+            if let Some(outbound_peer_id) = outbound_peer_id {
+                let outbound_pending =
+                    self.pending.remove(&outbound_peer_id).expect("peer must exist");
+
+                log::info!(
+                    "self-connection detect on address {:?}",
+                    outbound_pending.address
+                );
+
+                // Report outbound connection failure
+                self.conn_tx
+                    .send(ConnectivityEvent::ConnectionError {
+                        address: outbound_pending.address,
+                        error: P2pError::DialError(DialError::AttemptToDialSelf),
+                    })
+                    .await
+                    .map_err(P2pError::from)?;
+
+                // Nothing else to do, just drop inbound connection
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
     async fn handle_peer_event(
         &mut self,
         peer_id: MockPeerId,
@@ -444,12 +496,24 @@ where
                 version,
                 subscriptions,
                 receiver_address,
+                handshake_nonce,
             } => {
-                let PendingPeerContext { address, role, tx } =
-                    self.pending.remove(&peer_id).expect("peer to exist");
+                let PendingPeerContext {
+                    address,
+                    peer_role,
+                    tx,
+                } = match self.pending.remove(&peer_id) {
+                    Some(pending) => pending,
+                    // Might be removed if self-connection detected
+                    None => return Ok(()),
+                };
 
-                match role {
-                    Role::Outbound => {
+                if self.is_connection_from_self(peer_role, handshake_nonce).await? {
+                    return Ok(());
+                }
+
+                match peer_role {
+                    PeerRole::Outbound { handshake_nonce: _ } => {
                         self.conn_tx
                             .send(ConnectivityEvent::OutboundAccepted {
                                 address,
@@ -464,7 +528,7 @@ where
                             .await
                             .map_err(P2pError::from)?;
                     }
-                    Role::Inbound => {
+                    PeerRole::Inbound => {
                         self.conn_tx
                             .send(ConnectivityEvent::InboundAccepted {
                                 address: address.clone(),
@@ -482,7 +546,7 @@ where
                 }
 
                 if let Some(receiver_address) = receiver_address {
-                    self.handle_own_receiver_address(receiver_address, role)?;
+                    self.handle_own_receiver_address(receiver_address, peer_role.into())?;
                 }
 
                 self.peers.insert(peer_id, PeerContext { subscriptions, tx });
@@ -492,8 +556,13 @@ where
                 self.handle_message(peer_id, message).await?;
             }
             PeerEvent::ConnectionClosed => {
+                self.pending.remove(&peer_id);
                 self.peers.remove(&peer_id);
                 self.request_mgr.unregister_peer(&peer_id);
+
+                // Probably ConnectionClosed should be only sent if InboundAccepted or OutboundAccepted was sent before.
+                // This can be done by checking self.peers first.
+                // But doing so will break some unit tests.
                 self.conn_tx
                     .send(ConnectivityEvent::ConnectionClosed { peer_id })
                     .await

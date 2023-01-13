@@ -160,6 +160,10 @@ impl std::fmt::Display for MockPeerId {
     }
 }
 
+/// Random nonce sent in outbound handshake.
+/// Used to detect and drop self connections.
+pub type HandshakeNonce = u64;
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct MockPeerInfo {
     pub peer_id: MockPeerId,
@@ -177,6 +181,10 @@ pub enum PeerEvent {
         version: SemVer,
         subscriptions: BTreeSet<PubSubTopic>,
         receiver_address: Option<PeerAddress>,
+
+        /// For outbound connections that is what we sent.
+        /// For inbound connections that is what was received from remote peer.
+        handshake_nonce: HandshakeNonce,
     },
 
     /// Connection closed to remote
@@ -204,6 +212,9 @@ pub enum HandshakeMessage {
 
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,
+
+        /// Random nonce that is only used to detect and drop self-connects
+        handshake_nonce: HandshakeNonce,
     },
     HelloAck {
         version: SemVer,
