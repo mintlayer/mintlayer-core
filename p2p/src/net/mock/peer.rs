@@ -47,7 +47,7 @@ impl From<PeerRole> for Role {
     fn from(role: PeerRole) -> Self {
         match role {
             PeerRole::Inbound => Role::Inbound,
-            PeerRole::Outbound { .. } => Role::Outbound,
+            PeerRole::Outbound { handshake_nonce: _ } => Role::Outbound,
         }
     }
 }

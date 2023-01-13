@@ -498,7 +498,7 @@ where
                 }
 
                 match peer_role {
-                    PeerRole::Outbound { .. } => {
+                    PeerRole::Outbound { handshake_nonce: _ } => {
                         self.conn_tx
                             .send(ConnectivityEvent::OutboundAccepted {
                                 address,
