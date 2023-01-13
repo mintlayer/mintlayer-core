@@ -155,38 +155,34 @@ where
         // For now we always respond with success
         response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
 
-        match timeout(self.timeout, self.transport.connect(address.clone())).await {
-            Ok(event) => match event {
-                Ok(socket) => {
-                    let handshake_nonce = make_pseudo_rng().gen();
+        let connection_res = timeout(self.timeout, self.transport.connect(address.clone()))
+            .await
+            .unwrap_or(Err(P2pError::DialError(
+                DialError::ConnectionRefusedOrTimedOut,
+            )));
 
-                    self.create_peer(
-                        socket,
-                        MockPeerId::new(),
-                        PeerRole::Outbound { handshake_nonce },
-                        address,
-                    )
-                }
-                Err(err) => {
-                    log::error!("Failed to establish connection: {err}");
+        match connection_res {
+            Ok(socket) => {
+                let handshake_nonce = make_pseudo_rng().gen();
 
-                    self.conn_tx
-                        .send(ConnectivityEvent::ConnectionError {
-                            address,
-                            error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
-                        })
-                        .await
-                        .map_err(P2pError::from)
-                }
-            },
-            Err(_err) => self
-                .conn_tx
-                .send(ConnectivityEvent::ConnectionError {
+                self.create_peer(
+                    socket,
+                    MockPeerId::new(),
+                    PeerRole::Outbound { handshake_nonce },
                     address,
-                    error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
-                })
-                .await
-                .map_err(P2pError::from),
+                )
+            }
+            Err(err) => {
+                log::error!("Failed to establish connection: {err}");
+
+                self.conn_tx
+                    .send(ConnectivityEvent::ConnectionError {
+                        address,
+                        error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
+                    })
+                    .await
+                    .map_err(P2pError::from)
+            }
         }
     }
 
