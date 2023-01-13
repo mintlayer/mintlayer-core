@@ -20,7 +20,7 @@ use std::{
 
 use crate::testing_utils::{TestTransportChannel, TestTransportMaker, TestTransportTcp};
 use async_trait::async_trait;
-use futures::StreamExt;
+use futures::{future::BoxFuture, StreamExt};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     time::timeout,
@@ -145,8 +145,8 @@ impl TransportSocket for TestMockTransport {
         })
     }
 
-    async fn connect(&self, address: Self::Address) -> crate::Result<Self::Stream> {
-        self.transport.connect(address).await
+    fn connect(&self, address: Self::Address) -> BoxFuture<'static, crate::Result<Self::Stream>> {
+        Box::pin(self.transport.connect(address))
     }
 }
 

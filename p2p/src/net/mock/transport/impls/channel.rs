@@ -22,6 +22,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use futures::future::BoxFuture;
 use once_cell::sync::Lazy;
 use tokio::{
     io::DuplexStream,
@@ -125,25 +126,29 @@ impl TransportSocket for MockChannelTransport {
         })
     }
 
-    async fn connect(&self, address: Self::Address) -> Result<Self::Stream> {
+    fn connect(&self, address: Self::Address) -> BoxFuture<'static, crate::Result<Self::Stream>> {
         // A connection can only be established to a known address.
         assert_ne!(ZERO_ADDRESS, address);
 
-        let server_sender = CONNECTIONS
-            .lock()
-            .expect("Connections mutex is poisoned")
-            .get(&address)
-            .ok_or(P2pError::DialError(DialError::NoAddresses))?
-            .clone();
+        let local_address = self.local_address;
 
-        let (connect_sender, connect_receiver) = oneshot::channel();
-        server_sender
-            .send((self.local_address, connect_sender))
-            .map_err(|_| P2pError::DialError(DialError::NoAddresses))?;
+        Box::pin(async move {
+            let server_sender = CONNECTIONS
+                .lock()
+                .expect("Connections mutex is poisoned")
+                .get(&address)
+                .ok_or(P2pError::DialError(DialError::NoAddresses))?
+                .clone();
 
-        let channel = connect_receiver.await.map_err(|_| P2pError::ChannelClosed)?;
+            let (connect_sender, connect_receiver) = oneshot::channel();
+            server_sender
+                .send((local_address, connect_sender))
+                .map_err(|_| P2pError::DialError(DialError::NoAddresses))?;
 
-        Ok(channel)
+            let channel = connect_receiver.await.map_err(|_| P2pError::ChannelClosed)?;
+
+            Ok(channel)
+        })
     }
 }
 

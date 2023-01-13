@@ -16,6 +16,7 @@
 use std::{fmt::Debug, hash::Hash, str::FromStr};
 
 use async_trait::async_trait;
+use futures::future::BoxFuture;
 
 use crate::{net::AsBannableAddress, Result};
 
@@ -52,5 +53,5 @@ pub trait TransportSocket: Send + Sync + 'static {
     async fn bind(&self, address: Vec<Self::Address>) -> Result<Self::Listener>;
 
     /// Open a connection to the given address.
-    async fn connect(&self, address: Self::Address) -> Result<Self::Stream>;
+    fn connect(&self, address: Self::Address) -> BoxFuture<'static, crate::Result<Self::Stream>>;
 }

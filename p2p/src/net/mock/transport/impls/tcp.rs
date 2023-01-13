@@ -16,7 +16,7 @@
 use std::net::{IpAddr, SocketAddr};
 
 use async_trait::async_trait;
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::{
@@ -61,9 +61,11 @@ impl TransportSocket for TcpTransportSocket {
         TcpTransportListener::new(addresses)
     }
 
-    async fn connect(&self, address: Self::Address) -> Result<Self::Stream> {
-        let stream = TcpStream::connect(address).await?;
-        Ok(stream)
+    fn connect(&self, address: Self::Address) -> BoxFuture<'static, crate::Result<Self::Stream>> {
+        Box::pin(async move {
+            let stream = TcpStream::connect(address).await?;
+            Ok(stream)
+        })
     }
 }
 
