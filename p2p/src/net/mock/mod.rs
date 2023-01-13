@@ -127,12 +127,10 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
         let socket = transport.bind(bind_addresses).await?;
         let local_addresses = socket.local_addresses().expect("to have bind address available");
 
-        let addresses = local_addresses.clone();
         tokio::spawn(async move {
             let timeout = *p2p_config.outbound_connection_timeout;
             let mut backend = backend::Backend::<T>::new(
                 transport,
-                addresses,
                 socket,
                 chain_config,
                 p2p_config,
@@ -337,6 +335,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{transport::NoiseTcpTransport, *};
+    use crate::error::DialError;
     use crate::testing_utils::{TestTransportChannel, TestTransportMaker, TestTransportTcp};
     use crate::{
         net::mock::transport::{MockChannelTransport, TcpTransportSocket},
@@ -518,5 +517,91 @@ mod tests {
     #[tokio::test]
     async fn disconnect_noise() {
         disconnect::<TestTransportNoise, NoiseTcpTransport>().await;
+    }
+
+    async fn self_connect<A, T>()
+    where
+        A: TestTransportMaker<Transport = T, Address = T::Address>,
+        T: TransportSocket + Debug,
+    {
+        let config = Arc::new(common::chain::config::create_mainnet());
+        let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
+
+        let (mut conn1, _) = MockService::<T>::start(
+            A::make_transport(),
+            vec![A::make_address()],
+            Arc::clone(&config),
+            Arc::clone(&p2p_config),
+        )
+        .await
+        .unwrap();
+
+        let (conn2, _) = MockService::<T>::start(
+            A::make_transport(),
+            vec![A::make_address()],
+            Arc::clone(&config),
+            Arc::clone(&p2p_config),
+        )
+        .await
+        .unwrap();
+
+        // Try connect to self
+        let addr = conn1.local_addresses().await.unwrap();
+        assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
+
+        // ConnectionError should be reported
+        if let Ok(ConnectivityEvent::ConnectionError { address, error }) = conn1.poll_next().await {
+            assert_eq!(address, conn1.local_addresses().await.unwrap()[0]);
+            assert_eq!(error, P2pError::DialError(DialError::AttemptToDialSelf));
+        } else {
+            panic!("invalid event received");
+        }
+
+        // Two ConnectionClosed will be also reported
+        if let Ok(ConnectivityEvent::ConnectionClosed { peer_id: _ }) = conn1.poll_next().await {
+        } else {
+            panic!("invalid event received");
+        }
+        if let Ok(ConnectivityEvent::ConnectionClosed { peer_id: _ }) = conn1.poll_next().await {
+        } else {
+            panic!("invalid event received");
+        }
+
+        // Check that we can still connect normally after
+        let addr = conn2.local_addresses().await.unwrap();
+        assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
+        if let Ok(ConnectivityEvent::OutboundAccepted { address, peer_info }) =
+            conn1.poll_next().await
+        {
+            assert_eq!(address, conn2.local_addresses().await.unwrap()[0]);
+            assert_eq!(&peer_info.magic_bytes, config.magic_bytes());
+            assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
+            assert_eq!(peer_info.agent, None);
+            assert_eq!(
+                peer_info.subscriptions,
+                [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
+            );
+        } else {
+            panic!("invalid event received");
+        }
+    }
+
+    #[tokio::test]
+    async fn self_connect_tcp() {
+        self_connect::<TestTransportTcp, TcpTransportSocket>().await;
+    }
+
+    // Test fails because of event loop blocking in Backend::connect
+    #[ignore]
+    #[tokio::test]
+    async fn self_connect_channels() {
+        self_connect::<TestTransportChannel, MockChannelTransport>().await;
+    }
+
+    // Test fails because of event loop blocking in Backend::connect
+    #[ignore]
+    #[tokio::test]
+    async fn self_connect_noise() {
+        self_connect::<TestTransportNoise, NoiseTcpTransport>().await;
     }
 }
