@@ -441,6 +441,50 @@ where
         Ok(())
     }
 
+    async fn is_connection_from_self(
+        &mut self,
+        peer_role: PeerRole,
+        incoming_nonce: u64,
+    ) -> crate::Result<bool> {
+        if peer_role == PeerRole::Inbound {
+            // Look for own outbound connection with same nonce
+            let outbound_peer_id = self
+                .pending
+                .iter()
+                .find(|(_peer_id, pending)| {
+                    pending.peer_role
+                        == PeerRole::Outbound {
+                            handshake_nonce: incoming_nonce,
+                        }
+                })
+                .map(|(peer_id, _pending)| *peer_id);
+
+            if let Some(outbound_peer_id) = outbound_peer_id {
+                let outbound_pending =
+                    self.pending.remove(&outbound_peer_id).expect("peer must exists");
+
+                log::info!(
+                    "self-connection detect on address {:?}",
+                    outbound_pending.address
+                );
+
+                // Report outbound connection failure
+                self.conn_tx
+                    .send(ConnectivityEvent::ConnectionError {
+                        address: outbound_pending.address,
+                        error: P2pError::DialError(DialError::AttemptToDialSelf),
+                    })
+                    .await
+                    .map_err(P2pError::from)?;
+
+                // Nothing else to do, just drop inbound connection
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
     async fn handle_peer_event(
         &mut self,
         peer_id: MockPeerId,
@@ -464,37 +508,8 @@ where
                     None => return Ok(()),
                 };
 
-                if peer_role == PeerRole::Inbound {
-                    // Look for own outbound connection with same nonce
-                    let outbound_peer_id = self
-                        .pending
-                        .iter()
-                        .find(|(_peer_id, pending)| {
-                            pending.peer_role == PeerRole::Outbound { handshake_nonce }
-                        })
-                        .map(|(peer_id, _pending)| *peer_id);
-
-                    if let Some(outbound_peer_id) = outbound_peer_id {
-                        let outbound_pending =
-                            self.pending.remove(&outbound_peer_id).expect("peer must exists");
-
-                        log::info!(
-                            "self-connection detect on address {:?}",
-                            outbound_pending.address
-                        );
-
-                        // Report outbound connection failure
-                        self.conn_tx
-                            .send(ConnectivityEvent::ConnectionError {
-                                address: outbound_pending.address,
-                                error: P2pError::DialError(DialError::AttemptToDialSelf),
-                            })
-                            .await
-                            .map_err(P2pError::from)?;
-
-                        // Nothing else to do, just drop inbound connection
-                        return Ok(());
-                    }
+                if self.is_connection_from_self(peer_role, handshake_nonce).await? {
+                    return Ok(());
                 }
 
                 match peer_role {
