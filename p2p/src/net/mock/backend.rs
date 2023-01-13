@@ -58,7 +58,7 @@ use crate::{
     types::peer_address::PeerAddress,
 };
 
-use super::{peer::PeerRole, transport::TransportAddress};
+use super::{peer::PeerRole, transport::TransportAddress, types::HandshakeNonce};
 
 /// Active peer data
 struct PeerContext {
@@ -444,7 +444,7 @@ where
     async fn is_connection_from_self(
         &mut self,
         peer_role: PeerRole,
-        incoming_nonce: u64,
+        incoming_nonce: HandshakeNonce,
     ) -> crate::Result<bool> {
         if peer_role == PeerRole::Inbound {
             // Look for own outbound connection with same nonce
