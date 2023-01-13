@@ -461,7 +461,7 @@ where
 
             if let Some(outbound_peer_id) = outbound_peer_id {
                 let outbound_pending =
-                    self.pending.remove(&outbound_peer_id).expect("peer must exists");
+                    self.pending.remove(&outbound_peer_id).expect("peer must exist");
 
                 log::info!(
                     "self-connection detect on address {:?}",
