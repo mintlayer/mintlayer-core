@@ -548,7 +548,9 @@ where
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
-        let input0 = tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+        let input0_getter =
+            || tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent);
+
         let tx_undo = tx
             .outputs()
             .iter()
@@ -560,6 +562,8 @@ where
             })
             .map(
                 |(pool_data, output_value)| -> Result<PoSAccountingUndo, ConnectTransactionError> {
+                    let input0 = input0_getter()?;
+
                     // TODO: check StakePoolData fields
                     let delegation_amount = output_value.coin_amount().ok_or_else(|| {
                         ConnectTransactionError::TokenOutputInPoSAccountingOperation(tx.get_id())
