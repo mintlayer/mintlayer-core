@@ -35,6 +35,7 @@ members = [
   "storage/core",                 # Core backend-agnostic storage abstraction.
   "storage/inmemory",             # In-memory storage backend implementation.
   "storage/lmdb",                 # LMDB-based persistent storage backend implementation.
+  "storage/sqlite",               # SQLite-based persistent storage backend implementation.
   "subsystem",                    # Utilities for working with concurrent subsystems.
   "test",                         # Integration tests.
   "test-utils",                   # Various utilities for tests.
