@@ -123,25 +123,22 @@ mockall::mock! {
         fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error>;
     }
 
-    impl PoSAccountingView for Store{
+    impl PoSAccountingView for Store {
         fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error>;
-
         fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error>;
-
         fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error>;
-
-        fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Option<Amount>, pos_accounting::Error>;
-
+        fn get_delegation_balance(
+            &self,
+            delegation_id: DelegationId,
+        ) -> Result<Option<Amount>, pos_accounting::Error>;
         fn get_delegation_data(
             &self,
             delegation_id: DelegationId,
         ) -> Result<Option<DelegationData>, pos_accounting::Error>;
-
         fn get_pool_delegations_shares(
             &self,
             pool_id: PoolId,
         ) -> Result<Option<BTreeMap<DelegationId, Amount>>, pos_accounting::Error>;
-
         fn get_pool_delegation_share(
             &self,
             pool_id: PoolId,

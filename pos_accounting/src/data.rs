@@ -22,10 +22,15 @@ use crate::{DelegationData, DelegationId, PoolData, PoolId};
 
 #[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
 pub struct PoSAccountingData {
+    /// A collection of all the pools and their data.
     pub pool_data: BTreeMap<PoolId, PoolData>,
+    /// A collection of all the pools and their balances.
     pub pool_balances: BTreeMap<PoolId, Amount>,
+    /// A collection of all the pools and their delegation shares.
     pub pool_delegation_shares: BTreeMap<(PoolId, DelegationId), Amount>,
+    /// A collection of all the delegations and their balances.
     pub delegation_balances: BTreeMap<DelegationId, Amount>,
+    /// A collection of all the delegations and their data.
     pub delegation_data: BTreeMap<DelegationId, DelegationData>,
 }
 

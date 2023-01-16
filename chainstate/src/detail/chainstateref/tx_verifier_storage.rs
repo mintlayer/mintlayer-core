@@ -196,6 +196,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
         tx_source: TransactionSource,
         undo: &UtxosBlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
@@ -211,6 +212,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
         match tx_source {
             TransactionSource::Chain(id) => {
                 self.db_tx.del_undo_data(id).map_err(TransactionVerifierStorageError::from)
@@ -226,6 +228,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
         tx_source: TransactionSource,
         undo: &AccountingBlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
@@ -241,6 +244,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx

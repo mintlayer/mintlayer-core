@@ -87,10 +87,7 @@ impl<B: storage::Backend> Store<B> {
     pub fn read_utxo_set(&self) -> crate::Result<BTreeMap<OutPoint, Utxo>> {
         let db = self.transaction_ro()?;
         let map = db.0.get::<db::DBUtxo, _>();
-        let res = map
-            .prefix_iter(&())?
-            .map(|(k, v)| crate::Result::<(OutPoint, Utxo)>::Ok((k, v.decode())))
-            .collect::<Result<BTreeMap<OutPoint, Utxo>, _>>()?;
+        let res = map.prefix_iter_decoded(&())?.collect::<BTreeMap<_, _>>();
 
         Ok(res)
     }
@@ -98,36 +95,31 @@ impl<B: storage::Backend> Store<B> {
     /// Collect and return all accounting data from storage
     pub fn read_accounting_data(&self) -> crate::Result<pos_accounting::PoSAccountingData> {
         let db = self.transaction_ro()?;
+
         let pool_data =
             db.0.get::<db::DBAccountingPoolData, _>()
-                .prefix_iter(&())?
-                .map(|(k, v)| crate::Result::<(PoolId, PoolData)>::Ok((k, v.decode())))
-                .collect::<Result<BTreeMap<_, _>, _>>()?;
+                .prefix_iter_decoded(&())?
+                .collect::<BTreeMap<_, _>>();
 
         let pool_balances =
             db.0.get::<db::DBAccountingPoolBalances, _>()
-                .prefix_iter(&())?
-                .map(|(k, v)| crate::Result::<(PoolId, Amount)>::Ok((k, v.decode())))
-                .collect::<Result<BTreeMap<_, _>, _>>()?;
+                .prefix_iter_decoded(&())?
+                .collect::<BTreeMap<_, _>>();
 
         let delegation_data =
             db.0.get::<db::DBAccountingDelegationData, _>()
-                .prefix_iter(&())?
-                .map(|(k, v)| crate::Result::<(DelegationId, DelegationData)>::Ok((k, v.decode())))
-                .collect::<Result<BTreeMap<_, _>, _>>()?;
+                .prefix_iter_decoded(&())?
+                .collect::<BTreeMap<_, _>>();
 
         let delegation_balances =
             db.0.get::<db::DBAccountingDelegationBalances, _>()
-                .prefix_iter(&())?
-                .map(|(k, v)| crate::Result::<(DelegationId, Amount)>::Ok((k, v.decode())))
-                .collect::<Result<BTreeMap<_, _>, _>>()?;
+                .prefix_iter_decoded(&())?
+                .collect::<BTreeMap<_, _>>();
 
-        let pool_delegation_shares = db
-            .0
-            .get::<db::DBAccountingPoolDelegationShares, _>()
-            .prefix_iter(&())?
-            .map(|(k, v)| crate::Result::<((PoolId, DelegationId), Amount)>::Ok((k, v.decode())))
-            .collect::<Result<BTreeMap<_, _>, _>>()?;
+        let pool_delegation_shares =
+            db.0.get::<db::DBAccountingPoolDelegationShares, _>()
+                .prefix_iter_decoded(&())?
+                .collect::<BTreeMap<_, _>>();
 
         Ok(pos_accounting::PoSAccountingData {
             pool_data,
@@ -459,10 +451,10 @@ macro_rules! impl_read_ops {
                 &self,
             ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>> {
                 let map = self.0.get::<db::DBBlockIndex, _>();
-                let items = map.prefix_iter(&())?.map(|(_id, bi)| bi.decode());
+                let items = map.prefix_iter_decoded(&())?;
 
                 let mut result = BTreeMap::<BlockHeight, Vec<Id<Block>>>::new();
-                for bi in items {
+                for (_, bi) in items {
                     result.entry(bi.block_height()).or_default().push(*bi.block_id());
                 }
 
@@ -487,7 +479,7 @@ macro_rules! impl_read_ops {
             }
 
             fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
-                self.read::<db::DBBlockUndo, _, _>(id)
+                self.read::<db::DBUtxosBlockUndo, _, _>(id)
             }
         }
 
@@ -521,11 +513,8 @@ macro_rules! impl_read_ops {
                 let all_shares = self
                     .0
                     .get::<db::DBAccountingPoolDelegationShares, _>()
-                    .prefix_iter(&())?
-                    .map(|(k, v)| {
-                        crate::Result::<((PoolId, DelegationId), Amount)>::Ok((k, v.decode()))
-                    })
-                    .collect::<Result<BTreeMap<(PoolId, DelegationId), Amount>, _>>()?;
+                    .prefix_iter_decoded(&())?
+                    .collect::<BTreeMap<(PoolId, DelegationId), Amount>>();
 
                 let range_start = (pool_id, DelegationId::new(H256::zero()));
                 let range_end = (pool_id, DelegationId::new(H256::repeat_byte(0xFF)));
@@ -679,11 +668,11 @@ impl<'st, B: storage::Backend> UtxosStorageWrite for StoreTxRw<'st, B> {
     }
 
     fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()> {
-        self.write::<db::DBBlockUndo, _, _, _>(id, undo)
+        self.write::<db::DBUtxosBlockUndo, _, _, _>(id, undo)
     }
 
     fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
-        self.0.get_mut::<db::DBBlockUndo, _>().del(id).map_err(Into::into)
+        self.0.get_mut::<db::DBUtxosBlockUndo, _>().del(id).map_err(Into::into)
     }
 }
 

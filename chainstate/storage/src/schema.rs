@@ -42,7 +42,7 @@ storage::decl_schema! {
         /// Store for Utxo Entries
         pub DBUtxo: Map<OutPoint, Utxo>,
         /// Store for utxo BlockUndo
-        pub DBBlockUndo: Map<Id<Block>, UtxosBlockUndo>,
+        pub DBUtxosBlockUndo: Map<Id<Block>, UtxosBlockUndo>,
         /// Store for token's info; created on issuance
         pub DBTokensAuxData: Map<TokenId, TokenAuxiliaryData>,
         /// Store of issuance tx id vs token id

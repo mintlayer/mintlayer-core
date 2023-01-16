@@ -81,6 +81,17 @@ fn prefix_iteration() {
         assert_eq!(items, expected);
         dbtx.close();
 
+        // Iterate over the "foo" prefix decoded
+        let dbtx = store.transaction_ro().unwrap();
+        let items: Vec<_> = dbtx
+            .get::<Map2, _>()
+            .prefix_iter_decoded(&("foo".into(),))
+            .unwrap()
+            .map(|((_, k), v)| (k, v))
+            .collect();
+        assert_eq!(items, expected);
+        dbtx.close();
+
         // Iterate over all values
         let test_values_sorted = {
             let mut values = test_values;
@@ -93,6 +104,17 @@ fn prefix_iteration() {
             .prefix_iter(&())
             .unwrap()
             .map(|(k, v)| (k, v.decode()))
+            .collect();
+        assert_eq!(items, test_values_sorted);
+        dbtx.close();
+
+        // Iterate over all decoded values
+        let dbtx = store.transaction_ro().unwrap();
+        let items: Vec<_> = dbtx
+            .get::<Map2, _>()
+            .prefix_iter_decoded(&())
+            .unwrap()
+            .map(|(k, v)| (k, v))
             .collect();
         assert_eq!(items, test_values_sorted);
         dbtx.close();
