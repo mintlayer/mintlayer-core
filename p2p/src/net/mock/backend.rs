@@ -32,10 +32,7 @@ use futures::{
     stream::FuturesUnordered,
     StreamExt, TryFutureExt,
 };
-use tokio::{
-    sync::{mpsc, oneshot},
-    time::timeout,
-};
+use tokio::{sync::mpsc, time::timeout};
 
 use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
@@ -153,55 +150,35 @@ where
         }
     }
 
-    /// Try to establish connection with a remote peer
-    async fn connect(
+    /// Handle connection result to a remote peer
+    async fn handle_connect_res(
         &mut self,
         address: T::Address,
-        response: oneshot::Sender<crate::Result<()>>,
-    ) -> crate::Result<BlockingTask<T>> {
-        // For now we always respond with success
-        response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
+        connection_res: crate::Result<T::Stream>,
+    ) -> crate::Result<()> {
+        match connection_res {
+            Ok(socket) => {
+                let handshake_nonce = make_pseudo_rng().gen();
 
-        let connection_fut = timeout(self.timeout, self.transport.connect(address.clone()));
+                self.create_peer(
+                    socket,
+                    MockPeerId::new(),
+                    PeerRole::Outbound { handshake_nonce },
+                    address,
+                )
+            }
+            Err(err) => {
+                log::error!("Failed to establish connection: {err}");
 
-        let task: BlockingTask<T> = Box::pin(async move {
-            let connection_res = connection_fut.await.unwrap_or(Err(P2pError::DialError(
-                DialError::ConnectionRefusedOrTimedOut,
-            )));
-
-            let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
-                Box::pin(async move {
-                    match connection_res {
-                        Ok(socket) => {
-                            let handshake_nonce = make_pseudo_rng().gen();
-
-                            this.create_peer(
-                                socket,
-                                MockPeerId::new(),
-                                PeerRole::Outbound { handshake_nonce },
-                                address,
-                            )
-                        }
-                        Err(err) => {
-                            log::error!("Failed to establish connection: {err}");
-
-                            this.conn_tx
-                                .send(ConnectivityEvent::ConnectionError {
-                                    address,
-                                    error: P2pError::DialError(
-                                        DialError::ConnectionRefusedOrTimedOut,
-                                    ),
-                                })
-                                .await
-                                .map_err(P2pError::from)
-                        }
-                    }
-                })
-            });
-            callback
-        });
-
-        Ok(task)
+                self.conn_tx
+                    .send(ConnectivityEvent::ConnectionError {
+                        address,
+                        error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
+                    })
+                    .await
+                    .map_err(P2pError::from)
+            }
+        }
     }
 
     /// Disconnect remote peer by id
@@ -607,8 +584,26 @@ where
     }
 
     async fn handle_command(&mut self, command: Command<T>) -> crate::Result<()> {
-        let blocking_task = match command {
-            Command::Connect { address, response } => self.connect(address, response).await?,
+        let blocking_task: BlockingTask<T> = match command {
+            Command::Connect { address, response } => {
+                // For now we always respond with success
+                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
+
+                let connection_fut = timeout(self.timeout, self.transport.connect(address.clone()));
+
+                Box::pin(async move {
+                    let connection_res = connection_fut.await.unwrap_or(Err(P2pError::DialError(
+                        DialError::ConnectionRefusedOrTimedOut,
+                    )));
+
+                    let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
+                        Box::pin(
+                            async move { this.handle_connect_res(address, connection_res).await },
+                        )
+                    });
+                    callback
+                })
+            }
             Command::Disconnect { peer_id, response } => Box::pin(async move {
                 let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
                     Box::pin(async move {
