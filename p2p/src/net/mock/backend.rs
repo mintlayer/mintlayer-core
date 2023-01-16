@@ -30,7 +30,7 @@ use std::{
 use futures::{
     future::{join_all, BoxFuture},
     stream::FuturesUnordered,
-    StreamExt, TryFutureExt,
+    FutureExt, StreamExt, TryFutureExt,
 };
 use tokio::{sync::mpsc, time::timeout};
 
@@ -591,67 +591,75 @@ where
 
                 let connection_fut = timeout(self.timeout, self.transport.connect(address.clone()));
 
-                Box::pin(async move {
+                async move {
                     let connection_res = connection_fut.await.unwrap_or(Err(P2pError::DialError(
                         DialError::ConnectionRefusedOrTimedOut,
                     )));
 
                     let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
-                        Box::pin(
-                            async move { this.handle_connect_res(address, connection_res).await },
-                        )
+                        async move { this.handle_connect_res(address, connection_res).await }
+                            .boxed()
                     });
                     callback
-                })
+                }
+                .boxed()
             }
-            Command::Disconnect { peer_id, response } => Box::pin(async move {
+            Command::Disconnect { peer_id, response } => async move {
                 let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
-                    Box::pin(async move {
+                    async move {
                         let res = this.disconnect_peer(&peer_id).await;
                         response.send(res).map_err(|_| P2pError::ChannelClosed)
-                    })
+                    }
+                    .boxed()
                 });
                 callback
-            }),
+            }
+            .boxed(),
             Command::SendRequest {
                 peer_id,
                 message,
                 response,
-            } => Box::pin(async move {
+            } => async move {
                 let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
-                    Box::pin(async move {
+                    async move {
                         let res = this.send_request(peer_id, message).await;
                         response.send(res).map_err(|_| P2pError::ChannelClosed)
-                    })
+                    }
+                    .boxed()
                 });
                 callback
-            }),
+            }
+            .boxed(),
             Command::SendResponse {
                 request_id,
                 message,
                 response,
-            } => Box::pin(async move {
+            } => async move {
                 let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
-                    Box::pin(async move {
+                    async move {
                         let res = this.send_response(request_id, message).await;
                         response.send(res).map_err(|_| P2pError::ChannelClosed)
-                    })
+                    }
+                    .boxed()
                 });
                 callback
-            }),
+            }
+            .boxed(),
             Command::AnnounceData {
                 topic,
                 message,
                 response,
-            } => Box::pin(async move {
+            } => async move {
                 let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
-                    Box::pin(async move {
+                    async move {
                         let res = this.announce_data(topic, message).await;
                         response.send(res).map_err(|_| P2pError::ChannelClosed)
-                    })
+                    }
+                    .boxed()
                 });
                 callback
-            }),
+            }
+            .boxed(),
         };
 
         self.blocking_tasks.push(blocking_task);
