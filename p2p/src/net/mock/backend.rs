@@ -115,7 +115,8 @@ pub struct Backend<T: TransportSocket> {
     /// Request manager for managing inbound/outbound requests and responses
     request_mgr: request_manager::RequestManager,
 
-    blocking_tasks: FuturesUnordered<BoxFuture<'static, NonBlockingTaskCallback<T>>>,
+    /// List of "slow" async tasks that might block event loop (for example outbound connection attempts)
+    blocking_tasks: FuturesUnordered<BlockingTask<T>>,
 }
 
 impl<T> Backend<T>
@@ -146,7 +147,7 @@ where
             pending: HashMap::new(),
             peer_chan: mpsc::channel(64),
             request_mgr: request_manager::RequestManager::new(),
-            blocking_tasks: Default::default(),
+            blocking_tasks: FuturesUnordered::new(),
         }
     }
 
@@ -584,6 +585,12 @@ where
     }
 
     async fn handle_command(&mut self, command: Command<T>) -> crate::Result<()> {
+        // All handlings are separated to two parts:
+        // - "Slow", potentialy blocking part (can't take reference to self because they are run concurrently).
+        // - "Fast", non-blocking part (take mutable reference to self because they are run sequentially).
+        // Because the second part depends on result of the first part boxed closures are used.
+        // So the first future will return a closure that takes a reference to self and returns one more future.
+
         let blocking_task: BlockingTask<T> = match command {
             Command::Connect { address, response } => {
                 // For now we always respond with success
@@ -596,23 +603,21 @@ where
                         DialError::ConnectionRefusedOrTimedOut,
                     )));
 
-                    let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
+                    boxed_cb(move |this| {
                         async move { this.handle_connect_res(address, connection_res).await }
                             .boxed()
-                    });
-                    callback
+                    })
                 }
                 .boxed()
             }
             Command::Disconnect { peer_id, response } => async move {
-                let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
+                boxed_cb(move |this: &mut Self| {
                     async move {
                         let res = this.disconnect_peer(&peer_id).await;
                         response.send(res).map_err(|_| P2pError::ChannelClosed)
                     }
                     .boxed()
-                });
-                callback
+                })
             }
             .boxed(),
             Command::SendRequest {
@@ -620,14 +625,13 @@ where
                 message,
                 response,
             } => async move {
-                let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
+                boxed_cb(move |this| {
                     async move {
                         let res = this.send_request(peer_id, message).await;
                         response.send(res).map_err(|_| P2pError::ChannelClosed)
                     }
                     .boxed()
-                });
-                callback
+                })
             }
             .boxed(),
             Command::SendResponse {
@@ -635,14 +639,13 @@ where
                 message,
                 response,
             } => async move {
-                let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
+                boxed_cb(move |this| {
                     async move {
                         let res = this.send_response(request_id, message).await;
                         response.send(res).map_err(|_| P2pError::ChannelClosed)
                     }
                     .boxed()
-                });
-                callback
+                })
             }
             .boxed(),
             Command::AnnounceData {
@@ -650,14 +653,13 @@ where
                 message,
                 response,
             } => async move {
-                let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
+                boxed_cb(move |this| {
                     async move {
                         let res = this.announce_data(topic, message).await;
                         response.send(res).map_err(|_| P2pError::ChannelClosed)
                     }
                     .boxed()
-                });
-                callback
+                })
             }
             .boxed(),
         };
@@ -668,8 +670,16 @@ where
     }
 }
 
+// Some boilerplate types and a function for blocking tasks handling
+
 type BlockingTask<T> = BoxFuture<'static, NonBlockingTaskCallback<T>>;
 
 type NonBlockingTaskCallback<T> = Box<dyn FnOnce(&mut Backend<T>) -> NonBlockingTask + Send>;
 
 type NonBlockingTask<'a> = BoxFuture<'a, crate::Result<()>>;
+
+fn boxed_cb<T: TransportSocket, F: FnOnce(&mut Backend<T>) -> NonBlockingTask + Send + 'static>(
+    f: F,
+) -> NonBlockingTaskCallback<T> {
+    Box::new(f)
+}
