@@ -27,7 +27,11 @@ use std::{
     time::Duration,
 };
 
-use futures::{future::join_all, TryFutureExt};
+use futures::{
+    future::{join_all, BoxFuture},
+    stream::FuturesUnordered,
+    StreamExt, TryFutureExt,
+};
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
@@ -113,6 +117,8 @@ pub struct Backend<T: TransportSocket> {
 
     /// Request manager for managing inbound/outbound requests and responses
     request_mgr: request_manager::RequestManager,
+
+    blocking_tasks: FuturesUnordered<BoxFuture<'static, NonBlockingTaskCallback<T>>>,
 }
 
 impl<T> Backend<T>
@@ -143,6 +149,7 @@ where
             pending: HashMap::new(),
             peer_chan: mpsc::channel(64),
             request_mgr: request_manager::RequestManager::new(),
+            blocking_tasks: Default::default(),
         }
     }
 
@@ -151,39 +158,50 @@ where
         &mut self,
         address: T::Address,
         response: oneshot::Sender<crate::Result<()>>,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<BlockingTask<T>> {
         // For now we always respond with success
         response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
 
-        let connection_res = timeout(self.timeout, self.transport.connect(address.clone()))
-            .await
-            .unwrap_or(Err(P2pError::DialError(
+        let connection_fut = timeout(self.timeout, self.transport.connect(address.clone()));
+
+        let task: BlockingTask<T> = Box::pin(async move {
+            let connection_res = connection_fut.await.unwrap_or(Err(P2pError::DialError(
                 DialError::ConnectionRefusedOrTimedOut,
             )));
 
-        match connection_res {
-            Ok(socket) => {
-                let handshake_nonce = make_pseudo_rng().gen();
+            let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
+                Box::pin(async move {
+                    match connection_res {
+                        Ok(socket) => {
+                            let handshake_nonce = make_pseudo_rng().gen();
 
-                self.create_peer(
-                    socket,
-                    MockPeerId::new(),
-                    PeerRole::Outbound { handshake_nonce },
-                    address,
-                )
-            }
-            Err(err) => {
-                log::error!("Failed to establish connection: {err}");
+                            this.create_peer(
+                                socket,
+                                MockPeerId::new(),
+                                PeerRole::Outbound { handshake_nonce },
+                                address,
+                            )
+                        }
+                        Err(err) => {
+                            log::error!("Failed to establish connection: {err}");
 
-                self.conn_tx
-                    .send(ConnectivityEvent::ConnectionError {
-                        address,
-                        error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
-                    })
-                    .await
-                    .map_err(P2pError::from)
-            }
-        }
+                            this.conn_tx
+                                .send(ConnectivityEvent::ConnectionError {
+                                    address,
+                                    error: P2pError::DialError(
+                                        DialError::ConnectionRefusedOrTimedOut,
+                                    ),
+                                })
+                                .await
+                                .map_err(P2pError::from)
+                        }
+                    }
+                })
+            });
+            callback
+        });
+
+        Ok(task)
     }
 
     /// Disconnect remote peer by id
@@ -361,15 +379,11 @@ where
                 },
                 // Handle commands.
                 command = self.cmd_rx.recv() => {
-                    // TODO: commands running here will block, which means (maybe) these commands in the
-                    //       below function should be short-lived. The issue is that connect/disconnect
-                    //       functions are part of the handling and they could take a relatively long time
-                    //       we should try to figure out how to handle this problem. Maybe we need a separate
-                    //       pipeline for commands that are slow, or maybe everything here should go into a new
-                    //       task (which sounds excessive).
-                    //       Once fixed enable self_connect_channels and self_connect_noise tests.
                     self.handle_command(command.ok_or(P2pError::ChannelClosed)?).await?;
-                }
+                },
+                callback = self.blocking_tasks.select_next_some(), if !self.blocking_tasks.is_empty() => {
+                    callback(self).await?;
+                },
             }
         }
     }
@@ -593,39 +607,66 @@ where
     }
 
     async fn handle_command(&mut self, command: Command<T>) -> crate::Result<()> {
-        match command {
-            Command::Connect { address, response } => {
-                self.connect(address, response).await?;
-            }
-            Command::Disconnect { peer_id, response } => {
-                let res = self.disconnect_peer(&peer_id).await;
-                response.send(res).map_err(|_| P2pError::ChannelClosed)?
-            }
+        let blocking_task = match command {
+            Command::Connect { address, response } => self.connect(address, response).await?,
+            Command::Disconnect { peer_id, response } => Box::pin(async move {
+                let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
+                    Box::pin(async move {
+                        let res = this.disconnect_peer(&peer_id).await;
+                        response.send(res).map_err(|_| P2pError::ChannelClosed)
+                    })
+                });
+                callback
+            }),
             Command::SendRequest {
                 peer_id,
                 message,
                 response,
-            } => {
-                let res = self.send_request(peer_id, message).await;
-                response.send(res).map_err(|_| P2pError::ChannelClosed)?;
-            }
+            } => Box::pin(async move {
+                let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
+                    Box::pin(async move {
+                        let res = this.send_request(peer_id, message).await;
+                        response.send(res).map_err(|_| P2pError::ChannelClosed)
+                    })
+                });
+                callback
+            }),
             Command::SendResponse {
                 request_id,
                 message,
                 response,
-            } => {
-                let res = self.send_response(request_id, message).await;
-                response.send(res).map_err(|_| P2pError::ChannelClosed)?;
-            }
+            } => Box::pin(async move {
+                let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
+                    Box::pin(async move {
+                        let res = this.send_response(request_id, message).await;
+                        response.send(res).map_err(|_| P2pError::ChannelClosed)
+                    })
+                });
+                callback
+            }),
             Command::AnnounceData {
                 topic,
                 message,
                 response,
-            } => {
-                let res = self.announce_data(topic, message).await;
-                response.send(res).map_err(|_| P2pError::ChannelClosed)?;
-            }
-        }
+            } => Box::pin(async move {
+                let callback: NonBlockingTaskCallback<T> = Box::new(move |this: &mut Self| {
+                    Box::pin(async move {
+                        let res = this.announce_data(topic, message).await;
+                        response.send(res).map_err(|_| P2pError::ChannelClosed)
+                    })
+                });
+                callback
+            }),
+        };
+
+        self.blocking_tasks.push(blocking_task);
+
         Ok(())
     }
 }
+
+type BlockingTask<T> = BoxFuture<'static, NonBlockingTaskCallback<T>>;
+
+type NonBlockingTaskCallback<T> = Box<dyn FnOnce(&mut Backend<T>) -> NonBlockingTask + Send>;
+
+type NonBlockingTask<'a> = BoxFuture<'a, crate::Result<()>>;
