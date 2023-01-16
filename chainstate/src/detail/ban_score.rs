@@ -73,6 +73,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvariantBrokenAlreadyUnspent => 0,
             // Even though this is an invariant error, it stems from referencing a block for reward that doesn't exist
             ConnectTransactionError::MissingOutputOrSpent => 100,
+            ConnectTransactionError::MissingCoinOutputToStake => 100,
             ConnectTransactionError::AttemptToPrintMoney(_, _) => 100,
             ConnectTransactionError::TxFeeTotalCalcFailed(_, _) => 100,
             ConnectTransactionError::SignatureVerificationFailed(_) => 100,
@@ -94,9 +95,13 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _) => 100,
             ConnectTransactionError::BlockIndexCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::TransactionVerifierError(err) => err.ban_score(),
-            ConnectTransactionError::BlockUndoError(_) => 100,
+            ConnectTransactionError::UtxoBlockUndoError(_) => 100,
             ConnectTransactionError::BurnAmountSumError(_) => 100,
             ConnectTransactionError::AttemptToSpendBurnedAmount => 100,
+            ConnectTransactionError::MissingPoSAccountingUndo(_) => 0,
+            ConnectTransactionError::PoSAccountingError(err) => err.ban_score(),
+            ConnectTransactionError::TokenOutputInPoSAccountingOperation(_) => 100,
+            ConnectTransactionError::AccountingBlockUndoError(_) => 100,
         }
     }
 }
@@ -111,8 +116,10 @@ impl BanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::TokensError(err) => err.ban_score(),
             TransactionVerifierStorageError::UtxoError(err) => err.ban_score(),
             TransactionVerifierStorageError::TxIndexError(err) => err.ban_score(),
-            TransactionVerifierStorageError::BlockUndoError(_) => 100,
+            TransactionVerifierStorageError::UtxoBlockUndoError(_) => 100,
             TransactionVerifierStorageError::TransactionIndexDisabled => 0,
+            TransactionVerifierStorageError::PoSAccountingError(err) => err.ban_score(),
+            TransactionVerifierStorageError::AccountingBlockUndoError(_) => 100,
         }
     }
 }
@@ -266,6 +273,47 @@ impl BanScore for utxo::Error {
             utxo::Error::MissingBlockRewardUndo(_) => 0,
             utxo::Error::InvalidBlockRewardOutputType(_) => 100,
             utxo::Error::DBError(_) => 0,
+        }
+    }
+}
+
+impl BanScore for pos_accounting::Error {
+    fn ban_score(&self) -> u32 {
+        type E = pos_accounting::Error;
+        match self {
+            E::StorageError(_) => 0,
+            E::AccountingError(_) => 100,
+            E::InvariantErrorPoolBalanceAlreadyExists => 100,
+            E::InvariantErrorPoolDataAlreadyExists => 100,
+            E::AttemptedDecommissionNonexistingPoolBalance => 100,
+            E::AttemptedDecommissionNonexistingPoolData => 100,
+            E::DelegationCreationFailedPoolDoesNotExist => 100,
+            E::InvariantErrorDelegationCreationFailedIdAlreadyExists => 100,
+            E::DelegateToNonexistingId => 100,
+            E::DelegateToNonexistingPool => 100,
+            E::AdditionError => 100,
+            E::SubError => 100,
+            E::DelegationBalanceAdditionError => 100,
+            E::DelegationBalanceSubtractionError => 100,
+            E::PoolBalanceAdditionError => 100,
+            E::PoolBalanceSubtractionError => 100,
+            E::DelegationSharesAdditionError => 100,
+            E::DelegationSharesSubtractionError => 100,
+            E::InvariantErrorPoolCreationReversalFailedBalanceNotFound => 100,
+            E::InvariantErrorPoolCreationReversalFailedDataNotFound => 100,
+            E::InvariantErrorPoolCreationReversalFailedAmountChanged => 100,
+            E::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists => 100,
+            E::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists => 100,
+            E::InvariantErrorDelegationIdUndoFailedNotFound => 100,
+            E::InvariantErrorDelegationIdUndoFailedDataConflict => 100,
+            E::InvariantErrorDelegationBalanceAdditionUndoError => 100,
+            E::InvariantErrorPoolBalanceAdditionUndoError => 100,
+            E::InvariantErrorDelegationSharesAdditionUndoError => 100,
+            E::InvariantErrorDelegationShareNotFound => 100,
+            E::PledgeValueToSignedError => 100,
+            E::InvariantErrorDelegationUndoFailedDataNotFound => 100,
+            E::DuplicatesInDeltaAndUndo => 100,
+            E::FailedToCreateDeltaUndo => 100,
         }
     }
 }

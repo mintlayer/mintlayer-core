@@ -22,7 +22,7 @@ use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
-use utxo::{BlockRewardUndo, BlockUndo, TxUndoWithSources};
+use utxo::{UtxosBlockRewardUndo, UtxosBlockUndo, UtxosTxUndoWithSources};
 
 type TestStore = crate::inmemory::Store;
 
@@ -270,14 +270,14 @@ pub fn create_rand_block_undo(
     rng: &mut (impl Rng + CryptoRng),
     max_lim_of_utxos: u8,
     max_lim_of_tx_undos: u8,
-) -> BlockUndo {
+) -> UtxosBlockUndo {
     let utxo_rng = rng.gen_range(1..max_lim_of_utxos);
     let reward_utxos = (0..utxo_rng)
         .into_iter()
         .enumerate()
         .map(|(i, _)| create_rand_utxo(rng, i as u64))
         .collect();
-    let reward_undo = BlockRewardUndo::new(reward_utxos);
+    let reward_undo = UtxosBlockRewardUndo::new(reward_utxos);
 
     let mut tx_undo = vec![];
     let undo_rng = rng.gen_range(1..max_lim_of_tx_undos);
@@ -289,7 +289,7 @@ pub fn create_rand_block_undo(
             .map(|(i, _)| create_rand_utxo(rng, i as u64))
             .collect();
 
-        tx_undo.push(TxUndoWithSources::new(tx_utxos, vec![]));
+        tx_undo.push(UtxosTxUndoWithSources::new(tx_utxos, vec![]));
     }
 
     let tx_undo = tx_undo
@@ -297,7 +297,7 @@ pub fn create_rand_block_undo(
         .map(|u| (H256::random_using(rng).into(), u))
         .collect::<BTreeMap<_, _>>();
 
-    BlockUndo::new(Some(reward_undo), tx_undo).unwrap()
+    UtxosBlockUndo::new(Some(reward_undo), tx_undo).unwrap()
 }
 
 #[cfg(not(loom))]

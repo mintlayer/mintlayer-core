@@ -12,6 +12,7 @@ chainstate-storage = { path = '../storage' }
 chainstate-types = { path = '../types' }
 common = { path = '../../common' }
 crypto = { path = '../../crypto' }
+pos_accounting = {path = '../../pos_accounting'}
 test-utils = {path = '../../test-utils' }
 tx-verifier = { path = '../tx-verifier' }
 utils = { path = '../../utils' }

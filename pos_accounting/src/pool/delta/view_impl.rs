@@ -20,11 +20,15 @@ use common::primitives::{signed_amount::SignedAmount, Amount};
 
 use crate::{
     error::Error,
-    pool::{delegation::DelegationData, pool_data::PoolData, view::PoSAccountingView},
+    pool::{
+        delegation::DelegationData,
+        pool_data::PoolData,
+        view::{FlushablePoSAccountingView, PoSAccountingView},
+    },
     DelegationId, PoolId,
 };
 
-use super::{sum_maps, PoSAccountingDelta};
+use super::{data::PoSAccountingDeltaData, PoSAccountingDelta};
 
 fn signed_to_unsigned_pair(
     (k, v): (DelegationId, SignedAmount),
@@ -33,7 +37,30 @@ fn signed_to_unsigned_pair(
     Ok((k, v))
 }
 
-impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
+fn sum_maps<K: Ord + Copy>(
+    mut m1: BTreeMap<K, Amount>,
+    m2: BTreeMap<K, SignedAmount>,
+) -> Result<BTreeMap<K, Amount>, Error> {
+    for (k, v) in m2 {
+        let base_value = match m1.get(&k) {
+            Some(pv) => *pv,
+            None => Amount::from_atoms(0),
+        };
+        let base_amount = base_value.into_signed().ok_or(Error::AccountingError(
+            accounting::Error::ArithmeticErrorToUnsignedFailed,
+        ))?;
+        let new_amount = (base_amount + v).ok_or(Error::AccountingError(
+            accounting::Error::ArithmeticErrorSumToSignedFailed,
+        ))?;
+        let new_amount = new_amount.into_unsigned().ok_or(Error::AccountingError(
+            accounting::Error::ArithmeticErrorToUnsignedFailed,
+        ))?;
+        m1.insert(k, new_amount);
+    }
+    Ok(m1)
+}
+
+impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
         Ok(self
             .get_pool_data(pool_id)?
@@ -100,5 +127,11 @@ impl<'a> PoSAccountingView for PoSAccountingDelta<'a> {
         let local_amount =
             self.data.pool_delegation_shares.data().get(&(pool_id, delegation_id)).copied();
         combine_amount_delta(&parent_amount, &local_amount).map_err(Error::AccountingError)
+    }
+}
+
+impl<P: PoSAccountingView> FlushablePoSAccountingView for PoSAccountingDelta<P> {
+    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<(), Error> {
+        self.merge_with_delta(data).map(|_| ())
     }
 }

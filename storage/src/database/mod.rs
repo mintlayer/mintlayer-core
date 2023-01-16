@@ -166,6 +166,19 @@ where
     {
         internal::prefix_iter(self.dbtx, self.idx, prefix.encode())
     }
+
+    /// Iterator over decoded entries with key starting with given prefix
+    pub fn prefix_iter_decoded<Pfx>(
+        &self,
+        prefix: &Pfx,
+    ) -> crate::Result<impl '_ + Iterator<Item = (DbMap::Key, DbMap::Value)>>
+    where
+        Pfx: Encode,
+        DbMap::Key: HasPrefix<Pfx>,
+    {
+        internal::prefix_iter::<DbMap, <Tx as TxImpl>::Impl>(self.dbtx, self.idx, prefix.encode())
+            .map(|item| item.map(|(k, v)| (k, v.decode())))
+    }
 }
 
 /// Represents a mutable view of a key-value map

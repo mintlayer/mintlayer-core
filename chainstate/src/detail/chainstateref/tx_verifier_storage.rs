@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use crate::detail::{
     chainstateref::ChainstateRef,
@@ -31,10 +31,14 @@ use common::{
         tokens::{TokenAuxiliaryData, TokenId},
         Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction,
     },
-    primitives::Id,
+    primitives::{Amount, Id},
+};
+use pos_accounting::{
+    AccountingBlockUndo, DelegationData, DelegationId, FlushablePoSAccountingView, PoSAccountingDB,
+    PoSAccountingDeltaData, PoSAccountingView, PoolData, PoolId,
 };
 use tx_verifier::transaction_verifier::TransactionSource;
-use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDB, UtxosStorageRead};
+use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosDB, UtxosStorageRead};
 
 impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
     TransactionVerifierStorageRef for ChainstateRef<'a, S, O, V>
@@ -70,6 +74,15 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
             .get_token_aux_data(token_id)
             .map_err(TransactionVerifierStorageError::from)
     }
+
+    fn get_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError> {
+        self.db_tx
+            .get_accounting_undo(id)
+            .map_err(TransactionVerifierStorageError::from)
+    }
 }
 
 // TODO: this function is a duplicate of one in chainstate-types; the cause for this is that BlockchainStorageRead causes a circular dependencies
@@ -93,20 +106,18 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
     fn get_utxo(
         &self,
         outpoint: &common::chain::OutPoint,
-    ) -> Result<Option<utxo::Utxo>, chainstate_types::storage_result::Error> {
+    ) -> Result<Option<utxo::Utxo>, storage_result::Error> {
         self.db_tx.get_utxo(outpoint)
     }
 
-    fn get_best_block_for_utxos(
-        &self,
-    ) -> Result<Option<Id<GenBlock>>, chainstate_types::storage_result::Error> {
+    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, storage_result::Error> {
         self.db_tx.get_best_block_for_utxos()
     }
 
     fn get_undo_data(
         &self,
         id: Id<Block>,
-    ) -> Result<Option<utxo::BlockUndo>, chainstate_types::storage_result::Error> {
+    ) -> Result<Option<UtxosBlockUndo>, storage_result::Error> {
         self.db_tx.get_undo_data(id)
     }
 }
@@ -180,11 +191,12 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
             .map_err(TransactionVerifierStorageError::from)
     }
 
-    fn set_undo_data(
+    fn set_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &utxo::BlockUndo,
+        undo: &UtxosBlockUndo,
     ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
         match tx_source {
             TransactionSource::Chain(id) => self
                 .db_tx
@@ -196,10 +208,11 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
         }
     }
 
-    fn del_undo_data(
+    fn del_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
         match tx_source {
             TransactionSource::Chain(id) => {
                 self.db_tx.del_undo_data(id).map_err(TransactionVerifierStorageError::from)
@@ -208,5 +221,108 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
                 panic!("Flushing mempool info into the storage is forbidden")
             }
         }
+    }
+
+    fn set_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+        undo: &AccountingBlockUndo,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
+        match tx_source {
+            TransactionSource::Chain(id) => self
+                .db_tx
+                .set_accounting_undo_data(id, undo)
+                .map_err(TransactionVerifierStorageError::from),
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
+    }
+
+    fn del_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
+        match tx_source {
+            TransactionSource::Chain(id) => self
+                .db_tx
+                .del_accounting_undo_data(id)
+                .map_err(TransactionVerifierStorageError::from),
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
+    }
+}
+
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    PoSAccountingView for ChainstateRef<'a, S, O, V>
+{
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
+        self.db_tx
+            .get_pool_data(pool_id)
+            .map(|v| v.is_some())
+            .map_err(pos_accounting::Error::StorageError)
+    }
+
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error> {
+        self.db_tx
+            .get_pool_balance(pool_id)
+            .map_err(pos_accounting::Error::StorageError)
+    }
+
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error> {
+        self.db_tx.get_pool_data(pool_id).map_err(pos_accounting::Error::StorageError)
+    }
+
+    fn get_delegation_balance(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, pos_accounting::Error> {
+        self.db_tx
+            .get_delegation_balance(delegation_id)
+            .map_err(pos_accounting::Error::StorageError)
+    }
+
+    fn get_delegation_data(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<DelegationData>, pos_accounting::Error> {
+        self.db_tx
+            .get_delegation_data(delegation_id)
+            .map_err(pos_accounting::Error::StorageError)
+    }
+
+    fn get_pool_delegations_shares(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, pos_accounting::Error> {
+        self.db_tx
+            .get_pool_delegations_shares(pool_id)
+            .map_err(pos_accounting::Error::StorageError)
+    }
+
+    fn get_pool_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, pos_accounting::Error> {
+        self.db_tx
+            .get_pool_delegation_share(pool_id, delegation_id)
+            .map_err(pos_accounting::Error::StorageError)
+    }
+}
+
+impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    FlushablePoSAccountingView for ChainstateRef<'a, S, O, V>
+{
+    fn batch_write_delta(
+        &mut self,
+        data: PoSAccountingDeltaData,
+    ) -> Result<(), pos_accounting::Error> {
+        let mut db = PoSAccountingDB::new(&mut self.db_tx);
+        db.batch_write_delta(data)
     }
 }

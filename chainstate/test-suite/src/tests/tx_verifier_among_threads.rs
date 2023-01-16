@@ -19,6 +19,7 @@ use common::{
     chain::OutPoint,
     primitives::{Id, H256},
 };
+use pos_accounting::PoSAccountingView;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
@@ -46,6 +47,62 @@ impl UtxosView for EmptyUtxosView {
     }
 }
 
+pub struct EmptyAccountingView;
+
+impl PoSAccountingView for EmptyAccountingView {
+    fn pool_exists(&self, _pool_id: pos_accounting::PoolId) -> Result<bool, pos_accounting::Error> {
+        Ok(false)
+    }
+
+    fn get_pool_balance(
+        &self,
+        _pool_id: pos_accounting::PoolId,
+    ) -> Result<Option<common::primitives::Amount>, pos_accounting::Error> {
+        Ok(None)
+    }
+
+    fn get_pool_data(
+        &self,
+        _pool_id: pos_accounting::PoolId,
+    ) -> Result<Option<pos_accounting::PoolData>, pos_accounting::Error> {
+        Ok(None)
+    }
+
+    fn get_pool_delegations_shares(
+        &self,
+        _pool_id: pos_accounting::PoolId,
+    ) -> Result<
+        Option<
+            std::collections::BTreeMap<pos_accounting::DelegationId, common::primitives::Amount>,
+        >,
+        pos_accounting::Error,
+    > {
+        Ok(None)
+    }
+
+    fn get_delegation_balance(
+        &self,
+        _delegation_id: pos_accounting::DelegationId,
+    ) -> Result<Option<common::primitives::Amount>, pos_accounting::Error> {
+        Ok(None)
+    }
+
+    fn get_delegation_data(
+        &self,
+        _delegation_id: pos_accounting::DelegationId,
+    ) -> Result<Option<pos_accounting::DelegationData>, pos_accounting::Error> {
+        Ok(None)
+    }
+
+    fn get_pool_delegation_share(
+        &self,
+        _pool_id: pos_accounting::PoolId,
+        _delegation_id: pos_accounting::DelegationId,
+    ) -> Result<Option<common::primitives::Amount>, pos_accounting::Error> {
+        Ok(None)
+    }
+}
+
 /// This test proves that a transaction verifier with this structure can be moved among threads
 #[rstest]
 #[trace]
@@ -60,11 +117,13 @@ fn transfer_tx_verifier_to_thread(#[case] seed: Seed) {
         let storage = InMemoryStorageWrapper::new(storage, chain_config.clone());
 
         let utxos = EmptyUtxosView {};
+        let accounting = EmptyAccountingView {};
 
         let verifier = TransactionVerifier::new_from_handle(
             &storage,
             &chain_config,
             utxos,
+            accounting,
             TransactionVerifierConfig::new(false),
         );
 

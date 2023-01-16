@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use common::{chain::OutPoint, primitives::Amount};
 use crypto::key::PublicKey;
 
@@ -25,18 +23,17 @@ use crate::{
         helpers::{make_delegation_id, make_pool_id},
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
-            DelegationDataUndo, PoSAccountingOperatorRead, PoSAccountingOperatorWrite,
-            PoSAccountingUndo, PoolDataUndo, SpendFromShareUndo,
+            DelegationDataUndo, PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo,
+            SpendFromShareUndo,
         },
         pool_data::PoolData,
+        view::PoSAccountingView,
     },
-    storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
-    DelegationId, PoolId,
+    storage::PoSAccountingStorageWrite,
+    DelegationId, PoSAccountingDB, PoolId,
 };
 
-use super::PoSAccountingDBMut;
-
-impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccountingDBMut<'a, S> {
+impl<S: PoSAccountingStorageWrite> PoSAccountingOperations for PoSAccountingDB<S> {
     fn create_pool(
         &mut self,
         input0_outpoint: &OutPoint,
@@ -118,7 +115,10 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
         delegation_target: DelegationId,
         amount_to_delegate: Amount,
     ) -> Result<PoSAccountingUndo, Error> {
-        let pool_id = *self.get_delegation_data(delegation_target)?.source_pool();
+        let pool_id = *self
+            .get_delegation_data(delegation_target)?
+            .ok_or(Error::DelegateToNonexistingId)?
+            .source_pool();
 
         self.add_to_delegation_balance(delegation_target, amount_to_delegate)?;
 
@@ -137,7 +137,10 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
         delegation_id: DelegationId,
         amount: Amount,
     ) -> Result<PoSAccountingUndo, Error> {
-        let pool_id = *self.get_delegation_data(delegation_id)?.source_pool();
+        let pool_id = *self
+            .get_delegation_data(delegation_id)?
+            .ok_or(Error::InvariantErrorDelegationUndoFailedDataNotFound)?
+            .source_pool();
 
         self.sub_delegation_from_pool_share(pool_id, delegation_id, amount)?;
 
@@ -164,13 +167,13 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingOperatorWrite for PoSAccount
     }
 }
 
-impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
+impl<S: PoSAccountingStorageWrite> PoSAccountingDB<S> {
     fn undo_create_pool(&mut self, undo: CreatePoolUndo) -> Result<(), Error> {
         let amount = self.store.get_pool_balance(undo.pool_id)?;
 
         let data_undo = match undo.data_undo {
             PoolDataUndo::Data(v) => v,
-            PoolDataUndo::DataDelta(_) => unreachable!("incompatible PoolDataUndo supplied"),
+            PoolDataUndo::DataDelta(_) => panic!("incompatible PoolDataUndo supplied"),
         };
 
         match amount {
@@ -195,7 +198,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
     fn undo_decommission_pool(&mut self, undo: DecommissionPoolUndo) -> Result<(), Error> {
         let data_undo = match undo.data_undo {
             PoolDataUndo::Data(v) => v,
-            PoolDataUndo::DataDelta(_) => unreachable!("incompatible PoolDataUndo supplied"),
+            PoolDataUndo::DataDelta(_) => panic!("incompatible PoolDataUndo supplied"),
         };
 
         if self.store.get_pool_balance(undo.pool_id)?.is_some() {
@@ -216,7 +219,7 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         let data_undo = match undo.data_undo {
             DelegationDataUndo::Data(v) => v,
             DelegationDataUndo::DataDelta(_) => {
-                unreachable!("incompatible DelegationDataUndo supplied")
+                panic!("incompatible DelegationDataUndo supplied")
             }
         };
 
@@ -235,7 +238,10 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
     }
 
     fn undo_delegate_staking(&mut self, undo_data: DelegateStakingUndo) -> Result<(), Error> {
-        let pool_id = *self.get_delegation_data(undo_data.delegation_target)?.source_pool();
+        let pool_id = *self
+            .get_delegation_data(undo_data.delegation_target)?
+            .ok_or(Error::InvariantErrorDelegationUndoFailedDataNotFound)?
+            .source_pool();
 
         self.sub_delegation_from_pool_share(
             pool_id,
@@ -257,7 +263,10 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         &mut self,
         undo_data: SpendFromShareUndo,
     ) -> Result<(), Error> {
-        let pool_id = *self.get_delegation_data(undo_data.delegation_id)?.source_pool();
+        let pool_id = *self
+            .get_delegation_data(undo_data.delegation_id)?
+            .ok_or(Error::DelegationCreationFailedPoolDoesNotExist)?
+            .source_pool();
 
         self.add_to_delegation_balance(undo_data.delegation_id, undo_data.amount)?;
 
@@ -266,51 +275,5 @@ impl<'a, S: PoSAccountingStorageWrite> PoSAccountingDBMut<'a, S> {
         self.add_delegation_to_pool_share(pool_id, undo_data.delegation_id, undo_data.amount)?;
 
         Ok(())
-    }
-}
-
-impl<'a, S: PoSAccountingStorageRead> PoSAccountingOperatorRead for PoSAccountingDBMut<'a, S> {
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
-        self.store.get_pool_balance(pool_id).map_err(Error::from).map(|v| v.is_some())
-    }
-
-    // TODO: test that all values within the pool will be returned, especially boundary values, and off boundary aren't returned
-    fn get_delegation_shares(
-        &self,
-        pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Error> {
-        self.store.get_pool_delegations_shares(pool_id).map_err(Error::from)
-    }
-
-    fn get_delegation_share(
-        &self,
-        pool_id: PoolId,
-        delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Error> {
-        self.store
-            .get_pool_delegation_share(pool_id, delegation_id)
-            .map_err(Error::from)
-    }
-
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
-        self.store.get_pool_balance(pool_id).map_err(Error::from)
-    }
-
-    fn get_delegation_id_balance(
-        &self,
-        delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Error> {
-        self.store.get_delegation_balance(delegation_id).map_err(Error::from)
-    }
-
-    fn get_delegation_id_data(
-        &self,
-        delegation_id: DelegationId,
-    ) -> Result<Option<DelegationData>, Error> {
-        self.store.get_delegation_data(delegation_id).map_err(Error::from)
-    }
-
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
-        self.store.get_pool_data(pool_id).map_err(Error::from)
     }
 }

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::{UtxosDB, UtxosStorageRead, UtxosStorageWrite};
-use crate::{BlockUndo, Utxo};
+use crate::{Utxo, UtxosBlockUndo};
 use chainstate_types::storage_result::Error as StorageError;
 use common::{
     chain::{Block, GenBlock, OutPoint},
@@ -33,7 +33,7 @@ impl<S: UtxosStorageWrite> UtxosStorageWrite for UtxosDB<S> {
     fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError> {
         self.0.set_best_block_for_utxos(block_id)
     }
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), StorageError> {
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> Result<(), StorageError> {
         self.0.set_undo_data(id, undo)
     }
 
@@ -51,7 +51,7 @@ impl<S: UtxosStorageRead> UtxosStorageRead for UtxosDB<S> {
         self.0.get_best_block_for_utxos()
     }
 
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, StorageError> {
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, StorageError> {
         self.0.get_undo_data(id)
     }
 }

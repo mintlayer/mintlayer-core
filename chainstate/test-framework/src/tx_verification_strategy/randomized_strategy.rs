@@ -20,7 +20,7 @@ use chainstate::{
     tx_verification_strategy_utils::{
         construct_reward_tx_indices, construct_tx_indices, take_front_tx_index,
     },
-    BlockError, TransactionVerificationStrategy,
+    BlockError, TransactionVerificationStrategy, TransactionVerifierMakerFn,
 };
 use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
@@ -28,6 +28,7 @@ use common::{
     primitives::{id::WithId, Amount, Idable},
 };
 use crypto::random::{Rng, RngCore};
+use pos_accounting::PoSAccountingView;
 use test_utils::random::{make_seedable_rng, Seed};
 use tx_verifier::transaction_verifier::{
     config::TransactionVerifierConfig, error::ConnectTransactionError, flush::flush_to_storage,
@@ -64,7 +65,7 @@ impl RandomizedTransactionVerificationStrategy {
 }
 
 impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrategy {
-    fn connect_block<C, H, S, M, U>(
+    fn connect_block<C, H, S, M, U, A>(
         &self,
         tx_verifier_maker: M,
         block_index_handle: &H,
@@ -73,13 +74,14 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         verifier_config: TransactionVerifierConfig,
         block_index: &BlockIndex,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
     where
         C: AsRef<ChainConfig>,
         H: BlockIndexHandle,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U>,
+        A: PoSAccountingView,
+        M: TransactionVerifierMakerFn<C, S, U, A>,
     {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past =
@@ -108,19 +110,20 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         Ok(tx_verifier)
     }
 
-    fn disconnect_block<C, S, M, U>(
+    fn disconnect_block<C, S, M, U, A>(
         &self,
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
     where
         C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U>,
+        A: PoSAccountingView,
+        M: TransactionVerifierMakerFn<C, S, U, A>,
     {
         let mut tx_verifier = self.disconnect_with_base(
             tx_verifier_maker,
@@ -137,8 +140,8 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
 }
 
 impl RandomizedTransactionVerificationStrategy {
-    #[allow(clippy::too_many_arguments)]
-    fn connect_with_base<C: AsRef<ChainConfig>, S, M, U>(
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    fn connect_with_base<C: AsRef<ChainConfig>, S, M, U, A>(
         &self,
         tx_verifier_maker: M,
         storage_backend: S,
@@ -147,11 +150,12 @@ impl RandomizedTransactionVerificationStrategy {
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: &BlockTimestamp,
-    ) -> Result<(TransactionVerifier<C, S, U>, Amount), ConnectTransactionError>
+    ) -> Result<(TransactionVerifier<C, S, U, A>, Amount), ConnectTransactionError>
     where
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U>,
+        A: PoSAccountingView,
+        M: TransactionVerifierMakerFn<C, S, U, A>,
     {
         let mut tx_indices = construct_tx_indices(&verifier_config, block)?;
         let block_reward_tx_index = construct_reward_tx_indices(&verifier_config, block)?;
@@ -205,9 +209,9 @@ impl RandomizedTransactionVerificationStrategy {
         Ok((tx_verifier, total_fee))
     }
 
-    fn connect_with_derived<C, S, U>(
+    fn connect_with_derived<C, S, U, A>(
         &self,
-        base_tx_verifier: &TransactionVerifier<C, S, U>,
+        base_tx_verifier: &TransactionVerifier<C, S, U, A>,
         block: &WithId<Block>,
         block_index: &BlockIndex,
         median_time_past: &BlockTimestamp,
@@ -217,6 +221,7 @@ impl RandomizedTransactionVerificationStrategy {
     where
         C: AsRef<ChainConfig>,
         U: UtxosView,
+        A: PoSAccountingView,
         S: TransactionVerifierStorageRef,
     {
         let mut tx_verifier = base_tx_verifier.derive_child();
@@ -247,19 +252,20 @@ impl RandomizedTransactionVerificationStrategy {
         Ok((cache, total_fee, tx_num))
     }
 
-    fn disconnect_with_base<C, S, M, U>(
+    fn disconnect_with_base<C, S, M, U, A>(
         &self,
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U>, ConnectTransactionError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        M: Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U>,
+        A: PoSAccountingView,
+        M: TransactionVerifierMakerFn<C, S, U, A>,
     {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
         let mut tx_num = i32::try_from(block.transactions().len()).unwrap() - 1;
@@ -289,15 +295,16 @@ impl RandomizedTransactionVerificationStrategy {
         Ok(tx_verifier)
     }
 
-    fn disconnect_with_derived<C, S, U>(
+    fn disconnect_with_derived<C, S, U, A>(
         &self,
-        base_tx_verifier: &TransactionVerifier<C, S, U>,
+        base_tx_verifier: &TransactionVerifier<C, S, U, A>,
         block: &WithId<Block>,
         mut tx_num: i32,
     ) -> Result<(TransactionVerifierDelta, i32), ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         U: UtxosView,
+        A: PoSAccountingView,
         S: TransactionVerifierStorageRef,
     {
         let mut tx_verifier = base_tx_verifier.derive_child();

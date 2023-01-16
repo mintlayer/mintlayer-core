@@ -28,8 +28,8 @@ pub mod data;
 pub mod operator_impls;
 mod view_impl;
 
-pub struct PoSAccountingDelta<'a> {
-    parent: &'a dyn PoSAccountingView,
+pub struct PoSAccountingDelta<P> {
+    parent: P,
     data: PoSAccountingDeltaData,
 }
 
@@ -39,15 +39,16 @@ pub struct DeltaMergeUndo {
     delegation_data_undo: DeltaDataUndoCollection<DelegationId, DelegationData>,
 }
 
-impl<'a> PoSAccountingDelta<'a> {
-    pub fn new(parent: &'a dyn PoSAccountingView) -> Self {
+impl<P: PoSAccountingView> PoSAccountingDelta<P> {
+    pub fn new(parent: P) -> Self {
         Self {
             parent,
             data: PoSAccountingDeltaData::new(),
         }
     }
 
-    pub fn from_data(parent: &'a dyn PoSAccountingView, data: PoSAccountingDeltaData) -> Self {
+    #[cfg(test)]
+    pub fn from_data(parent: P, data: PoSAccountingDeltaData) -> Self {
         Self { parent, data }
     }
 
@@ -184,28 +185,4 @@ impl<'a> PoSAccountingDelta<'a> {
             .sub_unsigned((pool_id, delegation_id), amount_to_add)
             .map_err(Error::AccountingError)
     }
-}
-
-// TODO: this is used in both operator and view impls. Find an appropriate place for it.
-fn sum_maps<K: Ord + Copy>(
-    mut m1: BTreeMap<K, Amount>,
-    m2: BTreeMap<K, SignedAmount>,
-) -> Result<BTreeMap<K, Amount>, Error> {
-    for (k, v) in m2 {
-        let base_value = match m1.get(&k) {
-            Some(pv) => *pv,
-            None => Amount::from_atoms(0),
-        };
-        let base_amount = base_value.into_signed().ok_or(Error::AccountingError(
-            accounting::Error::ArithmeticErrorToUnsignedFailed,
-        ))?;
-        let new_amount = (base_amount + v).ok_or(Error::AccountingError(
-            accounting::Error::ArithmeticErrorSumToSignedFailed,
-        ))?;
-        let new_amount = new_amount.into_unsigned().ok_or(Error::AccountingError(
-            accounting::Error::ArithmeticErrorToUnsignedFailed,
-        ))?;
-        m1.insert(k, new_amount);
-    }
-    Ok(m1)
 }

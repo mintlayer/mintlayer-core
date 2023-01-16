@@ -20,47 +20,24 @@ use common::{
     primitives::Id,
 };
 
-mod utxosdb_utxosview_impls {
-    use super::*;
-
-    pub fn utxo<S: UtxosStorageRead>(db: &S, outpoint: &OutPoint) -> Option<Utxo> {
-        db.get_utxo(outpoint).unwrap_or_else(|e| {
-            panic!(
-                "Database error while attempting to retrieve utxo from the database: {}",
-                e
-            )
-        })
-    }
-
-    pub fn has_utxo<S: UtxosStorageRead>(db: &S, outpoint: &OutPoint) -> bool {
-        utxo(db, outpoint).is_some()
-    }
-
-    pub fn best_block_hash<S: UtxosStorageRead>(db: &S) -> Id<GenBlock> {
-        db.get_best_block_for_utxos().unwrap_or_else(|e| panic!("Database error while attempting to retrieve utxo set best block hash from the database: {}",
-        e)).expect("Failed to get best block hash")
-    }
-
-    pub fn estimated_size<S: UtxosStorageRead>(_db: &S) -> Option<usize> {
-        None
-    }
-}
-
 impl<S: UtxosStorageRead> UtxosView for UtxosDB<S> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
-        utxosdb_utxosview_impls::utxo(self, outpoint)
+        self.get_utxo(outpoint)
+            .expect("Database error while attempting to retrieve utxo")
     }
 
     fn has_utxo(&self, outpoint: &OutPoint) -> bool {
-        utxosdb_utxosview_impls::has_utxo(self, outpoint)
+        self.utxo(outpoint).is_some()
     }
 
     fn best_block_hash(&self) -> Id<GenBlock> {
-        utxosdb_utxosview_impls::best_block_hash(self)
+        self.get_best_block_for_utxos()
+            .expect("Database error while attempting to retrieve utxo set best block hash")
+            .expect("Failed to get best block hash")
     }
 
     fn estimated_size(&self) -> Option<usize> {
-        utxosdb_utxosview_impls::estimated_size(self)
+        None
     }
 }
 

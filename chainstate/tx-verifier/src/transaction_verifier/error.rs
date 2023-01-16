@@ -24,7 +24,6 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use thiserror::Error;
-use utxo::BlockUndoError;
 
 use super::storage::TransactionVerifierStorageError;
 
@@ -40,6 +39,8 @@ pub enum ConnectTransactionError {
     InvariantBrokenAlreadyUnspent,
     #[error("Output is not found in the cache or database")]
     MissingOutputOrSpent,
+    #[error("Coin output is not found to be able to stake")]
+    MissingCoinOutputToStake,
     #[error("While disconnecting a block, undo info for transaction `{0}` doesn't exist ")]
     MissingTxUndo(Id<Transaction>),
     #[error("While disconnecting a block, block undo info doesn't exist for block `{0}`")]
@@ -80,12 +81,20 @@ pub enum ConnectTransactionError {
     TxIndexError(#[from] TxIndexError),
     #[error("Error from TransactionVerifierStorage: {0}")]
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
-    #[error("BlockUndo error: {0}")]
-    BlockUndoError(#[from] BlockUndoError),
+    #[error("utxo BlockUndo error: {0}")]
+    UtxoBlockUndoError(#[from] utxo::UtxosBlockUndoError),
+    #[error("accounting BlockUndo error: {0}")]
+    AccountingBlockUndoError(#[from] pos_accounting::AccountingBlockUndoError),
     #[error("Failed to sum amounts of burns in transaction: {0}")]
     BurnAmountSumError(Id<Transaction>),
     #[error("Attempt to spend burned amount in transaction")]
     AttemptToSpendBurnedAmount,
+    #[error("PoS accounting error")]
+    PoSAccountingError(#[from] pos_accounting::Error),
+    #[error("PoS accounting undo is missing for transaction {0}")]
+    MissingPoSAccountingUndo(Id<Transaction>),
+    #[error("No token outputs are allowed in PoS accounting operations {0}")]
+    TokenOutputInPoSAccountingOperation(Id<Transaction>),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

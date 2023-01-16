@@ -17,8 +17,9 @@ use crate::{address::pubkeyhash::PublicKeyHash, chain::tokens::OutputValue, prim
 use script::Script;
 use serialization::{Decode, Encode};
 
-use self::timelock::OutputTimeLock;
+use self::{stakelock::StakePoolData, timelock::OutputTimeLock};
 
+pub mod stakelock;
 pub mod timelock;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
@@ -40,7 +41,7 @@ pub enum OutputPurpose {
     #[codec(index = 1)]
     LockThenTransfer(Destination, OutputTimeLock),
     #[codec(index = 2)]
-    StakeLock(Destination),
+    StakePool(Box<StakePoolData>),
     #[codec(index = 3)]
     Burn,
 }
@@ -50,7 +51,7 @@ impl OutputPurpose {
         match self {
             OutputPurpose::Transfer(d) => Some(d),
             OutputPurpose::LockThenTransfer(d, _) => Some(d),
-            OutputPurpose::StakeLock(d) => Some(d),
+            OutputPurpose::StakePool(d) => Some(d.staker()),
             OutputPurpose::Burn => None,
         }
     }
@@ -59,7 +60,7 @@ impl OutputPurpose {
         match self {
             OutputPurpose::Transfer(_) => false,
             OutputPurpose::LockThenTransfer(_, _) => false,
-            OutputPurpose::StakeLock(_) => false,
+            OutputPurpose::StakePool(_) => false,
             OutputPurpose::Burn => true,
         }
     }
@@ -88,7 +89,7 @@ impl TxOutput {
         match &self.purpose {
             OutputPurpose::Transfer(_) => false,
             OutputPurpose::LockThenTransfer(_, _) => true,
-            OutputPurpose::StakeLock(_) => false,
+            OutputPurpose::StakePool(_) => false,
             OutputPurpose::Burn => false,
         }
     }

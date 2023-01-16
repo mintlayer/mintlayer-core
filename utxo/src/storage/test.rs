@@ -165,7 +165,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         let block_height = BlockHeight::new(1);
         // spend the block
         let block_undo = {
-            let mut block_undo: BlockUndo = Default::default();
+            let mut block_undo: UtxosBlockUndo = Default::default();
             block
                 .transactions()
                 .iter()

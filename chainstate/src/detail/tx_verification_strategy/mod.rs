@@ -17,6 +17,7 @@ pub mod default_strategy;
 pub mod tx_verification_strategy_utils;
 
 pub use default_strategy::DefaultTransactionVerificationStrategy;
+use pos_accounting::PoSAccountingView;
 use utxo::UtxosView;
 
 use crate::BlockError;
@@ -29,6 +30,17 @@ use tx_verifier::transaction_verifier::{
     config::TransactionVerifierConfig, storage::TransactionVerifierStorageRef, TransactionVerifier,
 };
 
+// TODO: replace with trait_alias when stabilized
+pub trait TransactionVerifierMakerFn<C, S, U, A>:
+    Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U, A>
+{
+}
+
+impl<C, S, U, A, T> TransactionVerifierMakerFn<C, S, U, A> for T where
+    T: Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U, A>
+{
+}
+
 /// A trait that specifies how a block will be verified
 pub trait TransactionVerificationStrategy: Sized + Send {
     /// Connect the transactions given by block and block_index,
@@ -38,7 +50,7 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     /// state. It just returns a TransactionVerifier that can be
     /// used to update the database/storage state.
     #[allow(clippy::too_many_arguments)]
-    fn connect_block<C, H, S, M, U>(
+    fn connect_block<C, H, S, M, U, A>(
         &self,
         tx_verifier_maker: M,
         block_index_handle: &H,
@@ -47,13 +59,14 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         verifier_config: TransactionVerifierConfig,
         block_index: &BlockIndex,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
     where
         H: BlockIndexHandle,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
         C: AsRef<ChainConfig>,
-        M: Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U>;
+        A: PoSAccountingView,
+        M: TransactionVerifierMakerFn<C, S, U, A>;
 
     /// Disconnect the transactions given by block and block_index,
     /// and return a TransactionVerifier with an internal state
@@ -61,17 +74,18 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     /// Notice that this doesn't modify the internal database/storage
     /// state. It just returns a TransactionVerifier that can be
     /// used to update the database/storage state.
-    fn disconnect_block<C, S, M, U>(
+    fn disconnect_block<C, S, M, U, A>(
         &self,
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
     where
+        C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef,
         U: UtxosView,
-        C: AsRef<ChainConfig>,
-        M: Fn(S, C, TransactionVerifierConfig) -> TransactionVerifier<C, S, U>;
+        A: PoSAccountingView,
+        M: TransactionVerifierMakerFn<C, S, U, A>;
 }

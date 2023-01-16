@@ -512,7 +512,7 @@ fn token_transfer_test(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::MissingOutputOrSpent
+                ConnectTransactionError::AttemptToPrintMoney(Amount::ZERO, total_funds)
             ))
         );
 

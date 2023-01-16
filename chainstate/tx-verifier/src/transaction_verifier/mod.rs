@@ -13,28 +13,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod accounting_undo_cache;
 mod amounts_map;
 mod cached_operation;
+mod token_issuance_cache;
+mod tx_index_cache;
+mod utils;
+mod utxos_undo_cache;
+
 pub mod config;
 pub mod error;
 pub mod flush;
 pub mod hierarchy;
 mod optional_tx_index_cache;
 pub mod storage;
-mod tx_index_cache;
+
+use std::collections::BTreeMap;
 
 use self::{
+    accounting_undo_cache::{AccountingBlockUndoCache, AccountingBlockUndoEntry},
     amounts_map::AmountsMap,
+    cached_operation::CachedInputsOperation,
     config::TransactionVerifierConfig,
     error::{ConnectTransactionError, TokensError},
     optional_tx_index_cache::OptionalTxIndexCache,
     storage::TransactionVerifierStorageRef,
-    token_issuance_cache::{CoinOrTokenId, ConsumedTokenIssuanceCache},
+    token_issuance_cache::{CoinOrTokenId, ConsumedTokenIssuanceCache, TokenIssuanceCache},
+    utils::{
+        calculate_total_outputs, check_transferred_amount, get_input_token_id_and_amount,
+        get_total_fee,
+    },
+    utxos_undo_cache::{UtxosBlockUndoCache, UtxosBlockUndoEntry},
 };
 use ::utils::{ensure, shallow_clone::ShallowClone};
-use cached_operation::CachedInputsOperation;
-
-use std::collections::{btree_map::Entry, BTreeMap};
 
 use chainstate_types::{block_index_ancestor_getter, BlockIndex, GenBlockIndex};
 use common::{
@@ -49,17 +60,11 @@ use common::{
     },
     primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable, H256},
 };
-use utxo::{
-    BlockRewardUndo, BlockUndo, ConsumedUtxoCache, TxUndo, Utxo, UtxosCache, UtxosDB, UtxosView,
+use pos_accounting::{
+    PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo,
+    PoSAccountingView,
 };
-
-mod token_issuance_cache;
-use self::token_issuance_cache::TokenIssuanceCache;
-
-mod utils;
-use self::utils::{
-    calculate_total_outputs, check_transferred_amount, get_input_token_id_and_amount, get_total_fee,
-};
+use utxo::{ConsumedUtxoCache, Utxo, UtxosCache, UtxosDB, UtxosView};
 
 // TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee`
 //       that essentially belongs to this type, but return Amount
@@ -67,13 +72,6 @@ use self::utils::{
 pub struct Fee(pub Amount);
 
 pub struct Subsidy(pub Amount);
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct BlockUndoEntry {
-    undo: BlockUndo,
-    // indicates whether this BlockUndo was fetched from the db or it's new
-    is_fresh: bool,
-}
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum CachedOperation<T> {
@@ -122,6 +120,17 @@ pub enum TransactionSource {
     Mempool,
 }
 
+impl<'a> From<&TransactionSourceForConnect<'a>> for TransactionSource {
+    fn from(t: &TransactionSourceForConnect) -> Self {
+        match t {
+            TransactionSourceForConnect::Chain { new_block_index } => {
+                TransactionSource::Chain(*new_block_index.block_id())
+            }
+            TransactionSourceForConnect::Mempool { current_best: _ } => TransactionSource::Mempool,
+        }
+    }
+}
+
 pub enum TransactionSourceForConnect<'a> {
     Chain { new_block_index: &'a BlockIndex },
     Mempool { current_best: &'a BlockIndex },
@@ -155,23 +164,31 @@ impl<'a> TransactionSourceForConnect<'a> {
 pub struct TransactionVerifierDelta {
     tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
     utxo_cache: ConsumedUtxoCache,
-    utxo_block_undo: BTreeMap<TransactionSource, BlockUndoEntry>,
+    utxo_block_undo: BTreeMap<TransactionSource, UtxosBlockUndoEntry>,
     token_issuance_cache: ConsumedTokenIssuanceCache,
+    accounting_delta: PoSAccountingDeltaData,
+    accounting_delta_undo: BTreeMap<TransactionSource, AccountingBlockUndoEntry>,
 }
 
 /// The tool used to verify transaction and cache their updated states in memory
-pub struct TransactionVerifier<C, S, U> {
+pub struct TransactionVerifier<C, S, U, A> {
     chain_config: C,
     storage: S,
-    tx_index_cache: OptionalTxIndexCache,
-    utxo_cache: UtxosCache<U>,
-    utxo_block_undo: BTreeMap<TransactionSource, BlockUndoEntry>,
-    token_issuance_cache: TokenIssuanceCache,
     best_block: Id<GenBlock>,
+
+    tx_index_cache: OptionalTxIndexCache,
+    token_issuance_cache: TokenIssuanceCache,
+
+    utxo_cache: UtxosCache<U>,
+    utxo_block_undo: UtxosBlockUndoCache,
+
+    accounting_delta: PoSAccountingDelta<A>,
+    accounting_block_undo: AccountingBlockUndoCache,
 }
 
-impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, S, UtxosDB<S>> {
+impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, S, UtxosDB<S>, S> {
     pub fn new(storage: S, chain_config: C, verifier_config: TransactionVerifierConfig) -> Self {
+        let accounting_delta = PoSAccountingDelta::new(S::clone(&storage));
         let utxo_cache = UtxosCache::new(UtxosDB::new(S::clone(&storage)));
         let best_block = storage
             .get_best_block_for_utxos()
@@ -181,20 +198,28 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, 
         Self {
             storage,
             chain_config,
-            tx_index_cache,
-            utxo_cache,
-            utxo_block_undo: BTreeMap::new(),
-            token_issuance_cache: TokenIssuanceCache::new(),
             best_block,
+            tx_index_cache,
+            token_issuance_cache: TokenIssuanceCache::new(),
+            utxo_cache,
+            utxo_block_undo: UtxosBlockUndoCache::new(),
+            accounting_delta,
+            accounting_block_undo: AccountingBlockUndoCache::new(),
         }
     }
 }
 
-impl<C, S: TransactionVerifierStorageRef, U: UtxosView + Send + Sync> TransactionVerifier<C, S, U> {
+impl<C, S, U, A> TransactionVerifier<C, S, U, A>
+where
+    S: TransactionVerifierStorageRef,
+    U: UtxosView + Send + Sync,
+    A: PoSAccountingView + Send + Sync,
+{
     pub fn new_from_handle(
         storage: S,
         chain_config: C,
-        utxos: U, // TODO: Replace this parameter with handle
+        utxos: U,      // TODO: Replace this parameter with handle
+        accounting: A, // TODO: Replace this parameter with handle
         verifier_config: TransactionVerifierConfig,
     ) -> Self {
         let best_block = storage
@@ -205,29 +230,36 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView + Send + Sync> Transactio
         Self {
             storage,
             chain_config,
-            tx_index_cache,
-            utxo_cache: UtxosCache::new(utxos), // TODO: take utxos from handle
-            utxo_block_undo: BTreeMap::new(),
-            token_issuance_cache: TokenIssuanceCache::new(),
             best_block,
+            tx_index_cache,
+            token_issuance_cache: TokenIssuanceCache::new(),
+            utxo_cache: UtxosCache::new(utxos), // TODO: take utxos from handle
+            utxo_block_undo: UtxosBlockUndoCache::new(),
+            accounting_delta: PoSAccountingDelta::new(accounting),
+            accounting_block_undo: AccountingBlockUndoCache::new(),
         }
     }
 }
 
-impl<C, S, U> TransactionVerifier<C, S, U>
+impl<C, S, U, A> TransactionVerifier<C, S, U, A>
 where
     C: AsRef<ChainConfig>,
     S: TransactionVerifierStorageRef,
     U: UtxosView,
+    A: PoSAccountingView,
 {
-    pub fn derive_child(&self) -> TransactionVerifier<&ChainConfig, &Self, &UtxosCache<U>> {
+    pub fn derive_child(
+        &self,
+    ) -> TransactionVerifier<&ChainConfig, &Self, &UtxosCache<U>, &PoSAccountingDelta<A>> {
         TransactionVerifier {
             storage: self,
             chain_config: self.chain_config.as_ref(),
             tx_index_cache: OptionalTxIndexCache::new(self.tx_index_cache.enabled()),
             utxo_cache: UtxosCache::new(&self.utxo_cache),
-            utxo_block_undo: BTreeMap::new(),
+            utxo_block_undo: UtxosBlockUndoCache::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
+            accounting_delta: PoSAccountingDelta::new(&self.accounting_delta),
+            accounting_block_undo: AccountingBlockUndoCache::new(),
             best_block: self.best_block,
         }
     }
@@ -388,7 +420,7 @@ where
         let timelock = match output.purpose() {
             OutputPurpose::Transfer(_) => return Ok(()),
             OutputPurpose::LockThenTransfer(_, tl) => tl,
-            OutputPurpose::StakeLock(_) => return Ok(()),
+            OutputPurpose::StakePool(_) => return Ok(()),
             OutputPurpose::Burn => return Ok(()),
         };
 
@@ -511,77 +543,78 @@ where
         Ok(())
     }
 
-    fn read_block_undo(
-        &self,
-        tx_source: &TransactionSource,
-    ) -> Result<BlockUndo, ConnectTransactionError> {
-        match self.utxo_block_undo.get(tx_source) {
-            Some(entry) => Ok(entry.undo.clone()),
-            None => match tx_source {
-                TransactionSource::Chain(block_id) => {
-                    let block_undo = self
-                        .storage
-                        .get_undo_data(*block_id)?
-                        .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
-                    Ok(block_undo)
-                }
-                TransactionSource::Mempool => Err(ConnectTransactionError::MissingMempoolTxsUndo),
-            },
-        }
-    }
-
-    fn fetch_block_undo(
+    fn connect_pos_accounting_outputs(
         &mut self,
-        tx_source: &TransactionSource,
-    ) -> Result<&mut BlockUndo, ConnectTransactionError> {
-        match self.utxo_block_undo.entry(*tx_source) {
-            Entry::Occupied(entry) => Ok(&mut entry.into_mut().undo),
-            Entry::Vacant(entry) => match tx_source {
-                TransactionSource::Chain(block_id) => {
-                    let block_undo = self
-                        .storage
-                        .get_undo_data(*block_id)?
-                        .ok_or(ConnectTransactionError::MissingBlockUndo(*block_id))?;
-                    Ok(&mut entry
-                        .insert(BlockUndoEntry {
-                            undo: block_undo,
-                            is_fresh: false,
-                        })
-                        .undo)
-                }
-                TransactionSource::Mempool => Err(ConnectTransactionError::MissingMempoolTxsUndo),
-            },
-        }
-    }
+        tx_source: TransactionSource,
+        tx: &Transaction,
+    ) -> Result<(), ConnectTransactionError> {
+        let input0_getter =
+            || tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent);
 
-    fn take_tx_undo(
-        &mut self,
-        tx_source: &TransactionSource,
-        tx_id: &Id<Transaction>,
-    ) -> Result<TxUndo, ConnectTransactionError> {
-        let block_undo = self.fetch_block_undo(tx_source)?;
-
-        block_undo
-            .take_tx_undo(tx_id)
-            .ok_or(ConnectTransactionError::MissingTxUndo(*tx_id))
-    }
-
-    fn take_block_reward_undo(
-        &mut self,
-        tx_source: &TransactionSource,
-    ) -> Result<Option<BlockRewardUndo>, ConnectTransactionError> {
-        Ok(self.fetch_block_undo(tx_source)?.take_block_reward_undo())
-    }
-
-    fn get_or_create_block_undo(&mut self, tx_source: &TransactionSource) -> &mut BlockUndo {
-        &mut self
-            .utxo_block_undo
-            .entry(*tx_source)
-            .or_insert(BlockUndoEntry {
-                is_fresh: true,
-                undo: Default::default(),
+        let tx_undo = tx
+            .outputs()
+            .iter()
+            .filter_map(|output| match output.purpose() {
+                OutputPurpose::StakePool(data) => Some((data, output.value())),
+                OutputPurpose::Transfer(_)
+                | OutputPurpose::LockThenTransfer(_, _)
+                | OutputPurpose::Burn => None,
             })
-            .undo
+            .map(
+                |(pool_data, output_value)| -> Result<PoSAccountingUndo, ConnectTransactionError> {
+                    let input0 = input0_getter()?;
+
+                    // TODO: check StakePoolData fields
+                    let delegation_amount = output_value.coin_amount().ok_or_else(|| {
+                        ConnectTransactionError::TokenOutputInPoSAccountingOperation(tx.get_id())
+                    })?;
+
+                    let (_, undo) = self
+                        .accounting_delta
+                        .create_pool(
+                            input0.outpoint(),
+                            delegation_amount,
+                            pool_data.decommission_key().clone(),
+                        )
+                        .map_err(ConnectTransactionError::PoSAccountingError)?;
+
+                    Ok(undo)
+                },
+            )
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if !tx_undo.is_empty() {
+            self.accounting_block_undo
+                .get_or_create_block_undo(&tx_source)
+                .insert_tx_undo(tx.get_id(), pos_accounting::AccountingTxUndo::new(tx_undo))
+                .map_err(ConnectTransactionError::AccountingBlockUndoError)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn disconnect_pos_accounting_outputs(
+        &mut self,
+        tx_source: TransactionSource,
+        tx: &Transaction,
+    ) -> Result<(), ConnectTransactionError> {
+        tx.outputs().iter().try_for_each(|output| match output.purpose() {
+            OutputPurpose::StakePool(_) => {
+                let block_undo_fetcher = |id: Id<Block>| self.storage.get_accounting_undo(id);
+                self.accounting_block_undo
+                    .take_tx_undo(&tx_source, &tx.get_id(), block_undo_fetcher)?
+                    .into_inner()
+                    .into_iter()
+                    .try_for_each(|undo| {
+                        self.accounting_delta
+                            .undo(undo)
+                            .map_err(ConnectTransactionError::PoSAccountingError)
+                    })
+            }
+            OutputPurpose::Transfer(_)
+            | OutputPurpose::LockThenTransfer(_, _)
+            | OutputPurpose::Burn => Ok(()),
+        })
     }
 
     pub fn connect_transaction(
@@ -611,16 +644,21 @@ where
         // verify input signatures
         self.verify_signatures(tx)?;
 
+        self.connect_pos_accounting_outputs(tx_source.into(), tx.transaction())?;
+
         // spend utxos
         let tx_undo = self
             .utxo_cache
             .connect_transaction(tx.transaction(), tx_source.expected_block_height())
             .map_err(ConnectTransactionError::from)?;
 
+        // save spent utxos for undo
+        self.utxo_block_undo
+            .get_or_create_block_undo(&TransactionSource::from(tx_source))
+            .insert_tx_undo(tx.transaction().get_id(), tx_undo)?;
+
         match tx_source {
-            TransactionSourceForConnect::Chain {
-                new_block_index: block_index,
-            } => {
+            TransactionSourceForConnect::Chain { new_block_index: _ } => {
                 // update tx index only for txs from main chain
                 if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
                     // pre-cache all inputs
@@ -632,17 +670,8 @@ where
                     tx_index_cache
                         .spend_tx_index_inputs(tx.inputs(), tx.transaction().get_id().into())?;
                 }
-
-                // save spent utxos for undo
-                self.get_or_create_block_undo(&TransactionSource::Chain(*block_index.block_id()))
-                    .insert_tx_undo(tx.transaction().get_id(), tx_undo)?;
             }
-            TransactionSourceForConnect::Mempool { current_best: _ } => {
-                // save spent utxos for undo
-                let tx_id = tx.transaction().get_id();
-                self.get_or_create_block_undo(&TransactionSource::Mempool)
-                    .insert_tx_undo(tx_id, tx_undo)?;
-            }
+            TransactionSourceForConnect::Mempool { current_best: _ } => { /* do nothing */ }
         };
 
         Ok(fee)
@@ -681,7 +710,8 @@ where
 
         if let Some(reward_undo) = reward_undo {
             // save spent utxos for undo
-            self.get_or_create_block_undo(&TransactionSource::Chain(block_id))
+            self.utxo_block_undo
+                .get_or_create_block_undo(&TransactionSource::Chain(block_id))
                 .set_block_reward_undo(reward_undo);
         }
 
@@ -737,6 +767,7 @@ where
         tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
     ) -> Result<bool, ConnectTransactionError> {
+        let block_undo_fetcher = |id: Id<Block>| self.storage.get_undo_data(id);
         match tx_source {
             TransactionSource::Chain(block_id) => {
                 let current_block_height = self
@@ -757,12 +788,16 @@ where
                 if current_block_height < best_block_height {
                     Ok(false)
                 } else {
-                    Ok(!self.read_block_undo(tx_source)?.has_children_of(tx_id))
+                    Ok(!self
+                        .utxo_block_undo
+                        .read_block_undo(tx_source, block_undo_fetcher)?
+                        .has_children_of(tx_id))
                 }
             }
-            TransactionSource::Mempool => {
-                Ok(!self.read_block_undo(tx_source)?.has_children_of(tx_id))
-            }
+            TransactionSource::Mempool => Ok(!self
+                .utxo_block_undo
+                .read_block_undo(tx_source, block_undo_fetcher)?
+                .has_children_of(tx_id)),
         }
     }
 
@@ -771,11 +806,17 @@ where
         tx_source: &TransactionSource,
         tx: &SignedTransaction,
     ) -> Result<(), ConnectTransactionError> {
-        let tx_undo = match tx_source {
+        let block_undo_fetcher = |id: Id<Block>| self.storage.get_undo_data(id);
+        let tx_undo = self.utxo_block_undo.take_tx_undo(
+            tx_source,
+            &tx.transaction().get_id(),
+            block_undo_fetcher,
+        )?;
+
+        match tx_source {
             TransactionSource::Chain(_) => {
                 let tx_index_fetcher =
                     |tx_id: &OutPointSourceId| self.storage.get_mainchain_tx_index(tx_id);
-
                 // update tx index only for txs from main chain
                 if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
                     // pre-cache all inputs
@@ -784,19 +825,11 @@ where
                     // unspend inputs
                     tx_index_cache.unspend_tx_index_inputs(tx.inputs())?;
                 }
-
-                self.take_tx_undo(tx_source, &tx.transaction().get_id())
             }
-            TransactionSource::Mempool => {
-                let tx_id = tx.transaction().get_id();
+            TransactionSource::Mempool => { /* do nothing */ }
+        };
 
-                if !self.fetch_block_undo(tx_source)?.has_children_of(&tx_id) {
-                    self.take_tx_undo(tx_source, &tx_id)
-                } else {
-                    return Err(ConnectTransactionError::TxUndoWithDependency(tx_id));
-                }
-            }
-        }?;
+        self.disconnect_pos_accounting_outputs(*tx_source, tx.transaction())?;
 
         self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
 
@@ -830,8 +863,11 @@ where
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.block_reward_transactable();
 
-                let reward_undo =
-                    self.take_block_reward_undo(&TransactionSource::Chain(block.get_id()))?;
+                let block_undo_fetcher = |id: Id<Block>| self.storage.get_undo_data(id);
+                let reward_undo = self.utxo_block_undo.take_block_reward_undo(
+                    &TransactionSource::Chain(block.get_id()),
+                    block_undo_fetcher,
+                )?;
                 self.utxo_cache.disconnect_block_transactable(
                     &reward_transactable,
                     &block.get_id().into(),
@@ -864,8 +900,10 @@ where
         Ok(TransactionVerifierDelta {
             tx_index_cache: self.tx_index_cache.take_always().consume(),
             utxo_cache: self.utxo_cache.consume(),
-            utxo_block_undo: self.utxo_block_undo,
+            utxo_block_undo: self.utxo_block_undo.consume(),
             token_issuance_cache: self.token_issuance_cache.consume(),
+            accounting_delta: self.accounting_delta.consume(),
+            accounting_delta_undo: self.accounting_block_undo.consume(),
         })
     }
 }

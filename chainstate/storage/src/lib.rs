@@ -31,6 +31,7 @@ use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::{Block, GenBlock, OutPointSourceId};
 use common::primitives::{BlockHeight, Id};
+use pos_accounting::{AccountingBlockUndo, PoSAccountingStorageRead, PoSAccountingStorageWrite};
 use utxo::{UtxosStorageRead, UtxosStorageWrite};
 
 /// Possibly failing result of blockchain storage query
@@ -42,7 +43,7 @@ pub mod inmemory {
 }
 
 /// Queries on persistent blockchain data
-pub trait BlockchainStorageRead: UtxosStorageRead {
+pub trait BlockchainStorageRead: UtxosStorageRead + PoSAccountingStorageRead {
     /// Get storage version
     fn get_storage_version(&self) -> crate::Result<u32>;
 
@@ -81,10 +82,15 @@ pub trait BlockchainStorageRead: UtxosStorageRead {
 
     /// Get block tree as height vs ids
     fn get_block_tree_by_height(&self) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
+
+    /// Get accounting undo for specific block
+    fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
 }
 
 /// Modifying operations on persistent blockchain data
-pub trait BlockchainStorageWrite: BlockchainStorageRead + UtxosStorageWrite {
+pub trait BlockchainStorageWrite:
+    BlockchainStorageRead + UtxosStorageWrite + PoSAccountingStorageWrite
+{
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
 
@@ -142,6 +148,16 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead + UtxosStorageWrite {
 
     // Remove token id
     fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()>;
+
+    // Set accounting block undo data for specific block
+    fn set_accounting_undo_data(
+        &mut self,
+        id: Id<Block>,
+        undo: &AccountingBlockUndo,
+    ) -> crate::Result<()>;
+
+    // Remove accounting block undo data for specific block
+    fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction

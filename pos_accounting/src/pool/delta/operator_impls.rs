@@ -24,7 +24,7 @@ use crate::{
         helpers::{make_delegation_id, make_pool_id},
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
-            DelegationDataUndo, PoSAccountingOperatorWrite, PoSAccountingUndo, PoolDataUndo,
+            DelegationDataUndo, PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo,
             SpendFromShareUndo,
         },
         pool_data::PoolData,
@@ -35,7 +35,7 @@ use crate::{
 
 use super::PoSAccountingDelta;
 
-impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
+impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
     fn create_pool(
         &mut self,
         input0_outpoint: &OutPoint,
@@ -74,13 +74,13 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
     }
 
     fn decommission_pool(&mut self, pool_id: PoolId) -> Result<PoSAccountingUndo, Error> {
-        let last_amount = self
-            .get_pool_balance(pool_id)?
-            .ok_or(Error::AttemptedDecommissionNonexistingPoolBalance)?;
-
         let last_data = self
             .get_pool_data(pool_id)?
             .ok_or(Error::AttemptedDecommissionNonexistingPoolData)?;
+
+        let last_amount = self
+            .get_pool_balance(pool_id)?
+            .ok_or(Error::AttemptedDecommissionNonexistingPoolBalance)?;
 
         self.data.pool_balances.sub_unsigned(pool_id, last_amount)?;
         let data_undo = self
@@ -136,7 +136,7 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
     ) -> Result<PoSAccountingUndo, Error> {
         let pool_id = *self
             .get_delegation_data(delegation_target)?
-            .ok_or(Error::DelegationCreationFailedPoolDoesNotExist)?
+            .ok_or(Error::DelegateToNonexistingId)?
             .source_pool();
 
         self.add_to_delegation_balance(delegation_target, amount_to_delegate)?;
@@ -186,11 +186,11 @@ impl<'a> PoSAccountingOperatorWrite for PoSAccountingDelta<'a> {
     }
 }
 
-impl<'a> PoSAccountingDelta<'a> {
+impl<P: PoSAccountingView> PoSAccountingDelta<P> {
     fn undo_create_pool(&mut self, undo: CreatePoolUndo) -> Result<(), Error> {
         let (pledge_amount, undo_data) = match undo.data_undo {
             PoolDataUndo::DataDelta(v) => *v,
-            PoolDataUndo::Data(_) => unreachable!("incompatible PoolDataUndo supplied"),
+            PoolDataUndo::Data(_) => panic!("incompatible PoolDataUndo supplied"),
         };
         let amount = self.get_pool_balance(undo.pool_id)?;
 
@@ -216,10 +216,10 @@ impl<'a> PoSAccountingDelta<'a> {
     fn undo_decommission_pool(&mut self, undo: DecommissionPoolUndo) -> Result<(), Error> {
         let (last_amount, undo_data) = match undo.data_undo {
             PoolDataUndo::DataDelta(v) => *v,
-            PoolDataUndo::Data(_) => unreachable!("incompatible PoolDataUndo supplied"),
+            PoolDataUndo::Data(_) => panic!("incompatible PoolDataUndo supplied"),
         };
 
-        if self.get_pool_balance(undo.pool_id)?.is_some() {
+        if self.get_pool_balance(undo.pool_id)?.unwrap_or(Amount::ZERO) != Amount::ZERO {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists);
         }
 
@@ -236,7 +236,7 @@ impl<'a> PoSAccountingDelta<'a> {
     fn undo_create_delegation_id(&mut self, undo: CreateDelegationIdUndo) -> Result<(), Error> {
         let undo_data = match undo.data_undo {
             DelegationDataUndo::DataDelta(v) => v,
-            DelegationDataUndo::Data(_) => unreachable!("incompatible DelegationDataUndo supplied"),
+            DelegationDataUndo::Data(_) => panic!("incompatible DelegationDataUndo supplied"),
         };
 
         self.get_delegation_data(undo.delegation_id)?

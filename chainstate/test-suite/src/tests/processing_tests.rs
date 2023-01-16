@@ -26,8 +26,9 @@ use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
 };
 use chainstate_types::{GenBlockIndex, GetAncestorError, PropertyQueryError};
-use common::chain::OutPoint;
-use common::chain::{signed_transaction::SignedTransaction, Transaction};
+use common::chain::{
+    signed_transaction::SignedTransaction, stakelock::StakePoolData, OutPoint, Transaction,
+};
 use common::primitives::BlockDistance;
 use common::{
     chain::{
@@ -46,6 +47,7 @@ use consensus::{ConsensusPoWError, ConsensusVerificationError};
 use crypto::{
     key::{KeyKind, PrivateKey},
     random::Rng,
+    vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -200,11 +202,20 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         );
 
         // Case 7: reward is a stake lock
+        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (_, vrf_pub_key) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
         let block = tf
             .make_block_builder()
             .with_reward(vec![TxOutput::new(
                 coins.clone(),
-                OutputPurpose::StakeLock(destination.clone()),
+                OutputPurpose::StakePool(Box::new(StakePoolData::new(
+                    anyonecanspend_address(),
+                    None,
+                    vrf_pub_key,
+                    pub_key,
+                    0,
+                    Amount::ZERO,
+                ))),
             )])
             .add_test_transaction_from_best_block(&mut rng)
             .build();

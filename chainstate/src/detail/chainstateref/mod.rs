@@ -54,7 +54,7 @@ use super::{
 
 mod tx_verifier_storage;
 
-pub(crate) struct ChainstateRef<'a, S, O, V> {
+pub struct ChainstateRef<'a, S, O, V> {
     chain_config: &'a ChainConfig,
     chainstate_config: &'a ChainstateConfig,
     tx_verification_strategy: &'a V,
@@ -459,7 +459,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
                         ))
                     }
                 },
-                common::chain::OutputPurpose::StakeLock(_) => {
+                common::chain::OutputPurpose::StakePool(_) => {
                     return Err(CheckBlockError::InvalidBlockRewardOutputType(
                         block.get_id(),
                     ))

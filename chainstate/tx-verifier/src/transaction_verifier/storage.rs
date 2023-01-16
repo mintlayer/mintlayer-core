@@ -23,8 +23,9 @@ use common::{
     },
     primitives::Id,
 };
+use pos_accounting::{AccountingBlockUndo, FlushablePoSAccountingView, PoSAccountingView};
 use thiserror::Error;
-use utxo::{BlockUndo, BlockUndoError, FlushableUtxoView, UtxosStorageRead};
+use utxo::{FlushableUtxoView, UtxosStorageRead};
 
 use super::{
     error::{TokensError, TxIndexError},
@@ -48,12 +49,18 @@ pub enum TransactionVerifierStorageError {
     #[error("Tx index error: {0}")]
     TxIndexError(#[from] TxIndexError),
     #[error("BlockUndo error: {0}")]
-    BlockUndoError(#[from] BlockUndoError),
+    UtxoBlockUndoError(#[from] utxo::UtxosBlockUndoError),
     #[error("Transaction index has been disabled")]
     TransactionIndexDisabled,
+    #[error("PoS accounting error: {0}")]
+    PoSAccountingError(#[from] pos_accounting::Error),
+    #[error("Accounting BlockUndo error: {0}")]
+    AccountingBlockUndoError(#[from] pos_accounting::AccountingBlockUndoError),
 }
 
-pub trait TransactionVerifierStorageRef: UtxosStorageRead {
+// TODO(Gosha): PoSAccountingView should be replaced with PoSAccountingStorageRead in which the
+//              return error type can handle both storage_result::Error and pos_accounting::Error
+pub trait TransactionVerifierStorageRef: UtxosStorageRead + PoSAccountingView {
     fn get_token_id_from_issuance_tx(
         &self,
         tx_id: Id<Transaction>,
@@ -78,9 +85,16 @@ pub trait TransactionVerifierStorageRef: UtxosStorageRead {
         &self,
         token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError>;
+
+    fn get_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError>;
 }
 
-pub trait TransactionVerifierStorageMut: TransactionVerifierStorageRef + FlushableUtxoView {
+pub trait TransactionVerifierStorageMut:
+    TransactionVerifierStorageRef + FlushableUtxoView + FlushablePoSAccountingView
+{
     fn set_mainchain_tx_index(
         &mut self,
         tx_id: &OutPointSourceId,
@@ -114,13 +128,24 @@ pub trait TransactionVerifierStorageMut: TransactionVerifierStorageRef + Flushab
         issuance_tx_id: &Id<Transaction>,
     ) -> Result<(), TransactionVerifierStorageError>;
 
-    fn set_undo_data(
+    fn set_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &BlockUndo,
+        undo: &utxo::UtxosBlockUndo,
     ) -> Result<(), TransactionVerifierStorageError>;
 
-    fn del_undo_data(
+    fn del_utxo_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), TransactionVerifierStorageError>;
+
+    fn set_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+        undo: &AccountingBlockUndo,
+    ) -> Result<(), TransactionVerifierStorageError>;
+
+    fn del_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), TransactionVerifierStorageError>;
@@ -156,5 +181,12 @@ where
         token_id: &TokenId,
     ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError> {
         self.deref().get_token_aux_data(token_id)
+    }
+
+    fn get_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError> {
+        self.deref().get_accounting_undo(id)
     }
 }
