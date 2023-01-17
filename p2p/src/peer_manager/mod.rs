@@ -322,7 +322,7 @@ where
     /// not disturb the operation of `PeerManager`.
     ///
     /// If an error has ban score greater than zero, the peer score is updated and connection
-    /// to that peer is possibly closed if their scored crossed the ban threshold.
+    /// to that peer is possibly closed if their score crossed the ban threshold.
     ///
     /// # Arguments
     /// `peer_id` - peer ID of the remote peer, if available

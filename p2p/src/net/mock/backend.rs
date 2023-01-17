@@ -15,11 +15,7 @@
 
 //! Mock networking backend
 //!
-//! The backend is modeled after libp2p.
-//!
-//! The peers are required to have unique IDs which they self-assign to themselves
-//! and advertise via the `Hello` message. Until the peer ID has been received, the
-//! peers are distinguished by their socket addresses.
+//! Every connected peer gets unique ID (generated locally from a counter).
 
 use std::{
     collections::{BTreeSet, HashMap},
@@ -509,7 +505,7 @@ where
                     self.pending.remove(&outbound_peer_id).expect("peer must exist");
 
                 log::info!(
-                    "self-connection detect on address {:?}",
+                    "self-connection detected on address {:?}",
                     outbound_pending.address
                 );
 
