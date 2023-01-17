@@ -111,7 +111,7 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
     type Address = T::Address;
     type BannableAddress = T::BannableAddress;
     type PeerId = MockPeerId;
-    type SyncingPeerRequestId = MockRequestId;
+    type PeerRequestId = MockRequestId;
     type ConnectivityHandle = MockConnectivityHandle<Self, T>;
     type SyncingMessagingHandle = MockSyncingMessagingHandle<Self, T>;
 
@@ -164,11 +164,8 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
 #[async_trait]
 impl<S, T> ConnectivityService<S> for MockConnectivityHandle<S, T>
 where
-    S: NetworkingService<
-            Address = T::Address,
-            PeerId = MockPeerId,
-            SyncingPeerRequestId = MockRequestId,
-        > + Send,
+    S: NetworkingService<Address = T::Address, PeerId = MockPeerId, PeerRequestId = MockRequestId>
+        + Send,
     MockPeerInfo: TryInto<PeerInfo<S>, Error = P2pError>,
     T: TransportSocket,
 {
@@ -207,7 +204,7 @@ where
         &mut self,
         peer_id: S::PeerId,
         request: PeerManagerRequest,
-    ) -> crate::Result<S::SyncingPeerRequestId> {
+    ) -> crate::Result<S::PeerRequestId> {
         let request_id = MockRequestId::new();
 
         self.cmd_tx
@@ -223,7 +220,7 @@ where
 
     async fn send_response(
         &mut self,
-        request_id: S::SyncingPeerRequestId,
+        request_id: S::PeerRequestId,
         response: PeerManagerResponse,
     ) -> crate::Result<()> {
         self.cmd_tx
@@ -296,14 +293,14 @@ where
 #[async_trait]
 impl<S, T> SyncingMessagingService<S> for MockSyncingMessagingHandle<S, T>
 where
-    S: NetworkingService<PeerId = MockPeerId, SyncingPeerRequestId = MockRequestId> + Send,
+    S: NetworkingService<PeerId = MockPeerId, PeerRequestId = MockRequestId> + Send,
     T: TransportSocket,
 {
     async fn send_request(
         &mut self,
         peer_id: S::PeerId,
         request: SyncRequest,
-    ) -> crate::Result<S::SyncingPeerRequestId> {
+    ) -> crate::Result<S::PeerRequestId> {
         let request_id = MockRequestId::new();
 
         self.cmd_tx
@@ -319,7 +316,7 @@ where
 
     async fn send_response(
         &mut self,
-        request_id: S::SyncingPeerRequestId,
+        request_id: S::PeerRequestId,
         response: SyncResponse,
     ) -> crate::Result<()> {
         self.cmd_tx

@@ -325,7 +325,7 @@ where
     async fn handle_incoming_request(
         &mut self,
         _peer_id: T::PeerId,
-        request_id: T::SyncingPeerRequestId,
+        request_id: T::PeerRequestId,
         request: PeerManagerRequest,
     ) -> crate::Result<()> {
         match request {
@@ -346,7 +346,7 @@ where
     fn handle_incoming_response(
         &mut self,
         _peer_id: T::PeerId,
-        _request_id: T::SyncingPeerRequestId,
+        _request_id: T::PeerRequestId,
         response: PeerManagerResponse,
     ) -> crate::Result<()> {
         match response {

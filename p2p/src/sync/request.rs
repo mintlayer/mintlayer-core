@@ -34,7 +34,7 @@ impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::SyncingPeerRequestId: 'static,
+    T::PeerRequestId: 'static,
     T::PeerId: 'static,
 {
     /// Creates a blocks request message.
@@ -146,7 +146,7 @@ where
     /// * `headers` - headers that the remote requested
     pub async fn send_header_response(
         &mut self,
-        request_id: T::SyncingPeerRequestId,
+        request_id: T::PeerRequestId,
         headers: Vec<BlockHeader>,
     ) -> crate::Result<()> {
         log::trace!("send header response, request id {request_id:?}");
@@ -166,7 +166,7 @@ where
     /// * `headers` - headers that the remote requested
     pub async fn send_block_response(
         &mut self,
-        request_id: T::SyncingPeerRequestId,
+        request_id: T::PeerRequestId,
         blocks: Vec<Block>,
     ) -> crate::Result<()> {
         log::trace!("send block response, request id {request_id:?}");

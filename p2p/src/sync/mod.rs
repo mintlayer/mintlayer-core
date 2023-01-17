@@ -86,7 +86,7 @@ impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::SyncingPeerRequestId: 'static,
+    T::PeerRequestId: 'static,
     T::PeerId: 'static,
 {
     pub fn new(
@@ -147,7 +147,7 @@ where
     pub async fn process_header_request(
         &mut self,
         peer_id: T::PeerId,
-        request_id: T::SyncingPeerRequestId,
+        request_id: T::PeerRequestId,
         locator: Locator,
     ) -> crate::Result<()> {
         log::debug!("send header response to peer {peer_id}, request_id: {request_id:?}");
@@ -161,7 +161,7 @@ where
     pub async fn process_block_request(
         &mut self,
         peer_id: T::PeerId,
-        request_id: T::SyncingPeerRequestId,
+        request_id: T::PeerRequestId,
         headers: Vec<Id<Block>>,
     ) -> crate::Result<()> {
         ensure!(
@@ -328,7 +328,7 @@ where
     pub async fn process_response(
         &mut self,
         peer_id: T::PeerId,
-        request_id: T::SyncingPeerRequestId,
+        request_id: T::PeerRequestId,
         response: message::SyncResponse,
     ) -> crate::Result<()> {
         match response {

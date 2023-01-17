@@ -71,7 +71,7 @@ pub trait NetworkingService {
     type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString + FromStr;
 
     /// Unique ID assigned to each received request from a peer
-    type SyncingPeerRequestId: Copy + Debug + Eq + Hash + Send + Sync;
+    type PeerRequestId: Copy + Debug + Eq + Hash + Send + Sync;
 
     /// Handle for sending/receiving connectivity-related events
     type ConnectivityHandle: Send;
@@ -124,7 +124,7 @@ where
         &mut self,
         peer_id: T::PeerId,
         request: PeerManagerRequest,
-    ) -> crate::Result<T::SyncingPeerRequestId>;
+    ) -> crate::Result<T::PeerRequestId>;
 
     /// Send response to remote
     ///
@@ -133,7 +133,7 @@ where
     /// * `response` - Response to be sent
     async fn send_response(
         &mut self,
-        request_id: T::SyncingPeerRequestId,
+        request_id: T::PeerRequestId,
         response: PeerManagerResponse,
     ) -> crate::Result<()>;
 
@@ -167,7 +167,7 @@ where
         &mut self,
         peer_id: T::PeerId,
         request: SyncRequest,
-    ) -> crate::Result<T::SyncingPeerRequestId>;
+    ) -> crate::Result<T::PeerRequestId>;
 
     /// Send block/header response to remote
     ///
@@ -176,7 +176,7 @@ where
     /// * `response` - Response to be sent
     async fn send_response(
         &mut self,
-        request_id: T::SyncingPeerRequestId,
+        request_id: T::PeerRequestId,
         response: SyncResponse,
     ) -> crate::Result<()>;
 

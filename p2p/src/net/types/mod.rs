@@ -78,7 +78,7 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         peer_id: T::PeerId,
 
         /// Unique ID of the request
-        request_id: T::SyncingPeerRequestId,
+        request_id: T::PeerRequestId,
 
         /// Received request
         request: message::PeerManagerRequest,
@@ -89,7 +89,7 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         peer_id: T::PeerId,
 
         /// Unique ID of the request this message is a response to
-        request_id: T::SyncingPeerRequestId,
+        request_id: T::PeerRequestId,
 
         /// Received response
         response: message::PeerManagerResponse,
@@ -158,7 +158,7 @@ pub enum SyncingEvent<T: NetworkingService> {
         peer_id: T::PeerId,
 
         /// Unique ID of the request
-        request_id: T::SyncingPeerRequestId,
+        request_id: T::PeerRequestId,
 
         /// Received request
         request: message::SyncRequest,
@@ -169,7 +169,7 @@ pub enum SyncingEvent<T: NetworkingService> {
         peer_id: T::PeerId,
 
         /// Unique ID of the request this message is a response to
-        request_id: T::SyncingPeerRequestId,
+        request_id: T::PeerRequestId,
 
         /// Received response
         response: message::SyncResponse,
