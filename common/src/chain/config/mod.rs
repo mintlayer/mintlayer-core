@@ -36,6 +36,9 @@ use std::time::Duration;
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
 pub const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
+const DEFAULT_EPOCH_LENGTH: BlockDistance =
+    BlockDistance::new((5 * 24 * 60 * 60) / (DEFAULT_TARGET_BLOCK_SPACING.as_secs() as i64));
+const DEFAULT_SEALED_EPOCH_DISTANCE_FROM_TIP: usize = 2;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ChainType {
@@ -81,6 +84,8 @@ pub struct ChainConfig {
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
+    epoch_length: BlockDistance,
+    sealed_epoch_distance_from_tip: usize,
     token_min_issuance_fee: Amount,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
@@ -143,6 +148,14 @@ impl ChainConfig {
 
     pub fn max_future_block_time_offset(&self) -> &Duration {
         &self.max_future_block_time_offset
+    }
+
+    pub fn epoch_length(&self) -> BlockDistance {
+        self.epoch_length
+    }
+
+    pub fn sealed_epoch_distance_from_tip(&self) -> usize {
+        self.sealed_epoch_distance_from_tip
     }
 
     pub fn block_subsidy_at_height(&self, height: &BlockHeight) -> Amount {

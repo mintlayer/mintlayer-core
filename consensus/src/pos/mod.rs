@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 RBB S.r.l
+// Copyright (c) 2021 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,16 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A consensus related logic.
+use common::{chain::ChainConfig, primitives::BlockHeight};
 
-pub mod pos;
-pub mod pow;
-
-pub use crate::{
-    error::ConsensusVerificationError,
-    pow::ConsensusPoWError,
-    validator::{validate_consensus, TransactionIndexHandle},
-};
-
-mod error;
-mod validator;
+pub fn is_due_for_epoch_data_calculation(chain_config: &ChainConfig, height: BlockHeight) -> bool {
+    let height: u64 = height.into();
+    let epoch_length: i64 = chain_config.epoch_length().into();
+    let epoch_length: u64 =
+        epoch_length.try_into().expect("Epoch length negative. Invariant broken.");
+    height % epoch_length == 0
+}

@@ -33,7 +33,7 @@ use common::{
     time_getter::TimeGetterFn,
     Uint256,
 };
-use consensus::TransactionIndexHandle;
+use consensus::{pos::is_due_for_epoch_data_calculation, TransactionIndexHandle};
 use logging::log;
 use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
 use utils::{ensure, tap_error_log::LogError};
@@ -876,6 +876,18 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         Ok(prev_block_index)
     }
 
+    fn prepare_epoch_data(&mut self, height: BlockHeight) -> Result<(), BlockError> {
+        if is_due_for_epoch_data_calculation(self.chain_config, height) {
+            // TODO: calculate the data that has to go to the EpochData type and store it to database
+            // FIXME: store accounting data to sealed
+
+            //let mut db = PoSAccountingDB::<_, SealedStorageTag>::new(&mut self.db_tx);
+            //db.batch_write_delta(data)
+        }
+
+        Ok(())
+    }
+
     pub fn activate_best_chain(
         &mut self,
         new_block_index: BlockIndex,
@@ -890,6 +902,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
 
         if new_block_index.chain_trust() > current_best_block_index.chain_trust() {
             self.reorganize(&best_block_id, &new_block_index).log_err()?;
+            self.prepare_epoch_data(new_block_index.block_height())?;
             return Ok(Some(new_block_index));
         }
 
