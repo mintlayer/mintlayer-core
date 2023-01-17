@@ -45,6 +45,7 @@ use crate::{
         self, mock::transport::TransportAddress, types::Role, AsBannableAddress,
         ConnectivityService, NetworkingService,
     },
+    types::peer_address::PeerAddress,
 };
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
@@ -130,7 +131,10 @@ where
         address: T::Address,
         role: Role,
         info: net::types::PeerInfo<T>,
+        _receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
+        // TODO: Handle receiver_address
+
         let peer_id = info.peer_id;
 
         ensure!(
@@ -174,6 +178,7 @@ where
         &mut self,
         address: T::Address,
         info: net::types::PeerInfo<T>,
+        receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
         log::debug!("validate inbound connection, inbound address {address:?}");
 
@@ -196,7 +201,7 @@ where
             return Err(P2pError::PeerError(PeerError::TooManyPeers));
         }
 
-        self.accept_connection(address, Role::Inbound, info)
+        self.accept_connection(address, Role::Inbound, info, receiver_address)
     }
 
     /// Close connection to a remote peer
@@ -457,10 +462,10 @@ where
                         net::types::ConnectivityEvent::Response { peer_id, request_id, response } => {
                             self.handle_incoming_response(peer_id, request_id, response)?;
                         },
-                        net::types::ConnectivityEvent::InboundAccepted { address, peer_info } => {
+                        net::types::ConnectivityEvent::InboundAccepted { address, peer_info, receiver_address } => {
                             let peer_id = peer_info.peer_id;
 
-                            match self.accept_inbound_connection(address, peer_info) {
+                            match self.accept_inbound_connection(address, peer_info, receiver_address) {
                                 Ok(_) => {},
                                 Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
                                 Err(P2pError::PeerError(err)) => {
@@ -476,9 +481,9 @@ where
                                 }
                             }
                         }
-                        net::types::ConnectivityEvent::OutboundAccepted { address, peer_info } => {
+                        net::types::ConnectivityEvent::OutboundAccepted { address, peer_info, receiver_address } => {
                             let peer_id = peer_info.peer_id;
-                            let res = self.accept_connection(address.clone(), Role::Outbound, peer_info);
+                            let res = self.accept_connection(address.clone(), Role::Outbound, peer_info, receiver_address);
                             self.handle_result(Some(peer_id), res).await?;
 
                             match self.pending.remove(&address) {

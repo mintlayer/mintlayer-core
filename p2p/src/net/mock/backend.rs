@@ -49,10 +49,9 @@ use crate::{
                 MockRequestId, PeerEvent, SyncingEvent,
             },
         },
-        types::{PubSubTopic, Role},
+        types::PubSubTopic,
         Announcement,
     },
-    types::peer_address::PeerAddress,
 };
 
 use super::{peer::PeerRole, transport::TransportAddress, types::HandshakeNonce};
@@ -401,19 +400,6 @@ where
         }
     }
 
-    /// Handle received listening port from inbound remote peer
-    fn handle_own_receiver_address(
-        &mut self,
-        receiver_address: PeerAddress,
-        role: Role,
-    ) -> crate::Result<()> {
-        log::debug!("new own receiver address {receiver_address} found from {role:?} connection");
-
-        // TODO: Handle receiver address
-
-        Ok(())
-    }
-
     /// Create new peer
     ///
     /// Move the connection to `pending` where it stays until either the connection is closed
@@ -547,6 +533,7 @@ where
                                     agent: None,
                                     subscriptions: subscriptions.clone(),
                                 },
+                                receiver_address,
                             })
                             .await
                             .map_err(P2pError::from)?;
@@ -562,14 +549,11 @@ where
                                     agent: None,
                                     subscriptions: subscriptions.clone(),
                                 },
+                                receiver_address,
                             })
                             .await
                             .map_err(P2pError::from)?;
                     }
-                }
-
-                if let Some(receiver_address) = receiver_address {
-                    self.handle_own_receiver_address(receiver_address, peer_role.into())?;
                 }
 
                 self.peers.insert(peer_id, PeerContext { subscriptions, tx });

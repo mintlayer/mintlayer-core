@@ -18,7 +18,7 @@ use std::{collections::BTreeSet, fmt::Display};
 use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
 
-use crate::{message, NetworkingService, P2pError};
+use crate::{message, types::peer_address::PeerAddress, NetworkingService, P2pError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
@@ -101,6 +101,9 @@ pub enum ConnectivityEvent<T: NetworkingService> {
 
         /// Peer information
         peer_info: PeerInfo<T>,
+
+        /// Socket address of this node as seen by remote peer
+        receiver_address: Option<PeerAddress>,
     },
 
     /// Inbound connection received
@@ -110,6 +113,9 @@ pub enum ConnectivityEvent<T: NetworkingService> {
 
         /// Peer information
         peer_info: PeerInfo<T>,
+
+        /// Socket address of this node as seen by remote peer
+        receiver_address: Option<PeerAddress>,
     },
 
     /// Outbound connection failed

@@ -227,7 +227,10 @@ where
         &mut pm2.peer_connectivity_handle,
     )
     .await;
-    assert_eq!(pm2.accept_inbound_connection(address, peer_info), Ok(()));
+    assert_eq!(
+        pm2.accept_inbound_connection(address, peer_info, None),
+        Ok(())
+    );
 }
 
 #[tokio::test]
@@ -274,7 +277,7 @@ where
     .await;
 
     assert_eq!(
-        pm2.accept_inbound_connection(address, peer_info),
+        pm2.accept_inbound_connection(address, peer_info, None),
         Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
             [1, 2, 3, 4],
             *config::create_mainnet().magic_bytes(),

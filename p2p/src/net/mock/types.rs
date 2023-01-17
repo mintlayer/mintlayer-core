@@ -88,10 +88,12 @@ pub enum ConnectivityEvent<T: TransportSocket> {
     InboundAccepted {
         address: T::Address,
         peer_info: MockPeerInfo,
+        receiver_address: Option<PeerAddress>,
     },
     OutboundAccepted {
         address: T::Address,
         peer_info: MockPeerInfo,
+        receiver_address: Option<PeerAddress>,
     },
     ConnectionError {
         address: T::Address,

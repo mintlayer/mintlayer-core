@@ -259,18 +259,24 @@ where
                 request_id,
                 response,
             }),
-            types::ConnectivityEvent::InboundAccepted { address, peer_info } => {
-                Ok(ConnectivityEvent::InboundAccepted {
-                    address,
-                    peer_info: peer_info.try_into()?,
-                })
-            }
-            types::ConnectivityEvent::OutboundAccepted { address, peer_info } => {
-                Ok(ConnectivityEvent::OutboundAccepted {
-                    address,
-                    peer_info: peer_info.try_into()?,
-                })
-            }
+            types::ConnectivityEvent::InboundAccepted {
+                address,
+                peer_info,
+                receiver_address,
+            } => Ok(ConnectivityEvent::InboundAccepted {
+                address,
+                peer_info: peer_info.try_into()?,
+                receiver_address,
+            }),
+            types::ConnectivityEvent::OutboundAccepted {
+                address,
+                peer_info,
+                receiver_address,
+            } => Ok(ConnectivityEvent::OutboundAccepted {
+                address,
+                peer_info: peer_info.try_into()?,
+                receiver_address,
+            }),
             types::ConnectivityEvent::ConnectionError { address, error } => {
                 Ok(ConnectivityEvent::ConnectionError { address, error })
             }
@@ -418,8 +424,11 @@ mod tests {
         let addr = conn2.local_addresses().await.unwrap();
         assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
 
-        if let Ok(ConnectivityEvent::OutboundAccepted { address, peer_info }) =
-            conn1.poll_next().await
+        if let Ok(ConnectivityEvent::OutboundAccepted {
+            address,
+            peer_info,
+            receiver_address: _,
+        }) = conn1.poll_next().await
         {
             assert_eq!(address, conn2.local_addresses().await.unwrap()[0]);
             assert_eq!(&peer_info.magic_bytes, config.magic_bytes());
@@ -481,6 +490,7 @@ mod tests {
             ConnectivityEvent::InboundAccepted {
                 address: _,
                 peer_info,
+                receiver_address: _,
             } => {
                 assert_eq!(peer_info.magic_bytes, *config.magic_bytes());
                 assert_eq!(
@@ -542,6 +552,7 @@ mod tests {
             ConnectivityEvent::InboundAccepted {
                 address: _,
                 peer_info,
+                receiver_address: _,
             } => {
                 assert_eq!(conn2.disconnect(peer_info.peer_id).await, Ok(()));
             }
@@ -615,8 +626,11 @@ mod tests {
         // Check that we can still connect normally after
         let addr = conn2.local_addresses().await.unwrap();
         assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
-        if let Ok(ConnectivityEvent::OutboundAccepted { address, peer_info }) =
-            conn1.poll_next().await
+        if let Ok(ConnectivityEvent::OutboundAccepted {
+            address,
+            peer_info,
+            receiver_address: _,
+        }) = conn1.poll_next().await
         {
             assert_eq!(address, conn2.local_addresses().await.unwrap()[0]);
             assert_eq!(&peer_info.magic_bytes, config.magic_bytes());

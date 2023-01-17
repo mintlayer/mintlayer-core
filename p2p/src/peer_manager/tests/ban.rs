@@ -60,7 +60,7 @@ where
     )
     .await;
     let peer_id = peer_info.peer_id;
-    pm2.accept_inbound_connection(address, peer_info).unwrap();
+    pm2.accept_inbound_connection(address, peer_info, None).unwrap();
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
     let addr1 = pm1.peer_connectivity_handle.local_addresses().await.unwrap()[0]
@@ -114,7 +114,7 @@ where
     )
     .await;
     let peer_id = peer_info.peer_id;
-    pm2.accept_inbound_connection(address, peer_info).unwrap();
+    pm2.accept_inbound_connection(address, peer_info, None).unwrap();
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
     let addr1 = pm1.peer_connectivity_handle.local_addresses().await.unwrap()[0]
@@ -170,7 +170,7 @@ where
     )
     .await;
     let peer_id = peer_info1.peer_id;
-    pm2.accept_inbound_connection(address, peer_info1).unwrap();
+    pm2.accept_inbound_connection(address, peer_info1, None).unwrap();
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
     let addr1 = pm1.peer_connectivity_handle.local_addresses().await.unwrap()[0]
@@ -246,6 +246,7 @@ where
             agent: None,
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
+        None,
     );
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(!peer_manager.peerdb.is_active_peer(&peer_id));
@@ -261,6 +262,7 @@ where
             agent: None,
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
+        None,
     );
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(!peer_manager.peerdb.is_active_peer(&peer_id));
@@ -277,6 +279,7 @@ where
             agent: None,
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
+        None,
     );
     assert!(res.is_ok());
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
@@ -335,6 +338,7 @@ where
             agent: None,
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
+        None,
     );
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(!peer_manager.peerdb.is_active_peer(&peer_id));
@@ -349,6 +353,7 @@ where
             agent: None,
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
+        None,
     );
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(!peer_manager.peerdb.is_active_peer(&peer_id));
@@ -364,6 +369,7 @@ where
             agent: None,
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
+        None,
     );
     assert!(res.is_ok());
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
