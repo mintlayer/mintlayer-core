@@ -164,7 +164,11 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
 #[async_trait]
 impl<S, T> ConnectivityService<S> for MockConnectivityHandle<S, T>
 where
-    S: NetworkingService<Address = T::Address, PeerId = MockPeerId> + Send,
+    S: NetworkingService<
+            Address = T::Address,
+            PeerId = MockPeerId,
+            SyncingPeerRequestId = MockRequestId,
+        > + Send,
     MockPeerInfo: TryInto<PeerInfo<S>, Error = P2pError>,
     T: TransportSocket,
 {
@@ -199,20 +203,70 @@ where
         rx.await?
     }
 
+    async fn send_request(
+        &mut self,
+        peer_id: S::PeerId,
+        request: message::Request,
+    ) -> crate::Result<S::SyncingPeerRequestId> {
+        let request_id = MockRequestId::new();
+
+        self.cmd_tx
+            .send(types::Command::SendRequest {
+                peer_id,
+                request_id,
+                message: request,
+            })
+            .await?;
+
+        Ok(request_id)
+    }
+
+    async fn send_response(
+        &mut self,
+        request_id: S::SyncingPeerRequestId,
+        response: message::Response,
+    ) -> crate::Result<()> {
+        self.cmd_tx
+            .send(types::Command::SendResponse {
+                request_id,
+                message: response,
+            })
+            .await?;
+        Ok(())
+    }
+
     async fn local_addresses(&self) -> crate::Result<Vec<S::Address>> {
         Ok(self.local_addresses.clone())
     }
 
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<S>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::ConnectivityEvent::OutboundAccepted { address, peer_info } => {
-                Ok(ConnectivityEvent::OutboundAccepted {
+            types::ConnectivityEvent::Request {
+                peer_id,
+                request_id,
+                request,
+            } => Ok(ConnectivityEvent::Request {
+                peer_id,
+                request_id,
+                request,
+            }),
+            types::ConnectivityEvent::Response {
+                peer_id,
+                request_id,
+                response,
+            } => Ok(ConnectivityEvent::Response {
+                peer_id,
+                request_id,
+                response,
+            }),
+            types::ConnectivityEvent::InboundAccepted { address, peer_info } => {
+                Ok(ConnectivityEvent::InboundAccepted {
                     address,
                     peer_info: peer_info.try_into()?,
                 })
             }
-            types::ConnectivityEvent::InboundAccepted { address, peer_info } => {
-                Ok(ConnectivityEvent::InboundAccepted {
+            types::ConnectivityEvent::OutboundAccepted { address, peer_info } => {
+                Ok(ConnectivityEvent::OutboundAccepted {
                     address,
                     peer_info: peer_info.try_into()?,
                 })
@@ -227,9 +281,7 @@ where
                 Ok(ConnectivityEvent::Misbehaved { peer_id, error })
             }
             types::ConnectivityEvent::AddressDiscovered { address } => {
-                Ok(ConnectivityEvent::AddressDiscovered {
-                    addresses: vec![address],
-                })
+                Ok(ConnectivityEvent::AddressDiscovered { address })
             }
         }
     }

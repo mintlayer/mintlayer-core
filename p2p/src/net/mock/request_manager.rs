@@ -105,6 +105,7 @@ impl RequestManager {
     ///
     /// The request ID is stored into a temporary storage holding all pending
     /// inbound requests.
+    // TODO: Use different type in result so it's not possible to mixup ephemeral and real request ids.
     pub fn register_request(
         &mut self,
         peer_id: &types::MockPeerId,

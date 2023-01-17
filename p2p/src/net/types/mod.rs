@@ -72,6 +72,28 @@ impl<T: NetworkingService> Display for PeerInfo<T> {
 /// Connectivity-related events received from the network
 #[derive(Debug)]
 pub enum ConnectivityEvent<T: NetworkingService> {
+    /// An incoming request.
+    Request {
+        /// Unique ID of the sender
+        peer_id: T::PeerId,
+
+        /// Unique ID of the request
+        request_id: T::SyncingPeerRequestId,
+
+        /// Received request
+        request: message::PeerManagerRequest,
+    },
+    /// An incoming response.
+    Response {
+        /// Unique ID of the sender
+        peer_id: T::PeerId,
+
+        /// Unique ID of the request this message is a response to
+        request_id: T::SyncingPeerRequestId,
+
+        /// Received response
+        response: message::PeerManagerResponse,
+    },
     /// Outbound connection accepted
     OutboundAccepted {
         /// Peer address
@@ -105,10 +127,10 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         peer_id: T::PeerId,
     },
 
-    /// One or more peers discovered
+    /// New peer discovered
     AddressDiscovered {
         /// Address information
-        addresses: Vec<T::Address>,
+        address: T::Address,
     },
 
     /// Protocol violation

@@ -75,6 +75,16 @@ pub enum SyncingEvent {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConnectivityEvent<T: TransportSocket> {
+    Request {
+        peer_id: MockPeerId,
+        request_id: MockRequestId,
+        request: message::PeerManagerRequest,
+    },
+    Response {
+        peer_id: MockPeerId,
+        request_id: MockRequestId,
+        response: message::PeerManagerResponse,
+    },
     InboundAccepted {
         address: T::Address,
         peer_info: MockPeerInfo,

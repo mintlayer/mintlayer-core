@@ -38,7 +38,7 @@ use serialization::{Decode, Encode};
 use crate::{
     config::P2pConfig,
     error::{DialError, P2pError, PeerError, PublishError},
-    message::{self, SyncRequest, SyncResponse},
+    message::{self, PeerManagerRequest, PeerManagerResponse, SyncRequest, SyncResponse},
     net::{
         mock::{
             constants::ANNOUNCEMENT_MAX_SIZE,
@@ -269,46 +269,37 @@ where
     ) -> crate::Result<()> {
         log::trace!("request received from peer {peer_id}, request id {request_id}");
 
-        match request {
-            message::Request::HeaderListRequest(request) => {
-                self.handle_incoming_sync_request(
-                    peer_id,
-                    request_id,
-                    SyncRequest::HeaderListRequest(request),
-                )
-                .await
-            }
-            message::Request::BlockListRequest(request) => {
-                self.handle_incoming_sync_request(
-                    peer_id,
-                    request_id,
-                    SyncRequest::BlockListRequest(request),
-                )
-                .await
-            }
-            message::Request::AddrListRequest(_request) => {
-                // TODO(PR): Handle request
-                Ok(())
-            }
-        }
-    }
-
-    async fn handle_incoming_sync_request(
-        &mut self,
-        peer_id: MockPeerId,
-        request_id: MockRequestId,
-        request: message::SyncRequest,
-    ) -> crate::Result<()> {
         let request_id = self.request_mgr.register_request(&peer_id, &request_id)?;
 
-        self.sync_tx
-            .send(SyncingEvent::Request {
-                peer_id,
-                request_id,
-                request,
-            })
-            .await
-            .map_err(P2pError::from)
+        match request {
+            message::Request::HeaderListRequest(request) => self
+                .sync_tx
+                .send(SyncingEvent::Request {
+                    peer_id,
+                    request_id,
+                    request: SyncRequest::HeaderListRequest(request),
+                })
+                .await
+                .map_err(P2pError::from),
+            message::Request::BlockListRequest(request) => self
+                .sync_tx
+                .send(SyncingEvent::Request {
+                    peer_id,
+                    request_id,
+                    request: SyncRequest::BlockListRequest(request),
+                })
+                .await
+                .map_err(P2pError::from),
+            message::Request::AddrListRequest(request) => self
+                .conn_tx
+                .send(ConnectivityEvent::Request {
+                    peer_id,
+                    request_id,
+                    request: PeerManagerRequest::AddrListRequest(request),
+                })
+                .await
+                .map_err(P2pError::from),
+        }
     }
 
     /// Handle incoming response
@@ -321,43 +312,34 @@ where
         log::trace!("response received from peer {peer_id}, request id {request_id}");
 
         match response {
-            message::Response::HeaderListResponse(response) => {
-                self.handle_incoming_sync_response(
+            message::Response::HeaderListResponse(response) => self
+                .sync_tx
+                .send(SyncingEvent::Response {
                     peer_id,
                     request_id,
-                    SyncResponse::HeaderListResponse(response),
-                )
+                    response: SyncResponse::HeaderListResponse(response),
+                })
                 .await
-            }
-            message::Response::BlockListResponse(response) => {
-                self.handle_incoming_sync_response(
+                .map_err(P2pError::from),
+            message::Response::BlockListResponse(response) => self
+                .sync_tx
+                .send(SyncingEvent::Response {
                     peer_id,
                     request_id,
-                    SyncResponse::BlockListResponse(response),
-                )
+                    response: SyncResponse::BlockListResponse(response),
+                })
                 .await
-            }
-            message::Response::AddrListResponse(_response) => {
-                // TODO(PR): Handle received addresses
-                Ok(())
-            }
+                .map_err(P2pError::from),
+            message::Response::AddrListResponse(response) => self
+                .conn_tx
+                .send(ConnectivityEvent::Response {
+                    peer_id,
+                    request_id,
+                    response: PeerManagerResponse::AddrListResponse(response),
+                })
+                .await
+                .map_err(P2pError::from),
         }
-    }
-
-    async fn handle_incoming_sync_response(
-        &mut self,
-        peer_id: MockPeerId,
-        request_id: MockRequestId,
-        response: message::SyncResponse,
-    ) -> crate::Result<()> {
-        self.sync_tx
-            .send(SyncingEvent::Response {
-                peer_id,
-                request_id,
-                response,
-            })
-            .await
-            .map_err(P2pError::from)
     }
 
     async fn handle_announcement(

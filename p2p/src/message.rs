@@ -79,6 +79,11 @@ pub enum SyncRequest {
     BlockListRequest(BlockListRequest),
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum PeerManagerRequest {
+    AddrListRequest(AddrListRequest),
+}
+
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub struct HeaderListResponse {
     headers: Vec<BlockHeader>,
@@ -136,6 +141,11 @@ pub enum Response {
 pub enum SyncResponse {
     HeaderListResponse(HeaderListResponse),
     BlockListResponse(BlockListResponse),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum PeerManagerResponse {
+    AddrListResponse(AddrListResponse),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]

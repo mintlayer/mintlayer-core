@@ -108,6 +108,28 @@ where
     /// `peer_id` - Peer ID of the remote node
     async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()>;
 
+    /// Send PeerManager's request to remote
+    ///
+    /// # Arguments
+    /// * `peer_id` - Unique ID of the peer the request is sent to
+    /// * `request` - Request to be sent
+    async fn send_request(
+        &mut self,
+        peer_id: T::PeerId,
+        request: message::Request,
+    ) -> crate::Result<T::SyncingPeerRequestId>;
+
+    /// Send response to remote
+    ///
+    /// # Arguments
+    /// * `request_id` - ID of the request this is a response to
+    /// * `message` - Response to be sent
+    async fn send_response(
+        &mut self,
+        request_id: T::SyncingPeerRequestId,
+        response: message::Response,
+    ) -> crate::Result<()>;
+
     /// Return the socket address of the network service provider
     ///
     /// If the address isn't available yet, `None` is returned

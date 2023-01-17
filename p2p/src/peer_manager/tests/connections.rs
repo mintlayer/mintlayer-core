@@ -105,7 +105,7 @@ where
     });
 
     // "discover" the other networking service
-    pm1.peer_discovered(&[addr]);
+    pm1.peer_discovered(&addr);
     pm1.heartbeat().await.unwrap();
 
     assert_eq!(pm1.pending.len(), 1);
