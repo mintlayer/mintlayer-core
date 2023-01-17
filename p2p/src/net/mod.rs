@@ -27,6 +27,8 @@ use async_trait::async_trait;
 
 use crate::{config, message, message::Announcement};
 
+use self::mock::transport::TransportAddress;
+
 /// [NetworkingService] provides the low-level network interface
 /// that each network service provider must implement
 #[async_trait]
@@ -52,6 +54,7 @@ pub trait NetworkingService {
         + Sync
         + ToString
         + FromStr
+        + TransportAddress
         + AsBannableAddress<BannableAddress = Self::BannableAddress>;
 
     /// An address type that can be banned.
@@ -123,7 +126,7 @@ where
     ///
     /// # Arguments
     /// * `request_id` - ID of the request this is a response to
-    /// * `message` - Response to be sent
+    /// * `response` - Response to be sent
     async fn send_response(
         &mut self,
         request_id: T::SyncingPeerRequestId,
@@ -166,7 +169,7 @@ where
     ///
     /// # Arguments
     /// * `request_id` - ID of the request this is a response to
-    /// * `message` - Response to be sent
+    /// * `response` - Response to be sent
     async fn send_response(
         &mut self,
         request_id: T::SyncingPeerRequestId,

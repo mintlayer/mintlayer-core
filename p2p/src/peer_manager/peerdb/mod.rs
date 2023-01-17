@@ -38,9 +38,11 @@ use crate::{
     error::{ConversionError, P2pError},
     interface::types::ConnectedPeer,
     net::{
+        mock::transport::TransportAddress,
         types::{self, Role},
         AsBannableAddress, NetworkingService,
     },
+    types::peer_address::PeerAddress,
 };
 
 #[derive(Debug)]
@@ -130,6 +132,10 @@ impl<T: NetworkingService> PeerDb<T> {
     /// Checks if the given address is already connected.
     pub fn is_address_connected(&self, address: &T::Address) -> bool {
         self.addresses.contains(address)
+    }
+
+    pub fn known_addresses(&self) -> Vec<PeerAddress> {
+        self.addresses.iter().map(TransportAddress::as_peer_address).collect()
     }
 
     /// Checks if the given address is banned.

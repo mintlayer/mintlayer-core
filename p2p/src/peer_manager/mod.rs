@@ -40,8 +40,13 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
-    message::{PeerManagerRequest, PeerManagerResponse},
-    net::{self, types::Role, AsBannableAddress, ConnectivityService, NetworkingService},
+    message::{
+        AddrListRequest, AddrListResponse, PeerManagerRequest, PeerManagerResponse, Response,
+    },
+    net::{
+        self, mock::transport::TransportAddress, types::Role, AsBannableAddress,
+        ConnectivityService, NetworkingService,
+    },
 };
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
@@ -317,21 +322,41 @@ where
     async fn handle_incoming_request(
         &mut self,
         _peer_id: T::PeerId,
-        _request_id: T::SyncingPeerRequestId,
-        _request: PeerManagerRequest,
+        request_id: T::SyncingPeerRequestId,
+        request: PeerManagerRequest,
     ) -> crate::Result<()> {
-        // TODO(PR): Handle this
-        Ok(())
+        match request {
+            // TODO: Rework this
+            PeerManagerRequest::AddrListRequest(AddrListRequest {}) => {
+                let addresses = self.peerdb.known_addresses();
+
+                self.peer_connectivity_handle
+                    .send_response(
+                        request_id,
+                        Response::AddrListResponse(AddrListResponse::new(addresses)),
+                    )
+                    .await
+            }
+        }
     }
 
-    async fn handle_incoming_response(
+    fn handle_incoming_response(
         &mut self,
         _peer_id: T::PeerId,
         _request_id: T::SyncingPeerRequestId,
-        _response: PeerManagerResponse,
+        response: PeerManagerResponse,
     ) -> crate::Result<()> {
-        // TODO(PR): Handle this
-        Ok(())
+        match response {
+            // TODO: Rework this
+            PeerManagerResponse::AddrListResponse(response) => {
+                for address in response.addresses() {
+                    if let Some(address) = TransportAddress::from_peer_address(address) {
+                        self.peerdb.peer_discovered(&address);
+                    }
+                }
+                Ok(())
+            }
+        }
     }
 
     /// Handle the result of a control/network event
@@ -432,7 +457,7 @@ where
                             self.handle_incoming_request(peer_id, request_id, request).await?;
                         },
                         net::types::ConnectivityEvent::Response { peer_id, request_id, response } => {
-                            self.handle_incoming_response(peer_id, request_id, response).await?;
+                            self.handle_incoming_response(peer_id, request_id, response)?;
                         },
                         net::types::ConnectivityEvent::InboundAccepted { address, peer_info } => {
                             let peer_id = peer_info.peer_id;

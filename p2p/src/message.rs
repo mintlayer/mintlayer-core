@@ -127,6 +127,16 @@ pub struct AddrListResponse {
     addresses: Vec<PeerAddress>,
 }
 
+impl AddrListResponse {
+    pub fn new(addresses: Vec<PeerAddress>) -> Self {
+        Self { addresses }
+    }
+
+    pub fn addresses(&self) -> &Vec<PeerAddress> {
+        &self.addresses
+    }
+}
+
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Response {
     #[codec(index = 0)]
