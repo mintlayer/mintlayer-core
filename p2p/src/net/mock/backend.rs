@@ -586,8 +586,8 @@ where
     }
 
     async fn handle_command(&mut self, command: Command<T>) -> crate::Result<()> {
-        // All handlings are separated to two parts:
-        // - "Slow", potentially blocking part (can't take reference to self because they are run concurrently).
+        // All handlings are separated to two parts, fast and slow:
+        // - "Slow", potentially blocking part (can't take reference to '&mut self' because they are run concurrently).
         // - "Fast", non-blocking part (take mutable reference to self because they are run sequentially).
         // Because the second part depends on result of the first part boxed closures are used.
         // So the first future will return a closure that takes a reference to self and returns one more future.
