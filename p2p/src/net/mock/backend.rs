@@ -115,8 +115,9 @@ pub struct Backend<T: TransportSocket> {
     /// Request manager for managing inbound/outbound requests and responses
     request_mgr: request_manager::RequestManager,
 
-    /// List of "slow" async tasks that might block event loop (for example outbound connection attempts)
-    blocking_tasks: FuturesUnordered<BlockingTask<T>>,
+    /// List of incoming commands to the backend; we put them in a queue
+    /// to make receiving commands can run concurrently with other backend operations
+    command_queue: FuturesUnordered<BackendTask<T>>,
 }
 
 impl<T> Backend<T>
@@ -147,7 +148,7 @@ where
             pending: HashMap::new(),
             peer_chan: mpsc::channel(64),
             request_mgr: request_manager::RequestManager::new(),
-            blocking_tasks: FuturesUnordered::new(),
+            command_queue: FuturesUnordered::new(),
         }
     }
 
@@ -359,7 +360,7 @@ where
                 command = self.cmd_rx.recv() => {
                     self.handle_command(command.ok_or(P2pError::ChannelClosed)?).await?;
                 },
-                callback = self.blocking_tasks.select_next_some(), if !self.blocking_tasks.is_empty() => {
+                callback = self.command_queue.select_next_some(), if !self.command_queue.is_empty() => {
                     callback(self).await?;
                 },
             }
@@ -586,12 +587,12 @@ where
 
     async fn handle_command(&mut self, command: Command<T>) -> crate::Result<()> {
         // All handlings are separated to two parts:
-        // - "Slow", potentialy blocking part (can't take reference to self because they are run concurrently).
+        // - "Slow", potentially blocking part (can't take reference to self because they are run concurrently).
         // - "Fast", non-blocking part (take mutable reference to self because they are run sequentially).
         // Because the second part depends on result of the first part boxed closures are used.
         // So the first future will return a closure that takes a reference to self and returns one more future.
 
-        let blocking_task: BlockingTask<T> = match command {
+        let backend_task: BackendTask<T> = match command {
             Command::Connect { address, response } => {
                 // For now we always respond with success
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
@@ -664,7 +665,7 @@ where
             .boxed(),
         };
 
-        self.blocking_tasks.push(blocking_task);
+        self.command_queue.push(backend_task);
 
         Ok(())
     }
@@ -672,14 +673,14 @@ where
 
 // Some boilerplate types and a function for blocking tasks handling
 
-type BlockingTask<T> = BoxFuture<'static, NonBlockingTaskCallback<T>>;
+type BackendTask<T> = BoxFuture<'static, BackendTaskCallback<T>>;
 
-type NonBlockingTaskCallback<T> = Box<dyn FnOnce(&mut Backend<T>) -> NonBlockingTask + Send>;
+type BackendTaskCallback<T> = Box<dyn FnOnce(&mut Backend<T>) -> BackendTaskFut + Send>;
 
-type NonBlockingTask<'a> = BoxFuture<'a, crate::Result<()>>;
+type BackendTaskFut<'a> = BoxFuture<'a, crate::Result<()>>;
 
-fn boxed_cb<T: TransportSocket, F: FnOnce(&mut Backend<T>) -> NonBlockingTask + Send + 'static>(
+fn boxed_cb<T: TransportSocket, F: FnOnce(&mut Backend<T>) -> BackendTaskFut + Send + 'static>(
     f: F,
-) -> NonBlockingTaskCallback<T> {
+) -> BackendTaskCallback<T> {
     Box::new(f)
 }
