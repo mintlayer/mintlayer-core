@@ -52,6 +52,6 @@ pub trait TransportSocket: Send + Sync + 'static {
     /// Creates a new listener bound to the specified address.
     async fn bind(&self, address: Vec<Self::Address>) -> Result<Self::Listener>;
 
-    /// Open a connection to the given address.
+    /// Returns a future that opens a connection to the given address.
     fn connect(&self, address: Self::Address) -> BoxFuture<'static, crate::Result<Self::Stream>>;
 }
