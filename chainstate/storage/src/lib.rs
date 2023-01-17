@@ -31,7 +31,10 @@ use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::{Block, GenBlock, OutPointSourceId};
 use common::primitives::{BlockHeight, Id};
-use pos_accounting::{AccountingBlockUndo, PoSAccountingStorageRead, PoSAccountingStorageWrite};
+use pos_accounting::{
+    AccountingBlockUndo, PoSAccountingDeltaData, PoSAccountingStorageRead,
+    PoSAccountingStorageWrite,
+};
 use utxo::{UtxosStorageRead, UtxosStorageWrite};
 
 /// Possibly failing result of blockchain storage query
@@ -95,6 +98,11 @@ pub trait BlockchainStorageRead:
 
     /// Get accounting undo for specific block
     fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
+
+    fn get_pre_sealed_accounting_delta(
+        &self,
+        epoch_index: u64,
+    ) -> crate::Result<Option<PoSAccountingDeltaData>>;
 }
 
 /// Modifying operations on persistent blockchain data
@@ -171,6 +179,14 @@ pub trait BlockchainStorageWrite:
 
     // Remove accounting block undo data for specific block
     fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+
+    fn set_pre_sealed_accounting_delta(
+        &mut self,
+        epoch_index: u64,
+        delta: &PoSAccountingDeltaData,
+    ) -> crate::Result<()>;
+
+    fn del_pre_sealed_accounting_delta(&mut self, epoch_index: u64) -> crate::Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction

@@ -174,6 +174,14 @@ impl ChainConfig {
         self.max_block_size_with_smart_contracts
     }
 
+    #[must_use]
+    pub fn epoch_index_from_height(&self, height: &BlockHeight) -> u64 {
+        let height: u64 = (*height).into();
+        let epoch_length: i64 = self.epoch_length.into();
+        let epoch_length: u64 = epoch_length.try_into().expect("Invalid negative epoch length");
+        height % epoch_length
+    }
+
     pub fn token_min_issuance_fee(&self) -> Amount {
         self.token_min_issuance_fee
     }

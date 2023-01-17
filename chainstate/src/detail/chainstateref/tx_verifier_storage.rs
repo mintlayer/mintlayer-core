@@ -35,7 +35,8 @@ use common::{
 };
 use pos_accounting::{
     AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, FlushablePoSAccountingView,
-    PoSAccountingDeltaData, PoSAccountingStorageRead, PoSAccountingView, PoolData, PoolId,
+    PoSAccountingDB, PoSAccountingDeltaData, PoSAccountingStorageRead, PoSAccountingView, PoolData,
+    PoolId,
 };
 use tx_verifier::transaction_verifier::TransactionSource;
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosDB, UtxosStorageRead};

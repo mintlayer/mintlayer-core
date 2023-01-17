@@ -170,6 +170,32 @@ pub struct TransactionVerifierDelta {
     accounting_delta_undo: BTreeMap<TransactionSource, AccountingBlockUndoEntry>,
 }
 
+impl TransactionVerifierDelta {
+    pub fn tx_index_cache(&self) -> &BTreeMap<OutPointSourceId, CachedInputsOperation> {
+        &self.tx_index_cache
+    }
+
+    pub fn utxo_cache(&self) -> &ConsumedUtxoCache {
+        &self.utxo_cache
+    }
+
+    pub fn utxo_block_undo(&self) -> &BTreeMap<TransactionSource, UtxosBlockUndoEntry> {
+        &self.utxo_block_undo
+    }
+
+    pub fn token_issuance_cache(&self) -> &ConsumedTokenIssuanceCache {
+        &self.token_issuance_cache
+    }
+
+    pub fn accounting_delta(&self) -> &PoSAccountingDeltaData {
+        &self.accounting_delta
+    }
+
+    pub fn accounting_delta_undo(&self) -> &BTreeMap<TransactionSource, AccountingBlockUndoEntry> {
+        &self.accounting_delta_undo
+    }
+}
+
 /// The tool used to verify transaction and cache their updated states in memory
 pub struct TransactionVerifier<C, S, U, A> {
     chain_config: C,

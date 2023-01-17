@@ -15,7 +15,9 @@
 
 use std::{collections::BTreeSet, convert::TryInto};
 
-use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
+use chainstate_storage::{
+    BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TransactionRw,
+};
 use chainstate_types::{
     block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, GenBlockIndex,
     GetAncestorError, PropertyQueryError,
@@ -35,7 +37,11 @@ use common::{
 };
 use consensus::{pos::is_due_for_epoch_data_calculation, TransactionIndexHandle};
 use logging::log;
-use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
+use pos_accounting::{FlushablePoSAccountingView, PoSAccountingDB};
+use tx_verifier::transaction_verifier::{
+    config::TransactionVerifierConfig, storage::TransactionVerifierStorageError,
+    TransactionVerifier, TransactionVerifierDelta,
+};
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosDB, UtxosView};
 
@@ -769,6 +775,24 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         Ok(())
     }
 
+    fn flush_to_storage(
+        &mut self,
+        consumed_data: TransactionVerifierDelta,
+        block_height: BlockHeight,
+    ) -> Result<(), BlockError> {
+        let epoch_index = self.chain_config.epoch_index_from_height(&block_height);
+        if let Some(delta) = self.db_tx.get_pre_sealed_accounting_delta(epoch_index)? {
+            let mut epoch_accounting_delta = consumed_data.accounting_delta().clone();
+            epoch_accounting_delta
+                .merge_with_delta(delta)
+                .map_err(TransactionVerifierStorageError::from)?;
+            self.db_tx
+                .set_pre_sealed_accounting_delta(epoch_index, &epoch_accounting_delta)?;
+        }
+
+        flush_to_storage(self, consumed_data).map_err(BlockError::from)
+    }
+
     fn connect_transactions(
         &mut self,
         block_index: &BlockIndex,
@@ -790,8 +814,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
             )
             .log_err()?;
 
-        let consumed = connected_txs.consume()?;
-        flush_to_storage(self, consumed)?;
+        self.flush_to_storage(connected_txs.consume()?, block_index.block_height())?;
 
         Ok(())
     }
@@ -808,6 +831,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
             block,
         )?;
         let cached_inputs = cached_inputs.consume()?;
+        // FIXME: remove from presealed storage
         flush_to_storage(self, cached_inputs)?;
 
         Ok(())
@@ -878,11 +902,21 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
 
     fn prepare_epoch_data(&mut self, height: BlockHeight) -> Result<(), BlockError> {
         if is_due_for_epoch_data_calculation(self.chain_config, height) {
-            // TODO: calculate the data that has to go to the EpochData type and store it to database
-            // FIXME: store accounting data to sealed
+            let current_epoch_index = self.chain_config.epoch_index_from_height(&height);
+            if current_epoch_index > self.chain_config.sealed_epoch_distance_from_tip() as u64 {
+                let sealed_epoch_index =
+                    current_epoch_index - self.chain_config.sealed_epoch_distance_from_tip() as u64;
 
-            //let mut db = PoSAccountingDB::<_, SealedStorageTag>::new(&mut self.db_tx);
-            //db.batch_write_delta(data)
+                // get data from intermediary storage
+                let delta_to_seal =
+                    self.db_tx.get_pre_sealed_accounting_delta(sealed_epoch_index)?.unwrap();
+                self.db_tx.del_pre_sealed_accounting_delta(sealed_epoch_index)?;
+
+                // flush indermediary data to sealed storage
+                let mut db = PoSAccountingDB::<_, SealedStorageTag>::new(&mut self.db_tx);
+                db.batch_write_delta(delta_to_seal)
+                    .map_err(TransactionVerifierStorageError::from)?;
+            }
         }
 
         Ok(())

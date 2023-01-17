@@ -783,7 +783,7 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
         };
 
         assert_eq!(
-            storage.read_accounting_data().unwrap(),
+            storage.read_accounting_data_from_tip().unwrap(),
             expected_storage_data
         );
     });
