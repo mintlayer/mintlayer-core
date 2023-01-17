@@ -146,7 +146,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let added_nodes = options.p2p_add_node.clone().or(added_nodes);
     let ban_threshold = options.p2p_ban_threshold.or(ban_threshold);
     let outbound_connection_timeout =
-        options.p2p_outbound_connection_timeout.or(outbound_connection_timeout.into());
+        options.p2p_outbound_connection_timeout.or(outbound_connection_timeout);
     let node_type = options.node_type.or(node_type);
 
     P2pConfigFile {
