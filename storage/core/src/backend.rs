@@ -15,6 +15,8 @@
 
 //! Low-level interface implemented by storage backends.
 
+use utils::shallow_clone::ShallowClone;
+
 pub use crate::{
     info::{DbDesc, DbIndex},
     Data,
@@ -76,8 +78,12 @@ pub trait TransactionalRw<'tx> {
 }
 
 /// Storage backend internal implementation type
-pub trait BackendImpl:
-    'static + for<'tx> TransactionalRo<'tx> + for<'tx> TransactionalRw<'tx> + Send + Sync + Clone
+pub trait BackendImpl
+where
+    Self: 'static + Send + Sync,
+    Self: for<'tx> TransactionalRo<'tx>,
+    Self: for<'tx> TransactionalRw<'tx>,
+    Self: ShallowClone,
 {
 }
 
