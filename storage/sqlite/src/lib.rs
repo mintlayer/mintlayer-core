@@ -18,6 +18,7 @@ mod error;
 use rusqlite::{Connection, OpenFlags, Transaction};
 use std::marker::PhantomData;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use storage_core::error::Fatal;
 use storage_core::{
@@ -46,11 +47,18 @@ pub struct PrefixIter<'tx, C> {
 
     /// Prefix to iterate over
     prefix: Data,
+
+    // TODO remove
+    _phantom: PhantomData<&'tx ()>,
 }
 
 impl<'tx, C> PrefixIter<'tx, C> {
     fn new(iter: C, prefix: Data) -> Self {
-        PrefixIter { iter, prefix }
+        PrefixIter {
+            iter,
+            prefix,
+            _phantom: PhantomData,
+        }
     }
 }
 
@@ -126,16 +134,17 @@ impl backend::TxRw for DbTx<'_, '_> {
 }
 
 #[derive(Clone)]
-pub struct SqliteImpl {
+pub struct SqliteImpl<'conn> {
     /// Handle to an Sqlite database connection
-    connection: Arc<Connection>,
+    connection: Arc<Mutex<Connection>>,
     // /// List of open databases
     // dbs: DbList,
+    _phantom: PhantomData<&'conn ()>,
 }
 
-impl SqliteImpl {
+impl<'conn> SqliteImpl<'conn> {
     /// Start a transaction using the low-level method provided
-    fn start_transaction<'a, 'conn>(
+    fn start_transaction<'a>(
         &'a self,
         start_tx: impl FnOnce(&'a ()) -> Result<Transaction<'conn>, rusqlite::Error>,
     ) -> storage_core::Result<DbTx<'a, 'conn>> {
@@ -150,7 +159,9 @@ impl SqliteImpl {
     }
 }
 
-impl<'tx, 'conn> TransactionalRo<'tx> for SqliteImpl {
+// impl<'tx, 'conn> TransactionalRo<'tx> for SqliteImpl<'conn> {
+//     type TxRo = DbTx<'tx, 'conn>;
+impl<'tx, 'conn> TransactionalRo<'tx> for SqliteImpl<'conn> {
     type TxRo = DbTx<'tx, 'conn>;
 
     fn transaction_ro<'st: 'tx>(&'st self) -> storage_core::Result<Self::TxRo> {
@@ -159,7 +170,7 @@ impl<'tx, 'conn> TransactionalRo<'tx> for SqliteImpl {
     }
 }
 
-impl<'tx, 'conn> TransactionalRw<'tx> for SqliteImpl {
+impl<'tx, 'conn> TransactionalRw<'tx> for SqliteImpl<'conn> {
     type TxRw = DbTx<'tx, 'conn>;
 
     fn transaction_rw<'st: 'tx>(&'st self) -> storage_core::Result<Self::TxRw> {
@@ -168,7 +179,8 @@ impl<'tx, 'conn> TransactionalRw<'tx> for SqliteImpl {
     }
 }
 
-impl backend::BackendImpl for SqliteImpl {}
+impl<'conn: 'static> backend::BackendImpl for SqliteImpl<'conn> {}
+// impl backend::BackendImpl for SqliteImpl<'_> {}
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Sqlite {
@@ -190,9 +202,9 @@ impl Sqlite {
         ]);
 
         // // TODO change error
-        Connection::open_with_flags(self.path, flags)
-            .map_err(|err| Fatal::InternalError(err.to_string()))
-            .into()
+        let connection = Connection::open_with_flags(self.path, flags)
+            .map_err(|err| Fatal::InternalError(err.to_string()))?;
+        Ok(connection)
 
         // let flags = lmdb::DatabaseFlags::default();
         // env.create_db(name, flags).or_else(error::process_with_err)
@@ -200,7 +212,7 @@ impl Sqlite {
 }
 
 impl backend::Backend for Sqlite {
-    type Impl = SqliteImpl;
+    type Impl<'conn> = SqliteImpl<'conn>;
 
     fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
         // Attempt to create the storage directory
@@ -224,10 +236,11 @@ impl backend::Backend for Sqlite {
         let connection = self.open_db()?;
 
         Ok(SqliteImpl {
-            connection: Arc::new(connection),
+            connection: Arc::new(Mutex::new(connection)),
             // dbs,
             // map_token: Arc::new(RwLock::new(remap::MemMapController::new())),
             // tx_size: self.tx_size,
+            _phantom: Default::default(),
         })
     }
 }
