@@ -31,7 +31,7 @@ use serialization::Encode;
 use crate::{
     config,
     error::{P2pError, PublishError},
-    message,
+    message::{self, PeerManagerRequest, PeerManagerResponse, SyncRequest, SyncResponse},
     net::{
         mock::{
             constants::ANNOUNCEMENT_MAX_SIZE,
@@ -206,7 +206,7 @@ where
     async fn send_request(
         &mut self,
         peer_id: S::PeerId,
-        request: message::Request,
+        request: PeerManagerRequest,
     ) -> crate::Result<S::SyncingPeerRequestId> {
         let request_id = MockRequestId::new();
 
@@ -214,7 +214,7 @@ where
             .send(types::Command::SendRequest {
                 peer_id,
                 request_id,
-                message: request,
+                message: request.into(),
             })
             .await?;
 
@@ -224,12 +224,12 @@ where
     async fn send_response(
         &mut self,
         request_id: S::SyncingPeerRequestId,
-        response: message::Response,
+        response: PeerManagerResponse,
     ) -> crate::Result<()> {
         self.cmd_tx
             .send(types::Command::SendResponse {
                 request_id,
-                message: response,
+                message: response.into(),
             })
             .await?;
         Ok(())
@@ -296,7 +296,7 @@ where
     async fn send_request(
         &mut self,
         peer_id: S::PeerId,
-        request: message::Request,
+        request: SyncRequest,
     ) -> crate::Result<S::SyncingPeerRequestId> {
         let request_id = MockRequestId::new();
 
@@ -304,7 +304,7 @@ where
             .send(types::Command::SendRequest {
                 peer_id,
                 request_id,
-                message: request,
+                message: request.into(),
             })
             .await?;
 
@@ -314,12 +314,12 @@ where
     async fn send_response(
         &mut self,
         request_id: S::SyncingPeerRequestId,
-        response: message::Response,
+        response: SyncResponse,
     ) -> crate::Result<()> {
         self.cmd_tx
             .send(types::Command::SendResponse {
                 request_id,
-                message: response,
+                message: response.into(),
             })
             .await?;
         Ok(())

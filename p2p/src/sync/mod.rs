@@ -40,7 +40,7 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
-    message::{self, Announcement},
+    message::{self, Announcement, SyncRequest},
     net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
 };
 
@@ -127,7 +127,7 @@ where
 
         self.send_request(
             peer_id,
-            message::Request::HeaderListRequest(message::HeaderListRequest::new(locator.clone())),
+            SyncRequest::HeaderListRequest(message::HeaderListRequest::new(locator.clone())),
         )
         .await
         .map(|_| {

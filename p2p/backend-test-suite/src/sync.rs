@@ -32,10 +32,7 @@ use p2p::{
     config::P2pConfig,
     error::P2pError,
     event::{PeerManagerEvent, SyncControlEvent},
-    message::{
-        BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response, SyncRequest,
-        SyncResponse,
-    },
+    message::{BlockListRequest, BlockListResponse, HeaderListResponse, SyncRequest, SyncResponse},
     net::{
         types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
@@ -164,7 +161,7 @@ where
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::HeaderListResponse(HeaderListResponse::new(headers)),
+                        SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
                     )
                     .await
                     .unwrap()
@@ -185,7 +182,7 @@ where
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::BlockListResponse(BlockListResponse::new(blocks)),
+                        SyncResponse::BlockListResponse(BlockListResponse::new(blocks)),
                     )
                     .await
                     .unwrap();
@@ -261,7 +258,7 @@ where
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::HeaderListResponse(HeaderListResponse::new(headers)),
+                        SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
                     )
                     .await
                     .unwrap()
@@ -283,7 +280,7 @@ where
                     mgr2.handle_mut()
                         .send_request(
                             peer_id,
-                            Request::BlockListRequest(BlockListRequest::new(vec![header])),
+                            SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
                         )
                         .await
                         .unwrap();
@@ -308,7 +305,7 @@ where
                 mgr2.handle_mut()
                     .send_request(
                         peer_id,
-                        Request::BlockListRequest(BlockListRequest::new(vec![header])),
+                        SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
                     )
                     .await
                     .unwrap();
@@ -386,7 +383,7 @@ where
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::HeaderListResponse(HeaderListResponse::new(headers)),
+                        SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
                     )
                     .await
                     .unwrap()
@@ -407,7 +404,7 @@ where
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::BlockListResponse(BlockListResponse::new(blocks)),
+                        SyncResponse::BlockListResponse(BlockListResponse::new(blocks)),
                     )
                     .await
                     .unwrap();
@@ -429,7 +426,7 @@ where
                     mgr2.handle_mut()
                         .send_request(
                             peer_id,
-                            Request::BlockListRequest(BlockListRequest::new(vec![header])),
+                            SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
                         )
                         .await
                         .unwrap();
@@ -450,7 +447,7 @@ where
                 mgr2.handle_mut()
                     .send_request(
                         peer_id,
-                        Request::BlockListRequest(BlockListRequest::new(vec![header])),
+                        SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
                     )
                     .await
                     .unwrap();
@@ -530,7 +527,7 @@ where
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::HeaderListResponse(HeaderListResponse::new(headers)),
+                        SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
                     )
                     .await
                     .unwrap()
@@ -551,7 +548,7 @@ where
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::BlockListResponse(BlockListResponse::new(blocks)),
+                        SyncResponse::BlockListResponse(BlockListResponse::new(blocks)),
                     )
                     .await
                     .unwrap();
@@ -573,7 +570,7 @@ where
                     mgr2.handle_mut()
                         .send_request(
                             peer_id,
-                            Request::BlockListRequest(BlockListRequest::new(vec![header])),
+                            SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
                         )
                         .await
                         .unwrap();
@@ -594,7 +591,7 @@ where
                 mgr2.handle_mut()
                     .send_request(
                         peer_id,
-                        Request::BlockListRequest(BlockListRequest::new(vec![header])),
+                        SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
                     )
                     .await
                     .unwrap();
@@ -688,7 +685,7 @@ where
                     .await
                     .unwrap()
                     .unwrap();
-                let msg = Response::HeaderListResponse(HeaderListResponse::new(headers));
+                let msg = SyncResponse::HeaderListResponse(HeaderListResponse::new(headers));
 
                 if dest_peer_id == peer_info21.peer_id {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap()
@@ -703,7 +700,7 @@ where
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let msg = Response::BlockListResponse(BlockListResponse::new(vec![mgr_handle
+                let msg = SyncResponse::BlockListResponse(BlockListResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
@@ -827,7 +824,7 @@ where
                     .await
                     .unwrap()
                     .unwrap();
-                let msg = Response::HeaderListResponse(HeaderListResponse::new(headers));
+                let msg = SyncResponse::HeaderListResponse(HeaderListResponse::new(headers));
 
                 if dest_peer_id == peer_info21.peer_id {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap()
@@ -842,7 +839,7 @@ where
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let msg = Response::BlockListResponse(BlockListResponse::new(vec![mgr_handle
+                let msg = SyncResponse::BlockListResponse(BlockListResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
@@ -964,7 +961,7 @@ where
                     .await
                     .unwrap()
                     .unwrap();
-                let msg = Response::HeaderListResponse(HeaderListResponse::new(headers));
+                let msg = SyncResponse::HeaderListResponse(HeaderListResponse::new(headers));
 
                 if dest_peer_id == peer_info21.peer_id {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap()
@@ -989,7 +986,7 @@ where
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let msg = Response::BlockListResponse(BlockListResponse::new(vec![mgr_handle
+                let msg = SyncResponse::BlockListResponse(BlockListResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
@@ -1107,7 +1104,7 @@ where
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::HeaderListResponse(HeaderListResponse::new(headers)),
+                        SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
                     )
                     .await
                     .unwrap()
@@ -1128,7 +1125,7 @@ where
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::BlockListResponse(BlockListResponse::new(blocks)),
+                        SyncResponse::BlockListResponse(BlockListResponse::new(blocks)),
                     )
                     .await
                     .unwrap();
@@ -1276,7 +1273,7 @@ where
             mgr.handle_mut()
                 .send_response(
                     request_id,
-                    Response::HeaderListResponse(HeaderListResponse::new(headers)),
+                    SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
                 )
                 .await
         }

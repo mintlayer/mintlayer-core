@@ -25,7 +25,7 @@ use utils::ensure;
 
 use crate::{
     error::{P2pError, PeerError},
-    message,
+    message::{self, SyncRequest, SyncResponse},
     sync::{peer::PeerSyncState, BlockSyncManager},
     NetworkingService, SyncingMessagingService,
 };
@@ -38,36 +38,36 @@ where
     T::PeerId: 'static,
 {
     /// Creates a blocks request message.
-    pub fn make_block_request(&self, block_ids: Vec<Id<Block>>) -> message::Request {
-        message::Request::BlockListRequest(message::BlockListRequest::new(block_ids))
+    pub fn make_block_request(&self, block_ids: Vec<Id<Block>>) -> SyncRequest {
+        SyncRequest::BlockListRequest(message::BlockListRequest::new(block_ids))
     }
 
     /// Creates a headers request message with the given locator.
-    pub fn make_header_request(&self, locator: Locator) -> message::Request {
-        message::Request::HeaderListRequest(message::HeaderListRequest::new(locator))
+    pub fn make_header_request(&self, locator: Locator) -> SyncRequest {
+        SyncRequest::HeaderListRequest(message::HeaderListRequest::new(locator))
     }
 
     /// Make header response
     ///
     /// # Arguments
     /// * `headers` - the headers that were requested
-    pub fn make_header_response(&self, headers: Vec<BlockHeader>) -> message::Response {
-        message::Response::HeaderListResponse(message::HeaderListResponse::new(headers))
+    pub fn make_header_response(&self, headers: Vec<BlockHeader>) -> SyncResponse {
+        SyncResponse::HeaderListResponse(message::HeaderListResponse::new(headers))
     }
 
     /// Make block response
     ///
     /// # Arguments
     /// * `blocks` - the blocks that were requested
-    pub fn make_block_response(&self, blocks: Vec<Block>) -> message::Response {
-        message::Response::BlockListResponse(message::BlockListResponse::new(blocks))
+    pub fn make_block_response(&self, blocks: Vec<Block>) -> SyncResponse {
+        SyncResponse::BlockListResponse(message::BlockListResponse::new(blocks))
     }
 
     /// Sends a request to the given peer.
     pub async fn send_request(
         &mut self,
         peer_id: T::PeerId,
-        request: message::Request,
+        request: SyncRequest,
     ) -> crate::Result<()> {
         self.peer_sync_handle.send_request(peer_id, request).await.map(|_| ())
     }

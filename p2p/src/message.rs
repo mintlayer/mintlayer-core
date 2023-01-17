@@ -73,13 +73,13 @@ pub enum Request {
     AddrListRequest(AddrListRequest),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SyncRequest {
     HeaderListRequest(HeaderListRequest),
     BlockListRequest(BlockListRequest),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PeerManagerRequest {
     AddrListRequest(AddrListRequest),
 }
@@ -147,13 +147,13 @@ pub enum Response {
     AddrListResponse(AddrListResponse),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SyncResponse {
     HeaderListResponse(HeaderListResponse),
     BlockListResponse(BlockListResponse),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PeerManagerResponse {
     AddrListResponse(AddrListResponse),
 }
@@ -162,4 +162,38 @@ pub enum PeerManagerResponse {
 pub enum Announcement {
     #[codec(index = 0)]
     Block(Block),
+}
+
+impl From<PeerManagerRequest> for Request {
+    fn from(request: PeerManagerRequest) -> Self {
+        match request {
+            PeerManagerRequest::AddrListRequest(request) => Request::AddrListRequest(request),
+        }
+    }
+}
+
+impl From<PeerManagerResponse> for Response {
+    fn from(response: PeerManagerResponse) -> Self {
+        match response {
+            PeerManagerResponse::AddrListResponse(response) => Response::AddrListResponse(response),
+        }
+    }
+}
+
+impl From<SyncRequest> for Request {
+    fn from(request: SyncRequest) -> Self {
+        match request {
+            SyncRequest::HeaderListRequest(request) => Request::HeaderListRequest(request),
+            SyncRequest::BlockListRequest(request) => Request::BlockListRequest(request),
+        }
+    }
+}
+
+impl From<SyncResponse> for Response {
+    fn from(response: SyncResponse) -> Self {
+        match response {
+            SyncResponse::HeaderListResponse(response) => Response::HeaderListResponse(response),
+            SyncResponse::BlockListResponse(response) => Response::BlockListResponse(response),
+        }
+    }
 }

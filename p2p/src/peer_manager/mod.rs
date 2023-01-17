@@ -40,9 +40,7 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
-    message::{
-        AddrListRequest, AddrListResponse, PeerManagerRequest, PeerManagerResponse, Response,
-    },
+    message::{AddrListRequest, AddrListResponse, PeerManagerRequest, PeerManagerResponse},
     net::{
         self, mock::transport::TransportAddress, types::Role, AsBannableAddress,
         ConnectivityService, NetworkingService,
@@ -333,7 +331,7 @@ where
                 self.peer_connectivity_handle
                     .send_response(
                         request_id,
-                        Response::AddrListResponse(AddrListResponse::new(addresses)),
+                        PeerManagerResponse::AddrListResponse(AddrListResponse::new(addresses)),
                     )
                     .await
             }

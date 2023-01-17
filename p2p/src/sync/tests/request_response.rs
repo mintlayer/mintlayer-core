@@ -20,7 +20,7 @@ use tokio::time::timeout;
 use chainstate::Locator;
 
 use crate::{
-    message::{HeaderListRequest, HeaderListResponse, Request, Response, SyncRequest},
+    message::{HeaderListRequest, HeaderListResponse, SyncRequest, SyncResponse},
     net::{
         mock::{
             transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
@@ -54,7 +54,7 @@ where
     mgr1.peer_sync_handle
         .send_request(
             peer_info2.peer_id,
-            Request::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
+            SyncRequest::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .await
         .unwrap();
@@ -73,7 +73,7 @@ where
         mgr2.peer_sync_handle
             .send_response(
                 request_id,
-                Response::HeaderListResponse(HeaderListResponse::new(vec![])),
+                SyncResponse::HeaderListResponse(HeaderListResponse::new(vec![])),
             )
             .await
             .unwrap();
@@ -120,7 +120,7 @@ where
         .peer_sync_handle
         .send_request(
             peer_info2.peer_id,
-            Request::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
+            SyncRequest::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .await
         .unwrap();
@@ -130,7 +130,7 @@ where
         .peer_sync_handle
         .send_request(
             peer_info2.peer_id,
-            Request::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
+            SyncRequest::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .await
         .unwrap();
@@ -145,7 +145,7 @@ where
                     mgr2.peer_sync_handle
                         .send_response(
                             request_id,
-                            Response::HeaderListResponse(HeaderListResponse::new(vec![])),
+                            SyncResponse::HeaderListResponse(HeaderListResponse::new(vec![])),
                         )
                         .await
                         .unwrap();

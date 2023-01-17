@@ -25,7 +25,11 @@ use std::{
 
 use async_trait::async_trait;
 
-use crate::{config, message, message::Announcement};
+use crate::{
+    config,
+    message::{Announcement, PeerManagerRequest},
+    message::{PeerManagerResponse, SyncRequest, SyncResponse},
+};
 
 use self::mock::transport::TransportAddress;
 
@@ -119,7 +123,7 @@ where
     async fn send_request(
         &mut self,
         peer_id: T::PeerId,
-        request: message::Request,
+        request: PeerManagerRequest,
     ) -> crate::Result<T::SyncingPeerRequestId>;
 
     /// Send response to remote
@@ -130,7 +134,7 @@ where
     async fn send_response(
         &mut self,
         request_id: T::SyncingPeerRequestId,
-        response: message::Response,
+        response: PeerManagerResponse,
     ) -> crate::Result<()>;
 
     /// Return the socket address of the network service provider
@@ -162,7 +166,7 @@ where
     async fn send_request(
         &mut self,
         peer_id: T::PeerId,
-        request: message::Request,
+        request: SyncRequest,
     ) -> crate::Result<T::SyncingPeerRequestId>;
 
     /// Send block/header response to remote
@@ -173,7 +177,7 @@ where
     async fn send_response(
         &mut self,
         request_id: T::SyncingPeerRequestId,
-        response: message::Response,
+        response: SyncResponse,
     ) -> crate::Result<()>;
 
     /// Publishes an announcement on the network.

@@ -20,7 +20,7 @@ use tokio::sync::mpsc;
 use p2p::{
     config::P2pConfig,
     event::PeerManagerEvent,
-    message::{Announcement, HeaderListResponse, Response, SyncRequest},
+    message::{Announcement, HeaderListResponse, SyncRequest, SyncResponse},
     net::{types::SyncingEvent, ConnectivityService, NetworkingService, SyncingMessagingService},
     sync::BlockSyncManager,
     testing_utils::{connect_services, TestTransportMaker},
@@ -96,7 +96,7 @@ where
         sync2
             .send_response(
                 request_id,
-                Response::HeaderListResponse(HeaderListResponse::new(Vec::new())),
+                SyncResponse::HeaderListResponse(HeaderListResponse::new(Vec::new())),
             )
             .await
             .unwrap();
