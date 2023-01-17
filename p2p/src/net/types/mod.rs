@@ -106,7 +106,7 @@ pub enum ConnectivityEvent<T: NetworkingService> {
     },
 
     /// One or more peers discovered
-    Discovered {
+    AddressDiscovered {
         /// Address information
         addresses: Vec<T::Address>,
     },

@@ -447,7 +447,7 @@ where
                             let res = self.handle_outbound_error(address, error);
                             self.handle_result(None, res).await?;
                         }
-                        net::types::ConnectivityEvent::Discovered { addresses } => {
+                        net::types::ConnectivityEvent::AddressDiscovered { addresses } => {
                             self.peer_discovered(&addresses);
                         }
                         net::types::ConnectivityEvent::Misbehaved { peer_id, error } => {

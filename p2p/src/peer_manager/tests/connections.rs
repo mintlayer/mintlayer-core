@@ -383,7 +383,10 @@ where
     tokio::spawn(async move { pm1.run().await });
 
     let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
-        !std::matches!(event, Ok(net::types::ConnectivityEvent::Discovered { .. }))
+        !std::matches!(
+            event,
+            Ok(net::types::ConnectivityEvent::AddressDiscovered { .. })
+        )
     })
     .await;
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) = event {

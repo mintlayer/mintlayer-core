@@ -68,7 +68,10 @@ where
         .as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
     let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
-        !std::matches!(event, Ok(net::types::ConnectivityEvent::Discovered { .. }))
+        !std::matches!(
+            event,
+            Ok(net::types::ConnectivityEvent::AddressDiscovered { .. })
+        )
     })
     .await;
     assert!(std::matches!(
@@ -119,7 +122,10 @@ where
         .as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
     let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
-        !std::matches!(event, Ok(net::types::ConnectivityEvent::Discovered { .. }))
+        !std::matches!(
+            event,
+            Ok(net::types::ConnectivityEvent::AddressDiscovered { .. })
+        )
     })
     .await;
     assert!(std::matches!(
@@ -172,7 +178,10 @@ where
         .as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
     let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
-        !std::matches!(event, Ok(net::types::ConnectivityEvent::Discovered { .. }))
+        !std::matches!(
+            event,
+            Ok(net::types::ConnectivityEvent::AddressDiscovered { .. })
+        )
     })
     .await;
     assert!(matches!(
@@ -425,7 +434,10 @@ where
     tokio::spawn(async move { pm1.run().await });
 
     let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
-        !std::matches!(event, Ok(net::types::ConnectivityEvent::Discovered { .. }))
+        !std::matches!(
+            event,
+            Ok(net::types::ConnectivityEvent::AddressDiscovered { .. })
+        )
     })
     .await;
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) = event {

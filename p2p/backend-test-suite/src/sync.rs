@@ -1067,7 +1067,7 @@ where
     assert_eq!(conn1.disconnect(peer_info2.peer_id).await, Ok(()));
 
     let event = filter_connectivity_event::<S, _>(&mut conn2, |event| {
-        !std::matches!(event, Ok(ConnectivityEvent::Discovered { .. }))
+        !std::matches!(event, Ok(ConnectivityEvent::AddressDiscovered { .. }))
     })
     .await;
     assert!(std::matches!(

@@ -227,7 +227,7 @@ where
                 Ok(ConnectivityEvent::Misbehaved { peer_id, error })
             }
             types::ConnectivityEvent::AddressDiscovered { address } => {
-                Ok(ConnectivityEvent::Discovered {
+                Ok(ConnectivityEvent::AddressDiscovered {
                     addresses: vec![address],
                 })
             }
