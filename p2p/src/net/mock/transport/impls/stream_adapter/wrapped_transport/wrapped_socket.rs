@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use async_trait::async_trait;
+use futures::future::BoxFuture;
 
 use crate::net::{
     mock::transport::{impls::stream_adapter::traits::StreamAdapter, TransportSocket},
@@ -58,9 +59,13 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
         Ok(AdaptedListener::new(stream_adapter, listener))
     }
 
-    async fn connect(&self, address: Self::Address) -> Result<Self::Stream> {
-        let base = self.base_transport.connect(address).await?;
-        let stream = self.stream_adapter.handshake(base, Role::Outbound).await?;
-        Ok(stream)
+    fn connect(&self, address: Self::Address) -> BoxFuture<'static, crate::Result<Self::Stream>> {
+        let base = self.base_transport.connect(address);
+        let stream_adapter = self.stream_adapter.clone();
+        Box::pin(async move {
+            let base = base.await?;
+            let stream = stream_adapter.handshake(base, Role::Outbound).await?;
+            Ok(stream)
+        })
     }
 }

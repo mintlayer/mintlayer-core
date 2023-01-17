@@ -591,15 +591,11 @@ mod tests {
         self_connect::<TestTransportTcp, TcpTransportSocket>().await;
     }
 
-    // Test fails because of event loop blocking in Backend::connect
-    #[ignore]
     #[tokio::test]
     async fn self_connect_channels() {
         self_connect::<TestTransportChannel, MockChannelTransport>().await;
     }
 
-    // Test fails because of event loop blocking in Backend::connect
-    #[ignore]
     #[tokio::test]
     async fn self_connect_noise() {
         self_connect::<TestTransportNoise, NoiseTcpTransport>().await;

@@ -27,11 +27,12 @@ use std::{
     time::Duration,
 };
 
-use futures::{future::join_all, TryFutureExt};
-use tokio::{
-    sync::{mpsc, oneshot},
-    time::timeout,
+use futures::{
+    future::{join_all, BoxFuture},
+    stream::FuturesUnordered,
+    FutureExt, StreamExt, TryFutureExt,
 };
+use tokio::{sync::mpsc, time::timeout};
 
 use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
@@ -113,6 +114,10 @@ pub struct Backend<T: TransportSocket> {
 
     /// Request manager for managing inbound/outbound requests and responses
     request_mgr: request_manager::RequestManager,
+
+    /// List of incoming commands to the backend; we put them in a queue
+    /// to make receiving commands can run concurrently with other backend operations
+    command_queue: FuturesUnordered<BackendTask<T>>,
 }
 
 impl<T> Backend<T>
@@ -143,50 +148,38 @@ where
             pending: HashMap::new(),
             peer_chan: mpsc::channel(64),
             request_mgr: request_manager::RequestManager::new(),
+            command_queue: FuturesUnordered::new(),
         }
     }
 
-    /// Try to establish connection with a remote peer
-    async fn connect(
+    /// Handle connection result to a remote peer
+    async fn handle_connect_res(
         &mut self,
         address: T::Address,
-        response: oneshot::Sender<crate::Result<()>>,
+        connection_res: crate::Result<T::Stream>,
     ) -> crate::Result<()> {
-        // For now we always respond with success
-        response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
+        match connection_res {
+            Ok(socket) => {
+                let handshake_nonce = make_pseudo_rng().gen();
 
-        match timeout(self.timeout, self.transport.connect(address.clone())).await {
-            Ok(event) => match event {
-                Ok(socket) => {
-                    let handshake_nonce = make_pseudo_rng().gen();
-
-                    self.create_peer(
-                        socket,
-                        MockPeerId::new(),
-                        PeerRole::Outbound { handshake_nonce },
-                        address,
-                    )
-                }
-                Err(err) => {
-                    log::error!("Failed to establish connection: {err}");
-
-                    self.conn_tx
-                        .send(ConnectivityEvent::ConnectionError {
-                            address,
-                            error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
-                        })
-                        .await
-                        .map_err(P2pError::from)
-                }
-            },
-            Err(_err) => self
-                .conn_tx
-                .send(ConnectivityEvent::ConnectionError {
+                self.create_peer(
+                    socket,
+                    MockPeerId::new(),
+                    PeerRole::Outbound { handshake_nonce },
                     address,
-                    error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
-                })
-                .await
-                .map_err(P2pError::from),
+                )
+            }
+            Err(err) => {
+                log::error!("Failed to establish connection: {err}");
+
+                self.conn_tx
+                    .send(ConnectivityEvent::ConnectionError {
+                        address,
+                        error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
+                    })
+                    .await
+                    .map_err(P2pError::from)
+            }
         }
     }
 
@@ -365,15 +358,11 @@ where
                 },
                 // Handle commands.
                 command = self.cmd_rx.recv() => {
-                    // TODO: commands running here will block, which means (maybe) these commands in the
-                    //       below function should be short-lived. The issue is that connect/disconnect
-                    //       functions are part of the handling and they could take a relatively long time
-                    //       we should try to figure out how to handle this problem. Maybe we need a separate
-                    //       pipeline for commands that are slow, or maybe everything here should go into a new
-                    //       task (which sounds excessive).
-                    //       Once fixed enable self_connect_channels and self_connect_noise tests.
                     self.handle_command(command.ok_or(P2pError::ChannelClosed)?).await?;
-                }
+                },
+                callback = self.command_queue.select_next_some(), if !self.command_queue.is_empty() => {
+                    callback(self).await?;
+                },
             }
         }
     }
@@ -597,39 +586,101 @@ where
     }
 
     async fn handle_command(&mut self, command: Command<T>) -> crate::Result<()> {
-        match command {
+        // All handlings are separated to two parts, fast and slow:
+        // - "Slow", potentially blocking part (can't take reference to '&mut self' because they are run concurrently).
+        // - "Fast", non-blocking part (take mutable reference to self because they are run sequentially).
+        // Because the second part depends on result of the first part boxed closures are used.
+        // So the first future will return a closure that takes a reference to self and returns one more future.
+
+        let backend_task: BackendTask<T> = match command {
             Command::Connect { address, response } => {
-                self.connect(address, response).await?;
+                // For now we always respond with success
+                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
+
+                let connection_fut = timeout(self.timeout, self.transport.connect(address.clone()));
+
+                async move {
+                    let connection_res = connection_fut.await.unwrap_or(Err(P2pError::DialError(
+                        DialError::ConnectionRefusedOrTimedOut,
+                    )));
+
+                    boxed_cb(move |this| {
+                        async move { this.handle_connect_res(address, connection_res).await }
+                            .boxed()
+                    })
+                }
+                .boxed()
             }
-            Command::Disconnect { peer_id, response } => {
-                let res = self.disconnect_peer(&peer_id).await;
-                response.send(res).map_err(|_| P2pError::ChannelClosed)?
+            Command::Disconnect { peer_id, response } => async move {
+                boxed_cb(move |this: &mut Self| {
+                    async move {
+                        let res = this.disconnect_peer(&peer_id).await;
+                        response.send(res).map_err(|_| P2pError::ChannelClosed)
+                    }
+                    .boxed()
+                })
             }
+            .boxed(),
             Command::SendRequest {
                 peer_id,
                 message,
                 response,
-            } => {
-                let res = self.send_request(peer_id, message).await;
-                response.send(res).map_err(|_| P2pError::ChannelClosed)?;
+            } => async move {
+                boxed_cb(move |this| {
+                    async move {
+                        let res = this.send_request(peer_id, message).await;
+                        response.send(res).map_err(|_| P2pError::ChannelClosed)
+                    }
+                    .boxed()
+                })
             }
+            .boxed(),
             Command::SendResponse {
                 request_id,
                 message,
                 response,
-            } => {
-                let res = self.send_response(request_id, message).await;
-                response.send(res).map_err(|_| P2pError::ChannelClosed)?;
+            } => async move {
+                boxed_cb(move |this| {
+                    async move {
+                        let res = this.send_response(request_id, message).await;
+                        response.send(res).map_err(|_| P2pError::ChannelClosed)
+                    }
+                    .boxed()
+                })
             }
+            .boxed(),
             Command::AnnounceData {
                 topic,
                 message,
                 response,
-            } => {
-                let res = self.announce_data(topic, message).await;
-                response.send(res).map_err(|_| P2pError::ChannelClosed)?;
+            } => async move {
+                boxed_cb(move |this| {
+                    async move {
+                        let res = this.announce_data(topic, message).await;
+                        response.send(res).map_err(|_| P2pError::ChannelClosed)
+                    }
+                    .boxed()
+                })
             }
-        }
+            .boxed(),
+        };
+
+        self.command_queue.push(backend_task);
+
         Ok(())
     }
+}
+
+// Some boilerplate types and a function for blocking tasks handling
+
+type BackendTask<T> = BoxFuture<'static, BackendTaskCallback<T>>;
+
+type BackendTaskCallback<T> = Box<dyn FnOnce(&mut Backend<T>) -> BackendTaskFut + Send>;
+
+type BackendTaskFut<'a> = BoxFuture<'a, crate::Result<()>>;
+
+fn boxed_cb<T: TransportSocket, F: FnOnce(&mut Backend<T>) -> BackendTaskFut + Send + 'static>(
+    f: F,
+) -> BackendTaskCallback<T> {
+    Box::new(f)
 }
