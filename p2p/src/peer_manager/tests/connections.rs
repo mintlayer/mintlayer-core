@@ -478,7 +478,7 @@ where
     pm1.peer_connectivity_handle.connect(addr2).await.expect("dial to succeed");
 
     match timeout(
-        Duration::from_secs(*pm1._p2p_config.outbound_connection_timeout),
+        *pm1._p2p_config.outbound_connection_timeout,
         pm1.peer_connectivity_handle.poll_next(),
     )
     .await
@@ -563,12 +563,7 @@ async fn connection_timeout_rpc_notified<T>(
     let (rtx, rrx) = oneshot::channel();
     tx.send(PeerManagerEvent::Connect(addr2, rtx)).unwrap();
 
-    match timeout(
-        Duration::from_secs(*p2p_config.outbound_connection_timeout),
-        rrx,
-    )
-    .await
-    {
+    match timeout(*p2p_config.outbound_connection_timeout, rrx).await {
         Ok(res) => assert!(std::matches!(
             res.unwrap(),
             Err(P2pError::DialError(DialError::ConnectionRefusedOrTimedOut))

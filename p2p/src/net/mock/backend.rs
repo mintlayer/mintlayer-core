@@ -24,7 +24,6 @@
 use std::{
     collections::{BTreeSet, HashMap},
     sync::Arc,
-    time::Duration,
 };
 
 use futures::{
@@ -109,9 +108,6 @@ pub struct Backend<T: TransportSocket> {
     /// TX channel for sending syncing events
     sync_tx: mpsc::Sender<SyncingEvent>,
 
-    /// Timeout for outbound operations
-    timeout: Duration,
-
     /// Request manager for managing inbound/outbound requests and responses
     request_mgr: request_manager::RequestManager,
 
@@ -133,7 +129,6 @@ where
         cmd_rx: mpsc::Receiver<Command<T>>,
         conn_tx: mpsc::Sender<ConnectivityEvent<T>>,
         sync_tx: mpsc::Sender<SyncingEvent>,
-        timeout: Duration,
     ) -> Self {
         Self {
             transport,
@@ -143,7 +138,6 @@ where
             chain_config,
             p2p_config,
             sync_tx,
-            timeout,
             peers: HashMap::new(),
             pending: HashMap::new(),
             peer_chan: mpsc::channel(64),
@@ -597,7 +591,10 @@ where
                 // For now we always respond with success
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
 
-                let connection_fut = timeout(self.timeout, self.transport.connect(address.clone()));
+                let connection_fut = timeout(
+                    *self.p2p_config.outbound_connection_timeout,
+                    self.transport.connect(address.clone()),
+                );
 
                 async move {
                     let connection_res = connection_fut.await.unwrap_or(Err(P2pError::DialError(

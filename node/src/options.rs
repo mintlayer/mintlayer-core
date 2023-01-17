@@ -15,7 +15,7 @@
 
 //! The node command line options.
 
-use std::{ffi::OsString, fs, net::SocketAddr, path::PathBuf};
+use std::{ffi::OsString, fs, net::SocketAddr, num::NonZeroU64, path::PathBuf};
 
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
@@ -93,7 +93,7 @@ pub struct RunOptions {
 
     /// The p2p timeout value in seconds.
     #[clap(long)]
-    pub p2p_outbound_connection_timeout: Option<u64>,
+    pub p2p_outbound_connection_timeout: Option<NonZeroU64>,
 
     /// A maximum tip age in seconds.
     ///

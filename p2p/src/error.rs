@@ -65,15 +65,6 @@ pub enum PublishError {
     TransformFailed,
 }
 
-/// PubSub errors for subscriptions
-#[derive(Error, Debug, PartialEq, Eq)]
-pub enum SubscriptionError {
-    #[error("Failed to publish subscription: {0}")]
-    FailedToPublish(PublishError),
-    #[error("Not allowed to subscribe to this topic")]
-    NotAllowed,
-}
-
 /// Errors related to establishing a connection with a remote peer
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum DialError {
@@ -116,8 +107,6 @@ pub enum P2pError {
     ProtocolError(ProtocolError),
     #[error("Failed to publish message: `{0}`")]
     PublishError(PublishError),
-    #[error("Failed to subscribe to pubsub topic: `{0}`")]
-    SubscriptionError(SubscriptionError),
     #[error("Failed to dial peer: `{0}`")]
     DialError(DialError),
     #[error("Connection to other task lost")]
@@ -179,7 +168,6 @@ impl BanScore for P2pError {
         match self {
             P2pError::ProtocolError(err) => err.ban_score(),
             P2pError::PublishError(err) => err.ban_score(),
-            P2pError::SubscriptionError(err) => err.ban_score(),
             P2pError::DialError(_) => 0,
             P2pError::ChannelClosed => 0,
             P2pError::PeerError(_) => 0,
@@ -212,15 +200,6 @@ impl BanScore for PublishError {
             PublishError::InsufficientPeers => 0,
             PublishError::MessageTooLarge(_, _) => 100,
             PublishError::TransformFailed => 0,
-        }
-    }
-}
-
-impl BanScore for SubscriptionError {
-    fn ban_score(&self) -> u32 {
-        match self {
-            SubscriptionError::FailedToPublish(err) => err.ban_score(),
-            SubscriptionError::NotAllowed => 0,
         }
     }
 }
