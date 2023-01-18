@@ -26,7 +26,7 @@ use crate::{
     net::types::Role,
     peer_manager::tests::run_peer_manager,
     testing_utils::{
-        connect_services, filter_connectivity_event, TestTransportChannel, TestTransportMaker,
+        connect_services, get_connectivity_event, TestTransportChannel, TestTransportMaker,
         TestTransportNoise, TestTransportTcp,
     },
 };
@@ -123,7 +123,7 @@ where
     });
 
     // "discover" the other networking service
-    pm1.peer_discovered(&addr);
+    pm1.peerdb.peer_discovered(&addr);
     pm1.heartbeat().await.unwrap();
 
     assert_eq!(pm1.pending.len(), 1);
@@ -436,13 +436,7 @@ where
     // that tries to connect to the first manager
     tokio::spawn(async move { pm1.run().await });
 
-    let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
-        !std::matches!(
-            event,
-            Ok(net::types::ConnectivityEvent::AddressDiscovered { .. })
-        )
-    })
-    .await;
+    let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) = event {
         assert_eq!(peer_id, peer_info.peer_id);
     } else {

@@ -262,9 +262,6 @@ where
             types::ConnectivityEvent::Misbehaved { peer_id, error } => {
                 Ok(ConnectivityEvent::Misbehaved { peer_id, error })
             }
-            types::ConnectivityEvent::AddressDiscovered { address } => {
-                Ok(ConnectivityEvent::AddressDiscovered { address })
-            }
         }
     }
 }

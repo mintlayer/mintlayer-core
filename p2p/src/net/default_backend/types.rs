@@ -111,9 +111,6 @@ pub enum ConnectivityEvent<T: TransportSocket> {
         peer_id: PeerId,
         error: error::P2pError,
     },
-    AddressDiscovered {
-        address: T::Address,
-    },
 }
 
 // TODO: use two events, one for txs and one for blocks?

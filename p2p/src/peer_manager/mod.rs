@@ -110,11 +110,6 @@ where
         })
     }
 
-    /// Update the list of known peers or known peer's list of addresses
-    fn peer_discovered(&mut self, address: &T::Address) {
-        self.peerdb.peer_discovered(address);
-    }
-
     /// Verify software version compatibility
     ///
     /// Make sure that local and remote peer have the same software version
@@ -501,9 +496,6 @@ where
                         net::types::ConnectivityEvent::ConnectionError { address, error } => {
                             let res = self.handle_outbound_error(address, error);
                             self.handle_result(None, res).await?;
-                        }
-                        net::types::ConnectivityEvent::AddressDiscovered { address } => {
-                            self.peer_discovered(&address);
                         }
                         net::types::ConnectivityEvent::Misbehaved { peer_id, error } => {
                             let res = self.adjust_peer_score(peer_id, error.ban_score()).await;

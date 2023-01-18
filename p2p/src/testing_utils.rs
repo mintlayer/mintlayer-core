@@ -185,11 +185,7 @@ where
     (address, peer_info1, peer_info2)
 }
 
-/// Return first event that is accepted by predicate.
-///
-/// Used to skip events that are not of interest or that are different between backends
-/// (for example ConnectivityEvent::Discovered).
-/// Can be used in tests only, will panic in case of errors.
+/// Returns first event that is accepted by predicate or panics on timeout.
 pub async fn filter_connectivity_event<T, F>(
     conn: &mut T::ConnectivityHandle,
     predicate: F,
@@ -199,12 +195,27 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
     F: Fn(&crate::Result<ConnectivityEvent<T>>) -> bool,
 {
-    loop {
-        let result = timeout(Duration::from_secs(10), conn.poll_next())
-            .await
-            .expect("unexpected timeout receiving connectivity event");
-        if predicate(&result) {
-            return result;
+    let recv_fut = async {
+        loop {
+            let result = conn.poll_next().await;
+            if predicate(&result) {
+                break result;
+            }
         }
-    }
+    };
+
+    timeout(Duration::from_secs(10), recv_fut)
+        .await
+        .expect("unexpected timeout receiving connectivity event")
+}
+
+/// Returns first event or panics on timeout.
+pub async fn get_connectivity_event<T>(
+    conn: &mut T::ConnectivityHandle,
+) -> crate::Result<ConnectivityEvent<T>>
+where
+    T: NetworkingService,
+    T::ConnectivityHandle: ConnectivityService<T>,
+{
+    filter_connectivity_event(conn, |_event| true).await
 }

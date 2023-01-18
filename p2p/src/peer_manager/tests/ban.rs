@@ -18,7 +18,7 @@ use std::sync::Arc;
 use crate::{
     net::types::Role,
     testing_utils::{
-        connect_services, filter_connectivity_event, RandomAddressMaker, TestChannelAddressMaker,
+        connect_services, get_connectivity_event, RandomAddressMaker, TestChannelAddressMaker,
         TestTcpAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp,
     },
@@ -67,13 +67,7 @@ where
         .clone()
         .as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
-    let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
-        !std::matches!(
-            event,
-            Ok(net::types::ConnectivityEvent::AddressDiscovered { .. })
-        )
-    })
-    .await;
+    let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(std::matches!(
         event,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
@@ -122,13 +116,7 @@ where
         .clone()
         .as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
-    let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
-        !std::matches!(
-            event,
-            Ok(net::types::ConnectivityEvent::AddressDiscovered { .. })
-        )
-    })
-    .await;
+    let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(std::matches!(
         event,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
@@ -185,13 +173,7 @@ where
         .clone()
         .as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
-    let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
-        !std::matches!(
-            event,
-            Ok(net::types::ConnectivityEvent::AddressDiscovered { .. })
-        )
-    })
-    .await;
+    let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(matches!(
         event,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
@@ -451,13 +433,7 @@ where
     // that tries to connect to the first manager
     tokio::spawn(async move { pm1.run().await });
 
-    let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
-        !std::matches!(
-            event,
-            Ok(net::types::ConnectivityEvent::AddressDiscovered { .. })
-        )
-    })
-    .await;
+    let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) = event {
         assert_eq!(peer_id, peer_info.peer_id);
     } else {
