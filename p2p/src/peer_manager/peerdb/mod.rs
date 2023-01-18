@@ -134,8 +134,8 @@ impl<T: NetworkingService> PeerDb<T> {
         self.addresses.contains(address)
     }
 
-    pub fn known_addresses(&self) -> Vec<PeerAddress> {
-        self.addresses.iter().map(TransportAddress::as_peer_address).collect()
+    pub fn known_addresses(&self) -> impl Iterator<Item = PeerAddress> + '_ {
+        self.addresses.iter().map(TransportAddress::as_peer_address)
     }
 
     /// Checks if the given address is banned.

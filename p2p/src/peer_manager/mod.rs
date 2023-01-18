@@ -369,7 +369,7 @@ where
         match request {
             // TODO: Rework this
             PeerManagerRequest::AddrListRequest(AddrListRequest {}) => {
-                let addresses = self.peerdb.known_addresses();
+                let addresses = self.peerdb.known_addresses().collect();
 
                 self.peer_connectivity_handle
                     .send_response(
