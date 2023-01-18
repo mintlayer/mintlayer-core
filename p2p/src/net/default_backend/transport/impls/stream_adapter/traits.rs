@@ -13,15 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p::{
-    net::mock::{transport::TcpTransportSocket, MockService},
-    testing_utils::{TestTcpAddressMaker, TestTransportTcp},
+use futures::future::BoxFuture;
+
+use crate::{
+    net::{default_backend::transport::PeerStream, types::Role},
+    Result,
 };
 
-fn main() {
-    p2p_backend_test_suite::run::<
-        TestTransportTcp,
-        MockService<TcpTransportSocket>,
-        TestTcpAddressMaker,
-    >();
+/// Represents a stream that requires a handshake to function (such as encrypted streams)
+pub trait StreamAdapter<T>: Clone + Send + Sync + 'static {
+    type Stream: PeerStream;
+
+    /// Wraps base async stream into AsyncRead/AsyncWrite stream that may implement encryption.
+    fn handshake(&self, base: T, role: Role) -> BoxFuture<'static, Result<Self::Stream>>;
 }

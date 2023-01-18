@@ -20,7 +20,7 @@ use serialization::{DecodeAll, Encode};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{constants::MAX_MESSAGE_SIZE, net::mock::types::Message, P2pError, Result};
+use crate::{constants::MAX_MESSAGE_SIZE, net::default_backend::types::Message, P2pError, Result};
 
 struct EncoderDecoder {}
 

@@ -120,24 +120,26 @@ impl<T: NetworkingService> PeerContext<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::mock::{transport::TcpTransportSocket, types, MockService};
+    use crate::net::default_backend::{
+        transport::TcpTransportSocket, types, DefaultNetworkingService,
+    };
     use common::chain::block::{
         consensus_data::ConsensusData, timestamp::BlockTimestamp, BlockReward,
     };
 
-    fn new_mock_peersyncstate() -> PeerContext<MockService<TcpTransportSocket>> {
-        PeerContext::<MockService<TcpTransportSocket>>::new(types::MockPeerId::new())
+    fn new_peersyncstate() -> PeerContext<DefaultNetworkingService<TcpTransportSocket>> {
+        PeerContext::<DefaultNetworkingService<TcpTransportSocket>>::new(types::PeerId::new())
     }
 
     #[test]
     fn create_new_peersyncstate() {
-        let peer = new_mock_peersyncstate();
+        let peer = new_peersyncstate();
         assert_eq!(peer.state, PeerSyncState::Unknown);
     }
 
     #[test]
     fn test_set_state() {
-        let mut peer = new_mock_peersyncstate();
+        let mut peer = new_peersyncstate();
         let header = Block::new(
             vec![],
             Id::new(common::primitives::H256([0x07; 32])),

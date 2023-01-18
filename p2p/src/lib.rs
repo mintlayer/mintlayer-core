@@ -42,9 +42,9 @@ use crate::{
     error::{ConversionError, P2pError},
     event::{PeerManagerEvent, SyncEvent},
     net::{
-        mock::{
+        default_backend::{
             transport::{NoiseEncryptionAdapter, NoiseTcpTransport},
-            MockService,
+            DefaultNetworkingService,
         },
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
@@ -64,7 +64,7 @@ struct P2p<T: NetworkingService> {
 
 impl<T> P2p<T>
 where
-    T: 'static + NetworkingService,
+    T: 'static + NetworkingService + Send,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
@@ -157,10 +157,10 @@ pub async fn make_p2p(
     mempool_handle: mempool::MempoolHandle,
 ) -> Result<Box<dyn P2pInterface>> {
     let stream_adapter = NoiseEncryptionAdapter::gen_new();
-    let base_transport = net::mock::transport::TcpTransportSocket::new();
+    let base_transport = net::default_backend::transport::TcpTransportSocket::new();
     let transport = NoiseTcpTransport::new(stream_adapter, base_transport);
 
-    let p2p = P2p::<MockService<NoiseTcpTransport>>::new(
+    let p2p = P2p::<DefaultNetworkingService<NoiseTcpTransport>>::new(
         transport,
         chain_config,
         p2p_config,

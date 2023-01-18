@@ -27,7 +27,11 @@ use serialization::{Decode, Encode};
 
 use crate::{
     error, message,
-    net::{self, mock::transport::TransportSocket, types::PubSubTopic},
+    net::{
+        self,
+        default_backend::transport::TransportSocket,
+        types::{PeerInfo, PubSubTopic},
+    },
     types::peer_address::PeerAddress,
 };
 
@@ -37,17 +41,17 @@ pub enum Command<T: TransportSocket> {
         response: oneshot::Sender<crate::Result<()>>,
     },
     Disconnect {
-        peer_id: MockPeerId,
+        peer_id: PeerId,
         response: oneshot::Sender<crate::Result<()>>,
     },
     SendRequest {
-        peer_id: MockPeerId,
-        request_id: MockRequestId,
+        peer_id: PeerId,
+        request_id: RequestId,
         message: message::Request,
     },
     /// Send response to remote peer
     SendResponse {
-        request_id: MockRequestId,
+        request_id: RequestId,
         message: message::Response,
     },
     AnnounceData {
@@ -58,17 +62,17 @@ pub enum Command<T: TransportSocket> {
 
 pub enum SyncingEvent {
     Request {
-        peer_id: MockPeerId,
-        request_id: MockRequestId,
+        peer_id: PeerId,
+        request_id: RequestId,
         request: message::SyncRequest,
     },
     Response {
-        peer_id: MockPeerId,
-        request_id: MockRequestId,
+        peer_id: PeerId,
+        request_id: RequestId,
         response: message::SyncResponse,
     },
     Announcement {
-        peer_id: MockPeerId,
+        peer_id: PeerId,
         announcement: Box<message::Announcement>,
     },
 }
@@ -76,23 +80,23 @@ pub enum SyncingEvent {
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConnectivityEvent<T: TransportSocket> {
     Request {
-        peer_id: MockPeerId,
-        request_id: MockRequestId,
+        peer_id: PeerId,
+        request_id: RequestId,
         request: message::PeerManagerRequest,
     },
     Response {
-        peer_id: MockPeerId,
-        request_id: MockRequestId,
+        peer_id: PeerId,
+        request_id: RequestId,
         response: message::PeerManagerResponse,
     },
     InboundAccepted {
         address: T::Address,
-        peer_info: MockPeerInfo,
+        peer_info: PeerInfo<PeerId>,
         receiver_address: Option<PeerAddress>,
     },
     OutboundAccepted {
         address: T::Address,
-        peer_info: MockPeerInfo,
+        peer_info: PeerInfo<PeerId>,
         receiver_address: Option<PeerAddress>,
     },
     ConnectionError {
@@ -100,11 +104,11 @@ pub enum ConnectivityEvent<T: TransportSocket> {
         error: error::P2pError,
     },
     ConnectionClosed {
-        peer_id: MockPeerId,
+        peer_id: PeerId,
     },
     /// A peer misbehaved and its reputation must be adjusted according to the error type.
     Misbehaved {
-        peer_id: MockPeerId,
+        peer_id: PeerId,
         error: error::P2pError,
     },
     AddressDiscovered {
@@ -125,25 +129,25 @@ pub enum PubSubEvent<T: TransportSocket> {
 static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Encode, Decode, Default)]
-pub struct MockRequestId(u64);
+pub struct RequestId(u64);
 
-impl MockRequestId {
+impl RequestId {
     pub fn new() -> Self {
         let id = NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed);
         Self(id)
     }
 }
 
-impl std::fmt::Display for MockRequestId {
+impl std::fmt::Display for RequestId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Encode, Decode)]
-pub struct MockPeerId(u64);
+pub struct PeerId(u64);
 
-impl FromStr for MockPeerId {
+impl FromStr for PeerId {
     type Err = <u64 as FromStr>::Err;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -153,14 +157,14 @@ impl FromStr for MockPeerId {
 
 static NEXT_PEER_ID: AtomicU64 = AtomicU64::new(1);
 
-impl MockPeerId {
+impl PeerId {
     pub fn new() -> Self {
         let id = NEXT_PEER_ID.fetch_add(1, Ordering::Relaxed);
         Self(id)
     }
 }
 
-impl std::fmt::Display for MockPeerId {
+impl std::fmt::Display for PeerId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -169,15 +173,6 @@ impl std::fmt::Display for MockPeerId {
 /// Random nonce sent in outbound handshake.
 /// Used to detect and drop self connections.
 pub type HandshakeNonce = u64;
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct MockPeerInfo {
-    pub peer_id: MockPeerId,
-    pub network: [u8; 4],
-    pub version: SemVer,
-    pub agent: Option<String>,
-    pub subscriptions: BTreeSet<PubSubTopic>,
-}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PeerEvent {
@@ -200,9 +195,9 @@ pub enum PeerEvent {
     MessageReceived { message: Message },
 }
 
-/// Events sent by the mock backend to peers
+/// Events sent by the default_backend backend to peers
 #[derive(Debug)]
-pub enum MockEvent {
+pub enum Event {
     Disconnect,
     SendMessage(Box<Message>),
 }
@@ -236,11 +231,11 @@ pub enum HandshakeMessage {
 pub enum Message {
     Handshake(HandshakeMessage),
     Request {
-        request_id: MockRequestId,
+        request_id: RequestId,
         request: message::Request,
     },
     Response {
-        request_id: MockRequestId,
+        request_id: RequestId,
         response: message::Response,
     },
     Announcement {

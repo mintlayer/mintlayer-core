@@ -27,9 +27,9 @@ use p2p::testing_utils::{
 use p2p::{
     message::Announcement,
     net::{
-        mock::{
-            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-            MockService,
+        default_backend::{
+            transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
+            DefaultNetworkingService,
         },
         types::SyncingEvent,
         ConnectivityService, NetworkingService, SyncingMessagingService,
@@ -151,19 +151,25 @@ where
 #[ignore]
 #[tokio::test]
 async fn block_announcement_3_peers_tcp() {
-    block_announcement_3_peers::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
+    block_announcement_3_peers::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
+        .await;
 }
 
 // TODO: Implement announcements resending in partially connected networks.
 #[tokio::test]
 #[ignore]
 async fn block_announcement_3_peers_channels() {
-    block_announcement_3_peers::<TestTransportChannel, MockService<MockChannelTransport>>().await;
+    block_announcement_3_peers::<
+        TestTransportChannel,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
 }
 
 // TODO: Implement announcements resending in partially connected networks.
 #[ignore]
 #[tokio::test]
 async fn block_announcement_3_peers_noise() {
-    block_announcement_3_peers::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
+    block_announcement_3_peers::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
+        .await;
 }

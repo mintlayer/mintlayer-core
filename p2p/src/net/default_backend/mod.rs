@@ -33,54 +33,54 @@ use crate::{
     error::{P2pError, PublishError},
     message::{self, PeerManagerRequest, PeerManagerResponse, SyncRequest, SyncResponse},
     net::{
-        mock::{
+        default_backend::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             transport::{TransportListener, TransportSocket},
-            types::{MockPeerId, MockPeerInfo, MockRequestId},
+            types::{PeerId, RequestId},
         },
-        types::{ConnectivityEvent, PeerInfo, PubSubTopic, SyncingEvent},
+        types::{ConnectivityEvent, PubSubTopic, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
 };
 
 #[derive(Debug)]
-pub struct MockService<T: TransportSocket>(PhantomData<T>);
+pub struct DefaultNetworkingService<T: TransportSocket>(PhantomData<T>);
 
 #[derive(Debug)]
-pub struct MockConnectivityHandle<S: NetworkingService, T: TransportSocket> {
+pub struct ConnectivityHandle<S: NetworkingService, T: TransportSocket> {
     /// The local addresses of a network service provider.
     local_addresses: Vec<S::Address>,
 
-    /// TX channel for sending commands to mock backend
+    /// TX channel for sending commands to default_backend backend
     cmd_tx: mpsc::Sender<types::Command<T>>,
 
-    /// RX channel for receiving connectivity events from mock backend
+    /// RX channel for receiving connectivity events from default_backend backend
     conn_rx: mpsc::Receiver<types::ConnectivityEvent<T>>,
 
     _marker: PhantomData<fn() -> S>,
 }
 
-pub struct MockPubSubHandle<S, T>
+pub struct PubSubHandle<S, T>
 where
     S: NetworkingService,
     T: TransportSocket,
 {
-    /// TX channel for sending commands to mock backend
+    /// TX channel for sending commands to default_backend backend
     _cmd_tx: mpsc::Sender<types::Command<T>>,
 
-    /// RX channel for receiving pubsub events from mock backend
+    /// RX channel for receiving pubsub events from default_backend backend
     _pubsub_rx: mpsc::Receiver<types::PubSubEvent<T>>,
 
     _marker: PhantomData<fn() -> S>,
 }
 
 #[derive(Debug)]
-pub struct MockSyncingMessagingHandle<S, T>
+pub struct SyncingMessagingHandle<S, T>
 where
     S: NetworkingService,
     T: TransportSocket,
 {
-    /// TX channel for sending commands to mock backend
+    /// TX channel for sending commands to default_backend backend
     cmd_tx: mpsc::Sender<types::Command<T>>,
 
     /// RX channel for receiving syncing events
@@ -88,32 +88,15 @@ where
     _marker: PhantomData<fn() -> S>,
 }
 
-impl<T> TryInto<PeerInfo<T>> for MockPeerInfo
-where
-    T: NetworkingService<PeerId = MockPeerId>,
-{
-    type Error = P2pError;
-
-    fn try_into(self) -> Result<PeerInfo<T>, Self::Error> {
-        Ok(PeerInfo {
-            peer_id: self.peer_id,
-            magic_bytes: self.network,
-            version: self.version,
-            agent: None,
-            subscriptions: self.subscriptions,
-        })
-    }
-}
-
 #[async_trait]
-impl<T: TransportSocket> NetworkingService for MockService<T> {
+impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
     type Transport = T;
     type Address = T::Address;
     type BannableAddress = T::BannableAddress;
-    type PeerId = MockPeerId;
-    type PeerRequestId = MockRequestId;
-    type ConnectivityHandle = MockConnectivityHandle<Self, T>;
-    type SyncingMessagingHandle = MockSyncingMessagingHandle<Self, T>;
+    type PeerId = PeerId;
+    type PeerRequestId = RequestId;
+    type ConnectivityHandle = ConnectivityHandle<Self, T>;
+    type SyncingMessagingHandle = SyncingMessagingHandle<Self, T>;
 
     async fn start(
         transport: Self::Transport,
@@ -160,11 +143,9 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
 }
 
 #[async_trait]
-impl<S, T> ConnectivityService<S> for MockConnectivityHandle<S, T>
+impl<S, T> ConnectivityService<S> for ConnectivityHandle<S, T>
 where
-    S: NetworkingService<Address = T::Address, PeerId = MockPeerId, PeerRequestId = MockRequestId>
-        + Send,
-    MockPeerInfo: TryInto<PeerInfo<S>, Error = P2pError>,
+    S: NetworkingService<Address = T::Address, PeerId = PeerId, PeerRequestId = RequestId> + Send,
     T: TransportSocket,
 {
     async fn connect(&mut self, address: S::Address) -> crate::Result<()> {
@@ -203,7 +184,7 @@ where
         peer_id: S::PeerId,
         request: PeerManagerRequest,
     ) -> crate::Result<S::PeerRequestId> {
-        let request_id = MockRequestId::new();
+        let request_id = RequestId::new();
 
         self.cmd_tx
             .send(types::Command::SendRequest {
@@ -260,7 +241,7 @@ where
                 receiver_address,
             } => Ok(ConnectivityEvent::InboundAccepted {
                 address,
-                peer_info: peer_info.try_into()?,
+                peer_info,
                 receiver_address,
             }),
             types::ConnectivityEvent::OutboundAccepted {
@@ -269,7 +250,7 @@ where
                 receiver_address,
             } => Ok(ConnectivityEvent::OutboundAccepted {
                 address,
-                peer_info: peer_info.try_into()?,
+                peer_info,
                 receiver_address,
             }),
             types::ConnectivityEvent::ConnectionError { address, error } => {
@@ -289,9 +270,9 @@ where
 }
 
 #[async_trait]
-impl<S, T> SyncingMessagingService<S> for MockSyncingMessagingHandle<S, T>
+impl<S, T> SyncingMessagingService<S> for SyncingMessagingHandle<S, T>
 where
-    S: NetworkingService<PeerId = MockPeerId, PeerRequestId = MockRequestId> + Send,
+    S: NetworkingService<PeerId = PeerId, PeerRequestId = RequestId> + Send,
     T: TransportSocket,
 {
     async fn send_request(
@@ -299,7 +280,7 @@ where
         peer_id: S::PeerId,
         request: SyncRequest,
     ) -> crate::Result<S::PeerRequestId> {
-        let request_id = MockRequestId::new();
+        let request_id = RequestId::new();
 
         self.cmd_tx
             .send(types::Command::SendRequest {
@@ -384,7 +365,7 @@ mod tests {
     use crate::error::DialError;
     use crate::testing_utils::{TestTransportChannel, TestTransportMaker, TestTransportTcp};
     use crate::{
-        net::mock::transport::{MockChannelTransport, TcpTransportSocket},
+        net::default_backend::transport::{MpscChannelTransport, TcpTransportSocket},
         testing_utils::TestTransportNoise,
     };
     use common::primitives::semver::SemVer;
@@ -398,7 +379,7 @@ mod tests {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
-        let (mut conn1, _) = MockService::<T>::start(
+        let (mut conn1, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             Arc::clone(&config),
@@ -407,7 +388,7 @@ mod tests {
         .await
         .unwrap();
 
-        let (conn2, _) = MockService::<T>::start(
+        let (conn2, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             Arc::clone(&config),
@@ -426,7 +407,7 @@ mod tests {
         }) = conn1.poll_next().await
         {
             assert_eq!(address, conn2.local_addresses().await.unwrap()[0]);
-            assert_eq!(&peer_info.magic_bytes, config.magic_bytes());
+            assert_eq!(&peer_info.network, config.magic_bytes());
             assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
             assert_eq!(peer_info.agent, None);
             assert_eq!(
@@ -445,7 +426,7 @@ mod tests {
 
     #[tokio::test]
     async fn connect_to_remote_channels() {
-        connect_to_remote::<TestTransportChannel, MockChannelTransport>().await;
+        connect_to_remote::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]
@@ -461,7 +442,7 @@ mod tests {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
-        let (mut conn1, _) = MockService::<T>::start(
+        let (mut conn1, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             Arc::clone(&config),
@@ -470,7 +451,7 @@ mod tests {
         .await
         .unwrap();
 
-        let (mut conn2, _) = MockService::<T>::start(
+        let (mut conn2, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             Arc::clone(&config),
@@ -487,7 +468,7 @@ mod tests {
                 peer_info,
                 receiver_address: _,
             } => {
-                assert_eq!(peer_info.magic_bytes, *config.magic_bytes());
+                assert_eq!(peer_info.network, *config.magic_bytes());
                 assert_eq!(
                     peer_info.version,
                     common::primitives::semver::SemVer::new(0, 1, 0),
@@ -505,7 +486,7 @@ mod tests {
 
     #[tokio::test]
     async fn accept_incoming_channels() {
-        accept_incoming::<TestTransportChannel, MockChannelTransport>().await;
+        accept_incoming::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]
@@ -521,7 +502,7 @@ mod tests {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
-        let (mut conn1, _) = MockService::<T>::start(
+        let (mut conn1, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             Arc::clone(&config),
@@ -529,7 +510,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let (mut conn2, _) = MockService::<T>::start(
+        let (mut conn2, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             config,
@@ -562,7 +543,7 @@ mod tests {
 
     #[tokio::test]
     async fn disconnect_channels() {
-        disconnect::<TestTransportChannel, MockChannelTransport>().await;
+        disconnect::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]
@@ -578,7 +559,7 @@ mod tests {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
-        let (mut conn1, _) = MockService::<T>::start(
+        let (mut conn1, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             Arc::clone(&config),
@@ -587,7 +568,7 @@ mod tests {
         .await
         .unwrap();
 
-        let (conn2, _) = MockService::<T>::start(
+        let (conn2, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             Arc::clone(&config),
@@ -628,7 +609,7 @@ mod tests {
         }) = conn1.poll_next().await
         {
             assert_eq!(address, conn2.local_addresses().await.unwrap()[0]);
-            assert_eq!(&peer_info.magic_bytes, config.magic_bytes());
+            assert_eq!(&peer_info.network, config.magic_bytes());
             assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
             assert_eq!(peer_info.agent, None);
             assert_eq!(
@@ -647,7 +628,7 @@ mod tests {
 
     #[tokio::test]
     async fn self_connect_channels() {
-        self_connect::<TestTransportChannel, MockChannelTransport>().await;
+        self_connect::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]

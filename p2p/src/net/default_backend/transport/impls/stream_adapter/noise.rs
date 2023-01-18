@@ -21,7 +21,7 @@ use tokio::time::timeout;
 
 use crate::{
     error::P2pError,
-    net::{mock::transport::PeerStream, types::Role},
+    net::{default_backend::transport::PeerStream, types::Role},
 };
 
 use super::StreamAdapter;

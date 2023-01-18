@@ -14,14 +14,14 @@
 // limitations under the License.
 
 use p2p::{
-    net::mock::{transport::MockChannelTransport, MockService},
-    testing_utils::{TestChannelAddressMaker, TestTransportChannel},
+    net::default_backend::{transport::TcpTransportSocket, DefaultNetworkingService},
+    testing_utils::{TestTcpAddressMaker, TestTransportTcp},
 };
 
 fn main() {
     p2p_backend_test_suite::run::<
-        TestTransportChannel,
-        MockService<MockChannelTransport>,
-        TestChannelAddressMaker,
+        TestTransportTcp,
+        DefaultNetworkingService<TcpTransportSocket>,
+        TestTcpAddressMaker,
     >();
 }

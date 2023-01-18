@@ -35,7 +35,7 @@ use tokio::{
 use crate::{
     error::DialError,
     net::{
-        mock::transport::{
+        default_backend::transport::{
             traits::TransportAddress, PeerStream, TransportListener, TransportSocket,
         },
         AsBannableAddress,
@@ -51,7 +51,7 @@ impl TransportAddress for Address {
         PeerAddress::Ip4(PeerAddressIp4 {
             // Address of the first "host" will be 0.0.0.1
             ip: std::net::Ipv4Addr::from(*self).into(),
-            // There is only one "port" in MockChannelTransport per "host", use arbitrary value
+            // There is only one "port" in MpscChannelTransport per "host", use arbitrary value
             port: 10000,
         })
     }
@@ -74,28 +74,30 @@ static CONNECTIONS: Lazy<Mutex<BTreeMap<Address, UnboundedSender<IncomingConnect
 
 static NEXT_ADDRESS: AtomicU32 = AtomicU32::new(1);
 
-// Creating new transport is like attaching new "host" to the network.
-// New unique address is registered for the new "host".
-// Unlike TCP only one active bind is allowed at any moment to keep things simple
-// (so there is only one port per host).
+/// Creating new transport is like attaching new "host" to the network.
+/// New unique address is registered for the new "host".
+/// Unlike TCP only one active bind is allowed at any moment to keep things simple
+/// (so there is only one port per host).
+///
+/// This transport should only be used in tests.
 #[derive(Debug)]
-pub struct MockChannelTransport {
+pub struct MpscChannelTransport {
     local_address: Address,
 }
 
-impl MockChannelTransport {
+impl MpscChannelTransport {
     pub fn new() -> Self {
         let local_address = NEXT_ADDRESS.fetch_add(1, Ordering::Relaxed);
-        MockChannelTransport { local_address }
+        MpscChannelTransport { local_address }
     }
 }
 
 #[async_trait]
-impl TransportSocket for MockChannelTransport {
+impl TransportSocket for MpscChannelTransport {
     type Address = Address;
     type BannableAddress = Address;
-    type Listener = MockChannelListener;
-    type Stream = ChannelMockStream;
+    type Listener = ChannelListener;
+    type Stream = ChannelStream;
 
     async fn bind(&self, addresses: Vec<Self::Address>) -> Result<Self::Listener> {
         // It's not possible to bind to random address
@@ -152,14 +154,14 @@ impl TransportSocket for MockChannelTransport {
     }
 }
 
-pub struct MockChannelListener {
+pub struct ChannelListener {
     address: Address,
     receiver: UnboundedReceiver<IncomingConnection>,
 }
 
 #[async_trait]
-impl TransportListener<ChannelMockStream, Address> for MockChannelListener {
-    async fn accept(&mut self) -> Result<(ChannelMockStream, Address)> {
+impl TransportListener<ChannelStream, Address> for ChannelListener {
+    async fn accept(&mut self) -> Result<(ChannelStream, Address)> {
         let (remote_address, response_sender) =
             self.receiver.recv().await.ok_or(P2pError::ChannelClosed)?;
 
@@ -175,7 +177,7 @@ impl TransportListener<ChannelMockStream, Address> for MockChannelListener {
     }
 }
 
-impl Drop for MockChannelListener {
+impl Drop for ChannelListener {
     fn drop(&mut self) {
         let old_entry =
             CONNECTIONS.lock().expect("Connections mutex is poisoned").remove(&self.address);
@@ -183,9 +185,9 @@ impl Drop for MockChannelListener {
     }
 }
 
-pub type ChannelMockStream = tokio::io::DuplexStream;
+pub type ChannelStream = DuplexStream;
 
-impl PeerStream for ChannelMockStream {}
+impl PeerStream for ChannelStream {}
 
 impl AsBannableAddress for Address {
     type BannableAddress = Address;
@@ -200,15 +202,15 @@ mod tests {
     use super::*;
     use crate::{
         message::{BlockListRequest, SyncRequest},
-        net::mock::{
+        net::default_backend::{
             transport::BufferedTranscoder,
-            types::{Message, MockRequestId},
+            types::{Message, RequestId},
         },
     };
 
     #[tokio::test]
     async fn send_recv() {
-        let transport = MockChannelTransport::new();
+        let transport = MpscChannelTransport::new();
         let address = ZERO_ADDRESS;
         let mut server = transport.bind(vec![address]).await.unwrap();
         let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
@@ -217,7 +219,7 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let request_id = MockRequestId::new();
+        let request_id = RequestId::new();
         let request = SyncRequest::BlockListRequest(BlockListRequest::new(vec![]));
         let mut peer_stream = BufferedTranscoder::new(peer_stream);
         peer_stream

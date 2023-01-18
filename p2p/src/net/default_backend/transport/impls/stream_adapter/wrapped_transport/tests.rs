@@ -28,14 +28,14 @@ use tokio::{
 
 use crate::{
     message::{BlockListRequest, Request},
-    net::mock::{
+    net::default_backend::{
         transport::{
             impls::stream_adapter::wrapped_transport::wrapped_listener::MAX_CONCURRENT_HANDSHAKES,
-            BufferedTranscoder, IdentityStreamAdapter, MockChannelListener, MockChannelTransport,
+            BufferedTranscoder, ChannelListener, IdentityStreamAdapter, MpscChannelTransport,
             NoiseEncryptionAdapter, PeerStream, TcpTransportSocket, TransportListener,
             TransportSocket,
         },
-        types::{Message, MockRequestId},
+        types::{Message, RequestId},
     },
 };
 
@@ -70,7 +70,7 @@ async fn test<A: TestTransportMaker<Address = T::Address>, T: TransportSocket>(t
 async fn test_send_recv() {
     test::<TestTransportTcp, TcpTransportSocket>(TcpTransportSocket::new()).await;
 
-    test::<TestTransportChannel, MockChannelTransport>(MockChannelTransport::new()).await;
+    test::<TestTransportChannel, MpscChannelTransport>(MpscChannelTransport::new()).await;
 
     test::<TestTransportTcp, WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>>(
         WrappedTransportSocket::new(NoiseEncryptionAdapter::gen_new(), TcpTransportSocket::new()),
@@ -79,10 +79,10 @@ async fn test_send_recv() {
 
     test::<
         TestTransportChannel,
-        WrappedTransportSocket<NoiseEncryptionAdapter, MockChannelTransport>,
+        WrappedTransportSocket<NoiseEncryptionAdapter, MpscChannelTransport>,
     >(WrappedTransportSocket::new(
         NoiseEncryptionAdapter::gen_new(),
-        MockChannelTransport::new(),
+        MpscChannelTransport::new(),
     ))
     .await;
 
@@ -93,8 +93,8 @@ async fn test_send_recv() {
 
     test::<
         TestTransportChannel,
-        WrappedTransportSocket<IdentityStreamAdapter, MockChannelTransport>,
-    >(WrappedTransportSocket::new(IdentityStreamAdapter::new(), MockChannelTransport::new()))
+        WrappedTransportSocket<IdentityStreamAdapter, MpscChannelTransport>,
+    >(WrappedTransportSocket::new(IdentityStreamAdapter::new(), MpscChannelTransport::new()))
     .await;
 
     test::<
@@ -110,36 +110,36 @@ async fn test_send_recv() {
     .await;
 }
 
-pub struct TestMockTransport {
-    transport: MockChannelTransport,
+pub struct TestTransport {
+    transport: MpscChannelTransport,
     port_open: Arc<Mutex<bool>>,
 }
 
-pub struct TestMockListener {
-    listener: MockChannelListener,
+pub struct TestListener {
+    listener: ChannelListener,
     port_open: Arc<Mutex<bool>>,
 }
 
-impl TestMockTransport {
+impl TestTransport {
     fn new() -> Self {
         Self {
-            transport: MockChannelTransport::new(),
+            transport: MpscChannelTransport::new(),
             port_open: Default::default(),
         }
     }
 }
 
 #[async_trait]
-impl TransportSocket for TestMockTransport {
-    type Address = <MockChannelTransport as TransportSocket>::Address;
-    type BannableAddress = <MockChannelTransport as TransportSocket>::BannableAddress;
-    type Listener = TestMockListener;
-    type Stream = <MockChannelTransport as TransportSocket>::Stream;
+impl TransportSocket for TestTransport {
+    type Address = <MpscChannelTransport as TransportSocket>::Address;
+    type BannableAddress = <MpscChannelTransport as TransportSocket>::BannableAddress;
+    type Listener = TestListener;
+    type Stream = <MpscChannelTransport as TransportSocket>::Stream;
 
     async fn bind(&self, addresses: Vec<Self::Address>) -> crate::Result<Self::Listener> {
         let listener = self.transport.bind(addresses).await.unwrap();
         *self.port_open.lock().unwrap() = true;
-        Ok(TestMockListener {
+        Ok(TestListener {
             listener,
             port_open: Arc::clone(&self.port_open),
         })
@@ -153,38 +153,38 @@ impl TransportSocket for TestMockTransport {
 #[async_trait]
 impl
     TransportListener<
-        <MockChannelTransport as TransportSocket>::Stream,
-        <MockChannelTransport as TransportSocket>::Address,
-    > for TestMockListener
+        <MpscChannelTransport as TransportSocket>::Stream,
+        <MpscChannelTransport as TransportSocket>::Address,
+    > for TestListener
 {
     async fn accept(
         &mut self,
     ) -> crate::Result<(
-        <MockChannelTransport as TransportSocket>::Stream,
-        <MockChannelTransport as TransportSocket>::Address,
+        <MpscChannelTransport as TransportSocket>::Stream,
+        <MpscChannelTransport as TransportSocket>::Address,
     )> {
         self.listener.accept().await
     }
 
     fn local_addresses(
         &self,
-    ) -> crate::Result<Vec<<MockChannelTransport as TransportSocket>::Address>> {
+    ) -> crate::Result<Vec<<MpscChannelTransport as TransportSocket>::Address>> {
         self.listener.local_addresses()
     }
 }
 
-impl Drop for TestMockListener {
+impl Drop for TestListener {
     fn drop(&mut self) {
         *self.port_open.lock().unwrap() = false;
     }
 }
 
 #[tokio::test]
-// Test that the base listener is dropped after AdaptedMockTransport::Listener is dropped.
+// Test that the base listener is dropped after AdaptedTransport::Listener is dropped.
 async fn test_bind_port_closed() {
-    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TestMockTransport>::new(
+    let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TestTransport>::new(
         NoiseEncryptionAdapter::gen_new(),
-        TestMockTransport::new(),
+        TestTransport::new(),
     );
     assert!(!*transport.base_transport.port_open.lock().unwrap());
 
@@ -208,7 +208,7 @@ async fn send_2_reqs() {
     let server_stream = server_res.unwrap().0;
     let peer_stream = peer_res.unwrap();
 
-    let id_1 = MockRequestId::new();
+    let id_1 = RequestId::new();
     let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
     let mut peer_stream = BufferedTranscoder::new(peer_stream);
     peer_stream
@@ -219,7 +219,7 @@ async fn send_2_reqs() {
         .await
         .unwrap();
 
-    let id_2 = MockRequestId::new();
+    let id_2 = RequestId::new();
     peer_stream
         .send(Message::Request {
             request_id: id_2,

@@ -16,6 +16,7 @@
 #![allow(clippy::unwrap_used)]
 
 use std::{
+    fmt::Debug,
     net::{IpAddr, Ipv6Addr, SocketAddr},
     time::Duration,
 };
@@ -24,8 +25,8 @@ use crypto::random::{make_pseudo_rng, Rng};
 use tokio::time::timeout;
 
 use crate::net::{
-    mock::transport::{
-        MockChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
+    default_backend::transport::{
+        MpscChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
     },
     types::{ConnectivityEvent, PeerInfo},
     ConnectivityService, NetworkingService,
@@ -34,7 +35,7 @@ use crate::net::{
 /// An interface for creating transports and addresses used in tests.
 ///
 /// This abstraction layer is needed to uniformly create transports and addresses
-/// in the tests for different mocks transport implementations.
+/// in the tests for different transport implementations.
 pub trait TestTransportMaker {
     /// A transport type.
     type Transport;
@@ -70,12 +71,12 @@ impl TestTransportMaker for TestTransportTcp {
 pub struct TestTransportChannel {}
 
 impl TestTransportMaker for TestTransportChannel {
-    type Transport = MockChannelTransport;
+    type Transport = MpscChannelTransport;
 
     type Address = u32;
 
     fn make_transport() -> Self::Transport {
-        MockChannelTransport::new()
+        MpscChannelTransport::new()
     }
 
     fn make_address() -> Self::Address {
@@ -146,9 +147,9 @@ impl RandomAddressMaker for TestChannelAddressMaker {
 pub async fn connect_services<T>(
     conn1: &mut T::ConnectivityHandle,
     conn2: &mut T::ConnectivityHandle,
-) -> (T::Address, PeerInfo<T>, PeerInfo<T>)
+) -> (T::Address, PeerInfo<T::PeerId>, PeerInfo<T::PeerId>)
 where
-    T: NetworkingService + std::fmt::Debug,
+    T: NetworkingService + Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr = timeout(Duration::from_secs(5), conn2.local_addresses())

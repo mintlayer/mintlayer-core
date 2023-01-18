@@ -31,7 +31,8 @@ use libtest_mimic::{Arguments, Trial};
 
 use p2p::{
     net::{
-        mock::types::MockPeerId, ConnectivityService, NetworkingService, SyncingMessagingService,
+        default_backend::types::PeerId, ConnectivityService, NetworkingService,
+        SyncingMessagingService,
     },
     testing_utils::{RandomAddressMaker, TestTransportMaker},
 };
@@ -40,7 +41,7 @@ use p2p::{
 pub fn run<T, S, A>()
 where
     T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
-    S: NetworkingService<PeerId = MockPeerId> + Debug + 'static,
+    S: NetworkingService<PeerId = PeerId> + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S> + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S> + Debug,
     A: RandomAddressMaker<Address = S::Address>,
@@ -54,7 +55,7 @@ where
 fn tests<T, S, A>() -> Vec<Trial>
 where
     T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
-    S: NetworkingService<PeerId = MockPeerId> + Debug + 'static,
+    S: NetworkingService<PeerId = PeerId> + Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S> + Debug,
     S::SyncingMessagingHandle: SyncingMessagingService<S> + Debug,
     A: RandomAddressMaker<Address = S::Address>,

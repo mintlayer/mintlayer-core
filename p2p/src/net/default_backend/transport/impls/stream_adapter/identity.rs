@@ -13,17 +13,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use futures::future::BoxFuture;
+use futures::future::{ready, BoxFuture};
 
-use crate::{
-    net::{mock::transport::PeerStream, types::Role},
-    Result,
-};
+use crate::net::{default_backend::transport::PeerStream, types::Role};
 
-/// Represents a stream that requires a handshake to function (such as encrypted streams)
-pub trait StreamAdapter<T>: Clone + Send + Sync + 'static {
-    type Stream: PeerStream;
+use super::StreamAdapter;
 
-    /// Wraps base async stream into AsyncRead/AsyncWrite stream that may implement encryption.
-    fn handshake(&self, base: T, role: Role) -> BoxFuture<'static, Result<Self::Stream>>;
+#[derive(Debug, Clone)]
+pub struct IdentityStreamAdapter;
+
+impl IdentityStreamAdapter {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+/// A StreamAdapter that does nothing with no handshake (Identity operation on data that goes through it)
+impl<T: PeerStream + 'static> StreamAdapter<T> for IdentityStreamAdapter {
+    type Stream = T;
+
+    fn handshake(&self, base: T, _role: Role) -> BoxFuture<'static, crate::Result<Self::Stream>> {
+        Box::pin(ready(Ok(base)))
+    }
 }

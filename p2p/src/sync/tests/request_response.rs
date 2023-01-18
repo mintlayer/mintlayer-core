@@ -22,9 +22,9 @@ use chainstate::Locator;
 use crate::{
     message::{HeaderListRequest, HeaderListResponse, SyncRequest, SyncResponse},
     net::{
-        mock::{
-            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-            MockService,
+        default_backend::{
+            transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
+            DefaultNetworkingService,
         },
         types::SyncingEvent,
     },
@@ -83,18 +83,19 @@ where
 }
 
 #[tokio::test]
-async fn request_response_mock_tcp() {
-    request_response::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
+async fn request_response_tcp() {
+    request_response::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn request_response_mock_channels() {
-    request_response::<TestTransportChannel, MockService<MockChannelTransport>>().await;
+async fn request_response_channels() {
+    request_response::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
+        .await;
 }
 
 #[tokio::test]
-async fn test_request_response_mock_noise() {
-    request_response::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
+async fn test_request_response_noise() {
+    request_response::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }
 
 async fn multiple_requests_and_responses<A, T>()
@@ -172,17 +173,24 @@ where
 }
 
 #[tokio::test]
-async fn multiple_requests_and_responses_mock_tcp() {
-    multiple_requests_and_responses::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
+async fn multiple_requests_and_responses_tcp() {
+    multiple_requests_and_responses::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn multiple_requests_and_responses_mock_channels() {
-    multiple_requests_and_responses::<TestTransportChannel, MockService<MockChannelTransport>>()
-        .await;
+async fn multiple_requests_and_responses_channels() {
+    multiple_requests_and_responses::<
+        TestTransportChannel,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
 }
 
 #[tokio::test]
-async fn multiple_requests_and_responses_mock_noise() {
-    multiple_requests_and_responses::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
+async fn multiple_requests_and_responses_noise() {
+    multiple_requests_and_responses::<
+        TestTransportNoise,
+        DefaultNetworkingService<NoiseTcpTransport>,
+    >()
+    .await;
 }

@@ -24,9 +24,9 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, ProtocolError},
     net::{
-        mock::{
+        default_backend::{
             transport::TransportSocket,
-            types::{self, MockEvent, MockPeerId, PeerEvent},
+            types::{self, Event, PeerEvent, PeerId},
         },
         types::Role,
     },
@@ -54,7 +54,7 @@ impl From<PeerRole> for Role {
 
 pub struct Peer<T: TransportSocket> {
     /// Peer ID of the remote node
-    peer_id: MockPeerId,
+    peer_id: PeerId,
 
     /// Chain config
     chain_config: Arc<ChainConfig>,
@@ -71,10 +71,10 @@ pub struct Peer<T: TransportSocket> {
     receiver_address: Option<PeerAddress>,
 
     /// TX channel for communicating with backend
-    tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
+    tx: mpsc::Sender<(PeerId, PeerEvent)>,
 
     /// RX channel for receiving commands from backend
-    rx: mpsc::Receiver<MockEvent>,
+    rx: mpsc::Receiver<Event>,
 }
 
 impl<T> Peer<T>
@@ -83,14 +83,14 @@ where
 {
     #![allow(clippy::too_many_arguments)]
     pub fn new(
-        peer_id: MockPeerId,
+        peer_id: PeerId,
         peer_role: PeerRole,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         socket: T::Stream,
         receiver_address: Option<PeerAddress>,
-        tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
-        rx: mpsc::Receiver<MockEvent>,
+        tx: mpsc::Sender<(PeerId, PeerEvent)>,
+        rx: mpsc::Receiver<Event>,
     ) -> Self {
         let socket = BufferedTranscoder::new(socket);
 
@@ -210,8 +210,8 @@ where
         loop {
             tokio::select! {
                 event = self.rx.recv() => match event.ok_or(P2pError::ChannelClosed)? {
-                    MockEvent::Disconnect => return Ok(()),
-                    MockEvent::SendMessage(message) => self.socket.send(*message).await?,
+                    Event::Disconnect => return Ok(()),
+                    Event::SendMessage(message) => self.socket.send(*message).await?,
                 },
                 event = self.socket.recv() => match event {
                     Err(err) => {
@@ -244,9 +244,9 @@ mod tests {
     use crate::{
         message,
         net::{
-            mock::{
+            default_backend::{
                 transport::{
-                    MockChannelTransport, NoiseTcpTransport, TcpTransportSocket, TransportListener,
+                    MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket, TransportListener,
                 },
                 types,
             },
@@ -266,7 +266,7 @@ mod tests {
         let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, mut rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
-        let peer_id2 = MockPeerId::new();
+        let peer_id2 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
             peer_id2,
@@ -321,7 +321,7 @@ mod tests {
 
     #[tokio::test]
     async fn handshake_inbound_channels() {
-        handshake_inbound::<TestTransportChannel, MockChannelTransport>().await;
+        handshake_inbound::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]
@@ -339,7 +339,7 @@ mod tests {
         let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, mut rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
-        let peer_id3 = MockPeerId::new();
+        let peer_id3 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
             peer_id3,
@@ -398,7 +398,7 @@ mod tests {
 
     #[tokio::test]
     async fn handshake_outbound_channels() {
-        handshake_outbound::<TestTransportChannel, MockChannelTransport>().await;
+        handshake_outbound::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]
@@ -416,7 +416,7 @@ mod tests {
         let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, _rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
-        let peer_id3 = MockPeerId::new();
+        let peer_id3 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
             peer_id3,
@@ -456,7 +456,7 @@ mod tests {
 
     #[tokio::test]
     async fn handshake_different_network_channels() {
-        handshake_different_network::<TestTransportChannel, MockChannelTransport>().await;
+        handshake_different_network::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]
@@ -474,7 +474,7 @@ mod tests {
         let p2p_config = Arc::new(P2pConfig::default());
         let (tx1, _rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
-        let peer_id2 = MockPeerId::new();
+        let peer_id2 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
             peer_id2,
@@ -493,7 +493,7 @@ mod tests {
         assert!(socket2.recv().now_or_never().is_none());
         socket2
             .send(types::Message::Request {
-                request_id: types::MockRequestId::new(),
+                request_id: types::RequestId::new(),
                 request: message::Request::HeaderListRequest(message::HeaderListRequest::new(
                     Locator::new(vec![]),
                 )),
@@ -514,7 +514,7 @@ mod tests {
 
     #[tokio::test]
     async fn invalid_handshake_message_channels() {
-        invalid_handshake_message::<TestTransportChannel, MockChannelTransport>().await;
+        invalid_handshake_message::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]
