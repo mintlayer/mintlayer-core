@@ -51,7 +51,7 @@ impl BlockListRequest {
         Self { block_ids }
     }
 
-    pub fn block_ids(&self) -> &Vec<Id<Block>> {
+    pub fn block_ids(&self) -> &[Id<Block>] {
         &self.block_ids
     }
 
@@ -94,7 +94,7 @@ impl HeaderListResponse {
         Self { headers }
     }
 
-    pub fn headers(&self) -> &Vec<BlockHeader> {
+    pub fn headers(&self) -> &[BlockHeader] {
         &self.headers
     }
 
@@ -113,7 +113,7 @@ impl BlockListResponse {
         Self { blocks }
     }
 
-    pub fn blocks(&self) -> &Vec<Block> {
+    pub fn blocks(&self) -> &[Block] {
         &self.blocks
     }
 
@@ -132,7 +132,7 @@ impl AddrListResponse {
         Self { addresses }
     }
 
-    pub fn addresses(&self) -> &Vec<PeerAddress> {
+    pub fn addresses(&self) -> &[PeerAddress] {
         &self.addresses
     }
 }
