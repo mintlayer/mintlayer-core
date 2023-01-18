@@ -44,10 +44,8 @@ use crate::{
     message::{AddrListRequest, AddrListResponse, PeerManagerRequest, PeerManagerResponse},
     net::{
         self,
-        ConnectivityService, NetworkingService,
         default_backend::transport::TransportAddress,
-        types::{PeerInfo, Role},
-        mock::transport::TransportAddress,
+        types::PeerInfo,
         types::{ConnectivityEvent, Role},
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
@@ -124,7 +122,13 @@ where
         version == self.chain_config.version()
     }
 
+    /// Discover public addresses for this node after new outbound connection is made
+    ///
+    /// *receiver_address* is this host socket address as seen and reported by remote peer.
+    /// This should work for hosts with public IPs and for hosts behind NAT with port forwarding (same port is assumed).
+    /// This won't work for majority of nodes but that should be accepted.
     fn handle_outbound_receiver_address(&mut self, receiver_address: PeerAddress) {
+        // Make sure that the reported IP is globally routable
         let is_global_ip = match &receiver_address {
             PeerAddress::Ip4(socket) => std::net::Ipv4Addr::from(socket.ip).is_global_unicast_ip(),
             PeerAddress::Ip6(socket) => std::net::Ipv6Addr::from(socket.ip).is_global_unicast_ip(),
@@ -133,7 +137,8 @@ where
             return;
         }
 
-        let _public_addresses = self
+        // Take IP and use port numbers from all listening sockets (with same IP version)
+        let discovered_own_addresses = self
             .peer_connectivity_handle
             .local_addresses()
             .iter()
@@ -154,7 +159,12 @@ where
                     }
                     _ => None,
                 },
-            );
+            )
+            .filter_map(|a| TransportAddress::from_peer_address(&a));
+
+        for address in discovered_own_addresses {
+            self.peerdb.peer_discovered(&address);
+        }
     }
 
     /// Handle connection established event
