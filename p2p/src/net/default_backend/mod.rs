@@ -44,7 +44,7 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct Service<T: TransportSocket>(PhantomData<T>);
+pub struct DefaultNetworkingService<T: TransportSocket>(PhantomData<T>);
 
 #[derive(Debug)]
 pub struct ConnectivityHandle<S: NetworkingService, T: TransportSocket> {
@@ -89,7 +89,7 @@ where
 }
 
 #[async_trait]
-impl<T: TransportSocket> NetworkingService for Service<T> {
+impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
     type Transport = T;
     type Address = T::Address;
     type BannableAddress = T::BannableAddress;
@@ -365,7 +365,7 @@ mod tests {
     use crate::error::DialError;
     use crate::testing_utils::{TestTransportChannel, TestTransportMaker, TestTransportTcp};
     use crate::{
-        net::default_backend::transport::{TcpTransportSocket, TestChannelTransport},
+        net::default_backend::transport::{MpscChannelTransport, TcpTransportSocket},
         testing_utils::TestTransportNoise,
     };
     use common::primitives::semver::SemVer;
@@ -379,7 +379,7 @@ mod tests {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
-        let (mut conn1, _) = Service::<T>::start(
+        let (mut conn1, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             Arc::clone(&config),
@@ -388,7 +388,7 @@ mod tests {
         .await
         .unwrap();
 
-        let (conn2, _) = Service::<T>::start(
+        let (conn2, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             Arc::clone(&config),
@@ -426,7 +426,7 @@ mod tests {
 
     #[tokio::test]
     async fn connect_to_remote_channels() {
-        connect_to_remote::<TestTransportChannel, TestChannelTransport>().await;
+        connect_to_remote::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]
@@ -442,7 +442,7 @@ mod tests {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
-        let (mut conn1, _) = Service::<T>::start(
+        let (mut conn1, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             Arc::clone(&config),
@@ -451,7 +451,7 @@ mod tests {
         .await
         .unwrap();
 
-        let (mut conn2, _) = Service::<T>::start(
+        let (mut conn2, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             Arc::clone(&config),
@@ -486,7 +486,7 @@ mod tests {
 
     #[tokio::test]
     async fn accept_incoming_channels() {
-        accept_incoming::<TestTransportChannel, TestChannelTransport>().await;
+        accept_incoming::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]
@@ -502,7 +502,7 @@ mod tests {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
-        let (mut conn1, _) = Service::<T>::start(
+        let (mut conn1, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             Arc::clone(&config),
@@ -510,7 +510,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let (mut conn2, _) = Service::<T>::start(
+        let (mut conn2, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             config,
@@ -543,7 +543,7 @@ mod tests {
 
     #[tokio::test]
     async fn disconnect_channels() {
-        disconnect::<TestTransportChannel, TestChannelTransport>().await;
+        disconnect::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]
@@ -559,7 +559,7 @@ mod tests {
         let config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
 
-        let (mut conn1, _) = Service::<T>::start(
+        let (mut conn1, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             Arc::clone(&config),
@@ -568,7 +568,7 @@ mod tests {
         .await
         .unwrap();
 
-        let (conn2, _) = Service::<T>::start(
+        let (conn2, _) = DefaultNetworkingService::<T>::start(
             A::make_transport(),
             vec![A::make_address()],
             Arc::clone(&config),
@@ -628,7 +628,7 @@ mod tests {
 
     #[tokio::test]
     async fn self_connect_channels() {
-        self_connect::<TestTransportChannel, TestChannelTransport>().await;
+        self_connect::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]

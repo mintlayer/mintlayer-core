@@ -20,9 +20,9 @@ use crate::testing_utils::{
 use crate::{
     error::{P2pError, PeerError},
     net::default_backend::{
-        transport::{NoiseTcpTransport, TcpTransportSocket, TestChannelTransport},
+        transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
         types::PeerId,
-        Service,
+        DefaultNetworkingService,
     },
     sync::tests::{make_sync_manager, register_peer, MakeTestPeerId},
     ConnectivityService, NetworkingService, SyncingMessagingService,
@@ -52,17 +52,22 @@ where
 
 #[tokio::test]
 async fn test_peer_reconnected_tcp() {
-    test_peer_reconnected::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
+    test_peer_reconnected::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn test_peer_reconnected_channels() {
-    test_peer_reconnected::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
+    test_peer_reconnected::<
+        TestTransportChannel,
+        PeerId,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn test_peer_reconnected_noise() {
-    test_peer_reconnected::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
+    test_peer_reconnected::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }
 
 // handle peer disconnection event
@@ -94,15 +99,20 @@ where
 
 #[tokio::test]
 async fn test_peer_disconnected_tcp() {
-    test_peer_disconnected::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
+    test_peer_disconnected::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn test_peer_disconnected_channels() {
-    test_peer_disconnected::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
+    test_peer_disconnected::<
+        TestTransportChannel,
+        PeerId,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn test_peer_disconnected_noise() {
-    test_peer_disconnected::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
+    test_peer_disconnected::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }

@@ -30,9 +30,9 @@ use crate::{
     net::{
         self,
         default_backend::{
-            transport::{NoiseTcpTransport, TcpTransportSocket, TestChannelTransport},
+            transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             types::PeerId,
-            Service,
+            DefaultNetworkingService,
         },
         types::PubSubTopic,
         AsBannableAddress, ConnectivityService, NetworkingService,
@@ -82,17 +82,18 @@ where
 
 #[tokio::test]
 async fn ban_connected_peer_tcp() {
-    ban_connected_peer::<TestTransportTcp, Service<TcpTransportSocket>>().await;
+    ban_connected_peer::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn ban_connected_peer_channels() {
-    ban_connected_peer::<TestTransportChannel, Service<TestChannelTransport>>().await;
+    ban_connected_peer::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
+        .await;
 }
 
 #[tokio::test]
 async fn ban_connected_peer_noise() {
-    ban_connected_peer::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
+    ban_connected_peer::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }
 
 async fn banned_peer_attempts_to_connect<A, T>()
@@ -136,17 +137,25 @@ where
 
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_tcp() {
-    banned_peer_attempts_to_connect::<TestTransportTcp, Service<TcpTransportSocket>>().await;
+    banned_peer_attempts_to_connect::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_channel() {
-    banned_peer_attempts_to_connect::<TestTransportChannel, Service<TestChannelTransport>>().await;
+    banned_peer_attempts_to_connect::<
+        TestTransportChannel,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn banned_peer_attempts_to_connect_noise() {
-    banned_peer_attempts_to_connect::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
+    banned_peer_attempts_to_connect::<
+        TestTransportNoise,
+        DefaultNetworkingService<NoiseTcpTransport>,
+    >()
+    .await;
 }
 
 // attempt to connect to banned peer
@@ -210,17 +219,21 @@ where
 
 #[tokio::test]
 async fn connect_to_banned_peer_tcp() {
-    connect_to_banned_peer::<TestTransportTcp, Service<TcpTransportSocket>>().await;
+    connect_to_banned_peer::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
+        .await;
 }
 
 #[tokio::test]
 async fn connect_to_banned_peer_channels() {
-    connect_to_banned_peer::<TestTransportChannel, Service<TestChannelTransport>>().await;
+    connect_to_banned_peer::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>(
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn connect_to_banned_peer_noise() {
-    connect_to_banned_peer::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
+    connect_to_banned_peer::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
+        .await;
 }
 
 async fn validate_invalid_outbound_connection<A, S, B>(peer_id: S::PeerId)
@@ -290,7 +303,7 @@ where
 async fn validate_invalid_outbound_connection_tcp() {
     validate_invalid_outbound_connection::<
         TestTransportTcp,
-        Service<TcpTransportSocket>,
+        DefaultNetworkingService<TcpTransportSocket>,
         TestTcpAddressMaker,
     >(PeerId::new())
     .await;
@@ -300,7 +313,7 @@ async fn validate_invalid_outbound_connection_tcp() {
 async fn validate_invalid_outbound_connection_channels() {
     validate_invalid_outbound_connection::<
         TestTransportChannel,
-        Service<TestChannelTransport>,
+        DefaultNetworkingService<MpscChannelTransport>,
         TestChannelAddressMaker,
     >(PeerId::new())
     .await;
@@ -310,7 +323,7 @@ async fn validate_invalid_outbound_connection_channels() {
 async fn validate_invalid_outbound_connection_noise() {
     validate_invalid_outbound_connection::<
         TestTransportNoise,
-        Service<NoiseTcpTransport>,
+        DefaultNetworkingService<NoiseTcpTransport>,
         TestTcpAddressMaker,
     >(PeerId::new())
     .await;
@@ -380,7 +393,7 @@ where
 async fn validate_invalid_inbound_connection_tcp() {
     validate_invalid_inbound_connection::<
         TestTransportTcp,
-        Service<TcpTransportSocket>,
+        DefaultNetworkingService<TcpTransportSocket>,
         TestTcpAddressMaker,
     >(PeerId::new())
     .await;
@@ -390,7 +403,7 @@ async fn validate_invalid_inbound_connection_tcp() {
 async fn validate_invalid_inbound_connection_channels() {
     validate_invalid_inbound_connection::<
         TestTransportChannel,
-        Service<TestChannelTransport>,
+        DefaultNetworkingService<MpscChannelTransport>,
         TestChannelAddressMaker,
     >(PeerId::new())
     .await;
@@ -400,7 +413,7 @@ async fn validate_invalid_inbound_connection_channels() {
 async fn validate_invalid_inbound_connection_noise() {
     validate_invalid_inbound_connection::<
         TestTransportNoise,
-        Service<NoiseTcpTransport>,
+        DefaultNetworkingService<NoiseTcpTransport>,
         TestTcpAddressMaker,
     >(PeerId::new())
     .await;
@@ -454,15 +467,27 @@ where
 
 #[tokio::test]
 async fn inbound_connection_invalid_magic_tcp() {
-    inbound_connection_invalid_magic::<TestTransportTcp, Service<TcpTransportSocket>>().await;
+    inbound_connection_invalid_magic::<
+        TestTransportTcp,
+        DefaultNetworkingService<TcpTransportSocket>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn inbound_connection_invalid_magic_channels() {
-    inbound_connection_invalid_magic::<TestTransportChannel, Service<TestChannelTransport>>().await;
+    inbound_connection_invalid_magic::<
+        TestTransportChannel,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn inbound_connection_invalid_magic_noise() {
-    inbound_connection_invalid_magic::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
+    inbound_connection_invalid_magic::<
+        TestTransportNoise,
+        DefaultNetworkingService<NoiseTcpTransport>,
+    >()
+    .await;
 }

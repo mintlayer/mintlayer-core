@@ -246,7 +246,7 @@ mod tests {
         net::{
             default_backend::{
                 transport::{
-                    NoiseTcpTransport, TcpTransportSocket, TestChannelTransport, TransportListener,
+                    MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket, TransportListener,
                 },
                 types,
             },
@@ -321,7 +321,7 @@ mod tests {
 
     #[tokio::test]
     async fn handshake_inbound_channels() {
-        handshake_inbound::<TestTransportChannel, TestChannelTransport>().await;
+        handshake_inbound::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]
@@ -398,7 +398,7 @@ mod tests {
 
     #[tokio::test]
     async fn handshake_outbound_channels() {
-        handshake_outbound::<TestTransportChannel, TestChannelTransport>().await;
+        handshake_outbound::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]
@@ -456,7 +456,7 @@ mod tests {
 
     #[tokio::test]
     async fn handshake_different_network_channels() {
-        handshake_different_network::<TestTransportChannel, TestChannelTransport>().await;
+        handshake_different_network::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]
@@ -514,7 +514,7 @@ mod tests {
 
     #[tokio::test]
     async fn invalid_handshake_message_channels() {
-        invalid_handshake_message::<TestTransportChannel, TestChannelTransport>().await;
+        invalid_handshake_message::<TestTransportChannel, MpscChannelTransport>().await;
     }
 
     #[tokio::test]

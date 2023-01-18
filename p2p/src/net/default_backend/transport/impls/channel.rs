@@ -51,7 +51,7 @@ impl TransportAddress for Address {
         PeerAddress::Ip4(PeerAddressIp4 {
             // Address of the first "host" will be 0.0.0.1
             ip: std::net::Ipv4Addr::from(*self).into(),
-            // There is only one "port" in TestChannelTransport per "host", use arbitrary value
+            // There is only one "port" in MpscChannelTransport per "host", use arbitrary value
             port: 10000,
         })
     }
@@ -81,19 +81,19 @@ static NEXT_ADDRESS: AtomicU32 = AtomicU32::new(1);
 ///
 /// This transport should only be used in tests.
 #[derive(Debug)]
-pub struct TestChannelTransport {
+pub struct MpscChannelTransport {
     local_address: Address,
 }
 
-impl TestChannelTransport {
+impl MpscChannelTransport {
     pub fn new() -> Self {
         let local_address = NEXT_ADDRESS.fetch_add(1, Ordering::Relaxed);
-        TestChannelTransport { local_address }
+        MpscChannelTransport { local_address }
     }
 }
 
 #[async_trait]
-impl TransportSocket for TestChannelTransport {
+impl TransportSocket for MpscChannelTransport {
     type Address = Address;
     type BannableAddress = Address;
     type Listener = ChannelListener;
@@ -210,7 +210,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_recv() {
-        let transport = TestChannelTransport::new();
+        let transport = MpscChannelTransport::new();
         let address = ZERO_ADDRESS;
         let mut server = transport.bind(vec![address]).await.unwrap();
         let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);

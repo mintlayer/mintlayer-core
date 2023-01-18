@@ -14,14 +14,14 @@
 // limitations under the License.
 
 use p2p::{
-    net::default_backend::{transport::TestChannelTransport, Service},
+    net::default_backend::{transport::MpscChannelTransport, DefaultNetworkingService},
     testing_utils::{TestChannelAddressMaker, TestTransportChannel},
 };
 
 fn main() {
     p2p_backend_test_suite::run::<
         TestTransportChannel,
-        Service<TestChannelTransport>,
+        DefaultNetworkingService<MpscChannelTransport>,
         TestChannelAddressMaker,
     >();
 }

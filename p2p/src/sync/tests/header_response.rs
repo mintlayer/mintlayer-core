@@ -25,9 +25,9 @@ use p2p_test_utils::TestBlockInfo;
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     net::default_backend::{
-        transport::{NoiseTcpTransport, TcpTransportSocket, TestChannelTransport},
+        transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
         types::PeerId,
-        Service,
+        DefaultNetworkingService,
     },
     sync::{
         peer,
@@ -69,17 +69,19 @@ where
 
 #[tokio::test]
 async fn too_many_headers_tcp() {
-    too_many_headers::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
+    too_many_headers::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>()
+        .await;
 }
 
 #[tokio::test]
 async fn too_many_headers_channels() {
-    too_many_headers::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
+    too_many_headers::<TestTransportChannel, PeerId, DefaultNetworkingService<MpscChannelTransport>>().await;
 }
 
 #[tokio::test]
 async fn too_many_headers_noise() {
-    too_many_headers::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
+    too_many_headers::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>()
+        .await;
 }
 
 // header response is empty
@@ -105,17 +107,21 @@ where
 
 #[tokio::test]
 async fn empty_response_tcp() {
-    empty_response::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
+    empty_response::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>()
+        .await;
 }
 
 #[tokio::test]
 async fn empty_response_channels() {
-    empty_response::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
+    empty_response::<TestTransportChannel, PeerId, DefaultNetworkingService<MpscChannelTransport>>(
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn empty_response_noise() {
-    empty_response::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
+    empty_response::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>()
+        .await;
 }
 
 // valid response with headers in order and the first header attaching to local chain
@@ -154,17 +160,21 @@ where
 
 #[tokio::test]
 async fn valid_response_tcp() {
-    valid_response::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
+    valid_response::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>()
+        .await;
 }
 
 #[tokio::test]
 async fn valid_response_channles() {
-    valid_response::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
+    valid_response::<TestTransportChannel, PeerId, DefaultNetworkingService<MpscChannelTransport>>(
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn valid_response_noise() {
-    valid_response::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
+    valid_response::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>()
+        .await;
 }
 
 // the first header doesn't attach to local chain
@@ -202,8 +212,12 @@ where
 
 #[tokio::test]
 async fn header_doesnt_attach_to_local_chain_tcp() {
-    header_doesnt_attach_to_local_chain::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>()
-        .await;
+    header_doesnt_attach_to_local_chain::<
+        TestTransportTcp,
+        PeerId,
+        DefaultNetworkingService<TcpTransportSocket>,
+    >()
+    .await;
 }
 
 #[tokio::test]
@@ -211,15 +225,19 @@ async fn header_doesnt_attach_to_local_chain_channel() {
     header_doesnt_attach_to_local_chain::<
         TestTransportChannel,
         PeerId,
-        Service<TestChannelTransport>,
+        DefaultNetworkingService<MpscChannelTransport>,
     >()
     .await;
 }
 
 #[tokio::test]
 async fn header_doesnt_attach_to_local_chain_noise() {
-    header_doesnt_attach_to_local_chain::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>()
-        .await;
+    header_doesnt_attach_to_local_chain::<
+        TestTransportNoise,
+        PeerId,
+        DefaultNetworkingService<NoiseTcpTransport>,
+    >()
+    .await;
 }
 
 // valid headers but they are not in order
@@ -258,17 +276,24 @@ where
 
 #[tokio::test]
 async fn headers_not_in_order_tcp() {
-    headers_not_in_order::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
+    headers_not_in_order::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>(
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn headers_not_in_order_channels() {
-    headers_not_in_order::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
+    headers_not_in_order::<
+        TestTransportChannel,
+        PeerId,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn headers_not_in_order_noise() {
-    headers_not_in_order::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
+    headers_not_in_order::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }
 
 // peer state is incorrect to be sending header responses
@@ -308,17 +333,19 @@ where
 
 #[tokio::test]
 async fn invalid_state_tcp() {
-    invalid_state::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
+    invalid_state::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn invalid_state_channels() {
-    invalid_state::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
+    invalid_state::<TestTransportChannel, PeerId, DefaultNetworkingService<MpscChannelTransport>>()
+        .await;
 }
 
 #[tokio::test]
 async fn invalid_state_noise() {
-    invalid_state::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
+    invalid_state::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>()
+        .await;
 }
 
 // peer doesn't exist
@@ -343,15 +370,17 @@ where
 
 #[tokio::test]
 async fn peer_doesnt_exist_tcp() {
-    peer_doesnt_exist::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
+    peer_doesnt_exist::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>()
+        .await;
 }
 
 #[tokio::test]
 async fn peer_doesnt_exist_channels() {
-    peer_doesnt_exist::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
+    peer_doesnt_exist::<TestTransportChannel, PeerId, DefaultNetworkingService<MpscChannelTransport>>().await;
 }
 
 #[tokio::test]
 async fn peer_doesnt_exist_noise() {
-    peer_doesnt_exist::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
+    peer_doesnt_exist::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>()
+        .await;
 }

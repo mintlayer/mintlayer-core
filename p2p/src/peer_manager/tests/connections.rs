@@ -38,9 +38,9 @@ use crate::{
     net::{
         self,
         default_backend::{
-            transport::{NoiseTcpTransport, TcpTransportSocket, TestChannelTransport},
+            transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             types::PeerId,
-            Service,
+            DefaultNetworkingService,
         },
         types::{PeerInfo, PubSubTopic},
         ConnectivityService, NetworkingService,
@@ -77,8 +77,12 @@ async fn test_peer_manager_connect_tcp() {
     let bind_addr = TestTransportTcp::make_address();
     let remote_addr: SocketAddr = "[::1]:1".parse().unwrap();
 
-    test_peer_manager_connect::<Service<TcpTransportSocket>>(transport, bind_addr, remote_addr)
-        .await;
+    test_peer_manager_connect::<DefaultNetworkingService<TcpTransportSocket>>(
+        transport,
+        bind_addr,
+        remote_addr,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -87,8 +91,12 @@ async fn test_peer_manager_connect_tcp_noise() {
     let bind_addr = TestTransportTcp::make_address();
     let remote_addr: SocketAddr = "[::1]:1".parse().unwrap();
 
-    test_peer_manager_connect::<Service<NoiseTcpTransport>>(transport, bind_addr, remote_addr)
-        .await;
+    test_peer_manager_connect::<DefaultNetworkingService<NoiseTcpTransport>>(
+        transport,
+        bind_addr,
+        remote_addr,
+    )
+    .await;
 }
 
 // verify that the auto-connect functionality works if the number of active connections
@@ -127,17 +135,18 @@ where
 
 #[tokio::test]
 async fn test_auto_connect_tcp() {
-    test_auto_connect::<TestTransportTcp, Service<TcpTransportSocket>>().await;
+    test_auto_connect::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn test_auto_connect_channels() {
-    test_auto_connect::<TestTransportChannel, Service<TestChannelTransport>>().await;
+    test_auto_connect::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
+        .await;
 }
 
 #[tokio::test]
 async fn test_auto_connect_noise() {
-    test_auto_connect::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
+    test_auto_connect::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }
 
 async fn connect_outbound_same_network<A, T>()
@@ -162,17 +171,21 @@ where
 
 #[tokio::test]
 async fn connect_outbound_same_network_tcp() {
-    connect_outbound_same_network::<TestTransportTcp, Service<TcpTransportSocket>>().await;
+    connect_outbound_same_network::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn connect_outbound_same_network_channels() {
-    connect_outbound_same_network::<TestTransportChannel, Service<TestChannelTransport>>().await;
+    connect_outbound_same_network::<
+        TestTransportChannel,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn connect_outbound_same_network_noise() {
-    connect_outbound_same_network::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
+    connect_outbound_same_network::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }
 
 async fn connect_outbound_different_network<A, T>()
@@ -203,18 +216,29 @@ where
 
 #[tokio::test]
 async fn connect_outbound_different_network_tcp() {
-    connect_outbound_different_network::<TestTransportTcp, Service<TcpTransportSocket>>().await;
+    connect_outbound_different_network::<
+        TestTransportTcp,
+        DefaultNetworkingService<TcpTransportSocket>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn connect_outbound_different_network_channels() {
-    connect_outbound_different_network::<TestTransportChannel, Service<TestChannelTransport>>()
-        .await;
+    connect_outbound_different_network::<
+        TestTransportChannel,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn connect_outbound_different_network_noise() {
-    connect_outbound_different_network::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
+    connect_outbound_different_network::<
+        TestTransportNoise,
+        DefaultNetworkingService<NoiseTcpTransport>,
+    >()
+    .await;
 }
 
 async fn connect_inbound_same_network<A, T>()
@@ -243,17 +267,23 @@ where
 
 #[tokio::test]
 async fn connect_inbound_same_network_tcp() {
-    connect_inbound_same_network::<TestTransportTcp, Service<TcpTransportSocket>>().await;
+    connect_inbound_same_network::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>(
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn connect_inbound_same_network_channel() {
-    connect_inbound_same_network::<TestTransportChannel, Service<TestChannelTransport>>().await;
+    connect_inbound_same_network::<
+        TestTransportChannel,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn connect_inbound_same_network_noise() {
-    connect_inbound_same_network::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
+    connect_inbound_same_network::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }
 
 async fn connect_inbound_different_network<A, T>()
@@ -295,18 +325,29 @@ where
 
 #[tokio::test]
 async fn connect_inbound_different_network_tcp() {
-    connect_inbound_different_network::<TestTransportTcp, Service<TcpTransportSocket>>().await;
+    connect_inbound_different_network::<
+        TestTransportTcp,
+        DefaultNetworkingService<TcpTransportSocket>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn connect_inbound_different_network_channels() {
-    connect_inbound_different_network::<TestTransportChannel, Service<TestChannelTransport>>()
-        .await;
+    connect_inbound_different_network::<
+        TestTransportChannel,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn connect_inbound_different_network_noise() {
-    connect_inbound_different_network::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
+    connect_inbound_different_network::<
+        TestTransportNoise,
+        DefaultNetworkingService<NoiseTcpTransport>,
+    >()
+    .await;
 }
 
 async fn remote_closes_connection<A, T>()
@@ -349,17 +390,19 @@ where
 
 #[tokio::test]
 async fn remote_closes_connection_tcp() {
-    remote_closes_connection::<TestTransportTcp, Service<TcpTransportSocket>>().await;
+    remote_closes_connection::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
+        .await;
 }
 
 #[tokio::test]
 async fn remote_closes_connection_channels() {
-    remote_closes_connection::<TestTransportChannel, Service<TestChannelTransport>>().await;
+    remote_closes_connection::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>().await;
 }
 
 #[tokio::test]
 async fn remote_closes_connection_noise() {
-    remote_closes_connection::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
+    remote_closes_connection::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
+        .await;
 }
 
 async fn inbound_connection_too_many_peers<A, T>(peers: Vec<(T::Address, PeerInfo<T::PeerId>)>)
@@ -427,7 +470,11 @@ async fn inbound_connection_too_many_peers_tcp() {
         })
         .collect::<Vec<_>>();
 
-    inbound_connection_too_many_peers::<TestTransportTcp, Service<TcpTransportSocket>>(peers).await;
+    inbound_connection_too_many_peers::<
+        TestTransportTcp,
+        DefaultNetworkingService<TcpTransportSocket>,
+    >(peers)
+    .await;
 }
 
 #[tokio::test]
@@ -450,8 +497,11 @@ async fn inbound_connection_too_many_peers_channels() {
         })
         .collect::<Vec<_>>();
 
-    inbound_connection_too_many_peers::<TestTransportChannel, Service<TestChannelTransport>>(peers)
-        .await;
+    inbound_connection_too_many_peers::<
+        TestTransportChannel,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >(peers)
+    .await;
 }
 
 #[tokio::test]
@@ -474,8 +524,11 @@ async fn inbound_connection_too_many_peers_noise() {
         })
         .collect::<Vec<_>>();
 
-    inbound_connection_too_many_peers::<TestTransportNoise, Service<NoiseTcpTransport>>(peers)
-        .await;
+    inbound_connection_too_many_peers::<
+        TestTransportNoise,
+        DefaultNetworkingService<NoiseTcpTransport>,
+    >(peers)
+    .await;
 }
 
 async fn connection_timeout<T>(transport: T::Transport, addr1: T::Address, addr2: T::Address)
@@ -507,7 +560,7 @@ where
 
 #[tokio::test]
 async fn connection_timeout_tcp() {
-    connection_timeout::<Service<TcpTransportSocket>>(
+    connection_timeout::<DefaultNetworkingService<TcpTransportSocket>>(
         TestTransportTcp::make_transport(),
         TestTransportTcp::make_address(),
         TestTransportTcp::make_address(),
@@ -517,7 +570,7 @@ async fn connection_timeout_tcp() {
 
 #[tokio::test]
 async fn connection_timeout_channels() {
-    connection_timeout::<Service<TestChannelTransport>>(
+    connection_timeout::<DefaultNetworkingService<MpscChannelTransport>>(
         TestTransportChannel::make_transport(),
         TestTransportChannel::make_address(),
         65_535,
@@ -527,7 +580,7 @@ async fn connection_timeout_channels() {
 
 #[tokio::test]
 async fn connection_timeout_noise() {
-    connection_timeout::<Service<NoiseTcpTransport>>(
+    connection_timeout::<DefaultNetworkingService<NoiseTcpTransport>>(
         TestTransportNoise::make_transport(),
         TestTransportNoise::make_address(),
         TestTransportNoise::make_address(),
@@ -585,7 +638,7 @@ async fn connection_timeout_rpc_notified<T>(
 
 #[tokio::test]
 async fn connection_timeout_rpc_notified_tcp() {
-    connection_timeout_rpc_notified::<Service<TcpTransportSocket>>(
+    connection_timeout_rpc_notified::<DefaultNetworkingService<TcpTransportSocket>>(
         TestTransportTcp::make_transport(),
         TestTransportTcp::make_address(),
         TestTransportTcp::make_address(),
@@ -595,7 +648,7 @@ async fn connection_timeout_rpc_notified_tcp() {
 
 #[tokio::test]
 async fn connection_timeout_rpc_notified_channels() {
-    connection_timeout_rpc_notified::<Service<TestChannelTransport>>(
+    connection_timeout_rpc_notified::<DefaultNetworkingService<MpscChannelTransport>>(
         TestTransportChannel::make_transport(),
         TestTransportChannel::make_address(),
         9999,
@@ -605,7 +658,7 @@ async fn connection_timeout_rpc_notified_channels() {
 
 #[tokio::test]
 async fn connection_timeout_rpc_notified_noise() {
-    connection_timeout_rpc_notified::<Service<NoiseTcpTransport>>(
+    connection_timeout_rpc_notified::<DefaultNetworkingService<NoiseTcpTransport>>(
         TestTransportNoise::make_transport(),
         TestTransportNoise::make_address(),
         TestTransportNoise::make_address(),
@@ -675,15 +728,16 @@ where
 
 #[tokio::test]
 async fn connection_add_node_tcp() {
-    connection_add_node::<TestTransportTcp, Service<TcpTransportSocket>>().await;
+    connection_add_node::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn connection_add_node_noise() {
-    connection_add_node::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
+    connection_add_node::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }
 
 #[tokio::test]
 async fn connection_add_node_channel() {
-    connection_add_node::<TestTransportChannel, Service<TestChannelTransport>>().await;
+    connection_add_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
+        .await;
 }

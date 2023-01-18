@@ -26,7 +26,7 @@ use tokio::time::timeout;
 
 use crate::net::{
     default_backend::transport::{
-        NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket, TestChannelTransport,
+        MpscChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
     },
     types::{ConnectivityEvent, PeerInfo},
     ConnectivityService, NetworkingService,
@@ -71,12 +71,12 @@ impl TestTransportMaker for TestTransportTcp {
 pub struct TestTransportChannel {}
 
 impl TestTransportMaker for TestTransportChannel {
-    type Transport = TestChannelTransport;
+    type Transport = MpscChannelTransport;
 
     type Address = u32;
 
     fn make_transport() -> Self::Transport {
-        TestChannelTransport::new()
+        MpscChannelTransport::new()
     }
 
     fn make_address() -> Self::Address {

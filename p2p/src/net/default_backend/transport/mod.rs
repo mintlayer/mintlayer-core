@@ -20,7 +20,7 @@ mod traits;
 use impls::{channel, stream_adapter, tcp};
 
 pub use self::{
-    channel::{ChannelListener, ChannelStream, TestChannelTransport},
+    channel::{ChannelListener, ChannelStream, MpscChannelTransport},
     message_codec::BufferedTranscoder,
     stream_adapter::{
         identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter,

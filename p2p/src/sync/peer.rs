@@ -120,13 +120,15 @@ impl<T: NetworkingService> PeerContext<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::default_backend::{transport::TcpTransportSocket, types, Service};
+    use crate::net::default_backend::{
+        transport::TcpTransportSocket, types, DefaultNetworkingService,
+    };
     use common::chain::block::{
         consensus_data::ConsensusData, timestamp::BlockTimestamp, BlockReward,
     };
 
-    fn new_peersyncstate() -> PeerContext<Service<TcpTransportSocket>> {
-        PeerContext::<Service<TcpTransportSocket>>::new(types::PeerId::new())
+    fn new_peersyncstate() -> PeerContext<DefaultNetworkingService<TcpTransportSocket>> {
+        PeerContext::<DefaultNetworkingService<TcpTransportSocket>>::new(types::PeerId::new())
     }
 
     #[test]

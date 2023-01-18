@@ -14,11 +14,14 @@
 // limitations under the License.
 
 use p2p::{
-    net::default_backend::{transport::TcpTransportSocket, Service},
+    net::default_backend::{transport::TcpTransportSocket, DefaultNetworkingService},
     testing_utils::{TestTcpAddressMaker, TestTransportTcp},
 };
 
 fn main() {
-    p2p_backend_test_suite::run::<TestTransportTcp, Service<TcpTransportSocket>, TestTcpAddressMaker>(
-    );
+    p2p_backend_test_suite::run::<
+        TestTransportTcp,
+        DefaultNetworkingService<TcpTransportSocket>,
+        TestTcpAddressMaker,
+    >();
 }

@@ -23,8 +23,8 @@ use crate::{
     message::{HeaderListRequest, HeaderListResponse, SyncRequest, SyncResponse},
     net::{
         default_backend::{
-            transport::{NoiseTcpTransport, TcpTransportSocket, TestChannelTransport},
-            Service,
+            transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
+            DefaultNetworkingService,
         },
         types::SyncingEvent,
     },
@@ -84,17 +84,18 @@ where
 
 #[tokio::test]
 async fn request_response_tcp() {
-    request_response::<TestTransportTcp, Service<TcpTransportSocket>>().await;
+    request_response::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn request_response_channels() {
-    request_response::<TestTransportChannel, Service<TestChannelTransport>>().await;
+    request_response::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
+        .await;
 }
 
 #[tokio::test]
 async fn test_request_response_noise() {
-    request_response::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
+    request_response::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }
 
 async fn multiple_requests_and_responses<A, T>()
@@ -173,15 +174,23 @@ where
 
 #[tokio::test]
 async fn multiple_requests_and_responses_tcp() {
-    multiple_requests_and_responses::<TestTransportTcp, Service<TcpTransportSocket>>().await;
+    multiple_requests_and_responses::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn multiple_requests_and_responses_channels() {
-    multiple_requests_and_responses::<TestTransportChannel, Service<TestChannelTransport>>().await;
+    multiple_requests_and_responses::<
+        TestTransportChannel,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn multiple_requests_and_responses_noise() {
-    multiple_requests_and_responses::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
+    multiple_requests_and_responses::<
+        TestTransportNoise,
+        DefaultNetworkingService<NoiseTcpTransport>,
+    >()
+    .await;
 }

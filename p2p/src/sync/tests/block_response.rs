@@ -26,9 +26,9 @@ use common::{chain::block::consensus_data::PoWData, primitives::Idable};
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     net::default_backend::{
-        transport::{NoiseTcpTransport, TcpTransportSocket, TestChannelTransport},
+        transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
         types::PeerId,
-        Service,
+        DefaultNetworkingService,
     },
     sync::{
         peer,
@@ -59,17 +59,19 @@ where
 
 #[tokio::test]
 async fn peer_doesnt_exist_tcp() {
-    peer_doesnt_exist::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
+    peer_doesnt_exist::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>()
+        .await;
 }
 
 #[tokio::test]
 async fn peer_doesnt_exist_channels() {
-    peer_doesnt_exist::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
+    peer_doesnt_exist::<TestTransportChannel, PeerId, DefaultNetworkingService<MpscChannelTransport>>().await;
 }
 
 #[tokio::test]
 async fn peer_doesnt_exist_noise() {
-    peer_doesnt_exist::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
+    peer_doesnt_exist::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>()
+        .await;
 }
 
 // submit valid block but the peer is in invalid state
@@ -108,17 +110,18 @@ where
 
 #[tokio::test]
 async fn valid_block_tcp() {
-    valid_block::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
+    valid_block::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn valid_block_channels() {
-    valid_block::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
+    valid_block::<TestTransportChannel, PeerId, DefaultNetworkingService<MpscChannelTransport>>()
+        .await;
 }
 
 #[tokio::test]
 async fn valid_block_noise() {
-    valid_block::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
+    valid_block::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }
 
 // submit valid block
@@ -151,18 +154,32 @@ where
 
 #[tokio::test]
 async fn valid_block_invalid_state_tcp() {
-    valid_block_invalid_state::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
+    valid_block_invalid_state::<
+        TestTransportTcp,
+        PeerId,
+        DefaultNetworkingService<TcpTransportSocket>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn valid_block_invalid_state_channels() {
-    valid_block_invalid_state::<TestTransportChannel, PeerId, Service<TestChannelTransport>>()
-        .await;
+    valid_block_invalid_state::<
+        TestTransportChannel,
+        PeerId,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >()
+    .await;
 }
 
 #[tokio::test]
 async fn valid_block_invalid_state_noise() {
-    valid_block_invalid_state::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
+    valid_block_invalid_state::<
+        TestTransportNoise,
+        PeerId,
+        DefaultNetworkingService<NoiseTcpTransport>,
+    >()
+    .await;
 }
 
 // submit the same block twice
@@ -205,8 +222,12 @@ where
 
 #[tokio::test]
 async fn valid_block_resubmitted_chainstate_tcp() {
-    valid_block_resubmitted_chainstate::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>()
-        .await;
+    valid_block_resubmitted_chainstate::<
+        TestTransportTcp,
+        PeerId,
+        DefaultNetworkingService<TcpTransportSocket>,
+    >()
+    .await;
 }
 
 #[tokio::test]
@@ -214,15 +235,19 @@ async fn valid_block_resubmitted_chainstate_channels() {
     valid_block_resubmitted_chainstate::<
         TestTransportChannel,
         PeerId,
-        Service<TestChannelTransport>,
+        DefaultNetworkingService<MpscChannelTransport>,
     >()
     .await;
 }
 
 #[tokio::test]
 async fn valid_block_resubmitted_chainstate_noise() {
-    valid_block_resubmitted_chainstate::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>()
-        .await;
+    valid_block_resubmitted_chainstate::<
+        TestTransportNoise,
+        PeerId,
+        DefaultNetworkingService<NoiseTcpTransport>,
+    >()
+    .await;
 }
 
 // block validation fails
@@ -267,15 +292,17 @@ where
 
 #[tokio::test]
 async fn invalid_block_tcp() {
-    invalid_block::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
+    invalid_block::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn invalid_block_channels() {
-    invalid_block::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
+    invalid_block::<TestTransportChannel, PeerId, DefaultNetworkingService<MpscChannelTransport>>()
+        .await;
 }
 
 #[tokio::test]
 async fn invalid_block_noise() {
-    invalid_block::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
+    invalid_block::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>()
+        .await;
 }

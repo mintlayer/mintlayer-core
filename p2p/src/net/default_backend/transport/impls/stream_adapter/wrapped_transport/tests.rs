@@ -31,8 +31,8 @@ use crate::{
     net::default_backend::{
         transport::{
             impls::stream_adapter::wrapped_transport::wrapped_listener::MAX_CONCURRENT_HANDSHAKES,
-            BufferedTranscoder, ChannelListener, IdentityStreamAdapter, NoiseEncryptionAdapter,
-            PeerStream, TcpTransportSocket, TestChannelTransport, TransportListener,
+            BufferedTranscoder, ChannelListener, IdentityStreamAdapter, MpscChannelTransport,
+            NoiseEncryptionAdapter, PeerStream, TcpTransportSocket, TransportListener,
             TransportSocket,
         },
         types::{Message, RequestId},
@@ -70,7 +70,7 @@ async fn test<A: TestTransportMaker<Address = T::Address>, T: TransportSocket>(t
 async fn test_send_recv() {
     test::<TestTransportTcp, TcpTransportSocket>(TcpTransportSocket::new()).await;
 
-    test::<TestTransportChannel, TestChannelTransport>(TestChannelTransport::new()).await;
+    test::<TestTransportChannel, MpscChannelTransport>(MpscChannelTransport::new()).await;
 
     test::<TestTransportTcp, WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>>(
         WrappedTransportSocket::new(NoiseEncryptionAdapter::gen_new(), TcpTransportSocket::new()),
@@ -79,10 +79,10 @@ async fn test_send_recv() {
 
     test::<
         TestTransportChannel,
-        WrappedTransportSocket<NoiseEncryptionAdapter, TestChannelTransport>,
+        WrappedTransportSocket<NoiseEncryptionAdapter, MpscChannelTransport>,
     >(WrappedTransportSocket::new(
         NoiseEncryptionAdapter::gen_new(),
-        TestChannelTransport::new(),
+        MpscChannelTransport::new(),
     ))
     .await;
 
@@ -93,8 +93,8 @@ async fn test_send_recv() {
 
     test::<
         TestTransportChannel,
-        WrappedTransportSocket<IdentityStreamAdapter, TestChannelTransport>,
-    >(WrappedTransportSocket::new(IdentityStreamAdapter::new(), TestChannelTransport::new()))
+        WrappedTransportSocket<IdentityStreamAdapter, MpscChannelTransport>,
+    >(WrappedTransportSocket::new(IdentityStreamAdapter::new(), MpscChannelTransport::new()))
     .await;
 
     test::<
@@ -111,7 +111,7 @@ async fn test_send_recv() {
 }
 
 pub struct TestTransport {
-    transport: TestChannelTransport,
+    transport: MpscChannelTransport,
     port_open: Arc<Mutex<bool>>,
 }
 
@@ -123,7 +123,7 @@ pub struct TestListener {
 impl TestTransport {
     fn new() -> Self {
         Self {
-            transport: TestChannelTransport::new(),
+            transport: MpscChannelTransport::new(),
             port_open: Default::default(),
         }
     }
@@ -131,10 +131,10 @@ impl TestTransport {
 
 #[async_trait]
 impl TransportSocket for TestTransport {
-    type Address = <TestChannelTransport as TransportSocket>::Address;
-    type BannableAddress = <TestChannelTransport as TransportSocket>::BannableAddress;
+    type Address = <MpscChannelTransport as TransportSocket>::Address;
+    type BannableAddress = <MpscChannelTransport as TransportSocket>::BannableAddress;
     type Listener = TestListener;
-    type Stream = <TestChannelTransport as TransportSocket>::Stream;
+    type Stream = <MpscChannelTransport as TransportSocket>::Stream;
 
     async fn bind(&self, addresses: Vec<Self::Address>) -> crate::Result<Self::Listener> {
         let listener = self.transport.bind(addresses).await.unwrap();
@@ -153,22 +153,22 @@ impl TransportSocket for TestTransport {
 #[async_trait]
 impl
     TransportListener<
-        <TestChannelTransport as TransportSocket>::Stream,
-        <TestChannelTransport as TransportSocket>::Address,
+        <MpscChannelTransport as TransportSocket>::Stream,
+        <MpscChannelTransport as TransportSocket>::Address,
     > for TestListener
 {
     async fn accept(
         &mut self,
     ) -> crate::Result<(
-        <TestChannelTransport as TransportSocket>::Stream,
-        <TestChannelTransport as TransportSocket>::Address,
+        <MpscChannelTransport as TransportSocket>::Stream,
+        <MpscChannelTransport as TransportSocket>::Address,
     )> {
         self.listener.accept().await
     }
 
     fn local_addresses(
         &self,
-    ) -> crate::Result<Vec<<TestChannelTransport as TransportSocket>::Address>> {
+    ) -> crate::Result<Vec<<MpscChannelTransport as TransportSocket>::Address>> {
         self.listener.local_addresses()
     }
 }

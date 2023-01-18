@@ -44,7 +44,7 @@ use crate::{
     net::{
         default_backend::{
             transport::{NoiseEncryptionAdapter, NoiseTcpTransport},
-            Service,
+            DefaultNetworkingService,
         },
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
@@ -160,7 +160,7 @@ pub async fn make_p2p(
     let base_transport = net::default_backend::transport::TcpTransportSocket::new();
     let transport = NoiseTcpTransport::new(stream_adapter, base_transport);
 
-    let p2p = P2p::<Service<NoiseTcpTransport>>::new(
+    let p2p = P2p::<DefaultNetworkingService<NoiseTcpTransport>>::new(
         transport,
         chain_config,
         p2p_config,
