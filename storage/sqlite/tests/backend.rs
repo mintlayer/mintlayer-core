@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use storage_lmdb::Lmdb;
+use storage_sqlite::Sqlite;
 
 fn main() {
     let test_root = test_utils::test_root!("backend-tests").unwrap();
@@ -24,7 +24,7 @@ fn main() {
         move || {
             // Each test case gets its own subdirectory to avoid clashes
             let test_dir = test_root.fresh_test_dir("unknown");
-            Lmdb::new(test_dir.as_ref().to_path_buf())
+            Sqlite::new(test_dir.as_ref().to_path_buf().with_file_name("database.sqlite"))
         }
     };
 
