@@ -780,16 +780,12 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         consumed_data: TransactionVerifierDelta,
         block_height: BlockHeight,
     ) -> Result<(), BlockError> {
+        // Flush accounting data to the pre-sealed db index
         let epoch_index = self.chain_config.epoch_index_from_height(&block_height);
-        if let Some(delta) = self.db_tx.get_pre_sealed_accounting_delta(epoch_index)? {
-            let mut epoch_accounting_delta = consumed_data.accounting_delta().clone();
-            epoch_accounting_delta
-                .merge_with_delta(delta)
-                .map_err(TransactionVerifierStorageError::from)?;
-            self.db_tx
-                .set_pre_sealed_accounting_delta(epoch_index, &epoch_accounting_delta)?;
-        }
+        self.db_tx
+            .set_pre_sealed_accounting_delta(epoch_index, &consumed_data.accounting_delta())?;
 
+        // Flush all the data from the `TransactionVerifierDelta`
         flush_to_storage(self, consumed_data).map_err(BlockError::from)
     }
 
@@ -801,7 +797,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         let verifier_config = TransactionVerifierConfig {
             tx_index_enabled: *self.chainstate_config.tx_index_enabled,
         };
-        let connected_txs = self
+        let tx_verifier = self
             .tx_verification_strategy
             .connect_block(
                 TransactionVerifier::new,
@@ -814,25 +810,30 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
             )
             .log_err()?;
 
-        self.flush_to_storage(connected_txs.consume()?, block_index.block_height())?;
+        let consumed = tx_verifier.consume()?;
+        self.flush_to_storage(consumed, block_index.block_height())?;
 
         Ok(())
     }
 
-    fn disconnect_transactions(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
+    fn disconnect_transactions(
+        &mut self,
+        block_index: &BlockIndex,
+        block: &WithId<Block>,
+    ) -> Result<(), BlockError> {
         let verifier_config = TransactionVerifierConfig {
             tx_index_enabled: *self.chainstate_config.tx_index_enabled,
         };
-        let cached_inputs = self.tx_verification_strategy.disconnect_block(
+        let tx_verifier = self.tx_verification_strategy.disconnect_block(
             TransactionVerifier::new,
             &*self,
             self.chain_config,
             verifier_config,
             block,
         )?;
-        let cached_inputs = cached_inputs.consume()?;
-        // FIXME: remove from presealed storage
-        flush_to_storage(self, cached_inputs)?;
+
+        let consumed = tx_verifier.consume()?;
+        self.flush_to_storage(consumed, block_index.block_height())?;
 
         Ok(())
     }
@@ -889,7 +890,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
             .expect("Best block index not present in the database");
         let block = self.get_block_from_index(&block_index).log_err()?.expect("Inconsistent DB");
         // Disconnect transactions
-        self.disconnect_transactions(&block.into()).log_err()?;
+        self.disconnect_transactions(&block_index, &block.into()).log_err()?;
         self.db_tx.set_best_block_id(block_index.prev_block_id()).log_err()?;
         // Disconnect block
         self.db_tx.del_block_id_at_height(&block_index.block_height()).log_err()?;
@@ -912,7 +913,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
                     self.db_tx.get_pre_sealed_accounting_delta(sealed_epoch_index)?.unwrap();
                 self.db_tx.del_pre_sealed_accounting_delta(sealed_epoch_index)?;
 
-                // flush indermediary data to sealed storage
+                // flush intermediary data to sealed storage
                 let mut db = PoSAccountingDB::<_, SealedStorageTag>::new(&mut self.db_tx);
                 db.batch_write_delta(delta_to_seal)
                     .map_err(TransactionVerifierStorageError::from)?;
