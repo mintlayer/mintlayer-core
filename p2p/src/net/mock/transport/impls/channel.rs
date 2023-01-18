@@ -198,9 +198,9 @@ impl AsBannableAddress for Address {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::{
-        message::{BlockListRequest, Request},
-        mock::{
+    use crate::{
+        message::{BlockListRequest, SyncRequest},
+        net::mock::{
             transport::BufferedTranscoder,
             types::{Message, MockRequestId},
         },
@@ -217,13 +217,13 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let request_id = MockRequestId::new(1337u64);
-        let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
+        let request_id = MockRequestId::new();
+        let request = SyncRequest::BlockListRequest(BlockListRequest::new(vec![]));
         let mut peer_stream = BufferedTranscoder::new(peer_stream);
         peer_stream
             .send(Message::Request {
                 request_id,
-                request: request.clone(),
+                request: request.clone().into(),
             })
             .await
             .unwrap();
@@ -233,7 +233,7 @@ mod tests {
             server_stream.recv().await.unwrap(),
             Message::Request {
                 request_id,
-                request,
+                request: request.into(),
             }
         );
     }

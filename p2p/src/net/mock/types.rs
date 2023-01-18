@@ -42,19 +42,17 @@ pub enum Command<T: TransportSocket> {
     },
     SendRequest {
         peer_id: MockPeerId,
+        request_id: MockRequestId,
         message: message::Request,
-        response: oneshot::Sender<crate::Result<MockRequestId>>,
     },
     /// Send response to remote peer
     SendResponse {
         request_id: MockRequestId,
         message: message::Response,
-        response: oneshot::Sender<crate::Result<()>>,
     },
     AnnounceData {
         topic: PubSubTopic,
         message: Vec<u8>,
-        response: oneshot::Sender<crate::Result<()>>,
     },
 }
 
@@ -62,12 +60,12 @@ pub enum SyncingEvent {
     Request {
         peer_id: MockPeerId,
         request_id: MockRequestId,
-        request: message::Request,
+        request: message::SyncRequest,
     },
     Response {
         peer_id: MockPeerId,
         request_id: MockRequestId,
-        response: message::Response,
+        response: message::SyncResponse,
     },
     Announcement {
         peer_id: MockPeerId,
@@ -77,13 +75,25 @@ pub enum SyncingEvent {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConnectivityEvent<T: TransportSocket> {
+    Request {
+        peer_id: MockPeerId,
+        request_id: MockRequestId,
+        request: message::PeerManagerRequest,
+    },
+    Response {
+        peer_id: MockPeerId,
+        request_id: MockRequestId,
+        response: message::PeerManagerResponse,
+    },
     InboundAccepted {
         address: T::Address,
         peer_info: MockPeerInfo,
+        receiver_address: Option<PeerAddress>,
     },
     OutboundAccepted {
         address: T::Address,
         peer_info: MockPeerInfo,
+        receiver_address: Option<PeerAddress>,
     },
     ConnectionError {
         address: T::Address,
@@ -112,18 +122,14 @@ pub enum PubSubEvent<T: TransportSocket> {
     },
 }
 
+static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Encode, Decode, Default)]
 pub struct MockRequestId(u64);
 
 impl MockRequestId {
-    pub fn new(request_id: u64) -> Self {
-        Self(request_id)
-    }
-
-    pub fn fetch_and_inc(&mut self) -> Self {
-        let id = self.0;
-        self.0 += 1;
-
+    pub fn new() -> Self {
+        let id = NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed);
         Self(id)
     }
 }

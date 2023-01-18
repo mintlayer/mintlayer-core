@@ -19,9 +19,8 @@ use tokio::sync::mpsc;
 
 use p2p::{
     config::P2pConfig,
-    error::{P2pError, PublishError},
     event::PeerManagerEvent,
-    message::{Announcement, HeaderListResponse, Request, Response},
+    message::{Announcement, HeaderListResponse, SyncRequest, SyncResponse},
     net::{types::SyncingEvent, ConnectivityService, NetworkingService, SyncingMessagingService},
     sync::BlockSyncManager,
     testing_utils::{connect_services, TestTransportMaker},
@@ -90,30 +89,19 @@ where
             SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request: Request::HeaderListRequest(_),
+                request: SyncRequest::HeaderListRequest(_),
             } => request_id,
             e => panic!("Unexpected event type: {e:?}"),
         };
         sync2
             .send_response(
                 request_id,
-                Response::HeaderListResponse(HeaderListResponse::new(Vec::new())),
+                SyncResponse::HeaderListResponse(HeaderListResponse::new(Vec::new())),
             )
             .await
             .unwrap();
 
-        loop {
-            let res = sync2.make_announcement(Announcement::Block(blocks[2].clone())).await;
-
-            if res.is_ok() {
-                break;
-            } else {
-                assert_eq!(
-                    res,
-                    Err(P2pError::PublishError(PublishError::InsufficientPeers))
-                );
-            }
-        }
+        sync2.make_announcement(Announcement::Block(blocks[2].clone())).await.unwrap();
     });
 
     match rx_peer_manager.recv().await {

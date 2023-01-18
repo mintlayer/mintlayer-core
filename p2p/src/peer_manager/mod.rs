@@ -40,7 +40,12 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
-    net::{self, types::Role, AsBannableAddress, ConnectivityService, NetworkingService},
+    message::{AddrListRequest, AddrListResponse, PeerManagerRequest, PeerManagerResponse},
+    net::{
+        self, mock::transport::TransportAddress, types::Role, AsBannableAddress,
+        ConnectivityService, NetworkingService,
+    },
+    types::peer_address::PeerAddress,
 };
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
@@ -104,17 +109,8 @@ where
     }
 
     /// Update the list of known peers or known peer's list of addresses
-    fn peer_discovered(&mut self, addresses: &[T::Address]) {
-        addresses.iter().for_each(|peer| {
-            self.peerdb.peer_discovered(peer);
-        })
-    }
-
-    /// Update the list of known peers or known peer's list of addresses
-    fn peer_expired(&mut self, addresses: &[T::Address]) {
-        addresses.iter().for_each(|peer| {
-            self.peerdb.peer_expired(peer);
-        })
+    fn peer_discovered(&mut self, address: &T::Address) {
+        self.peerdb.peer_discovered(address);
     }
 
     /// Verify software version compatibility
@@ -135,7 +131,10 @@ where
         address: T::Address,
         role: Role,
         info: net::types::PeerInfo<T>,
+        _receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
+        // TODO: Handle receiver_address
+
         let peer_id = info.peer_id;
 
         ensure!(
@@ -179,6 +178,7 @@ where
         &mut self,
         address: T::Address,
         info: net::types::PeerInfo<T>,
+        receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
         log::debug!("validate inbound connection, inbound address {address:?}");
 
@@ -201,7 +201,7 @@ where
             return Err(P2pError::PeerError(PeerError::TooManyPeers));
         }
 
-        self.accept_connection(address, Role::Inbound, info)
+        self.accept_connection(address, Role::Inbound, info, receiver_address)
     }
 
     /// Close connection to a remote peer
@@ -322,6 +322,46 @@ where
         Ok(())
     }
 
+    async fn handle_incoming_request(
+        &mut self,
+        _peer_id: T::PeerId,
+        request_id: T::PeerRequestId,
+        request: PeerManagerRequest,
+    ) -> crate::Result<()> {
+        match request {
+            // TODO: Rework this
+            PeerManagerRequest::AddrListRequest(AddrListRequest {}) => {
+                let addresses = self.peerdb.known_addresses();
+
+                self.peer_connectivity_handle
+                    .send_response(
+                        request_id,
+                        PeerManagerResponse::AddrListResponse(AddrListResponse::new(addresses)),
+                    )
+                    .await
+            }
+        }
+    }
+
+    fn handle_incoming_response(
+        &mut self,
+        _peer_id: T::PeerId,
+        _request_id: T::PeerRequestId,
+        response: PeerManagerResponse,
+    ) -> crate::Result<()> {
+        match response {
+            // TODO: Rework this
+            PeerManagerResponse::AddrListResponse(response) => {
+                for address in response.addresses() {
+                    if let Some(address) = TransportAddress::from_peer_address(address) {
+                        self.peerdb.peer_discovered(&address);
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+
     /// Handle the result of a control/network event
     ///
     /// Currently only subsystem/channel-related errors are considered fatal.
@@ -329,7 +369,7 @@ where
     /// not disturb the operation of `PeerManager`.
     ///
     /// If an error has ban score greater than zero, the peer score is updated and connection
-    /// to that peer is possibly closed if their scored crossed the ban threshold.
+    /// to that peer is possibly closed if their score crossed the ban threshold.
     ///
     /// # Arguments
     /// `peer_id` - peer ID of the remote peer, if available
@@ -416,10 +456,16 @@ where
                 },
                 event = self.peer_connectivity_handle.poll_next() => match event {
                     Ok(event) => match event {
-                        net::types::ConnectivityEvent::InboundAccepted { address, peer_info } => {
+                        net::types::ConnectivityEvent::Request { peer_id, request_id, request } => {
+                            self.handle_incoming_request(peer_id, request_id, request).await?;
+                        },
+                        net::types::ConnectivityEvent::Response { peer_id, request_id, response } => {
+                            self.handle_incoming_response(peer_id, request_id, response)?;
+                        },
+                        net::types::ConnectivityEvent::InboundAccepted { address, peer_info, receiver_address } => {
                             let peer_id = peer_info.peer_id;
 
-                            match self.accept_inbound_connection(address, peer_info) {
+                            match self.accept_inbound_connection(address, peer_info, receiver_address) {
                                 Ok(_) => {},
                                 Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
                                 Err(P2pError::PeerError(err)) => {
@@ -435,9 +481,9 @@ where
                                 }
                             }
                         }
-                        net::types::ConnectivityEvent::OutboundAccepted { address, peer_info } => {
+                        net::types::ConnectivityEvent::OutboundAccepted { address, peer_info, receiver_address } => {
                             let peer_id = peer_info.peer_id;
-                            let res = self.accept_connection(address.clone(), Role::Outbound, peer_info);
+                            let res = self.accept_connection(address.clone(), Role::Outbound, peer_info, receiver_address);
                             self.handle_result(Some(peer_id), res).await?;
 
                             match self.pending.remove(&address) {
@@ -454,11 +500,8 @@ where
                             let res = self.handle_outbound_error(address, error);
                             self.handle_result(None, res).await?;
                         }
-                        net::types::ConnectivityEvent::Discovered { addresses } => {
-                            self.peer_discovered(&addresses);
-                        }
-                        net::types::ConnectivityEvent::Expired { addresses } => {
-                            self.peer_expired(&addresses);
+                        net::types::ConnectivityEvent::AddressDiscovered { address } => {
+                            self.peer_discovered(&address);
                         }
                         net::types::ConnectivityEvent::Misbehaved { peer_id, error } => {
                             let res = self.adjust_peer_score(peer_id, error.ban_score()).await;

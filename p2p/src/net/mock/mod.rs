@@ -31,7 +31,7 @@ use serialization::Encode;
 use crate::{
     config,
     error::{P2pError, PublishError},
-    message,
+    message::{self, PeerManagerRequest, PeerManagerResponse, SyncRequest, SyncResponse},
     net::{
         mock::{
             constants::ANNOUNCEMENT_MAX_SIZE,
@@ -111,7 +111,7 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
     type Address = T::Address;
     type BannableAddress = T::BannableAddress;
     type PeerId = MockPeerId;
-    type SyncingPeerRequestId = MockRequestId;
+    type PeerRequestId = MockRequestId;
     type ConnectivityHandle = MockConnectivityHandle<Self, T>;
     type SyncingMessagingHandle = MockSyncingMessagingHandle<Self, T>;
 
@@ -162,7 +162,8 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
 #[async_trait]
 impl<S, T> ConnectivityService<S> for MockConnectivityHandle<S, T>
 where
-    S: NetworkingService<Address = T::Address, PeerId = MockPeerId> + Send,
+    S: NetworkingService<Address = T::Address, PeerId = MockPeerId, PeerRequestId = MockRequestId>
+        + Send,
     MockPeerInfo: TryInto<PeerInfo<S>, Error = P2pError>,
     T: TransportSocket,
 {
@@ -197,24 +198,80 @@ where
         rx.await?
     }
 
+    async fn send_request(
+        &mut self,
+        peer_id: S::PeerId,
+        request: PeerManagerRequest,
+    ) -> crate::Result<S::PeerRequestId> {
+        let request_id = MockRequestId::new();
+
+        self.cmd_tx
+            .send(types::Command::SendRequest {
+                peer_id,
+                request_id,
+                message: request.into(),
+            })
+            .await?;
+
+        Ok(request_id)
+    }
+
+    async fn send_response(
+        &mut self,
+        request_id: S::PeerRequestId,
+        response: PeerManagerResponse,
+    ) -> crate::Result<()> {
+        self.cmd_tx
+            .send(types::Command::SendResponse {
+                request_id,
+                message: response.into(),
+            })
+            .await?;
+        Ok(())
+    }
+
     async fn local_addresses(&self) -> crate::Result<Vec<S::Address>> {
         Ok(self.local_addresses.clone())
     }
 
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<S>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::ConnectivityEvent::OutboundAccepted { address, peer_info } => {
-                Ok(ConnectivityEvent::OutboundAccepted {
-                    address,
-                    peer_info: peer_info.try_into()?,
-                })
-            }
-            types::ConnectivityEvent::InboundAccepted { address, peer_info } => {
-                Ok(ConnectivityEvent::InboundAccepted {
-                    address,
-                    peer_info: peer_info.try_into()?,
-                })
-            }
+            types::ConnectivityEvent::Request {
+                peer_id,
+                request_id,
+                request,
+            } => Ok(ConnectivityEvent::Request {
+                peer_id,
+                request_id,
+                request,
+            }),
+            types::ConnectivityEvent::Response {
+                peer_id,
+                request_id,
+                response,
+            } => Ok(ConnectivityEvent::Response {
+                peer_id,
+                request_id,
+                response,
+            }),
+            types::ConnectivityEvent::InboundAccepted {
+                address,
+                peer_info,
+                receiver_address,
+            } => Ok(ConnectivityEvent::InboundAccepted {
+                address,
+                peer_info: peer_info.try_into()?,
+                receiver_address,
+            }),
+            types::ConnectivityEvent::OutboundAccepted {
+                address,
+                peer_info,
+                receiver_address,
+            } => Ok(ConnectivityEvent::OutboundAccepted {
+                address,
+                peer_info: peer_info.try_into()?,
+                receiver_address,
+            }),
             types::ConnectivityEvent::ConnectionError { address, error } => {
                 Ok(ConnectivityEvent::ConnectionError { address, error })
             }
@@ -225,9 +282,7 @@ where
                 Ok(ConnectivityEvent::Misbehaved { peer_id, error })
             }
             types::ConnectivityEvent::AddressDiscovered { address } => {
-                Ok(ConnectivityEvent::Discovered {
-                    addresses: vec![address],
-                })
+                Ok(ConnectivityEvent::AddressDiscovered { address })
             }
         }
     }
@@ -236,40 +291,39 @@ where
 #[async_trait]
 impl<S, T> SyncingMessagingService<S> for MockSyncingMessagingHandle<S, T>
 where
-    S: NetworkingService<PeerId = MockPeerId, SyncingPeerRequestId = MockRequestId> + Send,
+    S: NetworkingService<PeerId = MockPeerId, PeerRequestId = MockRequestId> + Send,
     T: TransportSocket,
 {
     async fn send_request(
         &mut self,
         peer_id: S::PeerId,
-        request: message::Request,
-    ) -> crate::Result<S::SyncingPeerRequestId> {
-        let (tx, rx) = oneshot::channel();
+        request: SyncRequest,
+    ) -> crate::Result<S::PeerRequestId> {
+        let request_id = MockRequestId::new();
 
         self.cmd_tx
             .send(types::Command::SendRequest {
                 peer_id,
-                message: request,
-                response: tx,
+                request_id,
+                message: request.into(),
             })
             .await?;
-        rx.await?
+
+        Ok(request_id)
     }
 
     async fn send_response(
         &mut self,
-        request_id: S::SyncingPeerRequestId,
-        response: message::Response,
+        request_id: S::PeerRequestId,
+        response: SyncResponse,
     ) -> crate::Result<()> {
-        let (tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(types::Command::SendResponse {
                 request_id,
-                message: response,
-                response: tx,
+                message: response.into(),
             })
             .await?;
-        rx.await?
+        Ok(())
     }
 
     async fn make_announcement(
@@ -288,15 +342,9 @@ where
             message::Announcement::Block(_) => PubSubTopic::Blocks,
         };
 
-        let (response, receiver) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::AnnounceData {
-                topic,
-                message,
-                response,
-            })
-            .await?;
-        receiver.await?
+        self.cmd_tx.send(types::Command::AnnounceData { topic, message }).await?;
+
+        Ok(())
     }
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent<S>> {
@@ -371,8 +419,11 @@ mod tests {
         let addr = conn2.local_addresses().await.unwrap();
         assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
 
-        if let Ok(ConnectivityEvent::OutboundAccepted { address, peer_info }) =
-            conn1.poll_next().await
+        if let Ok(ConnectivityEvent::OutboundAccepted {
+            address,
+            peer_info,
+            receiver_address: _,
+        }) = conn1.poll_next().await
         {
             assert_eq!(address, conn2.local_addresses().await.unwrap()[0]);
             assert_eq!(&peer_info.magic_bytes, config.magic_bytes());
@@ -434,6 +485,7 @@ mod tests {
             ConnectivityEvent::InboundAccepted {
                 address: _,
                 peer_info,
+                receiver_address: _,
             } => {
                 assert_eq!(peer_info.magic_bytes, *config.magic_bytes());
                 assert_eq!(
@@ -495,6 +547,7 @@ mod tests {
             ConnectivityEvent::InboundAccepted {
                 address: _,
                 peer_info,
+                receiver_address: _,
             } => {
                 assert_eq!(conn2.disconnect(peer_info.peer_id).await, Ok(()));
             }
@@ -568,8 +621,11 @@ mod tests {
         // Check that we can still connect normally after
         let addr = conn2.local_addresses().await.unwrap();
         assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
-        if let Ok(ConnectivityEvent::OutboundAccepted { address, peer_info }) =
-            conn1.poll_next().await
+        if let Ok(ConnectivityEvent::OutboundAccepted {
+            address,
+            peer_info,
+            receiver_address: _,
+        }) = conn1.poll_next().await
         {
             assert_eq!(address, conn2.local_addresses().await.unwrap()[0]);
             assert_eq!(&peer_info.magic_bytes, config.magic_bytes());

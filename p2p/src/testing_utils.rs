@@ -159,7 +159,11 @@ where
 
     let (address, peer_info1) = match timeout(Duration::from_secs(5), conn2.poll_next()).await {
         Ok(event) => match event.unwrap() {
-            ConnectivityEvent::InboundAccepted { address, peer_info } => (address, peer_info),
+            ConnectivityEvent::InboundAccepted {
+                address,
+                peer_info,
+                receiver_address: _,
+            } => (address, peer_info),
             event => panic!("expected `InboundAccepted`, got {event:?}"),
         },
         Err(_err) => panic!("did not receive `InboundAccepted` in time"),
@@ -170,6 +174,7 @@ where
             ConnectivityEvent::OutboundAccepted {
                 address: _,
                 peer_info,
+                receiver_address: _,
             } => peer_info,
             event => panic!("expected `OutboundAccepted`, got {event:?}"),
         },

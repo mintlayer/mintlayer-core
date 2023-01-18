@@ -15,11 +15,7 @@
 
 //! Mock networking backend
 //!
-//! The backend is modeled after libp2p.
-//!
-//! The peers are required to have unique IDs which they self-assign to themselves
-//! and advertise via the `Hello` message. Until the peer ID has been received, the
-//! peers are distinguished by their socket addresses.
+//! Every connected peer gets unique ID (generated locally from a counter).
 
 use std::{
     collections::{BTreeSet, HashMap},
@@ -41,7 +37,7 @@ use serialization::{Decode, Encode};
 use crate::{
     config::P2pConfig,
     error::{DialError, P2pError, PeerError, PublishError},
-    message,
+    message::{self, PeerManagerRequest, PeerManagerResponse, SyncRequest, SyncResponse},
     net::{
         mock::{
             constants::ANNOUNCEMENT_MAX_SIZE,
@@ -52,10 +48,9 @@ use crate::{
                 MockRequestId, PeerEvent, SyncingEvent,
             },
         },
-        types::{PubSubTopic, Role},
+        types::PubSubTopic,
         Announcement,
     },
-    types::peer_address::PeerAddress,
 };
 
 use super::{peer::PeerRole, transport::TransportAddress, types::HandshakeNonce};
@@ -192,18 +187,19 @@ where
     /// Sends a request to the remote peer.
     async fn send_request(
         &mut self,
+        request_id: MockRequestId,
         peer_id: MockPeerId,
         request: message::Request,
-    ) -> crate::Result<MockRequestId> {
+    ) -> crate::Result<()> {
         let peer = self
             .peers
             .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        let (request_id, request) = self.request_mgr.make_request(request)?;
+        let request = self.request_mgr.make_request(request_id, request)?;
         peer.tx.send(MockEvent::SendMessage(request)).await.map_err(P2pError::from)?;
 
-        Ok(request_id)
+        Ok(())
     }
 
     /// Send response to a request
@@ -231,8 +227,7 @@ where
 
     /// Sends the announcement to all peers.
     ///
-    /// Returns the `InsufficientPeers` error if there are no peers that subscribed to the related
-    /// topic.
+    /// It is not an error if there are no peers that subscribed to the related topic.
     async fn announce_data(&mut self, topic: PubSubTopic, message: Vec<u8>) -> crate::Result<()> {
         let announcement = message::Announcement::decode(&mut &message[..])?;
 
@@ -253,14 +248,9 @@ where
             .collect();
         futures.shuffle(&mut make_pseudo_rng());
 
-        // TODO: We don't really need to return an error here. It is only needed temporarily in
-        // order to mimic the libp2p behavior.
-        if futures.is_empty() {
-            Err(P2pError::PublishError(PublishError::InsufficientPeers))
-        } else {
-            join_all(futures).await;
-            Ok(())
-        }
+        join_all(futures).await;
+
+        Ok(())
     }
 
     /// Handle incoming request
@@ -272,16 +262,37 @@ where
     ) -> crate::Result<()> {
         log::trace!("request received from peer {peer_id}, request id {request_id}");
 
-        let request_id = self.request_mgr.register_request(&peer_id, &request_id, &request)?;
+        let request_id = self.request_mgr.register_request(&peer_id, &request_id)?;
 
-        self.sync_tx
-            .send(SyncingEvent::Request {
-                peer_id,
-                request_id,
-                request,
-            })
-            .await
-            .map_err(P2pError::from)
+        match request {
+            message::Request::HeaderListRequest(request) => self
+                .sync_tx
+                .send(SyncingEvent::Request {
+                    peer_id,
+                    request_id,
+                    request: SyncRequest::HeaderListRequest(request),
+                })
+                .await
+                .map_err(P2pError::from),
+            message::Request::BlockListRequest(request) => self
+                .sync_tx
+                .send(SyncingEvent::Request {
+                    peer_id,
+                    request_id,
+                    request: SyncRequest::BlockListRequest(request),
+                })
+                .await
+                .map_err(P2pError::from),
+            message::Request::AddrListRequest(request) => self
+                .conn_tx
+                .send(ConnectivityEvent::Request {
+                    peer_id,
+                    request_id,
+                    request: PeerManagerRequest::AddrListRequest(request),
+                })
+                .await
+                .map_err(P2pError::from),
+        }
     }
 
     /// Handle incoming response
@@ -292,14 +303,36 @@ where
         response: message::Response,
     ) -> crate::Result<()> {
         log::trace!("response received from peer {peer_id}, request id {request_id}");
-        self.sync_tx
-            .send(SyncingEvent::Response {
-                peer_id,
-                request_id,
-                response,
-            })
-            .await
-            .map_err(P2pError::from)
+
+        match response {
+            message::Response::HeaderListResponse(response) => self
+                .sync_tx
+                .send(SyncingEvent::Response {
+                    peer_id,
+                    request_id,
+                    response: SyncResponse::HeaderListResponse(response),
+                })
+                .await
+                .map_err(P2pError::from),
+            message::Response::BlockListResponse(response) => self
+                .sync_tx
+                .send(SyncingEvent::Response {
+                    peer_id,
+                    request_id,
+                    response: SyncResponse::BlockListResponse(response),
+                })
+                .await
+                .map_err(P2pError::from),
+            message::Response::AddrListResponse(response) => self
+                .conn_tx
+                .send(ConnectivityEvent::Response {
+                    peer_id,
+                    request_id,
+                    response: PeerManagerResponse::AddrListResponse(response),
+                })
+                .await
+                .map_err(P2pError::from),
+        }
     }
 
     async fn handle_announcement(
@@ -359,19 +392,6 @@ where
                 },
             }
         }
-    }
-
-    /// Handle received listening port from inbound remote peer
-    fn handle_own_receiver_address(
-        &mut self,
-        receiver_address: PeerAddress,
-        role: Role,
-    ) -> crate::Result<()> {
-        log::debug!("new own receiver address {receiver_address} found from {role:?} connection");
-
-        // TODO: Handle receiver address
-
-        Ok(())
     }
 
     /// Create new peer
@@ -447,7 +467,7 @@ where
                     self.pending.remove(&outbound_peer_id).expect("peer must exist");
 
                 log::info!(
-                    "self-connection detect on address {:?}",
+                    "self-connection detected on address {:?}",
                     outbound_pending.address
                 );
 
@@ -507,6 +527,7 @@ where
                                     agent: None,
                                     subscriptions: subscriptions.clone(),
                                 },
+                                receiver_address,
                             })
                             .await
                             .map_err(P2pError::from)?;
@@ -522,14 +543,11 @@ where
                                     agent: None,
                                     subscriptions: subscriptions.clone(),
                                 },
+                                receiver_address,
                             })
                             .await
                             .map_err(P2pError::from)?;
                     }
-                }
-
-                if let Some(receiver_address) = receiver_address {
-                    self.handle_own_receiver_address(receiver_address, peer_role.into())?;
                 }
 
                 self.peers.insert(peer_id, PeerContext { subscriptions, tx });
@@ -620,13 +638,16 @@ where
             .boxed(),
             Command::SendRequest {
                 peer_id,
+                request_id,
                 message,
-                response,
             } => async move {
                 boxed_cb(move |this| {
                     async move {
-                        let res = this.send_request(peer_id, message).await;
-                        response.send(res).map_err(|_| P2pError::ChannelClosed)
+                        let res = this.send_request(request_id, peer_id, message).await;
+                        if let Err(e) = res {
+                            log::debug!("Failed to send request to peer {peer_id}: {e}")
+                        }
+                        Ok(())
                     }
                     .boxed()
                 })
@@ -635,26 +656,27 @@ where
             Command::SendResponse {
                 request_id,
                 message,
-                response,
             } => async move {
                 boxed_cb(move |this| {
                     async move {
                         let res = this.send_response(request_id, message).await;
-                        response.send(res).map_err(|_| P2pError::ChannelClosed)
+                        if let Err(e) = res {
+                            log::debug!("Failed to send response to peer: {e}")
+                        }
+                        Ok(())
                     }
                     .boxed()
                 })
             }
             .boxed(),
-            Command::AnnounceData {
-                topic,
-                message,
-                response,
-            } => async move {
+            Command::AnnounceData { topic, message } => async move {
                 boxed_cb(move |this| {
                     async move {
                         let res = this.announce_data(topic, message).await;
-                        response.send(res).map_err(|_| P2pError::ChannelClosed)
+                        if let Err(e) = res {
+                            log::error!("Failed to send announce data: {e}")
+                        }
+                        Ok(())
                     }
                     .boxed()
                 })

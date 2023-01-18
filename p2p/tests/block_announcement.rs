@@ -25,7 +25,6 @@ use p2p::testing_utils::{
     TestTransportTcp,
 };
 use p2p::{
-    error::{P2pError, PublishError},
     message::Announcement,
     net::{
         mock::{
@@ -82,30 +81,19 @@ where
     connect_services::<S>(&mut peer1.0, &mut peer2.0).await;
     connect_services::<S>(&mut peer2.0, &mut peer3.0).await;
 
-    // Spam the message until we have a peer.
-    loop {
-        let res = sync1
-            .make_announcement(Announcement::Block(
-                Block::new(
-                    vec![],
-                    Id::new(H256([0x03; 32])),
-                    BlockTimestamp::from_int_seconds(1337u64),
-                    ConsensusData::None,
-                    BlockReward::new(Vec::new()),
-                )
-                .unwrap(),
-            ))
-            .await;
-
-        if res.is_ok() {
-            break;
-        } else {
-            assert_eq!(
-                res,
-                Err(P2pError::PublishError(PublishError::InsufficientPeers))
-            );
-        }
-    }
+    sync1
+        .make_announcement(Announcement::Block(
+            Block::new(
+                vec![],
+                Id::new(H256([0x03; 32])),
+                BlockTimestamp::from_int_seconds(1337u64),
+                ConsensusData::None,
+                BlockReward::new(Vec::new()),
+            )
+            .unwrap(),
+        ))
+        .await
+        .unwrap();
 
     // Verify that all peers received the message even though they weren't directly connected.
     let event = peer1.1.poll_next().await.unwrap();

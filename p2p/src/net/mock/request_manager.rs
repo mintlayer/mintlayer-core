@@ -36,12 +36,6 @@ pub struct RequestManager {
     /// Active ephemeral IDs
     ephemerals: HashMap<types::MockPeerId, HashSet<types::MockRequestId>>,
 
-    /// The next ID for an outbound request.
-    next_request_id: types::MockRequestId,
-
-    /// Next ephemeral request ID
-    next_ephemeral_id: types::MockRequestId,
-
     /// Ephemeral requests IDs which are mapped to remote peer ID/request ID pair
     ephemeral: HashMap<types::MockRequestId, (types::MockPeerId, types::MockRequestId)>,
 }
@@ -76,17 +70,13 @@ impl RequestManager {
     /// Create new outgoing request
     pub fn make_request(
         &mut self,
+        request_id: types::MockRequestId,
         request: message::Request,
-    ) -> crate::Result<(types::MockRequestId, Box<types::Message>)> {
-        let request_id = self.next_request_id.fetch_and_inc();
-
-        Ok((
+    ) -> crate::Result<Box<types::Message>> {
+        Ok(Box::new(types::Message::Request {
             request_id,
-            Box::new(types::Message::Request {
-                request_id,
-                request,
-            }),
-        ))
+            request,
+        }))
     }
 
     /// Create new outgoing response
@@ -115,18 +105,18 @@ impl RequestManager {
     ///
     /// The request ID is stored into a temporary storage holding all pending
     /// inbound requests.
+    // TODO: Use different type in result so it's not possible to mixup ephemeral and real request ids.
     pub fn register_request(
         &mut self,
         peer_id: &types::MockPeerId,
         request_id: &types::MockRequestId,
-        _request: &message::Request,
     ) -> crate::Result<types::MockRequestId> {
         let peer_ephemerals = self
             .ephemerals
             .get_mut(peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        let ephemeral_id = self.next_ephemeral_id.fetch_and_inc();
+        let ephemeral_id = types::MockRequestId::new();
 
         peer_ephemerals.insert(ephemeral_id);
         self.ephemeral.insert(ephemeral_id, (*peer_id, *request_id));

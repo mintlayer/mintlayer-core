@@ -208,7 +208,7 @@ async fn send_2_reqs() {
     let server_stream = server_res.unwrap().0;
     let peer_stream = peer_res.unwrap();
 
-    let id_1 = MockRequestId::new(1337u64);
+    let id_1 = MockRequestId::new();
     let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
     let mut peer_stream = BufferedTranscoder::new(peer_stream);
     peer_stream
@@ -219,7 +219,7 @@ async fn send_2_reqs() {
         .await
         .unwrap();
 
-    let id_2 = MockRequestId::new(1338u64);
+    let id_2 = MockRequestId::new();
     peer_stream
         .send(Message::Request {
             request_id: id_2,

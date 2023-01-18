@@ -20,6 +20,8 @@ use common::{
 };
 use serialization::{Decode, Encode};
 
+use crate::types::peer_address::PeerAddress;
+
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub struct HeaderListRequest {
     locator: Locator,
@@ -49,7 +51,7 @@ impl BlockListRequest {
         Self { block_ids }
     }
 
-    pub fn block_ids(&self) -> &Vec<Id<Block>> {
+    pub fn block_ids(&self) -> &[Id<Block>] {
         &self.block_ids
     }
 
@@ -59,11 +61,27 @@ impl BlockListRequest {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub struct AddrListRequest {}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Request {
     #[codec(index = 0)]
     HeaderListRequest(HeaderListRequest),
     #[codec(index = 1)]
     BlockListRequest(BlockListRequest),
+    #[codec(index = 2)]
+    AddrListRequest(AddrListRequest),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncRequest {
+    HeaderListRequest(HeaderListRequest),
+    BlockListRequest(BlockListRequest),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PeerManagerRequest {
+    AddrListRequest(AddrListRequest),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
@@ -76,7 +94,7 @@ impl HeaderListResponse {
         Self { headers }
     }
 
-    pub fn headers(&self) -> &Vec<BlockHeader> {
+    pub fn headers(&self) -> &[BlockHeader] {
         &self.headers
     }
 
@@ -95,7 +113,7 @@ impl BlockListResponse {
         Self { blocks }
     }
 
-    pub fn blocks(&self) -> &Vec<Block> {
+    pub fn blocks(&self) -> &[Block] {
         &self.blocks
     }
 
@@ -105,15 +123,77 @@ impl BlockListResponse {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub struct AddrListResponse {
+    addresses: Vec<PeerAddress>,
+}
+
+impl AddrListResponse {
+    pub fn new(addresses: Vec<PeerAddress>) -> Self {
+        Self { addresses }
+    }
+
+    pub fn addresses(&self) -> &[PeerAddress] {
+        &self.addresses
+    }
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Response {
     #[codec(index = 0)]
     HeaderListResponse(HeaderListResponse),
     #[codec(index = 1)]
     BlockListResponse(BlockListResponse),
+    #[codec(index = 2)]
+    AddrListResponse(AddrListResponse),
+}
+
+#[derive(Debug, Clone)]
+pub enum SyncResponse {
+    HeaderListResponse(HeaderListResponse),
+    BlockListResponse(BlockListResponse),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PeerManagerResponse {
+    AddrListResponse(AddrListResponse),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Announcement {
     #[codec(index = 0)]
     Block(Block),
+}
+
+impl From<PeerManagerRequest> for Request {
+    fn from(request: PeerManagerRequest) -> Self {
+        match request {
+            PeerManagerRequest::AddrListRequest(request) => Request::AddrListRequest(request),
+        }
+    }
+}
+
+impl From<PeerManagerResponse> for Response {
+    fn from(response: PeerManagerResponse) -> Self {
+        match response {
+            PeerManagerResponse::AddrListResponse(response) => Response::AddrListResponse(response),
+        }
+    }
+}
+
+impl From<SyncRequest> for Request {
+    fn from(request: SyncRequest) -> Self {
+        match request {
+            SyncRequest::HeaderListRequest(request) => Request::HeaderListRequest(request),
+            SyncRequest::BlockListRequest(request) => Request::BlockListRequest(request),
+        }
+    }
+}
+
+impl From<SyncResponse> for Response {
+    fn from(response: SyncResponse) -> Self {
+        match response {
+            SyncResponse::HeaderListResponse(response) => Response::HeaderListResponse(response),
+            SyncResponse::BlockListResponse(response) => Response::BlockListResponse(response),
+        }
+    }
 }

@@ -25,7 +25,13 @@ use std::{
 
 use async_trait::async_trait;
 
-use crate::{config, message, message::Announcement};
+use crate::{
+    config,
+    message::{Announcement, PeerManagerRequest},
+    message::{PeerManagerResponse, SyncRequest, SyncResponse},
+};
+
+use self::mock::transport::TransportAddress;
 
 /// [NetworkingService] provides the low-level network interface
 /// that each network service provider must implement
@@ -52,6 +58,7 @@ pub trait NetworkingService {
         + Sync
         + ToString
         + FromStr
+        + TransportAddress
         + AsBannableAddress<BannableAddress = Self::BannableAddress>;
 
     /// An address type that can be banned.
@@ -64,7 +71,7 @@ pub trait NetworkingService {
     type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString + FromStr;
 
     /// Unique ID assigned to each received request from a peer
-    type SyncingPeerRequestId: Copy + Debug + Eq + Hash + Send + Sync;
+    type PeerRequestId: Copy + Debug + Eq + Hash + Send + Sync;
 
     /// Handle for sending/receiving connectivity-related events
     type ConnectivityHandle: Send;
@@ -108,6 +115,28 @@ where
     /// `peer_id` - Peer ID of the remote node
     async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()>;
 
+    /// Send PeerManager's request to remote
+    ///
+    /// # Arguments
+    /// * `peer_id` - Unique ID of the peer the request is sent to
+    /// * `request` - Request to be sent
+    async fn send_request(
+        &mut self,
+        peer_id: T::PeerId,
+        request: PeerManagerRequest,
+    ) -> crate::Result<T::PeerRequestId>;
+
+    /// Send response to remote
+    ///
+    /// # Arguments
+    /// * `request_id` - ID of the request this is a response to
+    /// * `response` - Response to be sent
+    async fn send_response(
+        &mut self,
+        request_id: T::PeerRequestId,
+        response: PeerManagerResponse,
+    ) -> crate::Result<()>;
+
     /// Return the socket address of the network service provider
     ///
     /// If the address isn't available yet, `None` is returned
@@ -137,18 +166,18 @@ where
     async fn send_request(
         &mut self,
         peer_id: T::PeerId,
-        request: message::Request,
-    ) -> crate::Result<T::SyncingPeerRequestId>;
+        request: SyncRequest,
+    ) -> crate::Result<T::PeerRequestId>;
 
     /// Send block/header response to remote
     ///
     /// # Arguments
     /// * `request_id` - ID of the request this is a response to
-    /// * `message` - Response to be sent
+    /// * `response` - Response to be sent
     async fn send_response(
         &mut self,
-        request_id: T::SyncingPeerRequestId,
-        response: message::Response,
+        request_id: T::PeerRequestId,
+        response: SyncResponse,
     ) -> crate::Result<()>;
 
     /// Publishes an announcement on the network.

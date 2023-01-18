@@ -18,7 +18,7 @@ use std::{collections::BTreeSet, fmt::Display};
 use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
 
-use crate::{message, NetworkingService, P2pError};
+use crate::{message, types::peer_address::PeerAddress, NetworkingService, P2pError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
@@ -72,6 +72,28 @@ impl<T: NetworkingService> Display for PeerInfo<T> {
 /// Connectivity-related events received from the network
 #[derive(Debug)]
 pub enum ConnectivityEvent<T: NetworkingService> {
+    /// An incoming request.
+    Request {
+        /// Unique ID of the sender
+        peer_id: T::PeerId,
+
+        /// Unique ID of the request
+        request_id: T::PeerRequestId,
+
+        /// Received request
+        request: message::PeerManagerRequest,
+    },
+    /// An incoming response.
+    Response {
+        /// Unique ID of the sender
+        peer_id: T::PeerId,
+
+        /// Unique ID of the request this message is a response to
+        request_id: T::PeerRequestId,
+
+        /// Received response
+        response: message::PeerManagerResponse,
+    },
     /// Outbound connection accepted
     OutboundAccepted {
         /// Peer address
@@ -79,6 +101,9 @@ pub enum ConnectivityEvent<T: NetworkingService> {
 
         /// Peer information
         peer_info: PeerInfo<T>,
+
+        /// Socket address of this node as seen by remote peer
+        receiver_address: Option<PeerAddress>,
     },
 
     /// Inbound connection received
@@ -88,6 +113,9 @@ pub enum ConnectivityEvent<T: NetworkingService> {
 
         /// Peer information
         peer_info: PeerInfo<T>,
+
+        /// Socket address of this node as seen by remote peer
+        receiver_address: Option<PeerAddress>,
     },
 
     /// Outbound connection failed
@@ -105,16 +133,10 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         peer_id: T::PeerId,
     },
 
-    /// One or more peers discovered
-    Discovered {
+    /// New peer discovered
+    AddressDiscovered {
         /// Address information
-        addresses: Vec<T::Address>,
-    },
-
-    /// One one more peers have expired (libp2p defines expired addresses as addresses that haven't appeared in later refreshes of available addresses)
-    Expired {
-        /// Address information
-        addresses: Vec<T::Address>,
+        address: T::Address,
     },
 
     /// Protocol violation
@@ -136,10 +158,10 @@ pub enum SyncingEvent<T: NetworkingService> {
         peer_id: T::PeerId,
 
         /// Unique ID of the request
-        request_id: T::SyncingPeerRequestId,
+        request_id: T::PeerRequestId,
 
         /// Received request
-        request: message::Request,
+        request: message::SyncRequest,
     },
     /// An incoming response.
     Response {
@@ -147,10 +169,10 @@ pub enum SyncingEvent<T: NetworkingService> {
         peer_id: T::PeerId,
 
         /// Unique ID of the request this message is a response to
-        request_id: T::SyncingPeerRequestId,
+        request_id: T::PeerRequestId,
 
         /// Received response
-        response: message::Response,
+        response: message::SyncResponse,
     },
     /// An announcement that is broadcast to all peers.
     Announcement {

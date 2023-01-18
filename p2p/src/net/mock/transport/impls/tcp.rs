@@ -158,15 +158,15 @@ impl PeerStream for TcpTransportStream {}
 
 #[cfg(test)]
 mod tests {
-    use crate::testing_utils::{TestTransportMaker, TestTransportTcp};
+    use crate::{
+        message::{BlockListRequest, SyncRequest},
+        testing_utils::{TestTransportMaker, TestTransportTcp},
+    };
 
     use super::*;
-    use crate::net::{
-        message::{BlockListRequest, Request},
-        mock::{
-            transport::BufferedTranscoder,
-            types::{Message, MockRequestId},
-        },
+    use crate::net::mock::{
+        transport::BufferedTranscoder,
+        types::{Message, MockRequestId},
     };
 
     #[tokio::test]
@@ -179,13 +179,13 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let request_id = MockRequestId::new(1337u64);
-        let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
+        let request_id = MockRequestId::new();
+        let request = SyncRequest::BlockListRequest(BlockListRequest::new(vec![]));
         let mut peer_stream = BufferedTranscoder::new(peer_stream);
         peer_stream
             .send(Message::Request {
                 request_id,
-                request: request.clone(),
+                request: request.clone().into(),
             })
             .await
             .unwrap();
@@ -195,7 +195,7 @@ mod tests {
             server_stream.recv().await.unwrap(),
             Message::Request {
                 request_id,
-                request,
+                request: request.into(),
             }
         );
     }
@@ -210,22 +210,22 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let id_1 = MockRequestId::new(1337u64);
-        let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
+        let id_1 = MockRequestId::new();
+        let request = SyncRequest::BlockListRequest(BlockListRequest::new(vec![]));
         let mut peer_stream = BufferedTranscoder::new(peer_stream);
         peer_stream
             .send(Message::Request {
                 request_id: id_1,
-                request: request.clone(),
+                request: request.clone().into(),
             })
             .await
             .unwrap();
 
-        let id_2 = MockRequestId::new(1338u64);
+        let id_2 = MockRequestId::new();
         peer_stream
             .send(Message::Request {
                 request_id: id_2,
-                request: request.clone(),
+                request: request.clone().into(),
             })
             .await
             .unwrap();
@@ -235,14 +235,14 @@ mod tests {
             server_stream.recv().await.unwrap(),
             Message::Request {
                 request_id: id_1,
-                request: request.clone(),
+                request: request.clone().into(),
             }
         );
         assert_eq!(
             server_stream.recv().await.unwrap(),
             Message::Request {
                 request_id: id_2,
-                request,
+                request: request.into(),
             }
         );
     }

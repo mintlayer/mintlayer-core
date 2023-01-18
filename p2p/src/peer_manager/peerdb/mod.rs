@@ -38,9 +38,11 @@ use crate::{
     error::{ConversionError, P2pError},
     interface::types::ConnectedPeer,
     net::{
+        mock::transport::TransportAddress,
         types::{self, Role},
         AsBannableAddress, NetworkingService,
     },
+    types::peer_address::PeerAddress,
 };
 
 #[derive(Debug)]
@@ -132,6 +134,10 @@ impl<T: NetworkingService> PeerDb<T> {
         self.addresses.contains(address)
     }
 
+    pub fn known_addresses(&self) -> Vec<PeerAddress> {
+        self.addresses.iter().map(TransportAddress::as_peer_address).collect()
+    }
+
     /// Checks if the given address is banned.
     pub fn is_address_banned(&mut self, address: &T::BannableAddress) -> bool {
         if let Some(banned_till) = self.banned.get(address) {
@@ -168,11 +174,6 @@ impl<T: NetworkingService> PeerDb<T> {
     /// Add new peer addresses
     pub fn peer_discovered(&mut self, address: &T::Address) {
         self.available.insert(address.clone());
-    }
-
-    /// Expire discovered peer addresses
-    pub fn peer_expired(&mut self, address: &T::Address) {
-        self.available.remove(address);
     }
 
     /// Report outbound connection failure
