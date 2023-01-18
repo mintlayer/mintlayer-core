@@ -646,7 +646,10 @@ where
             } => async move {
                 boxed_cb(move |this| {
                     async move {
-                        let _res = this.send_request(request_id, peer_id, message).await;
+                        let res = this.send_request(request_id, peer_id, message).await;
+                        if let Err(e) = res {
+                            log::debug!("Failed to send request to peer {peer_id}: {e}")
+                        }
                         Ok(())
                     }
                     .boxed()
@@ -659,7 +662,10 @@ where
             } => async move {
                 boxed_cb(move |this| {
                     async move {
-                        let _res = this.send_response(request_id, message).await;
+                        let res = this.send_response(request_id, message).await;
+                        if let Err(e) = res {
+                            log::debug!("Failed to send response to peer: {e}")
+                        }
                         Ok(())
                     }
                     .boxed()
@@ -669,7 +675,10 @@ where
             Command::AnnounceData { topic, message } => async move {
                 boxed_cb(move |this| {
                     async move {
-                        let _res = this.announce_data(topic, message).await;
+                        let res = this.announce_data(topic, message).await;
+                        if let Err(e) = res {
+                            log::error!("Failed to send announce data: {e}")
+                        }
                         Ok(())
                     }
                     .boxed()
