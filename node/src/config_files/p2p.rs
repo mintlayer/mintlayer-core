@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{str::FromStr, time::Duration};
+use std::{num::NonZeroU64, str::FromStr, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
@@ -60,7 +60,7 @@ pub struct P2pConfigFile {
     /// Duration of bans in seconds.
     pub ban_duration: Option<u64>,
     /// The outbound connection timeout value in seconds.
-    pub outbound_connection_timeout: Option<u64>,
+    pub outbound_connection_timeout: Option<NonZeroU64>,
     /// A node type.
     pub node_type: Option<NodeTypeConfigFile>,
 }
@@ -72,7 +72,10 @@ impl From<P2pConfigFile> for P2pConfig {
             added_nodes: c.added_nodes.clone().unwrap_or_default(),
             ban_threshold: c.ban_threshold.into(),
             ban_duration: c.ban_duration.map(Duration::from_secs).into(),
-            outbound_connection_timeout: c.outbound_connection_timeout.into(),
+            outbound_connection_timeout: c
+                .outbound_connection_timeout
+                .map(|t| Duration::from_secs(t.into()))
+                .into(),
             node_type: c.node_type.map(Into::into).into(),
         }
     }

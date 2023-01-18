@@ -128,7 +128,6 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
         let local_addresses = socket.local_addresses().expect("to have bind address available");
 
         tokio::spawn(async move {
-            let timeout = *p2p_config.outbound_connection_timeout;
             let mut backend = backend::Backend::<T>::new(
                 transport,
                 socket,
@@ -137,7 +136,6 @@ impl<T: TransportSocket> NetworkingService for MockService<T> {
                 cmd_rx,
                 conn_tx,
                 sync_tx,
-                std::time::Duration::from_secs(timeout),
             );
 
             if let Err(err) = backend.run().await {

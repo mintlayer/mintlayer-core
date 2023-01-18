@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{net::SocketAddr, path::Path, str::FromStr};
+use std::{net::SocketAddr, num::NonZeroU64, path::Path, str::FromStr};
 
 use assert_cmd::Command;
 use directories::UserDirs;
@@ -89,7 +89,7 @@ fn read_config_override_values() {
     let p2p_addr = "address";
     let p2p_add_node = "add_node";
     let p2p_ban_threshold = 3;
-    let p2p_timeout = 10000;
+    let p2p_timeout = NonZeroU64::new(10000).unwrap();
     let http_rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
     let ws_rpc_addr = SocketAddr::from_str("127.0.0.1:5433").unwrap();
     let backend_type = StorageBackendConfigFile::InMemory;

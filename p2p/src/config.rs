@@ -23,7 +23,7 @@ pub const DEFAULT_BIND_PORT: u16 = 3031;
 
 make_config_setting!(BanThreshold, u32, 100);
 make_config_setting!(BanDuration, Duration, Duration::from_secs(60 * 60 * 24));
-make_config_setting!(OutboundConnectionTimeout, u64, 10);
+make_config_setting!(OutboundConnectionTimeout, Duration, Duration::from_secs(10));
 make_config_setting!(
     AnnouncementSubscriptions,
     BTreeSet<PubSubTopic>,

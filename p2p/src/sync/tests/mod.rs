@@ -74,7 +74,7 @@ where
         added_nodes: Vec::new(),
         ban_threshold: 100.into(),
         ban_duration: Default::default(),
-        outbound_connection_timeout: 10.into(),
+        outbound_connection_timeout: Default::default(),
         node_type: NodeType::Full.into(),
     });
     let (conn, sync) = T::start(
