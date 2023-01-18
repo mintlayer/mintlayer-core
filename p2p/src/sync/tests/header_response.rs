@@ -24,10 +24,10 @@ use p2p_test_utils::TestBlockInfo;
 
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
-    net::mock::{
-        transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-        types::MockPeerId,
-        MockService,
+    net::default_backend::{
+        transport::{NoiseTcpTransport, TcpTransportSocket, TestChannelTransport},
+        types::PeerId,
+        Service,
     },
     sync::{
         peer,
@@ -68,18 +68,18 @@ where
 }
 
 #[tokio::test]
-async fn too_many_headers_mock_tcp() {
-    too_many_headers::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
+async fn too_many_headers_tcp() {
+    too_many_headers::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn too_many_headers_mock_channels() {
-    too_many_headers::<TestTransportChannel, MockPeerId, MockService<MockChannelTransport>>().await;
+async fn too_many_headers_channels() {
+    too_many_headers::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
 }
 
 #[tokio::test]
-async fn too_many_headers_mock_noise() {
-    too_many_headers::<TestTransportNoise, MockPeerId, MockService<NoiseTcpTransport>>().await;
+async fn too_many_headers_noise() {
+    too_many_headers::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
 }
 
 // header response is empty
@@ -104,18 +104,18 @@ where
 }
 
 #[tokio::test]
-async fn empty_response_mock_tcp() {
-    empty_response::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
+async fn empty_response_tcp() {
+    empty_response::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn empty_response_mock_channels() {
-    empty_response::<TestTransportChannel, MockPeerId, MockService<MockChannelTransport>>().await;
+async fn empty_response_channels() {
+    empty_response::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
 }
 
 #[tokio::test]
-async fn empty_response_mock_noise() {
-    empty_response::<TestTransportNoise, MockPeerId, MockService<NoiseTcpTransport>>().await;
+async fn empty_response_noise() {
+    empty_response::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
 }
 
 // valid response with headers in order and the first header attaching to local chain
@@ -153,18 +153,18 @@ where
 }
 
 #[tokio::test]
-async fn valid_response_mock_tcp() {
-    valid_response::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
+async fn valid_response_tcp() {
+    valid_response::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn valid_response_mock_channles() {
-    valid_response::<TestTransportChannel, MockPeerId, MockService<MockChannelTransport>>().await;
+async fn valid_response_channles() {
+    valid_response::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
 }
 
 #[tokio::test]
-async fn valid_response_mock_noise() {
-    valid_response::<TestTransportNoise, MockPeerId, MockService<NoiseTcpTransport>>().await;
+async fn valid_response_noise() {
+    valid_response::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
 }
 
 // the first header doesn't attach to local chain
@@ -201,33 +201,25 @@ where
 }
 
 #[tokio::test]
-async fn header_doesnt_attach_to_local_chain_mock_tcp() {
-    header_doesnt_attach_to_local_chain::<
-        TestTransportTcp,
-        MockPeerId,
-        MockService<TcpTransportSocket>,
-    >()
-    .await;
+async fn header_doesnt_attach_to_local_chain_tcp() {
+    header_doesnt_attach_to_local_chain::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>()
+        .await;
 }
 
 #[tokio::test]
-async fn header_doesnt_attach_to_local_chain_mock_channel() {
+async fn header_doesnt_attach_to_local_chain_channel() {
     header_doesnt_attach_to_local_chain::<
         TestTransportChannel,
-        MockPeerId,
-        MockService<MockChannelTransport>,
+        PeerId,
+        Service<TestChannelTransport>,
     >()
     .await;
 }
 
 #[tokio::test]
-async fn header_doesnt_attach_to_local_chain_mock_noise() {
-    header_doesnt_attach_to_local_chain::<
-        TestTransportNoise,
-        MockPeerId,
-        MockService<NoiseTcpTransport>,
-    >()
-    .await;
+async fn header_doesnt_attach_to_local_chain_noise() {
+    header_doesnt_attach_to_local_chain::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>()
+        .await;
 }
 
 // valid headers but they are not in order
@@ -265,19 +257,18 @@ where
 }
 
 #[tokio::test]
-async fn headers_not_in_order_mock_tcp() {
-    headers_not_in_order::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
+async fn headers_not_in_order_tcp() {
+    headers_not_in_order::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn headers_not_in_order_mock_channels() {
-    headers_not_in_order::<TestTransportChannel, MockPeerId, MockService<MockChannelTransport>>()
-        .await;
+async fn headers_not_in_order_channels() {
+    headers_not_in_order::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
 }
 
 #[tokio::test]
-async fn headers_not_in_order_mock_noise() {
-    headers_not_in_order::<TestTransportNoise, MockPeerId, MockService<NoiseTcpTransport>>().await;
+async fn headers_not_in_order_noise() {
+    headers_not_in_order::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
 }
 
 // peer state is incorrect to be sending header responses
@@ -316,18 +307,18 @@ where
 }
 
 #[tokio::test]
-async fn invalid_state_mock_tcp() {
-    invalid_state::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
+async fn invalid_state_tcp() {
+    invalid_state::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn invalid_state_mock_channels() {
-    invalid_state::<TestTransportChannel, MockPeerId, MockService<MockChannelTransport>>().await;
+async fn invalid_state_channels() {
+    invalid_state::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
 }
 
 #[tokio::test]
-async fn invalid_state_mock_noise() {
-    invalid_state::<TestTransportNoise, MockPeerId, MockService<NoiseTcpTransport>>().await;
+async fn invalid_state_noise() {
+    invalid_state::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
 }
 
 // peer doesn't exist
@@ -351,17 +342,16 @@ where
 }
 
 #[tokio::test]
-async fn peer_doesnt_exist_mock_tcp() {
-    peer_doesnt_exist::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
+async fn peer_doesnt_exist_tcp() {
+    peer_doesnt_exist::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn peer_doesnt_exist_mock_channels() {
-    peer_doesnt_exist::<TestTransportChannel, MockPeerId, MockService<MockChannelTransport>>()
-        .await;
+async fn peer_doesnt_exist_channels() {
+    peer_doesnt_exist::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
 }
 
 #[tokio::test]
-async fn peer_doesnt_exist_mock_noise() {
-    peer_doesnt_exist::<TestTransportNoise, MockPeerId, MockService<NoiseTcpTransport>>().await;
+async fn peer_doesnt_exist_noise() {
+    peer_doesnt_exist::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
 }

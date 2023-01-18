@@ -45,13 +45,13 @@ p2p-backend-test-suite = { path = "backend-test-suite" }
 portpicker = "0.1"
 
 [[test]]
-name = "backend_mock_tcp"
+name = "backend_tcp"
 harness = false
 
 [[test]]
-name = "backend_mock_channels"
+name = "backend_channels"
 harness = false
 
 [[test]]
-name = "backend_mock_noise"
+name = "backend_noise"
 harness = false

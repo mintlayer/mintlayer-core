@@ -90,7 +90,7 @@ def check_licenses():
         "./common/src/uint/internal_macros.rs",
         "./common/src/uint/endian.rs",
         "./common/src/uint/impls.rs",
-        "./common/src/uint/mod.rs"
+        "./common/src/uint/default_backend"
         ]
     
     template = re.compile('(?:' + r')\n(?:'.join(LICENSE_TEMPLATE) + ')')

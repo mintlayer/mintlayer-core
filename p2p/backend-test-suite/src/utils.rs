@@ -18,7 +18,7 @@ macro_rules! tests {
         pub fn tests<T, S, A>() -> impl Iterator<Item = libtest_mimic::Trial>
         where
             T: p2p::testing_utils::TestTransportMaker<Transport = S::Transport, Address = S::Address>,
-            S: p2p::net::NetworkingService<PeerId = p2p::net::mock::types::MockPeerId> + std::fmt::Debug + 'static,
+            S: p2p::net::NetworkingService<PeerId = p2p::net::default_backend::types::PeerId> + std::fmt::Debug + 'static,
             S::ConnectivityHandle: p2p::net::ConnectivityService<S> + std::fmt::Debug,
             S::SyncingMessagingHandle: p2p::net::SyncingMessagingService<S> + std::fmt::Debug,
             A: p2p::testing_utils::RandomAddressMaker<Address = S::Address>,

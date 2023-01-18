@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Mock networking backend
+//! Networking backend
 //!
 //! Every connected peer gets unique ID (generated locally from a counter).
 
@@ -39,16 +39,16 @@ use crate::{
     error::{DialError, P2pError, PeerError, PublishError},
     message::{self, PeerManagerRequest, PeerManagerResponse, SyncRequest, SyncResponse},
     net::{
-        mock::{
+        default_backend::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             peer, request_manager,
             transport::{TransportListener, TransportSocket},
             types::{
-                Command, ConnectivityEvent, Message, MockEvent, MockPeerId, MockPeerInfo,
-                MockRequestId, PeerEvent, SyncingEvent,
+                Command, ConnectivityEvent, Event, Message, PeerEvent, PeerId, RequestId,
+                SyncingEvent,
             },
         },
-        types::PubSubTopic,
+        types::{PeerInfo, PubSubTopic},
         Announcement,
     },
 };
@@ -58,14 +58,14 @@ use super::{peer::PeerRole, transport::TransportAddress, types::HandshakeNonce};
 /// Active peer data
 struct PeerContext {
     subscriptions: BTreeSet<PubSubTopic>,
-    tx: mpsc::Sender<MockEvent>,
+    tx: mpsc::Sender<Event>,
 }
 
 /// Pending peer data (until handshake message is received)
 struct PendingPeerContext<A> {
     address: A,
     peer_role: PeerRole,
-    tx: mpsc::Sender<MockEvent>,
+    tx: mpsc::Sender<Event>,
 }
 
 pub struct Backend<T: TransportSocket> {
@@ -85,16 +85,16 @@ pub struct Backend<T: TransportSocket> {
     cmd_rx: mpsc::Receiver<Command<T>>,
 
     /// Active peers
-    peers: HashMap<MockPeerId, PeerContext>,
+    peers: HashMap<PeerId, PeerContext>,
 
     /// Pending connections
-    pending: HashMap<MockPeerId, PendingPeerContext<T::Address>>,
+    pending: HashMap<PeerId, PendingPeerContext<T::Address>>,
 
     /// RX channel for receiving events from peers
     #[allow(clippy::type_complexity)]
     peer_chan: (
-        mpsc::Sender<(MockPeerId, PeerEvent)>,
-        mpsc::Receiver<(MockPeerId, PeerEvent)>,
+        mpsc::Sender<(PeerId, PeerEvent)>,
+        mpsc::Receiver<(PeerId, PeerEvent)>,
     ),
 
     /// TX channel for sending events to the frontend
@@ -153,7 +153,7 @@ where
 
                 self.create_peer(
                     socket,
-                    MockPeerId::new(),
+                    PeerId::new(),
                     PeerRole::Outbound { handshake_nonce },
                     address,
                 )
@@ -173,10 +173,10 @@ where
     }
 
     /// Disconnect remote peer by id
-    async fn disconnect_peer(&mut self, peer_id: &MockPeerId) -> crate::Result<()> {
+    async fn disconnect_peer(&mut self, peer_id: &PeerId) -> crate::Result<()> {
         self.request_mgr.unregister_peer(peer_id);
         if let Some(context) = self.peers.remove(peer_id) {
-            context.tx.send(MockEvent::Disconnect).await.map_err(P2pError::from)
+            context.tx.send(Event::Disconnect).await.map_err(P2pError::from)
         } else {
             // TODO: Think about error handling. Currently we simply follow the libp2p behaviour.
             log::error!("{peer_id} peer doesn't exist");
@@ -187,8 +187,8 @@ where
     /// Sends a request to the remote peer.
     async fn send_request(
         &mut self,
-        request_id: MockRequestId,
-        peer_id: MockPeerId,
+        request_id: RequestId,
+        peer_id: PeerId,
         request: message::Request,
     ) -> crate::Result<()> {
         let peer = self
@@ -197,7 +197,7 @@ where
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         let request = self.request_mgr.make_request(request_id, request)?;
-        peer.tx.send(MockEvent::SendMessage(request)).await.map_err(P2pError::from)?;
+        peer.tx.send(Event::SendMessage(request)).await.map_err(P2pError::from)?;
 
         Ok(())
     }
@@ -205,7 +205,7 @@ where
     /// Send response to a request
     async fn send_response(
         &mut self,
-        request_id: MockRequestId,
+        request_id: RequestId,
         response: message::Response,
     ) -> crate::Result<()> {
         log::trace!("try to send response to request, request id {request_id}");
@@ -216,7 +216,7 @@ where
                 .get_mut(&peer_id)
                 .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
                 .tx
-                .send(MockEvent::SendMessage(response))
+                .send(Event::SendMessage(response))
                 .await
                 .map_err(P2pError::from);
         }
@@ -238,7 +238,7 @@ where
             .filter(|(_, peer)| peer.subscriptions.contains(&topic))
             .map(|(id, peer)| {
                 peer.tx
-                    .send(MockEvent::SendMessage(Box::new(Message::Announcement {
+                    .send(Event::SendMessage(Box::new(Message::Announcement {
                         announcement: announcement.clone(),
                     })))
                     .inspect_err(move |e| {
@@ -256,8 +256,8 @@ where
     /// Handle incoming request
     async fn handle_incoming_request(
         &mut self,
-        peer_id: MockPeerId,
-        request_id: MockRequestId,
+        peer_id: PeerId,
+        request_id: RequestId,
         request: message::Request,
     ) -> crate::Result<()> {
         log::trace!("request received from peer {peer_id}, request id {request_id}");
@@ -298,8 +298,8 @@ where
     /// Handle incoming response
     async fn handle_incoming_response(
         &mut self,
-        peer_id: MockPeerId,
-        request_id: MockRequestId,
+        peer_id: PeerId,
+        request_id: RequestId,
         response: message::Response,
     ) -> crate::Result<()> {
         log::trace!("response received from peer {peer_id}, request id {request_id}");
@@ -337,7 +337,7 @@ where
 
     async fn handle_announcement(
         &mut self,
-        peer_id: MockPeerId,
+        peer_id: PeerId,
         announcement: Announcement,
     ) -> crate::Result<()> {
         let size = announcement.encode().len();
@@ -373,7 +373,7 @@ where
 
                     self.create_peer(
                         stream,
-                        MockPeerId::new(),
+                        PeerId::new(),
                         PeerRole::Inbound,
                         address,
                     )?;
@@ -402,7 +402,7 @@ where
     fn create_peer(
         &mut self,
         socket: T::Stream,
-        remote_peer_id: MockPeerId,
+        remote_peer_id: PeerId,
         peer_role: PeerRole,
         address: T::Address,
     ) -> crate::Result<()> {
@@ -488,11 +488,7 @@ where
         Ok(false)
     }
 
-    async fn handle_peer_event(
-        &mut self,
-        peer_id: MockPeerId,
-        event: PeerEvent,
-    ) -> crate::Result<()> {
+    async fn handle_peer_event(&mut self, peer_id: PeerId, event: PeerEvent) -> crate::Result<()> {
         match event {
             PeerEvent::PeerInfoReceived {
                 network,
@@ -520,7 +516,7 @@ where
                         self.conn_tx
                             .send(ConnectivityEvent::OutboundAccepted {
                                 address,
-                                peer_info: MockPeerInfo {
+                                peer_info: PeerInfo {
                                     peer_id,
                                     network,
                                     version,
@@ -536,7 +532,7 @@ where
                         self.conn_tx
                             .send(ConnectivityEvent::InboundAccepted {
                                 address: address.clone(),
-                                peer_info: MockPeerInfo {
+                                peer_info: PeerInfo {
                                     peer_id,
                                     network,
                                     version,
@@ -573,7 +569,7 @@ where
         Ok(())
     }
 
-    async fn handle_message(&mut self, peer_id: MockPeerId, message: Message) -> crate::Result<()> {
+    async fn handle_message(&mut self, peer_id: PeerId, message: Message) -> crate::Result<()> {
         match message {
             Message::Handshake(_) => {
                 log::error!("peer {peer_id} sent handshaking message");

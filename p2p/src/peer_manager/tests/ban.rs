@@ -29,10 +29,10 @@ use crate::{
     error::{P2pError, PeerError},
     net::{
         self,
-        mock::{
-            transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-            types::MockPeerId,
-            MockService,
+        default_backend::{
+            transport::{NoiseTcpTransport, TcpTransportSocket, TestChannelTransport},
+            types::PeerId,
+            Service,
         },
         types::PubSubTopic,
         AsBannableAddress, ConnectivityService, NetworkingService,
@@ -81,18 +81,18 @@ where
 }
 
 #[tokio::test]
-async fn ban_connected_peer_mock_tcp() {
-    ban_connected_peer::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
+async fn ban_connected_peer_tcp() {
+    ban_connected_peer::<TestTransportTcp, Service<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn ban_connected_peer_mock_channels() {
-    ban_connected_peer::<TestTransportChannel, MockService<MockChannelTransport>>().await;
+async fn ban_connected_peer_channels() {
+    ban_connected_peer::<TestTransportChannel, Service<TestChannelTransport>>().await;
 }
 
 #[tokio::test]
-async fn ban_connected_peer_mock_noise() {
-    ban_connected_peer::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
+async fn ban_connected_peer_noise() {
+    ban_connected_peer::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
 }
 
 async fn banned_peer_attempts_to_connect<A, T>()
@@ -135,19 +135,18 @@ where
 }
 
 #[tokio::test]
-async fn banned_peer_attempts_to_connect_mock_tcp() {
-    banned_peer_attempts_to_connect::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
+async fn banned_peer_attempts_to_connect_tcp() {
+    banned_peer_attempts_to_connect::<TestTransportTcp, Service<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn banned_peer_attempts_to_connect_mock_channel() {
-    banned_peer_attempts_to_connect::<TestTransportChannel, MockService<MockChannelTransport>>()
-        .await;
+async fn banned_peer_attempts_to_connect_channel() {
+    banned_peer_attempts_to_connect::<TestTransportChannel, Service<TestChannelTransport>>().await;
 }
 
 #[tokio::test]
-async fn banned_peer_attempts_to_connect_mock_noise() {
-    banned_peer_attempts_to_connect::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
+async fn banned_peer_attempts_to_connect_noise() {
+    banned_peer_attempts_to_connect::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
 }
 
 // attempt to connect to banned peer
@@ -210,18 +209,18 @@ where
 }
 
 #[tokio::test]
-async fn connect_to_banned_peer_mock_tcp() {
-    connect_to_banned_peer::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
+async fn connect_to_banned_peer_tcp() {
+    connect_to_banned_peer::<TestTransportTcp, Service<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn connect_to_banned_peer_mock_channels() {
-    connect_to_banned_peer::<TestTransportChannel, MockService<MockChannelTransport>>().await;
+async fn connect_to_banned_peer_channels() {
+    connect_to_banned_peer::<TestTransportChannel, Service<TestChannelTransport>>().await;
 }
 
 #[tokio::test]
-async fn connect_to_banned_peer_mock_noise() {
-    connect_to_banned_peer::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
+async fn connect_to_banned_peer_noise() {
+    connect_to_banned_peer::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
 }
 
 async fn validate_invalid_outbound_connection<A, S, B>(peer_id: S::PeerId)
@@ -239,9 +238,9 @@ where
     let res = peer_manager.accept_connection(
         B::new(),
         Role::Outbound,
-        net::types::PeerInfo::<S> {
+        net::types::PeerInfo::<S::PeerId> {
             peer_id,
-            magic_bytes: [1, 2, 3, 4],
+            network: [1, 2, 3, 4],
             version: SemVer::new(0, 1, 0),
             agent: None,
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
@@ -255,9 +254,9 @@ where
     let res = peer_manager.accept_connection(
         B::new(),
         Role::Outbound,
-        net::types::PeerInfo::<S> {
+        net::types::PeerInfo::<S::PeerId> {
             peer_id,
-            magic_bytes: *config.magic_bytes(),
+            network: *config.magic_bytes(),
             version: SemVer::new(1, 1, 1),
             agent: None,
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
@@ -272,9 +271,9 @@ where
     let res = peer_manager.accept_connection(
         address.clone(),
         Role::Outbound,
-        net::types::PeerInfo::<S> {
+        net::types::PeerInfo::<S::PeerId> {
             peer_id,
-            magic_bytes: *config.magic_bytes(),
+            network: *config.magic_bytes(),
             version: SemVer::new(0, 1, 0),
             agent: None,
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
@@ -288,32 +287,32 @@ where
 }
 
 #[tokio::test]
-async fn validate_invalid_outbound_connection_mock_tcp() {
+async fn validate_invalid_outbound_connection_tcp() {
     validate_invalid_outbound_connection::<
         TestTransportTcp,
-        MockService<TcpTransportSocket>,
+        Service<TcpTransportSocket>,
         TestTcpAddressMaker,
-    >(MockPeerId::new())
+    >(PeerId::new())
     .await;
 }
 
 #[tokio::test]
-async fn validate_invalid_outbound_connection_mock_channels() {
+async fn validate_invalid_outbound_connection_channels() {
     validate_invalid_outbound_connection::<
         TestTransportChannel,
-        MockService<MockChannelTransport>,
+        Service<TestChannelTransport>,
         TestChannelAddressMaker,
-    >(MockPeerId::new())
+    >(PeerId::new())
     .await;
 }
 
 #[tokio::test]
-async fn validate_invalid_outbound_connection_mock_noise() {
+async fn validate_invalid_outbound_connection_noise() {
     validate_invalid_outbound_connection::<
         TestTransportNoise,
-        MockService<NoiseTcpTransport>,
+        Service<NoiseTcpTransport>,
         TestTcpAddressMaker,
-    >(MockPeerId::new())
+    >(PeerId::new())
     .await;
 }
 
@@ -331,9 +330,9 @@ where
     // invalid magic bytes
     let res = peer_manager.accept_inbound_connection(
         B::new(),
-        net::types::PeerInfo::<S> {
+        net::types::PeerInfo::<S::PeerId> {
             peer_id,
-            magic_bytes: [1, 2, 3, 4],
+            network: [1, 2, 3, 4],
             version: SemVer::new(0, 1, 0),
             agent: None,
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
@@ -346,9 +345,9 @@ where
     // invalid version
     let res = peer_manager.accept_inbound_connection(
         B::new(),
-        net::types::PeerInfo::<S> {
+        net::types::PeerInfo::<S::PeerId> {
             peer_id,
-            magic_bytes: *config.magic_bytes(),
+            network: *config.magic_bytes(),
             version: SemVer::new(1, 1, 1),
             agent: None,
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
@@ -362,9 +361,9 @@ where
     let address = B::new();
     let res = peer_manager.accept_inbound_connection(
         address.clone(),
-        net::types::PeerInfo::<S> {
+        net::types::PeerInfo::<S::PeerId> {
             peer_id,
-            magic_bytes: *config.magic_bytes(),
+            network: *config.magic_bytes(),
             version: SemVer::new(0, 1, 0),
             agent: None,
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
@@ -378,32 +377,32 @@ where
 }
 
 #[tokio::test]
-async fn validate_invalid_inbound_connection_mock_tcp() {
+async fn validate_invalid_inbound_connection_tcp() {
     validate_invalid_inbound_connection::<
         TestTransportTcp,
-        MockService<TcpTransportSocket>,
+        Service<TcpTransportSocket>,
         TestTcpAddressMaker,
-    >(MockPeerId::new())
+    >(PeerId::new())
     .await;
 }
 
 #[tokio::test]
-async fn validate_invalid_inbound_connection_mock_channels() {
+async fn validate_invalid_inbound_connection_channels() {
     validate_invalid_inbound_connection::<
         TestTransportChannel,
-        MockService<MockChannelTransport>,
+        Service<TestChannelTransport>,
         TestChannelAddressMaker,
-    >(MockPeerId::new())
+    >(PeerId::new())
     .await;
 }
 
 #[tokio::test]
-async fn validate_invalid_inbound_connection_mock_noise() {
+async fn validate_invalid_inbound_connection_noise() {
     validate_invalid_inbound_connection::<
         TestTransportNoise,
-        MockService<NoiseTcpTransport>,
+        Service<NoiseTcpTransport>,
         TestTcpAddressMaker,
-    >(MockPeerId::new())
+    >(PeerId::new())
     .await;
 }
 
@@ -454,17 +453,16 @@ where
 }
 
 #[tokio::test]
-async fn inbound_connection_invalid_magic_mock_tcp() {
-    inbound_connection_invalid_magic::<TestTransportTcp, MockService<TcpTransportSocket>>().await;
+async fn inbound_connection_invalid_magic_tcp() {
+    inbound_connection_invalid_magic::<TestTransportTcp, Service<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn inbound_connection_invalid_magic_mock_channels() {
-    inbound_connection_invalid_magic::<TestTransportChannel, MockService<MockChannelTransport>>()
-        .await;
+async fn inbound_connection_invalid_magic_channels() {
+    inbound_connection_invalid_magic::<TestTransportChannel, Service<TestChannelTransport>>().await;
 }
 
 #[tokio::test]
-async fn inbound_connection_invalid_magic_mock_noise() {
-    inbound_connection_invalid_magic::<TestTransportNoise, MockService<NoiseTcpTransport>>().await;
+async fn inbound_connection_invalid_magic_noise() {
+    inbound_connection_invalid_magic::<TestTransportNoise, Service<NoiseTcpTransport>>().await;
 }

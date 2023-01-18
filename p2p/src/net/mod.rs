@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod mock;
+pub mod default_backend;
 pub mod types;
 
 use std::{
@@ -31,7 +31,7 @@ use crate::{
     message::{PeerManagerResponse, SyncRequest, SyncResponse},
 };
 
-use self::mock::transport::TransportAddress;
+use self::default_backend::transport::TransportAddress;
 
 /// [NetworkingService] provides the low-level network interface
 /// that each network service provider must implement

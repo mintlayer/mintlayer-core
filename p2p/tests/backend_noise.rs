@@ -13,21 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod impls;
-mod message_codec;
-mod traits;
-
-use impls::{channel, stream_adapter, tcp};
-
-pub use self::{
-    channel::{ChannelMockStream, MockChannelListener, MockChannelTransport},
-    message_codec::BufferedTranscoder,
-    stream_adapter::{
-        identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter,
-        wrapped_transport::wrapped_socket::WrappedTransportSocket,
+use p2p::{
+    net::default_backend::{
+        transport::{NoiseEncryptionAdapter, TcpTransportSocket, WrappedTransportSocket},
+        Service,
     },
-    tcp::TcpTransportSocket,
-    traits::{PeerStream, TransportAddress, TransportListener, TransportSocket},
+    testing_utils::{TestTcpAddressMaker, TestTransportNoise},
 };
 
-pub type NoiseTcpTransport = WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>;
+fn main() {
+    p2p_backend_test_suite::run::<
+        TestTransportNoise,
+        Service<WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>>,
+        TestTcpAddressMaker,
+    >();
+}

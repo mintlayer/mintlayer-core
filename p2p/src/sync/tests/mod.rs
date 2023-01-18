@@ -27,7 +27,7 @@ use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificati
 use crate::{
     config::{NodeType, P2pConfig},
     event::{PeerManagerEvent, SyncControlEvent},
-    net::{mock::types::MockPeerId, ConnectivityService},
+    net::{default_backend::types::PeerId, ConnectivityService},
     sync::{peer, BlockSyncManager},
     NetworkingService, SyncingMessagingService,
 };
@@ -113,10 +113,10 @@ pub trait MakeTestPeerId {
     fn new() -> Self::PeerId;
 }
 
-impl MakeTestPeerId for MockPeerId {
+impl MakeTestPeerId for PeerId {
     type PeerId = Self;
 
     fn new() -> Self::PeerId {
-        MockPeerId::new()
+        PeerId::new()
     }
 }

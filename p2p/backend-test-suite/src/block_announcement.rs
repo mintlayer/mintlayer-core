@@ -35,8 +35,8 @@ use p2p::{
     error::{P2pError, PublishError},
     message::Announcement,
     net::{
-        mock::constants::ANNOUNCEMENT_MAX_SIZE, types::SyncingEvent, ConnectivityService,
-        NetworkingService, SyncingMessagingService,
+        default_backend::constants::ANNOUNCEMENT_MAX_SIZE, types::SyncingEvent,
+        ConnectivityService, NetworkingService, SyncingMessagingService,
     },
     testing_utils::{connect_services, TestTransportMaker},
 };

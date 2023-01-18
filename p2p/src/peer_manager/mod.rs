@@ -42,8 +42,10 @@ use crate::{
     event::{PeerManagerEvent, SyncControlEvent},
     message::{AddrListRequest, AddrListResponse, PeerManagerRequest, PeerManagerResponse},
     net::{
-        self, mock::transport::TransportAddress, types::Role, AsBannableAddress,
-        ConnectivityService, NetworkingService,
+        self,
+        default_backend::transport::TransportAddress,
+        types::{PeerInfo, Role},
+        AsBannableAddress, ConnectivityService, NetworkingService,
     },
     types::peer_address::PeerAddress,
 };
@@ -130,7 +132,7 @@ where
         &mut self,
         address: T::Address,
         role: Role,
-        info: net::types::PeerInfo<T>,
+        info: PeerInfo<T::PeerId>,
         _receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
         // TODO: Handle receiver_address
@@ -138,10 +140,10 @@ where
         let peer_id = info.peer_id;
 
         ensure!(
-            info.magic_bytes == *self.chain_config.magic_bytes(),
+            info.network == *self.chain_config.magic_bytes(),
             P2pError::ProtocolError(ProtocolError::DifferentNetwork(
                 *self.chain_config.magic_bytes(),
-                info.magic_bytes,
+                info.network,
             ))
         );
         ensure!(
@@ -177,7 +179,7 @@ where
     fn accept_inbound_connection(
         &mut self,
         address: T::Address,
-        info: net::types::PeerInfo<T>,
+        info: net::types::PeerInfo<T::PeerId>,
         receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
         log::debug!("validate inbound connection, inbound address {address:?}");
@@ -210,7 +212,7 @@ where
     /// or by the [`PeerManager::heartbeat()`] function which has decided to cull
     /// this connection in favor of another potential connection.
     fn close_connection(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
-        // Mock backend is always sending ConnectionClosed event when somebody disconnects, ensure that the peer is active
+        // The backend is always sending ConnectionClosed event when somebody disconnects, ensure that the peer is active
         if self.peerdb.is_active_peer(&peer_id) {
             log::debug!("connection closed for peer {peer_id}");
 

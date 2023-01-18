@@ -38,7 +38,7 @@ use crate::{
     error::{ConversionError, P2pError},
     interface::types::ConnectedPeer,
     net::{
-        mock::transport::TransportAddress,
+        default_backend::transport::TransportAddress,
         types::{self, Role},
         AsBannableAddress, NetworkingService,
     },
@@ -48,7 +48,7 @@ use crate::{
 #[derive(Debug)]
 pub struct PeerContext<T: NetworkingService> {
     /// Peer information
-    pub info: types::PeerInfo<T>,
+    pub info: types::PeerInfo<T::PeerId>,
 
     /// Peer's address
     pub address: T::Address,
@@ -188,7 +188,12 @@ impl<T: NetworkingService> PeerDb<T> {
     ///
     /// After `PeerManager` has established either an inbound or an outbound connection,
     /// it informs the `PeerDb` about it.
-    pub fn peer_connected(&mut self, address: T::Address, role: Role, info: types::PeerInfo<T>) {
+    pub fn peer_connected(
+        &mut self,
+        address: T::Address,
+        role: Role,
+        info: types::PeerInfo<T::PeerId>,
+    ) {
         log::info!(
             "peer connected, peer_id: {}, address: {address:?}, {:?}",
             info.peer_id,

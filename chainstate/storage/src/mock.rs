@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A mock version of the blockchain storage.
+//! A default_backend version of the blockchain storage.
 
 use std::collections::BTreeMap;
 
@@ -34,7 +34,7 @@ use pos_accounting::{
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
 mockall::mock! {
-    /// A mock object for blockchain storage
+    /// A default_backend object for blockchain storage
     pub Store {}
 
     impl crate::BlockchainStorageRead for Store {
@@ -190,7 +190,7 @@ mockall::mock! {
 }
 
 mockall::mock! {
-    /// A mock object for blockchain storage transaction
+    /// A default_backend object for blockchain storage transaction
     pub StoreTxRo {}
 
     impl crate::BlockchainStorageRead for StoreTxRo {
@@ -255,7 +255,7 @@ mockall::mock! {
 }
 
 mockall::mock! {
-    /// A mock object for blockchain storage transaction
+    /// A default_backend object for blockchain storage transaction
     pub StoreTxRw {}
 
     impl crate::BlockchainStorageRead for StoreTxRw {
@@ -463,7 +463,7 @@ mod tests {
 
     #[test]
     fn mock_transaction_fail() {
-        // Set up the mock store
+        // Set up the default_backend store
         let mut store = MockStore::new();
         let err_f = || {
             Err(crate::Error::Storage(
@@ -484,7 +484,7 @@ mod tests {
 
     #[test]
     fn mock_transaction() {
-        // Set up the mock store
+        // Set up the default_backend store
         let mut store = MockStore::new();
         store.expect_transaction_rw().returning(|| {
             let mut mock_tx = MockStoreTxRw::new();
@@ -497,7 +497,7 @@ mod tests {
             Ok(mock_tx)
         });
 
-        // Test some code against the mock
+        // Test some code against the default_backend
         let mut tx = store.transaction_rw().unwrap();
         let v = tx.get_storage_version().unwrap();
         tx.set_storage_version(v + 1).unwrap();

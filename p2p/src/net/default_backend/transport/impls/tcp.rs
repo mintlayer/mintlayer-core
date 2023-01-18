@@ -22,7 +22,7 @@ use tokio::net::{TcpListener, TcpStream};
 use crate::{
     config::DEFAULT_BIND_PORT,
     net::{
-        mock::transport::{
+        default_backend::transport::{
             traits::TransportAddress, PeerStream, TransportListener, TransportSocket,
         },
         AsBannableAddress,
@@ -164,9 +164,9 @@ mod tests {
     };
 
     use super::*;
-    use crate::net::mock::{
+    use crate::net::default_backend::{
         transport::BufferedTranscoder,
-        types::{Message, MockRequestId},
+        types::{Message, RequestId},
     };
 
     #[tokio::test]
@@ -179,7 +179,7 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let request_id = MockRequestId::new();
+        let request_id = RequestId::new();
         let request = SyncRequest::BlockListRequest(BlockListRequest::new(vec![]));
         let mut peer_stream = BufferedTranscoder::new(peer_stream);
         peer_stream
@@ -210,7 +210,7 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let id_1 = MockRequestId::new();
+        let id_1 = RequestId::new();
         let request = SyncRequest::BlockListRequest(BlockListRequest::new(vec![]));
         let mut peer_stream = BufferedTranscoder::new(peer_stream);
         peer_stream
@@ -221,7 +221,7 @@ mod tests {
             .await
             .unwrap();
 
-        let id_2 = MockRequestId::new();
+        let id_2 = RequestId::new();
         peer_stream
             .send(Message::Request {
                 request_id: id_2,

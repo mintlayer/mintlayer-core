@@ -19,10 +19,10 @@ use crate::testing_utils::{
 
 use crate::{
     error::{P2pError, PeerError},
-    net::mock::{
-        transport::{MockChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-        types::MockPeerId,
-        MockService,
+    net::default_backend::{
+        transport::{NoiseTcpTransport, TcpTransportSocket, TestChannelTransport},
+        types::PeerId,
+        Service,
     },
     sync::tests::{make_sync_manager, register_peer, MakeTestPeerId},
     ConnectivityService, NetworkingService, SyncingMessagingService,
@@ -51,19 +51,18 @@ where
 }
 
 #[tokio::test]
-async fn test_peer_reconnected_mock_tcp() {
-    test_peer_reconnected::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
+async fn test_peer_reconnected_tcp() {
+    test_peer_reconnected::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn test_peer_reconnected_mock_channels() {
-    test_peer_reconnected::<TestTransportChannel, MockPeerId, MockService<MockChannelTransport>>()
-        .await;
+async fn test_peer_reconnected_channels() {
+    test_peer_reconnected::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
 }
 
 #[tokio::test]
-async fn test_peer_reconnected_mock_noise() {
-    test_peer_reconnected::<TestTransportNoise, MockPeerId, MockService<NoiseTcpTransport>>().await;
+async fn test_peer_reconnected_noise() {
+    test_peer_reconnected::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
 }
 
 // handle peer disconnection event
@@ -94,18 +93,16 @@ where
 }
 
 #[tokio::test]
-async fn test_peer_disconnected_mock_tcp() {
-    test_peer_disconnected::<TestTransportTcp, MockPeerId, MockService<TcpTransportSocket>>().await;
+async fn test_peer_disconnected_tcp() {
+    test_peer_disconnected::<TestTransportTcp, PeerId, Service<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
-async fn test_peer_disconnected_mock_channels() {
-    test_peer_disconnected::<TestTransportChannel, MockPeerId, MockService<MockChannelTransport>>()
-        .await;
+async fn test_peer_disconnected_channels() {
+    test_peer_disconnected::<TestTransportChannel, PeerId, Service<TestChannelTransport>>().await;
 }
 
 #[tokio::test]
-async fn test_peer_disconnected_mock_noise() {
-    test_peer_disconnected::<TestTransportNoise, MockPeerId, MockService<NoiseTcpTransport>>()
-        .await;
+async fn test_peer_disconnected_noise() {
+    test_peer_disconnected::<TestTransportNoise, PeerId, Service<NoiseTcpTransport>>().await;
 }

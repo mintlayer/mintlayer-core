@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, fmt::Display};
+use std::{
+    collections::BTreeSet,
+    fmt::{Debug, Display},
+};
 
 use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
@@ -35,13 +38,13 @@ pub enum Role {
 /// (both are Mintlayer nodes and that both support mandatory protocols). If those checks pass,
 /// the information is passed on to [crate::peer_manager::PeerManager] which decides whether it
 /// wants to keep the connection open or close it and possibly ban the peer from.
-#[derive(Debug)]
-pub struct PeerInfo<T: NetworkingService> {
+#[derive(Debug, PartialEq, Eq)]
+pub struct PeerInfo<P> {
     /// Unique ID of the peer
-    pub peer_id: T::PeerId,
+    pub peer_id: P,
 
     /// Peer network
-    pub magic_bytes: [u8; 4],
+    pub network: [u8; 4],
 
     /// Peer software version
     pub version: SemVer,
@@ -53,11 +56,11 @@ pub struct PeerInfo<T: NetworkingService> {
     pub subscriptions: BTreeSet<PubSubTopic>,
 }
 
-impl<T: NetworkingService> Display for PeerInfo<T> {
+impl<P: Debug> Display for PeerInfo<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Peer information:")?;
-        writeln!(f, "--> Peer ID: {}", self.peer_id)?;
-        writeln!(f, "--> Magic bytes: {:x?}", self.magic_bytes)?;
+        writeln!(f, "--> Peer ID: {:?}", self.peer_id)?;
+        writeln!(f, "--> Network: {:x?}", self.network)?;
         writeln!(f, "--> Software version: {}", self.version)?;
         writeln!(
             f,
@@ -100,7 +103,7 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         address: T::Address,
 
         /// Peer information
-        peer_info: PeerInfo<T>,
+        peer_info: PeerInfo<T::PeerId>,
 
         /// Socket address of this node as seen by remote peer
         receiver_address: Option<PeerAddress>,
@@ -112,7 +115,7 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         address: T::Address,
 
         /// Peer information
-        peer_info: PeerInfo<T>,
+        peer_info: PeerInfo<T::PeerId>,
 
         /// Socket address of this node as seen by remote peer
         receiver_address: Option<PeerAddress>,

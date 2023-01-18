@@ -17,7 +17,7 @@ use async_trait::async_trait;
 use futures::future::BoxFuture;
 
 use crate::net::{
-    mock::transport::{impls::stream_adapter::traits::StreamAdapter, TransportSocket},
+    default_backend::transport::{impls::stream_adapter::traits::StreamAdapter, TransportSocket},
     types::Role,
 };
 
