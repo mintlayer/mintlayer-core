@@ -119,6 +119,8 @@ impl<T> Clone for TransactionLockImpl<T> {
     }
 }
 
+impl<T> utils::shallow_clone::ShallowClone for TransactionLockImpl<T> {}
+
 impl<'tx, T: 'tx + ReadOps> backend::TransactionalRo<'tx> for TransactionLockImpl<T> {
     type TxRo = TxRo<'tx, T>;
 

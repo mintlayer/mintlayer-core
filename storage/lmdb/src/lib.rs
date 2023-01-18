@@ -177,6 +177,7 @@ impl<'tx> TransactionalRw<'tx> for LmdbImpl {
     }
 }
 
+impl utils::shallow_clone::ShallowClone for LmdbImpl {}
 impl backend::BackendImpl for LmdbImpl {}
 
 #[derive(Eq, PartialEq, Clone, Debug)]

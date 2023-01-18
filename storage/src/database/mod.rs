@@ -42,6 +42,11 @@ where
     }
 }
 
+impl<B: Backend, Sch> utils::shallow_clone::ShallowClone for Storage<B, Sch> where
+    B::Impl: utils::shallow_clone::ShallowClone
+{
+}
+
 impl<B: Backend, Sch: Schema> Storage<B, Sch> {
     /// Create new storage with given backend
     pub fn new(backend: B) -> crate::Result<Self> {
