@@ -384,8 +384,8 @@ def write_config(config_path, *, n, chain, extra_config="", disable_autoconnect=
         f.write("fixedseeds=0\n")
         f.write("listenonion=0\n")
         # Increase peertimeout to avoid disconnects while using mocktime.
-        # peertimeout is measured in default_backend time, so setting it large enough to
-        # cover any duration in default_backend time is sufficient. It can be overridden
+        # peertimeout is measured in mock time, so setting it large enough to
+        # cover any duration in mock time is sufficient. It can be overridden
         # in tests.
         f.write("peertimeout=999999999\n")
         f.write("printtoconsole=0\n")
