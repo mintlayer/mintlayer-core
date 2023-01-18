@@ -63,9 +63,7 @@ where
     pm2.accept_inbound_connection(address, peer_info, None).unwrap();
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
-    let addr1 = pm1.peer_connectivity_handle.local_addresses().await.unwrap()[0]
-        .clone()
-        .as_bannable();
+    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(std::matches!(
@@ -112,9 +110,7 @@ where
     pm2.accept_inbound_connection(address, peer_info, None).unwrap();
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
-    let addr1 = pm1.peer_connectivity_handle.local_addresses().await.unwrap()[0]
-        .clone()
-        .as_bannable();
+    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(std::matches!(
@@ -169,9 +165,7 @@ where
     pm2.accept_inbound_connection(address, peer_info1, None).unwrap();
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
-    let addr1 = pm1.peer_connectivity_handle.local_addresses().await.unwrap()[0]
-        .clone()
-        .as_bannable();
+    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(matches!(
@@ -179,7 +173,7 @@ where
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
 
-    let remote_addr = pm1.peer_connectivity_handle.local_addresses().await.unwrap()[0].clone();
+    let remote_addr = pm1.peer_connectivity_handle.local_addresses()[0].clone();
 
     tokio::spawn(async move {
         loop {

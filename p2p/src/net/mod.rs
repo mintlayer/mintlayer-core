@@ -137,10 +137,8 @@ where
         response: PeerManagerResponse,
     ) -> crate::Result<()>;
 
-    /// Return the socket address of the network service provider
-    ///
-    /// If the address isn't available yet, `None` is returned
-    async fn local_addresses(&self) -> crate::Result<Vec<T::Address>>;
+    /// Return the socket addresses of the network service provider
+    fn local_addresses(&self) -> &[T::Address];
 
     /// Poll events from the network service provider
     ///

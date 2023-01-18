@@ -211,8 +211,8 @@ where
         Ok(())
     }
 
-    async fn local_addresses(&self) -> crate::Result<Vec<S::Address>> {
-        Ok(self.local_addresses.clone())
+    fn local_addresses(&self) -> &[S::Address] {
+        &self.local_addresses
     }
 
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<S>> {
@@ -394,7 +394,7 @@ mod tests {
         .await
         .unwrap();
 
-        let addr = conn2.local_addresses().await.unwrap();
+        let addr = conn2.local_addresses();
         assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
 
         if let Ok(ConnectivityEvent::OutboundAccepted {
@@ -403,7 +403,7 @@ mod tests {
             receiver_address: _,
         }) = conn1.poll_next().await
         {
-            assert_eq!(address, conn2.local_addresses().await.unwrap()[0]);
+            assert_eq!(address, conn2.local_addresses()[0]);
             assert_eq!(&peer_info.network, config.magic_bytes());
             assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
             assert_eq!(peer_info.agent, None);
@@ -457,7 +457,7 @@ mod tests {
         .await
         .unwrap();
 
-        let bind_address = conn2.local_addresses().await.unwrap();
+        let bind_address = conn2.local_addresses();
         let (_res1, res2) = tokio::join!(conn1.connect(bind_address[0].clone()), conn2.poll_next());
         match res2.unwrap() {
             ConnectivityEvent::InboundAccepted {
@@ -517,7 +517,7 @@ mod tests {
         .unwrap();
 
         let (_res1, res2) = tokio::join!(
-            conn1.connect(conn2.local_addresses().await.unwrap()[0].clone()),
+            conn1.connect(conn2.local_addresses()[0].clone()),
             conn2.poll_next()
         );
 
@@ -575,12 +575,12 @@ mod tests {
         .unwrap();
 
         // Try connect to self
-        let addr = conn1.local_addresses().await.unwrap();
+        let addr = conn1.local_addresses();
         assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
 
         // ConnectionError should be reported
         if let Ok(ConnectivityEvent::ConnectionError { address, error }) = conn1.poll_next().await {
-            assert_eq!(address, conn1.local_addresses().await.unwrap()[0]);
+            assert_eq!(address, conn1.local_addresses()[0]);
             assert_eq!(error, P2pError::DialError(DialError::AttemptToDialSelf));
         } else {
             panic!("invalid event received");
@@ -597,7 +597,7 @@ mod tests {
         }
 
         // Check that we can still connect normally after
-        let addr = conn2.local_addresses().await.unwrap();
+        let addr = conn2.local_addresses();
         assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
         if let Ok(ConnectivityEvent::OutboundAccepted {
             address,
@@ -605,7 +605,7 @@ mod tests {
             receiver_address: _,
         }) = conn1.poll_next().await
         {
-            assert_eq!(address, conn2.local_addresses().await.unwrap()[0]);
+            assert_eq!(address, conn2.local_addresses()[0]);
             assert_eq!(&peer_info.network, config.magic_bytes());
             assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
             assert_eq!(peer_info.agent, None);

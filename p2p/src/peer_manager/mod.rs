@@ -431,10 +431,9 @@ where
                     .map_err(|_| P2pError::ChannelClosed)?;
             }
             PeerManagerEvent::GetBindAddresses(response) => {
-                let addr = self.peer_connectivity_handle.local_addresses();
-                let addr = addr
-                    .await
-                    .unwrap_or_default()
+                let addr = self
+                    .peer_connectivity_handle
+                    .local_addresses()
                     .into_iter()
                     .map(|addr| addr.to_string())
                     .collect();

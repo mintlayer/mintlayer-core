@@ -114,7 +114,7 @@ where
     let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
-    let addr = pm2.peer_connectivity_handle.local_addresses().await.unwrap()[0].clone();
+    let addr = pm2.peer_connectivity_handle.local_addresses()[0].clone();
 
     tokio::spawn(async move {
         loop {
