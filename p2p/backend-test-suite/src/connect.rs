@@ -23,12 +23,7 @@ use p2p::{
     net::{ConnectivityService, NetworkingService, SyncingMessagingService},
 };
 
-tests![
-    connect,
-    #[cfg(not(target_os = "windows"))]
-    connect_address_in_use,
-    connect_accept,
-];
+tests![connect, connect_address_in_use, connect_accept,];
 
 async fn connect<T, S, A>()
 where
@@ -49,8 +44,6 @@ where
 }
 
 // Check that connecting twice to the same address isn't possible.
-// TODO: Investigate why this test fails on Windows.
-#[cfg(not(target_os = "windows"))]
 async fn connect_address_in_use<T, S, A>()
 where
     T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
