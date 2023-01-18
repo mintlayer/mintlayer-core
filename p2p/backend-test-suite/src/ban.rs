@@ -101,8 +101,7 @@ where
             .await
             .unwrap();
 
-        let res = sync2.make_announcement(Announcement::Block(blocks[2].clone())).await;
-        assert!(res.is_ok());
+        sync2.make_announcement(Announcement::Block(blocks[2].clone())).await.unwrap();
     });
 
     match rx_peer_manager.recv().await {

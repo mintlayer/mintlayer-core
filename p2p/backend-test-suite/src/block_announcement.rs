@@ -74,8 +74,7 @@ where
 
     connect_services::<S>(&mut conn1, &mut conn2).await;
 
-    // Spam the message until until we have a peer.
-    let res = sync1
+    sync1
         .make_announcement(Announcement::Block(
             Block::new(
                 vec![],
@@ -86,8 +85,8 @@ where
             )
             .unwrap(),
         ))
-        .await;
-    assert!(res.is_ok());
+        .await
+        .unwrap();
 
     // Poll an event from the network for server2.
     let block = match sync2.poll_next().await.unwrap() {
@@ -157,7 +156,7 @@ where
 
     connect_services::<S>(&mut conn1, &mut conn2).await;
 
-    let res = sync1
+    sync1
         .make_announcement(Announcement::Block(
             Block::new(
                 vec![],
@@ -168,8 +167,8 @@ where
             )
             .unwrap(),
         ))
-        .await;
-    assert!(res.is_ok());
+        .await
+        .unwrap();
 }
 
 async fn block_announcement_too_big_message<T, S, A>()

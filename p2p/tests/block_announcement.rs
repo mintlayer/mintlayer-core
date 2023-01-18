@@ -81,8 +81,7 @@ where
     connect_services::<S>(&mut peer1.0, &mut peer2.0).await;
     connect_services::<S>(&mut peer2.0, &mut peer3.0).await;
 
-    // Spam the message until we have a peer.
-    let res = sync1
+    sync1
         .make_announcement(Announcement::Block(
             Block::new(
                 vec![],
@@ -93,8 +92,8 @@ where
             )
             .unwrap(),
         ))
-        .await;
-    assert!(res.is_ok());
+        .await
+        .unwrap();
 
     // Verify that all peers received the message even though they weren't directly connected.
     let event = peer1.1.poll_next().await.unwrap();
