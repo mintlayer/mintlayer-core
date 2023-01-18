@@ -21,6 +21,7 @@
 
 #![allow(rustdoc::private_intra_doc_links)]
 
+mod global_ip;
 pub mod peerdb;
 
 use std::{
@@ -50,8 +51,10 @@ use crate::{
         types::{ConnectivityEvent, Role},
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
-    types::peer_address::PeerAddress,
+    types::peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
 };
+
+use self::global_ip::GlobalIp;
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
 const MAX_ACTIVE_CONNECTIONS: usize = 128;
@@ -121,6 +124,39 @@ where
         version == self.chain_config.version()
     }
 
+    fn handle_outbound_receiver_address(&mut self, receiver_address: PeerAddress) {
+        let is_global_ip = match &receiver_address {
+            PeerAddress::Ip4(socket) => std::net::Ipv4Addr::from(socket.ip).is_global_unicast_ip(),
+            PeerAddress::Ip6(socket) => std::net::Ipv6Addr::from(socket.ip).is_global_unicast_ip(),
+        };
+        if !is_global_ip {
+            return;
+        }
+
+        let _public_addresses = self
+            .peer_connectivity_handle
+            .local_addresses()
+            .iter()
+            .map(TransportAddress::as_peer_address)
+            .filter_map(
+                |listening_address| match (&receiver_address, listening_address) {
+                    (PeerAddress::Ip4(listener), PeerAddress::Ip4(receiver)) => {
+                        Some(PeerAddress::Ip4(PeerAddressIp4 {
+                            ip: receiver.ip,
+                            port: listener.port,
+                        }))
+                    }
+                    (PeerAddress::Ip6(listener), PeerAddress::Ip6(receiver)) => {
+                        Some(PeerAddress::Ip6(PeerAddressIp6 {
+                            ip: receiver.ip,
+                            port: listener.port,
+                        }))
+                    }
+                    _ => None,
+                },
+            );
+    }
+
     /// Handle connection established event
     ///
     /// The event is received from the networking backend and it's either a result of an incoming
@@ -131,9 +167,11 @@ where
         address: T::Address,
         role: Role,
         info: PeerInfo<T::PeerId>,
-        _receiver_address: Option<PeerAddress>,
+        receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
-        // TODO: Handle receiver_address
+        if let (Some(receiver_address), Role::Outbound) = (receiver_address, role) {
+            self.handle_outbound_receiver_address(receiver_address);
+        }
 
         let peer_id = info.peer_id;
 
@@ -434,7 +472,7 @@ where
                 let addr = self
                     .peer_connectivity_handle
                     .local_addresses()
-                    .into_iter()
+                    .iter()
                     .map(|addr| addr.to_string())
                     .collect();
                 response.send(addr).map_err(|_| P2pError::ChannelClosed)?;
