@@ -18,7 +18,7 @@ mod error;
 use rusqlite::{Connection, OpenFlags, Transaction};
 use std::marker::PhantomData;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use storage_core::error::Fatal;
 use storage_core::{
@@ -74,6 +74,7 @@ impl<'tx, C> Iterator for PrefixIter<'tx, C> {
 }
 
 pub struct DbTx<'m> {
+    // conn: MutexGuard<'m, Connection>,
     tx: Transaction<'m>,
     // dbs: &'m DbList,
     // _map_token: RwLockReadGuard<'m, remap::MemMapController>,
@@ -151,9 +152,15 @@ impl SqliteImpl {
         // todo!()
 
         // TODO implement properly
-        let mut connection = self.connection.lock().unwrap();
-        let tx = connection.transaction().unwrap();
-        Ok(DbTx { tx })
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| storage_core::error::Recoverable::TemporarilyUnavailable)?;
+        let mut tx = connection.transaction().map_err(error::process_sqlite_error)?;
+        Ok(DbTx {
+            // conn: connection,
+            tx,
+        })
 
         // // Make sure map token is acquired before starting the transaction below
         // let _map_token = self.map_token.read().expect("mutex to be alive");
@@ -171,8 +178,7 @@ impl<'tx> TransactionalRo<'tx> for SqliteImpl {
     type TxRo = DbTx<'tx>;
 
     fn transaction_ro<'st: 'tx>(&'st self) -> storage_core::Result<Self::TxRo> {
-        todo!()
-        // self.start_transaction(lmdb::Environment::begin_ro_txn)
+        self.start_transaction()
     }
 }
 
@@ -181,11 +187,10 @@ impl<'tx> TransactionalRw<'tx> for SqliteImpl {
 
     fn transaction_rw<'st: 'tx>(&'st self) -> storage_core::Result<Self::TxRw> {
         self.start_transaction()
-        // self.start_transaction(lmdb::Environment::begin_rw_txn)
     }
 }
 
-impl<'conn: 'static> backend::BackendImpl for SqliteImpl {}
+impl backend::BackendImpl for SqliteImpl {}
 // impl backend::BackendImpl for SqliteImpl<'_> {}
 
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -210,6 +215,7 @@ impl Sqlite {
         // // TODO change error
         let connection = Connection::open_with_flags(self.path, flags)
             .map_err(|err| Fatal::InternalError(err.to_string()))?;
+
         Ok(connection)
 
         // let flags = lmdb::DatabaseFlags::default();

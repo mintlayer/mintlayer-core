@@ -97,3 +97,10 @@ pub fn process_io_error(err: IoError) -> storage_core::Error {
 //         Err(storage_core::error::Fatal::InternalError(err.to_string()).into()),
 //     )
 // }
+
+/// Map Sqlite error into a storage error
+pub fn process_sqlite_error(err: rusqlite::Error) -> storage_core::Error {
+    match err {
+        _ => Recoverable::TemporarilyUnavailable.into(),
+    }
+}
