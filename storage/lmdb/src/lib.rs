@@ -165,7 +165,7 @@ impl<'tx> TransactionalRo<'tx> for LmdbImpl {
 impl<'tx> TransactionalRw<'tx> for LmdbImpl {
     type TxRw = DbTxRw<'tx>;
 
-    fn transaction_rw<'st: 'tx>(&'st self) -> storage_core::Result<Self::TxRw> {
+    fn transaction_rw<'st: 'tx>(&'st self, size: Option<usize>) -> storage_core::Result<Self::TxRw> {
         remap::remap(
             &self.env,
             // Acquire exclusive memory map token to make sure no transactions are active for

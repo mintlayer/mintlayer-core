@@ -72,9 +72,9 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
     }
 
     /// Start a read-write transaction
-    pub fn transaction_rw<'tx, 'st: 'tx>(&'st self) -> crate::Result<TransactionRw<'tx, B, Sch>> {
+    pub fn transaction_rw<'tx, 'st: 'tx>(&'st self, size: Option<usize>) -> crate::Result<TransactionRw<'tx, B, Sch>> {
         Ok(TransactionRw {
-            dbtx: backend::TransactionalRw::transaction_rw(&self.backend)?,
+            dbtx: backend::TransactionalRw::transaction_rw(&self.backend, size)?,
             _schema: Default::default(),
         })
     }

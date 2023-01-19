@@ -43,7 +43,9 @@ fn perform_writes(
 
             // Try inserting values with sizes given by the `write_sizes` param
             for (i, size) in write_sizes.iter().enumerate() {
-                let mut txrw = backend::TransactionalRw::transaction_rw(&lmdb).unwrap();
+                let mut txrw =
+                    backend::TransactionalRw::transaction_rw(&lmdb, Some(tx_size.as_bytes()))
+                        .unwrap();
                 let val = vec![42u8; size.as_bytes()];
                 backend::WriteOps::put(&mut txrw, IDX0, i.to_le_bytes().to_vec(), val).unwrap();
                 backend::TxRw::commit(txrw).unwrap();
@@ -116,7 +118,8 @@ fn two_concurrent_writers() {
             let spawn_writer = |key: Vec<u8>| {
                 let storage = storage.clone();
                 thread::spawn(move || {
-                    let mut txrw = backend::TransactionalRw::transaction_rw(&storage).unwrap();
+                    let mut txrw =
+                        backend::TransactionalRw::transaction_rw(&storage, Some(400_000)).unwrap();
                     let val = vec![0x33u8; MemSize::from_kilobytes(300).as_bytes()];
                     backend::WriteOps::put(&mut txrw, IDX0, key, val).unwrap();
                     backend::TxRw::commit(txrw).unwrap();

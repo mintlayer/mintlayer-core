@@ -56,7 +56,7 @@
 //!     let mut store = Storage::<_, Schema>::new(storage::inmemory::InMemory::new())?;
 //!
 //!     // All store operations happen inside of a transaction.
-//!     let mut tx = store.transaction_rw()?;
+//!     let mut tx = store.transaction_rw(None)?;
 //!
 //!     // Get the storage map, identified by the index type.
 //!     let mut map = tx.get_mut::<MyMap, _>();
@@ -72,7 +72,7 @@
 //!     tx.commit()?;
 //!
 //!     // Try writing a value but abort the transaction afterwards.
-//!     let mut tx = store.transaction_rw()?;
+//!     let mut tx = store.transaction_rw(None)?;
 //!     tx.get_mut::<MyMap, _>().put("baz", &42)?;
 //!     tx.abort();
 //!

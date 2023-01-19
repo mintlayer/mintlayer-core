@@ -76,7 +76,7 @@ pub trait TransactionalRw<'tx> {
     type TxRw: TxRw + 'tx;
 
     /// Start a read-write transaction
-    fn transaction_rw<'st: 'tx>(&'st self) -> crate::Result<Self::TxRw>;
+    fn transaction_rw<'st: 'tx>(&'st self, size: Option<usize>) -> crate::Result<Self::TxRw>;
 }
 
 /// Storage backend internal implementation type

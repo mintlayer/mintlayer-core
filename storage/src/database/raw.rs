@@ -183,7 +183,7 @@ mod test {
             }
 
             // Add some values, check the dump contents
-            let mut dbtx = storage.transaction_rw().unwrap();
+            let mut dbtx = storage.transaction_rw(None).unwrap();
             dbtx.get_mut::<Db0, _>().put(42, 1337).unwrap();
             dbtx.get_mut::<Db1, _>().put(21, vec![1, 2, 3, 4]).unwrap();
             dbtx.commit().unwrap();
@@ -197,7 +197,7 @@ mod test {
             }
 
             // More modifications, check contents
-            let mut dbtx = storage.transaction_rw().unwrap();
+            let mut dbtx = storage.transaction_rw(None).unwrap();
             dbtx.get_mut::<Db0, _>().del(42).unwrap();
             dbtx.get_mut::<Db1, _>().put(22, vec![1, 2]).unwrap();
             dbtx.commit().unwrap();

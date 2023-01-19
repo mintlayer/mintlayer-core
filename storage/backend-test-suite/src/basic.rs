@@ -21,7 +21,7 @@ fn put_and_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     // Create a transaction, modify storage and abort transaction
-    let mut dbtx = store.transaction_rw().unwrap();
+    let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(IDX.0, b"hello".to_vec(), b"world".to_vec()).unwrap();
     dbtx.commit().expect("commit to succeed");
 
@@ -38,7 +38,7 @@ fn put_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     // Create a transaction, modify storage and abort transaction
-    let mut dbtx = store.transaction_rw().unwrap();
+    let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(IDX.0, b"hello".to_vec(), b"world".to_vec()).unwrap();
     drop(dbtx);
 
@@ -52,7 +52,7 @@ fn put_two_under_different_keys<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>)
     let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     // Create a transaction, modify storage and commit
-    let mut dbtx = store.transaction_rw().unwrap();
+    let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(IDX.0, b"a".to_vec(), b"0".to_vec()).unwrap();
     dbtx.put(IDX.0, b"b".to_vec(), b"1".to_vec()).unwrap();
     dbtx.commit().expect("commit to succeed");
@@ -70,7 +70,7 @@ fn put_two_under_different_keys<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>)
     drop(dbtx);
 
     // Create a transaction, modify storage and abort
-    let mut dbtx = store.transaction_rw().unwrap();
+    let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(IDX.0, b"a".to_vec(), b"00".to_vec()).unwrap();
     dbtx.put(IDX.0, b"b".to_vec(), b"11".to_vec()).unwrap();
     drop(dbtx);
@@ -91,7 +91,7 @@ fn put_two_under_different_keys<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>)
 fn put_twice_then_commit_read_last<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
-    let mut dbtx = store.transaction_rw().unwrap();
+    let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(IDX.0, b"hello".to_vec(), b"a".to_vec()).unwrap();
     assert_eq!(
         dbtx.get(IDX.0, b"hello").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
@@ -114,7 +114,7 @@ fn put_twice_then_commit_read_last<B: Backend, F: BackendFn<B>>(backend_fn: Arc<
 fn put_iterator_count_matches<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
-    let mut dbtx = store.transaction_rw().unwrap();
+    let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(IDX.0, vec![0x00], vec![]).unwrap();
     dbtx.put(IDX.0, vec![0x01], vec![]).unwrap();
     dbtx.put(IDX.0, vec![0x02], vec![]).unwrap();
@@ -129,7 +129,7 @@ fn put_and_iterate_over_prefixes<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
     let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     // Populate the database with some values
-    let mut dbtx = store.transaction_rw().unwrap();
+    let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(IDX.0, b"ac".to_vec(), b"2".to_vec()).unwrap();
     dbtx.put(IDX.0, b"bf".to_vec(), b"7".to_vec()).unwrap();
     dbtx.put(IDX.0, b"ab".to_vec(), b"1".to_vec()).unwrap();
@@ -188,7 +188,7 @@ fn put_and_iterate_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) 
     let expected_ac_0 = [("ac", "2"), ("aca", "3"), ("acb", "4")];
 
     // Populate the database with some
-    let mut dbtx = store.transaction_rw().unwrap();
+    let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(IDX.0, b"aa".to_vec(), b"0".to_vec()).unwrap();
     dbtx.put(IDX.0, b"ab".to_vec(), b"1".to_vec()).unwrap();
     dbtx.put(IDX.0, b"ac".to_vec(), b"2".to_vec()).unwrap();
@@ -213,7 +213,7 @@ fn put_and_iterate_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) 
     let expected_ac_1 = [("ac", "2"), ("acb", "4")];
 
     // Delete some entries
-    let mut dbtx = store.transaction_rw().unwrap();
+    let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.del(IDX.0, b"aca").unwrap();
     dbtx.del(IDX.0, b"ab").unwrap();
     // Check updated contents
@@ -231,7 +231,7 @@ fn put_and_iterate_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) 
     drop(dbtx);
 
     // Delete the items, this time for real
-    let mut dbtx = store.transaction_rw().unwrap();
+    let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.del(IDX.0, b"aca").unwrap();
     dbtx.del(IDX.0, b"ab").unwrap();
     // Check updated contents
