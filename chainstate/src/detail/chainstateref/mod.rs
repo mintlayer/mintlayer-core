@@ -40,7 +40,7 @@ use logging::log;
 use pos_accounting::{FlushablePoSAccountingView, PoSAccountingDB};
 use tx_verifier::transaction_verifier::{
     config::TransactionVerifierConfig, storage::TransactionVerifierStorageError,
-    TransactionVerifier, TransactionVerifierDelta,
+    TransactionVerifier,
 };
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosDB, UtxosView};
@@ -775,20 +775,6 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         Ok(())
     }
 
-    fn flush_to_storage(
-        &mut self,
-        consumed_data: TransactionVerifierDelta,
-        block_height: BlockHeight,
-    ) -> Result<(), BlockError> {
-        // Flush accounting data to the pre-sealed db index
-        let epoch_index = self.chain_config.epoch_index_from_height(&block_height);
-        self.db_tx
-            .set_pre_sealed_accounting_delta(epoch_index, &consumed_data.accounting_delta())?;
-
-        // Flush all the data from the `TransactionVerifierDelta`
-        flush_to_storage(self, consumed_data).map_err(BlockError::from)
-    }
-
     fn connect_transactions(
         &mut self,
         block_index: &BlockIndex,
@@ -811,9 +797,18 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
             .log_err()?;
 
         let consumed = tx_verifier.consume()?;
-        self.flush_to_storage(consumed, block_index.block_height())?;
 
-        Ok(())
+        // Flush accounting data to the pre-sealed db index
+        let epoch_index = self.chain_config.epoch_index_from_height(&block_index.block_height());
+        let mut current_delta = self.db_tx.get_pre_sealed_accounting_delta(epoch_index)?.unwrap();
+        let undo = current_delta
+            .merge_with_delta(consumed.accounting_delta().clone())
+            .map_err(TransactionVerifierStorageError::from)?;
+        self.db_tx.set_pre_sealed_accounting_delta(epoch_index, &current_delta)?;
+        self.db_tx.set_pre_sealed_accounting_delta_undo(block.get_id(), &undo)?;
+
+        // Flush all the data from the `TransactionVerifierDelta`
+        flush_to_storage(self, consumed).map_err(BlockError::from)
     }
 
     fn disconnect_transactions(
@@ -833,9 +828,20 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         )?;
 
         let consumed = tx_verifier.consume()?;
-        self.flush_to_storage(consumed, block_index.block_height())?;
 
-        Ok(())
+        // Flush accounting data to the pre-sealed db index
+        let epoch_index = self.chain_config.epoch_index_from_height(&block_index.block_height());
+        let mut current_delta = self.db_tx.get_pre_sealed_accounting_delta(epoch_index)?.unwrap();
+        let current_undo =
+            self.db_tx.get_pre_sealed_accounting_delta_undo(block.get_id())?.unwrap();
+        current_delta
+            .undo_delta_merge(current_undo)
+            .map_err(TransactionVerifierStorageError::from)?;
+        self.db_tx.set_pre_sealed_accounting_delta(epoch_index, &current_delta)?;
+        self.db_tx.del_pre_sealed_accounting_delta_undo(block.get_id())?;
+
+        // Flush all the data from the `TransactionVerifierDelta`
+        flush_to_storage(self, consumed).map_err(BlockError::from)
     }
 
     // Connect new block

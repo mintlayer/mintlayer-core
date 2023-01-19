@@ -28,7 +28,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, PoSAccountingDeltaData,
+    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, PoSAccountingDeltaData,
     PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData, PoolId,
 };
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
@@ -75,6 +75,11 @@ mockall::mock! {
             &self,
             epoch_index: u64,
         ) -> crate::Result<Option<PoSAccountingDeltaData>>;
+
+        fn get_pre_sealed_accounting_delta_undo(
+            &self,
+            id: Id<Block>,
+        ) -> crate::Result<Option<DeltaMergeUndo>>;
     }
 
     impl UtxosStorageRead for Store {
@@ -119,6 +124,13 @@ mockall::mock! {
             delta: &PoSAccountingDeltaData,
         ) -> crate::Result<()>;
         fn del_pre_sealed_accounting_delta(&mut self, epoch_index: u64) -> crate::Result<()>;
+
+        fn set_pre_sealed_accounting_delta_undo(
+            &mut self,
+            id: Id<Block>,
+            delta: &pos_accounting::DeltaMergeUndo,
+        ) -> crate::Result<()>;
+        fn del_pre_sealed_accounting_delta_undo(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for Store {
@@ -363,6 +375,11 @@ mockall::mock! {
             &self,
             epoch_index: u64,
         ) -> crate::Result<Option<PoSAccountingDeltaData>>;
+
+        fn get_pre_sealed_accounting_delta_undo(
+            &self,
+            id: Id<Block>,
+        ) -> crate::Result<Option<DeltaMergeUndo>>;
     }
 
     impl crate::UtxosStorageRead for StoreTxRo {
@@ -487,6 +504,11 @@ mockall::mock! {
             &self,
             epoch_index: u64,
         ) -> crate::Result<Option<PoSAccountingDeltaData>>;
+
+        fn get_pre_sealed_accounting_delta_undo(
+            &self,
+            id: Id<Block>,
+        ) -> crate::Result<Option<DeltaMergeUndo>>;
     }
 
     impl UtxosStorageRead for StoreTxRw {
@@ -532,6 +554,13 @@ mockall::mock! {
             delta: &PoSAccountingDeltaData,
         ) -> crate::Result<()>;
         fn del_pre_sealed_accounting_delta(&mut self, epoch_index: u64) -> crate::Result<()>;
+
+        fn set_pre_sealed_accounting_delta_undo(
+            &mut self,
+            id: Id<Block>,
+            delta: &pos_accounting::DeltaMergeUndo,
+        ) -> crate::Result<()>;
+        fn del_pre_sealed_accounting_delta_undo(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for StoreTxRw {

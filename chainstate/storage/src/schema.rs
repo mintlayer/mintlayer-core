@@ -24,7 +24,8 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, PoSAccountingDeltaData, PoolData, PoolId,
+    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, PoSAccountingDeltaData,
+    PoolData, PoolId,
 };
 use utxo::{Utxo, UtxosBlockUndo};
 
@@ -56,6 +57,7 @@ storage::decl_schema! {
         /// Store for accounting block delta for epochs that are about
         /// to go to the sealed storage
         pub DBAccountingPreSealedData: Map<u64, PoSAccountingDeltaData>,
+        pub DBAccountingPreSealedDataUndo: Map<Id<Block>, DeltaMergeUndo>,
 
         /// Store for accounting pool data
         pub DBAccountingPoolDataTip: Map<PoolId, PoolData>,

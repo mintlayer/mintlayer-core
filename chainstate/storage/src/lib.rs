@@ -103,6 +103,11 @@ pub trait BlockchainStorageRead:
         &self,
         epoch_index: u64,
     ) -> crate::Result<Option<PoSAccountingDeltaData>>;
+
+    fn get_pre_sealed_accounting_delta_undo(
+        &self,
+        id: Id<Block>,
+    ) -> crate::Result<Option<pos_accounting::DeltaMergeUndo>>;
 }
 
 /// Modifying operations on persistent blockchain data
@@ -187,6 +192,14 @@ pub trait BlockchainStorageWrite:
     ) -> crate::Result<()>;
 
     fn del_pre_sealed_accounting_delta(&mut self, epoch_index: u64) -> crate::Result<()>;
+
+    fn set_pre_sealed_accounting_delta_undo(
+        &mut self,
+        id: Id<Block>,
+        delta: &pos_accounting::DeltaMergeUndo,
+    ) -> crate::Result<()>;
+
+    fn del_pre_sealed_accounting_delta_undo(&mut self, id: Id<Block>) -> crate::Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction

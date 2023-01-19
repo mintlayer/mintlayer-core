@@ -26,7 +26,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id, Idable, H256},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, PoSAccountingDeltaData,
+    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, PoSAccountingDeltaData,
     PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData, PoolId,
 };
 use serialization::{Codec, Decode, DecodeAll, Encode, EncodeLike};
@@ -88,6 +88,18 @@ impl<B: storage::Backend> Store<B> {
     pub fn read_utxo_set(&self) -> crate::Result<BTreeMap<OutPoint, Utxo>> {
         let db = self.transaction_ro()?;
         let map = db.0.get::<db::DBUtxo, _>();
+        let res = map.prefix_iter_decoded(&())?.collect::<BTreeMap<_, _>>();
+
+        Ok(res)
+    }
+
+    /// Collect and return all utxos from the storage
+    #[allow(clippy::let_and_return)]
+    pub fn read_presealed_accounting_data(
+        &self,
+    ) -> crate::Result<BTreeMap<u64, pos_accounting::PoSAccountingDeltaData>> {
+        let db = self.transaction_ro()?;
+        let map = db.0.get::<db::DBAccountingPreSealedData, _>();
         let res = map.prefix_iter_decoded(&())?.collect::<BTreeMap<_, _>>();
 
         Ok(res)
@@ -231,6 +243,11 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
             &self,
             epoch_index: u64,
         ) -> crate::Result<Option<PoSAccountingDeltaData>>;
+
+        fn get_pre_sealed_accounting_delta_undo(
+            &self,
+            id: Id<Block>,
+        ) -> crate::Result<Option<DeltaMergeUndo>>;
     }
 }
 
@@ -370,6 +387,14 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
         ) -> crate::Result<()>;
 
         fn del_pre_sealed_accounting_delta(&mut self, epoch_index: u64) -> crate::Result<()>;
+
+        fn set_pre_sealed_accounting_delta_undo(
+            &mut self,
+            id: Id<Block>,
+            delta: &pos_accounting::DeltaMergeUndo,
+        ) -> crate::Result<()>;
+
+        fn del_pre_sealed_accounting_delta_undo(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 }
 
@@ -723,6 +748,13 @@ macro_rules! impl_read_ops {
             ) -> crate::Result<Option<PoSAccountingDeltaData>> {
                 self.read::<db::DBAccountingPreSealedData, _, _>(epoch_index)
             }
+
+            fn get_pre_sealed_accounting_delta_undo(
+                &self,
+                id: Id<Block>,
+            ) -> crate::Result<Option<DeltaMergeUndo>> {
+                self.read::<db::DBAccountingPreSealedDataUndo, _, _>(id)
+            }
         }
 
         impl<'st, B: storage::Backend> UtxosStorageRead for $TxType<'st, B> {
@@ -983,6 +1015,21 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         self.0
             .get_mut::<db::DBAccountingPreSealedData, _>()
             .del(epoch_index)
+            .map_err(Into::into)
+    }
+
+    fn set_pre_sealed_accounting_delta_undo(
+        &mut self,
+        id: Id<Block>,
+        delta: &pos_accounting::DeltaMergeUndo,
+    ) -> crate::Result<()> {
+        self.write::<db::DBAccountingPreSealedDataUndo, _, _, _>(id, delta)
+    }
+
+    fn del_pre_sealed_accounting_delta_undo(&mut self, id: Id<Block>) -> crate::Result<()> {
+        self.0
+            .get_mut::<db::DBAccountingPreSealedDataUndo, _>()
+            .del(id)
             .map_err(Into::into)
     }
 }
