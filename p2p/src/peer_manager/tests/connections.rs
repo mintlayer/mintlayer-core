@@ -709,14 +709,12 @@ where
         let (rtx, rrx) = oneshot::channel();
         tx1.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
         let connected_peers = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
-        // The backend will also make reverse connection.
-        if connected_peers.len() == 1 || connected_peers.len() == 2 {
+        if connected_peers.len() == 1 {
             break;
         }
-        assert!(
-            Instant::now().duration_since(started_at) < Duration::from_secs(10),
-            "no peer connected on time"
-        );
+        if Instant::now().duration_since(started_at) > Duration::from_secs(10) {
+            panic!("Unexpected peer count: {}", connected_peers.len());
+        }
     }
 }
 

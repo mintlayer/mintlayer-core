@@ -329,7 +329,7 @@ where
     /// is checked and updated at least once every 30 seconds. In high-traffic scenarios the
     /// update interval is clamped to a sensible lower bound. `PeerManager` will keep track of
     /// when it last update its own state and if the time since last update is less than the
-    /// configured lower bound, it exits early from the function.
+    /// configured lower bound, *heartbeat* won't be called.
     ///
     /// This function maintains the overall connectivity state of peers by culling
     /// low-reputation peers and establishing new connections with peers that have higher
