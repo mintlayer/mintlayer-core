@@ -450,7 +450,12 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Store<B> 
         &mut self,
         delegation_id: DelegationId,
     ) -> Result<(), chainstate_types::storage_result::Error> {
-        todo!()
+        let mut tx = self.transaction_rw()?;
+        let val = PoSAccountingStorageWrite::<TipStorageTag>::del_delegation_data(
+            &mut tx,
+            delegation_id,
+        )?;
+        tx.commit().map(|_| val)
     }
 
     fn set_pool_delegation_share(
@@ -459,7 +464,14 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Store<B> 
         delegation_id: DelegationId,
         amount: Amount,
     ) -> Result<(), chainstate_types::storage_result::Error> {
-        todo!()
+        let mut tx = self.transaction_rw()?;
+        let val = PoSAccountingStorageWrite::<TipStorageTag>::set_pool_delegation_share(
+            &mut tx,
+            pool_id,
+            delegation_id,
+            amount,
+        )?;
+        tx.commit().map(|_| val)
     }
 
     fn del_pool_delegation_share(
@@ -467,7 +479,13 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Store<B> 
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<(), chainstate_types::storage_result::Error> {
-        todo!()
+        let mut tx = self.transaction_rw()?;
+        let val = PoSAccountingStorageWrite::<TipStorageTag>::del_pool_delegation_share(
+            &mut tx,
+            pool_id,
+            delegation_id,
+        )?;
+        tx.commit().map(|_| val)
     }
 }
 
@@ -541,7 +559,12 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for Store<
         &mut self,
         delegation_id: DelegationId,
     ) -> Result<(), chainstate_types::storage_result::Error> {
-        todo!()
+        let mut tx = self.transaction_rw()?;
+        let val = PoSAccountingStorageWrite::<SealedStorageTag>::del_delegation_data(
+            &mut tx,
+            delegation_id,
+        )?;
+        tx.commit().map(|_| val)
     }
 
     fn set_pool_delegation_share(
@@ -550,7 +573,14 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for Store<
         delegation_id: DelegationId,
         amount: Amount,
     ) -> crate::Result<()> {
-        todo!()
+        let mut tx = self.transaction_rw()?;
+        let val = PoSAccountingStorageWrite::<SealedStorageTag>::set_pool_delegation_share(
+            &mut tx,
+            pool_id,
+            delegation_id,
+            amount,
+        )?;
+        tx.commit().map(|_| val)
     }
 
     fn del_pool_delegation_share(
@@ -558,7 +588,13 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for Store<
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> crate::Result<()> {
-        todo!()
+        let mut tx = self.transaction_rw()?;
+        let val = PoSAccountingStorageWrite::<SealedStorageTag>::del_pool_delegation_share(
+            &mut tx,
+            pool_id,
+            delegation_id,
+        )?;
+        tx.commit().map(|_| val)
     }
 }
 
