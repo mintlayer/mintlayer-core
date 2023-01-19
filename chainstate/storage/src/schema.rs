@@ -54,10 +54,11 @@ storage::decl_schema! {
         /// Store for accounting BlockUndo
         pub DBAccountingBlockUndo: Map<Id<Block>, AccountingBlockUndo>,
 
-        /// Store for accounting block delta for epochs that are about
+        /// Store for accumulated accounting deltas per epochs that are about
         /// to go to the sealed storage
         pub DBAccountingPreSealedData: Map<u64, PoSAccountingDeltaData>,
-        pub DBAccountingPreSealedDataUndo: Map<Id<Block>, DeltaMergeUndo>,
+        /// Store for undo deltas
+        pub DBAccountingPreSealedDataUndo: Map<(u64, Id<Block>), DeltaMergeUndo>,
 
         /// Store for accounting pool data
         pub DBAccountingPoolDataTip: Map<PoolId, PoolData>,

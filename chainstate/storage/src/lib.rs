@@ -99,13 +99,14 @@ pub trait BlockchainStorageRead:
     /// Get accounting undo for specific block
     fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
 
-    fn get_pre_sealed_accounting_delta(
+    fn get_pre_seal_accounting_delta(
         &self,
         epoch_index: u64,
     ) -> crate::Result<Option<PoSAccountingDeltaData>>;
 
-    fn get_pre_sealed_accounting_delta_undo(
+    fn get_pre_seal_accounting_delta_undo(
         &self,
+        epoch_index: u64,
         id: Id<Block>,
     ) -> crate::Result<Option<pos_accounting::DeltaMergeUndo>>;
 }
@@ -185,21 +186,27 @@ pub trait BlockchainStorageWrite:
     // Remove accounting block undo data for specific block
     fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
-    fn set_pre_sealed_accounting_delta(
+    fn set_pre_seal_accounting_delta(
         &mut self,
         epoch_index: u64,
         delta: &PoSAccountingDeltaData,
     ) -> crate::Result<()>;
 
-    fn del_pre_sealed_accounting_delta(&mut self, epoch_index: u64) -> crate::Result<()>;
+    fn del_pre_seal_accounting_delta(&mut self, epoch_index: u64) -> crate::Result<()>;
 
-    fn set_pre_sealed_accounting_delta_undo(
+    fn set_pre_seal_accounting_delta_undo(
         &mut self,
+        epoch_index: u64,
         id: Id<Block>,
         delta: &pos_accounting::DeltaMergeUndo,
     ) -> crate::Result<()>;
 
-    fn del_pre_sealed_accounting_delta_undo(&mut self, id: Id<Block>) -> crate::Result<()>;
+    fn del_pre_seal_accounting_delta_undo(
+        &mut self,
+        epoch_index: u64,
+        id: Id<Block>,
+    ) -> crate::Result<()>;
+    fn del_epoch_pre_seal_accounting_delta_undo(&mut self, epoch_index: u64) -> crate::Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction

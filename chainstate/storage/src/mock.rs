@@ -71,13 +71,14 @@ mockall::mock! {
 
         fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
 
-        fn get_pre_sealed_accounting_delta(
+        fn get_pre_seal_accounting_delta(
             &self,
             epoch_index: u64,
         ) -> crate::Result<Option<PoSAccountingDeltaData>>;
 
-        fn get_pre_sealed_accounting_delta_undo(
+        fn get_pre_seal_accounting_delta_undo(
             &self,
+            epoch_index: u64,
             id: Id<Block>,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
     }
@@ -118,19 +119,24 @@ mockall::mock! {
         fn set_accounting_undo_data(&mut self, id: Id<Block>, undo: &AccountingBlockUndo) -> crate::Result<()>;
         fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
-        fn set_pre_sealed_accounting_delta(
+        fn set_pre_seal_accounting_delta(
             &mut self,
             epoch_index: u64,
             delta: &PoSAccountingDeltaData,
         ) -> crate::Result<()>;
-        fn del_pre_sealed_accounting_delta(&mut self, epoch_index: u64) -> crate::Result<()>;
+        fn del_pre_seal_accounting_delta(&mut self, epoch_index: u64) -> crate::Result<()>;
 
-        fn set_pre_sealed_accounting_delta_undo(
+        fn set_pre_seal_accounting_delta_undo(
             &mut self,
+            epoch_index: u64,
             id: Id<Block>,
             delta: &pos_accounting::DeltaMergeUndo,
         ) -> crate::Result<()>;
-        fn del_pre_sealed_accounting_delta_undo(&mut self, id: Id<Block>) -> crate::Result<()>;
+        fn del_pre_seal_accounting_delta_undo(&mut self,
+            epoch_index: u64,
+            id: Id<Block>
+        ) -> crate::Result<()>;
+        fn del_epoch_pre_seal_accounting_delta_undo(&mut self, epoch_index: u64) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for Store {
@@ -371,13 +377,14 @@ mockall::mock! {
 
         fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
 
-        fn get_pre_sealed_accounting_delta(
+        fn get_pre_seal_accounting_delta(
             &self,
             epoch_index: u64,
         ) -> crate::Result<Option<PoSAccountingDeltaData>>;
 
-        fn get_pre_sealed_accounting_delta_undo(
+        fn get_pre_seal_accounting_delta_undo(
             &self,
+            epoch_index: u64,
             id: Id<Block>,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
     }
@@ -500,13 +507,14 @@ mockall::mock! {
 
         fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
 
-        fn get_pre_sealed_accounting_delta(
+        fn get_pre_seal_accounting_delta(
             &self,
             epoch_index: u64,
         ) -> crate::Result<Option<PoSAccountingDeltaData>>;
 
-        fn get_pre_sealed_accounting_delta_undo(
+        fn get_pre_seal_accounting_delta_undo(
             &self,
+            epoch_index: u64,
             id: Id<Block>,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
     }
@@ -548,19 +556,24 @@ mockall::mock! {
         fn set_accounting_undo_data(&mut self, id: Id<Block>, undo: &AccountingBlockUndo) -> crate::Result<()>;
         fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
-        fn set_pre_sealed_accounting_delta(
+        fn set_pre_seal_accounting_delta(
             &mut self,
             epoch_index: u64,
             delta: &PoSAccountingDeltaData,
         ) -> crate::Result<()>;
-        fn del_pre_sealed_accounting_delta(&mut self, epoch_index: u64) -> crate::Result<()>;
+        fn del_pre_seal_accounting_delta(&mut self, epoch_index: u64) -> crate::Result<()>;
 
-        fn set_pre_sealed_accounting_delta_undo(
+        fn set_pre_seal_accounting_delta_undo(
             &mut self,
+            epoch_index: u64,
             id: Id<Block>,
             delta: &pos_accounting::DeltaMergeUndo,
         ) -> crate::Result<()>;
-        fn del_pre_sealed_accounting_delta_undo(&mut self, id: Id<Block>) -> crate::Result<()>;
+        fn del_pre_seal_accounting_delta_undo(&mut self,
+            epoch_index: u64,
+            id: Id<Block>
+        ) -> crate::Result<()>;
+        fn del_epoch_pre_seal_accounting_delta_undo(&mut self, epoch_index: u64) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for StoreTxRw {
