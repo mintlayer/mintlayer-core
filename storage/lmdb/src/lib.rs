@@ -14,9 +14,6 @@
 // limitations under the License.
 
 mod error;
-mod remap;
-
-pub use remap::MemSize;
 
 use std::{borrow::Cow, path::PathBuf};
 
@@ -26,7 +23,7 @@ use storage_core::{
     info::{DbDesc, MapDesc},
     Data, DbIndex,
 };
-use utils::sync::{Arc, RwLock, RwLockReadGuard};
+use utils::sync::Arc;
 
 /// Identifiers of the list of databases (key-value maps)
 #[derive(Eq, PartialEq, Debug, Clone)]
@@ -68,7 +65,6 @@ impl<'tx, C: lmdb::Cursor<'tx>> Iterator for PrefixIter<'tx, C> {
 pub struct DbTx<'m, Tx> {
     tx: Tx,
     dbs: &'m DbList,
-    _map_token: RwLockReadGuard<'m, remap::MemMapController>,
 }
 
 type DbTxRo<'a> = DbTx<'a, lmdb::RoTransaction<'a>>;
@@ -127,15 +123,6 @@ pub struct LmdbImpl {
 
     /// List of open databases
     dbs: DbList,
-
-    /// Guards access to memory map.
-    ///
-    /// * Shared (read) lock is required for running transactions, both read-only and read-write.
-    /// * Exclusive (write) lock is required to reallocate the memory map
-    map_token: Arc<RwLock<remap::MemMapController>>,
-
-    /// Size required to write a transaction
-    tx_size: MemSize,
 }
 
 impl LmdbImpl {
@@ -145,11 +132,9 @@ impl LmdbImpl {
         start_tx: impl FnOnce(&'a lmdb::Environment) -> Result<Tx, lmdb::Error>,
     ) -> storage_core::Result<DbTx<'a, Tx>> {
         // Make sure map token is acquired before starting the transaction below
-        let _map_token = self.map_token.read().expect("mutex to be alive");
         Ok(DbTx {
             tx: start_tx(&self.env).or_else(error::process_with_err)?,
             dbs: &self.dbs,
-            _map_token,
         })
     }
 }
@@ -165,14 +150,10 @@ impl<'tx> TransactionalRo<'tx> for LmdbImpl {
 impl<'tx> TransactionalRw<'tx> for LmdbImpl {
     type TxRw = DbTxRw<'tx>;
 
-    fn transaction_rw<'st: 'tx>(&'st self, size: Option<usize>) -> storage_core::Result<Self::TxRw> {
-        remap::remap(
-            &self.env,
-            // Acquire exclusive memory map token to make sure no transactions are active for
-            // the duration of memory remapping.
-            self.map_token.write().expect("mmap lock to be alive"),
-            self.tx_size,
-        )?;
+    fn transaction_rw<'st: 'tx>(
+        &'st self,
+        _size: Option<usize>,
+    ) -> storage_core::Result<Self::TxRw> {
         self.start_transaction(lmdb::Environment::begin_rw_txn)
     }
 }
@@ -184,37 +165,15 @@ impl backend::BackendImpl for LmdbImpl {}
 pub struct Lmdb {
     path: PathBuf,
     flags: lmdb::EnvironmentFlags,
-    map_size: MemSize,
-    tx_size: MemSize,
 }
 
 impl Lmdb {
-    /// Amount of space the memory map is initialized with
-    pub const DEFAULT_MAP_SIZE: MemSize = MemSize::from_megabytes(16);
-
-    /// Amount of space needed for a transaction by default
-    pub const DEFAULT_TX_SIZE: MemSize = MemSize::from_megabytes(8);
-
     /// New LMDB database backend
     pub fn new(path: PathBuf) -> Self {
         Self {
             path,
             flags: lmdb::EnvironmentFlags::default(),
-            map_size: Self::DEFAULT_MAP_SIZE,
-            tx_size: Self::DEFAULT_TX_SIZE,
         }
-    }
-
-    /// Set the initial memory map size
-    pub fn with_map_size(mut self, map_size: MemSize) -> Self {
-        self.map_size = map_size;
-        self
-    }
-
-    /// Set maximum transaction size
-    pub fn with_tx_size(mut self, tx_size: MemSize) -> Self {
-        self.tx_size = tx_size;
-        self
     }
 
     /// Use a writable memory map.
@@ -244,7 +203,6 @@ impl backend::Backend for Lmdb {
         let environment = lmdb::Environment::new()
             .set_max_dbs(desc.len() as u32)
             .set_flags(self.flags)
-            .set_map_size(self.map_size.as_bytes())
             .open(&self.path)
             .or_else(error::process_with_err)?;
 
@@ -258,8 +216,6 @@ impl backend::Backend for Lmdb {
         Ok(LmdbImpl {
             env: Arc::new(environment),
             dbs,
-            map_token: Arc::new(RwLock::new(remap::MemMapController::new())),
-            tx_size: self.tx_size,
         })
     }
 }
