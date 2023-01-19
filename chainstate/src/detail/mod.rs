@@ -234,8 +234,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     /// Check that transaction index state is consistent between DB and config.
     fn process_tx_index_enabled_flag(&mut self) -> Result<(), BlockError> {
         use chainstate_storage::{BlockchainStorageWrite, TransactionRw};
-        let mut db_tx =
-            self.chainstate_storage.transaction_rw(None).map_err(BlockError::from).log_err()?;
+        let mut db_tx = self
+            .chainstate_storage
+            .transaction_rw(None)
+            .map_err(BlockError::from)
+            .log_err()?;
 
         let tx_index_enabled = db_tx
             .get_is_mainchain_tx_index_enabled()
@@ -385,8 +388,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             .expect("Genesis not constructed correctly");
 
         // Initialize storage with given info
-        let mut db_tx =
-            self.chainstate_storage.transaction_rw(None).map_err(BlockError::from).log_err()?;
+        let mut db_tx = self
+            .chainstate_storage
+            .transaction_rw(None)
+            .map_err(BlockError::from)
+            .log_err()?;
         db_tx
             .set_best_block_id(&genesis_id)
             .map_err(BlockError::StorageError)
