@@ -41,7 +41,11 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
     message::{self, Announcement, SyncRequest},
-    net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
+    net::{
+        default_backend::types::{PeerId, RequestId},
+        types::SyncingEvent,
+        NetworkingService, SyncingMessagingService,
+    },
 };
 
 // TODO: from config? global constant?
@@ -69,13 +73,13 @@ pub struct BlockSyncManager<T: NetworkingService> {
     peer_sync_handle: T::SyncingMessagingHandle,
 
     /// RX channel for receiving control events
-    rx_sync: mpsc::UnboundedReceiver<SyncControlEvent<T>>,
+    rx_sync: mpsc::UnboundedReceiver<SyncControlEvent>,
 
     /// A sender for the peer manager events.
     tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
 
     /// Hashmap of connected peers
-    peers: HashMap<T::PeerId, peer::PeerContext<T>>,
+    peers: HashMap<PeerId, peer::PeerContext>,
 
     /// Subsystem handle to Chainstate
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
@@ -86,15 +90,13 @@ impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PeerRequestId: 'static,
-    T::PeerId: 'static,
 {
     pub fn new(
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         handle: T::SyncingMessagingHandle,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-        rx_sync: mpsc::UnboundedReceiver<SyncControlEvent<T>>,
+        rx_sync: mpsc::UnboundedReceiver<SyncControlEvent>,
         tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
     ) -> Self {
         Self {
@@ -117,7 +119,7 @@ where
     }
 
     /// Register peer to the `SyncManager`
-    pub async fn register_peer(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+    pub async fn register_peer(&mut self, peer_id: PeerId) -> crate::Result<()> {
         ensure!(
             !self.peers.contains_key(&peer_id),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
@@ -139,15 +141,15 @@ where
     }
 
     /// Unregister peer from the `SyncManager`
-    pub fn unregister_peer(&mut self, peer_id: T::PeerId) {
+    pub fn unregister_peer(&mut self, peer_id: PeerId) {
         self.peers.remove(&peer_id);
     }
 
     /// Process header request
     pub async fn process_header_request(
         &mut self,
-        peer_id: T::PeerId,
-        request_id: T::PeerRequestId,
+        peer_id: PeerId,
+        request_id: RequestId,
         locator: Locator,
     ) -> crate::Result<()> {
         log::debug!("send header response to peer {peer_id}, request_id: {request_id:?}");
@@ -160,8 +162,8 @@ where
     /// Process block request
     pub async fn process_block_request(
         &mut self,
-        peer_id: T::PeerId,
-        request_id: T::PeerRequestId,
+        peer_id: PeerId,
+        request_id: RequestId,
         headers: Vec<Id<Block>>,
     ) -> crate::Result<()> {
         ensure!(
@@ -193,7 +195,7 @@ where
     /// Validate incoming header response
     async fn validate_header_response(
         &mut self,
-        peer_id: &T::PeerId,
+        peer_id: &PeerId,
         headers: Vec<BlockHeader>,
     ) -> crate::Result<Option<BlockHeader>> {
         ensure!(
@@ -250,7 +252,7 @@ where
     /// Process incoming header response
     pub async fn process_header_response(
         &mut self,
-        peer_id: T::PeerId,
+        peer_id: PeerId,
         headers: Vec<BlockHeader>,
     ) -> crate::Result<()> {
         match self.validate_header_response(&peer_id, headers).await {
@@ -269,7 +271,7 @@ where
     /// Validate incoming block response
     async fn validate_block_response(
         &mut self,
-        peer_id: &T::PeerId,
+        peer_id: &PeerId,
         blocks: Vec<Block>,
     ) -> crate::Result<Option<BlockHeader>> {
         let peer = self
@@ -305,7 +307,7 @@ where
     /// Process block response
     pub async fn process_block_response(
         &mut self,
-        peer_id: T::PeerId,
+        peer_id: PeerId,
         blocks: Vec<Block>,
     ) -> crate::Result<()> {
         // TODO: remove the limitation of sending only one block, and allow sending multiple blocks (up to a cap)
@@ -327,8 +329,8 @@ where
 
     pub async fn process_response(
         &mut self,
-        peer_id: T::PeerId,
-        request_id: T::PeerRequestId,
+        peer_id: PeerId,
+        request_id: RequestId,
         response: message::SyncResponse,
     ) -> crate::Result<()> {
         match response {
@@ -357,7 +359,7 @@ where
 
     pub async fn process_announcement(
         &mut self,
-        peer_id: T::PeerId,
+        peer_id: PeerId,
         announcement: Announcement,
     ) -> crate::Result<()> {
         // TODO: Discuss if we should announce blocks or headers, because announcing
@@ -371,7 +373,7 @@ where
     // TODO: refactor this
     pub async fn handle_error(
         &mut self,
-        peer_id: T::PeerId,
+        peer_id: PeerId,
         result: crate::Result<()>,
     ) -> crate::Result<()> {
         match result {
@@ -536,7 +538,7 @@ where
 
     async fn process_block_announcement(
         &mut self,
-        peer_id: T::PeerId,
+        peer_id: PeerId,
         block: Block,
     ) -> crate::Result<()> {
         let result = match self

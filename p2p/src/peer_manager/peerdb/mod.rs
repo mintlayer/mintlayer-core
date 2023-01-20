@@ -38,7 +38,7 @@ use crate::{
     error::{ConversionError, P2pError},
     interface::types::ConnectedPeer,
     net::{
-        default_backend::transport::TransportAddress,
+        default_backend::{transport::TransportAddress, types::PeerId},
         types::{self, Role},
         AsBannableAddress, NetworkingService,
     },
@@ -48,7 +48,7 @@ use crate::{
 #[derive(Debug)]
 pub struct PeerContext<T: NetworkingService> {
     /// Peer information
-    pub info: types::PeerInfo<T::PeerId>,
+    pub info: types::PeerInfo,
 
     /// Peer's address
     pub address: T::Address,
@@ -79,7 +79,7 @@ pub struct PeerDb<T: NetworkingService> {
     p2p_config: Arc<config::P2pConfig>,
 
     /// Set of active peers
-    peers: HashMap<T::PeerId, PeerContext<T>>,
+    peers: HashMap<PeerId, PeerContext<T>>,
 
     addresses: HashSet<T::Address>,
 
@@ -157,7 +157,7 @@ impl<T: NetworkingService> PeerDb<T> {
     }
 
     /// Checks if the peer is active
-    pub fn is_active_peer(&self, peer_id: &T::PeerId) -> bool {
+    pub fn is_active_peer(&self, peer_id: &PeerId) -> bool {
         self.peers.get(peer_id).is_some()
     }
 
@@ -188,12 +188,7 @@ impl<T: NetworkingService> PeerDb<T> {
     ///
     /// After `PeerManager` has established either an inbound or an outbound connection,
     /// it informs the `PeerDb` about it.
-    pub fn peer_connected(
-        &mut self,
-        address: T::Address,
-        role: Role,
-        info: types::PeerInfo<T::PeerId>,
-    ) {
+    pub fn peer_connected(&mut self, address: T::Address, role: Role, info: types::PeerInfo) {
         log::info!(
             "peer connected, peer_id: {}, address: {address:?}, {:?}",
             info.peer_id,
@@ -218,7 +213,7 @@ impl<T: NetworkingService> PeerDb<T> {
     /// Handle peer disconnection event
     ///
     /// Close the connection to an active peer.
-    pub fn peer_disconnected(&mut self, peer_id: &T::PeerId) {
+    pub fn peer_disconnected(&mut self, peer_id: &PeerId) {
         let removed = self.peers.remove(peer_id);
         let peer = removed.expect("peer must be known");
 
@@ -233,7 +228,7 @@ impl<T: NetworkingService> PeerDb<T> {
     }
 
     /// Changes the peer state to `Peer::Banned` and bans it for 24 hours.
-    fn ban_peer(&mut self, peer_id: &T::PeerId) {
+    fn ban_peer(&mut self, peer_id: &PeerId) {
         if let Some(peer) = self.peers.remove(peer_id) {
             let bannable_address = peer.address.as_bannable();
             let ban_till = SystemTime::now()
@@ -255,7 +250,7 @@ impl<T: NetworkingService> PeerDb<T> {
     ///
     /// If peer is banned, it is removed from the connected peers
     /// and its address is marked as banned.
-    pub fn adjust_peer_score(&mut self, peer_id: &T::PeerId, score: u32) -> bool {
+    pub fn adjust_peer_score(&mut self, peer_id: &PeerId, score: u32) -> bool {
         let peer = match self.peers.get_mut(peer_id) {
             Some(peer) => peer,
             None => return true,
@@ -271,7 +266,7 @@ impl<T: NetworkingService> PeerDb<T> {
         false
     }
 
-    pub fn peer_address(&self, id: &T::PeerId) -> Option<&T::Address> {
+    pub fn peer_address(&self, id: &PeerId) -> Option<&T::Address> {
         self.peers.get(id).map(|c| &c.address)
     }
 }

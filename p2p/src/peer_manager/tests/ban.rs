@@ -236,7 +236,7 @@ async fn connect_to_banned_peer_noise() {
         .await;
 }
 
-async fn validate_invalid_outbound_connection<A, S, B>(peer_id: S::PeerId)
+async fn validate_invalid_outbound_connection<A, S, B>(peer_id: PeerId)
 where
     A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + std::fmt::Debug,
@@ -251,7 +251,7 @@ where
     let res = peer_manager.accept_connection(
         B::new(),
         Role::Outbound,
-        net::types::PeerInfo::<S::PeerId> {
+        net::types::PeerInfo {
             peer_id,
             network: [1, 2, 3, 4],
             version: SemVer::new(0, 1, 0),
@@ -267,7 +267,7 @@ where
     let res = peer_manager.accept_connection(
         B::new(),
         Role::Outbound,
-        net::types::PeerInfo::<S::PeerId> {
+        net::types::PeerInfo {
             peer_id,
             network: *config.magic_bytes(),
             version: SemVer::new(1, 1, 1),
@@ -284,7 +284,7 @@ where
     let res = peer_manager.accept_connection(
         address.clone(),
         Role::Outbound,
-        net::types::PeerInfo::<S::PeerId> {
+        net::types::PeerInfo {
             peer_id,
             network: *config.magic_bytes(),
             version: SemVer::new(0, 1, 0),
@@ -329,7 +329,7 @@ async fn validate_invalid_outbound_connection_noise() {
     .await;
 }
 
-async fn validate_invalid_inbound_connection<A, S, B>(peer_id: S::PeerId)
+async fn validate_invalid_inbound_connection<A, S, B>(peer_id: PeerId)
 where
     A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + std::fmt::Debug,
@@ -343,7 +343,7 @@ where
     // invalid magic bytes
     let res = peer_manager.accept_inbound_connection(
         B::new(),
-        net::types::PeerInfo::<S::PeerId> {
+        net::types::PeerInfo {
             peer_id,
             network: [1, 2, 3, 4],
             version: SemVer::new(0, 1, 0),
@@ -358,7 +358,7 @@ where
     // invalid version
     let res = peer_manager.accept_inbound_connection(
         B::new(),
-        net::types::PeerInfo::<S::PeerId> {
+        net::types::PeerInfo {
             peer_id,
             network: *config.magic_bytes(),
             version: SemVer::new(1, 1, 1),
@@ -374,7 +374,7 @@ where
     let address = B::new();
     let res = peer_manager.accept_inbound_connection(
         address.clone(),
-        net::types::PeerInfo::<S::PeerId> {
+        net::types::PeerInfo {
             peer_id,
             network: *config.magic_bytes(),
             version: SemVer::new(0, 1, 0),

@@ -1153,15 +1153,13 @@ async fn make_sync_manager<T>(
 ) -> (
     BlockSyncManager<T>,
     T::ConnectivityHandle,
-    mpsc::UnboundedSender<SyncControlEvent<T>>,
+    mpsc::UnboundedSender<SyncControlEvent>,
     mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
 )
 where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PeerRequestId: 'static,
-    T::PeerId: 'static,
 {
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
     let (tx_peer_manager, rx_peer_manager) = mpsc::unbounded_channel();
@@ -1256,8 +1254,6 @@ async fn process_header_request<T>(
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PeerRequestId: 'static,
-    T::PeerId: 'static,
 {
     match mgr.handle_mut().poll_next().await.unwrap() {
         SyncingEvent::Request {
@@ -1285,8 +1281,6 @@ async fn advance_mgr_state<T>(mgr: &mut BlockSyncManager<T>) -> Result<(), P2pEr
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PeerRequestId: 'static,
-    T::PeerId: 'static,
 {
     match mgr.handle_mut().poll_next().await.unwrap() {
         SyncingEvent::Request {

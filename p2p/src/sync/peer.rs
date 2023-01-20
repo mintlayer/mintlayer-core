@@ -15,7 +15,7 @@
 
 use crate::{
     error::{P2pError, ProtocolError},
-    net::NetworkingService,
+    net::default_backend::types::PeerId,
 };
 use chainstate::Locator;
 use common::{
@@ -42,12 +42,9 @@ pub enum PeerSyncState {
 }
 
 /// Syncing-related context of the peer
-pub struct PeerContext<T>
-where
-    T: NetworkingService,
-{
+pub struct PeerContext {
     /// Unique peer ID
-    _peer_id: T::PeerId,
+    _peer_id: PeerId,
 
     /// State of the peer
     state: PeerSyncState,
@@ -57,8 +54,8 @@ where
     work: VecDeque<BlockHeader>,
 }
 
-impl<T: NetworkingService> PeerContext<T> {
-    pub fn new(_peer_id: T::PeerId) -> Self {
+impl PeerContext {
+    pub fn new(_peer_id: PeerId) -> Self {
         Self {
             _peer_id,
             state: PeerSyncState::Unknown,
@@ -66,7 +63,7 @@ impl<T: NetworkingService> PeerContext<T> {
         }
     }
 
-    pub fn new_with_locator(_peer_id: T::PeerId, locator: Locator) -> Self {
+    pub fn new_with_locator(_peer_id: PeerId, locator: Locator) -> Self {
         Self {
             _peer_id,
             state: PeerSyncState::UploadingHeaders(locator),
@@ -120,15 +117,13 @@ impl<T: NetworkingService> PeerContext<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::default_backend::{
-        transport::TcpTransportSocket, types, DefaultNetworkingService,
-    };
+    use crate::net::default_backend::types;
     use common::chain::block::{
         consensus_data::ConsensusData, timestamp::BlockTimestamp, BlockReward,
     };
 
-    fn new_peersyncstate() -> PeerContext<DefaultNetworkingService<TcpTransportSocket>> {
-        PeerContext::<DefaultNetworkingService<TcpTransportSocket>>::new(types::PeerId::new())
+    fn new_peersyncstate() -> PeerContext {
+        PeerContext::new(types::PeerId::new())
     }
 
     #[test]

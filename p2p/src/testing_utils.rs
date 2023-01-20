@@ -147,7 +147,7 @@ impl RandomAddressMaker for TestChannelAddressMaker {
 pub async fn connect_services<T>(
     conn1: &mut T::ConnectivityHandle,
     conn2: &mut T::ConnectivityHandle,
-) -> (T::Address, PeerInfo<T::PeerId>, PeerInfo<T::PeerId>)
+) -> (T::Address, PeerInfo, PeerInfo)
 where
     T: NetworkingService + Debug,
     T::ConnectivityHandle: ConnectivityService<T>,

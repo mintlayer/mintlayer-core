@@ -32,22 +32,21 @@ use crate::{
     },
     sync::{
         peer,
-        tests::{make_sync_manager, register_peer, MakeTestPeerId},
+        tests::{make_sync_manager, register_peer},
     },
     ConnectivityService, NetworkingService, SyncingMessagingService,
 };
 
 // peer doesn't exist
-async fn peer_doesnt_exist<A, P, T>()
+async fn peer_doesnt_exist<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
-    P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id = P::new();
+    let peer_id = PeerId::new();
 
     let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(A::make_transport(), addr).await;
 
@@ -59,32 +58,30 @@ where
 
 #[tokio::test]
 async fn peer_doesnt_exist_tcp() {
-    peer_doesnt_exist::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>()
-        .await;
+    peer_doesnt_exist::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn peer_doesnt_exist_channels() {
-    peer_doesnt_exist::<TestTransportChannel, PeerId, DefaultNetworkingService<MpscChannelTransport>>().await;
+    peer_doesnt_exist::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
+        .await;
 }
 
 #[tokio::test]
 async fn peer_doesnt_exist_noise() {
-    peer_doesnt_exist::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>()
-        .await;
+    peer_doesnt_exist::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }
 
 // submit valid block but the peer is in invalid state
-async fn valid_block<A, P, T>()
+async fn valid_block<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
-    P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id = P::new();
+    let peer_id = PeerId::new();
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(A::make_transport(), addr).await;
@@ -110,31 +107,29 @@ where
 
 #[tokio::test]
 async fn valid_block_tcp() {
-    valid_block::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>().await;
+    valid_block::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn valid_block_channels() {
-    valid_block::<TestTransportChannel, PeerId, DefaultNetworkingService<MpscChannelTransport>>()
-        .await;
+    valid_block::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>().await;
 }
 
 #[tokio::test]
 async fn valid_block_noise() {
-    valid_block::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>().await;
+    valid_block::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }
 
 // submit valid block
-async fn valid_block_invalid_state<A, P, T>()
+async fn valid_block_invalid_state<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
-    P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id = P::new();
+    let peer_id = PeerId::new();
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(A::make_transport(), addr).await;
@@ -154,19 +149,14 @@ where
 
 #[tokio::test]
 async fn valid_block_invalid_state_tcp() {
-    valid_block_invalid_state::<
-        TestTransportTcp,
-        PeerId,
-        DefaultNetworkingService<TcpTransportSocket>,
-    >()
-    .await;
+    valid_block_invalid_state::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
+        .await;
 }
 
 #[tokio::test]
 async fn valid_block_invalid_state_channels() {
     valid_block_invalid_state::<
         TestTransportChannel,
-        PeerId,
         DefaultNetworkingService<MpscChannelTransport>,
     >()
     .await;
@@ -174,25 +164,20 @@ async fn valid_block_invalid_state_channels() {
 
 #[tokio::test]
 async fn valid_block_invalid_state_noise() {
-    valid_block_invalid_state::<
-        TestTransportNoise,
-        PeerId,
-        DefaultNetworkingService<NoiseTcpTransport>,
-    >()
-    .await;
+    valid_block_invalid_state::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
+        .await;
 }
 
 // submit the same block twice
-async fn valid_block_resubmitted_chainstate<A, P, T>()
+async fn valid_block_resubmitted_chainstate<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
-    P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id = P::new();
+    let peer_id = PeerId::new();
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
@@ -224,7 +209,6 @@ where
 async fn valid_block_resubmitted_chainstate_tcp() {
     valid_block_resubmitted_chainstate::<
         TestTransportTcp,
-        PeerId,
         DefaultNetworkingService<TcpTransportSocket>,
     >()
     .await;
@@ -234,7 +218,6 @@ async fn valid_block_resubmitted_chainstate_tcp() {
 async fn valid_block_resubmitted_chainstate_channels() {
     valid_block_resubmitted_chainstate::<
         TestTransportChannel,
-        PeerId,
         DefaultNetworkingService<MpscChannelTransport>,
     >()
     .await;
@@ -244,23 +227,21 @@ async fn valid_block_resubmitted_chainstate_channels() {
 async fn valid_block_resubmitted_chainstate_noise() {
     valid_block_resubmitted_chainstate::<
         TestTransportNoise,
-        PeerId,
         DefaultNetworkingService<NoiseTcpTransport>,
     >()
     .await;
 }
 
 // block validation fails
-async fn invalid_block<A, P, T>()
+async fn invalid_block<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
-    P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id = P::new();
+    let peer_id = PeerId::new();
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
@@ -292,17 +273,15 @@ where
 
 #[tokio::test]
 async fn invalid_block_tcp() {
-    invalid_block::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>().await;
+    invalid_block::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn invalid_block_channels() {
-    invalid_block::<TestTransportChannel, PeerId, DefaultNetworkingService<MpscChannelTransport>>()
-        .await;
+    invalid_block::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>().await;
 }
 
 #[tokio::test]
 async fn invalid_block_noise() {
-    invalid_block::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>()
-        .await;
+    invalid_block::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }

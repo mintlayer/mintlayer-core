@@ -93,8 +93,6 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
     type Transport = T;
     type Address = T::Address;
     type BannableAddress = T::BannableAddress;
-    type PeerId = PeerId;
-    type PeerRequestId = RequestId;
     type ConnectivityHandle = ConnectivityHandle<Self, T>;
     type SyncingMessagingHandle = SyncingMessagingHandle<Self, T>;
 
@@ -145,7 +143,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
 #[async_trait]
 impl<S, T> ConnectivityService<S> for ConnectivityHandle<S, T>
 where
-    S: NetworkingService<Address = T::Address, PeerId = PeerId, PeerRequestId = RequestId> + Send,
+    S: NetworkingService<Address = T::Address> + Send,
     T: TransportSocket,
 {
     async fn connect(&mut self, address: S::Address) -> crate::Result<()> {
@@ -165,7 +163,7 @@ where
         rx.await?
     }
 
-    async fn disconnect(&mut self, peer_id: S::PeerId) -> crate::Result<()> {
+    async fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()> {
         log::debug!("close connection with remote, {peer_id}");
 
         let (tx, rx) = oneshot::channel();
@@ -181,9 +179,9 @@ where
 
     async fn send_request(
         &mut self,
-        peer_id: S::PeerId,
+        peer_id: PeerId,
         request: PeerManagerRequest,
-    ) -> crate::Result<S::PeerRequestId> {
+    ) -> crate::Result<RequestId> {
         let request_id = RequestId::new();
 
         self.cmd_tx
@@ -199,7 +197,7 @@ where
 
     async fn send_response(
         &mut self,
-        request_id: S::PeerRequestId,
+        request_id: RequestId,
         response: PeerManagerResponse,
     ) -> crate::Result<()> {
         self.cmd_tx
@@ -272,14 +270,14 @@ where
 #[async_trait]
 impl<S, T> SyncingMessagingService<S> for SyncingMessagingHandle<S, T>
 where
-    S: NetworkingService<PeerId = PeerId, PeerRequestId = RequestId> + Send,
+    S: NetworkingService + Send,
     T: TransportSocket,
 {
     async fn send_request(
         &mut self,
-        peer_id: S::PeerId,
+        peer_id: PeerId,
         request: SyncRequest,
-    ) -> crate::Result<S::PeerRequestId> {
+    ) -> crate::Result<RequestId> {
         let request_id = RequestId::new();
 
         self.cmd_tx
@@ -295,7 +293,7 @@ where
 
     async fn send_response(
         &mut self,
-        request_id: S::PeerRequestId,
+        request_id: RequestId,
         response: SyncResponse,
     ) -> crate::Result<()> {
         self.cmd_tx
@@ -328,7 +326,7 @@ where
         Ok(())
     }
 
-    async fn poll_next(&mut self) -> crate::Result<SyncingEvent<S>> {
+    async fn poll_next(&mut self) -> crate::Result<SyncingEvent> {
         match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::SyncingEvent::Request {
                 peer_id,

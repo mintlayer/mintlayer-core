@@ -26,6 +26,7 @@ use utils::ensure;
 use crate::{
     error::{P2pError, PeerError},
     message::{self, SyncRequest, SyncResponse},
+    net::default_backend::types::{PeerId, RequestId},
     sync::{peer::PeerSyncState, BlockSyncManager},
     NetworkingService, SyncingMessagingService,
 };
@@ -34,8 +35,6 @@ impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PeerRequestId: 'static,
-    T::PeerId: 'static,
 {
     /// Creates a blocks request message.
     pub fn make_block_request(&self, block_ids: Vec<Id<Block>>) -> SyncRequest {
@@ -66,7 +65,7 @@ where
     /// Sends a request to the given peer.
     pub async fn send_request(
         &mut self,
-        peer_id: T::PeerId,
+        peer_id: PeerId,
         request: SyncRequest,
     ) -> crate::Result<()> {
         self.peer_sync_handle.send_request(peer_id, request).await.map(|_| ())
@@ -83,7 +82,7 @@ where
     /// * `retry_count` - how many times the request has been resent
     pub async fn send_block_request(
         &mut self,
-        peer_id: T::PeerId,
+        peer_id: PeerId,
         block_id: Id<Block>,
     ) -> crate::Result<()> {
         ensure!(
@@ -115,7 +114,7 @@ where
     /// * `retry_count` - how many times the request has been resent
     pub async fn send_header_request(
         &mut self,
-        peer_id: T::PeerId,
+        peer_id: PeerId,
         locator: Locator,
     ) -> crate::Result<()> {
         ensure!(
@@ -146,7 +145,7 @@ where
     /// * `headers` - headers that the remote requested
     pub async fn send_header_response(
         &mut self,
-        request_id: T::PeerRequestId,
+        request_id: RequestId,
         headers: Vec<BlockHeader>,
     ) -> crate::Result<()> {
         log::trace!("send header response, request id {request_id:?}");
@@ -166,7 +165,7 @@ where
     /// * `headers` - headers that the remote requested
     pub async fn send_block_response(
         &mut self,
-        request_id: T::PeerRequestId,
+        request_id: RequestId,
         blocks: Vec<Block>,
     ) -> crate::Result<()> {
         log::trace!("send block response, request id {request_id:?}");

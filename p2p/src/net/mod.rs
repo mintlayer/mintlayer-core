@@ -16,12 +16,7 @@
 pub mod default_backend;
 pub mod types;
 
-use std::{
-    fmt::{Debug, Display},
-    hash::Hash,
-    str::FromStr,
-    sync::Arc,
-};
+use std::{fmt::Debug, hash::Hash, str::FromStr, sync::Arc};
 
 use async_trait::async_trait;
 
@@ -31,7 +26,10 @@ use crate::{
     message::{PeerManagerResponse, SyncRequest, SyncResponse},
 };
 
-use self::default_backend::transport::TransportAddress;
+use self::default_backend::{
+    transport::TransportAddress,
+    types::{PeerId, RequestId},
+};
 
 /// [NetworkingService] provides the low-level network interface
 /// that each network service provider must implement
@@ -66,12 +64,6 @@ pub trait NetworkingService {
     /// Usually it is part of the `NetworkingService::Address`. For example for a socket address
     /// that consists of an IP address and a port we want to ban the IP address.
     type BannableAddress: Debug + Eq + Ord + Send;
-
-    /// Unique ID assigned to a peer on the network
-    type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString + FromStr;
-
-    /// Unique ID assigned to each received request from a peer
-    type PeerRequestId: Copy + Debug + Eq + Hash + Send + Sync;
 
     /// Handle for sending/receiving connectivity-related events
     type ConnectivityHandle: Send;
@@ -113,7 +105,7 @@ where
     ///
     /// # Arguments
     /// `peer_id` - Peer ID of the remote node
-    async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()>;
+    async fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()>;
 
     /// Send PeerManager's request to remote
     ///
@@ -122,9 +114,9 @@ where
     /// * `request` - Request to be sent
     async fn send_request(
         &mut self,
-        peer_id: T::PeerId,
+        peer_id: PeerId,
         request: PeerManagerRequest,
-    ) -> crate::Result<T::PeerRequestId>;
+    ) -> crate::Result<RequestId>;
 
     /// Send response to remote
     ///
@@ -133,7 +125,7 @@ where
     /// * `response` - Response to be sent
     async fn send_response(
         &mut self,
-        request_id: T::PeerRequestId,
+        request_id: RequestId,
         response: PeerManagerResponse,
     ) -> crate::Result<()>;
 
@@ -165,9 +157,9 @@ where
     /// * `request` - Request to be sent
     async fn send_request(
         &mut self,
-        peer_id: T::PeerId,
+        peer_id: PeerId,
         request: SyncRequest,
-    ) -> crate::Result<T::PeerRequestId>;
+    ) -> crate::Result<RequestId>;
 
     /// Send block/header response to remote
     ///
@@ -176,7 +168,7 @@ where
     /// * `response` - Response to be sent
     async fn send_response(
         &mut self,
-        request_id: T::PeerRequestId,
+        request_id: RequestId,
         response: SyncResponse,
     ) -> crate::Result<()>;
 
@@ -184,7 +176,7 @@ where
     async fn make_announcement(&mut self, announcement: Announcement) -> crate::Result<()>;
 
     /// Poll syncing-related event from the networking service
-    async fn poll_next(&mut self) -> crate::Result<types::SyncingEvent<T>>;
+    async fn poll_next(&mut self) -> crate::Result<types::SyncingEvent>;
 }
 
 /// Extracts a bannable part from an address.

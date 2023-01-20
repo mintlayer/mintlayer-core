@@ -38,7 +38,7 @@ tests![
 
 async fn adjust_peer_score_normal_threshold<T, S, A>()
 where
-    S: NetworkingService<PeerId = PeerId>,
+    S: NetworkingService,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default())).unwrap();
@@ -51,7 +51,7 @@ where
 
 async fn adjust_peer_score_higher_threshold<T, S, A>()
 where
-    S: NetworkingService<PeerId = PeerId>,
+    S: NetworkingService,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let config = P2pConfig {
@@ -73,7 +73,7 @@ where
 
 async fn adjust_peer_score_lower_threshold<T, S, A>()
 where
-    S: NetworkingService<PeerId = PeerId>,
+    S: NetworkingService,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let config = P2pConfig {
@@ -94,7 +94,7 @@ where
 
 async fn unban_peer<T, S, A>()
 where
-    S: NetworkingService<PeerId = PeerId>,
+    S: NetworkingService,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig {
@@ -119,9 +119,9 @@ where
     assert!(!peerdb.is_address_banned(&address));
 }
 
-fn make_peer_info<T, S, A>() -> (S::PeerId, S::Address, PeerInfo<S::PeerId>)
+fn make_peer_info<T, S, A>() -> (PeerId, S::Address, PeerInfo)
 where
-    S: NetworkingService<PeerId = PeerId>,
+    S: NetworkingService,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let peer_id = PeerId::new();
@@ -129,7 +129,7 @@ where
     (
         peer_id,
         A::new(),
-        PeerInfo::<S::PeerId> {
+        PeerInfo {
             peer_id,
             network: [1, 2, 3, 4],
             version: common::primitives::semver::SemVer::new(0, 1, 0),
@@ -139,9 +139,9 @@ where
     )
 }
 
-fn add_active_peer<T, S, A>(peerdb: &mut PeerDb<S>) -> S::PeerId
+fn add_active_peer<T, S, A>(peerdb: &mut PeerDb<S>) -> PeerId
 where
-    S: NetworkingService<PeerId = PeerId>,
+    S: NetworkingService,
     A: RandomAddressMaker<Address = S::Address>,
 {
     let (peer_id, address, info) = make_peer_info::<T, S, A>();

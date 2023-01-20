@@ -405,7 +405,7 @@ async fn remote_closes_connection_noise() {
         .await;
 }
 
-async fn inbound_connection_too_many_peers<A, T>(peers: Vec<(T::Address, PeerInfo<T::PeerId>)>)
+async fn inbound_connection_too_many_peers<A, T>(peers: Vec<(T::Address, PeerInfo)>)
 where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,

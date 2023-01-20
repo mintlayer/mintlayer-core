@@ -91,12 +91,12 @@ pub enum ConnectivityEvent<T: TransportSocket> {
     },
     InboundAccepted {
         address: T::Address,
-        peer_info: PeerInfo<PeerId>,
+        peer_info: PeerInfo,
         receiver_address: Option<PeerAddress>,
     },
     OutboundAccepted {
         address: T::Address,
-        peer_info: PeerInfo<PeerId>,
+        peer_info: PeerInfo,
         receiver_address: Option<PeerAddress>,
     },
     ConnectionError {

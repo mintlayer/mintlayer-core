@@ -20,7 +20,7 @@ use tokio::sync::oneshot;
 use crate::{
     error::{ConversionError, P2pError},
     event::PeerManagerEvent,
-    net::NetworkingService,
+    net::{default_backend::types::PeerId, NetworkingService},
     P2p,
 };
 
@@ -34,7 +34,6 @@ where
     async fn connect(&mut self, addr: String) -> crate::Result<()>
     where
         <T as NetworkingService>::Address: FromStr,
-        <T as NetworkingService>::PeerId: FromStr,
     {
         let (tx, rx) = oneshot::channel();
         let addr = addr
@@ -46,13 +45,10 @@ where
         rx.await.map_err(P2pError::from)?
     }
 
-    async fn disconnect(&mut self, peer_id: String) -> crate::Result<()>
-    where
-        <T as NetworkingService>::PeerId: FromStr,
-    {
+    async fn disconnect(&mut self, peer_id: String) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();
         let peer_id = peer_id
-            .parse::<T::PeerId>()
+            .parse::<PeerId>()
             .map_err(|_| P2pError::ConversionError(ConversionError::InvalidPeerId(peer_id)))?;
 
         self.tx_peer_manager

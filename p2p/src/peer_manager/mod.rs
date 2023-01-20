@@ -43,7 +43,10 @@ use crate::{
     message::{AddrListRequest, AddrListResponse, PeerManagerRequest, PeerManagerResponse},
     net::{
         self,
-        default_backend::transport::TransportAddress,
+        default_backend::{
+            transport::TransportAddress,
+            types::{PeerId, RequestId},
+        },
         types::{PeerInfo, Role},
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
@@ -75,7 +78,7 @@ where
     rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
 
     /// TX channel for sending events to SyncManager
-    tx_sync: mpsc::UnboundedSender<SyncControlEvent<T>>,
+    tx_sync: mpsc::UnboundedSender<SyncControlEvent>,
 
     /// Hashmap of pending outbound connections
     pending: HashMap<T::Address, Option<oneshot::Sender<crate::Result<()>>>>,
@@ -96,7 +99,7 @@ where
         p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
         rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
-        tx_sync: mpsc::UnboundedSender<SyncControlEvent<T>>,
+        tx_sync: mpsc::UnboundedSender<SyncControlEvent>,
     ) -> crate::Result<Self> {
         Ok(Self {
             peer_connectivity_handle: handle,
@@ -132,7 +135,7 @@ where
         &mut self,
         address: T::Address,
         role: Role,
-        info: PeerInfo<T::PeerId>,
+        info: PeerInfo,
         _receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
         // TODO: Handle receiver_address
@@ -179,7 +182,7 @@ where
     fn accept_inbound_connection(
         &mut self,
         address: T::Address,
-        info: net::types::PeerInfo<T::PeerId>,
+        info: net::types::PeerInfo,
         receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
         log::debug!("validate inbound connection, inbound address {address:?}");
@@ -211,7 +214,7 @@ where
     /// The decision to close the connection is made either by the user via RPC
     /// or by the [`PeerManager::heartbeat()`] function which has decided to cull
     /// this connection in favor of another potential connection.
-    fn close_connection(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+    fn close_connection(&mut self, peer_id: PeerId) -> crate::Result<()> {
         // The backend is always sending ConnectionClosed event when somebody disconnects, ensure that the peer is active
         if self.peerdb.is_active_peer(&peer_id) {
             log::debug!("connection closed for peer {peer_id}");
@@ -228,7 +231,7 @@ where
     /// If after adjustment the peer score is more than the ban threshold, the peer is banned
     /// which makes the `PeerDb` mark is banned and prevents any further connections with the peer
     /// and also bans the peer in the networking backend.
-    async fn adjust_peer_score(&mut self, peer_id: T::PeerId, score: u32) -> crate::Result<()> {
+    async fn adjust_peer_score(&mut self, peer_id: PeerId, score: u32) -> crate::Result<()> {
         log::debug!("adjusting score for peer {peer_id}, adjustment {score}");
 
         if self.peerdb.adjust_peer_score(&peer_id, score) {
@@ -326,8 +329,8 @@ where
 
     async fn handle_incoming_request(
         &mut self,
-        _peer_id: T::PeerId,
-        request_id: T::PeerRequestId,
+        _peer_id: PeerId,
+        request_id: RequestId,
         request: PeerManagerRequest,
     ) -> crate::Result<()> {
         match request {
@@ -347,8 +350,8 @@ where
 
     fn handle_incoming_response(
         &mut self,
-        _peer_id: T::PeerId,
-        _request_id: T::PeerRequestId,
+        _peer_id: PeerId,
+        _request_id: RequestId,
         response: PeerManagerResponse,
     ) -> crate::Result<()> {
         match response {
@@ -378,7 +381,7 @@ where
     /// `result` - result of the operation that was performed
     pub async fn handle_result(
         &mut self,
-        peer_id: Option<T::PeerId>,
+        peer_id: Option<PeerId>,
         result: crate::Result<()>,
     ) -> crate::Result<()> {
         match result {

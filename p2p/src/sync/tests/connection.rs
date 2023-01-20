@@ -24,21 +24,20 @@ use crate::{
         types::PeerId,
         DefaultNetworkingService,
     },
-    sync::tests::{make_sync_manager, register_peer, MakeTestPeerId},
+    sync::tests::{make_sync_manager, register_peer},
     ConnectivityService, NetworkingService, SyncingMessagingService,
 };
 
 // handle peer reconnection
-async fn test_peer_reconnected<A, P, T>()
+async fn test_peer_reconnected<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
-    P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id = P::new();
+    let peer_id = PeerId::new();
 
     let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(A::make_transport(), addr).await;
     register_peer(&mut mgr, peer_id).await;
@@ -52,36 +51,32 @@ where
 
 #[tokio::test]
 async fn test_peer_reconnected_tcp() {
-    test_peer_reconnected::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>().await;
+    test_peer_reconnected::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn test_peer_reconnected_channels() {
-    test_peer_reconnected::<
-        TestTransportChannel,
-        PeerId,
-        DefaultNetworkingService<MpscChannelTransport>,
-    >()
-    .await;
+    test_peer_reconnected::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
+        .await;
 }
 
 #[tokio::test]
 async fn test_peer_reconnected_noise() {
-    test_peer_reconnected::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>().await;
+    test_peer_reconnected::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
+        .await;
 }
 
 // handle peer disconnection event
-async fn test_peer_disconnected<A, P, T>()
+async fn test_peer_disconnected<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
-    P: MakeTestPeerId<PeerId = T::PeerId>,
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let addr = A::make_address();
-    let peer_id1 = P::new();
-    let peer_id2 = P::new();
+    let peer_id1 = PeerId::new();
+    let peer_id2 = PeerId::new();
 
     let (mut mgr, _conn, _sync, _pm) = make_sync_manager::<T>(A::make_transport(), addr).await;
 
@@ -99,20 +94,19 @@ where
 
 #[tokio::test]
 async fn test_peer_disconnected_tcp() {
-    test_peer_disconnected::<TestTransportTcp, PeerId, DefaultNetworkingService<TcpTransportSocket>>().await;
+    test_peer_disconnected::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
+        .await;
 }
 
 #[tokio::test]
 async fn test_peer_disconnected_channels() {
-    test_peer_disconnected::<
-        TestTransportChannel,
-        PeerId,
-        DefaultNetworkingService<MpscChannelTransport>,
-    >()
+    test_peer_disconnected::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>(
+    )
     .await;
 }
 
 #[tokio::test]
 async fn test_peer_disconnected_noise() {
-    test_peer_disconnected::<TestTransportNoise, PeerId, DefaultNetworkingService<NoiseTcpTransport>>().await;
+    test_peer_disconnected::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
+        .await;
 }

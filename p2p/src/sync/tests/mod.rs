@@ -38,15 +38,13 @@ async fn make_sync_manager<T>(
 ) -> (
     BlockSyncManager<T>,
     T::ConnectivityHandle,
-    mpsc::UnboundedSender<SyncControlEvent<T>>,
+    mpsc::UnboundedSender<SyncControlEvent>,
     mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
 )
 where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PeerRequestId: 'static,
-    T::PeerId: 'static,
 {
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
     let (tx_pm, rx_pm) = mpsc::unbounded_channel();
@@ -94,7 +92,7 @@ where
     )
 }
 
-async fn register_peer<T>(mgr: &mut BlockSyncManager<T>, peer_id: T::PeerId)
+async fn register_peer<T>(mgr: &mut BlockSyncManager<T>, peer_id: PeerId)
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
@@ -105,18 +103,4 @@ where
         peer_id,
         peer::PeerContext::new_with_locator(peer_id, locator),
     );
-}
-
-pub trait MakeTestPeerId {
-    type PeerId;
-
-    fn new() -> Self::PeerId;
-}
-
-impl MakeTestPeerId for PeerId {
-    type PeerId = Self;
-
-    fn new() -> Self::PeerId {
-        PeerId::new()
-    }
 }
