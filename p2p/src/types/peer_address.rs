@@ -15,8 +15,9 @@
 
 use std::fmt::Display;
 
-use common::primitives::ip_address::{Ip4, Ip6};
 use serialization::{Decode, Encode};
+
+use super::ip_address::{Ip4, Ip6};
 
 #[derive(Debug, Encode, Decode, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub struct PeerAddressIp4 {
