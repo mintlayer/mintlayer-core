@@ -13,11 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod ip_address;
 mod peer_address;
 mod peer_id;
 mod request_id;
 
 pub use {
+    ip_address::{Ip4, Ip6},
     peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
     peer_id::PeerId,
     request_id::RequestId,
