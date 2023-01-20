@@ -17,8 +17,11 @@ use std::sync::Arc;
 
 use p2p_test_utils::TestBlockInfo;
 
-use crate::testing_utils::{
-    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+use crate::{
+    testing_utils::{
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+    },
+    types::PeerId,
 };
 use chainstate::ChainstateError;
 use common::{chain::block::consensus_data::PoWData, primitives::Idable};
@@ -27,7 +30,6 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     net::default_backend::{
         transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-        types::PeerId,
         DefaultNetworkingService,
     },
     sync::{

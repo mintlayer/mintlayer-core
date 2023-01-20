@@ -41,11 +41,8 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
     message::{self, Announcement, SyncRequest},
-    net::{
-        default_backend::types::{PeerId, RequestId},
-        types::SyncingEvent,
-        NetworkingService, SyncingMessagingService,
-    },
+    net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
+    types::{PeerId, RequestId},
 };
 
 // TODO: from config? global constant?

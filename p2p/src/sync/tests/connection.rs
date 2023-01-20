@@ -17,11 +17,11 @@ use crate::testing_utils::{
     TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
 };
 
+use crate::types::PeerId;
 use crate::{
     error::{P2pError, PeerError},
     net::default_backend::{
         transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-        types::PeerId,
         DefaultNetworkingService,
     },
     sync::tests::{make_sync_manager, register_peer},

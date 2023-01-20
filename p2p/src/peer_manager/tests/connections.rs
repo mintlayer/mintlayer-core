@@ -29,6 +29,7 @@ use crate::{
         connect_services, filter_connectivity_event, TestTransportChannel, TestTransportMaker,
         TestTransportNoise, TestTransportTcp,
     },
+    types::PeerId,
 };
 use common::chain::config;
 
@@ -39,7 +40,6 @@ use crate::{
         self,
         default_backend::{
             transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-            types::PeerId,
             DefaultNetworkingService,
         },
         types::{PeerInfo, PubSubTopic},

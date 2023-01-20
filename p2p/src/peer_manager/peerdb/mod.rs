@@ -38,11 +38,11 @@ use crate::{
     error::{ConversionError, P2pError},
     interface::types::ConnectedPeer,
     net::{
-        default_backend::{transport::TransportAddress, types::PeerId},
+        default_backend::transport::TransportAddress,
         types::{self, Role},
         AsBannableAddress, NetworkingService,
     },
-    types::peer_address::PeerAddress,
+    types::{PeerAddress, PeerId},
 };
 
 #[derive(Debug)]

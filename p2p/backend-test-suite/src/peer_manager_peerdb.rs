@@ -21,12 +21,12 @@ use std::{sync::Arc, time::Duration};
 use p2p::{
     config::P2pConfig,
     net::{
-        default_backend::types::PeerId,
         types::{PeerInfo, PubSubTopic, Role},
         AsBannableAddress, NetworkingService,
     },
     peer_manager::peerdb::PeerDb,
     testing_utils::RandomAddressMaker,
+    types::PeerId,
 };
 
 tests![

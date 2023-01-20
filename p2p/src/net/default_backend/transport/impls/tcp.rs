@@ -27,7 +27,7 @@ use crate::{
         },
         AsBannableAddress,
     },
-    types::peer_address::PeerAddress,
+    types::PeerAddress,
     Result,
 };
 
@@ -161,13 +161,11 @@ mod tests {
     use crate::{
         message::{BlockListRequest, SyncRequest},
         testing_utils::{TestTransportMaker, TestTransportTcp},
+        types::RequestId,
     };
 
     use super::*;
-    use crate::net::default_backend::{
-        transport::BufferedTranscoder,
-        types::{Message, RequestId},
-    };
+    use crate::net::default_backend::{transport::BufferedTranscoder, types::Message};
 
     #[tokio::test]
     async fn send_recv() {

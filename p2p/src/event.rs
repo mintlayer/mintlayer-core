@@ -17,10 +17,7 @@ use tokio::sync::oneshot;
 
 use common::chain::block::Block;
 
-use crate::{
-    interface::types::ConnectedPeer,
-    net::{default_backend::types::PeerId, NetworkingService},
-};
+use crate::{interface::types::ConnectedPeer, net::NetworkingService, types::PeerId};
 
 #[derive(Debug)]
 pub enum PeerManagerEvent<T: NetworkingService> {

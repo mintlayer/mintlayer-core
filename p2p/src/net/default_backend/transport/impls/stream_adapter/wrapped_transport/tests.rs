@@ -18,7 +18,10 @@ use std::{
     time::Duration,
 };
 
-use crate::testing_utils::{TestTransportChannel, TestTransportMaker, TestTransportTcp};
+use crate::{
+    testing_utils::{TestTransportChannel, TestTransportMaker, TestTransportTcp},
+    types::RequestId,
+};
 use async_trait::async_trait;
 use futures::{future::BoxFuture, StreamExt};
 use tokio::{
@@ -35,7 +38,7 @@ use crate::{
             NoiseEncryptionAdapter, PeerStream, TcpTransportSocket, TransportListener,
             TransportSocket,
         },
-        types::{Message, RequestId},
+        types::Message,
     },
 };
 

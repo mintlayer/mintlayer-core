@@ -40,7 +40,7 @@ use crate::{
         },
         AsBannableAddress,
     },
-    types::peer_address::{PeerAddress, PeerAddressIp4},
+    types::{PeerAddress, PeerAddressIp4},
     P2pError, Result,
 };
 
@@ -202,10 +202,8 @@ mod tests {
     use super::*;
     use crate::{
         message::{BlockListRequest, SyncRequest},
-        net::default_backend::{
-            transport::BufferedTranscoder,
-            types::{Message, RequestId},
-        },
+        net::default_backend::{transport::BufferedTranscoder, types::Message},
+        types::RequestId,
     };
 
     #[tokio::test]

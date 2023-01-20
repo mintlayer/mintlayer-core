@@ -20,7 +20,7 @@ use common::{
 };
 use serialization::{Decode, Encode};
 
-use crate::types::peer_address::PeerAddress;
+use crate::types::PeerAddress;
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub struct HeaderListRequest {

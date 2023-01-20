@@ -22,6 +22,7 @@ use crate::{
         TestTcpAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp,
     },
+    types::PeerId,
 };
 use common::{chain::config, primitives::semver::SemVer};
 
@@ -31,7 +32,6 @@ use crate::{
         self,
         default_backend::{
             transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-            types::PeerId,
             DefaultNetworkingService,
         },
         types::PubSubTopic,

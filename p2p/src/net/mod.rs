@@ -24,12 +24,10 @@ use crate::{
     config,
     message::{Announcement, PeerManagerRequest},
     message::{PeerManagerResponse, SyncRequest, SyncResponse},
-};
-
-use self::default_backend::{
-    transport::TransportAddress,
     types::{PeerId, RequestId},
 };
+
+use self::default_backend::transport::TransportAddress;
 
 /// [NetworkingService] provides the low-level network interface
 /// that each network service provider must implement

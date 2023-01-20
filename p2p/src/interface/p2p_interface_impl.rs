@@ -20,7 +20,8 @@ use tokio::sync::oneshot;
 use crate::{
     error::{ConversionError, P2pError},
     event::PeerManagerEvent,
-    net::{default_backend::types::PeerId, NetworkingService},
+    net::NetworkingService,
+    types::PeerId,
     P2p,
 };
 

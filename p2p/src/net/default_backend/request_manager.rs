@@ -28,16 +28,17 @@ use crate::{
     error::{P2pError, PeerError},
     message,
     net::default_backend::types,
+    types::{PeerId, RequestId},
 };
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 #[derive(Debug, Default)]
 pub struct RequestManager {
     /// Active ephemeral IDs
-    ephemerals: HashMap<types::PeerId, HashSet<types::RequestId>>,
+    ephemerals: HashMap<PeerId, HashSet<RequestId>>,
 
     /// Ephemeral requests IDs which are mapped to remote peer ID/request ID pair
-    ephemeral: HashMap<types::RequestId, (types::PeerId, types::RequestId)>,
+    ephemeral: HashMap<RequestId, (PeerId, RequestId)>,
 }
 
 impl RequestManager {
@@ -48,7 +49,7 @@ impl RequestManager {
     /// Register peer to the request manager
     ///
     /// Initialize peer context and allocate request ID slice for the peer
-    pub fn register_peer(&mut self, peer_id: types::PeerId) -> crate::Result<()> {
+    pub fn register_peer(&mut self, peer_id: PeerId) -> crate::Result<()> {
         match self.ephemerals.entry(peer_id) {
             Entry::Occupied(_) => Err(P2pError::PeerError(PeerError::PeerAlreadyExists)),
             Entry::Vacant(entry) => {
@@ -59,7 +60,7 @@ impl RequestManager {
     }
 
     /// Unregister peer from the request manager
-    pub fn unregister_peer(&mut self, peer_id: &types::PeerId) {
+    pub fn unregister_peer(&mut self, peer_id: &PeerId) {
         if let Some(ephemerals) = self.ephemerals.remove(peer_id) {
             ephemerals.iter().for_each(|id| {
                 self.ephemeral.remove(id);
@@ -70,7 +71,7 @@ impl RequestManager {
     /// Create new outgoing request
     pub fn make_request(
         &mut self,
-        request_id: types::RequestId,
+        request_id: RequestId,
         request: message::Request,
     ) -> crate::Result<Box<types::Message>> {
         Ok(Box::new(types::Message::Request {
@@ -85,9 +86,9 @@ impl RequestManager {
     /// of the remote node and return all information to the caller.
     pub fn make_response(
         &mut self,
-        request_id: &types::RequestId,
+        request_id: &RequestId,
         response: message::Response,
-    ) -> Option<(types::PeerId, Box<types::Message>)> {
+    ) -> Option<(PeerId, Box<types::Message>)> {
         if let Some((peer_id, request_id)) = self.ephemeral.remove(request_id) {
             return Some((
                 peer_id,
@@ -108,15 +109,15 @@ impl RequestManager {
     // TODO: Use different type in result so it's not possible to mixup ephemeral and real request ids.
     pub fn register_request(
         &mut self,
-        peer_id: &types::PeerId,
-        request_id: &types::RequestId,
-    ) -> crate::Result<types::RequestId> {
+        peer_id: &PeerId,
+        request_id: &RequestId,
+    ) -> crate::Result<RequestId> {
         let peer_ephemerals = self
             .ephemerals
             .get_mut(peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        let ephemeral_id = types::RequestId::new();
+        let ephemeral_id = RequestId::new();
 
         peer_ephemerals.insert(ephemeral_id);
         self.ephemeral.insert(ephemeral_id, (*peer_id, *request_id));

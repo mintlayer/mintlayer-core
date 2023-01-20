@@ -17,8 +17,11 @@ use std::sync::Arc;
 
 use crypto::random::{Rng, SliceRandom};
 
-use crate::testing_utils::{
-    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+use crate::{
+    testing_utils::{
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+    },
+    types::PeerId,
 };
 use p2p_test_utils::TestBlockInfo;
 
@@ -26,7 +29,6 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     net::default_backend::{
         transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-        types::PeerId,
         DefaultNetworkingService,
     },
     sync::{

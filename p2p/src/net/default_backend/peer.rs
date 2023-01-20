@@ -26,11 +26,11 @@ use crate::{
     net::{
         default_backend::{
             transport::TransportSocket,
-            types::{self, Event, PeerEvent, PeerId},
+            types::{self, Event, PeerEvent},
         },
         types::Role,
     },
-    types::peer_address::PeerAddress,
+    types::{PeerAddress, PeerId},
 };
 
 use super::{transport::BufferedTranscoder, types::HandshakeNonce};
@@ -241,6 +241,7 @@ mod tests {
     use crate::testing_utils::{
         TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     };
+    use crate::types::RequestId;
     use crate::{
         message,
         net::{
@@ -493,7 +494,7 @@ mod tests {
         assert!(socket2.recv().now_or_never().is_none());
         socket2
             .send(types::Message::Request {
-                request_id: types::RequestId::new(),
+                request_id: RequestId::new(),
                 request: message::Request::HeaderListRequest(message::HeaderListRequest::new(
                     Locator::new(vec![]),
                 )),

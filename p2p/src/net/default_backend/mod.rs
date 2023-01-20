@@ -36,11 +36,11 @@ use crate::{
         default_backend::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             transport::{TransportListener, TransportSocket},
-            types::{PeerId, RequestId},
         },
         types::{ConnectivityEvent, PubSubTopic, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
+    types::{PeerId, RequestId},
 };
 
 #[derive(Debug)]

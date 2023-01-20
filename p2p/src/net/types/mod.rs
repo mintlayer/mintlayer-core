@@ -21,9 +21,11 @@ use std::{
 use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
 
-use crate::{message, types::peer_address::PeerAddress, NetworkingService, P2pError};
-
-use super::default_backend::types::{PeerId, RequestId};
+use crate::{
+    message,
+    types::{PeerAddress, PeerId, RequestId},
+    NetworkingService, P2pError,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {

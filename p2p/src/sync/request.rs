@@ -26,8 +26,8 @@ use utils::ensure;
 use crate::{
     error::{P2pError, PeerError},
     message::{self, SyncRequest, SyncResponse},
-    net::default_backend::types::{PeerId, RequestId},
     sync::{peer::PeerSyncState, BlockSyncManager},
+    types::{PeerId, RequestId},
     NetworkingService, SyncingMessagingService,
 };
 

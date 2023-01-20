@@ -43,14 +43,11 @@ use crate::{
     message::{AddrListRequest, AddrListResponse, PeerManagerRequest, PeerManagerResponse},
     net::{
         self,
-        default_backend::{
-            transport::TransportAddress,
-            types::{PeerId, RequestId},
-        },
+        default_backend::transport::TransportAddress,
         types::{PeerInfo, Role},
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
-    types::peer_address::PeerAddress,
+    types::{PeerAddress, PeerId, RequestId},
 };
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open

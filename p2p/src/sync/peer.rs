@@ -15,7 +15,7 @@
 
 use crate::{
     error::{P2pError, ProtocolError},
-    net::default_backend::types::PeerId,
+    types::PeerId,
 };
 use chainstate::Locator;
 use common::{
@@ -117,13 +117,12 @@ impl PeerContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::default_backend::types;
     use common::chain::block::{
         consensus_data::ConsensusData, timestamp::BlockTimestamp, BlockReward,
     };
 
     fn new_peersyncstate() -> PeerContext {
-        PeerContext::new(types::PeerId::new())
+        PeerContext::new(PeerId::new())
     }
 
     #[test]

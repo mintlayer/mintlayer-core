@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::types::peer_address::PeerAddress;
+use crate::types::PeerAddress;
 
 /// Allow working with abstract socket address types.
 /// For example change socket port or encode for sending on wire.

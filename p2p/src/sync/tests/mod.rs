@@ -27,8 +27,9 @@ use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificati
 use crate::{
     config::{NodeType, P2pConfig},
     event::{PeerManagerEvent, SyncControlEvent},
-    net::{default_backend::types::PeerId, ConnectivityService},
+    net::ConnectivityService,
     sync::{peer, BlockSyncManager},
+    types::PeerId,
     NetworkingService, SyncingMessagingService,
 };
 

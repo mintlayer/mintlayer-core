@@ -43,14 +43,12 @@ use crate::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             peer, request_manager,
             transport::{TransportListener, TransportSocket},
-            types::{
-                Command, ConnectivityEvent, Event, Message, PeerEvent, PeerId, RequestId,
-                SyncingEvent,
-            },
+            types::{Command, ConnectivityEvent, Event, Message, PeerEvent, SyncingEvent},
         },
         types::{PeerInfo, PubSubTopic},
         Announcement,
     },
+    types::{PeerId, RequestId},
 };
 
 use super::{peer::PeerRole, transport::TransportAddress, types::HandshakeNonce};
