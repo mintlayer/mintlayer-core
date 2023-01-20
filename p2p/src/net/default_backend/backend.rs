@@ -43,9 +43,9 @@ use crate::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             peer, request_manager,
             transport::{TransportListener, TransportSocket},
-            types::{Command, ConnectivityEvent, Event, Message, PeerEvent, SyncingEvent},
+            types::{Command, ConnectivityEvent, Event, Message, PeerEvent},
         },
-        types::{PeerInfo, PubSubTopic},
+        types::{PeerInfo, PubSubTopic, SyncingEvent},
         Announcement,
     },
     types::{PeerId, RequestId},
@@ -355,7 +355,7 @@ where
         self.sync_tx
             .send(SyncingEvent::Announcement {
                 peer_id,
-                announcement: Box::new(announcement),
+                announcement,
             })
             .await
             .map_err(P2pError::from)

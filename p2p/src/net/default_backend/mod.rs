@@ -37,11 +37,13 @@ use crate::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             transport::{TransportListener, TransportSocket},
         },
-        types::{ConnectivityEvent, PubSubTopic, SyncingEvent},
+        types::{ConnectivityEvent, PubSubTopic},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
     types::{PeerId, RequestId},
 };
+
+use super::types::SyncingEvent;
 
 #[derive(Debug)]
 pub struct DefaultNetworkingService<T: TransportSocket>(PhantomData<T>);
@@ -84,7 +86,7 @@ where
     cmd_tx: mpsc::Sender<types::Command<T>>,
 
     /// RX channel for receiving syncing events
-    sync_rx: mpsc::Receiver<types::SyncingEvent>,
+    sync_rx: mpsc::Receiver<SyncingEvent>,
     _marker: PhantomData<fn() -> S>,
 }
 
@@ -327,33 +329,7 @@ where
     }
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent> {
-        match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::SyncingEvent::Request {
-                peer_id,
-                request_id,
-                request,
-            } => Ok(SyncingEvent::Request {
-                peer_id,
-                request_id,
-                request,
-            }),
-            types::SyncingEvent::Response {
-                peer_id,
-                request_id,
-                response,
-            } => Ok(SyncingEvent::Response {
-                peer_id,
-                request_id,
-                response,
-            }),
-            types::SyncingEvent::Announcement {
-                peer_id,
-                announcement,
-            } => Ok(SyncingEvent::Announcement {
-                peer_id,
-                announcement: *announcement,
-            }),
-        }
+        self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)
     }
 }
 

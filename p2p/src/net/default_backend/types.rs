@@ -55,23 +55,7 @@ pub enum Command<T: TransportSocket> {
     },
 }
 
-pub enum SyncingEvent {
-    Request {
-        peer_id: PeerId,
-        request_id: RequestId,
-        request: message::SyncRequest,
-    },
-    Response {
-        peer_id: PeerId,
-        request_id: RequestId,
-        response: message::SyncResponse,
-    },
-    Announcement {
-        peer_id: PeerId,
-        announcement: Box<message::Announcement>,
-    },
-}
-
+// TODO: Remove and use p2p::net::types::ConnectivityEvent instead (but need decide what to do with T::Address first)
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConnectivityEvent<T: TransportSocket> {
     Request {
