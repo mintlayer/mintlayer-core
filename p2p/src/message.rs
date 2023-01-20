@@ -61,7 +61,19 @@ impl BlockListRequest {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct AddrListRequest {}
+pub struct AddrListRequest {
+    addresses: Vec<PeerAddress>,
+}
+
+impl AddrListRequest {
+    pub fn new(addresses: Vec<PeerAddress>) -> Self {
+        Self { addresses }
+    }
+
+    pub fn addresses(&self) -> &[PeerAddress] {
+        &self.addresses
+    }
+}
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Request {

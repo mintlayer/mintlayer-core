@@ -41,7 +41,7 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
-    message::{AddrListRequest, AddrListResponse, PeerManagerRequest, PeerManagerResponse},
+    message::{AddrListResponse, PeerManagerRequest, PeerManagerResponse},
     net::{
         self,
         default_backend::transport::TransportAddress,
@@ -378,7 +378,13 @@ where
     ) -> crate::Result<()> {
         match request {
             // TODO: Rework this
-            PeerManagerRequest::AddrListRequest(AddrListRequest {}) => {
+            PeerManagerRequest::AddrListRequest(request) => {
+                for address in request.addresses() {
+                    if let Some(address) = TransportAddress::from_peer_address(address) {
+                        self.peerdb.peer_discovered(&address);
+                    }
+                }
+
                 let addresses = self.peerdb.known_addresses().collect();
 
                 self.peer_connectivity_handle
