@@ -138,7 +138,7 @@ where
     /// - incoming peer connections
     /// - new discovered peers
     /// - peer expiration events
-    async fn poll_next(&mut self) -> crate::Result<types::ConnectivityEvent<T>>;
+    async fn poll_next(&mut self) -> crate::Result<types::ConnectivityEvent<T::Address>>;
 }
 
 /// [SyncingMessagingService] provides an interface for sending and receiving block

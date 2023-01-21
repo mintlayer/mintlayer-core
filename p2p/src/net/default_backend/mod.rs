@@ -57,7 +57,7 @@ pub struct ConnectivityHandle<S: NetworkingService, T: TransportSocket> {
     cmd_tx: mpsc::Sender<types::Command<T>>,
 
     /// RX channel for receiving connectivity events from default_backend backend
-    conn_rx: mpsc::Receiver<types::ConnectivityEvent<T>>,
+    conn_rx: mpsc::Receiver<ConnectivityEvent<T::Address>>,
 
     _marker: PhantomData<fn() -> S>,
 }
@@ -215,57 +215,8 @@ where
         Ok(self.local_addresses.clone())
     }
 
-    async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<S>> {
-        match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::ConnectivityEvent::Request {
-                peer_id,
-                request_id,
-                request,
-            } => Ok(ConnectivityEvent::Request {
-                peer_id,
-                request_id,
-                request,
-            }),
-            types::ConnectivityEvent::Response {
-                peer_id,
-                request_id,
-                response,
-            } => Ok(ConnectivityEvent::Response {
-                peer_id,
-                request_id,
-                response,
-            }),
-            types::ConnectivityEvent::InboundAccepted {
-                address,
-                peer_info,
-                receiver_address,
-            } => Ok(ConnectivityEvent::InboundAccepted {
-                address,
-                peer_info,
-                receiver_address,
-            }),
-            types::ConnectivityEvent::OutboundAccepted {
-                address,
-                peer_info,
-                receiver_address,
-            } => Ok(ConnectivityEvent::OutboundAccepted {
-                address,
-                peer_info,
-                receiver_address,
-            }),
-            types::ConnectivityEvent::ConnectionError { address, error } => {
-                Ok(ConnectivityEvent::ConnectionError { address, error })
-            }
-            types::ConnectivityEvent::ConnectionClosed { peer_id } => {
-                Ok(ConnectivityEvent::ConnectionClosed { peer_id })
-            }
-            types::ConnectivityEvent::Misbehaved { peer_id, error } => {
-                Ok(ConnectivityEvent::Misbehaved { peer_id, error })
-            }
-            types::ConnectivityEvent::AddressDiscovered { address } => {
-                Ok(ConnectivityEvent::AddressDiscovered { address })
-            }
-        }
+    async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<S::Address>> {
+        self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)
     }
 }
 

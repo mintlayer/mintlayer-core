@@ -43,9 +43,9 @@ use crate::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             peer, request_manager,
             transport::{TransportListener, TransportSocket},
-            types::{Command, ConnectivityEvent, Event, Message, PeerEvent},
+            types::{Command, Event, Message, PeerEvent},
         },
-        types::{PeerInfo, PubSubTopic, SyncingEvent},
+        types::{ConnectivityEvent, PeerInfo, PubSubTopic, SyncingEvent},
         Announcement,
     },
     types::{PeerId, RequestId},
@@ -96,7 +96,7 @@ pub struct Backend<T: TransportSocket> {
     ),
 
     /// TX channel for sending events to the frontend
-    conn_tx: mpsc::Sender<ConnectivityEvent<T>>,
+    conn_tx: mpsc::Sender<ConnectivityEvent<T::Address>>,
 
     /// TX channel for sending syncing events
     sync_tx: mpsc::Sender<SyncingEvent>,
@@ -120,7 +120,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         cmd_rx: mpsc::Receiver<Command<T>>,
-        conn_tx: mpsc::Sender<ConnectivityEvent<T>>,
+        conn_tx: mpsc::Sender<ConnectivityEvent<T::Address>>,
         sync_tx: mpsc::Sender<SyncingEvent>,
     ) -> Self {
         Self {

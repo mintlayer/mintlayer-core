@@ -24,7 +24,7 @@ use serialization::{Decode, Encode};
 use crate::{
     message,
     types::{PeerAddress, PeerId, RequestId},
-    NetworkingService, P2pError,
+    P2pError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,7 +78,7 @@ impl Display for PeerInfo {
 
 /// Connectivity-related events received from the network
 #[derive(Debug)]
-pub enum ConnectivityEvent<T: NetworkingService> {
+pub enum ConnectivityEvent<A> {
     /// An incoming request.
     Request {
         /// Unique ID of the sender
@@ -104,7 +104,7 @@ pub enum ConnectivityEvent<T: NetworkingService> {
     /// Outbound connection accepted
     OutboundAccepted {
         /// Peer address
-        address: T::Address,
+        address: A,
 
         /// Peer information
         peer_info: PeerInfo,
@@ -116,7 +116,7 @@ pub enum ConnectivityEvent<T: NetworkingService> {
     /// Inbound connection received
     InboundAccepted {
         /// Peer address
-        address: T::Address,
+        address: A,
 
         /// Peer information
         peer_info: PeerInfo,
@@ -128,7 +128,7 @@ pub enum ConnectivityEvent<T: NetworkingService> {
     /// Outbound connection failed
     ConnectionError {
         /// Address that was dialed
-        address: T::Address,
+        address: A,
 
         /// Error that occurred
         error: P2pError,
@@ -143,7 +143,7 @@ pub enum ConnectivityEvent<T: NetworkingService> {
     /// New peer discovered
     AddressDiscovered {
         /// Address information
-        address: T::Address,
+        address: A,
     },
 
     /// Protocol violation

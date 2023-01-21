@@ -21,12 +21,8 @@ use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
 
 use crate::{
-    error, message,
-    net::{
-        self,
-        default_backend::transport::TransportSocket,
-        types::{PeerInfo, PubSubTopic},
-    },
+    message,
+    net::{self, default_backend::transport::TransportSocket, types::PubSubTopic},
     types::{PeerAddress, PeerId, RequestId},
 };
 
@@ -52,46 +48,6 @@ pub enum Command<T: TransportSocket> {
     AnnounceData {
         topic: PubSubTopic,
         message: Vec<u8>,
-    },
-}
-
-// TODO: Remove and use p2p::net::types::ConnectivityEvent instead (but need decide what to do with T::Address first)
-#[derive(Debug, PartialEq, Eq)]
-pub enum ConnectivityEvent<T: TransportSocket> {
-    Request {
-        peer_id: PeerId,
-        request_id: RequestId,
-        request: message::PeerManagerRequest,
-    },
-    Response {
-        peer_id: PeerId,
-        request_id: RequestId,
-        response: message::PeerManagerResponse,
-    },
-    InboundAccepted {
-        address: T::Address,
-        peer_info: PeerInfo,
-        receiver_address: Option<PeerAddress>,
-    },
-    OutboundAccepted {
-        address: T::Address,
-        peer_info: PeerInfo,
-        receiver_address: Option<PeerAddress>,
-    },
-    ConnectionError {
-        address: T::Address,
-        error: error::P2pError,
-    },
-    ConnectionClosed {
-        peer_id: PeerId,
-    },
-    /// A peer misbehaved and its reputation must be adjusted according to the error type.
-    Misbehaved {
-        peer_id: PeerId,
-        error: error::P2pError,
-    },
-    AddressDiscovered {
-        address: T::Address,
     },
 }
 

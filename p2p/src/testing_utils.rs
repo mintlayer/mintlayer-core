@@ -193,11 +193,11 @@ where
 pub async fn filter_connectivity_event<T, F>(
     conn: &mut T::ConnectivityHandle,
     predicate: F,
-) -> crate::Result<ConnectivityEvent<T>>
+) -> crate::Result<ConnectivityEvent<T::Address>>
 where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
-    F: Fn(&crate::Result<ConnectivityEvent<T>>) -> bool,
+    F: Fn(&crate::Result<ConnectivityEvent<T::Address>>) -> bool,
 {
     loop {
         let result = timeout(Duration::from_secs(10), conn.poll_next())
