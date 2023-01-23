@@ -61,6 +61,7 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
+        discover_private_ips: Default::default(),
     };
     let mut peerdb = PeerDb::<S>::new(Arc::new(config)).unwrap();
 
@@ -83,6 +84,7 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
+        discover_private_ips: Default::default(),
     };
     let mut peerdb = PeerDb::<S>::new(Arc::new(config)).unwrap();
 
@@ -104,6 +106,7 @@ where
         ban_duration: Duration::from_secs(2).into(),
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
+        discover_private_ips: Default::default(),
     }))
     .unwrap();
 

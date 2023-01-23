@@ -79,7 +79,7 @@ where
     chain_config: Arc<ChainConfig>,
 
     /// P2P configuration.
-    _p2p_config: Arc<P2pConfig>,
+    p2p_config: Arc<P2pConfig>,
 
     /// Handle for sending/receiving connectivity events
     peer_connectivity_handle: T::ConnectivityHandle,
@@ -124,7 +124,7 @@ where
             peerdb: peerdb::PeerDb::new(Arc::clone(&p2p_config))?,
             pending: HashMap::new(),
             chain_config,
-            _p2p_config: p2p_config,
+            p2p_config,
             last_heartbeat: Instant::now(),
             announced_addresses: HashMap::new(),
         })
@@ -141,8 +141,14 @@ where
     fn is_peer_address_valid(&self, address: &PeerAddress) -> bool {
         // The IP must be globally routable
         match &address {
-            PeerAddress::Ip4(socket) => std::net::Ipv4Addr::from(socket.ip).is_global_unicast_ip(),
-            PeerAddress::Ip6(socket) => std::net::Ipv6Addr::from(socket.ip).is_global_unicast_ip(),
+            PeerAddress::Ip4(socket) => {
+                std::net::Ipv4Addr::from(socket.ip).is_global_unicast_ip()
+                    || *self.p2p_config.discover_private_ips
+            }
+            PeerAddress::Ip6(socket) => {
+                std::net::Ipv6Addr::from(socket.ip).is_global_unicast_ip()
+                    || *self.p2p_config.discover_private_ips
+            }
         }
     }
 

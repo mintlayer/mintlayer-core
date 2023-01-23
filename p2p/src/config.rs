@@ -30,6 +30,7 @@ make_config_setting!(
     [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
 );
 make_config_setting!(NodeTypeSetting, NodeType, NodeType::Full);
+make_config_setting!(DiscoverPrivateIps, bool, false);
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]
@@ -71,4 +72,6 @@ pub struct P2pConfig {
     pub outbound_connection_timeout: OutboundConnectionTimeout,
     /// A node type.
     pub node_type: NodeTypeSetting,
+    /// Allow announcing and discovering local and private IPs. Should be used for testing only.
+    pub discover_private_ips: DiscoverPrivateIps,
 }

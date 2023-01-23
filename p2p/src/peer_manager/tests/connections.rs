@@ -536,7 +536,7 @@ where
     pm1.peer_connectivity_handle.connect(addr2).await.expect("dial to succeed");
 
     match timeout(
-        *pm1._p2p_config.outbound_connection_timeout,
+        *pm1.p2p_config.outbound_connection_timeout,
         pm1.peer_connectivity_handle.poll_next(),
     )
     .await
@@ -693,6 +693,7 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
+        discover_private_ips: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),

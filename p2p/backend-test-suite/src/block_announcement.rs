@@ -136,6 +136,7 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         node_type: NodeType::Inactive.into(),
+        discover_private_ips: Default::default(),
     });
     let (mut conn1, mut sync1) = S::start(
         T::make_transport(),
