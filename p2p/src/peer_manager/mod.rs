@@ -41,7 +41,10 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
-    message::{AddrListResponse, PeerManagerRequest, PeerManagerResponse},
+    message::{
+        PeerManagerRequest, PeerManagerResponse, PullAddrListRequest, PullAddrListResponse,
+        PushAddrListRequest, PushAddrListResponse,
+    },
     net::{
         self,
         default_backend::transport::TransportAddress,
@@ -378,21 +381,26 @@ where
     ) -> crate::Result<()> {
         match request {
             // TODO: Rework this
-            PeerManagerRequest::AddrListRequest(request) => {
-                for address in request.addresses() {
-                    if let Some(address) = TransportAddress::from_peer_address(address) {
-                        self.peerdb.peer_discovered(&address);
-                    }
-                }
-
+            PeerManagerRequest::PullAddrListRequest(PullAddrListRequest {}) => {
                 let addresses = self.peerdb.known_addresses().collect();
 
                 self.peer_connectivity_handle
                     .send_response(
                         request_id,
-                        PeerManagerResponse::AddrListResponse(AddrListResponse::new(addresses)),
+                        PeerManagerResponse::PullAddrListResponse(PullAddrListResponse {
+                            addresses,
+                        }),
                     )
                     .await
+            }
+            // TODO: Rework this
+            PeerManagerRequest::PushAddrListRequest(PushAddrListRequest { addresses }) => {
+                for address in addresses {
+                    if let Some(address) = TransportAddress::from_peer_address(&address) {
+                        self.peerdb.peer_discovered(&address);
+                    }
+                }
+                Ok(())
             }
         }
     }
@@ -405,14 +413,15 @@ where
     ) -> crate::Result<()> {
         match response {
             // TODO: Rework this
-            PeerManagerResponse::AddrListResponse(response) => {
-                for address in response.addresses() {
-                    if let Some(address) = TransportAddress::from_peer_address(address) {
+            PeerManagerResponse::PullAddrListResponse(PullAddrListResponse { addresses }) => {
+                for address in addresses {
+                    if let Some(address) = TransportAddress::from_peer_address(&address) {
                         self.peerdb.peer_discovered(&address);
                     }
                 }
                 Ok(())
             }
+            PeerManagerResponse::PushAddrListResponse(PushAddrListResponse {}) => Ok(()),
         }
     }
 

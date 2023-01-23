@@ -81,10 +81,11 @@ pub struct PeerDb<T: NetworkingService> {
     /// Set of active peers
     peers: HashMap<T::PeerId, PeerContext<T>>,
 
-    addresses: HashSet<T::Address>,
+    /// Set of currently connected addresses
+    connected_addresses: HashSet<T::Address>,
 
     /// Set of available addresses
-    available: HashSet<T::Address>,
+    available_addresses: HashSet<T::Address>,
 
     /// Banned addresses along with the duration of the ban.
     ///
@@ -106,10 +107,10 @@ impl<T: NetworkingService> PeerDb<T> {
             .collect::<Result<HashSet<_>, _>>()?;
         Ok(Self {
             peers: Default::default(),
-            addresses: Default::default(),
+            connected_addresses: Default::default(),
             // TODO: We need to handle added nodes differently from ordinary nodes.
             // There are peers that we want to persistently have, and others that we want to just give a "shot" at connecting at.
-            available: added_nodes,
+            available_addresses: added_nodes,
             banned: Default::default(),
             p2p_config,
         })
@@ -117,7 +118,7 @@ impl<T: NetworkingService> PeerDb<T> {
 
     /// Get the number of idle (available) addresses
     pub fn available_addresses_count(&self) -> usize {
-        self.available.len()
+        self.available_addresses.len()
     }
 
     /// Get the number of active peers
@@ -131,11 +132,11 @@ impl<T: NetworkingService> PeerDb<T> {
 
     /// Checks if the given address is already connected.
     pub fn is_address_connected(&self, address: &T::Address) -> bool {
-        self.addresses.contains(address)
+        self.connected_addresses.contains(address)
     }
 
     pub fn known_addresses(&self) -> impl Iterator<Item = PeerAddress> + '_ {
-        self.addresses.iter().map(TransportAddress::as_peer_address)
+        self.connected_addresses.iter().map(TransportAddress::as_peer_address)
     }
 
     /// Checks if the given address is banned.
@@ -164,16 +165,16 @@ impl<T: NetworkingService> PeerDb<T> {
     /// Get socket address of the next best peer (TODO: in terms of peer score).
     // TODO: Rewrite this.
     pub fn take_best_peer_addr(&mut self) -> Option<T::Address> {
-        let address = self.available.iter().next().cloned();
+        let address = self.available_addresses.iter().next().cloned();
         if let Some(address) = &address {
-            self.available.remove(address);
+            self.available_addresses.remove(address);
         }
         address
     }
 
     /// Add new peer addresses
     pub fn peer_discovered(&mut self, address: &T::Address) {
-        self.available.insert(address.clone());
+        self.available_addresses.insert(address.clone());
     }
 
     /// Report outbound connection failure
@@ -211,7 +212,7 @@ impl<T: NetworkingService> PeerDb<T> {
         );
         assert!(old_value.is_none());
 
-        let old_value = self.addresses.insert(address);
+        let old_value = self.connected_addresses.insert(address);
         assert!(old_value);
     }
 
@@ -222,7 +223,7 @@ impl<T: NetworkingService> PeerDb<T> {
         let removed = self.peers.remove(peer_id);
         let peer = removed.expect("peer must be known");
 
-        let removed = self.addresses.remove(&peer.address);
+        let removed = self.connected_addresses.remove(&peer.address);
         assert!(removed);
 
         log::info!(

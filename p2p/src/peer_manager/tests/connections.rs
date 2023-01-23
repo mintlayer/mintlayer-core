@@ -712,9 +712,11 @@ where
         if connected_peers.len() == 1 {
             break;
         }
-        if Instant::now().duration_since(started_at) > Duration::from_secs(10) {
-            panic!("Unexpected peer count: {}", connected_peers.len());
-        }
+        assert!(
+            Instant::now().duration_since(started_at) < Duration::from_secs(10),
+            "Unexpected peer count: {}",
+            connected_peers.len()
+        );
     }
 }
 

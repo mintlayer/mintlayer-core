@@ -283,12 +283,21 @@ where
                 })
                 .await
                 .map_err(P2pError::from),
-            message::Request::AddrListRequest(request) => self
+            message::Request::PullAddrListRequest(request) => self
                 .conn_tx
                 .send(ConnectivityEvent::Request {
                     peer_id,
                     request_id,
-                    request: PeerManagerRequest::AddrListRequest(request),
+                    request: PeerManagerRequest::PullAddrListRequest(request),
+                })
+                .await
+                .map_err(P2pError::from),
+            message::Request::PushAddrListRequest(request) => self
+                .conn_tx
+                .send(ConnectivityEvent::Request {
+                    peer_id,
+                    request_id,
+                    request: PeerManagerRequest::PushAddrListRequest(request),
                 })
                 .await
                 .map_err(P2pError::from),
@@ -323,12 +332,21 @@ where
                 })
                 .await
                 .map_err(P2pError::from),
-            message::Response::AddrListResponse(response) => self
+            message::Response::PullAddrListResponse(response) => self
                 .conn_tx
                 .send(ConnectivityEvent::Response {
                     peer_id,
                     request_id,
-                    response: PeerManagerResponse::AddrListResponse(response),
+                    response: PeerManagerResponse::PullAddrListResponse(response),
+                })
+                .await
+                .map_err(P2pError::from),
+            message::Response::PushAddrListResponse(response) => self
+                .conn_tx
+                .send(ConnectivityEvent::Response {
+                    peer_id,
+                    request_id,
+                    response: PeerManagerResponse::PushAddrListResponse(response),
                 })
                 .await
                 .map_err(P2pError::from),
