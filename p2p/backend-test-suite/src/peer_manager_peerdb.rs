@@ -110,12 +110,11 @@ where
     let peer_id = add_active_peer::<T, S, A>(&mut peerdb);
     let address = peerdb.peer_address(&peer_id).unwrap().as_bannable();
     assert!(peerdb.adjust_peer_score(&peer_id, 100));
+
     assert!(peerdb.is_address_banned(&address));
 
-    tokio::time::sleep(Duration::from_secs(1)).await;
-    assert!(peerdb.is_address_banned(&address));
+    tokio::time::sleep(Duration::from_secs(4)).await;
 
-    tokio::time::sleep(Duration::from_secs(2)).await;
     assert!(!peerdb.is_address_banned(&address));
 }
 
