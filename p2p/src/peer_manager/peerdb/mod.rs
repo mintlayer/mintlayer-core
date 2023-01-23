@@ -31,6 +31,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use crypto::random::{make_pseudo_rng, SliceRandom};
 use logging::log;
 
 use crate::{
@@ -38,11 +39,9 @@ use crate::{
     error::{ConversionError, P2pError},
     interface::types::ConnectedPeer,
     net::{
-        default_backend::transport::TransportAddress,
         types::{self, Role},
         AsBannableAddress, NetworkingService,
     },
-    types::peer_address::PeerAddress,
 };
 
 #[derive(Debug)]
@@ -84,8 +83,8 @@ pub struct PeerDb<T: NetworkingService> {
     /// Set of currently connected addresses
     connected_addresses: HashSet<T::Address>,
 
-    /// Set of available addresses
-    available_addresses: HashSet<T::Address>,
+    /// Set of all known addresses
+    known_addresses: HashSet<T::Address>,
 
     /// Banned addresses along with the duration of the ban.
     ///
@@ -110,7 +109,7 @@ impl<T: NetworkingService> PeerDb<T> {
             connected_addresses: Default::default(),
             // TODO: We need to handle added nodes differently from ordinary nodes.
             // There are peers that we want to persistently have, and others that we want to just give a "shot" at connecting at.
-            available_addresses: added_nodes,
+            known_addresses: added_nodes,
             banned: Default::default(),
             p2p_config,
         })
@@ -118,7 +117,7 @@ impl<T: NetworkingService> PeerDb<T> {
 
     /// Get the number of idle (available) addresses
     pub fn available_addresses_count(&self) -> usize {
-        self.available_addresses.len()
+        self.known_addresses.len()
     }
 
     /// Get the number of active peers
@@ -135,8 +134,18 @@ impl<T: NetworkingService> PeerDb<T> {
         self.connected_addresses.contains(address)
     }
 
-    pub fn known_addresses(&self) -> impl Iterator<Item = PeerAddress> + '_ {
-        self.connected_addresses.iter().map(TransportAddress::as_peer_address)
+    pub fn random_known_addresses(&self, count: usize) -> Vec<T::Address> {
+        let mut addresses = self.known_addresses.iter().cloned().collect::<Vec<_>>();
+        addresses.shuffle(&mut make_pseudo_rng());
+        addresses.truncate(count);
+        addresses
+    }
+
+    pub fn random_peer_ids(&self, count: usize) -> Vec<T::PeerId> {
+        let mut peer_ids = self.peers.keys().cloned().collect::<Vec<_>>();
+        peer_ids.shuffle(&mut make_pseudo_rng());
+        peer_ids.truncate(count);
+        peer_ids
     }
 
     /// Checks if the given address is banned.
@@ -165,16 +174,16 @@ impl<T: NetworkingService> PeerDb<T> {
     /// Get socket address of the next best peer (TODO: in terms of peer score).
     // TODO: Rewrite this.
     pub fn take_best_peer_addr(&mut self) -> Option<T::Address> {
-        let address = self.available_addresses.iter().next().cloned();
+        let address = self.known_addresses.iter().next().cloned();
         if let Some(address) = &address {
-            self.available_addresses.remove(address);
+            self.known_addresses.remove(address);
         }
         address
     }
 
     /// Add new peer addresses
     pub fn peer_discovered(&mut self, address: &T::Address) {
-        self.available_addresses.insert(address.clone());
+        self.known_addresses.insert(address.clone());
     }
 
     /// Report outbound connection failure

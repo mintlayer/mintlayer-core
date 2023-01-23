@@ -65,6 +65,12 @@ const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
 /// Upper bound for how often [`PeerManager::heartbeat()`] is called
 const PEER_MGR_HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
 
+/// How many addresses are allowed to be sent
+const MAX_ADDRESS_COUNT: usize = 1000;
+
+/// To how many peers re-send received announced address
+const ANNOUNCED_RESEND_COUNT: usize = 2;
+
 pub struct PeerManager<T>
 where
     T: NetworkingService,
@@ -90,12 +96,13 @@ where
     /// Peer database
     peerdb: peerdb::PeerDb<T>,
 
+    /// Last time when heartbeat was called
     last_heartbeat: Instant,
 
-    /// All addresses sent in PushAddr requests.
-    ///
-    /// Used to prevent infinity loops while re-sending address announcements.
-    announced_addresses: HashSet<PeerAddress>,
+    /// All addresses that were announced to or from some peer.
+    /// Used to prevent infinity loops while broadcasting addresses.
+    /// Bitcoin Core uses bloom filter for that.
+    announced_addresses: HashMap<T::PeerId, HashSet<T::Address>>,
 }
 
 impl<T> PeerManager<T>
@@ -119,7 +126,7 @@ where
             chain_config,
             _p2p_config: p2p_config,
             last_heartbeat: Instant::now(),
-            announced_addresses: HashSet::new(),
+            announced_addresses: HashMap::new(),
         })
     }
 
@@ -173,20 +180,33 @@ where
                     _ => None,
                 },
             )
+            .filter_map(|address| TransportAddress::from_peer_address(&address))
             .collect::<Vec<_>>();
 
         for address in discovered_own_addresses {
+            self.send_announced_address(peer_id, address).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn send_announced_address(
+        &mut self,
+        peer_id: T::PeerId,
+        address: T::Address,
+    ) -> crate::Result<()> {
+        let peer_addresses = self.announced_addresses.entry(peer_id).or_default();
+        if !peer_addresses.contains(&address) {
             self.peer_connectivity_handle
                 .send_request(
                     peer_id,
                     PeerManagerRequest::AnnounceAddrRequest(AnnounceAddrRequest {
-                        address: address.clone(),
+                        address: address.as_peer_address(),
                     }),
                 )
                 .await?;
-            self.announced_addresses.insert(address);
+            peer_addresses.insert(address);
         }
-
         Ok(())
     }
 
@@ -289,6 +309,9 @@ where
 
             self.peerdb.peer_disconnected(&peer_id);
         }
+
+        self.announced_addresses.remove(&peer_id);
+
         Ok(())
     }
 
@@ -395,14 +418,18 @@ where
 
     async fn handle_incoming_request(
         &mut self,
-        _peer_id: T::PeerId,
+        peer_id: T::PeerId,
         request_id: T::PeerRequestId,
         request: PeerManagerRequest,
     ) -> crate::Result<()> {
         match request {
-            // TODO: Rework this
             PeerManagerRequest::AddrListRequest(AddrListRequest {}) => {
-                let addresses = self.peerdb.known_addresses().collect();
+                let addresses = self
+                    .peerdb
+                    .random_known_addresses(MAX_ADDRESS_COUNT)
+                    .iter()
+                    .map(TransportAddress::as_peer_address)
+                    .collect();
 
                 self.peer_connectivity_handle
                     .send_response(
@@ -411,10 +438,18 @@ where
                     )
                     .await
             }
-            // TODO: Rework this
             PeerManagerRequest::AnnounceAddrRequest(AnnounceAddrRequest { address }) => {
+                // TODO: Rate limit announce address requests to prevent DoS attacks.
+                // For example it's 0.1 req/sec in Bitcoin Core.
                 if let Some(address) = TransportAddress::from_peer_address(&address) {
                     self.peerdb.peer_discovered(&address);
+
+                    self.announced_addresses.entry(peer_id).or_default().insert(address.clone());
+
+                    let peer_ids = self.peerdb.random_peer_ids(ANNOUNCED_RESEND_COUNT);
+                    for new_peer_id in peer_ids {
+                        self.send_announced_address(new_peer_id, address.clone()).await?;
+                    }
                 }
                 Ok(())
             }
@@ -428,7 +463,6 @@ where
         response: PeerManagerResponse,
     ) -> crate::Result<()> {
         match response {
-            // TODO: Rework this
             PeerManagerResponse::AddrListResponse(AddrListResponse { addresses }) => {
                 for address in addresses {
                     if let Some(address) = TransportAddress::from_peer_address(&address) {
