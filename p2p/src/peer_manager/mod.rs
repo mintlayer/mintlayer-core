@@ -353,10 +353,14 @@ where
     /// networking backend which then reports at some point in the future
     /// whether the connection failed or succeeded.
     async fn connect(&mut self, address: T::Address) -> crate::Result<()> {
-        // TODO: verify that the peer is not already part of our swarm (needs peerdb)
         ensure!(
             !self.pending.contains_key(&address),
             P2pError::PeerError(PeerError::Pending(address.to_string())),
+        );
+
+        ensure!(
+            !self.peerdb.is_address_connected(&address),
+            P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
 
         let bannable_address = address.as_bannable();
