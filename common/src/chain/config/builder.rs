@@ -249,6 +249,8 @@ impl Builder {
     builder_method!(max_block_size_with_smart_contracts: usize);
     builder_method!(net_upgrades: NetUpgrades<UpgradeVersion>);
     builder_method!(empty_consensus_reward_maturity_distance: BlockDistance);
+    builder_method!(epoch_length: BlockDistance);
+    builder_method!(sealed_epoch_distance_from_tip: usize);
 
     /// Set the genesis block to be the unit test version
     pub fn genesis_unittest(mut self, premine_destination: Destination) -> Self {

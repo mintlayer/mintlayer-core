@@ -179,7 +179,7 @@ impl ChainConfig {
         let height: u64 = (*height).into();
         let epoch_length: i64 = self.epoch_length.into();
         let epoch_length: u64 = epoch_length.try_into().expect("Invalid negative epoch length");
-        height % epoch_length
+        height / epoch_length
     }
 
     pub fn token_min_issuance_fee(&self) -> Amount {

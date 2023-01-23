@@ -138,7 +138,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
         // where reorg never happened.
         //
         // Construct fresh `genesis -> b -> c` chain as a reference
-        let expected_accounting_data = {
+        let expected_storage = {
             let storage = Store::new_empty().unwrap();
             let mut tf = TestFramework::builder(&mut rng)
                 .with_storage(storage.clone())
@@ -170,6 +170,6 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             storage.dump_raw()
         };
 
-        assert_eq!(storage.dump_raw(), expected_accounting_data);
+        assert_eq!(storage.dump_raw(), expected_storage);
     });
 }

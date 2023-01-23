@@ -44,6 +44,7 @@ storage::decl_schema! {
         pub DBBlockByHeight: Map<BlockHeight, Id<GenBlock>>,
         /// Store for Utxo Entries
         pub DBUtxo: Map<OutPoint, Utxo>,
+        // TODO: no need to store info for sealed blocks
         /// Store for utxo BlockUndo
         pub DBUtxosBlockUndo: Map<Id<Block>, UtxosBlockUndo>,
         /// Store for token's info; created on issuance
@@ -51,14 +52,19 @@ storage::decl_schema! {
         /// Store of issuance tx id vs token id
         pub DBIssuanceTxVsTokenId: Map<Id<Transaction>, TokenId>,
 
+        // TODO: no need to store info for sealed blocks
         /// Store for accounting BlockUndo
         pub DBAccountingBlockUndo: Map<Id<Block>, AccountingBlockUndo>,
 
+        // FIXME write better description for tip/seal/pre-seal
+
         /// Store for accumulated accounting deltas per epochs that are about
         /// to go to the sealed storage
-        pub DBAccountingPreSealedData: Map<u64, PoSAccountingDeltaData>,
-        /// Store for undo deltas
-        pub DBAccountingPreSealedDataUndo: Map<(u64, Id<Block>), DeltaMergeUndo>,
+        pub DBAccountingPreSealData: Map<u64, PoSAccountingDeltaData>,
+        /// Store of undos for pre-seal delta. They are stored per epoch and block
+        /// so that it is easy to disconnect and undo a block but also to discard
+        /// undos when an epoch is sealed.
+        pub DBAccountingPreSealDataUndo: Map<(u64, Id<Block>), DeltaMergeUndo>,
 
         /// Store for accounting pool data
         pub DBAccountingPoolDataTip: Map<PoolId, PoolData>,

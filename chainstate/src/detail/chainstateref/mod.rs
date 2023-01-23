@@ -796,17 +796,25 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
             )
             .log_err()?;
 
-        let consumed = tx_verifier.consume()?;
+        let consumed = tx_verifier.consume().log_err()?;
 
-        // Flush accounting data to the pre-sealed db index
+        // Flush accounting data to the pre-seal db index
         let epoch_index = self.chain_config.epoch_index_from_height(&block_index.block_height());
-        let mut current_delta = self.db_tx.get_pre_seal_accounting_delta(epoch_index)?.unwrap();
+        let mut current_delta = self
+            .db_tx
+            .get_pre_seal_accounting_delta(epoch_index)
+            .log_err()?
+            .unwrap_or_default();
         let undo = current_delta
             .merge_with_delta(consumed.accounting_delta().clone())
-            .map_err(TransactionVerifierStorageError::from)?;
-        self.db_tx.set_pre_seal_accounting_delta(epoch_index, &current_delta)?;
+            .map_err(TransactionVerifierStorageError::from)
+            .log_err()?;
         self.db_tx
-            .set_pre_seal_accounting_delta_undo(epoch_index, block.get_id(), &undo)?;
+            .set_pre_seal_accounting_delta(epoch_index, &current_delta)
+            .log_err()?;
+        self.db_tx
+            .set_pre_seal_accounting_delta_undo(epoch_index, block.get_id(), &undo)
+            .log_err()?;
 
         // Flush all the data from the `TransactionVerifierDelta`
         flush_to_storage(self, consumed).map_err(BlockError::from)
@@ -830,18 +838,28 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
 
         let consumed = tx_verifier.consume()?;
 
-        // Flush accounting data to the pre-sealed db index
+        // Flush accounting data to the pre-seal db index
         let epoch_index = self.chain_config.epoch_index_from_height(&block_index.block_height());
-        let mut current_delta = self.db_tx.get_pre_seal_accounting_delta(epoch_index)?.unwrap();
         let current_undo = self
             .db_tx
-            .get_pre_seal_accounting_delta_undo(epoch_index, block.get_id())?
-            .unwrap();
+            .get_pre_seal_accounting_delta_undo(epoch_index, block.get_id())
+            .log_err()?
+            .expect("Pre-sealed accounting delta undo must exist");
+        let mut current_delta = self
+            .db_tx
+            .get_pre_seal_accounting_delta(epoch_index)
+            .log_err()?
+            .expect("Pre-sealed accounting delta must exist");
         current_delta
             .undo_delta_merge(current_undo)
-            .map_err(TransactionVerifierStorageError::from)?;
-        self.db_tx.set_pre_seal_accounting_delta(epoch_index, &current_delta)?;
-        self.db_tx.del_pre_seal_accounting_delta_undo(epoch_index, block.get_id())?;
+            .map_err(TransactionVerifierStorageError::from)
+            .log_err()?;
+        self.db_tx
+            .set_pre_seal_accounting_delta(epoch_index, &current_delta)
+            .log_err()?;
+        self.db_tx
+            .del_pre_seal_accounting_delta_undo(epoch_index, block.get_id())
+            .log_err()?;
 
         // Flush all the data from the `TransactionVerifierDelta`
         flush_to_storage(self, consumed).map_err(BlockError::from)
@@ -913,13 +931,15 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
     fn prepare_epoch_data(&mut self, height: BlockHeight) -> Result<(), BlockError> {
         if is_due_for_epoch_data_calculation(self.chain_config, height) {
             let current_epoch_index = self.chain_config.epoch_index_from_height(&height);
-            if current_epoch_index > self.chain_config.sealed_epoch_distance_from_tip() as u64 {
+            if current_epoch_index >= self.chain_config.sealed_epoch_distance_from_tip() as u64 {
                 let epoch_index_to_seal =
                     current_epoch_index - self.chain_config.sealed_epoch_distance_from_tip() as u64;
 
                 // get data from intermediary storage
-                let delta_to_seal =
-                    self.db_tx.get_pre_seal_accounting_delta(epoch_index_to_seal)?.unwrap();
+                let delta_to_seal = self
+                    .db_tx
+                    .get_pre_seal_accounting_delta(epoch_index_to_seal)?
+                    .unwrap_or_default();
                 self.db_tx.del_pre_seal_accounting_delta(epoch_index_to_seal)?;
                 self.db_tx.del_epoch_pre_seal_accounting_delta_undo(epoch_index_to_seal)?;
 

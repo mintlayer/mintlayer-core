@@ -93,22 +93,20 @@ impl<B: storage::Backend> Store<B> {
         Ok(res)
     }
 
-    /// Collect and return all utxos from the storage
+    /// Collect and return all pre-seal accounting data from the storage
     #[allow(clippy::let_and_return)]
-    pub fn read_presealed_accounting_data(
+    pub fn read_preseal_accounting_delta(
         &self,
     ) -> crate::Result<BTreeMap<u64, pos_accounting::PoSAccountingDeltaData>> {
         let db = self.transaction_ro()?;
-        let map = db.0.get::<db::DBAccountingPreSealedData, _>();
+        let map = db.0.get::<db::DBAccountingPreSealData, _>();
         let res = map.prefix_iter_decoded(&())?.collect::<BTreeMap<_, _>>();
 
         Ok(res)
     }
 
-    /// Collect and return all accounting data from storage
-    pub fn read_accounting_data_from_tip(
-        &self,
-    ) -> crate::Result<pos_accounting::PoSAccountingData> {
+    /// Collect and return all tip accounting data from storage
+    pub fn read_accounting_data_tip(&self) -> crate::Result<pos_accounting::PoSAccountingData> {
         let db = self.transaction_ro()?;
 
         let pool_data =
@@ -133,6 +131,44 @@ impl<B: storage::Backend> Store<B> {
 
         let pool_delegation_shares =
             db.0.get::<db::DBAccountingPoolDelegationSharesTip, _>()
+                .prefix_iter_decoded(&())?
+                .collect::<BTreeMap<_, _>>();
+
+        Ok(pos_accounting::PoSAccountingData {
+            pool_data,
+            pool_balances,
+            pool_delegation_shares,
+            delegation_balances,
+            delegation_data,
+        })
+    }
+
+    /// Collect and return all sealed accounting data from storage
+    pub fn read_accounting_data_sealed(&self) -> crate::Result<pos_accounting::PoSAccountingData> {
+        let db = self.transaction_ro()?;
+
+        let pool_data =
+            db.0.get::<db::DBAccountingPoolDataSealed, _>()
+                .prefix_iter_decoded(&())?
+                .collect::<BTreeMap<_, _>>();
+
+        let pool_balances =
+            db.0.get::<db::DBAccountingPoolBalancesSealed, _>()
+                .prefix_iter_decoded(&())?
+                .collect::<BTreeMap<_, _>>();
+
+        let delegation_data =
+            db.0.get::<db::DBAccountingDelegationDataSealed, _>()
+                .prefix_iter_decoded(&())?
+                .collect::<BTreeMap<_, _>>();
+
+        let delegation_balances =
+            db.0.get::<db::DBAccountingDelegationBalancesSealed, _>()
+                .prefix_iter_decoded(&())?
+                .collect::<BTreeMap<_, _>>();
+
+        let pool_delegation_shares =
+            db.0.get::<db::DBAccountingPoolDelegationSharesSealed, _>()
                 .prefix_iter_decoded(&())?
                 .collect::<BTreeMap<_, _>>();
 
@@ -752,7 +788,7 @@ macro_rules! impl_read_ops {
                 &self,
                 epoch_index: u64,
             ) -> crate::Result<Option<PoSAccountingDeltaData>> {
-                self.read::<db::DBAccountingPreSealedData, _, _>(epoch_index)
+                self.read::<db::DBAccountingPreSealData, _, _>(epoch_index)
             }
 
             fn get_pre_seal_accounting_delta_undo(
@@ -760,7 +796,7 @@ macro_rules! impl_read_ops {
                 epoch_index: u64,
                 id: Id<Block>,
             ) -> crate::Result<Option<DeltaMergeUndo>> {
-                self.read::<db::DBAccountingPreSealedDataUndo, _, _>((epoch_index, id))
+                self.read::<db::DBAccountingPreSealDataUndo, _, _>((epoch_index, id))
             }
         }
 
@@ -1015,12 +1051,12 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         epoch_index: u64,
         delta: &PoSAccountingDeltaData,
     ) -> crate::Result<()> {
-        self.write::<db::DBAccountingPreSealedData, _, _, _>(epoch_index, delta)
+        self.write::<db::DBAccountingPreSealData, _, _, _>(epoch_index, delta)
     }
 
     fn del_pre_seal_accounting_delta(&mut self, epoch_index: u64) -> crate::Result<()> {
         self.0
-            .get_mut::<db::DBAccountingPreSealedData, _>()
+            .get_mut::<db::DBAccountingPreSealData, _>()
             .del(epoch_index)
             .map_err(Into::into)
     }
@@ -1031,7 +1067,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         id: Id<Block>,
         delta: &pos_accounting::DeltaMergeUndo,
     ) -> crate::Result<()> {
-        self.write::<db::DBAccountingPreSealedDataUndo, _, _, _>((epoch_index, id), delta)
+        self.write::<db::DBAccountingPreSealDataUndo, _, _, _>((epoch_index, id), delta)
     }
 
     fn del_pre_seal_accounting_delta_undo(
@@ -1040,7 +1076,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         id: Id<Block>,
     ) -> crate::Result<()> {
         self.0
-            .get_mut::<db::DBAccountingPreSealedDataUndo, _>()
+            .get_mut::<db::DBAccountingPreSealDataUndo, _>()
             .del((epoch_index, id))
             .map_err(Into::into)
     }
@@ -1048,13 +1084,13 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     fn del_epoch_pre_seal_accounting_delta_undo(&mut self, epoch_index: u64) -> crate::Result<()> {
         let epoch_deltas = self
             .0
-            .get::<db::DBAccountingPreSealedDataUndo, _>()
+            .get::<db::DBAccountingPreSealDataUndo, _>()
             .prefix_iter(&(epoch_index,))?
             .map(|(k, _)| k)
             .collect::<Vec<_>>();
         epoch_deltas.into_iter().try_for_each(|k| {
             self.0
-                .get_mut::<db::DBAccountingPreSealedDataUndo, _>()
+                .get_mut::<db::DBAccountingPreSealDataUndo, _>()
                 .del(k)
                 .map_err(Into::into)
         })
