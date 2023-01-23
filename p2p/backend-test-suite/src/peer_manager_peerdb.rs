@@ -62,6 +62,8 @@ where
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
         discover_private_ips: Default::default(),
+        heartbeat_interval_min: Default::default(),
+        heartbeat_interval_max: Default::default(),
     };
     let mut peerdb = PeerDb::<S>::new(Arc::new(config)).unwrap();
 
@@ -85,6 +87,8 @@ where
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
         discover_private_ips: Default::default(),
+        heartbeat_interval_min: Default::default(),
+        heartbeat_interval_max: Default::default(),
     };
     let mut peerdb = PeerDb::<S>::new(Arc::new(config)).unwrap();
 
@@ -107,6 +111,8 @@ where
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
         discover_private_ips: Default::default(),
+        heartbeat_interval_min: Default::default(),
+        heartbeat_interval_max: Default::default(),
     }))
     .unwrap();
 

@@ -135,6 +135,7 @@ impl<T: NetworkingService> PeerDb<T> {
     }
 
     pub fn random_known_addresses(&self, count: usize) -> Vec<T::Address> {
+        // TODO: Use something more efficient
         let mut addresses = self.known_addresses.iter().cloned().collect::<Vec<_>>();
         addresses.shuffle(&mut make_pseudo_rng());
         addresses.truncate(count);
@@ -142,6 +143,7 @@ impl<T: NetworkingService> PeerDb<T> {
     }
 
     pub fn random_peer_ids(&self, count: usize) -> Vec<T::PeerId> {
+        // TODO: Use something more efficient
         let mut peer_ids = self.peers.keys().cloned().collect::<Vec<_>>();
         peer_ids.shuffle(&mut make_pseudo_rng());
         peer_ids.truncate(count);
