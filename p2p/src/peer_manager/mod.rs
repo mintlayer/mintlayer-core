@@ -174,13 +174,13 @@ where
             .map(TransportAddress::as_peer_address)
             .filter_map(
                 |listening_address| match (&receiver_address, listening_address) {
-                    (PeerAddress::Ip4(listener), PeerAddress::Ip4(receiver)) => {
+                    (PeerAddress::Ip4(receiver), PeerAddress::Ip4(listener)) => {
                         Some(PeerAddress::Ip4(PeerAddressIp4 {
                             ip: receiver.ip,
                             port: listener.port,
                         }))
                     }
-                    (PeerAddress::Ip6(listener), PeerAddress::Ip6(receiver)) => {
+                    (PeerAddress::Ip6(receiver), PeerAddress::Ip6(listener)) => {
                         Some(PeerAddress::Ip6(PeerAddressIp6 {
                             ip: receiver.ip,
                             port: listener.port,
@@ -233,10 +233,6 @@ where
     ) -> crate::Result<()> {
         let peer_id = info.peer_id;
 
-        if let (Some(receiver_address), Role::Outbound) = (receiver_address, role) {
-            self.handle_outbound_receiver_address(peer_id, receiver_address).await?;
-        }
-
         ensure!(
             info.network == *self.chain_config.magic_bytes(),
             P2pError::ProtocolError(ProtocolError::DifferentNetwork(
@@ -259,6 +255,19 @@ where
             !self.peerdb.is_address_connected(&address),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
+
+        if let (Some(receiver_address), Role::Outbound) = (receiver_address, role) {
+            self.handle_outbound_receiver_address(peer_id, receiver_address).await?;
+        }
+
+        if role == Role::Outbound {
+            self.peer_connectivity_handle
+                .send_request(
+                    peer_id,
+                    PeerManagerRequest::AddrListRequest(AddrListRequest {}),
+                )
+                .await?;
+        }
 
         log::debug!("peer {peer_id} connected, address {address:?}, {info}");
         self.peerdb.peer_connected(address, role, info);
@@ -403,23 +412,23 @@ where
     /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
     async fn heartbeat(&mut self) -> crate::Result<()> {
-        let npeers = std::cmp::min(
+        let count = std::cmp::min(
             self.peerdb.available_addresses_count(),
             MAX_ACTIVE_CONNECTIONS
                 .saturating_sub(self.peerdb.available_addresses_count())
                 .saturating_sub(self.pending.len()),
         );
 
-        for _ in 0..npeers {
-            if let Some(addr) = self.peerdb.take_best_peer_addr() {
-                match self.connect(addr.clone()).await {
-                    Ok(_) => {
-                        self.pending.insert(addr, None);
-                    }
-                    Err(err) => {
-                        self.peerdb.report_outbound_failure(addr.clone());
-                        self.handle_result(None, Err(err)).await?;
-                    }
+        let addresses = self.peerdb.random_known_addresses(count);
+
+        for address in addresses {
+            match self.connect(address.clone()).await {
+                Ok(_) => {
+                    self.pending.insert(address, None);
+                }
+                Err(err) => {
+                    self.peerdb.report_outbound_failure(address.clone());
+                    self.handle_result(None, Err(err)).await?;
                 }
             }
         }

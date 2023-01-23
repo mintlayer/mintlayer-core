@@ -173,12 +173,8 @@ impl<T: NetworkingService> PeerDb<T> {
 
     /// Get socket address of the next best peer (TODO: in terms of peer score).
     // TODO: Rewrite this.
-    pub fn take_best_peer_addr(&mut self) -> Option<T::Address> {
-        let address = self.known_addresses.iter().next().cloned();
-        if let Some(address) = &address {
-            self.known_addresses.remove(address);
-        }
-        address
+    pub fn get_best_peer_addr(&mut self) -> Option<T::Address> {
+        self.random_known_addresses(1).into_iter().next()
     }
 
     /// Add new peer addresses

@@ -736,3 +736,124 @@ async fn connection_add_node_channel() {
     connection_add_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
         .await;
 }
+
+// Verify that peers announce own addresses and are discovered by other peers
+async fn discovered_node<A, T>()
+where
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+{
+    let chain_config = Arc::new(config::create_mainnet());
+
+    // Start the first peer manager
+    let p2p_config_1 = Arc::new(P2pConfig {
+        bind_addresses: Default::default(),
+        added_nodes: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        node_type: Default::default(),
+        discover_private_ips: true.into(),
+    });
+    let tx1 = run_peer_manager::<T>(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&chain_config),
+        p2p_config_1,
+    )
+    .await;
+
+    // Get the first peer manager's bind address
+    let (rtx, rrx) = oneshot::channel();
+    tx1.send(PeerManagerEvent::GetBindAddresses(rtx)).unwrap();
+    let bind_addresses = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
+    assert_eq!(bind_addresses.len(), 1);
+
+    // Start the second peer manager and let it know about first manager via added_nodes
+    let p2p_config_2 = Arc::new(P2pConfig {
+        bind_addresses: Default::default(),
+        added_nodes: bind_addresses.clone(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        node_type: Default::default(),
+        discover_private_ips: true.into(),
+    });
+    let tx2 = run_peer_manager::<T>(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&chain_config),
+        p2p_config_2,
+    )
+    .await;
+
+    // Start the third peer manager and let it know about first manager via added_nodes
+    let p2p_config_3 = Arc::new(P2pConfig {
+        bind_addresses: Default::default(),
+        added_nodes: bind_addresses,
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        node_type: Default::default(),
+        discover_private_ips: true.into(),
+    });
+    let tx3 = run_peer_manager::<T>(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&chain_config),
+        p2p_config_3,
+    )
+    .await;
+
+    let started_at = Instant::now();
+
+    // The second peer manager should discover the third manager and connect to it
+    // (or accept connection from it)
+    loop {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let (rtx, rrx) = oneshot::channel();
+        tx2.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
+        let connected_peers = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
+        // Connection to the first and the third managers
+        if connected_peers.len() == 2 {
+            break;
+        }
+        assert!(
+            Instant::now().duration_since(started_at) < Duration::from_secs(10),
+            "Unexpected peer count: {}",
+            connected_peers.len()
+        );
+    }
+
+    // The third peer manager should also report 2 connections
+    loop {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let (rtx, rrx) = oneshot::channel();
+        tx3.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
+        let connected_peers = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
+        if connected_peers.len() == 2 {
+            break;
+        }
+        assert!(
+            Instant::now().duration_since(started_at) < Duration::from_secs(10),
+            "Unexpected peer count: {}",
+            connected_peers.len()
+        );
+    }
+}
+
+#[tokio::test]
+async fn discovered_node_tcp() {
+    discovered_node::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
+}
+
+#[tokio::test]
+async fn discovered_node_noise() {
+    discovered_node::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
+}
+
+#[tokio::test]
+async fn discovered_node_channel() {
+    discovered_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>().await;
+}
