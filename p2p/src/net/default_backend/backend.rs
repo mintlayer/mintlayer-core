@@ -292,12 +292,12 @@ where
                 })
                 .await
                 .map_err(P2pError::from),
-            message::Request::PushAddrListRequest(request) => self
+            message::Request::PushAddrRequest(request) => self
                 .conn_tx
                 .send(ConnectivityEvent::Request {
                     peer_id,
                     request_id,
-                    request: PeerManagerRequest::PushAddrListRequest(request),
+                    request: PeerManagerRequest::PushAddrRequest(request),
                 })
                 .await
                 .map_err(P2pError::from),
@@ -341,12 +341,12 @@ where
                 })
                 .await
                 .map_err(P2pError::from),
-            message::Response::PushAddrListResponse(response) => self
+            message::Response::PushAddrResponse(response) => self
                 .conn_tx
                 .send(ConnectivityEvent::Response {
                     peer_id,
                     request_id,
-                    response: PeerManagerResponse::PushAddrListResponse(response),
+                    response: PeerManagerResponse::PushAddrResponse(response),
                 })
                 .await
                 .map_err(P2pError::from),

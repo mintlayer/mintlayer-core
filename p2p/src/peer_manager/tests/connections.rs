@@ -260,7 +260,7 @@ where
     )
     .await;
     assert_eq!(
-        pm2.accept_inbound_connection(address, peer_info, None),
+        pm2.accept_inbound_connection(address, peer_info, None).await,
         Ok(())
     );
 }
@@ -315,7 +315,7 @@ where
     .await;
 
     assert_eq!(
-        pm2.accept_inbound_connection(address, peer_info, None),
+        pm2.accept_inbound_connection(address, peer_info, None).await,
         Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
             [1, 2, 3, 4],
             *config::create_mainnet().magic_bytes(),

@@ -64,8 +64,8 @@ impl BlockListRequest {
 pub struct PullAddrListRequest {}
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PushAddrListRequest {
-    pub addresses: Vec<PeerAddress>,
+pub struct PushAddrRequest {
+    pub address: PeerAddress,
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
@@ -77,7 +77,7 @@ pub enum Request {
     #[codec(index = 2)]
     PullAddrListRequest(PullAddrListRequest),
     #[codec(index = 3)]
-    PushAddrListRequest(PushAddrListRequest),
+    PushAddrRequest(PushAddrRequest),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,7 +89,7 @@ pub enum SyncRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PeerManagerRequest {
     PullAddrListRequest(PullAddrListRequest),
-    PushAddrListRequest(PushAddrListRequest),
+    PushAddrRequest(PushAddrRequest),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
@@ -131,7 +131,7 @@ impl BlockListResponse {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PushAddrListResponse {}
+pub struct PushAddrResponse {}
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub struct PullAddrListResponse {
@@ -147,7 +147,7 @@ pub enum Response {
     #[codec(index = 2)]
     PullAddrListResponse(PullAddrListResponse),
     #[codec(index = 3)]
-    PushAddrListResponse(PushAddrListResponse),
+    PushAddrResponse(PushAddrResponse),
 }
 
 #[derive(Debug, Clone)]
@@ -159,7 +159,7 @@ pub enum SyncResponse {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PeerManagerResponse {
     PullAddrListResponse(PullAddrListResponse),
-    PushAddrListResponse(PushAddrListResponse),
+    PushAddrResponse(PushAddrResponse),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
@@ -174,9 +174,7 @@ impl From<PeerManagerRequest> for Request {
             PeerManagerRequest::PullAddrListRequest(request) => {
                 Request::PullAddrListRequest(request)
             }
-            PeerManagerRequest::PushAddrListRequest(request) => {
-                Request::PushAddrListRequest(request)
-            }
+            PeerManagerRequest::PushAddrRequest(request) => Request::PushAddrRequest(request),
         }
     }
 }
@@ -187,9 +185,7 @@ impl From<PeerManagerResponse> for Response {
             PeerManagerResponse::PullAddrListResponse(response) => {
                 Response::PullAddrListResponse(response)
             }
-            PeerManagerResponse::PushAddrListResponse(response) => {
-                Response::PushAddrListResponse(response)
-            }
+            PeerManagerResponse::PushAddrResponse(response) => Response::PushAddrResponse(response),
         }
     }
 }

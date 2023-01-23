@@ -25,7 +25,7 @@ mod global_ip;
 pub mod peerdb;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -43,7 +43,7 @@ use crate::{
     event::{PeerManagerEvent, SyncControlEvent},
     message::{
         PeerManagerRequest, PeerManagerResponse, PullAddrListRequest, PullAddrListResponse,
-        PushAddrListRequest, PushAddrListResponse,
+        PushAddrRequest, PushAddrResponse,
     },
     net::{
         self,
@@ -91,6 +91,11 @@ where
     peerdb: peerdb::PeerDb<T>,
 
     last_heartbeat: Instant,
+
+    /// All addresses sent in PushAddr requests.
+    ///
+    /// Used to prevent infinity loops while re-sending address announcements.
+    pushed_addresses: HashSet<PeerAddress>,
 }
 
 impl<T> PeerManager<T>
@@ -114,6 +119,7 @@ where
             chain_config,
             _p2p_config: p2p_config,
             last_heartbeat: Instant::now(),
+            pushed_addresses: HashSet::new(),
         })
     }
 
@@ -130,14 +136,18 @@ where
     /// *receiver_address* is this host socket address as seen and reported by remote peer.
     /// This should work for hosts with public IPs and for hosts behind NAT with port forwarding (same port is assumed).
     /// This won't work for majority of nodes but that should be accepted.
-    fn handle_outbound_receiver_address(&mut self, receiver_address: PeerAddress) {
+    async fn handle_outbound_receiver_address(
+        &mut self,
+        peer_id: T::PeerId,
+        receiver_address: PeerAddress,
+    ) -> crate::Result<()> {
         // Make sure that the reported IP is globally routable
         let is_global_ip = match &receiver_address {
             PeerAddress::Ip4(socket) => std::net::Ipv4Addr::from(socket.ip).is_global_unicast_ip(),
             PeerAddress::Ip6(socket) => std::net::Ipv6Addr::from(socket.ip).is_global_unicast_ip(),
         };
         if !is_global_ip {
-            return;
+            return Ok(());
         }
 
         // Take IP and use port numbers from all listening sockets (with same IP version)
@@ -163,11 +173,21 @@ where
                     _ => None,
                 },
             )
-            .filter_map(|a| TransportAddress::from_peer_address(&a));
+            .collect::<Vec<_>>();
 
         for address in discovered_own_addresses {
-            self.peerdb.peer_discovered(&address);
+            self.peer_connectivity_handle
+                .send_request(
+                    peer_id,
+                    PeerManagerRequest::PushAddrRequest(PushAddrRequest {
+                        address: address.clone(),
+                    }),
+                )
+                .await?;
+            self.pushed_addresses.insert(address);
         }
+
+        Ok(())
     }
 
     /// Handle connection established event
@@ -175,18 +195,18 @@ where
     /// The event is received from the networking backend and it's either a result of an incoming
     /// connection from a remote peer or a response to an outbound connection that was initiated
     /// by the node as result of the peer manager maintenance.
-    fn accept_connection(
+    async fn accept_connection(
         &mut self,
         address: T::Address,
         role: Role,
         info: PeerInfo<T::PeerId>,
         receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
-        if let (Some(receiver_address), Role::Outbound) = (receiver_address, role) {
-            self.handle_outbound_receiver_address(receiver_address);
-        }
-
         let peer_id = info.peer_id;
+
+        if let (Some(receiver_address), Role::Outbound) = (receiver_address, role) {
+            self.handle_outbound_receiver_address(peer_id, receiver_address).await?;
+        }
 
         ensure!(
             info.network == *self.chain_config.magic_bytes(),
@@ -225,7 +245,7 @@ where
     /// This function verifies that neither address the nor the peer ID are on the
     /// list of banned IPs/peer IDs. It also checks that the maximum number of
     /// connections `PeerManager` is configured to have has not been reached.
-    fn accept_inbound_connection(
+    async fn accept_inbound_connection(
         &mut self,
         address: T::Address,
         info: net::types::PeerInfo<T::PeerId>,
@@ -252,7 +272,7 @@ where
             return Err(P2pError::PeerError(PeerError::TooManyPeers));
         }
 
-        self.accept_connection(address, Role::Inbound, info, receiver_address)
+        self.accept_connection(address, Role::Inbound, info, receiver_address).await
     }
 
     /// Close connection to a remote peer
@@ -394,11 +414,9 @@ where
                     .await
             }
             // TODO: Rework this
-            PeerManagerRequest::PushAddrListRequest(PushAddrListRequest { addresses }) => {
-                for address in addresses {
-                    if let Some(address) = TransportAddress::from_peer_address(&address) {
-                        self.peerdb.peer_discovered(&address);
-                    }
+            PeerManagerRequest::PushAddrRequest(PushAddrRequest { address }) => {
+                if let Some(address) = TransportAddress::from_peer_address(&address) {
+                    self.peerdb.peer_discovered(&address);
                 }
                 Ok(())
             }
@@ -421,7 +439,7 @@ where
                 }
                 Ok(())
             }
-            PeerManagerResponse::PushAddrListResponse(PushAddrListResponse {}) => Ok(()),
+            PeerManagerResponse::PushAddrResponse(PushAddrResponse {}) => Ok(()),
         }
     }
 
@@ -539,7 +557,8 @@ where
                 } => {
                     let peer_id = peer_info.peer_id;
 
-                    match self.accept_inbound_connection(address, peer_info, receiver_address) {
+                    match self.accept_inbound_connection(address, peer_info, receiver_address).await
+                    {
                         Ok(_) => {}
                         Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
                         Err(P2pError::PeerError(err)) => {
@@ -561,12 +580,14 @@ where
                     receiver_address,
                 } => {
                     let peer_id = peer_info.peer_id;
-                    let res = self.accept_connection(
-                        address.clone(),
-                        Role::Outbound,
-                        peer_info,
-                        receiver_address,
-                    );
+                    let res = self
+                        .accept_connection(
+                            address.clone(),
+                            Role::Outbound,
+                            peer_info,
+                            receiver_address,
+                        )
+                        .await;
                     self.handle_result(Some(peer_id), res).await?;
 
                     match self.pending.remove(&address) {
