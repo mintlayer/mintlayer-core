@@ -61,10 +61,10 @@ impl BlockListRequest {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PullAddrListRequest {}
+pub struct AddrListRequest {}
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PushAddrRequest {
+pub struct AnnounceAddrRequest {
     pub address: PeerAddress,
 }
 
@@ -75,9 +75,9 @@ pub enum Request {
     #[codec(index = 1)]
     BlockListRequest(BlockListRequest),
     #[codec(index = 2)]
-    PullAddrListRequest(PullAddrListRequest),
+    AddrListRequest(AddrListRequest),
     #[codec(index = 3)]
-    PushAddrRequest(PushAddrRequest),
+    AnnounceAddrRequest(AnnounceAddrRequest),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,8 +88,8 @@ pub enum SyncRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PeerManagerRequest {
-    PullAddrListRequest(PullAddrListRequest),
-    PushAddrRequest(PushAddrRequest),
+    AddrListRequest(AddrListRequest),
+    AnnounceAddrRequest(AnnounceAddrRequest),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
@@ -131,10 +131,10 @@ impl BlockListResponse {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PushAddrResponse {}
+pub struct AnnounceAddrResponse {}
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct PullAddrListResponse {
+pub struct AddrListResponse {
     pub addresses: Vec<PeerAddress>,
 }
 
@@ -145,9 +145,9 @@ pub enum Response {
     #[codec(index = 1)]
     BlockListResponse(BlockListResponse),
     #[codec(index = 2)]
-    PullAddrListResponse(PullAddrListResponse),
+    AddrListResponse(AddrListResponse),
     #[codec(index = 3)]
-    PushAddrResponse(PushAddrResponse),
+    AnnounceAddrResponse(AnnounceAddrResponse),
 }
 
 #[derive(Debug, Clone)]
@@ -158,8 +158,8 @@ pub enum SyncResponse {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PeerManagerResponse {
-    PullAddrListResponse(PullAddrListResponse),
-    PushAddrResponse(PushAddrResponse),
+    AddrListResponse(AddrListResponse),
+    AnnounceAddrResponse(AnnounceAddrResponse),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
@@ -171,10 +171,10 @@ pub enum Announcement {
 impl From<PeerManagerRequest> for Request {
     fn from(request: PeerManagerRequest) -> Self {
         match request {
-            PeerManagerRequest::PullAddrListRequest(request) => {
-                Request::PullAddrListRequest(request)
+            PeerManagerRequest::AddrListRequest(request) => Request::AddrListRequest(request),
+            PeerManagerRequest::AnnounceAddrRequest(request) => {
+                Request::AnnounceAddrRequest(request)
             }
-            PeerManagerRequest::PushAddrRequest(request) => Request::PushAddrRequest(request),
         }
     }
 }
@@ -182,10 +182,10 @@ impl From<PeerManagerRequest> for Request {
 impl From<PeerManagerResponse> for Response {
     fn from(response: PeerManagerResponse) -> Self {
         match response {
-            PeerManagerResponse::PullAddrListResponse(response) => {
-                Response::PullAddrListResponse(response)
+            PeerManagerResponse::AddrListResponse(response) => Response::AddrListResponse(response),
+            PeerManagerResponse::AnnounceAddrResponse(response) => {
+                Response::AnnounceAddrResponse(response)
             }
-            PeerManagerResponse::PushAddrResponse(response) => Response::PushAddrResponse(response),
         }
     }
 }

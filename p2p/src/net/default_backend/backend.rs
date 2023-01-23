@@ -283,21 +283,21 @@ where
                 })
                 .await
                 .map_err(P2pError::from),
-            message::Request::PullAddrListRequest(request) => self
+            message::Request::AddrListRequest(request) => self
                 .conn_tx
                 .send(ConnectivityEvent::Request {
                     peer_id,
                     request_id,
-                    request: PeerManagerRequest::PullAddrListRequest(request),
+                    request: PeerManagerRequest::AddrListRequest(request),
                 })
                 .await
                 .map_err(P2pError::from),
-            message::Request::PushAddrRequest(request) => self
+            message::Request::AnnounceAddrRequest(request) => self
                 .conn_tx
                 .send(ConnectivityEvent::Request {
                     peer_id,
                     request_id,
-                    request: PeerManagerRequest::PushAddrRequest(request),
+                    request: PeerManagerRequest::AnnounceAddrRequest(request),
                 })
                 .await
                 .map_err(P2pError::from),
@@ -332,21 +332,21 @@ where
                 })
                 .await
                 .map_err(P2pError::from),
-            message::Response::PullAddrListResponse(response) => self
+            message::Response::AddrListResponse(response) => self
                 .conn_tx
                 .send(ConnectivityEvent::Response {
                     peer_id,
                     request_id,
-                    response: PeerManagerResponse::PullAddrListResponse(response),
+                    response: PeerManagerResponse::AddrListResponse(response),
                 })
                 .await
                 .map_err(P2pError::from),
-            message::Response::PushAddrResponse(response) => self
+            message::Response::AnnounceAddrResponse(response) => self
                 .conn_tx
                 .send(ConnectivityEvent::Response {
                     peer_id,
                     request_id,
-                    response: PeerManagerResponse::PushAddrResponse(response),
+                    response: PeerManagerResponse::AnnounceAddrResponse(response),
                 })
                 .await
                 .map_err(P2pError::from),

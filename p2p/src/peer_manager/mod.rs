@@ -42,8 +42,8 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
     message::{
-        PeerManagerRequest, PeerManagerResponse, PullAddrListRequest, PullAddrListResponse,
-        PushAddrRequest, PushAddrResponse,
+        AddrListRequest, AddrListResponse, AnnounceAddrRequest, AnnounceAddrResponse,
+        PeerManagerRequest, PeerManagerResponse,
     },
     net::{
         self,
@@ -95,7 +95,7 @@ where
     /// All addresses sent in PushAddr requests.
     ///
     /// Used to prevent infinity loops while re-sending address announcements.
-    pushed_addresses: HashSet<PeerAddress>,
+    announced_addresses: HashSet<PeerAddress>,
 }
 
 impl<T> PeerManager<T>
@@ -119,7 +119,7 @@ where
             chain_config,
             _p2p_config: p2p_config,
             last_heartbeat: Instant::now(),
-            pushed_addresses: HashSet::new(),
+            announced_addresses: HashSet::new(),
         })
     }
 
@@ -179,12 +179,12 @@ where
             self.peer_connectivity_handle
                 .send_request(
                     peer_id,
-                    PeerManagerRequest::PushAddrRequest(PushAddrRequest {
+                    PeerManagerRequest::AnnounceAddrRequest(AnnounceAddrRequest {
                         address: address.clone(),
                     }),
                 )
                 .await?;
-            self.pushed_addresses.insert(address);
+            self.announced_addresses.insert(address);
         }
 
         Ok(())
@@ -401,20 +401,18 @@ where
     ) -> crate::Result<()> {
         match request {
             // TODO: Rework this
-            PeerManagerRequest::PullAddrListRequest(PullAddrListRequest {}) => {
+            PeerManagerRequest::AddrListRequest(AddrListRequest {}) => {
                 let addresses = self.peerdb.known_addresses().collect();
 
                 self.peer_connectivity_handle
                     .send_response(
                         request_id,
-                        PeerManagerResponse::PullAddrListResponse(PullAddrListResponse {
-                            addresses,
-                        }),
+                        PeerManagerResponse::AddrListResponse(AddrListResponse { addresses }),
                     )
                     .await
             }
             // TODO: Rework this
-            PeerManagerRequest::PushAddrRequest(PushAddrRequest { address }) => {
+            PeerManagerRequest::AnnounceAddrRequest(AnnounceAddrRequest { address }) => {
                 if let Some(address) = TransportAddress::from_peer_address(&address) {
                     self.peerdb.peer_discovered(&address);
                 }
@@ -431,7 +429,7 @@ where
     ) -> crate::Result<()> {
         match response {
             // TODO: Rework this
-            PeerManagerResponse::PullAddrListResponse(PullAddrListResponse { addresses }) => {
+            PeerManagerResponse::AddrListResponse(AddrListResponse { addresses }) => {
                 for address in addresses {
                     if let Some(address) = TransportAddress::from_peer_address(&address) {
                         self.peerdb.peer_discovered(&address);
@@ -439,7 +437,7 @@ where
                 }
                 Ok(())
             }
-            PeerManagerResponse::PushAddrResponse(PushAddrResponse {}) => Ok(()),
+            PeerManagerResponse::AnnounceAddrResponse(AnnounceAddrResponse {}) => Ok(()),
         }
     }
 
