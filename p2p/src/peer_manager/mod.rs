@@ -138,6 +138,14 @@ where
         version == self.chain_config.version()
     }
 
+    fn is_peer_address_valid(&self, address: &PeerAddress) -> bool {
+        // The IP must be globally routable
+        match &address {
+            PeerAddress::Ip4(socket) => std::net::Ipv4Addr::from(socket.ip).is_global_unicast_ip(),
+            PeerAddress::Ip6(socket) => std::net::Ipv6Addr::from(socket.ip).is_global_unicast_ip(),
+        }
+    }
+
     /// Discover public addresses for this node after new outbound connection is made
     ///
     /// *receiver_address* is this host socket address as seen and reported by remote peer.
@@ -148,12 +156,7 @@ where
         peer_id: T::PeerId,
         receiver_address: PeerAddress,
     ) -> crate::Result<()> {
-        // Make sure that the reported IP is globally routable
-        let is_global_ip = match &receiver_address {
-            PeerAddress::Ip4(socket) => std::net::Ipv4Addr::from(socket.ip).is_global_unicast_ip(),
-            PeerAddress::Ip6(socket) => std::net::Ipv6Addr::from(socket.ip).is_global_unicast_ip(),
-        };
-        if !is_global_ip {
+        if !self.is_peer_address_valid(&receiver_address) {
             return Ok(());
         }
 
@@ -433,6 +436,7 @@ where
                     .random_known_addresses(MAX_ADDRESS_COUNT)
                     .iter()
                     .map(TransportAddress::as_peer_address)
+                    .filter(|address| self.is_peer_address_valid(address))
                     .collect();
 
                 self.peer_connectivity_handle
@@ -445,7 +449,11 @@ where
             PeerManagerRequest::AnnounceAddrRequest(AnnounceAddrRequest { address }) => {
                 // TODO: Rate limit announce address requests to prevent DoS attacks.
                 // For example it's 0.1 req/sec in Bitcoin Core.
-                if let Some(address) = TransportAddress::from_peer_address(&address) {
+                let is_address_valid = self.is_peer_address_valid(&address);
+                if let (true, Some(address)) = (
+                    is_address_valid,
+                    TransportAddress::from_peer_address(&address),
+                ) {
                     self.peerdb.peer_discovered(&address);
 
                     self.announced_addresses.entry(peer_id).or_default().insert(address.clone());
@@ -469,7 +477,10 @@ where
         match response {
             PeerManagerResponse::AddrListResponse(AddrListResponse { addresses }) => {
                 for address in addresses {
-                    if let Some(address) = TransportAddress::from_peer_address(&address) {
+                    if let (true, Some(address)) = (
+                        self.is_peer_address_valid(&address),
+                        TransportAddress::from_peer_address(&address),
+                    ) {
                         self.peerdb.peer_discovered(&address);
                     }
                 }
