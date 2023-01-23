@@ -33,7 +33,7 @@ use pos_accounting::{
 };
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
-use super::mock_accounting::{
+use super::mock_impl_accounting::{
     PoSAccountingStorageReadSealed, PoSAccountingStorageReadTip, PoSAccountingStorageWriteSealed,
     PoSAccountingStorageWriteTip,
 };
@@ -185,7 +185,7 @@ mockall::mock! {
             epoch_index: u64,
             id: Id<Block>
         ) -> crate::Result<()>;
-        fn del_epoch_pre_seal_accounting_delta_undo(&mut self, epoch_index: u64) -> crate::Result<()>;
+        fn del_pre_seal_accounting_delta_undo_for_epoch(&mut self, epoch_index: u64) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for Store {
@@ -530,7 +530,7 @@ mockall::mock! {
             epoch_index: u64,
             id: Id<Block>
         ) -> crate::Result<()>;
-        fn del_epoch_pre_seal_accounting_delta_undo(&mut self, epoch_index: u64) -> crate::Result<()>;
+        fn del_pre_seal_accounting_delta_undo_for_epoch(&mut self, epoch_index: u64) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for StoreTxRw {

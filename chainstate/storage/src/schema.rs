@@ -56,7 +56,10 @@ storage::decl_schema! {
         /// Store for accounting BlockUndo
         pub DBAccountingBlockUndo: Map<Id<Block>, AccountingBlockUndo>,
 
-        // FIXME write better description for tip/seal/pre-seal
+        /// Accounting data is stored as 3 different sets: tip, sealed and pre-seal.
+        /// `Tip` is the current state of the accounting data. It is updated on every block.
+        /// `Sealed` is the state of the accounting data representing the latest sealed epoch.
+        /// `Pre-seal` is the intermediary state of the accounting data that is about to be sealed.
 
         /// Store for accumulated accounting deltas per epochs that are about
         /// to go to the sealed storage
@@ -66,26 +69,26 @@ storage::decl_schema! {
         /// undos when an epoch is sealed.
         pub DBAccountingPreSealDataUndo: Map<(u64, Id<Block>), DeltaMergeUndo>,
 
-        /// Store for accounting pool data
+        /// Store for tip accounting pool data
         pub DBAccountingPoolDataTip: Map<PoolId, PoolData>,
-        /// Store for accounting pool balances
+        /// Store for tip accounting pool balances
         pub DBAccountingPoolBalancesTip: Map<PoolId, Amount>,
-        /// Store for accounting delegation data
+        /// Store for tip accounting delegation data
         pub DBAccountingDelegationDataTip: Map<DelegationId, DelegationData>,
-        /// Store for accounting delegation data
+        /// Store for tip accounting delegation data
         pub DBAccountingDelegationBalancesTip: Map<DelegationId, Amount>,
-        /// Store for accounting pool delegations balances
+        /// Store for tip accounting pool delegations balances
         pub DBAccountingPoolDelegationSharesTip: Map<(PoolId, DelegationId), Amount>,
 
-        /// Store for accounting pool data
+        /// Store for sealed accounting pool data
         pub DBAccountingPoolDataSealed: Map<PoolId, PoolData>,
-        /// Store for accounting pool balances
+        /// Store for sealed accounting pool balances
         pub DBAccountingPoolBalancesSealed: Map<PoolId, Amount>,
-        /// Store for accounting delegation data
+        /// Store for sealed accounting delegation data
         pub DBAccountingDelegationDataSealed: Map<DelegationId, DelegationData>,
-        /// Store for accounting delegation data
+        /// Store for sealed accounting delegation data
         pub DBAccountingDelegationBalancesSealed: Map<DelegationId, Amount>,
-        /// Store for accounting pool delegations balances
+        /// Store for sealed accounting pool delegations balances
         pub DBAccountingPoolDelegationSharesSealed: Map<(PoolId, DelegationId), Amount>,
     }
 }

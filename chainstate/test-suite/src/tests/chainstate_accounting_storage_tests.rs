@@ -81,7 +81,7 @@ fn make_tx_with_stake_pool(
             TxInput::new(input0_outpoint.tx_id(), input0_outpoint.output_index()),
             empty_witness(rng),
         )
-        .add_output(tx_output.clone())
+        .add_output(tx_output)
         .build();
     (tx, pool_id)
 }

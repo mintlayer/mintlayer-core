@@ -18,7 +18,7 @@
 mod internal;
 mod is_transaction_seal;
 #[cfg(any(test, feature = "mock"))]
-pub mod mock_tests;
+pub mod mock;
 pub mod schema;
 
 use std::collections::BTreeMap;
@@ -206,7 +206,10 @@ pub trait BlockchainStorageWrite:
         epoch_index: u64,
         id: Id<Block>,
     ) -> crate::Result<()>;
-    fn del_epoch_pre_seal_accounting_delta_undo(&mut self, epoch_index: u64) -> crate::Result<()>;
+    fn del_pre_seal_accounting_delta_undo_for_epoch(
+        &mut self,
+        epoch_index: u64,
+    ) -> crate::Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction

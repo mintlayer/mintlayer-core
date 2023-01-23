@@ -436,7 +436,7 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
             epoch_index: u64,
             id: Id<Block>
         ) -> crate::Result<()>;
-        fn del_epoch_pre_seal_accounting_delta_undo(&mut self, epoch_index: u64) -> crate::Result<()>;
+        fn del_pre_seal_accounting_delta_undo_for_epoch(&mut self, epoch_index: u64) -> crate::Result<()>;
     }
 }
 
@@ -453,27 +453,25 @@ impl<B: storage::Backend> UtxosStorageWrite for Store<B> {
 impl<B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Store<B> {
     fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val =
-            PoSAccountingStorageWrite::<TipStorageTag>::set_pool_balance(&mut tx, pool_id, amount)?;
-        tx.commit().map(|_| val)
+        PoSAccountingStorageWrite::<TipStorageTag>::set_pool_balance(&mut tx, pool_id, amount)?;
+        tx.commit()
     }
     fn del_pool_balance(&mut self, pool_id: PoolId) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<TipStorageTag>::del_pool_balance(&mut tx, pool_id)?;
-        tx.commit().map(|_| val)
+        PoSAccountingStorageWrite::<TipStorageTag>::del_pool_balance(&mut tx, pool_id)?;
+        tx.commit()
     }
 
     fn set_pool_data(&mut self, pool_id: PoolId, pool_data: &PoolData) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val =
-            PoSAccountingStorageWrite::<TipStorageTag>::set_pool_data(&mut tx, pool_id, pool_data)?;
-        tx.commit().map(|_| val)
+        PoSAccountingStorageWrite::<TipStorageTag>::set_pool_data(&mut tx, pool_id, pool_data)?;
+        tx.commit()
     }
 
     fn del_pool_data(&mut self, pool_id: PoolId) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<TipStorageTag>::del_pool_data(&mut tx, pool_id)?;
-        tx.commit().map(|_| val)
+        PoSAccountingStorageWrite::<TipStorageTag>::del_pool_data(&mut tx, pool_id)?;
+        tx.commit()
     }
 
     fn set_delegation_balance(
@@ -482,21 +480,21 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Store<B> 
         amount: Amount,
     ) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<TipStorageTag>::set_delegation_balance(
+        PoSAccountingStorageWrite::<TipStorageTag>::set_delegation_balance(
             &mut tx,
             delegation_target,
             amount,
         )?;
-        tx.commit().map(|_| val)
+        tx.commit()
     }
 
     fn del_delegation_balance(&mut self, delegation_target: DelegationId) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<TipStorageTag>::del_delegation_balance(
+        PoSAccountingStorageWrite::<TipStorageTag>::del_delegation_balance(
             &mut tx,
             delegation_target,
         )?;
-        tx.commit().map(|_| val)
+        tx.commit()
     }
 
     fn set_delegation_data(
@@ -505,12 +503,12 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Store<B> 
         delegation_data: &DelegationData,
     ) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<TipStorageTag>::set_delegation_data(
+        PoSAccountingStorageWrite::<TipStorageTag>::set_delegation_data(
             &mut tx,
             delegation_target,
             delegation_data,
         )?;
-        tx.commit().map(|_| val)
+        tx.commit()
     }
 
     fn del_delegation_data(
@@ -518,11 +516,8 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Store<B> 
         delegation_id: DelegationId,
     ) -> Result<(), chainstate_types::storage_result::Error> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<TipStorageTag>::del_delegation_data(
-            &mut tx,
-            delegation_id,
-        )?;
-        tx.commit().map(|_| val)
+        PoSAccountingStorageWrite::<TipStorageTag>::del_delegation_data(&mut tx, delegation_id)?;
+        tx.commit()
     }
 
     fn set_pool_delegation_share(
@@ -532,13 +527,13 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Store<B> 
         amount: Amount,
     ) -> Result<(), chainstate_types::storage_result::Error> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<TipStorageTag>::set_pool_delegation_share(
+        PoSAccountingStorageWrite::<TipStorageTag>::set_pool_delegation_share(
             &mut tx,
             pool_id,
             delegation_id,
             amount,
         )?;
-        tx.commit().map(|_| val)
+        tx.commit()
     }
 
     fn del_pool_delegation_share(
@@ -547,51 +542,46 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Store<B> 
         delegation_id: DelegationId,
     ) -> Result<(), chainstate_types::storage_result::Error> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<TipStorageTag>::del_pool_delegation_share(
+        PoSAccountingStorageWrite::<TipStorageTag>::del_pool_delegation_share(
             &mut tx,
             pool_id,
             delegation_id,
         )?;
-        tx.commit().map(|_| val)
+        tx.commit()
     }
 }
 
 impl<B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for Store<B> {
     fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<SealedStorageTag>::set_pool_balance(
-            &mut tx, pool_id, amount,
-        )?;
-        tx.commit().map(|_| val)
+        PoSAccountingStorageWrite::<SealedStorageTag>::set_pool_balance(&mut tx, pool_id, amount)?;
+        tx.commit()
     }
     fn del_pool_balance(&mut self, pool_id: PoolId) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val =
-            PoSAccountingStorageWrite::<SealedStorageTag>::del_pool_balance(&mut tx, pool_id)?;
-        tx.commit().map(|_| val)
+        PoSAccountingStorageWrite::<SealedStorageTag>::del_pool_balance(&mut tx, pool_id)?;
+        tx.commit()
     }
 
     fn set_pool_data(&mut self, pool_id: PoolId, pool_data: &PoolData) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<SealedStorageTag>::set_pool_data(
-            &mut tx, pool_id, pool_data,
-        )?;
-        tx.commit().map(|_| val)
+        PoSAccountingStorageWrite::<SealedStorageTag>::set_pool_data(&mut tx, pool_id, pool_data)?;
+        tx.commit()
     }
 
     fn del_pool_data(&mut self, pool_id: PoolId) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<SealedStorageTag>::del_pool_data(&mut tx, pool_id)?;
-        tx.commit().map(|_| val)
+        PoSAccountingStorageWrite::<SealedStorageTag>::del_pool_data(&mut tx, pool_id)?;
+        tx.commit()
     }
 
     fn del_delegation_balance(&mut self, delegation_target: DelegationId) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<SealedStorageTag>::del_delegation_balance(
+        PoSAccountingStorageWrite::<SealedStorageTag>::del_delegation_balance(
             &mut tx,
             delegation_target,
         )?;
-        tx.commit().map(|_| val)
+        tx.commit()
     }
 
     fn set_delegation_balance(
@@ -600,12 +590,12 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for Store<
         amount: Amount,
     ) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<SealedStorageTag>::set_delegation_balance(
+        PoSAccountingStorageWrite::<SealedStorageTag>::set_delegation_balance(
             &mut tx,
             delegation_target,
             amount,
         )?;
-        tx.commit().map(|_| val)
+        tx.commit()
     }
 
     fn set_delegation_data(
@@ -614,12 +604,12 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for Store<
         delegation_data: &DelegationData,
     ) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<SealedStorageTag>::set_delegation_data(
+        PoSAccountingStorageWrite::<SealedStorageTag>::set_delegation_data(
             &mut tx,
             delegation_target,
             delegation_data,
         )?;
-        tx.commit().map(|_| val)
+        tx.commit()
     }
 
     fn del_delegation_data(
@@ -627,11 +617,8 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for Store<
         delegation_id: DelegationId,
     ) -> Result<(), chainstate_types::storage_result::Error> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<SealedStorageTag>::del_delegation_data(
-            &mut tx,
-            delegation_id,
-        )?;
-        tx.commit().map(|_| val)
+        PoSAccountingStorageWrite::<SealedStorageTag>::del_delegation_data(&mut tx, delegation_id)?;
+        tx.commit()
     }
 
     fn set_pool_delegation_share(
@@ -641,13 +628,13 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for Store<
         amount: Amount,
     ) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<SealedStorageTag>::set_pool_delegation_share(
+        PoSAccountingStorageWrite::<SealedStorageTag>::set_pool_delegation_share(
             &mut tx,
             pool_id,
             delegation_id,
             amount,
         )?;
-        tx.commit().map(|_| val)
+        tx.commit()
     }
 
     fn del_pool_delegation_share(
@@ -656,12 +643,12 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for Store<
         delegation_id: DelegationId,
     ) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
-        let val = PoSAccountingStorageWrite::<SealedStorageTag>::del_pool_delegation_share(
+        PoSAccountingStorageWrite::<SealedStorageTag>::del_pool_delegation_share(
             &mut tx,
             pool_id,
             delegation_id,
         )?;
-        tx.commit().map(|_| val)
+        tx.commit()
     }
 }
 
@@ -1081,7 +1068,12 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
             .map_err(Into::into)
     }
 
-    fn del_epoch_pre_seal_accounting_delta_undo(&mut self, epoch_index: u64) -> crate::Result<()> {
+    // collect is needed to obey borrow checker rules
+    #[allow(clippy::needless_collect)]
+    fn del_pre_seal_accounting_delta_undo_for_epoch(
+        &mut self,
+        epoch_index: u64,
+    ) -> crate::Result<()> {
         let epoch_deltas = self
             .0
             .get::<db::DBAccountingPreSealDataUndo, _>()

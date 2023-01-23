@@ -14,13 +14,18 @@
 // limitations under the License.
 
 use super::*;
-use chainstate_storage::{inmemory::Store, BlockchainStorageWrite, TransactionRw, Transactional};
+use chainstate_storage::{
+    inmemory::Store, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
+};
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
 use common::{
-    chain::{stakelock::StakePoolData, tokens::OutputValue, OutPointSourceId, TxInput, TxOutput},
-    primitives::{Amount, Id, Idable},
+    chain::{
+        config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue, OutPoint,
+        OutPointSourceId, TxInput, TxOutput,
+    },
+    primitives::{Amount, BlockDistance, Id, Idable},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -32,12 +37,18 @@ use crypto::{
 // Check that after reorg all accounting data from block `a` was removed and from block `c` added to storage.
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
-fn stake_pool_reorg(#[case] seed: Seed) {
+#[case(Seed::from_entropy(), BlockDistance::from(1))] // reorg between epochs, every block is epoch boundary
+#[case(Seed::from_entropy(), BlockDistance::from(2))] // reorg between epochs, `c` starts new epoch
+#[case(Seed::from_entropy(), BlockDistance::from(3))] // reorg within epoch
+fn stake_pool_reorg(#[case] seed: Seed, #[case] epoch_length: BlockDistance) {
     utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
+        let chain_config = ConfigBuilder::test_chain().epoch_length(epoch_length).build();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_storage(storage.clone())
+            .with_chain_config(chain_config.clone())
+            .build();
         let genesis_id = tf.genesis().get_id();
 
         // prepare tx_a
@@ -60,6 +71,10 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                 ))),
             ))
             .build();
+        let pool_id = pos_accounting::make_pool_id(&OutPoint::new(
+            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+            0,
+        ));
 
         // prepare tx_b
         let tx_b = TransactionBuilder::new()
@@ -143,6 +158,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             let mut tf = TestFramework::builder(&mut rng)
                 .with_storage(storage.clone())
                 .with_chainstate_config(tf.chainstate().get_chainstate_config())
+                .with_chain_config(chain_config.clone())
                 .build();
 
             {
@@ -150,6 +166,22 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                 let mut db_tx = storage.transaction_rw(None).unwrap();
                 db_tx.set_block_index(&block_a_index).unwrap();
                 db_tx.add_block(&block_a).unwrap();
+
+                // reorg leaves a trace in pre-seal delta, because deltas are never removed on undo;
+                // so we need to manually add None-None delta left from block_a
+                let block_a_epoch_index =
+                    chain_config.epoch_index_from_height(&block_a_index.block_height());
+                let mut pre_seal_delta = db_tx
+                    .get_pre_seal_accounting_delta(block_a_epoch_index)
+                    .unwrap()
+                    .unwrap_or_default();
+                pre_seal_delta
+                    .pool_data
+                    .merge_delta_data_element(pool_id, accounting::DataDelta::new(None, None))
+                    .unwrap();
+                db_tx
+                    .set_pre_seal_accounting_delta(block_a_epoch_index, &pre_seal_delta)
+                    .unwrap();
                 db_tx.commit().unwrap();
             }
 
@@ -167,9 +199,9 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap();
 
-            storage.dump_raw()
+            storage
         };
 
-        assert_eq!(storage.dump_raw(), expected_storage);
+        assert_eq!(storage.dump_raw(), expected_storage.dump_raw());
     });
 }

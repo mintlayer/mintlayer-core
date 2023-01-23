@@ -23,7 +23,7 @@ use pos_accounting::{
     PoolId,
 };
 
-use super::mock::{MockStore, MockStoreTxRo, MockStoreTxRw};
+use super::{MockStore, MockStoreTxRo, MockStoreTxRw};
 
 pub trait PoSAccountingStorageReadTip {
     fn get_pool_balance_tip(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;

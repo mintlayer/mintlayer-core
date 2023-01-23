@@ -20,6 +20,6 @@ impl<'st, B: storage::Backend> Seal for crate::internal::StoreTxRo<'st, B> {}
 impl<'st, B: storage::Backend> Seal for crate::internal::StoreTxRw<'st, B> {}
 
 #[cfg(any(test, feature = "mock"))]
-impl Seal for crate::mock_tests::MockStoreTxRo {}
+impl Seal for crate::mock::MockStoreTxRo {}
 #[cfg(any(test, feature = "mock"))]
-impl Seal for crate::mock_tests::MockStoreTxRw {}
+impl Seal for crate::mock::MockStoreTxRw {}

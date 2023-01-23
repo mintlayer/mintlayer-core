@@ -15,25 +15,20 @@
 
 //! A mock version of the blockchain storage.
 
-use common::{
-    chain::{transaction::Transaction, Block, GenBlock},
-    primitives::Id,
-};
+mod mock_impl;
+mod mock_impl_accounting;
 
-pub mod mock;
-pub use mock::{MockStore, MockStoreTxRo, MockStoreTxRw};
-
-mod mock_accounting;
+pub use mock_impl::{MockStore, MockStoreTxRo, MockStoreTxRw};
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{BlockchainStorageRead, BlockchainStorageWrite, Transactional};
     use crate::{TransactionRo, TransactionRw};
-    use common::chain::signed_transaction::SignedTransaction;
     use common::{
         chain::block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
-        primitives::{Idable, H256},
+        chain::{signed_transaction::SignedTransaction, transaction::Transaction, Block, GenBlock},
+        primitives::{Id, Idable, H256},
     };
 
     type TestStore = crate::inmemory::Store;
