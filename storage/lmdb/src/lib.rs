@@ -117,25 +117,19 @@ impl backend::WriteOps for DbTx<'_, lmdb::RwTransaction<'_>> {
 /// If the lmdb map is full, perform a resize. This causes a recoverable error with MDB_MAP_FULL
 /// work out-of-the-box by just retrying one or more times
 fn resize_if_map_full(backend: &LmdbImpl, err: lmdb::Error) -> lmdb::Error {
-    match err {
-        lmdb::Error::MapFull => {
-            backend
-                .env
-                .do_resize(None)
-                .expect("Failed to resize after a write/commit failed with MDB_MAP_FULL");
-            backend.map_resize_scheduled.store(false, Ordering::Release);
-        }
-        _ => (),
+    if err == lmdb::Error::MapFull {
+        backend
+            .env
+            .do_resize(None)
+            .expect("Failed to resize after a write/commit failed with MDB_MAP_FULL");
+        backend.map_resize_scheduled.store(false, Ordering::Release);
     }
     err
 }
 
 fn schedule_map_resize_if_map_full(backend: &LmdbImpl, err: lmdb::Error) -> lmdb::Error {
-    match err {
-        lmdb::Error::MapFull => {
-            backend.schedule_map_resize();
-        }
-        _ => (),
+    if err == lmdb::Error::MapFull {
+        backend.schedule_map_resize();
     }
     err
 }
