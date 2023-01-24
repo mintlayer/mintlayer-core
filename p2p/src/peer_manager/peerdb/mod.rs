@@ -145,6 +145,7 @@ impl<T: NetworkingService> PeerDb<T> {
             .collect::<Vec<_>>()
     }
 
+    /// Selects requested count of connected peer ids randomly.
     pub fn random_peer_ids(&self, count: usize) -> Vec<T::PeerId> {
         // There are normally not many connected peers, so iterating over the whole list should be OK
         let all_peer_ids = self.peers.keys().cloned().collect::<Vec<_>>();
