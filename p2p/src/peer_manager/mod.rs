@@ -147,7 +147,7 @@ where
         }
     }
 
-    /// Discover public addresses for this node after new outbound connection is made
+    /// Discover public addresses for this node after a new outbound connection is made
     ///
     /// *receiver_address* is this host socket address as seen and reported by remote peer.
     /// This should work for hosts with public IPs and for hosts behind NAT with port forwarding (same port is assumed).
