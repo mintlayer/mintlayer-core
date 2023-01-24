@@ -677,7 +677,7 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
-        discover_private_ips: Default::default(),
+        allow_discover_private_ips: Default::default(),
         heartbeat_interval_min: Default::default(),
         heartbeat_interval_max: Default::default(),
     });
@@ -703,7 +703,7 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
-        discover_private_ips: Default::default(),
+        allow_discover_private_ips: Default::default(),
         heartbeat_interval_min: Default::default(),
         heartbeat_interval_max: Default::default(),
     });
@@ -766,7 +766,7 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
-        discover_private_ips: true.into(),
+        allow_discover_private_ips: true.into(),
         heartbeat_interval_min: Duration::from_secs(1).into(),
         heartbeat_interval_max: Duration::from_secs(2).into(),
     });
@@ -792,7 +792,7 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
-        discover_private_ips: true.into(),
+        allow_discover_private_ips: true.into(),
         heartbeat_interval_min: Duration::from_secs(1).into(),
         heartbeat_interval_max: Duration::from_secs(2).into(),
     });
@@ -812,7 +812,7 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
-        discover_private_ips: true.into(),
+        allow_discover_private_ips: true.into(),
         heartbeat_interval_min: Duration::from_secs(1).into(),
         heartbeat_interval_max: Duration::from_secs(2).into(),
     });

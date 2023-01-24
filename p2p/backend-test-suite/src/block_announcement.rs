@@ -136,7 +136,7 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         node_type: NodeType::Inactive.into(),
-        discover_private_ips: Default::default(),
+        allow_discover_private_ips: Default::default(),
         heartbeat_interval_min: Default::default(),
         heartbeat_interval_max: Default::default(),
     });

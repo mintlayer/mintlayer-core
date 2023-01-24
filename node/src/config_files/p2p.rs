@@ -77,7 +77,7 @@ impl From<P2pConfigFile> for P2pConfig {
                 .map(|t| Duration::from_secs(t.into()))
                 .into(),
             node_type: c.node_type.map(Into::into).into(),
-            discover_private_ips: Default::default(),
+            allow_discover_private_ips: Default::default(),
             heartbeat_interval_min: Default::default(),
             heartbeat_interval_max: Default::default(),
         }

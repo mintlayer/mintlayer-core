@@ -35,7 +35,7 @@ pub struct PeerAddressIp6 {
 ///
 /// Same as std::net::SocketAddr for now but can be later extended with other address types.
 /// Use custom type to be able implement Encode and Decode.
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum PeerAddress {
     #[codec(index = 0)]
     Ip4(PeerAddressIp4),

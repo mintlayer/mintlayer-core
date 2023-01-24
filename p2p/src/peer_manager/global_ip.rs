@@ -17,11 +17,11 @@
 // Based on libp2p sources:
 // https://github.com/libp2p/rust-libp2p/blob/73cbbe29679f5d56d81d5477d3796e82712f9ac2/protocols/autonat/src/behaviour.rs
 
-pub trait GlobalIp {
+pub trait IsGlobalIp {
     fn is_global_unicast_ip(&self) -> bool;
 }
 
-impl GlobalIp for std::net::Ipv4Addr {
+impl IsGlobalIp for std::net::Ipv4Addr {
     // NOTE: The below logic is based on `std::net::Ipv4Addr::is_global`,
     // which is at the time of writing behind the unstable `ip` feature.
     // See https://github.com/rust-lang/rust/issues/27709 for more info.
@@ -65,7 +65,7 @@ impl GlobalIp for std::net::Ipv4Addr {
     }
 }
 
-impl GlobalIp for std::net::Ipv6Addr {
+impl IsGlobalIp for std::net::Ipv6Addr {
     // NOTE: The below logic is based on `std::net::Ipv6Addr::is_global`,
     // which is at the time of writing behind the unstable `ip` feature.
     // See https://github.com/rust-lang/rust/issues/27709 for more info.
@@ -95,7 +95,7 @@ impl GlobalIp for std::net::Ipv6Addr {
 
 #[cfg(test)]
 mod tests {
-    use super::GlobalIp;
+    use super::IsGlobalIp;
 
     fn is_global_unicast(ip: &str) -> bool {
         match ip.parse::<std::net::IpAddr>().unwrap() {

@@ -55,7 +55,7 @@ use crate::{
     types::peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
 };
 
-use self::global_ip::GlobalIp;
+use self::global_ip::IsGlobalIp;
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
 const MAX_ACTIVE_CONNECTIONS: usize = 128;
@@ -96,7 +96,7 @@ where
 
     /// All addresses that were announced to or from some peer.
     /// Used to prevent infinity loops while broadcasting addresses.
-    /// Bitcoin Core uses bloom filter for that.
+    // TODO: Use bloom filter (like it's done in Bitcoin Core).
     announced_addresses: HashMap<T::PeerId, HashSet<T::Address>>,
 }
 
@@ -138,11 +138,11 @@ where
         match &address {
             PeerAddress::Ip4(socket) => {
                 std::net::Ipv4Addr::from(socket.ip).is_global_unicast_ip()
-                    || *self.p2p_config.discover_private_ips
+                    || *self.p2p_config.allow_discover_private_ips
             }
             PeerAddress::Ip6(socket) => {
                 std::net::Ipv6Addr::from(socket.ip).is_global_unicast_ip()
-                    || *self.p2p_config.discover_private_ips
+                    || *self.p2p_config.allow_discover_private_ips
             }
         }
     }

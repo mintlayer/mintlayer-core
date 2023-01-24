@@ -134,6 +134,8 @@ impl<T: NetworkingService> PeerDb<T> {
         self.connected_addresses.contains(address)
     }
 
+    /// Selects requested count of peer addresses from the DB randomly.
+    /// Result could be shared with remote peers over network.
     pub fn random_known_addresses(&self, count: usize) -> Vec<T::Address> {
         // TODO: Use something more efficient
         let mut addresses = self.known_addresses.iter().cloned().collect::<Vec<_>>();
