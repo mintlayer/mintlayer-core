@@ -137,19 +137,21 @@ impl<T: NetworkingService> PeerDb<T> {
     /// Selects requested count of peer addresses from the DB randomly.
     /// Result could be shared with remote peers over network.
     pub fn random_known_addresses(&self, count: usize) -> Vec<T::Address> {
-        // TODO: Use something more efficient
-        let mut addresses = self.known_addresses.iter().cloned().collect::<Vec<_>>();
-        addresses.shuffle(&mut make_pseudo_rng());
-        addresses.truncate(count);
-        addresses
+        // TODO: Use something more efficient (without iterating over the all addresses first)
+        let all_addresses = self.known_addresses.iter().cloned().collect::<Vec<_>>();
+        all_addresses
+            .choose_multiple(&mut make_pseudo_rng(), count)
+            .cloned()
+            .collect::<Vec<_>>()
     }
 
     pub fn random_peer_ids(&self, count: usize) -> Vec<T::PeerId> {
-        // TODO: Use something more efficient
-        let mut peer_ids = self.peers.keys().cloned().collect::<Vec<_>>();
-        peer_ids.shuffle(&mut make_pseudo_rng());
-        peer_ids.truncate(count);
-        peer_ids
+        // There are normally not many connected peers, so iterating over the whole list should be OK
+        let all_peer_ids = self.peers.keys().cloned().collect::<Vec<_>>();
+        all_peer_ids
+            .choose_multiple(&mut make_pseudo_rng(), count)
+            .cloned()
+            .collect::<Vec<_>>()
     }
 
     /// Checks if the given address is banned.
