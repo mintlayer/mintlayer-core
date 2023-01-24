@@ -992,6 +992,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
 
 [[package]]
+name = "fs4"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9813c3dc174931eff4bd78609debba56465b7c1da888576d21636b601a46790"
+dependencies = [
+ "libc",
+ "rustix 0.35.13",
+ "winapi",
+]
+
+[[package]]
 name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1395,6 +1406,12 @@ dependencies = [
 
 [[package]]
 name = "io-lifetimes"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59ce5ef949d49ee85593fc4d3f3f95ad61657076395cbbce23e2121fc5542074"
+
+[[package]]
+name = "io-lifetimes"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46112a93252b123d31a119a8d1a1ac19deac4fac6e0e8b0df58f0d4e5870e63c"
@@ -1410,8 +1427,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28dfb6c8100ccc63462345b67d1bbc3679177c75ee4bf59bf29c8b1d110b8189"
 dependencies = [
  "hermit-abi",
- "io-lifetimes",
- "rustix",
+ "io-lifetimes 1.0.3",
+ "rustix 0.36.5",
  "windows-sys 0.42.0",
 ]
 
@@ -1641,25 +1658,33 @@ dependencies = [
 
 [[package]]
 name = "linux-raw-sys"
+version = "0.0.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4d2456c373231a208ad294c33dc5bff30051eafd954cd4caae83a712b12854d"
+
+[[package]]
+name = "linux-raw-sys"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f051f77a7c8e6957c0696eac88f26b0117e54f52d3fc682ab19397a8812846a4"
 
 [[package]]
 name = "lmdb-mintlayer"
-version = "0.15.3"
-source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.15.3#291566adab9ba4c1e17c788ff3c6422380c4d13a"
+version = "0.16.0"
+source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.16.0#6c7bead27b27c9182ba9c37a74bbf63dbf8ee99f"
 dependencies = [
  "bitflags",
  "byteorder",
+ "fs4",
  "libc",
  "lmdb-rkv-sys",
+ "rm_rf",
 ]
 
 [[package]]
 name = "lmdb-rkv-sys"
 version = "0.11.2"
-source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.15.3#291566adab9ba4c1e17c788ff3c6422380c4d13a"
+source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.16.0#6c7bead27b27c9182ba9c37a74bbf63dbf8ee99f"
 dependencies = [
  "cc",
  "libc",
@@ -2411,6 +2436,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "psm"
+version = "0.1.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5787f7cda34e3033a72192c018bc5883100330f362ef279a8cbccfce8bb4e874"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2590,6 +2624,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rm_rf"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3443b7a35aa12ed2e99edfc0ecbefe6a53b4848305cc83e29981dfa1aea1f71e"
+dependencies = [
+ "stacker",
+]
+
+[[package]]
 name = "rpc"
 version = "0.1.0"
 dependencies = [
@@ -2660,15 +2703,29 @@ dependencies = [
 
 [[package]]
 name = "rustix"
+version = "0.35.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "727a1a6d65f786ec22df8a81ca3121107f235970dc1705ed681d3e6e8b9cd5f9"
+dependencies = [
+ "bitflags",
+ "errno",
+ "io-lifetimes 0.7.5",
+ "libc",
+ "linux-raw-sys 0.0.46",
+ "windows-sys 0.42.0",
+]
+
+[[package]]
+name = "rustix"
 version = "0.36.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3807b5d10909833d3e9acd1eb5fb988f79376ff10fce42937de71a449c4c588"
 dependencies = [
  "bitflags",
  "errno",
- "io-lifetimes",
+ "io-lifetimes 1.0.3",
  "libc",
- "linux-raw-sys",
+ "linux-raw-sys 0.1.4",
  "windows-sys 0.42.0",
 ]
 
@@ -3170,6 +3227,19 @@ dependencies = [
  "strsim",
  "syn",
  "unicode-width",
+]
+
+[[package]]
+name = "stacker"
+version = "0.1.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c886bd4480155fd3ef527d45e9ac8dd7118a898a46530b7b94c3e21866259fce"
+dependencies = [
+ "cc",
+ "cfg-if",
+ "libc",
+ "psm",
+ "winapi",
 ]
 
 [[package]]

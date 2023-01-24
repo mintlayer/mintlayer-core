@@ -15,6 +15,7 @@
 
 mod error;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{borrow::Cow, path::PathBuf};
 
 use lmdb::Cursor;
@@ -64,6 +65,7 @@ impl<'tx, C: lmdb::Cursor<'tx>> Iterator for PrefixIter<'tx, C> {
 
 pub struct DbTx<'m, Tx> {
     tx: Tx,
+    backend: &'m LmdbImpl,
     dbs: &'m DbList,
 }
 
@@ -100,11 +102,52 @@ impl backend::WriteOps for DbTx<'_, lmdb::RwTransaction<'_>> {
     fn put(&mut self, idx: DbIndex, key: Data, val: Data) -> storage_core::Result<()> {
         self.tx
             .put(self.dbs[idx], &key, &val, lmdb::WriteFlags::empty())
+            .map_err(|err| schedule_map_resize_if_map_full(self.backend, err))
             .or_else(error::process_with_unit)
     }
 
     fn del(&mut self, idx: DbIndex, key: &[u8]) -> storage_core::Result<()> {
-        self.tx.del(self.dbs[idx], &key, None).or_else(error::process_with_unit)
+        self.tx
+            .del(self.dbs[idx], &key, None)
+            .map_err(|err| schedule_map_resize_if_map_full(self.backend, err))
+            .or_else(error::process_with_unit)
+    }
+}
+
+/// If the lmdb map is full, perform a resize. This causes a recoverable error with MDB_MAP_FULL
+/// work out-of-the-box by just retrying one or more times
+fn resize_if_map_full(backend: &LmdbImpl, err: lmdb::Error) -> lmdb::Error {
+    match err {
+        lmdb::Error::MapFull => {
+            backend
+                .env
+                .do_resize(None)
+                .expect("Failed to resize after a write/commit failed with MDB_MAP_FULL");
+            backend.map_resize_scheduled.store(false, Ordering::Release);
+        }
+        _ => (),
+    }
+    err
+}
+
+fn schedule_map_resize_if_map_full(backend: &LmdbImpl, err: lmdb::Error) -> lmdb::Error {
+    match err {
+        lmdb::Error::MapFull => {
+            backend.schedule_map_resize();
+        }
+        _ => (),
+    }
+    err
+}
+
+fn resize_if_triggered(backend: &LmdbImpl) {
+    // simulate an atomic test_and_set(), where we check if a resize is scheduled, and we also set it to false
+    if backend
+        .map_resize_scheduled
+        .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
+        .unwrap_or(false)
+    {
+        backend.env.do_resize(None).expect("Failed to resize after a trigger to resize");
     }
 }
 
@@ -112,7 +155,9 @@ impl backend::TxRo for DbTxRo<'_> {}
 
 impl backend::TxRw for DbTxRw<'_> {
     fn commit(self) -> storage_core::Result<()> {
-        lmdb::Transaction::commit(self.tx).or_else(error::process_with_unit)
+        lmdb::Transaction::commit(self.tx)
+            .map_err(|e| resize_if_map_full(self.backend, e))
+            .or_else(error::process_with_unit)
     }
 }
 
@@ -123,6 +168,9 @@ pub struct LmdbImpl {
 
     /// List of open databases
     dbs: DbList,
+
+    /// Schedule a database resize of the database map
+    map_resize_scheduled: Arc<AtomicBool>,
 }
 
 impl LmdbImpl {
@@ -135,7 +183,12 @@ impl LmdbImpl {
         Ok(DbTx {
             tx: start_tx(&self.env).or_else(error::process_with_err)?,
             dbs: &self.dbs,
+            backend: self,
         })
+    }
+
+    fn schedule_map_resize(&self) {
+        self.map_resize_scheduled.store(true, Ordering::Release);
     }
 }
 
@@ -152,9 +205,10 @@ impl<'tx> TransactionalRw<'tx> for LmdbImpl {
 
     fn transaction_rw<'st: 'tx>(
         &'st self,
-        _size: Option<usize>,
+        size: Option<usize>,
     ) -> storage_core::Result<Self::TxRw> {
-        self.start_transaction(lmdb::Environment::begin_rw_txn)
+        resize_if_triggered(self);
+        self.start_transaction(|env| lmdb::Environment::begin_rw_txn(env, size))
     }
 }
 
@@ -216,6 +270,7 @@ impl backend::Backend for Lmdb {
         Ok(LmdbImpl {
             env: Arc::new(environment),
             dbs,
+            map_resize_scheduled: Arc::new(AtomicBool::new(false)),
         })
     }
 }
