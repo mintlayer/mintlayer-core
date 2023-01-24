@@ -15,18 +15,22 @@
 
 mod error;
 
-use rusqlite::{Connection, OpenFlags, Transaction};
+use rusqlite::{Connection, OpenFlags, OptionalExtension, Transaction};
+use std::borrow::BorrowMut;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-use storage_core::error::Fatal;
+use crate::error::process_sqlite_error;
 use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
-    info::{DbDesc, MapDesc},
+    info::DbDesc,
     Data, DbIndex,
 };
-use utils::sync::{Arc, RwLock, RwLockReadGuard};
+use utils::sync::Arc;
+
+/// The version of the SQLite key/value schema
+const SQLITE_SCHEMA_VERSION: i32 = 0;
 
 /// Identifiers of the list of databases (key-value maps)
 #[derive(Eq, PartialEq, Debug, Clone)]
@@ -73,9 +77,12 @@ impl<'tx, C> Iterator for PrefixIter<'tx, C> {
     }
 }
 
+#[ouroboros::self_referencing]
 pub struct DbTx<'m> {
-    // conn: MutexGuard<'m, Connection>,
-    tx: Transaction<'m>,
+    connection: MutexGuard<'m, Connection>,
+    #[borrows(mut connection)]
+    #[covariant]
+    tx: Transaction<'this>,
     // dbs: &'m DbList,
     // _map_token: RwLockReadGuard<'m, remap::MemMapController>,
 }
@@ -111,17 +118,59 @@ impl backend::ReadOps for DbTx<'_> {
     }
 }
 
+/*
+void SQLiteBatch::SetupSQLStatements()
+{
+    const std::vector<std::pair<sqlite3_stmt**, const char*>> statements{
+        {&m_read_stmt, "SELECT value FROM main WHERE key = ?"},
+        {&m_insert_stmt, "INSERT INTO main VALUES(?, ?)"},
+        {&m_overwrite_stmt, "INSERT or REPLACE into main values(?, ?)"},
+        {&m_delete_stmt, "DELETE FROM main WHERE key = ?"},
+        {&m_cursor_stmt, "SELECT key, value FROM main"},
+    };
+
+    for (const auto& [stmt_prepared, stmt_text] : statements) {
+        if (*stmt_prepared == nullptr) {
+            int res = sqlite3_prepare_v2(m_database.m_db, stmt_text, -1, stmt_prepared, nullptr);
+            if (res != SQLITE_OK) {
+                throw std::runtime_error(strprintf(
+                    "SQLiteDatabase: Failed to setup SQL statements: %s\n", sqlite3_errstr(res)));
+            }
+        }
+    }
+}
+ */
+
 impl backend::WriteOps for DbTx<'_> {
     fn put(&mut self, idx: DbIndex, key: Data, val: Data) -> storage_core::Result<()> {
-        todo!()
-        // self.tx
-        //     .put(self.dbs[idx], &key, &val, lmdb::WriteFlags::empty())
-        //     .or_else(error::process_with_unit)
+        println!("Put idx = {:?}, (k,v) = {:?}, {:?}", idx, key, val);
+
+        let mut stmt = self
+            .borrow_tx()
+            .prepare_cached("INSERT or REPLACE into main values(?, ?)")
+            .map_err(process_sqlite_error)?;
+
+        let kv = [key, val];
+        let res = stmt.execute(kv).map_err(process_sqlite_error)?;
+
+        println!("put result = {}", res);
+
+        Ok(())
     }
 
     fn del(&mut self, idx: DbIndex, key: &[u8]) -> storage_core::Result<()> {
-        todo!()
-        // self.tx.del(self.dbs[idx], &key, None).or_else(error::process_with_unit)
+        println!("del idx = {:?}, k = {:?}", idx, key);
+
+        let mut stmt = self
+            .borrow_tx()
+            .prepare_cached("DELETE FROM main WHERE key = ?")
+            .map_err(process_sqlite_error)?;
+
+        let res = stmt.execute([key]).map_err(process_sqlite_error)?;
+
+        println!("del result = {}", res);
+
+        Ok(())
     }
 }
 
@@ -129,7 +178,8 @@ impl backend::TxRo for DbTx<'_> {}
 
 impl backend::TxRw for DbTx<'_> {
     fn commit(self) -> storage_core::Result<()> {
-        todo!()
+        // todo!()
+        self.borrow_tx().commit().map_err(process_sqlite_error)
         // lmdb::Transaction::commit(self.tx).or_else(error::process_with_unit)
     }
 }
@@ -152,15 +202,15 @@ impl SqliteImpl {
         // todo!()
 
         // TODO implement properly
-        let mut connection = self
+        let connection: MutexGuard<Connection> = self
             .connection
             .lock()
             .map_err(|_| storage_core::error::Recoverable::TemporarilyUnavailable)?;
-        let mut tx = connection.transaction().map_err(error::process_sqlite_error)?;
-        Ok(DbTx {
-            // conn: connection,
-            tx,
+        DbTx::try_new(connection, |conn| {
+            conn.transaction().map_err(error::process_sqlite_error)
         })
+        //let mut tx: Transaction = connection.transaction().map_err(error::process_sqlite_error)?;
+        //Ok(DbTx { connection, tx })
 
         // // Make sure map token is acquired before starting the transaction below
         // let _map_token = self.map_token.read().expect("mutex to be alive");
@@ -191,7 +241,6 @@ impl<'tx> TransactionalRw<'tx> for SqliteImpl {
 }
 
 impl backend::BackendImpl for SqliteImpl {}
-// impl backend::BackendImpl for SqliteImpl<'_> {}
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Sqlite {
@@ -205,21 +254,53 @@ impl Sqlite {
     }
 
     // fn open_db(self, desc: &MapDesc) -> storage_core::Result<Connection> {
-    fn open_db(self) -> storage_core::Result<Connection> {
+    fn open_db(self) -> rusqlite::Result<Connection> {
         let flags = OpenFlags::from_iter([
             OpenFlags::SQLITE_OPEN_FULL_MUTEX,
             OpenFlags::SQLITE_OPEN_READ_WRITE,
             OpenFlags::SQLITE_OPEN_CREATE,
         ]);
 
-        // // TODO change error
-        let connection = Connection::open_with_flags(self.path, flags)
-            .map_err(|err| Fatal::InternalError(err.to_string()))?;
+        println!("db path = {:?}", self.path);
+
+        let connection = Connection::open_with_flags(self.path, flags)?;
+
+        // Set the locking mode to exclusive
+        connection.pragma_update(None, "locking_mode", "exclusive")?;
+
+        // Begin a transaction to acquire the exclusive lock
+        connection.execute("BEGIN EXCLUSIVE TRANSACTION", ())?;
+        connection.execute("COMMIT", ())?;
+
+        // Enable fullfsync
+        connection.pragma_update(None, "fullfsync", "true")?;
+
+        // Check if key/value table exists
+        let table_exists = {
+            let mut stmt = connection.prepare_cached(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='main'",
+            )?;
+            stmt.query_row([], |row| row.get::<usize, String>(0)).optional()?.is_some()
+        };
+
+        // Create the key/value table and set some metadata if needed
+        if !table_exists {
+            connection.execute(
+                "CREATE TABLE main(key BLOB PRIMARY KEY NOT NULL, value BLOB NOT NULL)",
+                (),
+            )?;
+
+            // TODO set the application id
+
+            // Set the schema version
+            connection.pragma_update(
+                None,
+                "schema_version",
+                format!("{}", SQLITE_SCHEMA_VERSION),
+            )?;
+        }
 
         Ok(connection)
-
-        // let flags = lmdb::DatabaseFlags::default();
-        // env.create_db(name, flags).or_else(error::process_with_err)
     }
 }
 
@@ -253,7 +334,7 @@ impl backend::Backend for Sqlite {
         //     .collect::<storage_core::Result<Vec<_>>>()
         //     .map(DbList)?;
 
-        let connection = self.open_db()?;
+        let connection = self.open_db().map_err(process_sqlite_error)?;
 
         Ok(SqliteImpl {
             connection: Arc::new(Mutex::new(connection)),
@@ -283,7 +364,6 @@ mod test {
         let test_dir = test_root.fresh_test_dir("unknown");
         let mut db_file = test_dir.as_ref().to_path_buf();
         db_file.set_file_name("database.sqlite");
-        println!("db_file.to_str() = {:?}", db_file.file_name().unwrap());
 
         // let sqlite = Sqlite::new(test_dir.as_ref().to_path_buf().with_file_name("database.sqlite"));
         let sqlite = Sqlite::new(db_file);

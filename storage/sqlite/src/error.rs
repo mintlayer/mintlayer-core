@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use rusqlite::Error;
 use std::io::{Error as IoError, ErrorKind};
 
 use storage_core::error::{Fatal, Recoverable};
@@ -100,6 +99,7 @@ pub fn process_io_error(err: IoError) -> storage_core::Error {
 
 /// Map Sqlite error into a storage error
 pub fn process_sqlite_error(err: rusqlite::Error) -> storage_core::Error {
+    // TODO check errors
     match err {
         _ => Recoverable::TemporarilyUnavailable.into(),
     }
