@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::num::NonZeroU64;
 
 use super::*;
 use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
@@ -249,7 +250,8 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
-        let chain_config = ConfigBuilder::test_chain().epoch_length(1.into()).build();
+        let chain_config =
+            ConfigBuilder::test_chain().epoch_length(NonZeroU64::new(1).unwrap()).build();
         let mut tf = TestFramework::builder(&mut rng)
             .with_storage(storage.clone())
             .with_chain_config(chain_config)
@@ -377,7 +379,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
         let storage = Store::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let chain_config = ConfigBuilder::test_chain()
-            .epoch_length(1.into())
+            .epoch_length(NonZeroU64::new(1).unwrap())
             .sealed_epoch_distance_from_tip(1)
             .build();
         let mut tf = TestFramework::builder(&mut rng)
@@ -504,7 +506,7 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
         let storage = Store::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let chain_config = ConfigBuilder::test_chain()
-            .epoch_length(1.into())
+            .epoch_length(NonZeroU64::new(1).unwrap())
             .sealed_epoch_distance_from_tip(0)
             .build();
         let mut tf = TestFramework::builder(&mut rng)

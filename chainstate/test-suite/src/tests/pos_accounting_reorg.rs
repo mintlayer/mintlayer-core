@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::num::NonZeroU64;
+
 use super::*;
 use chainstate_storage::{
     inmemory::Store, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
@@ -25,7 +27,7 @@ use common::{
         config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue, OutPoint,
         OutPointSourceId, TxInput, TxOutput,
     },
-    primitives::{Amount, BlockDistance, Id, Idable},
+    primitives::{Amount, Id, Idable},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -37,10 +39,10 @@ use crypto::{
 // Check that after reorg all accounting data from block `a` was removed and from block `c` added to storage.
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy(), BlockDistance::from(1))] // reorg between epochs, every block is epoch boundary
-#[case(Seed::from_entropy(), BlockDistance::from(2))] // reorg between epochs, `c` starts new epoch
-#[case(Seed::from_entropy(), BlockDistance::from(3))] // reorg within epoch
-fn stake_pool_reorg(#[case] seed: Seed, #[case] epoch_length: BlockDistance) {
+#[case(Seed::from_entropy(), NonZeroU64::new(1).unwrap())] // reorg between epochs, every block is epoch boundary
+#[case(Seed::from_entropy(), NonZeroU64::new(2).unwrap())] // reorg between epochs, `c` starts new epoch
+#[case(Seed::from_entropy(), NonZeroU64::new(3).unwrap())] // reorg within epoch
+fn stake_pool_reorg(#[case] seed: Seed, #[case] epoch_length: NonZeroU64) {
     utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);

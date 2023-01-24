@@ -31,13 +31,17 @@ use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::semver::SemVer;
 use crate::primitives::{Amount, BlockDistance, BlockHeight};
 use std::collections::BTreeMap;
+use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
 pub const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
-const DEFAULT_EPOCH_LENGTH: BlockDistance =
-    BlockDistance::new((5 * 24 * 60 * 60) / (DEFAULT_TARGET_BLOCK_SPACING.as_secs() as i64));
+const DEFAULT_EPOCH_LENGTH: NonZeroU64 =
+    match NonZeroU64::new((5 * 24 * 60 * 60) / DEFAULT_TARGET_BLOCK_SPACING.as_secs()) {
+        Some(v) => v,
+        None => panic!("epoch length cannot be 0"),
+    };
 const DEFAULT_SEALED_EPOCH_DISTANCE_FROM_TIP: usize = 2;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -84,7 +88,7 @@ pub struct ChainConfig {
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
-    epoch_length: BlockDistance,
+    epoch_length: NonZeroU64,
     sealed_epoch_distance_from_tip: usize,
     token_min_issuance_fee: Amount,
     token_max_uri_len: usize,
@@ -150,7 +154,7 @@ impl ChainConfig {
         &self.max_future_block_time_offset
     }
 
-    pub fn epoch_length(&self) -> BlockDistance {
+    pub fn epoch_length(&self) -> NonZeroU64 {
         self.epoch_length
     }
 
@@ -177,9 +181,7 @@ impl ChainConfig {
     #[must_use]
     pub fn epoch_index_from_height(&self, height: &BlockHeight) -> u64 {
         let height: u64 = (*height).into();
-        let epoch_length: i64 = self.epoch_length.into();
-        let epoch_length: u64 = epoch_length.try_into().expect("Invalid negative epoch length");
-        height / epoch_length
+        height / self.epoch_length
     }
 
     pub fn token_min_issuance_fee(&self) -> Amount {

@@ -17,8 +17,5 @@ use common::{chain::ChainConfig, primitives::BlockHeight};
 
 pub fn is_due_for_epoch_data_calculation(chain_config: &ChainConfig, height: BlockHeight) -> bool {
     let height: u64 = height.into();
-    let epoch_length: i64 = chain_config.epoch_length().into();
-    let epoch_length: u64 =
-        epoch_length.try_into().expect("Epoch length negative. Invariant broken.");
-    height % epoch_length == 0
+    height % chain_config.epoch_length() == 0
 }

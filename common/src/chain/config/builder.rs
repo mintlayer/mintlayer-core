@@ -23,6 +23,7 @@ use crate::primitives::{id::WithId, semver::SemVer, BlockHeight};
 use crate::primitives::{Amount, BlockDistance};
 
 use std::collections::BTreeMap;
+use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -95,7 +96,7 @@ pub struct Builder {
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
-    epoch_length: BlockDistance,
+    epoch_length: NonZeroU64,
     sealed_epoch_distance_from_tip: usize,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     genesis_block: GenesisBlockInit,
@@ -249,7 +250,7 @@ impl Builder {
     builder_method!(max_block_size_with_smart_contracts: usize);
     builder_method!(net_upgrades: NetUpgrades<UpgradeVersion>);
     builder_method!(empty_consensus_reward_maturity_distance: BlockDistance);
-    builder_method!(epoch_length: BlockDistance);
+    builder_method!(epoch_length: NonZeroU64);
     builder_method!(sealed_epoch_distance_from_tip: usize);
 
     /// Set the genesis block to be the unit test version
