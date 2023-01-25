@@ -158,6 +158,7 @@ where
     Tx::Impl: backend::ReadOps,
 {
     /// Get value associated with given key
+    #[allow(clippy::type_complexity)]
     pub fn get<K: EncodeLike<DbMap::Key>>(
         &self,
         key: K,
@@ -211,6 +212,7 @@ where
     Tx::Impl: backend::ReadOps,
 {
     /// Get value associated with given key
+    #[allow(clippy::type_complexity)]
     pub fn get<K: EncodeLike<DbMap::Key>>(
         &self,
         key: K,

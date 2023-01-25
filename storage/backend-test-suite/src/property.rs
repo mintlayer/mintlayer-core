@@ -146,14 +146,14 @@ fn add_and_delete<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             // remove all entries
             let mut dbtx = store.transaction_rw().unwrap();
             for (db, key) in entries.keys() {
-                dbtx.del(*db, &key).unwrap();
+                dbtx.del(*db, key).unwrap();
             }
             dbtx.commit().unwrap();
 
             // Check entries no longer present
             let dbtx = store.transaction_ro().unwrap();
             for (db, key) in entries.keys() {
-                assert_eq!(dbtx.get(*db, &key), Ok(None));
+                assert_eq!(dbtx.get(*db, key), Ok(None));
             }
             drop(dbtx);
         },
@@ -213,7 +213,7 @@ fn add_and_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             for ent @ (db, key) in entries1.keys().chain(entries2.keys()).chain(extra_keys.iter()) {
                 let expected = entries2.get(ent).or_else(|| entries1.get(ent)).map(AsRef::as_ref);
                 assert_eq!(
-                    dbtx.get(*db, &key).unwrap().as_ref().map(|v| v.as_ref()),
+                    dbtx.get(*db, key).unwrap().as_ref().map(|v| v.as_ref()),
                     expected
                 );
             }
@@ -222,7 +222,7 @@ fn add_and_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             // remove entries from the second set
             let mut dbtx = store.transaction_rw().unwrap();
             for (db, key) in entries2.keys() {
-                dbtx.del(*db, &key).unwrap();
+                dbtx.del(*db, key).unwrap();
             }
             dbtx.commit().unwrap();
 
@@ -230,7 +230,7 @@ fn add_and_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
             // Check entries from the second set are absent
             for (db, key) in entries2.keys() {
-                assert_eq!(dbtx.get(*db, &key), Ok(None));
+                assert_eq!(dbtx.get(*db, key), Ok(None));
             }
 
             // Check entries from the first set have correct value, unless deleted

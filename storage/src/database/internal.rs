@@ -39,6 +39,7 @@ impl<'tx, B: Backend, Sch> TxImpl for super::TransactionRw<'tx, B, Sch> {
 }
 
 /// Get a value from the database backend as a SCALE-encoded object
+#[allow(clippy::type_complexity)]
 pub fn get<DbMap: schema::DbMap, Tx: ReadOps, K: EncodeLike<DbMap::Key>>(
     dbtx: &Tx,
     idx: DbIndex,
