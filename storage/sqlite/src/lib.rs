@@ -77,14 +77,37 @@ impl<'tx, C> Iterator for PrefixIter<'tx, C> {
     }
 }
 
-#[ouroboros::self_referencing]
+// #[ouroboros::self_referencing]
+// pub struct DbTx<'m> {
+//     connection: MutexGuard<'m, Connection>,
+//     #[borrows(mut connection)]
+//     #[covariant]
+//     tx: Transaction<'this>,
+//     // dbs: &'m DbList,
+//     // _map_token: RwLockReadGuard<'m, remap::MemMapController>,
+// }
+
 pub struct DbTx<'m> {
     connection: MutexGuard<'m, Connection>,
-    #[borrows(mut connection)]
-    #[covariant]
-    tx: Transaction<'this>,
     // dbs: &'m DbList,
     // _map_token: RwLockReadGuard<'m, remap::MemMapController>,
+}
+
+impl<'m> DbTx<'m> {
+    pub fn start_transaction(connection: MutexGuard<'m, Connection>) -> storage_core::Result<Self> {
+        let tx = DbTx { connection };
+        tx.connection.execute("BEGIN TRANSACTION", ()).map_err(process_sqlite_error)?;
+        Ok(tx)
+    }
+
+    pub fn commit_transaction(&self) -> storage_core::Result<()> {
+        let res = self
+            .connection
+            .execute("COMMIT TRANSACTION", ())
+            .map_err(process_sqlite_error)?;
+        println!("commit_transaction res = {}", res);
+        Ok(())
+    }
 }
 
 // type DbTxRo<'a> = DbTx<'a, Transaction<'a>>;
@@ -111,7 +134,24 @@ impl<'s, 'i> backend::PrefixIter<'i> for DbTx<'s> {
 
 impl backend::ReadOps for DbTx<'_> {
     fn get(&self, idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<&[u8]>> {
+        println!("Get idx = {:?}, k = {:?}", idx, key);
+
+        let mut stmt = self
+            .connection
+            .prepare_cached("SELECT value FROM main WHERE key = ?")
+            .map_err(process_sqlite_error)?;
+
+        let key = [key];
+        let res = stmt
+            .query_row(key, |row| row.get::<usize, Vec<u8>>(0))
+            // .query_row(key, |row| row.get_ref::<usize>(0))
+            .optional()
+            .map_err(process_sqlite_error)?;
+
+        println!("get result = {:?}", res);
+
         todo!()
+
         // self.tx
         //     .get(self.dbs[idx], &key)
         //     .map_or_else(error::process_with_none, |x| Ok(Some(x)))
@@ -146,7 +186,7 @@ impl backend::WriteOps for DbTx<'_> {
         println!("Put idx = {:?}, (k,v) = {:?}, {:?}", idx, key, val);
 
         let mut stmt = self
-            .borrow_tx()
+            .connection
             .prepare_cached("INSERT or REPLACE into main values(?, ?)")
             .map_err(process_sqlite_error)?;
 
@@ -162,7 +202,7 @@ impl backend::WriteOps for DbTx<'_> {
         println!("del idx = {:?}, k = {:?}", idx, key);
 
         let mut stmt = self
-            .borrow_tx()
+            .connection
             .prepare_cached("DELETE FROM main WHERE key = ?")
             .map_err(process_sqlite_error)?;
 
@@ -179,7 +219,7 @@ impl backend::TxRo for DbTx<'_> {}
 impl backend::TxRw for DbTx<'_> {
     fn commit(self) -> storage_core::Result<()> {
         // todo!()
-        self.borrow_tx().commit().map_err(process_sqlite_error)
+        self.commit_transaction()
         // lmdb::Transaction::commit(self.tx).or_else(error::process_with_unit)
     }
 }
@@ -206,9 +246,10 @@ impl SqliteImpl {
             .connection
             .lock()
             .map_err(|_| storage_core::error::Recoverable::TemporarilyUnavailable)?;
-        DbTx::try_new(connection, |conn| {
-            conn.transaction().map_err(error::process_sqlite_error)
-        })
+        // DbTx::try_new(connection, |conn| {
+        //     conn.transaction().map_err(error::process_sqlite_error)
+        // })
+        DbTx::start_transaction(connection)
         //let mut tx: Transaction = connection.transaction().map_err(error::process_sqlite_error)?;
         //Ok(DbTx { connection, tx })
 
