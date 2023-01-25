@@ -46,7 +46,7 @@ use crate::{
     event::{PeerManagerEvent, SyncControlEvent},
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, AnnounceAddrResponse,
-        PeerManagerRequest, PeerManagerResponse,
+        PeerManagerRequest, PeerManagerResponse, PingRequest, PingResponse,
     },
     net::{
         self,
@@ -487,6 +487,14 @@ where
                 }
                 Ok(())
             }
+            PeerManagerRequest::PingRequest(PingRequest { nonce }) => {
+                self.peer_connectivity_handle
+                    .send_response(
+                        request_id,
+                        PeerManagerResponse::PingResponse(PingResponse { nonce }),
+                    )
+                    .await
+            }
         }
     }
 
@@ -510,6 +518,7 @@ where
                 Ok(())
             }
             PeerManagerResponse::AnnounceAddrResponse(AnnounceAddrResponse {}) => Ok(()),
+            PeerManagerResponse::PingResponse(PingResponse { nonce: _ }) => Ok(()),
         }
     }
 

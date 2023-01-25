@@ -69,6 +69,11 @@ pub struct AnnounceAddrRequest {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub struct PingRequest {
+    pub nonce: u64,
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Request {
     #[codec(index = 0)]
     HeaderListRequest(HeaderListRequest),
@@ -78,6 +83,8 @@ pub enum Request {
     AddrListRequest(AddrListRequest),
     #[codec(index = 3)]
     AnnounceAddrRequest(AnnounceAddrRequest),
+    #[codec(index = 4)]
+    PingRequest(PingRequest),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,6 +97,7 @@ pub enum SyncRequest {
 pub enum PeerManagerRequest {
     AddrListRequest(AddrListRequest),
     AnnounceAddrRequest(AnnounceAddrRequest),
+    PingRequest(PingRequest),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
@@ -139,6 +147,11 @@ pub struct AddrListResponse {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub struct PingResponse {
+    pub nonce: u64,
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Response {
     #[codec(index = 0)]
     HeaderListResponse(HeaderListResponse),
@@ -148,6 +161,8 @@ pub enum Response {
     AddrListResponse(AddrListResponse),
     #[codec(index = 3)]
     AnnounceAddrResponse(AnnounceAddrResponse),
+    #[codec(index = 4)]
+    PingResponse(PingResponse),
 }
 
 #[derive(Debug, Clone)]
@@ -160,6 +175,7 @@ pub enum SyncResponse {
 pub enum PeerManagerResponse {
     AddrListResponse(AddrListResponse),
     AnnounceAddrResponse(AnnounceAddrResponse),
+    PingResponse(PingResponse),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
@@ -175,6 +191,7 @@ impl From<PeerManagerRequest> for Request {
             PeerManagerRequest::AnnounceAddrRequest(request) => {
                 Request::AnnounceAddrRequest(request)
             }
+            PeerManagerRequest::PingRequest(request) => Request::PingRequest(request),
         }
     }
 }
@@ -186,6 +203,7 @@ impl From<PeerManagerResponse> for Response {
             PeerManagerResponse::AnnounceAddrResponse(response) => {
                 Response::AnnounceAddrResponse(response)
             }
+            PeerManagerResponse::PingResponse(response) => Response::PingResponse(response),
         }
     }
 }
