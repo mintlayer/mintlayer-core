@@ -18,6 +18,8 @@
 mod internal;
 pub mod raw;
 
+use std::borrow::Cow;
+
 use internal::{EntryIterator, TxImpl};
 
 use crate::schema::{self, Schema};
@@ -159,7 +161,7 @@ where
     pub fn get<K: EncodeLike<DbMap::Key>>(
         &self,
         key: K,
-    ) -> crate::Result<Option<Encoded<&[u8], DbMap::Value>>> {
+    ) -> crate::Result<Option<Encoded<Cow<[u8]>, DbMap::Value>>> {
         internal::get::<DbMap, _, _>(self.dbtx, self.idx, key)
     }
 
@@ -212,7 +214,7 @@ where
     pub fn get<K: EncodeLike<DbMap::Key>>(
         &self,
         key: K,
-    ) -> crate::Result<Option<Encoded<&[u8], DbMap::Value>>> {
+    ) -> crate::Result<Option<Encoded<Cow<[u8]>, DbMap::Value>>> {
         internal::get::<DbMap, _, _>(self.dbtx, self.idx, key)
     }
 

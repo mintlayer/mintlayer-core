@@ -26,14 +26,14 @@ use crate::{
 };
 use backend::{PrefixIter, ReadOps, WriteOps};
 
-use std::collections::BTreeMap;
+use std::{borrow::Cow, collections::BTreeMap};
 use utils::sync;
 
 // Read-only transaction just holds a read lock to the database
 pub struct TxRo<'tx, T>(sync::RwLockReadGuard<'tx, T>);
 
 impl<'tx, T: ReadOps> ReadOps for TxRo<'tx, T> {
-    fn get(&self, idx: DbIndex, key: &[u8]) -> crate::Result<Option<&[u8]>> {
+    fn get(&self, idx: DbIndex, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
         self.0.get(idx, key)
     }
 }
@@ -65,10 +65,11 @@ impl<'tx, T> TxRw<'tx, T> {
 }
 
 impl<'tx, T: ReadOps> ReadOps for TxRw<'tx, T> {
-    fn get(&self, idx: DbIndex, key: &[u8]) -> crate::Result<Option<&[u8]>> {
-        self.deltas[idx.get()]
-            .get(key)
-            .map_or_else(|| self.db.get(idx, key), |x| Ok(x.as_deref()))
+    fn get(&self, idx: DbIndex, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
+        self.deltas[idx.get()].get(key).map_or_else(
+            || self.db.get(idx, key),
+            |x| Ok(x.as_deref().map(|p| p.into())),
+        )
     }
 }
 

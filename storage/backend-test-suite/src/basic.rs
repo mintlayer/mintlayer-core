@@ -27,7 +27,10 @@ fn put_and_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
     // Check the modification did not happen
     let dbtx = store.transaction_ro().unwrap();
-    assert_eq!(dbtx.get(IDX.0, b"hello"), Ok(Some(b"world".as_ref())));
+    assert_eq!(
+        dbtx.get(IDX.0, b"hello").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        b"world".as_ref()
+    );
     drop(dbtx);
 }
 
@@ -56,8 +59,14 @@ fn put_two_under_different_keys<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>)
 
     // Check the values are in place
     let dbtx = store.transaction_ro().unwrap();
-    assert_eq!(dbtx.get(IDX.0, b"a"), Ok(Some(b"0".as_ref())));
-    assert_eq!(dbtx.get(IDX.0, b"b"), Ok(Some(b"1".as_ref())));
+    assert_eq!(
+        dbtx.get(IDX.0, b"a").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        b"0".as_ref()
+    );
+    assert_eq!(
+        dbtx.get(IDX.0, b"b").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        b"1".as_ref()
+    );
     drop(dbtx);
 
     // Create a transaction, modify storage and abort
@@ -68,8 +77,14 @@ fn put_two_under_different_keys<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>)
 
     // Check the modification did not happen
     let dbtx = store.transaction_ro().unwrap();
-    assert_eq!(dbtx.get(IDX.0, b"a"), Ok(Some(b"0".as_ref())));
-    assert_eq!(dbtx.get(IDX.0, b"b"), Ok(Some(b"1".as_ref())));
+    assert_eq!(
+        dbtx.get(IDX.0, b"a").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        b"0".as_ref()
+    );
+    assert_eq!(
+        dbtx.get(IDX.0, b"b").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        b"1".as_ref()
+    );
     drop(dbtx);
 }
 
@@ -78,13 +93,22 @@ fn put_twice_then_commit_read_last<B: Backend, F: BackendFn<B>>(backend_fn: Arc<
 
     let mut dbtx = store.transaction_rw().unwrap();
     dbtx.put(IDX.0, b"hello".to_vec(), b"a".to_vec()).unwrap();
-    assert_eq!(dbtx.get(IDX.0, b"hello"), Ok(Some(b"a".as_ref())),);
+    assert_eq!(
+        dbtx.get(IDX.0, b"hello").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        b"a".as_ref(),
+    );
     dbtx.put(IDX.0, b"hello".to_vec(), b"b".to_vec()).unwrap();
-    assert_eq!(dbtx.get(IDX.0, b"hello"), Ok(Some(b"b".as_ref())),);
+    assert_eq!(
+        dbtx.get(IDX.0, b"hello").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        b"b".as_ref(),
+    );
     dbtx.commit().expect("commit to succeed");
 
     let dbtx = store.transaction_ro().unwrap();
-    assert_eq!(dbtx.get(IDX.0, b"hello"), Ok(Some(b"b".as_ref())),);
+    assert_eq!(
+        dbtx.get(IDX.0, b"hello").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        b"b".as_ref(),
+    );
 }
 
 fn put_iterator_count_matches<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {

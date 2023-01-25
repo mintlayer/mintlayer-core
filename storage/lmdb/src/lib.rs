@@ -18,7 +18,7 @@ mod remap;
 
 pub use remap::MemSize;
 
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 
 use lmdb::Cursor;
 use storage_core::{
@@ -93,10 +93,10 @@ impl<'s, 'i, Tx: lmdb::Transaction> backend::PrefixIter<'i> for DbTx<'s, Tx> {
 }
 
 impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
-    fn get(&self, idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<&[u8]>> {
+    fn get(&self, idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
         self.tx
             .get(self.dbs[idx], &key)
-            .map_or_else(error::process_with_none, |x| Ok(Some(x)))
+            .map_or_else(error::process_with_none, |x| Ok(Some(x.into())))
     }
 }
 

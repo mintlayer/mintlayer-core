@@ -41,7 +41,7 @@ fn read_initialize_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
     let dbtx = store.transaction_ro().unwrap();
     let expected = [None, Some([2].as_ref())];
-    assert!(expected.contains(&dbtx.get(IDX.0, TEST_KEY).unwrap()));
+    assert!(expected.contains(&dbtx.get(IDX.0, TEST_KEY).unwrap().as_ref().map(|v| v.as_ref())));
     drop(dbtx);
 
     thr0.join().unwrap();
@@ -61,7 +61,8 @@ fn read_write_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
     let dbtx = store.transaction_ro().unwrap();
     let expected = [[0u8].as_ref(), [2].as_ref()];
-    assert!(expected.contains(&dbtx.get(IDX.0, TEST_KEY).unwrap().unwrap()));
+    assert!(expected
+        .contains(&dbtx.get(IDX.0, TEST_KEY).unwrap().as_ref().map(|v| v.as_ref()).unwrap()));
     drop(dbtx);
 
     thr0.join().unwrap();
@@ -74,7 +75,8 @@ fn commutative_read_modify_write<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
         let store = store.clone();
         move || {
             let mut dbtx = store.transaction_rw().unwrap();
-            let b = dbtx.get(IDX.0, TEST_KEY).unwrap().unwrap().first().unwrap();
+            let v = dbtx.get(IDX.0, TEST_KEY).unwrap().unwrap();
+            let b = v.first().unwrap();
             dbtx.put(IDX.0, TEST_KEY.to_vec(), vec![b + 5]).unwrap();
             dbtx.commit().unwrap();
         }
@@ -83,7 +85,8 @@ fn commutative_read_modify_write<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
         let store = store.clone();
         move || {
             let mut dbtx = store.transaction_rw().unwrap();
-            let b = dbtx.get(IDX.0, TEST_KEY).unwrap().unwrap().first().unwrap();
+            let v = dbtx.get(IDX.0, TEST_KEY).unwrap().unwrap();
+            let b = v.first().unwrap();
             dbtx.put(IDX.0, TEST_KEY.to_vec(), vec![b + 3]).unwrap();
             dbtx.commit().unwrap();
         }
@@ -93,7 +96,10 @@ fn commutative_read_modify_write<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
     thr1.join().unwrap();
 
     let dbtx = store.transaction_ro().unwrap();
-    assert_eq!(dbtx.get(IDX.0, TEST_KEY), Ok(Some([8].as_ref())));
+    assert_eq!(
+        dbtx.get(IDX.0, TEST_KEY).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        [8].as_ref()
+    );
 }
 
 fn threaded_reads_consistent<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
@@ -109,6 +115,7 @@ fn threaded_reads_consistent<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
                 .get(IDX.0, TEST_KEY)
                 .unwrap()
                 .unwrap()
+                .as_ref()
                 .to_owned()
         }
     });
@@ -120,6 +127,7 @@ fn threaded_reads_consistent<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
                 .get(IDX.0, TEST_KEY)
                 .unwrap()
                 .unwrap()
+                .as_ref()
                 .to_owned()
         }
     });
