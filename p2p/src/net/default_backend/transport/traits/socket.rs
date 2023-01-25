@@ -33,6 +33,7 @@ pub trait TransportSocket: Send + Sync + 'static {
         + Clone
         + Debug
         + Eq
+        + Ord
         + Hash
         + Send
         + Sync

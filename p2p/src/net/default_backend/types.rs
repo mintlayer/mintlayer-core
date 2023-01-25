@@ -111,9 +111,6 @@ pub enum ConnectivityEvent<T: TransportSocket> {
         peer_id: PeerId,
         error: error::P2pError,
     },
-    AddressDiscovered {
-        address: T::Address,
-    },
 }
 
 // TODO: use two events, one for txs and one for blocks?
@@ -144,7 +141,7 @@ impl std::fmt::Display for RequestId {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Encode, Decode)]
+#[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Encode, Decode)]
 pub struct PeerId(u64);
 
 impl FromStr for PeerId {

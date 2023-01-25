@@ -292,6 +292,15 @@ where
                 })
                 .await
                 .map_err(P2pError::from),
+            message::Request::AnnounceAddrRequest(request) => self
+                .conn_tx
+                .send(ConnectivityEvent::Request {
+                    peer_id,
+                    request_id,
+                    request: PeerManagerRequest::AnnounceAddrRequest(request),
+                })
+                .await
+                .map_err(P2pError::from),
         }
     }
 
@@ -329,6 +338,15 @@ where
                     peer_id,
                     request_id,
                     response: PeerManagerResponse::AddrListResponse(response),
+                })
+                .await
+                .map_err(P2pError::from),
+            message::Response::AnnounceAddrResponse(response) => self
+                .conn_tx
+                .send(ConnectivityEvent::Response {
+                    peer_id,
+                    request_id,
+                    response: PeerManagerResponse::AnnounceAddrResponse(response),
                 })
                 .await
                 .map_err(P2pError::from),

@@ -53,6 +53,7 @@ pub trait NetworkingService {
     type Address: Clone
         + Debug
         + Eq
+        + Ord
         + Hash
         + Send
         + Sync
@@ -68,7 +69,7 @@ pub trait NetworkingService {
     type BannableAddress: Debug + Eq + Ord + Send;
 
     /// Unique ID assigned to a peer on the network
-    type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString + FromStr;
+    type PeerId: Copy + Debug + Display + Eq + Ord + Hash + Send + Sync + ToString + FromStr;
 
     /// Unique ID assigned to each received request from a peer
     type PeerRequestId: Copy + Debug + Eq + Hash + Send + Sync;
@@ -137,10 +138,8 @@ where
         response: PeerManagerResponse,
     ) -> crate::Result<()>;
 
-    /// Return the socket address of the network service provider
-    ///
-    /// If the address isn't available yet, `None` is returned
-    async fn local_addresses(&self) -> crate::Result<Vec<T::Address>>;
+    /// Return the socket addresses of the network service provider
+    fn local_addresses(&self) -> &[T::Address];
 
     /// Poll events from the network service provider
     ///

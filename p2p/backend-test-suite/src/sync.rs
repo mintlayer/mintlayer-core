@@ -27,7 +27,7 @@ use common::{
     primitives::{Id, Idable},
 };
 
-use p2p::testing_utils::{connect_services, filter_connectivity_event, TestTransportMaker};
+use p2p::testing_utils::{connect_services, get_connectivity_event, TestTransportMaker};
 use p2p::{
     config::P2pConfig,
     error::P2pError,
@@ -1063,10 +1063,7 @@ where
     mgr1.unregister_peer(peer_info2.peer_id);
     assert_eq!(conn1.disconnect(peer_info2.peer_id).await, Ok(()));
 
-    let event = filter_connectivity_event::<S, _>(&mut conn2, |event| {
-        !std::matches!(event, Ok(ConnectivityEvent::AddressDiscovered { .. }))
-    })
-    .await;
+    let event = get_connectivity_event::<S>(&mut conn2).await;
     assert!(std::matches!(
         event,
         Ok(ConnectivityEvent::ConnectionClosed { .. })

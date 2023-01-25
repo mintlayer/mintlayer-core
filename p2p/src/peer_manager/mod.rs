@@ -21,12 +21,13 @@
 
 #![allow(rustdoc::private_intra_doc_links)]
 
+mod global_ip;
 pub mod peerdb;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::Arc,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use tokio::sync::{mpsc, oneshot};
@@ -40,23 +41,30 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
-    message::{AddrListRequest, AddrListResponse, PeerManagerRequest, PeerManagerResponse},
+    message::{
+        AddrListRequest, AddrListResponse, AnnounceAddrRequest, AnnounceAddrResponse,
+        PeerManagerRequest, PeerManagerResponse,
+    },
     net::{
         self,
         default_backend::transport::TransportAddress,
-        types::{PeerInfo, Role},
+        types::PeerInfo,
+        types::{ConnectivityEvent, Role},
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
-    types::peer_address::PeerAddress,
+    types::peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
 };
+
+use self::global_ip::IsGlobalIp;
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
 const MAX_ACTIVE_CONNECTIONS: usize = 128;
 
-/// Lower bound for how often [`PeerManager::heartbeat()`] is called
-const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
-/// Upper bound for how often [`PeerManager::heartbeat()`] is called
-const PEER_MGR_HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
+/// How many addresses are allowed to be sent
+const MAX_ADDRESS_COUNT: usize = 1000;
+
+/// To how many peers re-send received announced address
+const ANNOUNCED_RESEND_COUNT: usize = 2;
 
 pub struct PeerManager<T>
 where
@@ -66,7 +74,7 @@ where
     chain_config: Arc<ChainConfig>,
 
     /// P2P configuration.
-    _p2p_config: Arc<P2pConfig>,
+    p2p_config: Arc<P2pConfig>,
 
     /// Handle for sending/receiving connectivity events
     peer_connectivity_handle: T::ConnectivityHandle,
@@ -83,7 +91,13 @@ where
     /// Peer database
     peerdb: peerdb::PeerDb<T>,
 
+    /// Last time when heartbeat was called
     last_heartbeat: Instant,
+
+    /// All addresses that were announced to or from some peer.
+    /// Used to prevent infinity loops while broadcasting addresses.
+    // TODO: Use bloom filter (like it's done in Bitcoin Core).
+    announced_addresses: HashMap<T::PeerId, HashSet<T::Address>>,
 }
 
 impl<T> PeerManager<T>
@@ -105,14 +119,10 @@ where
             peerdb: peerdb::PeerDb::new(Arc::clone(&p2p_config))?,
             pending: HashMap::new(),
             chain_config,
-            _p2p_config: p2p_config,
+            p2p_config,
             last_heartbeat: Instant::now(),
+            announced_addresses: HashMap::new(),
         })
-    }
-
-    /// Update the list of known peers or known peer's list of addresses
-    fn peer_discovered(&mut self, address: &T::Address) {
-        self.peerdb.peer_discovered(address);
     }
 
     /// Verify software version compatibility
@@ -123,20 +133,99 @@ where
         version == self.chain_config.version()
     }
 
+    fn is_peer_address_valid(&self, address: &PeerAddress) -> bool {
+        // The IP must be globally routable
+        match &address {
+            PeerAddress::Ip4(socket) => {
+                std::net::Ipv4Addr::from(socket.ip).is_global_unicast_ip()
+                    || *self.p2p_config.allow_discover_private_ips
+            }
+            PeerAddress::Ip6(socket) => {
+                std::net::Ipv6Addr::from(socket.ip).is_global_unicast_ip()
+                    || *self.p2p_config.allow_discover_private_ips
+            }
+        }
+    }
+
+    /// Discover public addresses for this node after a new outbound connection is made
+    ///
+    /// *receiver_address* is this host socket address as seen and reported by remote peer.
+    /// This should work for hosts with public IPs and for hosts behind NAT with port forwarding (same port is assumed).
+    /// This won't work for majority of nodes but that should be accepted.
+    async fn handle_outbound_receiver_address(
+        &mut self,
+        peer_id: T::PeerId,
+        receiver_address: PeerAddress,
+    ) -> crate::Result<()> {
+        if !self.is_peer_address_valid(&receiver_address) {
+            return Ok(());
+        }
+
+        // Take IP and use port numbers from all listening sockets (with same IP version)
+        let discovered_own_addresses = self
+            .peer_connectivity_handle
+            .local_addresses()
+            .iter()
+            .map(TransportAddress::as_peer_address)
+            .filter_map(
+                |listening_address| match (&receiver_address, listening_address) {
+                    (PeerAddress::Ip4(receiver), PeerAddress::Ip4(listener)) => {
+                        Some(PeerAddress::Ip4(PeerAddressIp4 {
+                            ip: receiver.ip,
+                            port: listener.port,
+                        }))
+                    }
+                    (PeerAddress::Ip6(receiver), PeerAddress::Ip6(listener)) => {
+                        Some(PeerAddress::Ip6(PeerAddressIp6 {
+                            ip: receiver.ip,
+                            port: listener.port,
+                        }))
+                    }
+                    _ => None,
+                },
+            )
+            .filter_map(|address| TransportAddress::from_peer_address(&address))
+            .collect::<Vec<_>>();
+
+        for address in discovered_own_addresses {
+            self.send_announced_address(peer_id, address).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn send_announced_address(
+        &mut self,
+        peer_id: T::PeerId,
+        address: T::Address,
+    ) -> crate::Result<()> {
+        let peer_addresses = self.announced_addresses.entry(peer_id).or_default();
+        if !peer_addresses.contains(&address) {
+            self.peer_connectivity_handle
+                .send_request(
+                    peer_id,
+                    PeerManagerRequest::AnnounceAddrRequest(AnnounceAddrRequest {
+                        address: address.as_peer_address(),
+                    }),
+                )
+                .await?;
+            peer_addresses.insert(address);
+        }
+        Ok(())
+    }
+
     /// Handle connection established event
     ///
     /// The event is received from the networking backend and it's either a result of an incoming
     /// connection from a remote peer or a response to an outbound connection that was initiated
     /// by the node as result of the peer manager maintenance.
-    fn accept_connection(
+    async fn accept_connection(
         &mut self,
         address: T::Address,
         role: Role,
         info: PeerInfo<T::PeerId>,
-        _receiver_address: Option<PeerAddress>,
+        receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
-        // TODO: Handle receiver_address
-
         let peer_id = info.peer_id;
 
         ensure!(
@@ -162,6 +251,19 @@ where
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
 
+        if let (Some(receiver_address), Role::Outbound) = (receiver_address, role) {
+            self.handle_outbound_receiver_address(peer_id, receiver_address).await?;
+        }
+
+        if role == Role::Outbound {
+            self.peer_connectivity_handle
+                .send_request(
+                    peer_id,
+                    PeerManagerRequest::AddrListRequest(AddrListRequest {}),
+                )
+                .await?;
+        }
+
         log::debug!("peer {peer_id} connected, address {address:?}, {info}");
         self.peerdb.peer_connected(address, role, info);
         self.tx_sync.send(SyncControlEvent::Connected(peer_id)).map_err(P2pError::from)
@@ -176,7 +278,7 @@ where
     /// This function verifies that neither address the nor the peer ID are on the
     /// list of banned IPs/peer IDs. It also checks that the maximum number of
     /// connections `PeerManager` is configured to have has not been reached.
-    fn accept_inbound_connection(
+    async fn accept_inbound_connection(
         &mut self,
         address: T::Address,
         info: net::types::PeerInfo<T::PeerId>,
@@ -203,7 +305,7 @@ where
             return Err(P2pError::PeerError(PeerError::TooManyPeers));
         }
 
-        self.accept_connection(address, Role::Inbound, info, receiver_address)
+        self.accept_connection(address, Role::Inbound, info, receiver_address).await
     }
 
     /// Close connection to a remote peer
@@ -220,6 +322,9 @@ where
 
             self.peerdb.peer_disconnected(&peer_id);
         }
+
+        self.announced_addresses.remove(&peer_id);
+
         Ok(())
     }
 
@@ -261,10 +366,14 @@ where
     /// networking backend which then reports at some point in the future
     /// whether the connection failed or succeeded.
     async fn connect(&mut self, address: T::Address) -> crate::Result<()> {
-        // TODO: verify that the peer is not already part of our swarm (needs peerdb)
         ensure!(
             !self.pending.contains_key(&address),
             P2pError::PeerError(PeerError::Pending(address.to_string())),
+        );
+
+        ensure!(
+            !self.peerdb.is_address_connected(&address),
+            P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
 
         let bannable_address = address.as_bannable();
@@ -283,7 +392,7 @@ where
     /// is checked and updated at least once every 30 seconds. In high-traffic scenarios the
     /// update interval is clamped to a sensible lower bound. `PeerManager` will keep track of
     /// when it last update its own state and if the time since last update is less than the
-    /// configured lower bound, it exits early from the function.
+    /// configured lower bound, *heartbeat* won't be called.
     ///
     /// This function maintains the overall connectivity state of peers by culling
     /// low-reputation peers and establishing new connections with peers that have higher
@@ -298,23 +407,23 @@ where
     /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
     async fn heartbeat(&mut self) -> crate::Result<()> {
-        let npeers = std::cmp::min(
+        let count = std::cmp::min(
             self.peerdb.available_addresses_count(),
             MAX_ACTIVE_CONNECTIONS
                 .saturating_sub(self.peerdb.available_addresses_count())
                 .saturating_sub(self.pending.len()),
         );
 
-        for _ in 0..npeers {
-            if let Some(addr) = self.peerdb.take_best_peer_addr() {
-                match self.connect(addr.clone()).await {
-                    Ok(_) => {
-                        self.pending.insert(addr, None);
-                    }
-                    Err(err) => {
-                        self.peerdb.report_outbound_failure(addr.clone());
-                        self.handle_result(None, Err(err)).await?;
-                    }
+        let addresses = self.peerdb.random_known_addresses(count);
+
+        for address in addresses {
+            match self.connect(address.clone()).await {
+                Ok(_) => {
+                    self.pending.insert(address, None);
+                }
+                Err(err) => {
+                    self.peerdb.report_outbound_failure(address.clone());
+                    self.handle_result(None, Err(err)).await?;
                 }
             }
         }
@@ -326,21 +435,45 @@ where
 
     async fn handle_incoming_request(
         &mut self,
-        _peer_id: T::PeerId,
+        peer_id: T::PeerId,
         request_id: T::PeerRequestId,
         request: PeerManagerRequest,
     ) -> crate::Result<()> {
         match request {
-            // TODO: Rework this
             PeerManagerRequest::AddrListRequest(AddrListRequest {}) => {
-                let addresses = self.peerdb.known_addresses();
+                let addresses = self
+                    .peerdb
+                    .random_known_addresses(MAX_ADDRESS_COUNT)
+                    .iter()
+                    .map(TransportAddress::as_peer_address)
+                    .filter(|address| self.is_peer_address_valid(address))
+                    .collect();
 
                 self.peer_connectivity_handle
                     .send_response(
                         request_id,
-                        PeerManagerResponse::AddrListResponse(AddrListResponse::new(addresses)),
+                        PeerManagerResponse::AddrListResponse(AddrListResponse { addresses }),
                     )
                     .await
+            }
+            PeerManagerRequest::AnnounceAddrRequest(AnnounceAddrRequest { address }) => {
+                // TODO: Rate limit announce address requests to prevent DoS attacks.
+                // For example it's 0.1 req/sec in Bitcoin Core.
+                let is_address_valid = self.is_peer_address_valid(&address);
+                if let (true, Some(address)) = (
+                    is_address_valid,
+                    TransportAddress::from_peer_address(&address),
+                ) {
+                    self.peerdb.peer_discovered(&address);
+
+                    self.announced_addresses.entry(peer_id).or_default().insert(address.clone());
+
+                    let peer_ids = self.peerdb.random_peer_ids(ANNOUNCED_RESEND_COUNT);
+                    for new_peer_id in peer_ids {
+                        self.send_announced_address(new_peer_id, address.clone()).await?;
+                    }
+                }
+                Ok(())
             }
         }
     }
@@ -351,16 +484,20 @@ where
         _request_id: T::PeerRequestId,
         response: PeerManagerResponse,
     ) -> crate::Result<()> {
+        // TODO: Check that unsolicited responses are not allowed
         match response {
-            // TODO: Rework this
-            PeerManagerResponse::AddrListResponse(response) => {
-                for address in response.addresses() {
-                    if let Some(address) = TransportAddress::from_peer_address(address) {
+            PeerManagerResponse::AddrListResponse(AddrListResponse { addresses }) => {
+                for address in addresses {
+                    if let (true, Some(address)) = (
+                        self.is_peer_address_valid(&address),
+                        TransportAddress::from_peer_address(&address),
+                    ) {
                         self.peerdb.peer_discovered(&address);
                     }
                 }
                 Ok(())
             }
+            PeerManagerResponse::AnnounceAddrResponse(AnnounceAddrResponse {}) => Ok(()),
         }
     }
 
@@ -400,6 +537,147 @@ where
         }
     }
 
+    /// Handle control event.
+    ///
+    /// Handle events from an outside controller (rpc, for example) that sets/gets values for PeerManager
+    async fn handle_control_event(&mut self, event: PeerManagerEvent<T>) -> crate::Result<()> {
+        match event {
+            PeerManagerEvent::Connect(addr, response) => {
+                log::debug!("try to establish outbound connection to peer at address {addr:?}");
+
+                let res = self.connect(addr.clone()).await.map(|_| {
+                    self.pending.insert(addr.clone(), Some(response));
+                });
+                self.handle_result(None, res).await?;
+            }
+            PeerManagerEvent::Disconnect(peer_id, response) => {
+                log::debug!("disconnect peer {peer_id}");
+
+                response
+                    .send(self.peer_connectivity_handle.disconnect(peer_id).await)
+                    .map_err(|_| P2pError::ChannelClosed)?;
+            }
+            PeerManagerEvent::AdjustPeerScore(peer_id, score, response) => {
+                log::debug!("adjust peer {peer_id} score: {score}");
+
+                response
+                    .send(self.adjust_peer_score(peer_id, score).await)
+                    .map_err(|_| P2pError::ChannelClosed)?;
+            }
+            PeerManagerEvent::GetPeerCount(response) => {
+                response
+                    .send(self.peerdb.active_peer_count())
+                    .map_err(|_| P2pError::ChannelClosed)?;
+            }
+            PeerManagerEvent::GetBindAddresses(response) => {
+                let addr = self
+                    .peer_connectivity_handle
+                    .local_addresses()
+                    .iter()
+                    .map(|addr| addr.to_string())
+                    .collect();
+                response.send(addr).map_err(|_| P2pError::ChannelClosed)?;
+            }
+            PeerManagerEvent::GetConnectedPeers(response) => {
+                let peers = self.peerdb.get_connected_peers();
+                response.send(peers).map_err(|_| P2pError::ChannelClosed)?
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Handle connectivity event.
+    async fn handle_connectivity_event_result(
+        &mut self,
+        event_res: crate::Result<ConnectivityEvent<T>>,
+    ) -> crate::Result<()> {
+        match event_res {
+            Ok(event) => match event {
+                net::types::ConnectivityEvent::Request {
+                    peer_id,
+                    request_id,
+                    request,
+                } => {
+                    self.handle_incoming_request(peer_id, request_id, request).await?;
+                }
+                net::types::ConnectivityEvent::Response {
+                    peer_id,
+                    request_id,
+                    response,
+                } => {
+                    self.handle_incoming_response(peer_id, request_id, response)?;
+                }
+                net::types::ConnectivityEvent::InboundAccepted {
+                    address,
+                    peer_info,
+                    receiver_address,
+                } => {
+                    let peer_id = peer_info.peer_id;
+
+                    match self.accept_inbound_connection(address, peer_info, receiver_address).await
+                    {
+                        Ok(_) => {}
+                        Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
+                        Err(P2pError::PeerError(err)) => {
+                            log::warn!("peer error for peer {peer_id}: {err}");
+                            self.peer_connectivity_handle.disconnect(peer_id).await?;
+                        }
+                        Err(P2pError::ProtocolError(err)) => {
+                            log::warn!("peer error for peer {peer_id}: {err}");
+                            self.adjust_peer_score(peer_id, err.ban_score()).await?;
+                        }
+                        Err(err) => {
+                            log::error!("unknown error for peer {peer_id}: {err}");
+                        }
+                    }
+                }
+                net::types::ConnectivityEvent::OutboundAccepted {
+                    address,
+                    peer_info,
+                    receiver_address,
+                } => {
+                    let peer_id = peer_info.peer_id;
+                    let res = self
+                        .accept_connection(
+                            address.clone(),
+                            Role::Outbound,
+                            peer_info,
+                            receiver_address,
+                        )
+                        .await;
+                    self.handle_result(Some(peer_id), res).await?;
+
+                    match self.pending.remove(&address) {
+                        Some(Some(channel)) => {
+                            channel.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?
+                        }
+                        Some(None) => {}
+                        None => log::error!("connection accepted but it's not pending?"),
+                    }
+                }
+                net::types::ConnectivityEvent::ConnectionClosed { peer_id } => {
+                    let res = self.close_connection(peer_id);
+                    self.handle_result(Some(peer_id), res).await?;
+                }
+                net::types::ConnectivityEvent::ConnectionError { address, error } => {
+                    let res = self.handle_outbound_error(address, error);
+                    self.handle_result(None, res).await?;
+                }
+                net::types::ConnectivityEvent::Misbehaved { peer_id, error } => {
+                    let res = self.adjust_peer_score(peer_id, error.ban_score()).await;
+                    self.handle_result(Some(peer_id), res).await?;
+                }
+            },
+            Err(err) => {
+                log::error!("failed to read network event: {err:?}");
+                self.handle_result(None, Err(err)).await?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Runs the `PeerManager` event loop.
     ///
     /// The event loop has three main responsibilities:
@@ -417,110 +695,18 @@ where
     pub async fn run(&mut self) -> crate::Result<void::Void> {
         loop {
             tokio::select! {
-                event = self.rx_peer_manager.recv() => match event.ok_or(P2pError::ChannelClosed)? {
-                    //
-                    // Handle events from an outside controller (rpc, for example) that sets/gets values for PeerManager
-                    //
-                    PeerManagerEvent::Connect(addr, response) => {
-                        log::debug!("try to establish outbound connection to peer at address {addr:?}");
-
-                        let res = self.connect(addr.clone()).await.map(|_| {
-                            self.pending.insert(addr.clone(), Some(response));
-                        });
-                        self.handle_result(None, res).await?;
-                    }
-                    PeerManagerEvent::Disconnect(peer_id, response) => {
-                        log::debug!("disconnect peer {peer_id}");
-
-                        response
-                            .send(self.peer_connectivity_handle.disconnect(peer_id).await)
-                            .map_err(|_| P2pError::ChannelClosed)?;
-                    }
-                    PeerManagerEvent::AdjustPeerScore(peer_id, score, response) => {
-                        log::debug!("adjust peer {peer_id} score: {score}");
-
-                        response
-                            .send(self.adjust_peer_score(peer_id, score).await)
-                            .map_err(|_| P2pError::ChannelClosed)?;
-                    }
-                    PeerManagerEvent::GetPeerCount(response) => {
-                        response.send(self.peerdb.active_peer_count()).map_err(|_| P2pError::ChannelClosed)?;
-                    }
-                    PeerManagerEvent::GetBindAddresses(response) => {
-                        let addr = self.peer_connectivity_handle.local_addresses();
-                        let addr = addr.await.unwrap_or_default().into_iter().map(|addr| addr.to_string()).collect();
-                        response.send(addr).map_err(|_| P2pError::ChannelClosed)?;
-                    }
-                    PeerManagerEvent::GetConnectedPeers(response) => {
-                        let peers = self.peerdb.get_connected_peers();
-                        response.send(peers).map_err(|_| P2pError::ChannelClosed)?
-                    }
+                event = self.rx_peer_manager.recv() => {
+                    self.handle_control_event(event.ok_or(P2pError::ChannelClosed)?).await?;
                 },
-                event = self.peer_connectivity_handle.poll_next() => match event {
-                    Ok(event) => match event {
-                        net::types::ConnectivityEvent::Request { peer_id, request_id, request } => {
-                            self.handle_incoming_request(peer_id, request_id, request).await?;
-                        },
-                        net::types::ConnectivityEvent::Response { peer_id, request_id, response } => {
-                            self.handle_incoming_response(peer_id, request_id, response)?;
-                        },
-                        net::types::ConnectivityEvent::InboundAccepted { address, peer_info, receiver_address } => {
-                            let peer_id = peer_info.peer_id;
-
-                            match self.accept_inbound_connection(address, peer_info, receiver_address) {
-                                Ok(_) => {},
-                                Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
-                                Err(P2pError::PeerError(err)) => {
-                                    log::warn!("peer error for peer {peer_id}: {err}");
-                                    self.peer_connectivity_handle.disconnect(peer_id).await?;
-                                }
-                                Err(P2pError::ProtocolError(err)) => {
-                                    log::warn!("peer error for peer {peer_id}: {err}");
-                                    self.adjust_peer_score(peer_id, err.ban_score()).await?;
-                                }
-                                Err(err) => {
-                                    log::error!("unknown error for peer {peer_id}: {err}");
-                                }
-                            }
-                        }
-                        net::types::ConnectivityEvent::OutboundAccepted { address, peer_info, receiver_address } => {
-                            let peer_id = peer_info.peer_id;
-                            let res = self.accept_connection(address.clone(), Role::Outbound, peer_info, receiver_address);
-                            self.handle_result(Some(peer_id), res).await?;
-
-                            match self.pending.remove(&address) {
-                                Some(Some(channel)) => channel.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?,
-                                Some(None) => {},
-                                None => log::error!("connection accepted but it's not pending?"),
-                            }
-                        }
-                        net::types::ConnectivityEvent::ConnectionClosed { peer_id } => {
-                            let res = self.close_connection(peer_id);
-                            self.handle_result(Some(peer_id), res).await?;
-                        }
-                        net::types::ConnectivityEvent::ConnectionError { address, error } => {
-                            let res = self.handle_outbound_error(address, error);
-                            self.handle_result(None, res).await?;
-                        }
-                        net::types::ConnectivityEvent::AddressDiscovered { address } => {
-                            self.peer_discovered(&address);
-                        }
-                        net::types::ConnectivityEvent::Misbehaved { peer_id, error } => {
-                            let res = self.adjust_peer_score(peer_id, error.ban_score()).await;
-                            self.handle_result(Some(peer_id), res).await?;
-                        }
-                    }
-                    Err(err) => {
-                        log::error!("failed to read network event: {err:?}");
-                        self.handle_result(None, Err(err)).await?;
-                    }
+                event_res = self.peer_connectivity_handle.poll_next() => {
+                    self.handle_connectivity_event_result(event_res).await?;
                 },
-                _event = tokio::time::sleep(PEER_MGR_HEARTBEAT_INTERVAL_MAX) => {}
+                _event = tokio::time::sleep(*self.p2p_config.heartbeat_interval_max) => {}
             }
 
             // finally update peer manager state
             let now = Instant::now();
-            if now.duration_since(self.last_heartbeat) > PEER_MGR_HEARTBEAT_INTERVAL_MIN {
+            if now.duration_since(self.last_heartbeat) > *self.p2p_config.heartbeat_interval_min {
                 self.heartbeat().await?;
                 self.last_heartbeat = now;
             }

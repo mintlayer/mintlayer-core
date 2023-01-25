@@ -61,7 +61,7 @@ where
     .await
     .unwrap();
 
-    let addresses = connectivity.local_addresses().await.unwrap();
+    let addresses = connectivity.local_addresses().to_vec();
     let res = S::start(T::make_transport(), addresses, config, Default::default())
         .await
         .expect_err("address is not in use");
@@ -100,7 +100,7 @@ where
     .await
     .unwrap();
 
-    let conn_addr = service1.local_addresses().await.unwrap();
+    let conn_addr = service1.local_addresses().to_vec();
     let (res1, res2) = tokio::join!(service1.poll_next(), service2.connect(conn_addr[0].clone()));
     res1.unwrap();
     res2.unwrap();

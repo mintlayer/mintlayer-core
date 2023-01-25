@@ -30,6 +30,9 @@ make_config_setting!(
     [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
 );
 make_config_setting!(NodeTypeSetting, NodeType, NodeType::Full);
+make_config_setting!(AllowDiscoverPrivateIps, bool, false);
+make_config_setting!(HeartbeatIntervalMin, Duration, Duration::from_secs(5));
+make_config_setting!(HeartbeatIntervalMax, Duration, Duration::from_secs(30));
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]
@@ -71,4 +74,10 @@ pub struct P2pConfig {
     pub outbound_connection_timeout: OutboundConnectionTimeout,
     /// A node type.
     pub node_type: NodeTypeSetting,
+    /// Allow announcing and discovering local and private IPs. Should be used for testing only.
+    pub allow_discover_private_ips: AllowDiscoverPrivateIps,
+    /// Lower bound for how often `PeerManager::heartbeat` is called. Should be used for testing only.
+    pub heartbeat_interval_min: HeartbeatIntervalMin,
+    /// Upper bound for how often `PeerManager::heartbeat` is called. Should be used for testing only.
+    pub heartbeat_interval_max: HeartbeatIntervalMin,
 }

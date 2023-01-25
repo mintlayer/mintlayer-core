@@ -26,7 +26,7 @@ use crate::{
     net::types::Role,
     peer_manager::tests::run_peer_manager,
     testing_utils::{
-        connect_services, filter_connectivity_event, TestTransportChannel, TestTransportMaker,
+        connect_services, get_connectivity_event, TestTransportChannel, TestTransportMaker,
         TestTransportNoise, TestTransportTcp,
     },
 };
@@ -114,7 +114,7 @@ where
     let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
-    let addr = pm2.peer_connectivity_handle.local_addresses().await.unwrap()[0].clone();
+    let addr = pm2.peer_connectivity_handle.local_addresses()[0].clone();
 
     tokio::spawn(async move {
         loop {
@@ -123,7 +123,7 @@ where
     });
 
     // "discover" the other networking service
-    pm1.peer_discovered(&addr);
+    pm1.peerdb.peer_discovered(&addr);
     pm1.heartbeat().await.unwrap();
 
     assert_eq!(pm1.pending.len(), 1);
@@ -260,7 +260,7 @@ where
     )
     .await;
     assert_eq!(
-        pm2.accept_inbound_connection(address, peer_info, None),
+        pm2.accept_inbound_connection(address, peer_info, None).await,
         Ok(())
     );
 }
@@ -315,7 +315,7 @@ where
     .await;
 
     assert_eq!(
-        pm2.accept_inbound_connection(address, peer_info, None),
+        pm2.accept_inbound_connection(address, peer_info, None).await,
         Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
             [1, 2, 3, 4],
             *config::create_mainnet().magic_bytes(),
@@ -436,13 +436,7 @@ where
     // that tries to connect to the first manager
     tokio::spawn(async move { pm1.run().await });
 
-    let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
-        !std::matches!(
-            event,
-            Ok(net::types::ConnectivityEvent::AddressDiscovered { .. })
-        )
-    })
-    .await;
+    let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) = event {
         assert_eq!(peer_id, peer_info.peer_id);
     } else {
@@ -542,7 +536,7 @@ where
     pm1.peer_connectivity_handle.connect(addr2).await.expect("dial to succeed");
 
     match timeout(
-        *pm1._p2p_config.outbound_connection_timeout,
+        *pm1.p2p_config.outbound_connection_timeout,
         pm1.peer_connectivity_handle.poll_next(),
     )
     .await
@@ -676,7 +670,17 @@ where
     let chain_config = Arc::new(config::create_mainnet());
 
     // Start first peer manager
-    let p2p_config_1 = Arc::new(P2pConfig::default());
+    let p2p_config_1 = Arc::new(P2pConfig {
+        bind_addresses: Default::default(),
+        added_nodes: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        heartbeat_interval_min: Default::default(),
+        heartbeat_interval_max: Default::default(),
+    });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
@@ -699,6 +703,9 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        heartbeat_interval_min: Default::default(),
+        heartbeat_interval_max: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -715,13 +722,13 @@ where
         let (rtx, rrx) = oneshot::channel();
         tx1.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
         let connected_peers = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
-        // The backend will also make reverse connection.
-        if connected_peers.len() == 1 || connected_peers.len() == 2 {
+        if connected_peers.len() == 1 {
             break;
         }
         assert!(
             Instant::now().duration_since(started_at) < Duration::from_secs(10),
-            "no peer connected on time"
+            "Unexpected peer count: {}",
+            connected_peers.len()
         );
     }
 }
@@ -739,5 +746,156 @@ async fn connection_add_node_noise() {
 #[tokio::test]
 async fn connection_add_node_channel() {
     connection_add_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
+        .await;
+}
+
+// Verify that peers announce own addresses and are discovered by other peers
+async fn discovered_node<A, T>(expected_count: usize)
+where
+    A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+{
+    let chain_config = Arc::new(config::create_mainnet());
+
+    // Start the first peer manager
+    let p2p_config_1 = Arc::new(P2pConfig {
+        bind_addresses: Default::default(),
+        added_nodes: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: true.into(),
+        heartbeat_interval_min: Duration::from_secs(1).into(),
+        heartbeat_interval_max: Duration::from_secs(2).into(),
+    });
+    let tx1 = run_peer_manager::<T>(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&chain_config),
+        p2p_config_1,
+    )
+    .await;
+
+    // Get the first peer manager's bind address
+    let (rtx, rrx) = oneshot::channel();
+    tx1.send(PeerManagerEvent::GetBindAddresses(rtx)).unwrap();
+    let bind_addresses = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
+    assert_eq!(bind_addresses.len(), 1);
+
+    // Start the second peer manager and let it know about the first peer using added_nodes
+    let p2p_config_2 = Arc::new(P2pConfig {
+        bind_addresses: Default::default(),
+        added_nodes: bind_addresses.clone(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: true.into(),
+        heartbeat_interval_min: Duration::from_secs(1).into(),
+        heartbeat_interval_max: Duration::from_secs(2).into(),
+    });
+    let tx2 = run_peer_manager::<T>(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&chain_config),
+        p2p_config_2,
+    )
+    .await;
+
+    // Start the third peer manager and let it know about the first peer using added_nodes
+    let p2p_config_3 = Arc::new(P2pConfig {
+        bind_addresses: Default::default(),
+        added_nodes: bind_addresses,
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: true.into(),
+        heartbeat_interval_min: Duration::from_secs(1).into(),
+        heartbeat_interval_max: Duration::from_secs(2).into(),
+    });
+    let tx3 = run_peer_manager::<T>(
+        A::make_transport(),
+        A::make_address(),
+        Arc::clone(&chain_config),
+        p2p_config_3,
+    )
+    .await;
+
+    let started_at = Instant::now();
+
+    // The second peer should discover the third peer
+    loop {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let (rtx, rrx) = oneshot::channel();
+        tx2.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
+        let connected_peers = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
+        if connected_peers.len() == expected_count {
+            break;
+        }
+        assert!(
+            Instant::now().duration_since(started_at) < Duration::from_secs(10),
+            "Unexpected peer count: {}, expected: {}",
+            connected_peers.len(),
+            expected_count,
+        );
+    }
+
+    // Check the third peer manager
+    loop {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let (rtx, rrx) = oneshot::channel();
+        tx3.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
+        let connected_peers = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
+        if connected_peers.len() == expected_count {
+            break;
+        }
+        assert!(
+            Instant::now().duration_since(started_at) < Duration::from_secs(10),
+            "Unexpected peer count: {}, expected: {}",
+            connected_peers.len(),
+            expected_count,
+        );
+    }
+
+    // And the first peer manager
+    loop {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let (rtx, rrx) = oneshot::channel();
+        tx1.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
+        let connected_peers = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
+        if connected_peers.len() == expected_count {
+            break;
+        }
+        assert!(
+            Instant::now().duration_since(started_at) < Duration::from_secs(10),
+            "Unexpected peer count: {}, expected: {}",
+            connected_peers.len(),
+            expected_count,
+        );
+    }
+}
+
+#[tokio::test]
+async fn discovered_node_tcp() {
+    // With TCP all listening addresses are discovered and multiple connections are made:
+    // For example A mades outbound connections to B and C and accepts connections from B and C.
+    // There will be 4 connections reported for A.
+    discovered_node::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>(4).await;
+}
+
+#[tokio::test]
+async fn discovered_node_noise() {
+    // Same as with TCP
+    discovered_node::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>(4).await;
+}
+
+#[tokio::test]
+async fn discovered_node_channel() {
+    // With TestTransport peers made lower total connection count because there is only one "port" available.
+    // So when peer A connects to peer B, peer B won't open connection to A.
+    discovered_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>(2)
         .await;
 }

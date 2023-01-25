@@ -136,12 +136,6 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         peer_id: T::PeerId,
     },
 
-    /// New peer discovered
-    AddressDiscovered {
-        /// Address information
-        address: T::Address,
-    },
-
     /// Protocol violation
     Misbehaved {
         /// Unique ID of the peer

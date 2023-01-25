@@ -18,7 +18,7 @@ use std::sync::Arc;
 use crate::{
     net::types::Role,
     testing_utils::{
-        connect_services, filter_connectivity_event, RandomAddressMaker, TestChannelAddressMaker,
+        connect_services, get_connectivity_event, RandomAddressMaker, TestChannelAddressMaker,
         TestTcpAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp,
     },
@@ -60,20 +60,12 @@ where
     )
     .await;
     let peer_id = peer_info.peer_id;
-    pm2.accept_inbound_connection(address, peer_info, None).unwrap();
+    pm2.accept_inbound_connection(address, peer_info, None).await.unwrap();
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
-    let addr1 = pm1.peer_connectivity_handle.local_addresses().await.unwrap()[0]
-        .clone()
-        .as_bannable();
+    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
-    let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
-        !std::matches!(
-            event,
-            Ok(net::types::ConnectivityEvent::AddressDiscovered { .. })
-        )
-    })
-    .await;
+    let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(std::matches!(
         event,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
@@ -115,20 +107,12 @@ where
     )
     .await;
     let peer_id = peer_info.peer_id;
-    pm2.accept_inbound_connection(address, peer_info, None).unwrap();
+    pm2.accept_inbound_connection(address, peer_info, None).await.unwrap();
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
-    let addr1 = pm1.peer_connectivity_handle.local_addresses().await.unwrap()[0]
-        .clone()
-        .as_bannable();
+    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
-    let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
-        !std::matches!(
-            event,
-            Ok(net::types::ConnectivityEvent::AddressDiscovered { .. })
-        )
-    })
-    .await;
+    let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(std::matches!(
         event,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
@@ -178,26 +162,18 @@ where
     )
     .await;
     let peer_id = peer_info1.peer_id;
-    pm2.accept_inbound_connection(address, peer_info1, None).unwrap();
+    pm2.accept_inbound_connection(address, peer_info1, None).await.unwrap();
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
-    let addr1 = pm1.peer_connectivity_handle.local_addresses().await.unwrap()[0]
-        .clone()
-        .as_bannable();
+    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
     assert!(pm2.peerdb.is_address_banned(&addr1));
-    let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
-        !std::matches!(
-            event,
-            Ok(net::types::ConnectivityEvent::AddressDiscovered { .. })
-        )
-    })
-    .await;
+    let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(matches!(
         event,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
 
-    let remote_addr = pm1.peer_connectivity_handle.local_addresses().await.unwrap()[0].clone();
+    let remote_addr = pm1.peer_connectivity_handle.local_addresses()[0].clone();
 
     tokio::spawn(async move {
         loop {
@@ -248,51 +224,63 @@ where
         make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config)).await;
 
     // invalid magic bytes
-    let res = peer_manager.accept_connection(
-        B::new(),
-        Role::Outbound,
-        net::types::PeerInfo::<S::PeerId> {
-            peer_id,
-            network: [1, 2, 3, 4],
-            version: SemVer::new(0, 1, 0),
-            agent: None,
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
-        },
-        None,
-    );
+    let res = peer_manager
+        .accept_connection(
+            B::new(),
+            Role::Outbound,
+            net::types::PeerInfo::<S::PeerId> {
+                peer_id,
+                network: [1, 2, 3, 4],
+                version: SemVer::new(0, 1, 0),
+                agent: None,
+                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                    .into_iter()
+                    .collect(),
+            },
+            None,
+        )
+        .await;
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(!peer_manager.peerdb.is_active_peer(&peer_id));
 
     // invalid version
-    let res = peer_manager.accept_connection(
-        B::new(),
-        Role::Outbound,
-        net::types::PeerInfo::<S::PeerId> {
-            peer_id,
-            network: *config.magic_bytes(),
-            version: SemVer::new(1, 1, 1),
-            agent: None,
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
-        },
-        None,
-    );
+    let res = peer_manager
+        .accept_connection(
+            B::new(),
+            Role::Outbound,
+            net::types::PeerInfo::<S::PeerId> {
+                peer_id,
+                network: *config.magic_bytes(),
+                version: SemVer::new(1, 1, 1),
+                agent: None,
+                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                    .into_iter()
+                    .collect(),
+            },
+            None,
+        )
+        .await;
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(!peer_manager.peerdb.is_active_peer(&peer_id));
 
     // valid connection
     let address = B::new();
-    let res = peer_manager.accept_connection(
-        address.clone(),
-        Role::Outbound,
-        net::types::PeerInfo::<S::PeerId> {
-            peer_id,
-            network: *config.magic_bytes(),
-            version: SemVer::new(0, 1, 0),
-            agent: None,
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
-        },
-        None,
-    );
+    let res = peer_manager
+        .accept_connection(
+            address.clone(),
+            Role::Outbound,
+            net::types::PeerInfo::<S::PeerId> {
+                peer_id,
+                network: *config.magic_bytes(),
+                version: SemVer::new(0, 1, 0),
+                agent: None,
+                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                    .into_iter()
+                    .collect(),
+            },
+            None,
+        )
+        .await;
     assert!(res.is_ok());
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(peer_manager.peerdb.is_active_peer(&peer_id));
@@ -341,48 +329,60 @@ where
         make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config)).await;
 
     // invalid magic bytes
-    let res = peer_manager.accept_inbound_connection(
-        B::new(),
-        net::types::PeerInfo::<S::PeerId> {
-            peer_id,
-            network: [1, 2, 3, 4],
-            version: SemVer::new(0, 1, 0),
-            agent: None,
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
-        },
-        None,
-    );
+    let res = peer_manager
+        .accept_inbound_connection(
+            B::new(),
+            net::types::PeerInfo::<S::PeerId> {
+                peer_id,
+                network: [1, 2, 3, 4],
+                version: SemVer::new(0, 1, 0),
+                agent: None,
+                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                    .into_iter()
+                    .collect(),
+            },
+            None,
+        )
+        .await;
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(!peer_manager.peerdb.is_active_peer(&peer_id));
 
     // invalid version
-    let res = peer_manager.accept_inbound_connection(
-        B::new(),
-        net::types::PeerInfo::<S::PeerId> {
-            peer_id,
-            network: *config.magic_bytes(),
-            version: SemVer::new(1, 1, 1),
-            agent: None,
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
-        },
-        None,
-    );
+    let res = peer_manager
+        .accept_inbound_connection(
+            B::new(),
+            net::types::PeerInfo::<S::PeerId> {
+                peer_id,
+                network: *config.magic_bytes(),
+                version: SemVer::new(1, 1, 1),
+                agent: None,
+                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                    .into_iter()
+                    .collect(),
+            },
+            None,
+        )
+        .await;
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(!peer_manager.peerdb.is_active_peer(&peer_id));
 
     // valid connection
     let address = B::new();
-    let res = peer_manager.accept_inbound_connection(
-        address.clone(),
-        net::types::PeerInfo::<S::PeerId> {
-            peer_id,
-            network: *config.magic_bytes(),
-            version: SemVer::new(0, 1, 0),
-            agent: None,
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
-        },
-        None,
-    );
+    let res = peer_manager
+        .accept_inbound_connection(
+            address.clone(),
+            net::types::PeerInfo::<S::PeerId> {
+                peer_id,
+                network: *config.magic_bytes(),
+                version: SemVer::new(0, 1, 0),
+                agent: None,
+                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                    .into_iter()
+                    .collect(),
+            },
+            None,
+        )
+        .await;
     assert!(res.is_ok());
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(peer_manager.peerdb.is_active_peer(&peer_id));
@@ -451,13 +451,7 @@ where
     // that tries to connect to the first manager
     tokio::spawn(async move { pm1.run().await });
 
-    let event = filter_connectivity_event::<T, _>(&mut pm2.peer_connectivity_handle, |event| {
-        !std::matches!(
-            event,
-            Ok(net::types::ConnectivityEvent::AddressDiscovered { .. })
-        )
-    })
-    .await;
+    let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) = event {
         assert_eq!(peer_id, peer_info.peer_id);
     } else {
