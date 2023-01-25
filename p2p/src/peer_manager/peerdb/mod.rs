@@ -26,7 +26,7 @@
 //! if the actual number of active connection is less than the desired number of connections.
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -78,13 +78,13 @@ pub struct PeerDb<T: NetworkingService> {
     p2p_config: Arc<config::P2pConfig>,
 
     /// Set of active peers
-    peers: HashMap<T::PeerId, PeerContext<T>>,
+    peers: BTreeMap<T::PeerId, PeerContext<T>>,
 
     /// Set of currently connected addresses
-    connected_addresses: HashSet<T::Address>,
+    connected_addresses: BTreeSet<T::Address>,
 
     /// Set of all known addresses
-    known_addresses: HashSet<T::Address>,
+    known_addresses: BTreeSet<T::Address>,
 
     /// Banned addresses along with the duration of the ban.
     ///
@@ -103,7 +103,7 @@ impl<T: NetworkingService> PeerDb<T> {
                     P2pError::ConversionError(ConversionError::InvalidAddress(addr.clone()))
                 })
             })
-            .collect::<Result<HashSet<_>, _>>()?;
+            .collect::<Result<BTreeSet<_>, _>>()?;
         Ok(Self {
             peers: Default::default(),
             connected_addresses: Default::default(),

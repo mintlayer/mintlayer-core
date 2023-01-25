@@ -141,7 +141,7 @@ impl std::fmt::Display for RequestId {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Encode, Decode)]
+#[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Encode, Decode)]
 pub struct PeerId(u64);
 
 impl FromStr for PeerId {

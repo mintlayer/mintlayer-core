@@ -53,6 +53,7 @@ pub trait NetworkingService {
     type Address: Clone
         + Debug
         + Eq
+        + Ord
         + Hash
         + Send
         + Sync
@@ -68,7 +69,7 @@ pub trait NetworkingService {
     type BannableAddress: Debug + Eq + Ord + Send;
 
     /// Unique ID assigned to a peer on the network
-    type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString + FromStr;
+    type PeerId: Copy + Debug + Display + Eq + Ord + Hash + Send + Sync + ToString + FromStr;
 
     /// Unique ID assigned to each received request from a peer
     type PeerRequestId: Copy + Debug + Eq + Hash + Send + Sync;
