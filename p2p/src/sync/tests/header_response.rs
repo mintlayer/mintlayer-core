@@ -261,7 +261,7 @@ where
     let mut headers = p2p_test_utils::create_n_blocks(
         Arc::clone(&config),
         TestBlockInfo::from_genesis(config.genesis_block()),
-        rng.gen_range(5..100),
+        rng.gen_range(50..100),
     )
     .iter()
     .map(|block| block.header().clone())
