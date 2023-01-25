@@ -125,6 +125,7 @@ impl<T: NetworkingService> PeerDb<T> {
         self.peers.len()
     }
 
+    /// Returns short info about all connected peers
     pub fn get_connected_peers(&self) -> Vec<ConnectedPeer> {
         self.peers.values().map(Into::into).collect()
     }
@@ -135,6 +136,7 @@ impl<T: NetworkingService> PeerDb<T> {
     }
 
     /// Selects requested count of peer addresses from the DB randomly.
+    ///
     /// Result could be shared with remote peers over network.
     pub fn random_known_addresses(&self, count: usize) -> Vec<T::Address> {
         // TODO: Use something more efficient (without iterating over the all addresses first)
@@ -146,6 +148,9 @@ impl<T: NetworkingService> PeerDb<T> {
     }
 
     /// Selects requested count of connected peer ids randomly.
+    ///
+    /// It can be used to distribute data in the gossip protocol
+    /// (for example, to relay announced addresses to a small group of peers).
     pub fn random_peer_ids(&self, count: usize) -> Vec<T::PeerId> {
         // There are normally not many connected peers, so iterating over the whole list should be OK
         let all_peer_ids = self.peers.keys().cloned().collect::<Vec<_>>();
