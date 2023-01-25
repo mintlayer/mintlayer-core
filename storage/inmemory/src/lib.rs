@@ -33,7 +33,7 @@ pub struct StorageMaps(Vec<Map>);
 
 impl backend::ReadOps for StorageMaps {
     fn get(&self, idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
-        Ok(self.0[idx.get()].get(key).map(|p| p[..].into()))
+        Ok(self.0[idx.get()].get(key).map(|p| p.into()))
     }
 }
 
