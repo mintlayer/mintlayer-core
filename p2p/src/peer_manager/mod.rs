@@ -55,7 +55,7 @@ use crate::{
     types::peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
 };
 
-use self::global_ip::IsGlobalIp;
+use self::{global_ip::IsGlobalIp, peerdb::storage::PeerDbStorage};
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
 const MAX_ACTIVE_CONNECTIONS: usize = 128;
@@ -66,7 +66,7 @@ const MAX_ADDRESS_COUNT: usize = 1000;
 /// To how many peers re-send received announced address
 const ANNOUNCED_RESEND_COUNT: usize = 2;
 
-pub struct PeerManager<T>
+pub struct PeerManager<T, S>
 where
     T: NetworkingService,
 {
@@ -89,7 +89,7 @@ where
     pending: HashMap<T::Address, Option<oneshot::Sender<crate::Result<()>>>>,
 
     /// Peer database
-    peerdb: peerdb::PeerDb<T>,
+    peerdb: peerdb::PeerDb<T, S>,
 
     /// Last time when heartbeat was called
     last_heartbeat: Instant,
@@ -100,10 +100,11 @@ where
     announced_addresses: HashMap<T::PeerId, HashSet<T::Address>>,
 }
 
-impl<T> PeerManager<T>
+impl<T, S> PeerManager<T, S>
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
+    S: PeerDbStorage,
 {
     pub fn new(
         chain_config: Arc<ChainConfig>,
@@ -111,12 +112,14 @@ where
         handle: T::ConnectivityHandle,
         rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
         tx_sync: mpsc::UnboundedSender<SyncControlEvent<T>>,
+        peerdb_storage: S,
     ) -> crate::Result<Self> {
+        let peerdb = peerdb::PeerDb::new(Arc::clone(&p2p_config), peerdb_storage)?;
         Ok(Self {
             peer_connectivity_handle: handle,
             rx_peer_manager,
             tx_sync,
-            peerdb: peerdb::PeerDb::new(Arc::clone(&p2p_config))?,
+            peerdb,
             pending: HashMap::new(),
             chain_config,
             p2p_config,
@@ -293,7 +296,7 @@ where
 
         let bannable_address = address.as_bannable();
         ensure!(
-            !self.peerdb.is_address_banned(&bannable_address),
+            !self.peerdb.is_address_banned(&bannable_address)?,
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
@@ -336,7 +339,7 @@ where
     async fn adjust_peer_score(&mut self, peer_id: T::PeerId, score: u32) -> crate::Result<()> {
         log::debug!("adjusting score for peer {peer_id}, adjustment {score}");
 
-        if self.peerdb.adjust_peer_score(&peer_id, score) {
+        if self.peerdb.adjust_peer_score(&peer_id, score)? {
             let _ = self.peer_connectivity_handle.disconnect(peer_id).await;
         }
 
@@ -378,7 +381,7 @@ where
 
         let bannable_address = address.as_bannable();
         ensure!(
-            !self.peerdb.is_address_banned(&bannable_address),
+            !self.peerdb.is_address_banned(&bannable_address)?,
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
@@ -464,7 +467,7 @@ where
                     is_address_valid,
                     TransportAddress::from_peer_address(&address),
                 ) {
-                    self.peerdb.peer_discovered(&address);
+                    self.peerdb.peer_discovered(&address)?;
 
                     self.announced_addresses.entry(peer_id).or_default().insert(address.clone());
 
@@ -492,7 +495,7 @@ where
                         self.is_peer_address_valid(&address),
                         TransportAddress::from_peer_address(&address),
                     ) {
-                        self.peerdb.peer_discovered(&address);
+                        self.peerdb.peer_discovered(&address)?;
                     }
                 }
                 Ok(())

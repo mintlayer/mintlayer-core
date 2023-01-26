@@ -66,7 +66,7 @@ pub trait NetworkingService {
     ///
     /// Usually it is part of the `NetworkingService::Address`. For example for a socket address
     /// that consists of an IP address and a port we want to ban the IP address.
-    type BannableAddress: Debug + Eq + Ord + Send;
+    type BannableAddress: Debug + Eq + Ord + Send + ToString + FromStr;
 
     /// Unique ID assigned to a peer on the network
     type PeerId: Copy + Debug + Display + Eq + Ord + Hash + Send + Sync + ToString + FromStr;

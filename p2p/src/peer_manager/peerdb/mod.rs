@@ -25,6 +25,9 @@
 //! used by [`crate::peer_manager::PeerManager::heartbeat()`] to establish new outbound connections
 //! if the actual number of active connection is less than the desired number of connections.
 
+pub mod storage;
+pub mod storage_impl;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -42,6 +45,10 @@ use crate::{
         types::{self, Role},
         AsBannableAddress, NetworkingService,
     },
+};
+
+use self::storage::{
+    PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite, PeerDbTransactionRo, PeerDbTransactionRw,
 };
 
 #[derive(Debug)]
@@ -71,9 +78,7 @@ impl<T: NetworkingService> From<&PeerContext<T>> for ConnectedPeer {
 }
 
 // TODO: Store available addresses in a binary heap (sorting by their availability).
-// TODO: Find a way to persist this data in some database for when the node is restarted
-// (banned, available, and at-least-once used should be restored)
-pub struct PeerDb<T: NetworkingService> {
+pub struct PeerDb<T: NetworkingService, S> {
     /// P2P configuration
     p2p_config: Arc<config::P2pConfig>,
 
@@ -90,11 +95,13 @@ pub struct PeerDb<T: NetworkingService> {
     ///
     /// The duration represents the `UNIX_EPOCH + duration` time point, so the ban should end
     /// when `current_time > ban_duration`.
-    banned: BTreeMap<T::BannableAddress, Duration>,
+    banned_addresses: BTreeMap<T::BannableAddress, Duration>,
+
+    storage: S,
 }
 
-impl<T: NetworkingService> PeerDb<T> {
-    pub fn new(p2p_config: Arc<config::P2pConfig>) -> crate::Result<Self> {
+impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
+    pub fn new(p2p_config: Arc<config::P2pConfig>, storage: S) -> crate::Result<Self> {
         let added_nodes = p2p_config
             .added_nodes
             .iter()
@@ -103,15 +110,34 @@ impl<T: NetworkingService> PeerDb<T> {
                     P2pError::ConversionError(ConversionError::InvalidAddress(addr.clone()))
                 })
             })
-            .collect::<Result<BTreeSet<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Node won't start if DB loading fails!
+        let tx = storage.transaction_ro()?;
+        let stored_known_addresses = tx.get_known_addresses()?;
+        let stored_banned_addresses = tx.get_banned_addresses()?;
+        tx.close();
+
+        let stored_known_addresses_iter =
+            stored_known_addresses.iter().filter_map(|address| address.parse().ok());
+        // TODO: We need to handle added nodes differently from ordinary nodes.
+        // There are peers that we want to persistently have, and others that we want to just give a "shot" at connecting at.
+        let known_addresses = stored_known_addresses_iter.chain(added_nodes.into_iter()).collect();
+
+        let banned_addresses = stored_banned_addresses
+            .iter()
+            .filter_map(|(address, duration)| {
+                address.parse().ok().map(|address| (address, *duration))
+            })
+            .collect();
+
         Ok(Self {
             peers: Default::default(),
             connected_addresses: Default::default(),
-            // TODO: We need to handle added nodes differently from ordinary nodes.
-            // There are peers that we want to persistently have, and others that we want to just give a "shot" at connecting at.
-            known_addresses: added_nodes,
-            banned: Default::default(),
+            known_addresses,
+            banned_addresses,
             p2p_config,
+            storage,
         })
     }
 
@@ -161,21 +187,24 @@ impl<T: NetworkingService> PeerDb<T> {
     }
 
     /// Checks if the given address is banned.
-    pub fn is_address_banned(&mut self, address: &T::BannableAddress) -> bool {
-        if let Some(banned_till) = self.banned.get(address) {
+    pub fn is_address_banned(&mut self, address: &T::BannableAddress) -> crate::Result<bool> {
+        if let Some(banned_till) = self.banned_addresses.get(address) {
             // Check if the ban has expired.
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 // This can fail only if `SystemTime::now()` returns the time before `UNIX_EPOCH`.
                 .expect("Invalid system time");
             if now > *banned_till {
-                self.banned.remove(address);
+                self.banned_addresses.remove(address);
+                let mut tx = self.storage.transaction_rw()?;
+                tx.del_banned_address(&address.to_string())?;
+                tx.commit()?;
             } else {
-                return true;
+                return Ok(true);
             }
         }
 
-        false
+        Ok(false)
     }
 
     /// Checks if the peer is active
@@ -190,8 +219,13 @@ impl<T: NetworkingService> PeerDb<T> {
     }
 
     /// Add new peer addresses
-    pub fn peer_discovered(&mut self, address: &T::Address) {
+    pub fn peer_discovered(&mut self, address: &T::Address) -> crate::Result<()> {
         self.known_addresses.insert(address.clone());
+
+        let mut tx = self.storage.transaction_rw()?;
+        tx.add_known_address(&address.to_string())?;
+        tx.commit()?;
+        Ok(())
     }
 
     /// Report outbound connection failure
@@ -251,7 +285,7 @@ impl<T: NetworkingService> PeerDb<T> {
     }
 
     /// Changes the peer state to `Peer::Banned` and bans it for 24 hours.
-    fn ban_peer(&mut self, peer_id: &T::PeerId) {
+    fn ban_peer(&mut self, peer_id: &T::PeerId) -> crate::Result<()> {
         if let Some(peer) = self.peers.remove(peer_id) {
             let bannable_address = peer.address.as_bannable();
             let ban_till = SystemTime::now()
@@ -259,10 +293,14 @@ impl<T: NetworkingService> PeerDb<T> {
                 // This can fail only if `SystemTime::now()` returns the time before `UNIX_EPOCH`.
                 .expect("Invalid system time")
                 + *self.p2p_config.ban_duration;
-            self.banned.insert(bannable_address, ban_till);
+            let mut tx = self.storage.transaction_rw()?;
+            tx.add_banned_address(&bannable_address.to_string(), ban_till)?;
+            tx.commit()?;
+            self.banned_addresses.insert(bannable_address, ban_till);
         } else {
             log::error!("Failed to get address for peer {}", peer_id);
         }
+        Ok(())
     }
 
     /// Adjust peer score
@@ -273,20 +311,20 @@ impl<T: NetworkingService> PeerDb<T> {
     ///
     /// If peer is banned, it is removed from the connected peers
     /// and its address is marked as banned.
-    pub fn adjust_peer_score(&mut self, peer_id: &T::PeerId, score: u32) -> bool {
+    pub fn adjust_peer_score(&mut self, peer_id: &T::PeerId, score: u32) -> crate::Result<bool> {
         let peer = match self.peers.get_mut(peer_id) {
             Some(peer) => peer,
-            None => return true,
+            None => return Ok(true),
         };
 
         peer.score = peer.score.saturating_add(score);
 
         if peer.score >= *self.p2p_config.ban_threshold {
-            self.ban_peer(peer_id);
-            return true;
+            self.ban_peer(peer_id)?;
+            return Ok(true);
         }
 
-        false
+        Ok(false)
     }
 
     pub fn peer_address(&self, id: &T::PeerId) -> Option<&T::Address> {

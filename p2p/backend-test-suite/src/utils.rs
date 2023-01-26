@@ -15,13 +15,13 @@
 
 macro_rules! tests {
     ($($(#[$meta:meta])* $name:ident,)+) => {
-        pub fn tests<T, S, A>() -> impl Iterator<Item = libtest_mimic::Trial>
+        pub fn tests<T, N, A>() -> impl Iterator<Item = libtest_mimic::Trial>
         where
-            T: p2p::testing_utils::TestTransportMaker<Transport = S::Transport, Address = S::Address>,
-            S: p2p::net::NetworkingService<PeerId = p2p::net::default_backend::types::PeerId> + std::fmt::Debug + 'static,
-            S::ConnectivityHandle: p2p::net::ConnectivityService<S> + std::fmt::Debug,
-            S::SyncingMessagingHandle: p2p::net::SyncingMessagingService<S> + std::fmt::Debug,
-            A: p2p::testing_utils::RandomAddressMaker<Address = S::Address>,
+            T: p2p::testing_utils::TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+            N: p2p::net::NetworkingService<PeerId = p2p::net::default_backend::types::PeerId> + std::fmt::Debug + 'static,
+            N::ConnectivityHandle: p2p::net::ConnectivityService<N> + std::fmt::Debug,
+            N::SyncingMessagingHandle: p2p::net::SyncingMessagingService<N> + std::fmt::Debug,
+            A: p2p::testing_utils::RandomAddressMaker<Address = N::Address>,
         {
             [
                 $($(#[$meta])*
@@ -33,7 +33,7 @@ macro_rules! tests {
                         .build()
                         .unwrap()
                         .block_on(async {
-                            $name::<T, S, A>().await;
+                            $name::<T, N, A>().await;
                         });
                     Ok(())
                 }

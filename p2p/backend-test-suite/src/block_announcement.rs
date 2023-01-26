@@ -47,15 +47,15 @@ tests![
     block_announcement_too_big_message,
 ];
 
-async fn block_announcement<T, S, A>()
+async fn block_announcement<T, N, A>()
 where
-    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
-    S: NetworkingService + Debug,
-    S::SyncingMessagingHandle: SyncingMessagingService<S>,
-    S::ConnectivityHandle: ConnectivityService<S>,
+    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    N: NetworkingService + Debug,
+    N::SyncingMessagingHandle: SyncingMessagingService<N>,
+    N::ConnectivityHandle: ConnectivityService<N>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut sync1) = S::start(
+    let (mut conn1, mut sync1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -63,7 +63,7 @@ where
     )
     .await
     .unwrap();
-    let (mut conn2, mut sync2) = S::start(
+    let (mut conn2, mut sync2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -72,7 +72,7 @@ where
     .await
     .unwrap();
 
-    connect_services::<S>(&mut conn1, &mut conn2).await;
+    connect_services::<N>(&mut conn1, &mut conn2).await;
 
     sync1
         .make_announcement(Announcement::Block(
@@ -121,12 +121,12 @@ where
     assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));
 }
 
-async fn block_announcement_no_subscription<T, S, A>()
+async fn block_announcement_no_subscription<T, N, A>()
 where
-    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
-    S: NetworkingService + Debug,
-    S::SyncingMessagingHandle: SyncingMessagingService<S>,
-    S::ConnectivityHandle: ConnectivityService<S>,
+    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    N: NetworkingService + Debug,
+    N::SyncingMessagingHandle: SyncingMessagingService<N>,
+    N::ConnectivityHandle: ConnectivityService<N>,
 {
     let chain_config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(P2pConfig {
@@ -140,7 +140,7 @@ where
         heartbeat_interval_min: Default::default(),
         heartbeat_interval_max: Default::default(),
     });
-    let (mut conn1, mut sync1) = S::start(
+    let (mut conn1, mut sync1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -148,7 +148,7 @@ where
     )
     .await
     .unwrap();
-    let (mut conn2, _sync2) = S::start(
+    let (mut conn2, _sync2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         chain_config,
@@ -157,7 +157,7 @@ where
     .await
     .unwrap();
 
-    connect_services::<S>(&mut conn1, &mut conn2).await;
+    connect_services::<N>(&mut conn1, &mut conn2).await;
 
     sync1
         .make_announcement(Announcement::Block(
@@ -174,15 +174,15 @@ where
         .unwrap();
 }
 
-async fn block_announcement_too_big_message<T, S, A>()
+async fn block_announcement_too_big_message<T, N, A>()
 where
-    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
-    S: NetworkingService + Debug,
-    S::SyncingMessagingHandle: SyncingMessagingService<S>,
-    S::ConnectivityHandle: ConnectivityService<S>,
+    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    N: NetworkingService + Debug,
+    N::SyncingMessagingHandle: SyncingMessagingService<N>,
+    N::ConnectivityHandle: ConnectivityService<N>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut sync1) = S::start(
+    let (mut conn1, mut sync1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -191,7 +191,7 @@ where
     .await
     .unwrap();
 
-    let (mut conn2, _sync2) = S::start(
+    let (mut conn2, _sync2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -200,7 +200,7 @@ where
     .await
     .unwrap();
 
-    connect_services::<S>(&mut conn1, &mut conn2).await;
+    connect_services::<N>(&mut conn1, &mut conn2).await;
 
     let input = TxInput::new(config.genesis_block_id().into(), 0);
     let signature = (0..ANNOUNCEMENT_MAX_SIZE).into_iter().map(|_| 0).collect::<Vec<u8>>();

@@ -26,8 +26,8 @@ use crate::{
     net::types::Role,
     peer_manager::tests::run_peer_manager,
     testing_utils::{
-        connect_services, get_connectivity_event, TestTransportChannel, TestTransportMaker,
-        TestTransportNoise, TestTransportTcp,
+        connect_services, get_connectivity_event, peerdb_inmemory_store, TestTransportChannel,
+        TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
 };
 use common::chain::config;
@@ -123,7 +123,7 @@ where
     });
 
     // "discover" the other networking service
-    pm1.peerdb.peer_discovered(&addr);
+    pm1.peerdb.peer_discovered(&addr).unwrap();
     pm1.heartbeat().await.unwrap();
 
     assert_eq!(pm1.pending.len(), 1);
@@ -604,12 +604,13 @@ async fn connection_timeout_rpc_notified<T>(
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
 
-    let mut peer_manager = peer_manager::PeerManager::<T>::new(
+    let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         conn,
         rx,
         tx_sync,
+        peerdb_inmemory_store(),
     )
     .unwrap();
 

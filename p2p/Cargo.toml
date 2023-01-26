@@ -18,6 +18,7 @@ rpc = { path = "../rpc/" }
 serialization = { path = "../serialization/" }
 subsystem = { path = "../subsystem/" }
 utils = { path = "../utils/" }
+storage = { path = "../storage", features = ["inmemory"] }
 
 async-trait = "0.1"
 bytes = "1.1"

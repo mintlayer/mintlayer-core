@@ -25,8 +25,8 @@ use p2p::{
         types::{PeerInfo, PubSubTopic, Role},
         AsBannableAddress, NetworkingService,
     },
-    peer_manager::peerdb::PeerDb,
-    testing_utils::RandomAddressMaker,
+    peer_manager::peerdb::{storage::PeerDbStorage, PeerDb},
+    testing_utils::{peerdb_inmemory_store, RandomAddressMaker},
 };
 
 tests![
@@ -36,23 +36,24 @@ tests![
     unban_peer,
 ];
 
-async fn adjust_peer_score_normal_threshold<T, S, A>()
+async fn adjust_peer_score_normal_threshold<T, N, A>()
 where
-    S: NetworkingService<PeerId = PeerId>,
-    A: RandomAddressMaker<Address = S::Address>,
+    N: NetworkingService<PeerId = PeerId>,
+    A: RandomAddressMaker<Address = N::Address>,
 {
-    let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig::default())).unwrap();
+    let mut peerdb =
+        PeerDb::<N, _>::new(Arc::new(P2pConfig::default()), peerdb_inmemory_store()).unwrap();
 
-    let peer_id = add_active_peer::<T, S, A>(&mut peerdb);
+    let peer_id = add_active_peer::<T, N, A, _>(&mut peerdb);
     let address = peerdb.peer_address(&peer_id).unwrap().as_bannable();
-    assert!(peerdb.adjust_peer_score(&peer_id, 100));
-    assert!(peerdb.is_address_banned(&address));
+    assert!(peerdb.adjust_peer_score(&peer_id, 100).unwrap());
+    assert!(peerdb.is_address_banned(&address).unwrap());
 }
 
-async fn adjust_peer_score_higher_threshold<T, S, A>()
+async fn adjust_peer_score_higher_threshold<T, N, A>()
 where
-    S: NetworkingService<PeerId = PeerId>,
-    A: RandomAddressMaker<Address = S::Address>,
+    N: NetworkingService<PeerId = PeerId>,
+    A: RandomAddressMaker<Address = N::Address>,
 {
     let config = P2pConfig {
         bind_addresses: Default::default(),
@@ -65,19 +66,19 @@ where
         heartbeat_interval_min: Default::default(),
         heartbeat_interval_max: Default::default(),
     };
-    let mut peerdb = PeerDb::<S>::new(Arc::new(config)).unwrap();
+    let mut peerdb = PeerDb::<N, _>::new(Arc::new(config), peerdb_inmemory_store()).unwrap();
 
-    let peer_id = add_active_peer::<T, S, A>(&mut peerdb);
-    assert!(!peerdb.adjust_peer_score(&peer_id, 100));
+    let peer_id = add_active_peer::<T, N, A, _>(&mut peerdb);
+    assert!(!peerdb.adjust_peer_score(&peer_id, 100).unwrap());
 
     let address = peerdb.peer_address(&peer_id).unwrap().as_bannable();
-    assert!(!peerdb.is_address_banned(&address));
+    assert!(!peerdb.is_address_banned(&address).unwrap());
 }
 
-async fn adjust_peer_score_lower_threshold<T, S, A>()
+async fn adjust_peer_score_lower_threshold<T, N, A>()
 where
-    S: NetworkingService<PeerId = PeerId>,
-    A: RandomAddressMaker<Address = S::Address>,
+    N: NetworkingService<PeerId = PeerId>,
+    A: RandomAddressMaker<Address = N::Address>,
 {
     let config = P2pConfig {
         bind_addresses: Default::default(),
@@ -90,54 +91,58 @@ where
         heartbeat_interval_min: Default::default(),
         heartbeat_interval_max: Default::default(),
     };
-    let mut peerdb = PeerDb::<S>::new(Arc::new(config)).unwrap();
+    let mut peerdb = PeerDb::<N, _>::new(Arc::new(config), peerdb_inmemory_store()).unwrap();
 
-    let peer_id = add_active_peer::<T, S, A>(&mut peerdb);
+    let peer_id = add_active_peer::<T, N, A, _>(&mut peerdb);
     let address = peerdb.peer_address(&peer_id).unwrap().as_bannable();
-    assert!(peerdb.adjust_peer_score(&peer_id, 30));
-    assert!(peerdb.is_address_banned(&address));
+    assert!(peerdb.adjust_peer_score(&peer_id, 30).unwrap());
+    assert!(peerdb.is_address_banned(&address).unwrap());
 }
 
-async fn unban_peer<T, S, A>()
+async fn unban_peer<T, N, A>()
 where
-    S: NetworkingService<PeerId = PeerId>,
-    A: RandomAddressMaker<Address = S::Address>,
+    N: NetworkingService<PeerId = PeerId>,
+    A: RandomAddressMaker<Address = N::Address>,
 {
-    let mut peerdb = PeerDb::<S>::new(Arc::new(P2pConfig {
-        bind_addresses: Default::default(),
-        added_nodes: Default::default(),
-        ban_threshold: Default::default(),
-        ban_duration: Duration::from_secs(2).into(),
-        outbound_connection_timeout: Default::default(),
-        node_type: Default::default(),
-        allow_discover_private_ips: Default::default(),
-        heartbeat_interval_min: Default::default(),
-        heartbeat_interval_max: Default::default(),
-    }))
+    let db_store = peerdb_inmemory_store();
+    let mut peerdb = PeerDb::<N, _>::new(
+        Arc::new(P2pConfig {
+            bind_addresses: Default::default(),
+            added_nodes: Default::default(),
+            ban_threshold: Default::default(),
+            ban_duration: Duration::from_secs(2).into(),
+            outbound_connection_timeout: Default::default(),
+            node_type: Default::default(),
+            allow_discover_private_ips: Default::default(),
+            heartbeat_interval_min: Default::default(),
+            heartbeat_interval_max: Default::default(),
+        }),
+        db_store,
+    )
     .unwrap();
 
-    let peer_id = add_active_peer::<T, S, A>(&mut peerdb);
+    let peer_id = add_active_peer::<T, N, A, _>(&mut peerdb);
     let address = peerdb.peer_address(&peer_id).unwrap().as_bannable();
-    assert!(peerdb.adjust_peer_score(&peer_id, 100));
+    assert!(peerdb.adjust_peer_score(&peer_id, 100).unwrap());
 
-    assert!(peerdb.is_address_banned(&address));
+    assert!(peerdb.is_address_banned(&address).unwrap());
 
     tokio::time::sleep(Duration::from_secs(4)).await;
 
-    assert!(!peerdb.is_address_banned(&address));
+    assert!(!peerdb.is_address_banned(&address).unwrap());
 }
 
-fn make_peer_info<T, S, A>() -> (S::PeerId, S::Address, PeerInfo<S::PeerId>)
+fn make_peer_info<T, N, A>() -> (N::PeerId, N::Address, PeerInfo<N::PeerId>)
 where
-    S: NetworkingService<PeerId = PeerId>,
-    A: RandomAddressMaker<Address = S::Address>,
+    N: NetworkingService<PeerId = PeerId>,
+    A: RandomAddressMaker<Address = N::Address>,
 {
     let peer_id = PeerId::new();
 
     (
         peer_id,
         A::new(),
-        PeerInfo::<S::PeerId> {
+        PeerInfo::<N::PeerId> {
             peer_id,
             network: [1, 2, 3, 4],
             version: common::primitives::semver::SemVer::new(0, 1, 0),
@@ -147,12 +152,13 @@ where
     )
 }
 
-fn add_active_peer<T, S, A>(peerdb: &mut PeerDb<S>) -> S::PeerId
+fn add_active_peer<T, N, A, S>(peerdb: &mut PeerDb<N, S>) -> N::PeerId
 where
-    S: NetworkingService<PeerId = PeerId>,
-    A: RandomAddressMaker<Address = S::Address>,
+    N: NetworkingService<PeerId = PeerId>,
+    A: RandomAddressMaker<Address = N::Address>,
+    S: PeerDbStorage,
 {
-    let (peer_id, address, info) = make_peer_info::<T, S, A>();
+    let (peer_id, address, info) = make_peer_info::<T, N, A>();
     peerdb.peer_connected(address, Role::Inbound, info);
     peer_id
 }
