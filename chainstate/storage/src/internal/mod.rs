@@ -26,7 +26,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id, Idable, H256},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, PoSAccountingDeltaData,
+    AccountingBlockUndo, DelegationData, DelegationId, PoSAccountingDeltaData,
     PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData, PoolId,
 };
 use serialization::{Codec, Decode, DecodeAll, Encode, EncodeLike};
@@ -88,18 +88,6 @@ impl<B: storage::Backend> Store<B> {
     pub fn read_utxo_set(&self) -> crate::Result<BTreeMap<OutPoint, Utxo>> {
         let db = self.transaction_ro()?;
         let map = db.0.get::<db::DBUtxo, _>();
-        let res = map.prefix_iter_decoded(&())?.collect::<BTreeMap<_, _>>();
-
-        Ok(res)
-    }
-
-    /// Collect and return all pre-seal accounting data from the storage
-    #[allow(clippy::let_and_return)]
-    pub fn read_preseal_accounting_delta(
-        &self,
-    ) -> crate::Result<BTreeMap<u64, pos_accounting::PoSAccountingDeltaData>> {
-        let db = self.transaction_ro()?;
-        let map = db.0.get::<db::DBAccountingPreSealData, _>();
         let res = map.prefix_iter_decoded(&())?.collect::<BTreeMap<_, _>>();
 
         Ok(res)
@@ -275,16 +263,10 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
             id: Id<Block>,
         ) -> crate::Result<Option<AccountingBlockUndo>>;
 
-        fn get_pre_seal_accounting_delta(
+        fn get_accounting_delta(
             &self,
-            epoch_index: u64,
-        ) -> crate::Result<Option<PoSAccountingDeltaData>>;
-
-        fn get_pre_seal_accounting_delta_undo(
-            &self,
-            epoch_index: u64,
             id: Id<Block>,
-        ) -> crate::Result<Option<DeltaMergeUndo>>;
+        ) -> crate::Result<Option<PoSAccountingDeltaData>>;
     }
 }
 
@@ -417,26 +399,13 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
         ) -> crate::Result<()>;
         fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
-        fn set_pre_seal_accounting_delta(
+        fn set_accounting_delta(
             &mut self,
-            epoch_index: u64,
+            id: Id<Block>,
             delta: &PoSAccountingDeltaData,
         ) -> crate::Result<()>;
 
-        fn del_pre_seal_accounting_delta(&mut self, epoch_index: u64) -> crate::Result<()>;
-
-        fn set_pre_seal_accounting_delta_undo(
-            &mut self,
-            epoch_index: u64,
-            id: Id<Block>,
-            delta: &pos_accounting::DeltaMergeUndo,
-        ) -> crate::Result<()>;
-
-        fn del_pre_seal_accounting_delta_undo(&mut self,
-            epoch_index: u64,
-            id: Id<Block>
-        ) -> crate::Result<()>;
-        fn del_pre_seal_accounting_delta_undo_for_epoch(&mut self, epoch_index: u64) -> crate::Result<()>;
+        fn del_accounting_delta(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 }
 
@@ -771,19 +740,11 @@ macro_rules! impl_read_ops {
                 self.read::<db::DBAccountingBlockUndo, _, _>(id)
             }
 
-            fn get_pre_seal_accounting_delta(
+            fn get_accounting_delta(
                 &self,
-                epoch_index: u64,
-            ) -> crate::Result<Option<PoSAccountingDeltaData>> {
-                self.read::<db::DBAccountingPreSealData, _, _>(epoch_index)
-            }
-
-            fn get_pre_seal_accounting_delta_undo(
-                &self,
-                epoch_index: u64,
                 id: Id<Block>,
-            ) -> crate::Result<Option<DeltaMergeUndo>> {
-                self.read::<db::DBAccountingPreSealDataUndo, _, _>((epoch_index, id))
+            ) -> crate::Result<Option<PoSAccountingDeltaData>> {
+                self.read::<db::DBAccountingBlockDelta, _, _>(id)
             }
         }
 
@@ -1033,60 +994,37 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         self.0.get_mut::<db::DBAccountingBlockUndo, _>().del(id).map_err(Into::into)
     }
 
-    fn set_pre_seal_accounting_delta(
+    fn set_accounting_delta(
         &mut self,
-        epoch_index: u64,
+        id: Id<Block>,
         delta: &PoSAccountingDeltaData,
     ) -> crate::Result<()> {
-        self.write::<db::DBAccountingPreSealData, _, _, _>(epoch_index, delta)
+        self.write::<db::DBAccountingBlockDelta, _, _, _>(id, delta)
     }
 
-    fn del_pre_seal_accounting_delta(&mut self, epoch_index: u64) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingPreSealData, _>()
-            .del(epoch_index)
-            .map_err(Into::into)
-    }
-
-    fn set_pre_seal_accounting_delta_undo(
-        &mut self,
-        epoch_index: u64,
-        id: Id<Block>,
-        delta: &pos_accounting::DeltaMergeUndo,
-    ) -> crate::Result<()> {
-        self.write::<db::DBAccountingPreSealDataUndo, _, _, _>((epoch_index, id), delta)
-    }
-
-    fn del_pre_seal_accounting_delta_undo(
-        &mut self,
-        epoch_index: u64,
-        id: Id<Block>,
-    ) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingPreSealDataUndo, _>()
-            .del((epoch_index, id))
-            .map_err(Into::into)
+    fn del_accounting_delta(&mut self, id: Id<Block>) -> crate::Result<()> {
+        self.0.get_mut::<db::DBAccountingBlockDelta, _>().del(id).map_err(Into::into)
     }
 
     // collect is needed to obey borrow checker rules
-    #[allow(clippy::needless_collect)]
-    fn del_pre_seal_accounting_delta_undo_for_epoch(
-        &mut self,
-        epoch_index: u64,
-    ) -> crate::Result<()> {
-        let epoch_deltas = self
-            .0
-            .get::<db::DBAccountingPreSealDataUndo, _>()
-            .prefix_iter(&(epoch_index,))?
-            .map(|(k, _)| k)
-            .collect::<Vec<_>>();
-        epoch_deltas.into_iter().try_for_each(|k| {
-            self.0
-                .get_mut::<db::DBAccountingPreSealDataUndo, _>()
-                .del(k)
-                .map_err(Into::into)
-        })
-    }
+    //#[allow(clippy::needless_collect)]
+    //fn del_pre_seal_accounting_delta_undo_for_epoch(
+    //    &mut self,
+    //    epoch_index: u64,
+    //) -> crate::Result<()> {
+    //    let epoch_deltas = self
+    //        .0
+    //        .get::<db::DBAccountingPreSealDataUndo, _>()
+    //        .prefix_iter(&(epoch_index,))?
+    //        .map(|(k, _)| k)
+    //        .collect::<Vec<_>>();
+    //    epoch_deltas.into_iter().try_for_each(|k| {
+    //        self.0
+    //            .get_mut::<db::DBAccountingPreSealDataUndo, _>()
+    //            .del(k)
+    //            .map_err(Into::into)
+    //    })
+    //}
 }
 
 impl<'st, B: storage::Backend> UtxosStorageWrite for StoreTxRw<'st, B> {

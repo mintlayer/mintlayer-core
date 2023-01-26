@@ -24,8 +24,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, PoSAccountingDeltaData,
-    PoolData, PoolId,
+    AccountingBlockUndo, DelegationData, DelegationId, PoSAccountingDeltaData, PoolData, PoolId,
 };
 use utxo::{Utxo, UtxosBlockUndo};
 
@@ -55,19 +54,12 @@ storage::decl_schema! {
         // TODO: no need to store info for sealed blocks
         /// Store for accounting BlockUndo
         pub DBAccountingBlockUndo: Map<Id<Block>, AccountingBlockUndo>,
+        /// Store for accounting deltas per block
+        pub DBAccountingBlockDelta: Map<Id<Block>, PoSAccountingDeltaData>,
 
-        /// Accounting data is stored as 3 different sets: tip, sealed and pre-seal.
+        /// Accounting data is stored as 2 different sets: tip, sealed
         /// `Tip` is the current state of the accounting data. It is updated on every block.
-        /// `Sealed` is the state of the accounting data representing the latest sealed epoch.
         /// `Pre-seal` is the intermediary state of the accounting data that is about to be sealed.
-
-        /// Store for accumulated accounting deltas per epochs that are about
-        /// to go to the sealed storage
-        pub DBAccountingPreSealData: Map<u64, PoSAccountingDeltaData>,
-        /// Store of undos for pre-seal delta. They are stored per epoch and block
-        /// so that it is easy to disconnect and undo a block but also to discard
-        /// undos when an epoch is sealed.
-        pub DBAccountingPreSealDataUndo: Map<(u64, Id<Block>), DeltaMergeUndo>,
 
         /// Store for tip accounting pool data
         pub DBAccountingPoolDataTip: Map<PoolId, PoolData>,

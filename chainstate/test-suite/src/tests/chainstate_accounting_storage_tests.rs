@@ -138,8 +138,8 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
 // Create block1 from genesis and block2 from block1 using default chain config.
 // Every block creates a pool.
 // Check that block1 and block2 belong to the same epochs and no epoch was sealed.
-// Check that accounting info from both blocks got into tip and
-// per-seal storage but not into sealed storage.
+// Check that accounting info from both blocks got into tip and not into sealed storage.
+// Check that deltas from both blocks is stored.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -197,43 +197,43 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
         // check that result is not stored to sealed
         assert!(storage.read_accounting_data_sealed().unwrap().is_empty());
 
-        // check that result is stored to pre-seal
+        // check that deltas per block are stored
         let pool_data = PoolData::new(pub_key.clone(), Amount::from_atoms(100));
-        let expected_epoch0_preseal_delta = pos_accounting::PoSAccountingDeltaData {
+        let expected_block1_delta = pos_accounting::PoSAccountingDeltaData {
             pool_data: DeltaDataCollection::from_iter(
-                [
-                    (pool_id1, DataDelta::new(None, Some(pool_data.clone()))),
-                    (pool_id2, DataDelta::new(None, Some(pool_data))),
-                ]
-                .into_iter(),
+                [(pool_id1, DataDelta::new(None, Some(pool_data.clone())))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
-                [
-                    (pool_id1, SignedAmount::from_atoms(100)),
-                    (pool_id2, SignedAmount::from_atoms(100)),
-                ]
-                .into_iter(),
+                [(pool_id1, SignedAmount::from_atoms(100))].into_iter(),
             ),
             pool_delegation_shares: DeltaAmountCollection::new(),
             delegation_balances: DeltaAmountCollection::new(),
             delegation_data: DeltaDataCollection::new(),
         };
 
-        let preseal_deltas = storage.read_preseal_accounting_delta().unwrap();
-        assert_eq!(preseal_deltas.len(), 1);
-        let epoch0_preseal_delta = preseal_deltas.get(&0).unwrap();
-        assert_eq!(epoch0_preseal_delta, &expected_epoch0_preseal_delta);
+        let block1_delta = storage
+            .get_accounting_delta(*block1_index.block_id())
+            .expect("ok")
+            .expect("some");
+        assert_eq!(block1_delta, expected_block1_delta);
 
-        // check pre-seal undo is stored
-        let db_tx = storage.transaction_ro().unwrap();
-        db_tx
-            .get_pre_seal_accounting_delta_undo(0, *block1_index.block_id())
+        let expected_block2_delta = pos_accounting::PoSAccountingDeltaData {
+            pool_data: DeltaDataCollection::from_iter(
+                [(pool_id2, DataDelta::new(None, Some(pool_data)))].into_iter(),
+            ),
+            pool_balances: DeltaAmountCollection::from_iter(
+                [(pool_id2, SignedAmount::from_atoms(100))].into_iter(),
+            ),
+            pool_delegation_shares: DeltaAmountCollection::new(),
+            delegation_balances: DeltaAmountCollection::new(),
+            delegation_data: DeltaDataCollection::new(),
+        };
+
+        let block2_delta = storage
+            .get_accounting_delta(*block2_index.block_id())
             .expect("ok")
             .expect("some");
-        db_tx
-            .get_pre_seal_accounting_delta_undo(0, *block2_index.block_id())
-            .expect("ok")
-            .expect("some");
+        assert_eq!(block2_delta, expected_block2_delta);
     });
 }
 
@@ -241,8 +241,8 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
 // Create block1 from genesis and block2 from block1.
 // Every block creates a stake pool.
 // Check that block1 and block2 belong to different epochs, but no epoch was sealed.
-// Check that accounting info from both blocks got into tip and
-// per-seal storage but not into sealed storage.
+// Check that accounting info from both blocks got into tip and but not into sealed storage.
+// Check that deltas from both blocks is stored.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -319,10 +319,9 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
         // check that result is not stored to sealed
         assert!(storage.read_accounting_data_sealed().unwrap().is_empty());
 
-        // check that result is stored to pre-seal
-        // genesis block takes epoch 0, so new blocks start from epoch 1
+        // check that deltas per block are stored
         let pool_data = PoolData::new(pub_key.clone(), Amount::from_atoms(100));
-        let expected_epoch1_preseal_delta = pos_accounting::PoSAccountingDeltaData {
+        let expected_block1_delta = pos_accounting::PoSAccountingDeltaData {
             pool_data: DeltaDataCollection::from_iter(
                 [(pool_id1, DataDelta::new(None, Some(pool_data.clone())))].into_iter(),
             ),
@@ -333,7 +332,14 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             delegation_balances: DeltaAmountCollection::new(),
             delegation_data: DeltaDataCollection::new(),
         };
-        let expected_epoch2_preseal_delta = pos_accounting::PoSAccountingDeltaData {
+
+        let block1_delta = storage
+            .get_accounting_delta(*block1_index.block_id())
+            .expect("ok")
+            .expect("some");
+        assert_eq!(block1_delta, expected_block1_delta);
+
+        let expected_block2_delta = pos_accounting::PoSAccountingDeltaData {
             pool_data: DeltaDataCollection::from_iter(
                 [(pool_id2, DataDelta::new(None, Some(pool_data)))].into_iter(),
             ),
@@ -345,23 +351,11 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             delegation_data: DeltaDataCollection::new(),
         };
 
-        let preseal_deltas = storage.read_preseal_accounting_delta().unwrap();
-        assert_eq!(preseal_deltas.len(), 2);
-        let epoch1_preseal_delta = preseal_deltas.get(&1).unwrap();
-        assert_eq!(epoch1_preseal_delta, &expected_epoch1_preseal_delta);
-        let epoch2_preseal_delta = preseal_deltas.get(&2).unwrap();
-        assert_eq!(epoch2_preseal_delta, &expected_epoch2_preseal_delta);
-
-        // check pre-seal undo is stored
-        let db_tx = storage.transaction_ro().unwrap();
-        db_tx
-            .get_pre_seal_accounting_delta_undo(1, *block1_index.block_id())
+        let block2_delta = storage
+            .get_accounting_delta(*block2_index.block_id())
             .expect("ok")
             .expect("some");
-        db_tx
-            .get_pre_seal_accounting_delta_undo(2, *block2_index.block_id())
-            .expect("ok")
-            .expect("some");
+        assert_eq!(block2_delta, expected_block2_delta);
     });
 }
 
@@ -370,7 +364,8 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
 // Every block creates a stake pool.
 // Check that block1 and block2 belong to different epochs, and that epoch1 was sealed.
 // Check that accounting info from both blocks got into tip.
-// Check that accounting info from block1 got into sealed storage and from block 2 into pre-seal.
+// Check that only accounting info from block1 got into sealed storage.
+// Check that deltas from both blocks is stored.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -460,9 +455,27 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             expected_sealed_storage_data
         );
 
-        // check that result is stored to pre-seal only for block2
+        // check that deltas per block are stored
         let pool_data = PoolData::new(pub_key.clone(), Amount::from_atoms(100));
-        let expected_epoch2_preseal_delta = pos_accounting::PoSAccountingDeltaData {
+        let expected_block1_delta = pos_accounting::PoSAccountingDeltaData {
+            pool_data: DeltaDataCollection::from_iter(
+                [(pool_id1, DataDelta::new(None, Some(pool_data.clone())))].into_iter(),
+            ),
+            pool_balances: DeltaAmountCollection::from_iter(
+                [(pool_id1, SignedAmount::from_atoms(100))].into_iter(),
+            ),
+            pool_delegation_shares: DeltaAmountCollection::new(),
+            delegation_balances: DeltaAmountCollection::new(),
+            delegation_data: DeltaDataCollection::new(),
+        };
+
+        let block1_delta = storage
+            .get_accounting_delta(*block1_index.block_id())
+            .expect("ok")
+            .expect("some");
+        assert_eq!(block1_delta, expected_block1_delta);
+
+        let expected_block2_delta = pos_accounting::PoSAccountingDeltaData {
             pool_data: DeltaDataCollection::from_iter(
                 [(pool_id2, DataDelta::new(None, Some(pool_data)))].into_iter(),
             ),
@@ -474,21 +487,11 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             delegation_data: DeltaDataCollection::new(),
         };
 
-        let preseal_deltas = storage.read_preseal_accounting_delta().unwrap();
-        assert_eq!(preseal_deltas.len(), 1);
-        let epoch2_preseal_delta = preseal_deltas.get(&2).unwrap();
-        assert_eq!(epoch2_preseal_delta, &expected_epoch2_preseal_delta);
-
-        // check pre-seal undo is stored only for block2
-        let db_tx = storage.transaction_ro().unwrap();
-        assert!(db_tx
-            .get_pre_seal_accounting_delta_undo(1, *block1_index.block_id())
-            .expect("ok")
-            .is_none());
-        db_tx
-            .get_pre_seal_accounting_delta_undo(2, *block2_index.block_id())
+        let block2_delta = storage
+            .get_accounting_delta(*block2_index.block_id())
             .expect("ok")
             .expect("some");
+        assert_eq!(block2_delta, expected_block2_delta);
     });
 }
 
@@ -496,7 +499,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
 // (meaning every block is sealed thus tip == sealed).
 // Create block1 from genesis that creates a stake pool.
 // Check that the info is stored to the tip and sealed storage.
-// Check that the pre-seal data and undo are empty.
+// Check that delta from block is stored.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -533,7 +536,7 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
             1
         );
 
-        // check that result is stored to tip
+        // check that result is stored to tip and sealed
         let expected_storage_data = pos_accounting::PoSAccountingData {
             pool_data: BTreeMap::from([(
                 pool_id1,
@@ -553,15 +556,24 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
             expected_storage_data
         );
 
-        // check that pre-seal is empty
-        let preseal_deltas = storage.read_preseal_accounting_delta().unwrap();
-        assert!(preseal_deltas.is_empty());
+        // check that deltas per block are stored
+        let pool_data = PoolData::new(pub_key.clone(), Amount::from_atoms(100));
+        let expected_block1_delta = pos_accounting::PoSAccountingDeltaData {
+            pool_data: DeltaDataCollection::from_iter(
+                [(pool_id1, DataDelta::new(None, Some(pool_data)))].into_iter(),
+            ),
+            pool_balances: DeltaAmountCollection::from_iter(
+                [(pool_id1, SignedAmount::from_atoms(100))].into_iter(),
+            ),
+            pool_delegation_shares: DeltaAmountCollection::new(),
+            delegation_balances: DeltaAmountCollection::new(),
+            delegation_data: DeltaDataCollection::new(),
+        };
 
-        // check pre-seal undo is empty
-        let db_tx = storage.transaction_ro().unwrap();
-        assert!(db_tx
-            .get_pre_seal_accounting_delta_undo(1, *block1_index.block_id())
+        let block1_delta = storage
+            .get_accounting_delta(*block1_index.block_id())
             .expect("ok")
-            .is_none());
+            .expect("some");
+        assert_eq!(block1_delta, expected_block1_delta);
     });
 }
