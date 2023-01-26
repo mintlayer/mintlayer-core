@@ -44,6 +44,8 @@ const DEFAULT_EPOCH_LENGTH: NonZeroU64 =
     };
 const DEFAULT_SEALED_EPOCH_DISTANCE_FROM_TIP: usize = 2;
 
+pub type EpochIndex = u64;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ChainType {
     Mainnet,
@@ -179,7 +181,7 @@ impl ChainConfig {
     }
 
     #[must_use]
-    pub fn epoch_index_from_height(&self, height: &BlockHeight) -> u64 {
+    pub fn epoch_index_from_height(&self, height: &BlockHeight) -> EpochIndex {
         let height: u64 = (*height).into();
         height / self.epoch_length
     }
