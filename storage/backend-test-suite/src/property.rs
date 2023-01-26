@@ -35,7 +35,7 @@ mod gen {
         proptest::collection::btree_map((idx(num_dbs), big_key()), any::<Data>(), num_entries)
     }
 
-    // Generate key from a set of keys with given cardianlity. Lower cardinality encourages
+    // Generate key from a set of keys with given cardinality. Lower cardinality encourages
     // generation of conflicting keys, causing value overwrites and deletions to be more likely.
     pub fn key(key_cardinality: u32) -> impl Strategy<Value = Data> {
         (0..key_cardinality).prop_map(|x| format!("{x:x}").into())
@@ -82,7 +82,10 @@ fn overwrite_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
             // Check the values are in place
             let dbtx = store.transaction_ro().unwrap();
-            assert_eq!(dbtx.get(IDX.0, key.as_ref()), Ok(Some(val0.as_ref())));
+            assert_eq!(
+                dbtx.get(IDX.0, key.as_ref()).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+                val0.as_ref() as &[u8]
+            );
             drop(dbtx);
 
             // Create a transaction, modify storage and abort
@@ -92,7 +95,10 @@ fn overwrite_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
             // Check the store still contains the original value
             let dbtx = store.transaction_ro().unwrap();
-            assert_eq!(dbtx.get(IDX.0, key.as_ref()), Ok(Some(val0.as_ref())));
+            assert_eq!(
+                dbtx.get(IDX.0, key.as_ref()).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+                val0.as_ref() as &[u8]
+            );
             drop(dbtx);
 
             // Create a transaction, overwrite the value and commit
@@ -102,7 +108,10 @@ fn overwrite_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
             // Check the key now stores the new value
             let dbtx = store.transaction_ro().unwrap();
-            assert_eq!(dbtx.get(IDX.0, key.as_ref()), Ok(Some(val1.as_ref())));
+            assert_eq!(
+                dbtx.get(IDX.0, key.as_ref()).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+                val1.as_ref() as &[u8]
+            );
             drop(dbtx);
         },
     )
@@ -127,7 +136,10 @@ fn add_and_delete<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             // check all entries have been added
             let dbtx = store.transaction_ro().unwrap();
             for ((db, key), val) in &entries {
-                assert_eq!(dbtx.get(*db, key), Ok(Some(val.as_ref())));
+                assert_eq!(
+                    dbtx.get(*db, key).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+                    val.as_ref() as &[u8]
+                );
             }
             drop(dbtx);
 
@@ -168,7 +180,10 @@ fn last_write_wins<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             dbtx.commit().unwrap();
 
             let dbtx = store.transaction_ro().unwrap();
-            assert_eq!(dbtx.get(IDX.0, key.as_ref()), Ok(last.as_deref()));
+            assert_eq!(
+                dbtx.get(IDX.0, key.as_ref()).unwrap().as_ref().map(|v| v.as_ref()),
+                last.as_deref()
+            );
         },
     )
 }
@@ -197,7 +212,10 @@ fn add_and_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             let dbtx = store.transaction_ro().unwrap();
             for ent @ (db, key) in entries1.keys().chain(entries2.keys()).chain(extra_keys.iter()) {
                 let expected = entries2.get(ent).or_else(|| entries1.get(ent)).map(AsRef::as_ref);
-                assert_eq!(dbtx.get(*db, key), Ok(expected));
+                assert_eq!(
+                    dbtx.get(*db, key).unwrap().as_ref().map(|v| v.as_ref()),
+                    expected
+                );
             }
             drop(dbtx);
 
@@ -217,7 +235,10 @@ fn add_and_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
             // Check entries from the first set have correct value, unless deleted
             for ((db, key), val) in entries1.iter().filter(|e| !entries2.contains_key(e.0)) {
-                assert_eq!(dbtx.get(*db, key), Ok(Some(val.as_ref())));
+                assert_eq!(
+                    dbtx.get(*db, key).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+                    val.as_ref() as &[u8]
+                );
             }
         },
     )
@@ -236,7 +257,7 @@ fn add_modify_abort_modify_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F
             let model = Model::from_actions(to_prepopulate.clone());
             let store = backend.open(desc(1)).expect("db open to succeed");
 
-            // Pre-populate the db with initial data, check the contents agains the model
+            // Pre-populate the db with initial data, check the contents against the model
             let mut dbtx = store.transaction_rw().unwrap();
             dbtx.apply_actions(IDX.0, to_prepopulate.into_iter());
             dbtx.commit().unwrap();
@@ -276,7 +297,7 @@ fn add_modify_abort_replay_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F
         |backend, (initial, actions)| {
             let store = backend.open(desc(1)).expect("db open to succeed");
 
-            // Pre-populate the db with initial data, check the contents agains the model
+            // Pre-populate the db with initial data, check the contents against the model
             let mut dbtx = store.transaction_rw().unwrap();
             dbtx.apply_actions(IDX.0, initial.into_iter());
             dbtx.commit().unwrap();
@@ -340,7 +361,10 @@ fn empty_after_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             let mut dbtx = store.transaction_rw().unwrap();
             dbtx.apply_actions(IDX.0, actions.into_iter());
             for key in &keys {
-                assert_eq!(dbtx.get(IDX.0, key), Ok(model.get(key)));
+                assert_eq!(
+                    dbtx.get(IDX.0, key).unwrap().as_ref().map(|v| v.as_ref()),
+                    model.get(key)
+                );
             }
             drop(dbtx);
 

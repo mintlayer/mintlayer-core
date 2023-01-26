@@ -18,6 +18,8 @@
 mod internal;
 pub mod raw;
 
+use std::borrow::Cow;
+
 use internal::{EntryIterator, TxImpl};
 
 use crate::schema::{self, Schema};
@@ -156,10 +158,11 @@ where
     Tx::Impl: backend::ReadOps,
 {
     /// Get value associated with given key
+    #[allow(clippy::type_complexity)]
     pub fn get<K: EncodeLike<DbMap::Key>>(
         &self,
         key: K,
-    ) -> crate::Result<Option<Encoded<&[u8], DbMap::Value>>> {
+    ) -> crate::Result<Option<Encoded<Cow<[u8]>, DbMap::Value>>> {
         internal::get::<DbMap, _, _>(self.dbtx, self.idx, key)
     }
 
@@ -209,10 +212,11 @@ where
     Tx::Impl: backend::ReadOps,
 {
     /// Get value associated with given key
+    #[allow(clippy::type_complexity)]
     pub fn get<K: EncodeLike<DbMap::Key>>(
         &self,
         key: K,
-    ) -> crate::Result<Option<Encoded<&[u8], DbMap::Value>>> {
+    ) -> crate::Result<Option<Encoded<Cow<[u8]>, DbMap::Value>>> {
         internal::get::<DbMap, _, _>(self.dbtx, self.idx, key)
     }
 

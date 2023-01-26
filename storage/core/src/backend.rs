@@ -15,6 +15,8 @@
 
 //! Low-level interface implemented by storage backends.
 
+use std::borrow::Cow;
+
 use utils::shallow_clone::ShallowClone;
 
 pub use crate::{
@@ -34,7 +36,7 @@ pub trait PrefixIter<'i> {
 /// Read-only database operations
 pub trait ReadOps: for<'i> PrefixIter<'i> {
     /// Get value associated with given key.
-    fn get(&self, idx: DbIndex, key: &[u8]) -> crate::Result<Option<&[u8]>>;
+    fn get(&self, idx: DbIndex, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>>;
 }
 
 /// Write database operation

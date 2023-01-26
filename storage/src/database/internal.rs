@@ -15,6 +15,8 @@
 
 //! Internal database implementation utils
 
+use std::borrow::Cow;
+
 use crate::schema;
 use serialization::{encoded::Encoded, EncodeLike};
 use storage_core::{
@@ -37,11 +39,12 @@ impl<'tx, B: Backend, Sch> TxImpl for super::TransactionRw<'tx, B, Sch> {
 }
 
 /// Get a value from the database backend as a SCALE-encoded object
+#[allow(clippy::type_complexity)]
 pub fn get<DbMap: schema::DbMap, Tx: ReadOps, K: EncodeLike<DbMap::Key>>(
     dbtx: &Tx,
     idx: DbIndex,
     key: K,
-) -> crate::Result<Option<Encoded<&[u8], DbMap::Value>>> {
+) -> crate::Result<Option<Encoded<Cow<[u8]>, DbMap::Value>>> {
     key.using_encoded(|key| dbtx.get(idx, key).map(|x| x.map(Encoded::from_bytes_unchecked)))
 }
 

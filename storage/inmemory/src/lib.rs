@@ -15,7 +15,7 @@
 
 use storage_core::{adaptor, backend, util, Data, DbDesc, DbIndex};
 
-use std::collections::BTreeMap;
+use std::{borrow::Cow, collections::BTreeMap};
 
 type Map = BTreeMap<Data, Data>;
 
@@ -32,8 +32,8 @@ impl<'i> Iterator for PrefixIter<'i> {
 pub struct StorageMaps(Vec<Map>);
 
 impl backend::ReadOps for StorageMaps {
-    fn get(&self, idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<&[u8]>> {
-        Ok(self.0[idx.get()].get(key).map(AsRef::as_ref))
+    fn get(&self, idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+        Ok(self.0[idx.get()].get(key).map(|p| p.into()))
     }
 }
 
