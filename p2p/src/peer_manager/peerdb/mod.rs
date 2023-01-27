@@ -330,4 +330,9 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
     pub fn peer_address(&self, id: &T::PeerId) -> Option<&T::Address> {
         self.peers.get(id).map(|c| &c.address)
     }
+
+    #[cfg(feature = "testing_utils")]
+    pub fn get_storage_mut(&mut self) -> &mut S {
+        &mut self.storage
+    }
 }

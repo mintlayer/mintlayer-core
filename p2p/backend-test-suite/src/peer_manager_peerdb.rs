@@ -25,7 +25,10 @@ use p2p::{
         types::{PeerInfo, PubSubTopic, Role},
         AsBannableAddress, NetworkingService,
     },
-    peer_manager::peerdb::{storage::PeerDbStorage, PeerDb},
+    peer_manager::peerdb::{
+        storage::{PeerDbStorage, PeerDbStorageRead, PeerDbTransactional},
+        PeerDb,
+    },
     testing_utils::{peerdb_inmemory_store, RandomAddressMaker},
 };
 
@@ -129,10 +132,24 @@ where
     assert!(peerdb.adjust_peer_score(&peer_id, 100).unwrap());
 
     assert!(peerdb.is_address_banned(&address).unwrap());
+    let banned_addresses = peerdb
+        .get_storage_mut()
+        .transaction_ro()
+        .unwrap()
+        .get_banned_addresses()
+        .unwrap();
+    assert_eq!(banned_addresses.len(), 1);
 
     tokio::time::sleep(Duration::from_secs(4)).await;
 
     assert!(!peerdb.is_address_banned(&address).unwrap());
+    let banned_addresses = peerdb
+        .get_storage_mut()
+        .transaction_ro()
+        .unwrap()
+        .get_banned_addresses()
+        .unwrap();
+    assert_eq!(banned_addresses.len(), 0);
 }
 
 fn make_peer_info<T, N, A>() -> (N::PeerId, N::Address, PeerInfo<N::PeerId>)
