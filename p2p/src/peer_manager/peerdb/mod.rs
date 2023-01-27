@@ -31,9 +31,10 @@ pub mod storage_impl;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 
+use common::time_getter::TimeGetter;
 use crypto::random::{make_pseudo_rng, SliceRandom};
 use logging::log;
 
@@ -97,11 +98,17 @@ pub struct PeerDb<T: NetworkingService, S> {
     /// when `current_time > ban_duration`.
     banned_addresses: BTreeMap<T::BannableAddress, Duration>,
 
+    time_getter: TimeGetter,
+
     storage: S,
 }
 
 impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
-    pub fn new(p2p_config: Arc<config::P2pConfig>, storage: S) -> crate::Result<Self> {
+    pub fn new(
+        p2p_config: Arc<config::P2pConfig>,
+        time_getter: TimeGetter,
+        storage: S,
+    ) -> crate::Result<Self> {
         let added_nodes = p2p_config
             .added_nodes
             .iter()
@@ -137,6 +144,7 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
             known_addresses,
             banned_addresses,
             p2p_config,
+            time_getter,
             storage,
         })
     }
@@ -190,10 +198,7 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
     pub fn is_address_banned(&mut self, address: &T::BannableAddress) -> crate::Result<bool> {
         if let Some(banned_till) = self.banned_addresses.get(address) {
             // Check if the ban has expired.
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                // This can fail only if `SystemTime::now()` returns the time before `UNIX_EPOCH`.
-                .expect("Invalid system time");
+            let now = self.time_getter.get_time();
             if now > *banned_till {
                 self.banned_addresses.remove(address);
                 let mut tx = self.storage.transaction_rw()?;
@@ -288,11 +293,7 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
     fn ban_peer(&mut self, peer_id: &T::PeerId) -> crate::Result<()> {
         if let Some(peer) = self.peers.remove(peer_id) {
             let bannable_address = peer.address.as_bannable();
-            let ban_till = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                // This can fail only if `SystemTime::now()` returns the time before `UNIX_EPOCH`.
-                .expect("Invalid system time")
-                + *self.p2p_config.ban_duration;
+            let ban_till = self.time_getter.get_time() + *self.p2p_config.ban_duration;
             let mut tx = self.storage.transaction_rw()?;
             tx.add_banned_address(&bannable_address.to_string(), ban_till)?;
             tx.commit()?;

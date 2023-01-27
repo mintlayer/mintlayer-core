@@ -83,6 +83,7 @@ pub async fn initialize(
             chainstate.clone(),
             mempool.clone(),
             peerdb_storage,
+            Default::default(),
         )
         .await
         .expect("The p2p subsystem initialization failed"),

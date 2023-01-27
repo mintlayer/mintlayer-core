@@ -62,6 +62,7 @@ where
         conn,
         rx,
         tx_sync,
+        Default::default(),
         peerdb_inmemory_store(),
     )
     .unwrap();

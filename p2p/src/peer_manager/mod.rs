@@ -33,7 +33,7 @@ use std::{
 use tokio::sync::{mpsc, oneshot};
 
 use chainstate::ban_score::BanScore;
-use common::{chain::ChainConfig, primitives::semver::SemVer};
+use common::{chain::ChainConfig, primitives::semver::SemVer, time_getter::TimeGetter};
 use logging::log;
 use utils::ensure;
 
@@ -112,9 +112,10 @@ where
         handle: T::ConnectivityHandle,
         rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
         tx_sync: mpsc::UnboundedSender<SyncControlEvent<T>>,
+        time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> crate::Result<Self> {
-        let peerdb = peerdb::PeerDb::new(Arc::clone(&p2p_config), peerdb_storage)?;
+        let peerdb = peerdb::PeerDb::new(Arc::clone(&p2p_config), time_getter, peerdb_storage)?;
         Ok(Self {
             peer_connectivity_handle: handle,
             rx_peer_manager,
