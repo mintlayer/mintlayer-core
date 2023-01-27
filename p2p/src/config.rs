@@ -47,13 +47,6 @@ pub enum NodeType {
     Inactive,
 }
 
-/// Storage type to use in PeerDb
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PeerDbStorageBackend {
-    Lmdb,
-    InMemory,
-}
-
 impl From<NodeType> for BTreeSet<PubSubTopic> {
     fn from(t: NodeType) -> Self {
         match t {

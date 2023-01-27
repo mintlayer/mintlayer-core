@@ -31,7 +31,7 @@ use logging::log;
 
 use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
 
-use p2p::{config::PeerDbStorageBackend, rpc::P2pRpcServer};
+use p2p::{peer_manager::peerdb::storage_impl::PeerDbStorageImpl, rpc::P2pRpcServer};
 
 use crate::{
     config_files::NodeConfigFile,
@@ -71,15 +71,18 @@ pub async fn initialize(
     });
 
     // P2P subsystem
+    // TODO: Replace Lmdb with Sqlite backend when it's read
+    let peerdb_storage = PeerDbStorageImpl::new(storage_lmdb::Lmdb::new(
+        node_config.datadir.join("peerdb-lmdb"),
+    ))?;
     let p2p = manager.add_subsystem(
         "p2p",
         p2p::make_p2p(
-            &node_config.datadir,
             Arc::clone(&chain_config),
             Arc::new(node_config.p2p.into()),
             chainstate.clone(),
             mempool.clone(),
-            PeerDbStorageBackend::Lmdb, // TODO: Replace Lmdb with Sqlite backend when it's ready
+            peerdb_storage,
         )
         .await
         .expect("The p2p subsystem initialization failed"),

@@ -19,8 +19,6 @@ serialization = { path = "../serialization/" }
 subsystem = { path = "../subsystem/" }
 utils = { path = "../utils/" }
 storage = { path = "../storage" }
-storage-inmemory = { path = "../storage/inmemory" }
-storage-lmdb = { path = "../storage/lmdb" }
 
 async-trait = "0.1"
 bytes = "1.1"
