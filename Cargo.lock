@@ -1670,21 +1670,21 @@ checksum = "f051f77a7c8e6957c0696eac88f26b0117e54f52d3fc682ab19397a8812846a4"
 
 [[package]]
 name = "lmdb-mintlayer"
-version = "0.16.0"
-source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.16.0#6c7bead27b27c9182ba9c37a74bbf63dbf8ee99f"
+version = "0.16.2"
+source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.16.2#fb33e56a76697dd6f484c6d21f89a99ef9145e93"
 dependencies = [
  "bitflags",
  "byteorder",
  "fs4",
  "libc",
  "lmdb-rkv-sys",
- "rm_rf",
+ "num",
 ]
 
 [[package]]
 name = "lmdb-rkv-sys"
-version = "0.11.2"
-source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.16.0#6c7bead27b27c9182ba9c37a74bbf63dbf8ee99f"
+version = "0.11.3"
+source = "git+https://github.com/mintlayer/lmdb-rs-mintlayer.git?tag=v0.16.2#fb33e56a76697dd6f484c6d21f89a99ef9145e93"
 dependencies = [
  "cc",
  "libc",
@@ -2436,15 +2436,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "psm"
-version = "0.1.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5787f7cda34e3033a72192c018bc5883100330f362ef279a8cbccfce8bb4e874"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2621,15 +2612,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd124222d17ad93a644ed9d011a40f4fb64aa54275c08cc216524a9ea82fb09f"
 dependencies = [
  "digest 0.10.6",
-]
-
-[[package]]
-name = "rm_rf"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3443b7a35aa12ed2e99edfc0ecbefe6a53b4848305cc83e29981dfa1aea1f71e"
-dependencies = [
- "stacker",
 ]
 
 [[package]]
@@ -3227,19 +3209,6 @@ dependencies = [
  "strsim",
  "syn",
  "unicode-width",
-]
-
-[[package]]
-name = "stacker"
-version = "0.1.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c886bd4480155fd3ef527d45e9ac8dd7118a898a46530b7b94c3e21866259fce"
-dependencies = [
- "cc",
- "cfg-if",
- "libc",
- "psm",
- "winapi",
 ]
 
 [[package]]

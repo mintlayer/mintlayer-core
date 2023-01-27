@@ -18,7 +18,7 @@ mod error;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{borrow::Cow, path::PathBuf};
 
-use lmdb::Cursor;
+use lmdb::{Cursor, DatabaseResizeInfo, DatabaseResizeSettings};
 use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
     info::{DbDesc, MapDesc},
@@ -214,10 +214,11 @@ impl<'tx> TransactionalRw<'tx> for LmdbImpl {
 impl utils::shallow_clone::ShallowClone for LmdbImpl {}
 impl backend::BackendImpl for LmdbImpl {}
 
-#[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Lmdb {
     path: PathBuf,
     flags: lmdb::EnvironmentFlags,
+    resize_settings: Option<DatabaseResizeSettings>,
+    resize_callback: Option<Box<dyn Fn(DatabaseResizeInfo)>>,
 }
 
 impl Lmdb {
@@ -226,6 +227,8 @@ impl Lmdb {
         Self {
             path,
             flags: lmdb::EnvironmentFlags::default(),
+            resize_settings: None,
+            resize_callback: None,
         }
     }
 
@@ -256,6 +259,8 @@ impl backend::Backend for Lmdb {
         let environment = lmdb::Environment::new()
             .set_max_dbs(desc.len() as u32)
             .set_flags(self.flags)
+            .set_resize_settings(self.resize_settings.unwrap_or_default())
+            .set_resize_callback(self.resize_callback)
             .open(&self.path)
             .or_else(error::process_with_err)?;
 
