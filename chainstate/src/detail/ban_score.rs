@@ -45,7 +45,6 @@ impl BanScore for BlockError {
             BlockError::PrevBlockNotFound => 100,
             BlockError::BlockAtHeightNotFound(_) => 0,
             BlockError::BlockAlreadyExists(_) => 0,
-            BlockError::PoSAccountingDeltaNotFound(_) => 0,
             BlockError::DatabaseCommitError(_, _, _) => 0,
             BlockError::BlockProofCalculationError(_) => 100,
             BlockError::TransactionVerifierError(err) => err.ban_score(),

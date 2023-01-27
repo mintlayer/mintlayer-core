@@ -16,13 +16,14 @@
 use std::num::NonZeroU64;
 
 use super::*;
+use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
 use chainstate_storage::{inmemory::Store, BlockchainStorageWrite, TransactionRw, Transactional};
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
 use common::{
     chain::{
-        config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue,
+        config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue, OutPoint,
         OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, Id, Idable},
@@ -31,6 +32,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
+use pos_accounting::PoSAccountingDeltaData;
 
 // Produce `genesis -> a` chain, then a parallel `genesis -> b -> c` that should trigger a reorg.
 // Block `a` and block `c` have stake pool operation.
@@ -65,12 +67,16 @@ fn stake_pool_reorg(#[case] seed: Seed, #[case] epoch_length: NonZeroU64) {
                     anyonecanspend_address(),
                     None,
                     vrf_pub_key_a,
-                    pub_key_a,
+                    pub_key_a.clone(),
                     0,
                     Amount::ZERO,
                 ))),
             ))
             .build();
+        let pool_id_a = pos_accounting::make_pool_id(&OutPoint::new(
+            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+            0,
+        ));
 
         // prepare tx_b
         let tx_b = TransactionBuilder::new()
@@ -162,6 +168,20 @@ fn stake_pool_reorg(#[case] seed: Seed, #[case] epoch_length: NonZeroU64) {
                 let mut db_tx = storage.transaction_rw(None).unwrap();
                 db_tx.set_block_index(&block_a_index).unwrap();
                 db_tx.add_block(&block_a).unwrap();
+
+                // reorg leaves a trace in delta index, because deltas are never removed on undo;
+                // so we need to manually add None-None delta left from block_a
+                let block_a_delta = PoSAccountingDeltaData {
+                    pool_data: DeltaDataCollection::from_iter(
+                        [(pool_id_a, DataDelta::new(None, None))].into_iter(),
+                    ),
+                    pool_balances: DeltaAmountCollection::new(),
+                    pool_delegation_shares: DeltaAmountCollection::new(),
+                    delegation_balances: DeltaAmountCollection::new(),
+                    delegation_data: DeltaDataCollection::new(),
+                };
+                db_tx.set_accounting_delta(*block_a_index.block_id(), &block_a_delta).unwrap();
+
                 db_tx.commit().unwrap();
             }
 

@@ -232,6 +232,18 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
             .del_undo_data(tx_source)
             .map_err(TransactionVerifierStorageError::AccountingBlockUndoError)
     }
+
+    fn set_accounting_delta(
+        &mut self,
+        tx_source: TransactionSource,
+        delta: &PoSAccountingDeltaData,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        self.accounting_block_deltas
+            .entry(tx_source)
+            .or_default()
+            .merge_with_delta(delta.clone())?;
+        Ok(())
+    }
 }
 
 impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> FlushableUtxoView

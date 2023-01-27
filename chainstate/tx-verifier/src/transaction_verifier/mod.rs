@@ -168,32 +168,7 @@ pub struct TransactionVerifierDelta {
     token_issuance_cache: ConsumedTokenIssuanceCache,
     accounting_delta: PoSAccountingDeltaData,
     accounting_delta_undo: BTreeMap<TransactionSource, AccountingBlockUndoEntry>,
-}
-
-impl TransactionVerifierDelta {
-    pub fn tx_index_cache(&self) -> &BTreeMap<OutPointSourceId, CachedInputsOperation> {
-        &self.tx_index_cache
-    }
-
-    pub fn utxo_cache(&self) -> &ConsumedUtxoCache {
-        &self.utxo_cache
-    }
-
-    pub fn utxo_block_undo(&self) -> &BTreeMap<TransactionSource, UtxosBlockUndoEntry> {
-        &self.utxo_block_undo
-    }
-
-    pub fn token_issuance_cache(&self) -> &ConsumedTokenIssuanceCache {
-        &self.token_issuance_cache
-    }
-
-    pub fn accounting_delta(&self) -> &PoSAccountingDeltaData {
-        &self.accounting_delta
-    }
-
-    pub fn accounting_delta_undo(&self) -> &BTreeMap<TransactionSource, AccountingBlockUndoEntry> {
-        &self.accounting_delta_undo
-    }
+    accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
 }
 
 /// The tool used to verify transaction and cache their updated states in memory
@@ -208,8 +183,12 @@ pub struct TransactionVerifier<C, S, U, A> {
     utxo_cache: UtxosCache<U>,
     utxo_block_undo: UtxosBlockUndoCache,
 
+    // represents accumulated delta with all changes done via current verifier object
     accounting_delta: PoSAccountingDelta<A>,
     accounting_block_undo: AccountingBlockUndoCache,
+
+    // stores deltas per block
+    accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
 }
 
 impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, S, UtxosDB<S>, S> {
@@ -231,6 +210,7 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, 
             utxo_block_undo: UtxosBlockUndoCache::new(),
             accounting_delta,
             accounting_block_undo: AccountingBlockUndoCache::new(),
+            accounting_block_deltas: BTreeMap::new(),
         }
     }
 }
@@ -263,6 +243,7 @@ where
             utxo_block_undo: UtxosBlockUndoCache::new(),
             accounting_delta: PoSAccountingDelta::new(accounting),
             accounting_block_undo: AccountingBlockUndoCache::new(),
+            accounting_block_deltas: BTreeMap::new(),
         }
     }
 }
@@ -286,6 +267,7 @@ where
             token_issuance_cache: TokenIssuanceCache::new(),
             accounting_delta: PoSAccountingDelta::new(&self.accounting_delta),
             accounting_block_undo: AccountingBlockUndoCache::new(),
+            accounting_block_deltas: BTreeMap::new(),
             best_block: self.best_block,
         }
     }
@@ -595,14 +577,22 @@ where
                         ConnectTransactionError::TokenOutputInPoSAccountingOperation(tx.get_id())
                     })?;
 
-                    let (_, undo) = self
-                        .accounting_delta
+                    let mut temp_delta = PoSAccountingDelta::new(&self.accounting_delta);
+                    let (_, undo) = temp_delta
                         .create_pool(
                             input0.outpoint(),
                             delegation_amount,
                             pool_data.decommission_key().clone(),
                         )
                         .map_err(ConnectTransactionError::PoSAccountingError)?;
+                    let new_delta_data = temp_delta.consume();
+
+                    self.accounting_delta.merge_with_delta(new_delta_data.clone())?;
+
+                    self.accounting_block_deltas
+                        .entry(tx_source)
+                        .or_default()
+                        .merge_with_delta(new_delta_data)?;
 
                     Ok(undo)
                 },
@@ -632,10 +622,18 @@ where
                     .into_inner()
                     .into_iter()
                     .try_for_each(|undo| {
-                        self.accounting_delta
-                            .undo(undo)
-                            .map_err(ConnectTransactionError::PoSAccountingError)
+                        let mut temp_delta = PoSAccountingDelta::new(&self.accounting_delta);
+                        temp_delta.undo(undo)?;
+                        let new_delta_data = temp_delta.consume();
+
+                        self.accounting_delta.merge_with_delta(new_delta_data.clone())?;
+                        self.accounting_block_deltas
+                            .entry(tx_source)
+                            .or_default()
+                            .merge_with_delta(new_delta_data)?;
+                        Ok(())
                     })
+                    .map_err(ConnectTransactionError::PoSAccountingError)
             }
             OutputPurpose::Transfer(_)
             | OutputPurpose::LockThenTransfer(_, _)
@@ -930,6 +928,7 @@ where
             token_issuance_cache: self.token_issuance_cache.consume(),
             accounting_delta: self.accounting_delta.consume(),
             accounting_delta_undo: self.accounting_block_undo.consume(),
+            accounting_block_deltas: self.accounting_block_deltas,
         })
     }
 }

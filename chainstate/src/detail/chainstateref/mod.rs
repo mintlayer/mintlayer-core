@@ -35,9 +35,7 @@ use common::{
 };
 use consensus::TransactionIndexHandle;
 use logging::log;
-use tx_verifier::transaction_verifier::{
-    config::TransactionVerifierConfig, TransactionVerifier, TransactionVerifierDelta,
-};
+use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosDB, UtxosView};
 
@@ -779,7 +777,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         let verifier_config = TransactionVerifierConfig {
             tx_index_enabled: *self.chainstate_config.tx_index_enabled,
         };
-        let tx_verifier = self
+        let connected_txs = self
             .tx_verification_strategy
             .connect_block(
                 TransactionVerifier::new,
@@ -792,57 +790,27 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
             )
             .log_err()?;
 
-        let consumed = tx_verifier.consume().log_err()?;
-        self.flush_to_storage_after_connect(block_index, consumed)
+        let consumed = connected_txs.consume()?;
+        flush_to_storage(self, consumed)?;
+
+        Ok(())
     }
 
-    fn flush_to_storage_after_connect(
-        &mut self,
-        block_index: &BlockIndex,
-        consumed_verifier_data: TransactionVerifierDelta,
-    ) -> Result<(), BlockError> {
-        // Flush accounting delta
-        self.db_tx
-            .set_accounting_delta(
-                *block_index.block_id(),
-                &consumed_verifier_data.accounting_delta().clone(),
-            )
-            .log_err()?;
-
-        // Flush all the data from the `TransactionVerifierDelta`
-        flush_to_storage(self, consumed_verifier_data).map_err(BlockError::from)
-    }
-
-    fn disconnect_transactions(
-        &mut self,
-        block_index: &BlockIndex,
-        block: &WithId<Block>,
-    ) -> Result<(), BlockError> {
+    fn disconnect_transactions(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
         let verifier_config = TransactionVerifierConfig {
             tx_index_enabled: *self.chainstate_config.tx_index_enabled,
         };
-        let tx_verifier = self.tx_verification_strategy.disconnect_block(
+        let cached_inputs = self.tx_verification_strategy.disconnect_block(
             TransactionVerifier::new,
             &*self,
             self.chain_config,
             verifier_config,
             block,
         )?;
+        let cached_inputs = cached_inputs.consume()?;
+        flush_to_storage(self, cached_inputs)?;
 
-        let consumed = tx_verifier.consume()?;
-        self.flush_to_storage_after_disconnect(block_index, consumed)
-    }
-
-    fn flush_to_storage_after_disconnect(
-        &mut self,
-        block_index: &BlockIndex,
-        consumed_verifier_data: TransactionVerifierDelta,
-    ) -> Result<(), BlockError> {
-        // Flush accounting delta
-        self.db_tx.del_accounting_delta(*block_index.block_id()).log_err()?;
-
-        // Flush all the data from the `TransactionVerifierDelta`
-        flush_to_storage(self, consumed_verifier_data).map_err(BlockError::from)
+        Ok(())
     }
 
     // Connect new block
@@ -897,7 +865,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
             .expect("Best block index not present in the database");
         let block = self.get_block_from_index(&block_index).log_err()?.expect("Inconsistent DB");
         // Disconnect transactions
-        self.disconnect_transactions(&block_index, &block.into()).log_err()?;
+        self.disconnect_transactions(&block.into()).log_err()?;
         self.db_tx.set_best_block_id(block_index.prev_block_id()).log_err()?;
         // Disconnect block
         self.db_tx.del_block_id_at_height(&block_index.block_height()).log_err()?;

@@ -344,10 +344,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                             match genblock_id.classify(&self.chain_config) {
                                 GenBlockId::Genesis(_) => (), /* skip genesis block for now */
                                 GenBlockId::Block(block_id) => {
-                                    let block_delta = db_tx
-                                        .get_accounting_delta(block_id)?
-                                        .ok_or(BlockError::PoSAccountingDeltaNotFound(block_id))?;
-                                    delta.merge_with_delta(block_delta)?;
+                                    if let Some(block_delta) =
+                                        db_tx.get_accounting_delta(block_id)?
+                                    {
+                                        delta.merge_with_delta(block_delta)?;
+                                    }
                                 }
                             };
                             Ok(delta)

@@ -51,8 +51,6 @@ pub enum BlockError {
     BlockAtHeightNotFound(BlockHeight),
     #[error("Block {0} already exists")]
     BlockAlreadyExists(Id<Block>),
-    #[error("PoSAccounting delta for block {0} not found")]
-    PoSAccountingDeltaNotFound(Id<Block>),
     #[error("Failed to commit block state update to database for block: {0} after {1} attempts with error {2}")]
     DatabaseCommitError(Id<Block>, usize, chainstate_storage::Error),
     #[error("Block proof calculation error for block: {0}")]

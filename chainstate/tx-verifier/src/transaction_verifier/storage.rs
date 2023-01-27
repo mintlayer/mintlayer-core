@@ -23,7 +23,9 @@ use common::{
     },
     primitives::Id,
 };
-use pos_accounting::{AccountingBlockUndo, FlushablePoSAccountingView, PoSAccountingView};
+use pos_accounting::{
+    AccountingBlockUndo, FlushablePoSAccountingView, PoSAccountingDeltaData, PoSAccountingView,
+};
 use thiserror::Error;
 use utxo::{FlushableUtxoView, UtxosStorageRead};
 
@@ -148,6 +150,12 @@ pub trait TransactionVerifierStorageMut:
     fn del_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
+    ) -> Result<(), TransactionVerifierStorageError>;
+
+    fn set_accounting_delta(
+        &mut self,
+        tx_source: TransactionSource,
+        delta: &PoSAccountingDeltaData,
     ) -> Result<(), TransactionVerifierStorageError>;
 }
 

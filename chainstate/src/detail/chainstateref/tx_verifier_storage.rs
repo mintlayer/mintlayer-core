@@ -256,6 +256,30 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
             }
         }
     }
+
+    fn set_accounting_delta(
+        &mut self,
+        tx_source: TransactionSource,
+        delta: &PoSAccountingDeltaData,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
+        match tx_source {
+            TransactionSource::Chain(id) => {
+                let mut current_delta = self
+                    .db_tx
+                    .get_accounting_delta(id)
+                    .map_err(TransactionVerifierStorageError::from)?
+                    .unwrap_or_default();
+                current_delta.merge_with_delta(delta.clone())?;
+                self.db_tx
+                    .set_accounting_delta(id, &current_delta)
+                    .map_err(TransactionVerifierStorageError::from)
+            }
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
+    }
 }
 
 impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
