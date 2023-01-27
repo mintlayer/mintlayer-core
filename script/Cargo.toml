@@ -10,7 +10,7 @@ serialization = { path = "../serialization" }
 utils = { path = '../utils' }
 typename = { path = "../utils/typename" }
 
-parity-scale-codec = "3.1"
+parity-scale-codec.workspace = true
 thiserror = "1.0"
 
 [dev-dependencies]

@@ -12,7 +12,7 @@ logging = { path = "../logging/" }
 serialization = { path = "../serialization" }
 chainstate-types = { path = '../chainstate/types' }
 
-parity-scale-codec = { version = "3.1", features = ["chain-error"] }
+parity-scale-codec = { workspace = true, features = ["chain-error"] }
 thiserror = "1.0"
 
 [dev-dependencies]

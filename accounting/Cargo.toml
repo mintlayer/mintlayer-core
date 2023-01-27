@@ -12,7 +12,7 @@ serialization = {path = "../serialization"}
 utils = {path = '../utils'}
 
 thiserror = "1.0"
-parity-scale-codec = "3.1"
+parity-scale-codec.workspace = true
 
 [dev-dependencies]
 proptest = "1.0"

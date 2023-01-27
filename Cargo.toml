@@ -77,6 +77,9 @@ serialization = { path = "serialization"}
 storage = { path = "storage"}
 utxo = { path = "utxo"}
 
+[workspace.dependencies]
+parity-scale-codec = "3.1"
+
 [profile.release]
 debug-assertions = true
 overflow-checks = true
