@@ -600,7 +600,6 @@ dependencies = [
  "generic-array",
  "hex",
  "itertools",
- "lazy_static",
  "logging",
  "merkletree",
  "parity-scale-codec",

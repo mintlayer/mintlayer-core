@@ -44,8 +44,12 @@ where
     N: NetworkingService<PeerId = PeerId>,
     A: RandomAddressMaker<Address = N::Address>,
 {
-    let mut peerdb =
-        PeerDb::<N, _>::new(Arc::new(P2pConfig::default()), peerdb_inmemory_store()).unwrap();
+    let mut peerdb = PeerDb::<N, _>::new(
+        Arc::new(P2pConfig::default()),
+        Default::default(),
+        peerdb_inmemory_store(),
+    )
+    .unwrap();
 
     let peer_id = add_active_peer::<T, N, A, _>(&mut peerdb);
     let address = peerdb.peer_address(&peer_id).unwrap().as_bannable();
@@ -66,10 +70,13 @@ where
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        heartbeat_interval_min: Default::default(),
-        heartbeat_interval_max: Default::default(),
     };
-    let mut peerdb = PeerDb::<N, _>::new(Arc::new(config), peerdb_inmemory_store()).unwrap();
+    let mut peerdb = PeerDb::<N, _>::new(
+        Arc::new(config),
+        Default::default(),
+        peerdb_inmemory_store(),
+    )
+    .unwrap();
 
     let peer_id = add_active_peer::<T, N, A, _>(&mut peerdb);
     assert!(!peerdb.adjust_peer_score(&peer_id, 100).unwrap());
@@ -91,10 +98,13 @@ where
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        heartbeat_interval_min: Default::default(),
-        heartbeat_interval_max: Default::default(),
     };
-    let mut peerdb = PeerDb::<N, _>::new(Arc::new(config), peerdb_inmemory_store()).unwrap();
+    let mut peerdb = PeerDb::<N, _>::new(
+        Arc::new(config),
+        Default::default(),
+        peerdb_inmemory_store(),
+    )
+    .unwrap();
 
     let peer_id = add_active_peer::<T, N, A, _>(&mut peerdb);
     let address = peerdb.peer_address(&peer_id).unwrap().as_bannable();
@@ -117,9 +127,8 @@ where
             outbound_connection_timeout: Default::default(),
             node_type: Default::default(),
             allow_discover_private_ips: Default::default(),
-            heartbeat_interval_min: Default::default(),
-            heartbeat_interval_max: Default::default(),
         }),
+        Default::default(),
         db_store,
     )
     .unwrap();

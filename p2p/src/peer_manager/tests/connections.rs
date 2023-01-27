@@ -24,10 +24,10 @@ use tokio::{sync::oneshot, time::timeout};
 use crate::{
     config::P2pConfig,
     net::types::Role,
-    peer_manager::tests::run_peer_manager,
+    peer_manager::tests::{get_connected_peers, run_peer_manager},
     testing_utils::{
-        connect_services, get_connectivity_event, peerdb_inmemory_store, TestTransportChannel,
-        TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        connect_services, get_connectivity_event, peerdb_inmemory_store, P2pTestTimeGetter,
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
 };
 use common::chain::config;
@@ -610,6 +610,7 @@ async fn connection_timeout_rpc_notified<T>(
         conn,
         rx,
         tx_sync,
+        Default::default(),
         peerdb_inmemory_store(),
     )
     .unwrap();
@@ -679,14 +680,13 @@ where
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        heartbeat_interval_min: Default::default(),
-        heartbeat_interval_max: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
         p2p_config_1,
+        Default::default(),
     )
     .await;
 
@@ -705,14 +705,13 @@ where
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        heartbeat_interval_min: Default::default(),
-        heartbeat_interval_max: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
         p2p_config_2,
+        Default::default(),
     )
     .await;
 
@@ -759,6 +758,8 @@ where
 {
     let chain_config = Arc::new(config::create_mainnet());
 
+    let time_getter = P2pTestTimeGetter::new();
+
     // Start the first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
@@ -768,20 +769,20 @@ where
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
-        heartbeat_interval_min: Duration::from_secs(1).into(),
-        heartbeat_interval_max: Duration::from_secs(2).into(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
         p2p_config_1,
+        time_getter.get_time_getter(),
     )
     .await;
 
     // Get the first peer manager's bind address
     let (rtx, rrx) = oneshot::channel();
     tx1.send(PeerManagerEvent::GetBindAddresses(rtx)).unwrap();
+
     let bind_addresses = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
 
@@ -794,14 +795,13 @@ where
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
-        heartbeat_interval_min: Duration::from_secs(1).into(),
-        heartbeat_interval_max: Duration::from_secs(2).into(),
     });
     let tx2 = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
         p2p_config_2,
+        time_getter.get_time_getter(),
     )
     .await;
 
@@ -814,66 +814,42 @@ where
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
-        heartbeat_interval_min: Duration::from_secs(1).into(),
-        heartbeat_interval_max: Duration::from_secs(2).into(),
     });
     let tx3 = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
         p2p_config_3,
+        time_getter.get_time_getter(),
     )
     .await;
 
     let started_at = Instant::now();
 
-    // The second peer should discover the third peer
+    // All peers should discover each other
     loop {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let (rtx, rrx) = oneshot::channel();
-        tx2.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
-        let connected_peers = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
-        if connected_peers.len() == expected_count {
-            break;
-        }
-        assert!(
-            Instant::now().duration_since(started_at) < Duration::from_secs(10),
-            "Unexpected peer count: {}, expected: {}",
-            connected_peers.len(),
-            expected_count,
-        );
-    }
+        let connected_peers_1 = get_connected_peers(&tx1).await.len();
+        let connected_peers_2 = get_connected_peers(&tx2).await.len();
+        let connected_peers_3 = get_connected_peers(&tx3).await.len();
 
-    // Check the third peer manager
-    loop {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let (rtx, rrx) = oneshot::channel();
-        tx3.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
-        let connected_peers = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
-        if connected_peers.len() == expected_count {
+        if connected_peers_1 == expected_count
+            && connected_peers_2 == expected_count
+            && connected_peers_3 == expected_count
+        {
             break;
         }
-        assert!(
-            Instant::now().duration_since(started_at) < Duration::from_secs(10),
-            "Unexpected peer count: {}, expected: {}",
-            connected_peers.len(),
-            expected_count,
-        );
-    }
 
-    // And the first peer manager
-    loop {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let (rtx, rrx) = oneshot::channel();
-        tx1.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
-        let connected_peers = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
-        if connected_peers.len() == expected_count {
-            break;
-        }
+        // Without this noise handshake does complete in time for some reasons
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        time_getter.advance_time(Duration::from_millis(1000)).await;
+
         assert!(
             Instant::now().duration_since(started_at) < Duration::from_secs(10),
-            "Unexpected peer count: {}, expected: {}",
-            connected_peers.len(),
+            "Unexpected peer counts: {}, {}, {}, expected: {}",
+            connected_peers_1,
+            connected_peers_2,
+            connected_peers_3,
             expected_count,
         );
     }

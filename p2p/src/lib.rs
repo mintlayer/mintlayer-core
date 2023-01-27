@@ -35,7 +35,7 @@ use tap::TapFallible;
 use tokio::sync::mpsc;
 
 use chainstate::chainstate_interface;
-use common::chain::ChainConfig;
+use common::{chain::ChainConfig, time_getter::TimeGetter};
 use logging::log;
 
 use crate::{
@@ -78,6 +78,7 @@ where
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         _mempool_handle: mempool::MempoolHandle,
+        time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> crate::Result<Self> {
         let bind_addresses = p2p_config
@@ -116,6 +117,7 @@ where
             conn,
             rx_peer_manager,
             tx_p2p_sync,
+            time_getter,
             peerdb_storage,
         )?;
         tokio::spawn(async move {
@@ -158,6 +160,7 @@ pub async fn make_p2p<S: PeerDbStorage + 'static>(
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     mempool_handle: mempool::MempoolHandle,
+    time_getter: TimeGetter,
     peerdb_storage: S,
 ) -> Result<Box<dyn P2pInterface>> {
     let stream_adapter = NoiseEncryptionAdapter::gen_new();
@@ -170,6 +173,7 @@ pub async fn make_p2p<S: PeerDbStorage + 'static>(
         p2p_config,
         chainstate_handle,
         mempool_handle,
+        time_getter,
         peerdb_storage,
     )
     .await?;

@@ -13,9 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(unused, dead_code)]
-use lazy_static::lazy_static;
-use logging::log;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
 
@@ -28,9 +25,7 @@ fn duration_from_int(v: u64) -> Duration {
     Duration::from_millis(v)
 }
 
-lazy_static! {
-    static ref TIME_SOURCE: AtomicU64 = Default::default();
-}
+static TIME_SOURCE: AtomicU64 = AtomicU64::new(0);
 
 /// Either gets the current time or panics
 pub fn get() -> Duration {
@@ -67,13 +62,15 @@ pub fn set(now: Duration) -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
+    use logging::log;
+
     use super::*;
 
     #[test]
     #[serial_test::serial]
     fn test_time() {
         logging::init_logging::<&std::path::Path>(None);
-        set(Duration::from_secs(1337));
+        set(Duration::from_secs(1337)).unwrap();
 
         log::info!("p2p time: {}", get().as_secs());
         std::thread::sleep(Duration::from_secs(1));

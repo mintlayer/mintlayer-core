@@ -77,8 +77,6 @@ where
         outbound_connection_timeout: Default::default(),
         node_type: NodeType::Full.into(),
         allow_discover_private_ips: Default::default(),
-        heartbeat_interval_min: Default::default(),
-        heartbeat_interval_max: Default::default(),
     });
     let (conn, sync) = T::start(
         transport,

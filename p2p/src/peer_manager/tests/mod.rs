@@ -16,12 +16,17 @@
 mod ban;
 mod connections;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
-use tokio::sync::mpsc::UnboundedSender;
+use common::time_getter::TimeGetter;
+use tokio::{
+    sync::{mpsc::UnboundedSender, oneshot},
+    time::timeout,
+};
 
 use crate::{
     event::PeerManagerEvent,
+    interface::types::ConnectedPeer,
     net::{ConnectivityService, NetworkingService},
     peer_manager::PeerManager,
     testing_utils::peerdb_inmemory_store,
@@ -35,6 +40,7 @@ async fn make_peer_manager_custom<T>(
     addr: T::Address,
     chain_config: Arc<common::chain::ChainConfig>,
     p2p_config: Arc<P2pConfig>,
+    time_getter: TimeGetter,
 ) -> (
     PeerManager<T, impl PeerDbStorage>,
     UnboundedSender<PeerManagerEvent<T>>,
@@ -62,6 +68,7 @@ where
         conn,
         rx,
         tx_sync,
+        time_getter,
         peerdb_inmemory_store(),
     )
     .unwrap();
@@ -79,8 +86,14 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let p2p_config = Arc::new(P2pConfig::default());
-    let (peer_manager, _tx) =
-        make_peer_manager_custom::<T>(transport, addr, chain_config, p2p_config).await;
+    let (peer_manager, _tx) = make_peer_manager_custom::<T>(
+        transport,
+        addr,
+        chain_config,
+        p2p_config,
+        Default::default(),
+    )
+    .await;
     peer_manager
 }
 
@@ -89,15 +102,24 @@ async fn run_peer_manager<T>(
     addr: T::Address,
     chain_config: Arc<common::chain::ChainConfig>,
     p2p_config: Arc<P2pConfig>,
+    time_getter: TimeGetter,
 ) -> UnboundedSender<PeerManagerEvent<T>>
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let (mut peer_manager, tx) =
-        make_peer_manager_custom::<T>(transport, addr, chain_config, p2p_config).await;
+        make_peer_manager_custom::<T>(transport, addr, chain_config, p2p_config, time_getter).await;
     tokio::spawn(async move {
         peer_manager.run().await.unwrap();
     });
     tx
+}
+
+async fn get_connected_peers<T: NetworkingService + std::fmt::Debug>(
+    tx: &UnboundedSender<PeerManagerEvent<T>>,
+) -> Vec<ConnectedPeer> {
+    let (rtx, rrx) = oneshot::channel();
+    tx.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
+    timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap()
 }

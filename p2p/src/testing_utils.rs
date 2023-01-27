@@ -18,9 +18,14 @@
 use std::{
     fmt::Debug,
     net::{IpAddr, Ipv6Addr, SocketAddr},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
+use common::time_getter::TimeGetter;
 use crypto::random::{make_pseudo_rng, Rng};
 use tokio::time::timeout;
 
@@ -223,4 +228,37 @@ where
 pub fn peerdb_inmemory_store() -> PeerDbStorageImpl<storage::inmemory::InMemory> {
     let storage = storage::inmemory::InMemory::new();
     PeerDbStorageImpl::new(storage).unwrap()
+}
+
+pub struct P2pTestTimeGetter {
+    current_time_millis: Arc<AtomicU64>,
+}
+
+impl P2pTestTimeGetter {
+    pub fn new() -> Self {
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap();
+        let current_time_millis = Arc::new(AtomicU64::new(current_time.as_millis() as u64));
+        Self {
+            current_time_millis,
+        }
+    }
+
+    pub fn get_time_getter(&self) -> TimeGetter {
+        let current_time = Arc::clone(&self.current_time_millis);
+        TimeGetter::new(Arc::new(move || {
+            Duration::from_millis(current_time.load(Ordering::SeqCst))
+        }))
+    }
+
+    pub async fn advance_time(&self, duration: Duration) {
+        tokio::time::pause();
+        self.current_time_millis.store(
+            self.current_time_millis.load(Ordering::SeqCst) + duration.as_millis() as u64,
+            Ordering::SeqCst,
+        );
+        tokio::time::advance(duration).await;
+        tokio::time::resume();
+    }
 }

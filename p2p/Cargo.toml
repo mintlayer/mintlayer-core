@@ -44,6 +44,7 @@ p2p-test-utils = { path = "p2p-test-utils" }
 p2p-backend-test-suite = { path = "backend-test-suite" }
 
 portpicker = "0.1"
+tokio = { version = "1", features = ["test-util"] }
 
 [[test]]
 name = "backend_tcp"
