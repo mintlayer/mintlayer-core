@@ -114,8 +114,9 @@ impl backend::WriteOps for DbTx<'_, lmdb::RwTransaction<'_>> {
     }
 }
 
-/// If the lmdb map is full, perform a resize. This causes a recoverable error with MDB_MAP_FULL
-/// work out-of-the-box by just retrying one or more times
+/// If the lmdb map is full, perform a resize. This results in fixing
+/// a recoverable error of MDB_MAP_FULL to work out-of-the-box by just
+/// retrying one or more times
 fn resize_if_map_full(backend: &LmdbImpl, err: lmdb::Error) -> lmdb::Error {
     if err == lmdb::Error::MapFull {
         backend
