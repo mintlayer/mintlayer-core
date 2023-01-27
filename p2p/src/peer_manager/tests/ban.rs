@@ -64,7 +64,7 @@ where
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
     let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
-    assert!(pm2.peerdb.is_address_banned(&addr1));
+    assert!(pm2.peerdb.is_address_banned(&addr1).unwrap());
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(std::matches!(
         event,
@@ -111,7 +111,7 @@ where
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
     let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
-    assert!(pm2.peerdb.is_address_banned(&addr1));
+    assert!(pm2.peerdb.is_address_banned(&addr1).unwrap());
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(std::matches!(
         event,
@@ -166,7 +166,7 @@ where
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
     let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
-    assert!(pm2.peerdb.is_address_banned(&addr1));
+    assert!(pm2.peerdb.is_address_banned(&addr1).unwrap());
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(matches!(
         event,
@@ -284,7 +284,7 @@ where
     assert!(res.is_ok());
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(peer_manager.peerdb.is_active_peer(&peer_id));
-    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()));
+    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()).unwrap());
 }
 
 #[tokio::test]
@@ -386,7 +386,7 @@ where
     assert!(res.is_ok());
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(peer_manager.peerdb.is_active_peer(&peer_id));
-    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()));
+    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()).unwrap());
 }
 
 #[tokio::test]

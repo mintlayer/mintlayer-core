@@ -24,12 +24,15 @@ use std::{
 use crypto::random::{make_pseudo_rng, Rng};
 use tokio::time::timeout;
 
-use crate::net::{
-    default_backend::transport::{
-        MpscChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
+use crate::{
+    net::{
+        default_backend::transport::{
+            MpscChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
+        },
+        types::{ConnectivityEvent, PeerInfo},
+        ConnectivityService, NetworkingService,
     },
-    types::{ConnectivityEvent, PeerInfo},
-    ConnectivityService, NetworkingService,
+    peer_manager::peerdb::storage_impl::PeerDbStorageImpl,
 };
 
 /// An interface for creating transports and addresses used in tests.
@@ -215,4 +218,9 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     filter_connectivity_event(conn, |_event| true).await
+}
+
+pub fn peerdb_inmemory_store() -> PeerDbStorageImpl<storage::inmemory::InMemory> {
+    let storage = storage::inmemory::InMemory::new();
+    PeerDbStorageImpl::new(storage).unwrap()
 }

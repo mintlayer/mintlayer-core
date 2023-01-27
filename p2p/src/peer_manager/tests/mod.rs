@@ -24,14 +24,21 @@ use crate::{
     event::PeerManagerEvent,
     net::{ConnectivityService, NetworkingService},
     peer_manager::PeerManager,
+    testing_utils::peerdb_inmemory_store,
     P2pConfig,
 };
+
+use super::peerdb::storage::PeerDbStorage;
+
 async fn make_peer_manager_custom<T>(
     transport: T::Transport,
     addr: T::Address,
     chain_config: Arc<common::chain::ChainConfig>,
     p2p_config: Arc<P2pConfig>,
-) -> (PeerManager<T>, UnboundedSender<PeerManagerEvent<T>>)
+) -> (
+    PeerManager<T, impl PeerDbStorage>,
+    UnboundedSender<PeerManagerEvent<T>>,
+)
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -49,7 +56,15 @@ where
 
     tokio::spawn(async move { while rx_sync.recv().await.is_some() {} });
 
-    let peer_manager = PeerManager::<T>::new(chain_config, p2p_config, conn, rx, tx_sync).unwrap();
+    let peer_manager = PeerManager::<T, _>::new(
+        chain_config,
+        p2p_config,
+        conn,
+        rx,
+        tx_sync,
+        peerdb_inmemory_store(),
+    )
+    .unwrap();
 
     (peer_manager, tx)
 }
@@ -58,7 +73,7 @@ async fn make_peer_manager<T>(
     transport: T::Transport,
     addr: T::Address,
     chain_config: Arc<common::chain::ChainConfig>,
-) -> PeerManager<T>
+) -> PeerManager<T, impl PeerDbStorage>
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,

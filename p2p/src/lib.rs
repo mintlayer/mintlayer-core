@@ -30,6 +30,7 @@ pub mod types;
 use std::sync::Arc;
 
 use interface::p2p_interface::P2pInterface;
+use peer_manager::peerdb::storage::PeerDbStorage;
 use tap::TapFallible;
 use tokio::sync::mpsc;
 
@@ -71,12 +72,13 @@ where
     /// Start the P2P subsystem
     ///
     /// This function starts the networking backend and individual manager objects.
-    pub async fn new(
+    pub async fn new<S: PeerDbStorage + 'static>(
         transport: T::Transport,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         _mempool_handle: mempool::MempoolHandle,
+        peerdb_storage: S,
     ) -> crate::Result<Self> {
         let bind_addresses = p2p_config
             .bind_addresses
@@ -108,12 +110,13 @@ where
         let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
         let (_tx_sync, _rx_sync) = mpsc::unbounded_channel();
 
-        let mut peer_manager = peer_manager::PeerManager::<T>::new(
+        let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             conn,
             rx_peer_manager,
             tx_p2p_sync,
+            peerdb_storage,
         )?;
         tokio::spawn(async move {
             peer_manager.run().await.tap_err(|err| log::error!("PeerManager failed: {err}"))
@@ -150,11 +153,12 @@ impl subsystem::Subsystem for Box<dyn P2pInterface> {}
 
 pub type P2pHandle = subsystem::Handle<Box<dyn P2pInterface>>;
 
-pub async fn make_p2p(
+pub async fn make_p2p<S: PeerDbStorage + 'static>(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     mempool_handle: mempool::MempoolHandle,
+    peerdb_storage: S,
 ) -> Result<Box<dyn P2pInterface>> {
     let stream_adapter = NoiseEncryptionAdapter::gen_new();
     let base_transport = net::default_backend::transport::TcpTransportSocket::new();
@@ -166,6 +170,7 @@ pub async fn make_p2p(
         p2p_config,
         chainstate_handle,
         mempool_handle,
+        peerdb_storage,
     )
     .await?;
 

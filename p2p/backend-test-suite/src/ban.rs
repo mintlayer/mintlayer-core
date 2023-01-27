@@ -32,12 +32,12 @@ tests![invalid_pubsub_block, invalid_sync_block,];
 // Start two network services, spawn a `SyncMessageHandler` for the first service, publish an
 // invalid block from the first service and verify that the `SyncManager` of the first service
 // receives a `AdjustPeerScore` event which bans the peer of the second service.
-async fn invalid_pubsub_block<T, S, A>()
+async fn invalid_pubsub_block<T, N, A>()
 where
-    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
-    S: NetworkingService + Debug + 'static,
-    S::ConnectivityHandle: ConnectivityService<S>,
-    S::SyncingMessagingHandle: SyncingMessagingService<S>,
+    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    N: NetworkingService + Debug + 'static,
+    N::ConnectivityHandle: ConnectivityService<N>,
+    N::SyncingMessagingHandle: SyncingMessagingService<N>,
 {
     let (_tx_sync, rx_sync) = mpsc::unbounded_channel();
     let (tx_peer_manager, mut rx_peer_manager) = mpsc::unbounded_channel();
@@ -45,7 +45,7 @@ where
     let p2p_config = Arc::new(P2pConfig::default());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&chain_config)).await;
 
-    let (mut conn1, sync1) = S::start(
+    let (mut conn1, sync1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -54,7 +54,7 @@ where
     .await
     .unwrap();
 
-    let mut sync1 = BlockSyncManager::<S>::new(
+    let mut sync1 = BlockSyncManager::<N>::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         sync1,
@@ -63,7 +63,7 @@ where
         tx_peer_manager,
     );
 
-    let (mut conn2, mut sync2) = S::start(
+    let (mut conn2, mut sync2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -72,7 +72,7 @@ where
     .await
     .unwrap();
 
-    let (_address, _peer_info1, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
+    let (_address, _peer_info1, peer_info2) = connect_services::<N>(&mut conn1, &mut conn2).await;
 
     // create few blocks so `sync2` has something to send to `sync1`
     let best_block = TestBlockInfo::from_genesis(chain_config.genesis_block());
@@ -114,19 +114,19 @@ where
 }
 
 // Start two networking services and give an invalid block, verify that `PeerManager` is informed.
-async fn invalid_sync_block<T, S, A>()
+async fn invalid_sync_block<T, N, A>()
 where
-    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
-    S: NetworkingService + Debug + 'static,
-    S::ConnectivityHandle: ConnectivityService<S>,
-    S::SyncingMessagingHandle: SyncingMessagingService<S>,
+    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    N: NetworkingService + Debug + 'static,
+    N::ConnectivityHandle: ConnectivityService<N>,
+    N::SyncingMessagingHandle: SyncingMessagingService<N>,
 {
     let (_tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
     let (tx_peer_manager, mut rx_peer_manager) = mpsc::unbounded_channel();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&chain_config)).await;
 
-    let (mut conn1, sync1) = S::start(
+    let (mut conn1, sync1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -135,7 +135,7 @@ where
     .await
     .unwrap();
 
-    let (mut conn2, _sync2) = S::start(
+    let (mut conn2, _sync2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -144,7 +144,7 @@ where
     .await
     .unwrap();
 
-    let mut sync1 = BlockSyncManager::<S>::new(
+    let mut sync1 = BlockSyncManager::<N>::new(
         Arc::clone(&chain_config),
         Arc::new(P2pConfig::default()),
         sync1,
@@ -153,7 +153,7 @@ where
         tx_peer_manager,
     );
 
-    let (_address, _peer_info, peer_info2) = connect_services::<S>(&mut conn1, &mut conn2).await;
+    let (_address, _peer_info, peer_info2) = connect_services::<N>(&mut conn1, &mut conn2).await;
 
     // create few blocks and offer an orphan block to the `SyncManager`
     let best_block = TestBlockInfo::from_genesis(chain_config.genesis_block());

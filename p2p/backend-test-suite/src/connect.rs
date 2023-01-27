@@ -25,15 +25,15 @@ use p2p::{
 
 tests![connect, connect_address_in_use, connect_accept,];
 
-async fn connect<T, S, A>()
+async fn connect<T, N, A>()
 where
-    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
-    S: NetworkingService + Debug + 'static,
-    S::ConnectivityHandle: ConnectivityService<S>,
-    S::SyncingMessagingHandle: SyncingMessagingService<S>,
+    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    N: NetworkingService + Debug + 'static,
+    N::ConnectivityHandle: ConnectivityService<N>,
+    N::SyncingMessagingHandle: SyncingMessagingService<N>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    S::start(
+    N::start(
         T::make_transport(),
         vec![T::make_address()],
         config,
@@ -44,15 +44,15 @@ where
 }
 
 // Check that connecting twice to the same address isn't possible.
-async fn connect_address_in_use<T, S, A>()
+async fn connect_address_in_use<T, N, A>()
 where
-    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
-    S: NetworkingService + Debug + 'static,
-    S::ConnectivityHandle: ConnectivityService<S> + Debug,
-    S::SyncingMessagingHandle: SyncingMessagingService<S> + Debug,
+    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    N: NetworkingService + Debug + 'static,
+    N::ConnectivityHandle: ConnectivityService<N> + Debug,
+    N::SyncingMessagingHandle: SyncingMessagingService<N> + Debug,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (connectivity, _sync) = S::start(
+    let (connectivity, _sync) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -62,7 +62,7 @@ where
     .unwrap();
 
     let addresses = connectivity.local_addresses().to_vec();
-    let res = S::start(T::make_transport(), addresses, config, Default::default())
+    let res = N::start(T::make_transport(), addresses, config, Default::default())
         .await
         .expect_err("address is not in use");
     assert!(matches!(
@@ -75,15 +75,15 @@ where
 
 // Try to connect two nodes by having `service1` listen for network events and having `service2`
 // trying to connect to `service1`.
-async fn connect_accept<T, S, A>()
+async fn connect_accept<T, N, A>()
 where
-    T: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
-    S: NetworkingService + std::fmt::Debug + 'static,
-    S::ConnectivityHandle: ConnectivityService<S>,
-    S::SyncingMessagingHandle: SyncingMessagingService<S>,
+    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
+    N: NetworkingService + std::fmt::Debug + 'static,
+    N::ConnectivityHandle: ConnectivityService<N>,
+    N::SyncingMessagingHandle: SyncingMessagingService<N>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut service1, _) = S::start(
+    let (mut service1, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -91,7 +91,7 @@ where
     )
     .await
     .unwrap();
-    let (mut service2, _) = S::start(
+    let (mut service2, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),

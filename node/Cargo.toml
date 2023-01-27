@@ -17,6 +17,7 @@ mempool = { path = "../mempool/" }
 p2p = { path = "../p2p/" }
 rpc = { path = "../rpc/" }
 subsystem = { path = "../subsystem/" }
+storage-lmdb = { path = "../storage/lmdb" }
 
 # External dependencies
 anyhow = "1.0"
