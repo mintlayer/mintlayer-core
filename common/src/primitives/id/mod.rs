@@ -49,7 +49,7 @@ impl From<Uint256> for H256 {
 
 impl serde::Serialize for H256 {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_str(&format!("{:x}", self))
+        s.serialize_str(&format!("{self:x}"))
     }
 }
 

@@ -192,7 +192,7 @@ where
                 request_id: _,
                 response: SyncResponse::HeaderListResponse(_response),
             } => {}
-            msg => panic!("invalid message received: {:?}", msg),
+            msg => panic!("invalid message received: {msg:?}"),
         }
     }
 
@@ -310,7 +310,7 @@ where
                     .await
                     .unwrap();
             }
-            msg => panic!("invalid message received: {:?}", msg),
+            msg => panic!("invalid message received: {msg:?}"),
         }
     }
 
@@ -452,7 +452,7 @@ where
                     .await
                     .unwrap();
             }
-            msg => panic!("invalid message received: {:?}", msg),
+            msg => panic!("invalid message received: {msg:?}"),
         }
     }
 
@@ -596,7 +596,7 @@ where
                     .await
                     .unwrap();
             }
-            msg => panic!("invalid message received: {:?}", msg),
+            msg => panic!("invalid message received: {msg:?}"),
         }
     }
 
@@ -718,7 +718,7 @@ where
                 request_id: _,
                 response: SyncResponse::HeaderListResponse(_response),
             } => {}
-            msg => panic!("invalid message received: {:?}", msg),
+            msg => panic!("invalid message received: {msg:?}"),
         }
     }
     handle.await.unwrap();
@@ -857,7 +857,7 @@ where
                 request_id: _,
                 response: SyncResponse::HeaderListResponse(_response),
             } => {}
-            msg => panic!("invalid message received: {:?}", msg),
+            msg => panic!("invalid message received: {msg:?}"),
         }
     }
     handle.await.unwrap();
@@ -1004,7 +1004,7 @@ where
                 request_id: _,
                 response: SyncResponse::HeaderListResponse(_response),
             } => {}
-            msg => panic!("invalid message received: {:?}", msg),
+            msg => panic!("invalid message received: {msg:?}"),
         }
     }
     let (mgr1_handle, _) = handle.await.unwrap();
@@ -1132,7 +1132,7 @@ where
                 request_id: _,
                 response: SyncResponse::HeaderListResponse(_response),
             } => {}
-            msg => panic!("invalid message received: {:?}", msg),
+            msg => panic!("invalid message received: {msg:?}"),
         }
     }
 

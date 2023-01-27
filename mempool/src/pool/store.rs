@@ -140,7 +140,6 @@ impl MempoolStore {
         spending_tx_id_for_error_msg: &Id<Transaction>,
         outpoint: &OutPoint,
     ) -> Result<Amount, TxValidationError> {
-        eprintln!("get_unconfirmed_outpoint_value: {:?}", outpoint);
         let make_err = || TxValidationError::OutPointNotFound {
             outpoint: outpoint.clone(),
             spending_tx_id: *spending_tx_id_for_error_msg,

@@ -662,7 +662,7 @@ impl fmt::Debug for All {
             All { code: x } if x >= all::OP_NOP1.code && x <= all::OP_NOP10.code => {
                 write!(f, "NOP{}", x - all::OP_NOP1.code + 1)
             }
-            All { code: x } => write!(f, "RETURN_{}", x),
+            All { code: x } => write!(f, "RETURN_{x}"),
         }
     }
 }

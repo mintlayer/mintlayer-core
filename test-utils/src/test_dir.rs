@@ -112,7 +112,7 @@ impl TestRoot {
     pub fn fresh_test_dir(&self, name: impl AsRef<str>) -> TestDir {
         let seq_no = self.0.counter.fetch_add(1, Ordering::SeqCst);
         let name = name.as_ref().replace(['/', ':', '\\'], "_");
-        let path = self.0.path.join(format!("case_{:08x}_{}", seq_no, name));
+        let path = self.0.path.join(format!("case_{seq_no:08x}_{name}"));
         fs::create_dir(&path).expect("directory creation to succeed");
         TestDir { path }
     }
