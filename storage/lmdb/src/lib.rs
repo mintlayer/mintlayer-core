@@ -123,7 +123,7 @@ fn resize_if_map_full(backend: &LmdbImpl, err: lmdb::Error) -> lmdb::Error {
             .env
             .do_resize(None)
             .expect("Failed to resize after a write/commit failed with MDB_MAP_FULL");
-        backend.map_resize_scheduled.store(false, Ordering::Release);
+        backend.unschedule_map_resize();
     }
     err
 }
@@ -183,7 +183,11 @@ impl LmdbImpl {
     }
 
     fn schedule_map_resize(&self) {
-        self.map_resize_scheduled.store(true, Ordering::Release);
+        self.map_resize_scheduled.store(true, Ordering::SeqCst);
+    }
+
+    fn unschedule_map_resize(&self) {
+        self.map_resize_scheduled.store(false, Ordering::SeqCst);
     }
 }
 
