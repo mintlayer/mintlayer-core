@@ -25,7 +25,7 @@ use tokio::sync::mpsc;
 use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
 
 use crate::{
-    config::{NodeType, P2pConfig},
+    config::{NodeType, P2pConfig, PeerDbStorageBackend},
     event::{PeerManagerEvent, SyncControlEvent},
     net::{default_backend::types::PeerId, ConnectivityService},
     sync::{peer, BlockSyncManager},
@@ -76,6 +76,7 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         node_type: NodeType::Full.into(),
+        peerdb_storage_backend: PeerDbStorageBackend::InMemory.into(),
         allow_discover_private_ips: Default::default(),
         heartbeat_interval_min: Default::default(),
         heartbeat_interval_max: Default::default(),

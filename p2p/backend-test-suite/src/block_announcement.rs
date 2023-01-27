@@ -31,7 +31,7 @@ use common::{
 use serialization::Encode;
 
 use p2p::{
-    config::{NodeType, P2pConfig},
+    config::{NodeType, P2pConfig, PeerDbStorageBackend},
     error::{P2pError, PublishError},
     message::Announcement,
     net::{
@@ -136,6 +136,7 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         node_type: NodeType::Inactive.into(),
+        peerdb_storage_backend: PeerDbStorageBackend::InMemory.into(),
         allow_discover_private_ips: Default::default(),
         heartbeat_interval_min: Default::default(),
         heartbeat_interval_max: Default::default(),

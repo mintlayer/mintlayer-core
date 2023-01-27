@@ -54,6 +54,9 @@ use crate::{
 /// Result type with P2P errors
 pub type Result<T> = core::result::Result<T, P2pError>;
 
+/// Subdirectory under `datadir` where LMDB PeerDb database is placed
+const SUBDIRECTORY_PEERDB_LMDB: &str = "peerdb-lmdb";
+
 struct P2p<T: NetworkingService> {
     // TODO: add abstraction for channels
     /// A sender for the peer manager events.
@@ -153,16 +156,16 @@ impl subsystem::Subsystem for Box<dyn P2pInterface> {}
 
 pub type P2pHandle = subsystem::Handle<Box<dyn P2pInterface>>;
 
-pub async fn make_p2p(
+pub async fn make_p2p_impl<S: PeerDbStorage + 'static>(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     mempool_handle: mempool::MempoolHandle,
+    peerdb_storage: S,
 ) -> Result<Box<dyn P2pInterface>> {
     let stream_adapter = NoiseEncryptionAdapter::gen_new();
     let base_transport = net::default_backend::transport::TcpTransportSocket::new();
     let transport = NoiseTcpTransport::new(stream_adapter, base_transport);
-    let peerdb_storage = PeerDbStorageImpl::new(storage::inmemory::InMemory::new())?;
 
     let p2p = P2p::<DefaultNetworkingService<NoiseTcpTransport>>::new(
         transport,
@@ -175,4 +178,41 @@ pub async fn make_p2p(
     .await?;
 
     Ok(Box::new(p2p))
+}
+
+pub async fn make_p2p(
+    datadir: &std::path::Path,
+    chain_config: Arc<ChainConfig>,
+    p2p_config: Arc<P2pConfig>,
+    chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+    mempool_handle: mempool::MempoolHandle,
+) -> Result<Box<dyn P2pInterface>> {
+    match *p2p_config.peerdb_storage_backend {
+        config::PeerDbStorageBackend::Lmdb => {
+            let peerdb_storage = PeerDbStorageImpl::new(storage_lmdb::Lmdb::new(
+                datadir.join(SUBDIRECTORY_PEERDB_LMDB),
+            ))?;
+
+            make_p2p_impl(
+                chain_config,
+                p2p_config,
+                chainstate_handle,
+                mempool_handle,
+                peerdb_storage,
+            )
+            .await
+        }
+        config::PeerDbStorageBackend::InMemory => {
+            let peerdb_storage = PeerDbStorageImpl::new(storage_inmemory::InMemory::new())?;
+
+            make_p2p_impl(
+                chain_config,
+                p2p_config,
+                chainstate_handle,
+                mempool_handle,
+                peerdb_storage,
+            )
+            .await
+        }
+    }
 }

@@ -21,6 +21,12 @@ use crate::net::types::PubSubTopic;
 
 pub const DEFAULT_BIND_PORT: u16 = 3031;
 
+// TODO: Replace Lmdb with Sqlite backend when it's ready
+make_config_setting!(
+    PeerDbStorageBackendSetting,
+    PeerDbStorageBackend,
+    PeerDbStorageBackend::Lmdb
+);
 make_config_setting!(BanThreshold, u32, 100);
 make_config_setting!(BanDuration, Duration, Duration::from_secs(60 * 60 * 24));
 make_config_setting!(OutboundConnectionTimeout, Duration, Duration::from_secs(10));
@@ -45,6 +51,13 @@ pub enum NodeType {
     ///
     /// This node type isn't useful outside of the tests.
     Inactive,
+}
+
+/// Storage type to use in PeerDb
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PeerDbStorageBackend {
+    Lmdb,
+    InMemory,
 }
 
 impl From<NodeType> for BTreeSet<PubSubTopic> {
@@ -74,6 +87,8 @@ pub struct P2pConfig {
     pub outbound_connection_timeout: OutboundConnectionTimeout,
     /// A node type.
     pub node_type: NodeTypeSetting,
+    /// Type of storage backend to use in PeerDb
+    pub peerdb_storage_backend: PeerDbStorageBackendSetting,
     /// Allow announcing and discovering local and private IPs. Should be used for testing only.
     pub allow_discover_private_ips: AllowDiscoverPrivateIps,
     /// Lower bound for how often `PeerManager::heartbeat` is called. Should be used for testing only.
