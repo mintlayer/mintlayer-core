@@ -71,7 +71,7 @@ pub async fn initialize(
     });
 
     // P2P subsystem
-    // TODO: Replace Lmdb with Sqlite backend when it's read
+    // TODO: Replace Lmdb with Sqlite backend when it's ready
     let peerdb_storage = PeerDbStorageImpl::new(storage_lmdb::Lmdb::new(
         node_config.datadir.join("peerdb-lmdb"),
     ))?;
@@ -82,8 +82,8 @@ pub async fn initialize(
             Arc::new(node_config.p2p.into()),
             chainstate.clone(),
             mempool.clone(),
-            peerdb_storage,
             Default::default(),
+            peerdb_storage,
         )
         .await
         .expect("The p2p subsystem initialization failed"),

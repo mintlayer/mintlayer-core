@@ -27,10 +27,13 @@ pub mod peerdb;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
-    time::Instant,
+    time::Duration,
 };
 
-use tokio::sync::{mpsc, oneshot};
+use tokio::{
+    sync::{mpsc, oneshot},
+    time::Instant,
+};
 
 use chainstate::ban_score::BanScore;
 use common::{chain::ChainConfig, primitives::semver::SemVer, time_getter::TimeGetter};
@@ -59,6 +62,11 @@ use self::{global_ip::IsGlobalIp, peerdb::storage::PeerDbStorage};
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
 const MAX_ACTIVE_CONNECTIONS: usize = 128;
+
+/// Lower bound for how often [`PeerManager::heartbeat()`] is called
+const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
+/// Upper bound for how often [`PeerManager::heartbeat()`] is called
+const PEER_MGR_HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
 
 /// How many addresses are allowed to be sent
 const MAX_ADDRESS_COUNT: usize = 1000;
@@ -124,7 +132,7 @@ where
             pending: HashMap::new(),
             chain_config,
             p2p_config,
-            last_heartbeat: Instant::now(),
+            last_heartbeat: tokio::time::Instant::now(),
             announced_addresses: HashMap::new(),
         })
     }
@@ -705,12 +713,12 @@ where
                 event_res = self.peer_connectivity_handle.poll_next() => {
                     self.handle_connectivity_event_result(event_res).await?;
                 },
-                _event = tokio::time::sleep(*self.p2p_config.heartbeat_interval_max) => {}
+                _event = tokio::time::sleep(PEER_MGR_HEARTBEAT_INTERVAL_MAX) => {}
             }
 
             // finally update peer manager state
-            let now = Instant::now();
-            if now.duration_since(self.last_heartbeat) > *self.p2p_config.heartbeat_interval_min {
+            let now = tokio::time::Instant::now();
+            if now.duration_since(self.last_heartbeat) > PEER_MGR_HEARTBEAT_INTERVAL_MIN {
                 self.heartbeat().await?;
                 self.last_heartbeat = now;
             }

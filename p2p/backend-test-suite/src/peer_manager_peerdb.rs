@@ -70,8 +70,6 @@ where
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        heartbeat_interval_min: Default::default(),
-        heartbeat_interval_max: Default::default(),
     };
     let mut peerdb = PeerDb::<N, _>::new(
         Arc::new(config),
@@ -100,8 +98,6 @@ where
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        heartbeat_interval_min: Default::default(),
-        heartbeat_interval_max: Default::default(),
     };
     let mut peerdb = PeerDb::<N, _>::new(
         Arc::new(config),
@@ -131,8 +127,6 @@ where
             outbound_connection_timeout: Default::default(),
             node_type: Default::default(),
             allow_discover_private_ips: Default::default(),
-            heartbeat_interval_min: Default::default(),
-            heartbeat_interval_max: Default::default(),
         }),
         Default::default(),
         db_store,
