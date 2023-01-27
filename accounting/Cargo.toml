@@ -11,7 +11,7 @@ common = {path = '../common'}
 serialization = {path = "../serialization"}
 utils = {path = '../utils'}
 
-thiserror = "1.0"
+thiserror.workspace = true
 parity-scale-codec.workspace = true
 
 [dev-dependencies]

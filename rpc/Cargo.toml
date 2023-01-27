@@ -14,9 +14,8 @@ utils = { path = "../utils/" }
 
 # External dependencies
 anyhow = "1.0"
-async-trait = "0.1"
-jsonrpsee = { version = "0.16", features = ["full"] }
+async-trait.workspace = true
+jsonrpsee = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
-async-trait = "0.1"
-tokio = "1.19"
+tokio.workspace = true

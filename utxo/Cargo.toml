@@ -13,11 +13,11 @@ serialization = { path = "../serialization" }
 chainstate-types = { path = '../chainstate/types' }
 
 parity-scale-codec = { workspace = true, features = ["chain-error"] }
-thiserror = "1.0"
+thiserror.workspace = true
 
 [dev-dependencies]
 crypto = { path = '../crypto' }
 test-utils = {path = '../test-utils'}
 
-itertools = "0.10"
+itertools.workspace = true
 rstest = "0.16"

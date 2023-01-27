@@ -8,7 +8,7 @@ license = "MIT"
 serialization-core = { path = '../core' }
 serialization-tagged-derive = { path = 'derive' }
 
-static_assertions = "1.1"
+static_assertions.workspace = true
 
 [dev-dependencies]
 serialization = { path = '..' }

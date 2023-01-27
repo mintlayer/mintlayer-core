@@ -22,8 +22,8 @@ tx-verifier = { path = '../tx-verifier' }
 utils = { path = '../../utils' }
 utxo = { path = '../../utxo' }
 
-hex = "0.4"
-itertools = "0.10"
+hex.workspace = true
+itertools.workspace = true
 
 [dev-dependencies]
 rstest = "0.16"

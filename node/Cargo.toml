@@ -22,9 +22,9 @@ storage-lmdb = { path = "../storage/lmdb" }
 # External dependencies
 anyhow = "1.0"
 clap = { version = "4", features = ["derive"] }
-jsonrpsee = { version = "0.16", features = ["macros"] }
-tokio = { version = "1.19", default-features = false }
-serde = { version = "1", features = ["derive"] }
+jsonrpsee = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, default-features = false }
+serde = { workspace = true, features = ["derive"] }
 toml = "0.5"
 directories = "4.0"
 paste = "1.0"

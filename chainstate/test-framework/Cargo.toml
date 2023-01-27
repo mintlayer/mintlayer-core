@@ -19,10 +19,10 @@ utils = { path = '../../utils' }
 utxo = {path = '../../utxo'}
 
 rstest = "0.16"
-itertools = "0.10"
+itertools.workspace = true
 
 [dev-dependencies]
 consensus = { path = '../../consensus' }
 logging = { path = '../../logging' }
 
-hex = "0.4"
+hex.workspace = true

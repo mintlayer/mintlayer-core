@@ -8,11 +8,11 @@ license = "MIT"
 [dependencies]
 node = { path = "../node" }
 
-tokio = { version = "1.19", features = ['full'] }
+tokio = { workspace = true, features = ['full'] }
 
 [dev-dependencies]
 libtest-mimic = "0.6"
-thiserror = "1.0"
+thiserror.workspace = true
 
 [[test]]
 name = "functional"

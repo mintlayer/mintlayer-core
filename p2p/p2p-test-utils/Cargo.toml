@@ -13,4 +13,4 @@ mempool = { path = "../../mempool/" }
 subsystem = { path = "../../subsystem/" }
 
 portpicker = "0.1"
-tokio = { version = "1", default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
