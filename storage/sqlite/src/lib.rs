@@ -13,13 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+extern crate core;
+
 mod error;
 
-use rusqlite::{Connection, OpenFlags, OptionalExtension, Transaction};
-use std::borrow::BorrowMut;
-use std::marker::PhantomData;
+use rusqlite::{Connection, OpenFlags, OptionalExtension};
+use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
+use std::vec::IntoIter;
 
 use crate::error::process_sqlite_error;
 use storage_core::{
@@ -27,6 +29,7 @@ use storage_core::{
     info::DbDesc,
     Data, DbIndex,
 };
+use utils::shallow_clone::ShallowClone;
 use utils::sync::Arc;
 
 /// The version of the SQLite key/value schema
@@ -44,53 +47,33 @@ impl std::ops::Index<DbIndex> for DbList {
     }
 }
 
-/// LMDB iterator over entries with given key prefix
-pub struct PrefixIter<'tx, C> {
+/// Sqlite iterator over entries with given key prefix
+pub struct PrefixIter {
     /// Underlying iterator
-    iter: C,
+    iter: IntoIter<(Vec<u8>, Vec<u8>)>,
 
     /// Prefix to iterate over
     prefix: Data,
-
-    // TODO remove
-    _phantom: PhantomData<&'tx ()>,
 }
 
-impl<'tx, C> PrefixIter<'tx, C> {
-    fn new(iter: C, prefix: Data) -> Self {
-        PrefixIter {
-            iter,
-            prefix,
-            _phantom: PhantomData,
-        }
+impl PrefixIter {
+    fn new(iter: IntoIter<(Vec<u8>, Vec<u8>)>, prefix: Data) -> Self {
+        PrefixIter { iter, prefix }
     }
 }
 
-impl<'tx, C> Iterator for PrefixIter<'tx, C> {
+impl Iterator for PrefixIter {
     type Item = (Data, Data);
 
     fn next(&mut self) -> Option<Self::Item> {
-        todo!()
-        // let (k, v) = self.iter.next()?.expect("iteration to proceed");
-        // utils::ensure!(k.starts_with(&self.prefix));
-        // Some((k.to_vec(), v.to_vec()))
+        let kv = self.iter.next()?;
+        utils::ensure!(kv.0.starts_with(&self.prefix));
+        Some(kv)
     }
 }
 
-// #[ouroboros::self_referencing]
-// pub struct DbTx<'m> {
-//     connection: MutexGuard<'m, Connection>,
-//     #[borrows(mut connection)]
-//     #[covariant]
-//     tx: Transaction<'this>,
-//     // dbs: &'m DbList,
-//     // _map_token: RwLockReadGuard<'m, remap::MemMapController>,
-// }
-
 pub struct DbTx<'m> {
     connection: MutexGuard<'m, Connection>,
-    // dbs: &'m DbList,
-    // _map_token: RwLockReadGuard<'m, remap::MemMapController>,
 }
 
 impl<'m> DbTx<'m> {
@@ -101,41 +84,61 @@ impl<'m> DbTx<'m> {
     }
 
     pub fn commit_transaction(&self) -> storage_core::Result<()> {
-        let res = self
+        let _res = self
             .connection
             .execute("COMMIT TRANSACTION", ())
             .map_err(process_sqlite_error)?;
-        println!("commit_transaction res = {}", res);
         Ok(())
     }
 }
 
-// type DbTxRo<'a> = DbTx<'a, Transaction<'a>>;
-// type DbTxRw<'a> = DbTx<'a, Transaction<'a>>;
+impl Drop for DbTx<'_> {
+    fn drop(&mut self) {
+        if self.connection.is_autocommit() {
+            return;
+        }
+
+        let res = self.connection.execute("ROLLBACK TRANSACTION", ());
+        if let Err(err) = res {
+            println!("Error: transaction rollback failed: {}", err.to_string());
+        }
+    }
+}
 
 impl<'s, 'i> backend::PrefixIter<'i> for DbTx<'s> {
-    type Iterator = PrefixIter<'i, ()>;
+    type Iterator = PrefixIter;
 
     fn prefix_iter<'t: 'i>(
         &'t self,
-        idx: DbIndex,
+        _idx: DbIndex,
         prefix: Data,
     ) -> storage_core::Result<Self::Iterator> {
-        todo!()
-        // let cursor = self.tx.open_ro_cursor(self.dbs[idx]).or_else(error::process_with_err)?;
-        // let iter = if prefix.is_empty() {
-        //     cursor.into_iter_start()
-        // } else {
-        //     cursor.into_iter_from(prefix.as_slice())
-        // };
-        // Ok(PrefixIter::new(iter, prefix))
+        // TODO check if prefix.is_empty()
+        // TODO Perform the filtering in the SQL query itself
+        let mut stmt = self
+            .connection
+            .prepare_cached("SELECT key, value FROM main ORDER BY key")
+            .map_err(process_sqlite_error)?;
+
+        let mut rows = stmt.query(()).map_err(process_sqlite_error)?;
+
+        // TODO Move the statement/rows in to the PrefixIter
+        let mut kv = Vec::new();
+        while let Some(row) = rows.next().map_err(process_sqlite_error)? {
+            let key = row.get::<usize, Vec<u8>>(0).map_err(process_sqlite_error)?;
+            if key.starts_with(&prefix) {
+                let value = row.get::<usize, Vec<u8>>(1).map_err(process_sqlite_error)?;
+                kv.push((key, value));
+            }
+        }
+        let kv_iter = kv.into_iter();
+
+        Ok(PrefixIter::new(kv_iter, prefix))
     }
 }
 
 impl backend::ReadOps for DbTx<'_> {
-    fn get(&self, idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<&[u8]>> {
-        println!("Get idx = {:?}, k = {:?}", idx, key);
-
+    fn get(&self, _idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
         let mut stmt = self
             .connection
             .prepare_cached("SELECT value FROM main WHERE key = ?")
@@ -144,71 +147,33 @@ impl backend::ReadOps for DbTx<'_> {
         let key = [key];
         let res = stmt
             .query_row(key, |row| row.get::<usize, Vec<u8>>(0))
-            // .query_row(key, |row| row.get_ref::<usize>(0))
             .optional()
             .map_err(process_sqlite_error)?;
-
-        println!("get result = {:?}", res);
-
-        todo!()
-
-        // self.tx
-        //     .get(self.dbs[idx], &key)
-        //     .map_or_else(error::process_with_none, |x| Ok(Some(x)))
+        let res = res.map(|v| v.into());
+        Ok(res)
     }
 }
-
-/*
-void SQLiteBatch::SetupSQLStatements()
-{
-    const std::vector<std::pair<sqlite3_stmt**, const char*>> statements{
-        {&m_read_stmt, "SELECT value FROM main WHERE key = ?"},
-        {&m_insert_stmt, "INSERT INTO main VALUES(?, ?)"},
-        {&m_overwrite_stmt, "INSERT or REPLACE into main values(?, ?)"},
-        {&m_delete_stmt, "DELETE FROM main WHERE key = ?"},
-        {&m_cursor_stmt, "SELECT key, value FROM main"},
-    };
-
-    for (const auto& [stmt_prepared, stmt_text] : statements) {
-        if (*stmt_prepared == nullptr) {
-            int res = sqlite3_prepare_v2(m_database.m_db, stmt_text, -1, stmt_prepared, nullptr);
-            if (res != SQLITE_OK) {
-                throw std::runtime_error(strprintf(
-                    "SQLiteDatabase: Failed to setup SQL statements: %s\n", sqlite3_errstr(res)));
-            }
-        }
-    }
-}
- */
 
 impl backend::WriteOps for DbTx<'_> {
-    fn put(&mut self, idx: DbIndex, key: Data, val: Data) -> storage_core::Result<()> {
-        println!("Put idx = {:?}, (k,v) = {:?}, {:?}", idx, key, val);
-
+    fn put(&mut self, _idx: DbIndex, key: Data, val: Data) -> storage_core::Result<()> {
         let mut stmt = self
             .connection
             .prepare_cached("INSERT or REPLACE into main values(?, ?)")
             .map_err(process_sqlite_error)?;
 
         let kv = [key, val];
-        let res = stmt.execute(kv).map_err(process_sqlite_error)?;
-
-        println!("put result = {}", res);
+        let _res = stmt.execute(kv).map_err(process_sqlite_error)?;
 
         Ok(())
     }
 
-    fn del(&mut self, idx: DbIndex, key: &[u8]) -> storage_core::Result<()> {
-        println!("del idx = {:?}, k = {:?}", idx, key);
-
+    fn del(&mut self, _idx: DbIndex, key: &[u8]) -> storage_core::Result<()> {
         let mut stmt = self
             .connection
             .prepare_cached("DELETE FROM main WHERE key = ?")
             .map_err(process_sqlite_error)?;
 
-        let res = stmt.execute([key]).map_err(process_sqlite_error)?;
-
-        println!("del result = {}", res);
+        let _res = stmt.execute([key]).map_err(process_sqlite_error)?;
 
         Ok(())
     }
@@ -218,9 +183,7 @@ impl backend::TxRo for DbTx<'_> {}
 
 impl backend::TxRw for DbTx<'_> {
     fn commit(self) -> storage_core::Result<()> {
-        // todo!()
         self.commit_transaction()
-        // lmdb::Transaction::commit(self.tx).or_else(error::process_with_unit)
     }
 }
 
@@ -228,43 +191,19 @@ impl backend::TxRw for DbTx<'_> {
 pub struct SqliteImpl {
     /// Handle to an Sqlite database connection
     connection: Arc<Mutex<Connection>>,
-    // /// List of open databases
-    // dbs: DbList,
-    // _phantom: PhantomData<&'conn ()>,
 }
 
 impl SqliteImpl {
     /// Start a transaction using the low-level method provided
-    fn start_transaction<'a>(
-        &'a self,
-        // start_tx: impl FnOnce(&'a ()) -> Result<Transaction<'a>, rusqlite::Error>,
-    ) -> storage_core::Result<DbTx<'a>> {
-        // todo!()
-
-        // TODO implement properly
+    fn start_transaction<'a>(&'a self) -> storage_core::Result<DbTx<'a>> {
         let connection: MutexGuard<Connection> = self
             .connection
             .lock()
             .map_err(|_| storage_core::error::Recoverable::TemporarilyUnavailable)?;
-        // DbTx::try_new(connection, |conn| {
-        //     conn.transaction().map_err(error::process_sqlite_error)
-        // })
         DbTx::start_transaction(connection)
-        //let mut tx: Transaction = connection.transaction().map_err(error::process_sqlite_error)?;
-        //Ok(DbTx { connection, tx })
-
-        // // Make sure map token is acquired before starting the transaction below
-        // let _map_token = self.map_token.read().expect("mutex to be alive");
-        // Ok(DbTx {
-        //     tx: start_tx(&self.env).or_else(error::process_with_err)?,
-        //     dbs: &self.dbs,
-        //     _map_token,
-        // })
     }
 }
 
-// impl<'tx> TransactionalRo<'tx> for SqliteImpl {
-//     type TxRo = DbTx<'tx>;
 impl<'tx> TransactionalRo<'tx> for SqliteImpl {
     type TxRo = DbTx<'tx>;
 
@@ -280,6 +219,8 @@ impl<'tx> TransactionalRw<'tx> for SqliteImpl {
         self.start_transaction()
     }
 }
+
+impl ShallowClone for SqliteImpl {}
 
 impl backend::BackendImpl for SqliteImpl {}
 
@@ -301,8 +242,6 @@ impl Sqlite {
             OpenFlags::SQLITE_OPEN_READ_WRITE,
             OpenFlags::SQLITE_OPEN_CREATE,
         ]);
-
-        println!("db path = {:?}", self.path);
 
         let connection = Connection::open_with_flags(self.path, flags)?;
 
@@ -348,7 +287,7 @@ impl Sqlite {
 impl backend::Backend for Sqlite {
     type Impl = SqliteImpl;
 
-    fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
+    fn open(self, _desc: DbDesc) -> storage_core::Result<Self::Impl> {
         // Attempt to create the parent storage directory
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent).map_err(error::process_io_error)?;
@@ -360,65 +299,10 @@ impl backend::Backend for Sqlite {
             .into());
         }
 
-        // // Set up LMDB environment
-        // let environment = lmdb::Environment::new()
-        //     .set_max_dbs(desc.len() as u32)
-        //     .set_flags(self.flags)
-        //     .set_map_size(self.map_size.as_bytes())
-        //     .open(&self.path)
-        //     .or_else(error::process_with_err)?;
-
-        // // Set up all the databases
-        // let dbs = desc
-        //     .iter()
-        //     .map(|desc| Self::open_db(&environment, desc))
-        //     .collect::<storage_core::Result<Vec<_>>>()
-        //     .map(DbList)?;
-
         let connection = self.open_db().map_err(process_sqlite_error)?;
 
         Ok(SqliteImpl {
             connection: Arc::new(Mutex::new(connection)),
-            // dbs,
-            // map_token: Arc::new(RwLock::new(remap::MemMapController::new())),
-            // tx_size: self.tx_size,
         })
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::Sqlite;
-    use storage_backend_test_suite::prelude::IDX;
-    use storage_core::backend::{ReadOps, TransactionalRo, TransactionalRw, TxRw, WriteOps};
-    use storage_core::info::MapDesc;
-    use storage_core::{Backend, DbDesc};
-
-    /// Sample database description with `n` maps
-    pub fn desc(n: usize) -> DbDesc {
-        (0..n).map(|x| MapDesc::new(format!("map_{:02}", x))).collect()
-    }
-
-    #[test]
-    fn put_and_commit() {
-        let test_root = test_utils::test_root!("backend-tests").unwrap();
-        let test_dir = test_root.fresh_test_dir("unknown");
-        let mut db_file = test_dir.as_ref().to_path_buf();
-        db_file.set_file_name("database.sqlite");
-
-        // let sqlite = Sqlite::new(test_dir.as_ref().to_path_buf().with_file_name("database.sqlite"));
-        let sqlite = Sqlite::new(db_file);
-
-        let store = sqlite.open(desc(1)).expect("db open to succeed");
-
-        // Create a transaction, modify storage and abort transaction
-        let mut dbtx = store.transaction_rw().unwrap();
-        dbtx.put(IDX.0, b"hello".to_vec(), b"world".to_vec()).unwrap();
-        dbtx.commit().expect("commit to succeed");
-
-        // Check the modification did not happen
-        let dbtx = store.transaction_ro().unwrap();
-        assert_eq!(dbtx.get(IDX.0, b"hello"), Ok(Some(b"world".as_ref())));
-        drop(dbtx);
     }
 }
