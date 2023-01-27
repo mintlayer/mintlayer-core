@@ -158,7 +158,7 @@ fn put_and_iterate_over_prefixes<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
         let dbtx = store.transaction_ro().unwrap();
         let vals: Vec<_> = dbtx.prefix_iter(IDX.0, prefix.clone()).unwrap().map(|x| x.1).collect();
         let expected: Vec<_> = range.map(|x| Data::from(x.to_string())).collect();
-        assert_eq!(vals, expected, "prefix={:?}", prefix);
+        assert_eq!(vals, expected, "prefix={prefix:?}");
         drop(dbtx);
     };
 

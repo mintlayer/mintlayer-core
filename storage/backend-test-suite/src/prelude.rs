@@ -34,7 +34,7 @@ pub const IDX: (DbIndex, DbIndex) = (DbIndex::new(0), DbIndex::new(1));
 
 /// Sample database description with `n` maps
 pub fn desc(n: usize) -> DbDesc {
-    (0..n).map(|x| MapDesc::new(format!("map_{:02}", x))).collect()
+    (0..n).map(|x| MapDesc::new(format!("map_{x:02}"))).collect()
 }
 
 /// Run tests with backend using proptest

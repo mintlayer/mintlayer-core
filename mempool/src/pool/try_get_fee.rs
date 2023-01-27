@@ -47,7 +47,7 @@ where
 
         let mut input_values = Vec::<Amount>::new();
         for (i, chainstate_input_value) in chainstate_input_values.iter().enumerate() {
-            eprintln!("chainstate input value {}: {:?}", i, chainstate_input_value);
+            eprintln!("chainstate input value {i}: {chainstate_input_value:?}");
             if let Some(value) = chainstate_input_value {
                 eprintln!("if");
                 input_values.push(*value)

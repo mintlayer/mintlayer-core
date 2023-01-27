@@ -25,7 +25,7 @@ async fn run() -> anyhow::Result<()> {
 #[tokio::main]
 async fn main() {
     run().await.unwrap_or_else(|err| {
-        eprintln!("Mintlayer node launch failed: {:?}", err);
+        logging::log::error!("Mintlayer node launch failed: {err:?}");
         std::process::exit(1)
     })
 }
