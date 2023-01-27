@@ -29,6 +29,7 @@ pub mod types;
 
 use std::sync::Arc;
 
+use config::PeerDbStorageBackend;
 use interface::p2p_interface::P2pInterface;
 use peer_manager::peerdb::{storage::PeerDbStorage, storage_impl::PeerDbStorageImpl};
 use tap::TapFallible;
@@ -186,8 +187,9 @@ pub async fn make_p2p(
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     mempool_handle: mempool::MempoolHandle,
+    peerdb_storage_backend: PeerDbStorageBackend,
 ) -> Result<Box<dyn P2pInterface>> {
-    match *p2p_config.peerdb_storage_backend {
+    match peerdb_storage_backend {
         config::PeerDbStorageBackend::Lmdb => {
             let peerdb_storage = PeerDbStorageImpl::new(storage_lmdb::Lmdb::new(
                 datadir.join(SUBDIRECTORY_PEERDB_LMDB),

@@ -31,7 +31,7 @@ use logging::log;
 
 use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
 
-use p2p::rpc::P2pRpcServer;
+use p2p::{config::PeerDbStorageBackend, rpc::P2pRpcServer};
 
 use crate::{
     config_files::NodeConfigFile,
@@ -79,6 +79,7 @@ pub async fn initialize(
             Arc::new(node_config.p2p.into()),
             chainstate.clone(),
             mempool.clone(),
+            PeerDbStorageBackend::Lmdb, // TODO: Replace Lmdb with Sqlite backend when it's ready
         )
         .await
         .expect("The p2p subsystem initialization failed"),

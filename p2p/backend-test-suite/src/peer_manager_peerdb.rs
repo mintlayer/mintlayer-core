@@ -19,7 +19,7 @@
 use std::{sync::Arc, time::Duration};
 
 use p2p::{
-    config::{P2pConfig, PeerDbStorageBackend},
+    config::P2pConfig,
     net::{
         default_backend::types::PeerId,
         types::{PeerInfo, PubSubTopic, Role},
@@ -65,7 +65,6 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
-        peerdb_storage_backend: PeerDbStorageBackend::InMemory.into(),
         allow_discover_private_ips: Default::default(),
         heartbeat_interval_min: Default::default(),
         heartbeat_interval_max: Default::default(),
@@ -91,7 +90,6 @@ where
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
         node_type: Default::default(),
-        peerdb_storage_backend: PeerDbStorageBackend::InMemory.into(),
         allow_discover_private_ips: Default::default(),
         heartbeat_interval_min: Default::default(),
         heartbeat_interval_max: Default::default(),
@@ -118,7 +116,6 @@ where
             ban_duration: Duration::from_secs(2).into(),
             outbound_connection_timeout: Default::default(),
             node_type: Default::default(),
-            peerdb_storage_backend: PeerDbStorageBackend::InMemory.into(),
             allow_discover_private_ips: Default::default(),
             heartbeat_interval_min: Default::default(),
             heartbeat_interval_max: Default::default(),
