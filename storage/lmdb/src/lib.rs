@@ -135,17 +135,6 @@ fn schedule_map_resize_if_map_full(backend: &LmdbImpl, err: lmdb::Error) -> lmdb
     err
 }
 
-fn resize_if_triggered(backend: &LmdbImpl) {
-    // simulate an atomic test_and_set(), where we check if a resize is scheduled, and we also set it to false
-    if backend
-        .map_resize_scheduled
-        .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
-        .unwrap_or(false)
-    {
-        backend.env.do_resize(None).expect("Failed to resize after a trigger to resize");
-    }
-}
-
 impl backend::TxRo for DbTxRo<'_> {}
 
 impl backend::TxRw for DbTxRw<'_> {
@@ -189,6 +178,17 @@ impl LmdbImpl {
     fn unschedule_map_resize(&self) {
         self.map_resize_scheduled.store(false, Ordering::SeqCst);
     }
+
+    fn resize_if_resize_scheduled(&self) {
+        // simulate an atomic test_and_set(), where we check if a resize is scheduled, and we also set it to false
+        if self
+            .map_resize_scheduled
+            .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
+            .unwrap_or(false)
+        {
+            self.env.do_resize(None).expect("Failed to resize after a trigger to resize");
+        }
+    }
 }
 
 impl<'tx> TransactionalRo<'tx> for LmdbImpl {
@@ -206,7 +206,7 @@ impl<'tx> TransactionalRw<'tx> for LmdbImpl {
         &'st self,
         size: Option<usize>,
     ) -> storage_core::Result<Self::TxRw> {
-        resize_if_triggered(self);
+        self.resize_if_resize_scheduled();
         self.start_transaction(|env| lmdb::Environment::begin_rw_txn(env, size))
     }
 }
