@@ -104,7 +104,10 @@ where
     tx_sync: mpsc::UnboundedSender<SyncControlEvent<T>>,
 
     /// Hashmap of pending outbound connections
-    pending: HashMap<T::Address, Option<oneshot::Sender<crate::Result<()>>>>,
+    pending_connects: HashMap<T::Address, Option<oneshot::Sender<crate::Result<()>>>>,
+
+    /// Hashmap of pending disconnect requests
+    pending_disconnects: HashMap<T::PeerId, Option<oneshot::Sender<crate::Result<()>>>>,
 
     /// Set of active peers
     peers: BTreeMap<T::PeerId, PeerContext<T>>,
@@ -144,7 +147,8 @@ where
             tx_sync,
             peerdb,
             peers: BTreeMap::new(),
-            pending: HashMap::new(),
+            pending_connects: HashMap::new(),
+            pending_disconnects: HashMap::new(),
             chain_config,
             p2p_config,
             last_heartbeat: now,
@@ -353,12 +357,12 @@ where
         self.accept_connection(address, Role::Inbound, info, receiver_address).await
     }
 
-    /// Close connection to a remote peer
+    /// Connection to a remote peer closed
     ///
     /// The decision to close the connection is made either by the user via RPC
     /// or by the [`PeerManager::heartbeat()`] function which has decided to cull
     /// this connection in favor of another potential connection.
-    fn close_connection(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+    fn connection_closed(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
         // The backend is always sending ConnectionClosed event when somebody disconnects, ensure that the peer is active
         if self.is_active_peer(&peer_id) {
             let removed = self.peers.remove(&peer_id);
@@ -371,6 +375,10 @@ where
             );
 
             self.tx_sync.send(SyncControlEvent::Disconnected(peer_id))?;
+
+            if let Some(Some(response)) = self.pending_disconnects.remove(&peer_id) {
+                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
+            }
 
             self.peerdb.peer_disconnected(peer.address);
         }
@@ -400,8 +408,7 @@ where
 
         if peer.score >= *self.p2p_config.ban_threshold {
             self.peerdb.ban_peer(&peer.address)?;
-
-            let _ = self.peer_connectivity_handle.disconnect(peer_id).await;
+            self.disconnect(peer_id, None).await?;
         }
 
         Ok(())
@@ -416,7 +423,7 @@ where
     /// Inform the [`crate::peer_manager::peerdb::PeerDb`] about the address failure so it knows to
     /// update its own records.
     fn handle_outbound_error(&mut self, address: T::Address, error: P2pError) -> crate::Result<()> {
-        if let Some(Some(channel)) = self.pending.remove(&address) {
+        if let Some(Some(channel)) = self.pending_connects.remove(&address) {
             channel.send(Err(error)).map_err(|_| P2pError::ChannelClosed)?;
         }
 
@@ -429,9 +436,9 @@ where
     /// This function doesn't block on the call but sends a command to the
     /// networking backend which then reports at some point in the future
     /// whether the connection failed or succeeded.
-    async fn connect(&mut self, address: T::Address) -> crate::Result<()> {
+    async fn try_connect(&mut self, address: T::Address) -> crate::Result<()> {
         ensure!(
-            !self.pending.contains_key(&address),
+            !self.pending_connects.contains_key(&address),
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
 
@@ -447,6 +454,68 @@ where
         );
 
         self.peer_connectivity_handle.connect(address).await
+    }
+
+    /// Establish an outbound connection
+    async fn connect(
+        &mut self,
+        address: T::Address,
+        response: Option<oneshot::Sender<crate::Result<()>>>,
+    ) -> crate::Result<()> {
+        log::debug!("try to establish outbound connection to peer at address {address:?}");
+
+        let res = self.try_connect(address.clone()).await;
+
+        match res {
+            Ok(()) => {
+                self.pending_connects.insert(address, response);
+            }
+            Err(e) => {
+                if let Some(response) = response {
+                    response.send(Err(e)).map_err(|_| P2pError::ChannelClosed)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn try_disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+        ensure!(
+            !self.pending_disconnects.contains_key(&peer_id),
+            P2pError::PeerError(PeerError::Pending(peer_id.to_string())),
+        );
+
+        ensure!(
+            self.peers.contains_key(&peer_id),
+            P2pError::PeerError(PeerError::PeerDisconnected),
+        );
+
+        self.peer_connectivity_handle.disconnect(peer_id).await
+    }
+
+    /// Disconnect an existing connection (inbound or outbound)
+    async fn disconnect(
+        &mut self,
+        peer_id: T::PeerId,
+        response: Option<oneshot::Sender<crate::Result<()>>>,
+    ) -> crate::Result<()> {
+        log::debug!("disconnect peer {peer_id}");
+
+        let res = self.try_disconnect(peer_id).await;
+
+        match res {
+            Ok(()) => {
+                self.pending_disconnects.insert(peer_id, response);
+            }
+            Err(e) => {
+                if let Some(response) = response {
+                    response.send(Err(e)).map_err(|_| P2pError::ChannelClosed)?;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Maintains the peer manager state.
@@ -475,21 +544,13 @@ where
             self.peerdb.available_addresses_count(),
             MAX_ACTIVE_CONNECTIONS
                 .saturating_sub(self.peerdb.available_addresses_count())
-                .saturating_sub(self.pending.len()),
+                .saturating_sub(self.pending_connects.len()),
         );
 
         let addresses = self.peerdb.random_known_addresses(count);
 
         for address in addresses {
-            match self.connect(address.clone()).await {
-                Ok(_) => {
-                    self.pending.insert(address, None);
-                }
-                Err(err) => {
-                    self.peerdb.report_outbound_failure(address.clone());
-                    self.handle_result(None, Err(err)).await?;
-                }
-            }
+            self.connect(address, None).await?;
         }
 
         // TODO: update peer scores
@@ -623,20 +684,11 @@ where
     /// Handle events from an outside controller (rpc, for example) that sets/gets values for PeerManager
     async fn handle_control_event(&mut self, event: PeerManagerEvent<T>) -> crate::Result<()> {
         match event {
-            PeerManagerEvent::Connect(addr, response) => {
-                log::debug!("try to establish outbound connection to peer at address {addr:?}");
-
-                let res = self.connect(addr.clone()).await.map(|_| {
-                    self.pending.insert(addr.clone(), Some(response));
-                });
-                self.handle_result(None, res).await?;
+            PeerManagerEvent::Connect(address, response) => {
+                self.connect(address, Some(response)).await?;
             }
             PeerManagerEvent::Disconnect(peer_id, response) => {
-                log::debug!("disconnect peer {peer_id}");
-
-                response
-                    .send(self.peer_connectivity_handle.disconnect(peer_id).await)
-                    .map_err(|_| P2pError::ChannelClosed)?;
+                self.disconnect(peer_id, Some(response)).await?;
             }
             PeerManagerEvent::AdjustPeerScore(peer_id, score, response) => {
                 log::debug!("adjust peer {peer_id} score: {score}");
@@ -727,7 +779,7 @@ where
                         .await;
                     self.handle_result(Some(peer_id), res).await?;
 
-                    match self.pending.remove(&address) {
+                    match self.pending_connects.remove(&address) {
                         Some(Some(channel)) => {
                             channel.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?
                         }
@@ -736,7 +788,7 @@ where
                     }
                 }
                 net::types::ConnectivityEvent::ConnectionClosed { peer_id } => {
-                    let res = self.close_connection(peer_id);
+                    let res = self.connection_closed(peer_id);
                     self.handle_result(Some(peer_id), res).await?;
                 }
                 net::types::ConnectivityEvent::ConnectionError { address, error } => {
@@ -817,7 +869,7 @@ where
         }
 
         for peer_id in dead_peers {
-            self.close_connection(peer_id)?;
+            self.disconnect(peer_id, None).await?;
         }
 
         Ok(())

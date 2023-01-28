@@ -60,6 +60,21 @@ pub struct ConnectivityHandle<S: NetworkingService, T: TransportSocket> {
     _marker: PhantomData<fn() -> S>,
 }
 
+impl<S: NetworkingService, T: TransportSocket> ConnectivityHandle<S, T> {
+    pub fn new(
+        local_addresses: Vec<S::Address>,
+        cmd_tx: mpsc::Sender<types::Command<T>>,
+        conn_rx: mpsc::Receiver<types::ConnectivityEvent<T>>,
+    ) -> Self {
+        Self {
+            local_addresses,
+            cmd_tx,
+            conn_rx,
+            _marker: PhantomData,
+        }
+    }
+}
+
 pub struct PubSubHandle<S, T>
 where
     S: NetworkingService,
@@ -127,12 +142,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         });
 
         Ok((
-            Self::ConnectivityHandle {
-                local_addresses,
-                cmd_tx: cmd_tx.clone(),
-                conn_rx,
-                _marker: Default::default(),
-            },
+            ConnectivityHandle::new(local_addresses, cmd_tx.clone(), conn_rx),
             Self::SyncingMessagingHandle {
                 cmd_tx,
                 sync_rx,

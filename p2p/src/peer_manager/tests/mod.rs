@@ -15,6 +15,7 @@
 
 mod ban;
 mod connections;
+mod ping;
 
 use std::{sync::Arc, time::Duration};
 

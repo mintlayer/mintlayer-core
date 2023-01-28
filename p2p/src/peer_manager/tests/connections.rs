@@ -60,7 +60,7 @@ async fn test_peer_manager_connect<T: NetworkingService>(
     let config = Arc::new(config::create_mainnet());
     let mut peer_manager = make_peer_manager::<T>(transport, bind_addr, config).await;
 
-    peer_manager.connect(remote_addr).await.unwrap();
+    peer_manager.try_connect(remote_addr).await.unwrap();
 
     assert!(matches!(
         peer_manager.peer_connectivity_handle.poll_next().await,
@@ -126,7 +126,7 @@ where
     pm1.peerdb.peer_discovered(&addr).unwrap();
     pm1.heartbeat().await.unwrap();
 
-    assert_eq!(pm1.pending.len(), 1);
+    assert_eq!(pm1.pending_connects.len(), 1);
     assert!(std::matches!(
         pm1.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::OutboundAccepted { .. })
