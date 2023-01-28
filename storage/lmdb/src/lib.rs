@@ -217,7 +217,7 @@ impl backend::BackendImpl for LmdbImpl {}
 pub struct Lmdb {
     path: PathBuf,
     flags: lmdb::EnvironmentFlags,
-    resize_settings: Option<DatabaseResizeSettings>,
+    resize_settings: DatabaseResizeSettings,
     resize_callback: Option<Box<dyn Fn(DatabaseResizeInfo)>>,
 }
 
@@ -227,7 +227,7 @@ impl Lmdb {
         Self {
             path,
             flags: lmdb::EnvironmentFlags::default(),
-            resize_settings: None,
+            resize_settings: DatabaseResizeSettings::default(),
             resize_callback: None,
         }
     }
@@ -259,7 +259,7 @@ impl backend::Backend for Lmdb {
         let environment = lmdb::Environment::new()
             .set_max_dbs(desc.len() as u32)
             .set_flags(self.flags)
-            .set_resize_settings(self.resize_settings.unwrap_or_default())
+            .set_resize_settings(self.resize_settings)
             .set_resize_callback(self.resize_callback)
             .open(&self.path)
             .or_else(error::process_with_err)?;
