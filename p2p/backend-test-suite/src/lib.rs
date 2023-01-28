@@ -22,7 +22,6 @@ mod utils;
 mod ban;
 mod block_announcement;
 mod connect;
-mod peer_manager_peerdb;
 mod sync;
 
 use std::fmt::Debug;
@@ -65,6 +64,5 @@ where
         .chain(block_announcement::tests::<T, N, A>())
         .chain(sync::tests::<T, N, A>())
         .chain(ban::tests::<T, N, A>())
-        .chain(peer_manager_peerdb::tests::<T, N, A>())
         .collect()
 }

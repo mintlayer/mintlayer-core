@@ -418,11 +418,11 @@ where
     let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, Arc::clone(&config)).await;
 
-    peers.into_iter().for_each(|peer| {
-        pm1.peerdb.peer_connected(peer.0, Role::Inbound, peer.1);
-    });
+    for peer in peers.into_iter() {
+        pm1.accept_connection(peer.0, Role::Inbound, peer.1, None).await.unwrap();
+    }
     assert_eq!(
-        pm1.peerdb.active_peer_count(),
+        pm1.active_peer_count(),
         peer_manager::MAX_ACTIVE_CONNECTIONS
     );
 

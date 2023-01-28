@@ -36,55 +36,20 @@ use std::{
 
 use common::time_getter::TimeGetter;
 use crypto::random::{make_pseudo_rng, SliceRandom};
-use logging::log;
 
 use crate::{
     config,
     error::{ConversionError, P2pError},
-    interface::types::ConnectedPeer,
-    net::{
-        types::{self, Role},
-        AsBannableAddress, NetworkingService,
-    },
+    net::{AsBannableAddress, NetworkingService},
 };
 
 use self::storage::{
     PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite, PeerDbTransactionRo, PeerDbTransactionRw,
 };
 
-#[derive(Debug)]
-pub struct PeerContext<T: NetworkingService> {
-    /// Peer information
-    pub info: types::PeerInfo<T::PeerId>,
-
-    /// Peer's address
-    pub address: T::Address,
-
-    /// Peer's role (inbound or outbound)
-    pub role: Role,
-
-    /// Peer score
-    pub score: u32,
-}
-
-impl<T: NetworkingService> From<&PeerContext<T>> for ConnectedPeer {
-    fn from(context: &PeerContext<T>) -> Self {
-        ConnectedPeer {
-            peer_id: context.info.peer_id.to_string(),
-            address: context.address.to_string(),
-            inbound: context.role == Role::Inbound,
-            ban_score: context.score,
-        }
-    }
-}
-
-// TODO: Store available addresses in a binary heap (sorting by their availability).
 pub struct PeerDb<T: NetworkingService, S> {
     /// P2P configuration
     p2p_config: Arc<config::P2pConfig>,
-
-    /// Set of active peers
-    peers: BTreeMap<T::PeerId, PeerContext<T>>,
 
     /// Set of currently connected addresses
     connected_addresses: BTreeSet<T::Address>,
@@ -139,7 +104,6 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
             .collect();
 
         Ok(Self {
-            peers: Default::default(),
             connected_addresses: Default::default(),
             known_addresses,
             banned_addresses,
@@ -154,16 +118,6 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
         self.known_addresses.len()
     }
 
-    /// Get the number of active peers
-    pub fn active_peer_count(&self) -> usize {
-        self.peers.len()
-    }
-
-    /// Returns short info about all connected peers
-    pub fn get_connected_peers(&self) -> Vec<ConnectedPeer> {
-        self.peers.values().map(Into::into).collect()
-    }
-
     /// Checks if the given address is already connected.
     pub fn is_address_connected(&self, address: &T::Address) -> bool {
         self.connected_addresses.contains(address)
@@ -176,19 +130,6 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
         // TODO: Use something more efficient (without iterating over the all addresses first)
         let all_addresses = self.known_addresses.iter().cloned().collect::<Vec<_>>();
         all_addresses
-            .choose_multiple(&mut make_pseudo_rng(), count)
-            .cloned()
-            .collect::<Vec<_>>()
-    }
-
-    /// Selects requested count of connected peer ids randomly.
-    ///
-    /// It can be used to distribute data in the gossip protocol
-    /// (for example, to relay announced addresses to a small group of peers).
-    pub fn random_peer_ids(&self, count: usize) -> Vec<T::PeerId> {
-        // There are normally not many connected peers, so iterating over the whole list should be OK
-        let all_peer_ids = self.peers.keys().cloned().collect::<Vec<_>>();
-        all_peer_ids
             .choose_multiple(&mut make_pseudo_rng(), count)
             .cloned()
             .collect::<Vec<_>>()
@@ -210,11 +151,6 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
         }
 
         Ok(false)
-    }
-
-    /// Checks if the peer is active
-    pub fn is_active_peer(&self, peer_id: &T::PeerId) -> bool {
-        self.peers.get(peer_id).is_some()
     }
 
     /// Get socket address of the next best peer (TODO: in terms of peer score).
@@ -245,29 +181,7 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
     ///
     /// After `PeerManager` has established either an inbound or an outbound connection,
     /// it informs the `PeerDb` about it.
-    pub fn peer_connected(
-        &mut self,
-        address: T::Address,
-        role: Role,
-        info: types::PeerInfo<T::PeerId>,
-    ) {
-        log::info!(
-            "peer connected, peer_id: {}, address: {address:?}, {:?}",
-            info.peer_id,
-            role
-        );
-
-        let old_value = self.peers.insert(
-            info.peer_id,
-            PeerContext {
-                info,
-                address: address.clone(),
-                role,
-                score: 0,
-            },
-        );
-        assert!(old_value.is_none());
-
+    pub fn peer_connected(&mut self, address: T::Address) {
         let old_value = self.connected_addresses.insert(address);
         assert!(old_value);
     }
@@ -275,61 +189,20 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
     /// Handle peer disconnection event
     ///
     /// Close the connection to an active peer.
-    pub fn peer_disconnected(&mut self, peer_id: &T::PeerId) {
-        let removed = self.peers.remove(peer_id);
-        let peer = removed.expect("peer must be known");
-
-        let removed = self.connected_addresses.remove(&peer.address);
+    pub fn peer_disconnected(&mut self, address: T::Address) {
+        let removed = self.connected_addresses.remove(&address);
         assert!(removed);
-
-        log::info!(
-            "peer disconnected, peer_id: {}, address: {:?}",
-            peer.info.peer_id,
-            peer.address
-        );
     }
 
     /// Changes the peer state to `Peer::Banned` and bans it for 24 hours.
-    fn ban_peer(&mut self, peer_id: &T::PeerId) -> crate::Result<()> {
-        if let Some(peer) = self.peers.remove(peer_id) {
-            let bannable_address = peer.address.as_bannable();
-            let ban_till = self.time_getter.get_time() + *self.p2p_config.ban_duration;
-            let mut tx = self.storage.transaction_rw()?;
-            tx.add_banned_address(&bannable_address.to_string(), ban_till)?;
-            tx.commit()?;
-            self.banned_addresses.insert(bannable_address, ban_till);
-        } else {
-            log::error!("Failed to get address for peer {}", peer_id);
-        }
+    pub fn ban_peer(&mut self, address: &T::Address) -> crate::Result<()> {
+        let bannable_address = address.as_bannable();
+        let ban_till = self.time_getter.get_time() + *self.p2p_config.ban_duration;
+        let mut tx = self.storage.transaction_rw()?;
+        tx.add_banned_address(&bannable_address.to_string(), ban_till)?;
+        tx.commit()?;
+        self.banned_addresses.insert(bannable_address, ban_till);
         Ok(())
-    }
-
-    /// Adjust peer score
-    ///
-    /// If the peer is known, update its existing peer score and report
-    /// if it should be disconnected when score reached the threshold.
-    /// Unknown peers are reported as to be disconnected.
-    ///
-    /// If peer is banned, it is removed from the connected peers
-    /// and its address is marked as banned.
-    pub fn adjust_peer_score(&mut self, peer_id: &T::PeerId, score: u32) -> crate::Result<bool> {
-        let peer = match self.peers.get_mut(peer_id) {
-            Some(peer) => peer,
-            None => return Ok(true),
-        };
-
-        peer.score = peer.score.saturating_add(score);
-
-        if peer.score >= *self.p2p_config.ban_threshold {
-            self.ban_peer(peer_id)?;
-            return Ok(true);
-        }
-
-        Ok(false)
-    }
-
-    pub fn peer_address(&self, id: &T::PeerId) -> Option<&T::Address> {
-        self.peers.get(id).map(|c| &c.address)
     }
 
     #[cfg(feature = "testing_utils")]
