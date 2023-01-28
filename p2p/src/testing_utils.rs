@@ -254,10 +254,8 @@ impl P2pTestTimeGetter {
 
     pub async fn advance_time(&self, duration: Duration) {
         tokio::time::pause();
-        self.current_time_millis.store(
-            self.current_time_millis.load(Ordering::SeqCst) + duration.as_millis() as u64,
-            Ordering::SeqCst,
-        );
+        self.current_time_millis
+            .fetch_add(duration.as_millis() as u64, Ordering::SeqCst);
         tokio::time::advance(duration).await;
         tokio::time::resume();
     }
