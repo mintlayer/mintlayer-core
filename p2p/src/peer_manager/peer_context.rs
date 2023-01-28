@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use tokio::time::Instant;
+
 use crate::{
     interface::types::ConnectedPeer,
     net::{
@@ -20,6 +22,12 @@ use crate::{
         NetworkingService,
     },
 };
+
+#[derive(Debug)]
+pub struct SentPing {
+    pub nonce: u64,
+    pub timestamp: Instant,
+}
 
 #[derive(Debug)]
 pub struct PeerContext<T: NetworkingService> {
@@ -34,6 +42,9 @@ pub struct PeerContext<T: NetworkingService> {
 
     /// Peer score
     pub score: u32,
+
+    /// Sent ping details
+    pub sent_ping: Option<SentPing>,
 }
 
 impl<T: NetworkingService> From<&PeerContext<T>> for ConnectedPeer {

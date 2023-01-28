@@ -29,7 +29,7 @@ use std::{
     time::Duration,
 };
 
-use crypto::random::{make_pseudo_rng, SliceRandom};
+use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use tokio::{
     sync::{mpsc, oneshot},
     time::Instant,
@@ -59,7 +59,11 @@ use crate::{
     types::peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
 };
 
-use self::{global_ip::IsGlobalIp, peer_context::PeerContext, peerdb::storage::PeerDbStorage};
+use self::{
+    global_ip::IsGlobalIp,
+    peer_context::{PeerContext, SentPing},
+    peerdb::storage::PeerDbStorage,
+};
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
 const MAX_ACTIVE_CONNECTIONS: usize = 128;
@@ -68,6 +72,11 @@ const MAX_ACTIVE_CONNECTIONS: usize = 128;
 const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
 /// Upper bound for how often [`PeerManager::heartbeat()`] is called
 const PEER_MGR_HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
+
+/// How often send ping requests to peers
+const PEER_MGR_PING_CHECK_PERIOD: Duration = Duration::from_secs(60);
+/// When a peer is detected as dead and disconnected
+const PEER_MGR_PING_TIMEOUT: Duration = Duration::from_secs(150);
 
 /// How many addresses are allowed to be sent
 const MAX_ADDRESS_COUNT: usize = 1000;
@@ -106,9 +115,6 @@ where
     /// Last time when heartbeat was called
     last_heartbeat: Instant,
 
-    /// Last time when pings were sent
-    last_time_pings_sent: Instant,
-
     /// All addresses that were announced to or from some peer.
     /// Used to prevent infinity loops while broadcasting addresses.
     // TODO: Use bloom filter (like it's done in Bitcoin Core).
@@ -142,7 +148,6 @@ where
             chain_config,
             p2p_config,
             last_heartbeat: now,
-            last_time_pings_sent: now,
             announced_addresses: HashMap::new(),
         })
     }
@@ -299,6 +304,7 @@ where
                 address: address.clone(),
                 role,
                 score: 0,
+                sent_ping: None,
             },
         );
         assert!(old_value.is_none());
@@ -546,7 +552,7 @@ where
 
     fn handle_incoming_response(
         &mut self,
-        _peer_id: T::PeerId,
+        peer_id: T::PeerId,
         _request_id: T::PeerRequestId,
         response: PeerManagerResponse,
     ) -> crate::Result<()> {
@@ -564,7 +570,15 @@ where
                 Ok(())
             }
             PeerManagerResponse::AnnounceAddrResponse(AnnounceAddrResponse {}) => Ok(()),
-            PeerManagerResponse::PingResponse(PingResponse { nonce: _ }) => Ok(()),
+            PeerManagerResponse::PingResponse(PingResponse { nonce }) => {
+                if let Some(peer) = self.peers.get_mut(&peer_id) {
+                    if peer.sent_ping.as_ref().map(|sent_ping| sent_ping.nonce) == Some(nonce) {
+                        // Correct reply received, clear pending request.
+                        peer.sent_ping = None;
+                    }
+                }
+                Ok(())
+            }
         }
     }
 
@@ -771,13 +785,52 @@ where
         self.peers.get(peer_id).is_some()
     }
 
+    /// Sends ping requests and disconnects peers that do not respond in time
+    async fn ping_check(&mut self) -> crate::Result<()> {
+        let now = Instant::now();
+        let mut dead_peers = Vec::new();
+        for (peer_id, peer) in self.peers.iter_mut() {
+            // If a ping has already been sent, wait for a reply first, do not send another ping request!
+            match &peer.sent_ping {
+                Some(sent_ping) => {
+                    if now.duration_since(sent_ping.timestamp) > PEER_MGR_PING_TIMEOUT {
+                        log::info!("ping check: dead peer detected: {peer_id}");
+                        dead_peers.push(*peer_id);
+                    } else {
+                        log::debug!("ping check: slow peer detected: {peer_id}");
+                    }
+                }
+                None => {
+                    let nonce = make_pseudo_rng().gen();
+                    self.peer_connectivity_handle
+                        .send_request(
+                            *peer_id,
+                            PeerManagerRequest::PingRequest(PingRequest { nonce }),
+                        )
+                        .await?;
+                    peer.sent_ping = Some(SentPing {
+                        nonce,
+                        timestamp: now,
+                    });
+                }
+            }
+        }
+
+        for peer_id in dead_peers {
+            self.close_connection(peer_id)?;
+        }
+
+        Ok(())
+    }
+
     /// Runs the `PeerManager` event loop.
     ///
-    /// The event loop has three main responsibilities:
+    /// The event loop has this main responsibilities:
     /// - listening to and handling control events from [`crate::sync::SyncManager`]/
     /// [`crate::pubsub::PubSubMessageHandler`]/RPC
     /// - listening to network events
     /// - updating internal state
+    /// - sending and checking ping requests
     ///
     /// After handling an event from one of the aforementioned sources, the event loop
     /// handles the error (if any) and runs the [`PeerManager::heartbeat()`] function
@@ -786,6 +839,8 @@ where
     /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
     /// have any events.
     pub async fn run(&mut self) -> crate::Result<void::Void> {
+        let mut ping_check_interval = tokio::time::interval(PEER_MGR_PING_CHECK_PERIOD);
+
         loop {
             tokio::select! {
                 event = self.rx_peer_manager.recv() => {
@@ -794,19 +849,15 @@ where
                 event_res = self.peer_connectivity_handle.poll_next() => {
                     self.handle_connectivity_event_result(event_res).await?;
                 },
+                _event = ping_check_interval.tick() => {
+                    self.ping_check().await?;
+                }
                 _event = tokio::time::sleep(PEER_MGR_HEARTBEAT_INTERVAL_MAX) => {}
             }
 
             // finally update peer manager state
             let now = tokio::time::Instant::now();
             if now.duration_since(self.last_heartbeat) > PEER_MGR_HEARTBEAT_INTERVAL_MIN {
-                self.heartbeat().await?;
-                self.last_heartbeat = now;
-            }
-
-            // finally update peer manager state
-            let now = tokio::time::Instant::now();
-            if now.duration_since(self.last_time_pings_sent) > PEER_MGR_HEARTBEAT_INTERVAL_MIN {
                 self.heartbeat().await?;
                 self.last_heartbeat = now;
             }
