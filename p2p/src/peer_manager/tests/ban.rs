@@ -13,14 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use crate::{
+    config::P2pConfig,
     net::types::Role,
+    peer_manager::peerdb::{
+        storage::{PeerDbStorageRead, PeerDbTransactional},
+        PeerDb,
+    },
     testing_utils::{
-        connect_services, get_connectivity_event, RandomAddressMaker, TestChannelAddressMaker,
-        TestTcpAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportNoise,
-        TestTransportTcp,
+        connect_services, get_connectivity_event, peerdb_inmemory_store, P2pTestTimeGetter,
+        RandomAddressMaker, TestChannelAddressMaker, TestTcpAddressMaker, TestTransportChannel,
+        TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
 };
 use common::{chain::config, primitives::semver::SemVer};
@@ -478,6 +483,77 @@ async fn inbound_connection_invalid_magic_noise() {
     inbound_connection_invalid_magic::<
         TestTransportNoise,
         DefaultNetworkingService<NoiseTcpTransport>,
+    >()
+    .await;
+}
+
+async fn unban_peer<T, N, A>()
+where
+    N: NetworkingService<PeerId = PeerId>,
+    A: RandomAddressMaker<Address = N::Address>,
+{
+    let db_store = peerdb_inmemory_store();
+    let time_getter = P2pTestTimeGetter::new();
+    let mut peerdb = PeerDb::<N, _>::new(
+        Arc::new(P2pConfig {
+            bind_addresses: Default::default(),
+            added_nodes: Default::default(),
+            ban_threshold: Default::default(),
+            ban_duration: Duration::from_secs(60).into(),
+            outbound_connection_timeout: Default::default(),
+            node_type: Default::default(),
+            allow_discover_private_ips: Default::default(),
+        }),
+        time_getter.get_time_getter(),
+        db_store,
+    )
+    .unwrap();
+
+    let address = A::new();
+    peerdb.ban_peer(&address).unwrap();
+
+    assert!(peerdb.is_address_banned(&address.as_bannable()).unwrap());
+    let banned_addresses = peerdb
+        .get_storage_mut()
+        .transaction_ro()
+        .unwrap()
+        .get_banned_addresses()
+        .unwrap();
+    assert_eq!(banned_addresses.len(), 1);
+
+    time_getter.advance_time(Duration::from_secs(120)).await;
+
+    assert!(!peerdb.is_address_banned(&address.as_bannable()).unwrap());
+    let banned_addresses = peerdb
+        .get_storage_mut()
+        .transaction_ro()
+        .unwrap()
+        .get_banned_addresses()
+        .unwrap();
+    assert_eq!(banned_addresses.len(), 0);
+}
+
+#[tokio::test]
+async fn unban_peer_tcp() {
+    unban_peer::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>, TestTcpAddressMaker>().await;
+}
+
+#[tokio::test]
+async fn unban_peer_channels() {
+    unban_peer::<
+        TestTransportChannel,
+        DefaultNetworkingService<MpscChannelTransport>,
+        TestChannelAddressMaker,
+    >()
+    .await;
+}
+
+#[tokio::test]
+async fn unban_peer_noise() {
+    unban_peer::<
+        TestTransportNoise,
+        DefaultNetworkingService<NoiseTcpTransport>,
+        TestTcpAddressMaker,
     >()
     .await;
 }

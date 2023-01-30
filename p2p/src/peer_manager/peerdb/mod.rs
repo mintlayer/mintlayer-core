@@ -182,16 +182,16 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
     /// After `PeerManager` has established either an inbound or an outbound connection,
     /// it informs the `PeerDb` about it.
     pub fn peer_connected(&mut self, address: T::Address) {
-        let old_value = self.connected_addresses.insert(address);
-        assert!(old_value);
+        let is_inserted = self.connected_addresses.insert(address);
+        assert!(is_inserted);
     }
 
     /// Handle peer disconnection event
     ///
     /// Close the connection to an active peer.
     pub fn peer_disconnected(&mut self, address: T::Address) {
-        let removed = self.connected_addresses.remove(&address);
-        assert!(removed);
+        let is_removed = self.connected_addresses.remove(&address);
+        assert!(is_removed);
     }
 
     /// Changes the peer state to `Peer::Banned` and bans it for 24 hours.
