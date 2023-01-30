@@ -24,6 +24,7 @@ use crate::{
     },
 };
 use common::{chain::config, primitives::semver::SemVer};
+use tokio::sync::oneshot;
 
 use crate::{
     error::{P2pError, PeerError},
@@ -164,32 +165,27 @@ where
     let peer_id = peer_info1.peer_id;
     pm2.accept_inbound_connection(address, peer_info1, None).await.unwrap();
 
-    assert_eq!(pm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
-    let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
-    assert!(pm2.peerdb.is_address_banned(&addr1).unwrap());
-    let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
-    assert!(matches!(
-        event,
-        Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
-    ));
-
     let remote_addr = pm1.peer_connectivity_handle.local_addresses()[0].clone();
 
-    tokio::spawn(async move {
-        loop {
-            let _ = pm1.peer_connectivity_handle.poll_next().await.unwrap();
-        }
-    });
+    assert_eq!(pm2.adjust_peer_score(peer_id, 10).await, Ok(()));
+    assert!(!pm2.peerdb.is_address_banned(&remote_addr.as_bannable()).unwrap());
 
-    pm2.peer_connectivity_handle.connect(remote_addr.clone()).await.unwrap();
-    if let Ok(net::types::ConnectivityEvent::ConnectionError { address, error }) =
-        pm2.peer_connectivity_handle.poll_next().await
-    {
-        assert_eq!(remote_addr, address);
-        assert!(matches!(
-            error,
-            P2pError::PeerError(PeerError::BannedPeer(_))
-        ));
+    assert_eq!(pm2.adjust_peer_score(peer_id, 90).await, Ok(()));
+    assert!(pm2.peerdb.is_address_banned(&remote_addr.as_bannable()).unwrap());
+
+    let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
+    match &event {
+        Ok(net::types::ConnectivityEvent::ConnectionClosed { .. }) => {}
+        _ => panic!("unexpected event: {event:?}"),
+    }
+    pm2.handle_connectivity_event_result(event).await.unwrap();
+
+    let (tx, rx) = oneshot::channel();
+    pm2.connect(remote_addr, Some(tx)).await.unwrap();
+    let res = rx.await.unwrap();
+    match res {
+        Err(P2pError::PeerError(PeerError::BannedAddress(_))) => {}
+        _ => panic!("unexpected result: {res:?}"),
     }
 }
 
@@ -452,10 +448,10 @@ where
     tokio::spawn(async move { pm1.run().await });
 
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
-    if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) = event {
-        assert_eq!(peer_id, peer_info.peer_id);
-    } else {
-        panic!("invalid event received");
+    match event {
+        Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id })
+            if peer_id == peer_info.peer_id => {}
+        _ => panic!("unexpected event: {event:?}"),
     }
 }
 
