@@ -357,11 +357,10 @@ where
         self.accept_connection(address, Role::Inbound, info, receiver_address).await
     }
 
-    /// Connection to a remote peer closed
+    /// The connection to a remote peer is reported as closed.
     ///
-    /// The decision to close the connection is made either by the user via RPC
-    /// or by the [`PeerManager::heartbeat()`] function which has decided to cull
-    /// this connection in favor of another potential connection.
+    /// This can happen when the remote peer has dropped its connection
+    /// or if a disconnect request has been sent by PeerManager to the backend.
     fn connection_closed(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
         // The backend is always sending ConnectionClosed event when somebody disconnects, ensure that the peer is active
         if self.is_active_peer(&peer_id) {
@@ -495,6 +494,10 @@ where
     }
 
     /// Disconnect an existing connection (inbound or outbound)
+    ///
+    /// The decision to close the connection is made either by the user via RPC
+    /// or by the [`PeerManager::heartbeat()`] function which has decided to cull
+    /// this connection in favor of another potential connection.
     async fn disconnect(
         &mut self,
         peer_id: T::PeerId,
