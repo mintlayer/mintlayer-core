@@ -67,7 +67,7 @@ fn stake_pool_reorg(#[case] seed: Seed, #[case] epoch_length: NonZeroU64) {
                     anyonecanspend_address(),
                     None,
                     vrf_pub_key_a,
-                    pub_key_a.clone(),
+                    pub_key_a,
                     0,
                     Amount::ZERO,
                 ))),

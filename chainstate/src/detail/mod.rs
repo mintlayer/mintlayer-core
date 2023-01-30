@@ -32,7 +32,6 @@ pub use chainstate_types::Locator;
 pub use error::{
     BlockError, CheckBlockError, CheckBlockTransactionsError, InitializationError, OrphanCheckError,
 };
-use pos_accounting::{FlushablePoSAccountingView, PoSAccountingDB, PoSAccountingDeltaData};
 // TODO: ConnectTransactionError used in unit tests to check block processing results. We have to find more appropriate place for this error.
 pub use transaction_verifier::{
     error::{ConnectTransactionError, TokensError, TxIndexError},
@@ -45,20 +44,18 @@ use std::sync::Arc;
 use itertools::Itertools;
 
 use chainstate_storage::{
-    BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag,
-    TransactionRw, Transactional,
+    BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockHeader},
         config::ChainConfig,
-        Block, GenBlockId,
+        Block,
     },
     primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
-use consensus::pos::is_due_for_epoch_data_calculation;
 use logging::log;
 use utils::{
     eventhandler::{EventHandler, EventsController},
@@ -316,58 +313,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         }
     }
 
-    fn activate_seal_epoch(&mut self, height: BlockHeight) -> Result<(), BlockError> {
-        if is_due_for_epoch_data_calculation(&self.chain_config, height) {
-            let current_epoch_index = self.chain_config.epoch_index_from_height(&height);
-            let sealed_epoch_distance_from_tip =
-                self.chain_config.sealed_epoch_distance_from_tip() as u64;
-
-            if current_epoch_index >= sealed_epoch_distance_from_tip {
-                let epoch_index_to_seal = current_epoch_index - sealed_epoch_distance_from_tip;
-
-                let first_block_epoch_to_seal =
-                    epoch_index_to_seal * self.chain_config.epoch_length().get();
-                let last_block_epoch_to_seal =
-                    first_block_epoch_to_seal + self.chain_config.epoch_length().get() - 1;
-
-                // iterate over every block in the epoch and merge every block delta into a singe delta
-                let mut db_tx = self.chainstate_storage.transaction_rw(None).log_err()?;
-                let epoch_delta = (first_block_epoch_to_seal..=last_block_epoch_to_seal)
-                    .try_fold(
-                        PoSAccountingDeltaData::new(),
-                        |mut delta: PoSAccountingDeltaData, height| -> Result<_, BlockError> {
-                            let genblock_id = db_tx
-                                .get_block_id_by_height(&BlockHeight::new(height))?
-                                .ok_or_else(|| {
-                                    BlockError::BlockAtHeightNotFound(BlockHeight::new(height))
-                                })?;
-                            match genblock_id.classify(&self.chain_config) {
-                                GenBlockId::Genesis(_) => (), /* skip genesis block for now */
-                                GenBlockId::Block(block_id) => {
-                                    if let Some(block_delta) =
-                                        db_tx.get_accounting_delta(block_id)?
-                                    {
-                                        delta.merge_with_delta(block_delta)?;
-                                    }
-                                }
-                            };
-                            Ok(delta)
-                        },
-                    )
-                    .log_err()?;
-
-                // flush delta to sealed storage
-                let mut db = PoSAccountingDB::<_, SealedStorageTag>::new(&mut db_tx);
-                db.batch_write_delta(epoch_delta)
-                    .map_err(TransactionVerifierStorageError::from)
-                    .log_err()?;
-                db_tx.commit()?;
-            }
-        }
-
-        Ok(())
-    }
-
     pub fn attempt_to_process_block(
         &mut self,
         block: WithId<Block>,
@@ -391,7 +336,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             .log_err()?;
 
         let block_index = chainstate_ref.accept_block(&block).log_err()?;
-        let block_height = block_index.block_height();
         let result = chainstate_ref.activate_best_chain(block_index, best_block_id).log_err()?;
         let db_commit_result = chainstate_ref.commit_db_tx().log_err();
         match db_commit_result {
@@ -402,8 +346,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     .log_err()
             }
         }
-
-        self.activate_seal_epoch(block_height)?;
 
         let new_block_index_after_orphans = self.process_orphans(&block.get_id());
         let result = match new_block_index_after_orphans {
