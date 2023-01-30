@@ -124,7 +124,7 @@ mod tests {
         fn err_conversion(c: u32) {
             match Uint256::try_from(Compact(c)) {
                 Ok(v) => {
-                    panic!("conversion of {} should fail, not {:?}", c, v);
+                    panic!("conversion of {c} should fail, not {v:?}");
                 }
                 Err(e) => {
                     assert!(e.is_some())

@@ -151,9 +151,9 @@ where
                         .await
                         .unwrap();
                 }
-                _ => panic!("invalid event: {:?}", event),
+                _ => panic!("invalid event: {event:?}"),
             },
-            Err(_) => panic!("did not receive `Request` in time, iter {}", i),
+            Err(_) => panic!("did not receive `Request` in time, iter {i}"),
         }
     }
 
@@ -163,9 +163,9 @@ where
                 Ok(SyncingEvent::Response { request_id, .. }) => {
                     request_ids.remove(&request_id);
                 }
-                _ => panic!("invalid event: {:?}", event),
+                _ => panic!("invalid event: {event:?}"),
             },
-            Err(_) => panic!("did not receive `Response` in time, iter {}", i),
+            Err(_) => panic!("did not receive `Response` in time, iter {i}"),
         }
     }
 

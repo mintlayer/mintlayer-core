@@ -846,11 +846,7 @@ where
 
         assert!(
             Instant::now().duration_since(started_at) < Duration::from_secs(10),
-            "Unexpected peer counts: {}, {}, {}, expected: {}",
-            connected_peers_1,
-            connected_peers_2,
-            connected_peers_3,
-            expected_count,
+            "Unexpected peer counts: {connected_peers_1}, {connected_peers_2}, {connected_peers_3}, expected: {expected_count}"
         );
     }
 }
