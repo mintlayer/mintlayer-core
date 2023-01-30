@@ -23,7 +23,7 @@ use super::{Decode, DecodeAll, Encode, EncodeLike};
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct Encoded<E, T> {
     bytes: E,
-    _phantom: std::marker::PhantomData<fn() -> T>,
+    _phantom: std::marker::PhantomData<T>,
 }
 
 impl<T: Encode> Encoded<Vec<u8>, T> {

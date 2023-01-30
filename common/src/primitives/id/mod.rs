@@ -74,7 +74,7 @@ impl<'de> serde::Deserialize<'de> for H256 {
 pub struct Id<T> {
     id: H256,
     #[serde(skip)]
-    _shadow: std::marker::PhantomData<fn() -> T>,
+    _shadow: std::marker::PhantomData<T>,
 }
 
 impl<T: TypeName> Debug for Id<T> {

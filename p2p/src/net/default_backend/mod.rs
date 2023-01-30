@@ -57,7 +57,7 @@ pub struct ConnectivityHandle<S: NetworkingService, T: TransportSocket> {
     /// RX channel for receiving connectivity events from default_backend backend
     conn_rx: mpsc::Receiver<types::ConnectivityEvent<T>>,
 
-    _marker: PhantomData<fn() -> S>,
+    _marker: PhantomData<S>,
 }
 
 impl<S: NetworkingService, T: TransportSocket> ConnectivityHandle<S, T> {
@@ -86,7 +86,7 @@ where
     /// RX channel for receiving pubsub events from default_backend backend
     _pubsub_rx: mpsc::Receiver<types::PubSubEvent<T>>,
 
-    _marker: PhantomData<fn() -> S>,
+    _marker: PhantomData<S>,
 }
 
 #[derive(Debug)]
@@ -100,7 +100,7 @@ where
 
     /// RX channel for receiving syncing events
     sync_rx: mpsc::Receiver<types::SyncingEvent>,
-    _marker: PhantomData<fn() -> S>,
+    _marker: PhantomData<S>,
 }
 
 #[async_trait]

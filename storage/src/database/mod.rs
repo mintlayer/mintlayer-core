@@ -139,7 +139,7 @@ impl<'tx, B: Backend, Sch: Schema> TransactionRw<'tx, B, Sch> {
 pub struct MapRef<'tx, Tx: internal::TxImpl, DbMap: schema::DbMap> {
     dbtx: &'tx Tx::Impl,
     idx: DbIndex,
-    _phantom: std::marker::PhantomData<fn() -> DbMap>,
+    _phantom: std::marker::PhantomData<DbMap>,
 }
 
 impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapRef<'tx, Tx, DbMap> {
@@ -193,7 +193,7 @@ where
 pub struct MapMut<'tx, Tx: TxImpl, DbMap: schema::DbMap> {
     dbtx: &'tx mut Tx::Impl,
     idx: DbIndex,
-    _phantom: std::marker::PhantomData<fn() -> DbMap>,
+    _phantom: std::marker::PhantomData<DbMap>,
 }
 
 impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapMut<'tx, Tx, DbMap> {
