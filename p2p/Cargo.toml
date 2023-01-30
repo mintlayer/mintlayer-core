@@ -6,7 +6,7 @@ license = "MIT"
 
 [features]
 default = []
-testing_utils = []
+testing_utils = ["tokio/test-util"]
 
 [dependencies]
 common = { path = "../common/" }
@@ -44,7 +44,6 @@ p2p-test-utils = { path = "p2p-test-utils" }
 p2p-backend-test-suite = { path = "backend-test-suite" }
 
 portpicker = "0.1"
-tokio = { version = "1", features = ["test-util"] }
 
 [[test]]
 name = "backend_tcp"
