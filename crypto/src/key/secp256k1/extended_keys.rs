@@ -262,11 +262,11 @@ mod test {
             assert_eq!(sk.chain_code, pk.chain_code);
             assert_eq!(
                 sk.encode().encode_hex::<String>(),
-                format!("{}{}", chaincode, secret)
+                format!("{chaincode}{secret}")
             );
             assert_eq!(
                 pk.encode().encode_hex::<String>(),
-                format!("{}{}", chaincode, public)
+                format!("{chaincode}{public}")
             );
         }
     }

@@ -541,7 +541,7 @@ fn get_ancestor(#[case] seed: Seed) {
             <Id<GenBlock>>::from(*tf.index_at(i as usize).block_id()),
             tf.chainstate
                 .get_ancestor(&split, i.into())
-                .unwrap_or_else(|_| panic!("Ancestor of height {} not reached", i))
+                .unwrap_or_else(|_| panic!("Ancestor of height {i} not reached"))
                 .block_id()
         );
     }
