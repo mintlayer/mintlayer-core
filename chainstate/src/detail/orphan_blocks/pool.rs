@@ -261,10 +261,7 @@ mod tests {
             if let Some(blocks) = orphans_pool.orphan_by_prev_id.get(&block.prev_block_id()) {
                 assert!(blocks.contains(&Arc::new(block.clone())))
             } else {
-                panic!(
-                    "the block {:#?} is not in `orphan_by_prev_id` field.",
-                    block
-                );
+                panic!("the block {block:#?} is not in `orphan_by_prev_id` field.");
             }
         }
 

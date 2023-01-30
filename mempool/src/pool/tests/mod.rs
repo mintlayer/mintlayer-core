@@ -480,8 +480,7 @@ async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
 
     let available_for_spending = (input_value - fee).ok_or_else(|| {
         let msg = format!(
-            "tx_spend_several_inputs: input_value ({:?}) lower than fee ({:?})",
-            input_value, fee
+            "tx_spend_several_inputs: input_value ({input_value:?}) lower than fee ({fee:?})"
         );
         log::error!("{}", msg);
         anyhow::Error::msg(msg)
@@ -627,7 +626,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         .into_iter()
         .map(|i| {
             SignedTransaction::new(
-                Transaction::new(i, vec![], vec![], 0).unwrap_or_else(|_| panic!("tx {}", i)),
+                Transaction::new(i, vec![], vec![], 0).unwrap_or_else(|_| panic!("tx {i}")),
                 vec![],
             )
             .expect("invalid witness count")

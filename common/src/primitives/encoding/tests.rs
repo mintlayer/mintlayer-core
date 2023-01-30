@@ -153,12 +153,12 @@ fn check_valid_addresses() {
                         assert_eq!(s.to_lowercase(), encoded.to_lowercase())
                     }
                     Err(e) => {
-                        panic!("Did not encode: {:?} Reason: {:?}", s, e)
+                        panic!("Did not encode: {s:?} Reason: {e:?}")
                     }
                 }
             }
             Err(e) => {
-                panic!("Did not decode: {:?} Reason: {:?}", s, e)
+                panic!("Did not decode: {s:?} Reason: {e:?}")
             }
         }
     });
@@ -209,11 +209,11 @@ fn check_invalid_addresses() {
                     assert_eq!(s.to_lowercase(), encoded.to_lowercase())
                 }
                 Err(e) => {
-                    panic!("Did not encode: {:?} Reason: {:?}", s, e)
+                    panic!("Did not encode: {s:?} Reason: {e:?}")
                 }
             },
             Err(e) => {
-                panic!("Did not decode: {:?} Reason: {:?}", s, e)
+                panic!("Did not decode: {s:?} Reason: {e:?}")
             }
         }
     });
@@ -234,11 +234,11 @@ fn check_valid_strings() {
                Ok(decoded) => {
                    match super::bech32m::base32_to_bech32m(decoded.hrp(), <&[bech32::u5]>::clone(&decoded.data())) {
                        Ok(encoded) => { assert_eq!(s.to_lowercase(), encoded.to_lowercase()) }
-                       Err(e) => { panic!("Did not encode: {:?} Reason: {:?}",s,e) }
+                       Err(e) => { panic!("Did not encode: {s:?} Reason: {e:?}") }
                    }
                }
                Err(e) => {
-                   panic!("Did not decode: {:?} Reason: {:?}", s, e)
+                   panic!("Did not decode: {s:?} Reason: {e:?}")
                }
            }
         });
@@ -274,7 +274,7 @@ fn check_invalid_strings() {
             ("tb1qgk665m2auw09rc7pqyf7aulcuhmatz9xqtr5mxew7zuysacaascqs9v0vn", Bech32Error::FailedChecksum)
         ).iter().for_each(|(s,b_err)| {
             match super::decode(*s) {
-                Ok(_) => { panic!("Should be invalid: {:?}", s) }
+                Ok(_) => { panic!("Should be invalid: {s:?}") }
                 Err(e) => { assert_eq!(*b_err,e) }
             }
         });

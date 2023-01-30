@@ -242,8 +242,8 @@ mod tests {
             let hash_value = H256::from_str(value).expect("nothing wrong");
             let uint_value = Uint256::from(hash_value);
 
-            let hash_str = format!("{:?}", hash_value);
-            let uint_str = format!("{:?}", uint_value);
+            let hash_str = format!("{hash_value:?}");
+            let uint_str = format!("{uint_value:?}");
             assert_eq!(hash_str, uint_str);
 
             // make sure the position of the bytes are the same.
@@ -281,7 +281,7 @@ mod tests {
             serde_test::assert_tokens(&hash, &[serde_test::Token::Str(hex)]);
             assert_eq!(
                 serde_json::to_value(hash).ok(),
-                Some(Value::String(format!("{:x}", hash)))
+                Some(Value::String(format!("{hash:x}")))
             );
         }
         SAMPLE_HASHES.iter().cloned().for_each(check)

@@ -708,20 +708,20 @@ mod test {
         fn check(hash: &str) {
             let h256 = H256::from_str(hash).expect("should not fail");
 
-            let debug = format!("{:?}", h256);
-            assert_eq!(debug, format!("0x{}", hash));
+            let debug = format!("{h256:?}");
+            assert_eq!(debug, format!("0x{hash}"));
 
-            let display = format!("{}", h256);
+            let display = format!("{h256}");
             let (_, last_value) = hash.split_at(hash.len() - 4);
             assert_eq!(display, format!("0x{}…{}", &hash[0..4], last_value));
 
-            let no_0x = format!("{:x}", h256);
+            let no_0x = format!("{h256:x}");
             assert_eq!(no_0x, hash.to_string());
 
-            let sharp = format!("{:#x}", h256);
+            let sharp = format!("{h256:#x}");
             assert_eq!(sharp, debug);
 
-            let upper_hex = format!("{:#010X}", h256);
+            let upper_hex = format!("{h256:#010X}");
             assert_eq!(upper_hex, format!("0X{}", hash.to_uppercase()));
         }
 

@@ -46,7 +46,7 @@ enum Error {
 
 impl std::fmt::Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 
@@ -86,7 +86,7 @@ ENABLE_BITCOIND=true
         // Pass command-line arguments
         .arg(runner_path)
         .arg(format!("--configfile={}", config_file_path.display()))
-        .arg(format!("--tmpdirprefix={}", TEMP_DIR))
+        .arg(format!("--tmpdirprefix={TEMP_DIR}"))
         // Forward the rest of the arguments from this executable
         .args(runner_args)
         // Wait for exit status
