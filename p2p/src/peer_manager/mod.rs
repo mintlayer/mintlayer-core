@@ -274,7 +274,7 @@ where
             ))
         );
         ensure!(
-            !self.is_active_peer(&info.peer_id),
+            !self.is_peer_connected(&info.peer_id),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
         ensure!(
@@ -336,7 +336,7 @@ where
         log::debug!("validate inbound connection, inbound address {address:?}");
 
         ensure!(
-            !self.is_active_peer(&info.peer_id),
+            !self.is_peer_connected(&info.peer_id),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
 
@@ -363,10 +363,7 @@ where
     /// or if a disconnect request has been sent by PeerManager to the backend.
     fn connection_closed(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
         // The backend is always sending ConnectionClosed event when somebody disconnects, ensure that the peer is active
-        if self.is_active_peer(&peer_id) {
-            let removed = self.peers.remove(&peer_id);
-            let peer = removed.expect("peer must be known");
-
+        if let Some(peer) = self.peers.remove(&peer_id) {
             log::info!(
                 "peer disconnected, peer_id: {}, address: {:?}",
                 peer.info.peer_id,
@@ -380,9 +377,9 @@ where
             }
 
             self.peerdb.peer_disconnected(peer.address);
-        }
 
-        self.announced_addresses.remove(&peer_id);
+            self.announced_addresses.remove(&peer_id);
+        }
 
         Ok(())
     }
@@ -827,7 +824,7 @@ where
     /// It can be used to distribute data in the gossip protocol
     /// (for example, to relay announced addresses to a small group of peers).
     pub fn random_peer_ids(&self, count: usize) -> Vec<T::PeerId> {
-        // There are normally not many connected peers, so iterating over the whole list should be OK
+        // TODO: Optimise this
         let all_peer_ids = self.peers.keys().cloned().collect::<Vec<_>>();
         all_peer_ids
             .choose_multiple(&mut make_pseudo_rng(), count)
@@ -835,8 +832,8 @@ where
             .collect::<Vec<_>>()
     }
 
-    /// Checks if the peer is active
-    pub fn is_active_peer(&self, peer_id: &T::PeerId) -> bool {
+    /// Checks if the peer is in active state
+    pub fn is_peer_connected(&self, peer_id: &T::PeerId) -> bool {
         self.peers.get(peer_id).is_some()
     }
 

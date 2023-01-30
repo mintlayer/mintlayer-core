@@ -237,7 +237,7 @@ where
         )
         .await;
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(!peer_manager.is_active_peer(&peer_id));
+    assert!(!peer_manager.is_peer_connected(&peer_id));
 
     // invalid version
     let res = peer_manager
@@ -257,7 +257,7 @@ where
         )
         .await;
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(!peer_manager.is_active_peer(&peer_id));
+    assert!(!peer_manager.is_peer_connected(&peer_id));
 
     // valid connection
     let address = B::new();
@@ -279,7 +279,7 @@ where
         .await;
     assert!(res.is_ok());
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(peer_manager.is_active_peer(&peer_id));
+    assert!(peer_manager.is_peer_connected(&peer_id));
     assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()).unwrap());
 }
 
@@ -341,7 +341,7 @@ where
         )
         .await;
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(!peer_manager.is_active_peer(&peer_id));
+    assert!(!peer_manager.is_peer_connected(&peer_id));
 
     // invalid version
     let res = peer_manager
@@ -360,7 +360,7 @@ where
         )
         .await;
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(!peer_manager.is_active_peer(&peer_id));
+    assert!(!peer_manager.is_peer_connected(&peer_id));
 
     // valid connection
     let address = B::new();
@@ -381,7 +381,7 @@ where
         .await;
     assert!(res.is_ok());
     assert_eq!(peer_manager.handle_result(Some(peer_id), res).await, Ok(()));
-    assert!(peer_manager.is_active_peer(&peer_id));
+    assert!(peer_manager.is_peer_connected(&peer_id));
     assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()).unwrap());
 }
 
