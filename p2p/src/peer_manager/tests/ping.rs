@@ -102,7 +102,7 @@ async fn ping_timeout() {
                     .await
                     .unwrap();
             }
-            _ => panic!("unexpected event: {:?}", event),
+            _ => panic!("unexpected event: {event:?}"),
         }
     }
 
@@ -115,7 +115,7 @@ async fn ping_timeout() {
             request_id: _,
             message: Request::PingRequest(PingRequest { nonce: _ }),
         } => {}
-        _ => panic!("unexpected event: {:?}", event),
+        _ => panic!("unexpected event: {event:?}"),
     }
 
     time_getter.advance_time(PEER_MGR_PING_TIMEOUT).await;
@@ -127,6 +127,6 @@ async fn ping_timeout() {
             response.send(Ok(())).unwrap();
             conn_tx.send(ConnectivityEvent::ConnectionClosed { peer_id }).await.unwrap();
         }
-        _ => panic!("unexpected event: {:?}", event),
+        _ => panic!("unexpected event: {event:?}"),
     }
 }
