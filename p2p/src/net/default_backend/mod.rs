@@ -23,7 +23,7 @@ pub mod types;
 use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 
 use logging::log;
 use serialization::Encode;
@@ -164,29 +164,17 @@ where
             address
         );
 
-        let (tx, rx) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::Connect {
-                address,
-                response: tx,
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::Connect { address }).await?;
 
-        rx.await?
+        Ok(())
     }
 
     async fn disconnect(&mut self, peer_id: S::PeerId) -> crate::Result<()> {
         log::debug!("close connection with remote, {peer_id}");
 
-        let (tx, rx) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::Disconnect {
-                peer_id,
-                response: tx,
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::Disconnect { peer_id }).await?;
 
-        rx.await?
+        Ok(())
     }
 
     async fn send_request(

@@ -126,8 +126,7 @@ async fn ping_timeout() {
     // PeerManager should ask backend to close connection
     let event = cmd_rx.recv().await.unwrap();
     match event {
-        Command::Disconnect { peer_id, response } => {
-            response.send(Ok(())).unwrap();
+        Command::Disconnect { peer_id } => {
             conn_tx.send(ConnectivityEvent::ConnectionClosed { peer_id }).await.unwrap();
         }
         _ => panic!("unexpected event: {event:?}"),

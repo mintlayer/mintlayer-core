@@ -637,10 +637,7 @@ where
         // So the first future will return a closure that takes a reference to self and returns one more future.
 
         let backend_task: BackendTask<T> = match command {
-            Command::Connect { address, response } => {
-                // For now we always respond with success
-                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
-
+            Command::Connect { address } => {
                 let connection_fut = timeout(
                     *self.p2p_config.outbound_connection_timeout,
                     self.transport.connect(address.clone()),
@@ -658,13 +655,9 @@ where
                 }
                 .boxed()
             }
-            Command::Disconnect { peer_id, response } => async move {
+            Command::Disconnect { peer_id } => async move {
                 boxed_cb(move |this: &mut Self| {
-                    async move {
-                        let res = this.disconnect_peer(&peer_id).await;
-                        response.send(res).map_err(|_| P2pError::ChannelClosed)
-                    }
-                    .boxed()
+                    async move { this.disconnect_peer(&peer_id).await }.boxed()
                 })
             }
             .boxed(),
