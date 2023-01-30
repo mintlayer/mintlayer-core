@@ -77,6 +77,18 @@ serialization = { path = "serialization"}
 storage = { path = "storage"}
 utxo = { path = "utxo"}
 
+[workspace.dependencies]
+async-trait = "0.1"
+futures = "0.3"
+hex = "0.4"
+itertools = "0.10"
+jsonrpsee = "0.16"
+parity-scale-codec = "3.1"
+serde = "1.0"
+static_assertions = "1.1"
+thiserror = "1.0"
+tokio = "1.0"
+
 [profile.release]
 debug-assertions = true
 overflow-checks = true

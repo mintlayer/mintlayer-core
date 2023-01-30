@@ -14,8 +14,8 @@ chainstate-types = { path = '../chainstate/types' }
 serialization = {path = "../serialization"}
 typename = { path = "../utils/typename" }
 
-thiserror = "1.0"
-parity-scale-codec = "3.1"
+thiserror.workspace = true
+parity-scale-codec.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }

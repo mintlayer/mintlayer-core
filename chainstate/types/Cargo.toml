@@ -11,5 +11,5 @@ serialization = { path = "../../serialization" }
 common = { path = "../../common/" }
 storage = { path = "../../storage/" }
 
-thiserror = "1.0"
-parity-scale-codec = "3.1"
+thiserror.workspace = true
+parity-scale-codec.workspace = true

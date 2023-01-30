@@ -19,12 +19,12 @@ ripemd = "0.1"
 blake2 = "0.10"
 generic-array = "0.14"
 rand = "0.8"
-parity-scale-codec = "3.1"
+parity-scale-codec.workspace = true
 num = "0.4"
 num-derive = "0.3"
 num-traits = "0.2"
 chacha20poly1305 = "0.10"
-thiserror = "1.0"
+thiserror.workspace = true
 schnorrkel = "0.10.2"
 merlin = { version = "3.0.0", default-features = false }
 argon2 = { version = "0.4", features = ["std"] }
@@ -34,5 +34,5 @@ zeroize = "1.5.7"
 test-utils = { path = "../test-utils" }
 
 rstest = "0.16"
-hex = "0.4"
+hex.workspace = true
 rand_chacha = "0.3.1"
