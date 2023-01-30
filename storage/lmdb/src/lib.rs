@@ -18,13 +18,15 @@ mod error;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{borrow::Cow, path::PathBuf};
 
-use lmdb::{Cursor, DatabaseResizeInfo, DatabaseResizeSettings};
+use lmdb::Cursor;
 use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
     info::{DbDesc, MapDesc},
     Data, DbIndex,
 };
 use utils::sync::Arc;
+
+pub use lmdb::{DatabaseResizeInfo, DatabaseResizeSettings};
 
 /// Identifiers of the list of databases (key-value maps)
 #[derive(Eq, PartialEq, Debug, Clone)]
