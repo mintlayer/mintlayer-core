@@ -21,7 +21,7 @@ crypto = { path = '../../crypto' }
 test-utils = {path = '../../test-utils'}
 utils = { path = '../../utils' }
 
-itertools = "0.10"
+itertools.workspace = true
 mockall = "0.11"
 num-traits = "0.2"
 rstest = "0.16"

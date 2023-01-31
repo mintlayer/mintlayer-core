@@ -16,12 +16,12 @@ logging = { path = '../logging' }
 rpc = { path = '../rpc' }
 
 anyhow = "1.0"
-async-trait = "0.1"
-jsonrpsee = {version = "0.16", features = ["macros"]}
-thiserror = "1.0"
+async-trait.workspace = true
+jsonrpsee = { workspace = true, features = ["macros"] }
+thiserror.workspace = true
 mockall = "0.11.0"
 parking_lot = "0.12"
-tokio = { version = "1", default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
+tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 
 [dev-dependencies]
 chainstate-storage = { path = '../chainstate/storage' }

@@ -10,14 +10,14 @@ serialization = { path = "../serialization" }
 utils = { path = '../utils' }
 typename = { path = "../utils/typename" }
 
-parity-scale-codec = "3.1"
-thiserror = "1.0"
+parity-scale-codec.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 logging = { path = '../logging' }
 
 flate2 = "1.0"
-hex = "0.4"
+hex.workspace = true
 hex-literal = "0.3"
 proptest = "1.0"
 

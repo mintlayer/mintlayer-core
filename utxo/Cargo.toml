@@ -12,12 +12,12 @@ logging = { path = "../logging/" }
 serialization = { path = "../serialization" }
 chainstate-types = { path = '../chainstate/types' }
 
-parity-scale-codec = { version = "3.1", features = ["chain-error"] }
-thiserror = "1.0"
+parity-scale-codec = { workspace = true, features = ["chain-error"] }
+thiserror.workspace = true
 
 [dev-dependencies]
 crypto = { path = '../crypto' }
 test-utils = {path = '../test-utils'}
 
-itertools = "0.10"
+itertools.workspace = true
 rstest = "0.16"

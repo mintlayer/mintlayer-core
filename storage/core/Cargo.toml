@@ -11,5 +11,5 @@ utils = { path = '../../utils' }
 logging = { path = '../../logging' }
 
 # External dependencies
-thiserror = "1.0"
-itertools = "0.10"
+thiserror.workspace = true
+itertools.workspace = true

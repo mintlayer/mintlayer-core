@@ -20,21 +20,21 @@ subsystem = { path = "../subsystem/" }
 utils = { path = "../utils/" }
 storage = { path = "../storage" }
 
-async-trait = "0.1"
+async-trait.workspace = true
 bytes = "1.1"
-futures = "0.3"
-itertools = "0.10"
-parity-scale-codec = "3.1"
+futures.workspace = true
+itertools.workspace = true
+parity-scale-codec.workspace = true
 sscanf = "0.4"
-thiserror = "1.0"
+thiserror.workspace = true
 void = "1.0"
 tap = "1.0"
 once_cell = "1.13"
-jsonrpsee = { version = "0.16", features = ["macros"]}
-tokio = { version = "1", default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
+jsonrpsee = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 tokio-util = {version = "0.7", default-features = false, features = ["codec"] }
 snowstorm = "0.4.0"
-serde = "1.0"
+serde.workspace = true
 socket2 = { version = "0.4.0", features = ["all"] }
 
 [dev-dependencies]
