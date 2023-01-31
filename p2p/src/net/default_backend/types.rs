@@ -35,6 +35,7 @@ use crate::{
     types::peer_address::PeerAddress,
 };
 
+#[derive(Debug)]
 pub enum Command<T: TransportSocket> {
     Connect {
         address: T::Address,

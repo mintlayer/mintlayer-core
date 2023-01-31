@@ -95,6 +95,15 @@ pub struct RunOptions {
     #[clap(long)]
     pub p2p_outbound_connection_timeout: Option<NonZeroU64>,
 
+    /// How often send ping requests to peers (in seconds).
+    /// Set to 0 to disable sending ping requests.
+    #[clap(long)]
+    pub p2p_ping_check_period: Option<u64>,
+
+    /// After what time a peer is detected as dead and is disconnected (in seconds).
+    #[clap(long)]
+    pub p2p_ping_timeout: Option<u64>,
+
     /// A maximum tip age in seconds.
     ///
     /// The initial block download is finished if the difference between the current time and the

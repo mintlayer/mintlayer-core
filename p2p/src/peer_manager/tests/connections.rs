@@ -60,7 +60,7 @@ async fn test_peer_manager_connect<T: NetworkingService>(
     let config = Arc::new(config::create_mainnet());
     let mut peer_manager = make_peer_manager::<T>(transport, bind_addr, config).await;
 
-    peer_manager.connect(remote_addr).await.unwrap();
+    peer_manager.try_connect(remote_addr).await.unwrap();
 
     assert!(matches!(
         peer_manager.peer_connectivity_handle.poll_next().await,
@@ -126,7 +126,7 @@ where
     pm1.peerdb.peer_discovered(&addr).unwrap();
     pm1.heartbeat().await.unwrap();
 
-    assert_eq!(pm1.pending.len(), 1);
+    assert_eq!(pm1.pending_connects.len(), 1);
     assert!(std::matches!(
         pm1.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::OutboundAccepted { .. })
@@ -418,11 +418,11 @@ where
     let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, Arc::clone(&config)).await;
 
-    peers.into_iter().for_each(|peer| {
-        pm1.peerdb.peer_connected(peer.0, Role::Inbound, peer.1);
-    });
+    for peer in peers.into_iter() {
+        pm1.accept_connection(peer.0, Role::Inbound, peer.1, None).await.unwrap();
+    }
     assert_eq!(
-        pm1.peerdb.active_peer_count(),
+        pm1.active_peer_count(),
         peer_manager::MAX_ACTIVE_CONNECTIONS
     );
 
@@ -678,6 +678,8 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
     });
@@ -703,6 +705,8 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
     });
@@ -767,6 +771,8 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
     });
@@ -793,6 +799,8 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
     });
@@ -812,6 +820,8 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
     });

@@ -90,6 +90,8 @@ fn read_config_override_values() {
     let p2p_add_node = "add_node";
     let p2p_ban_threshold = 3;
     let p2p_timeout = NonZeroU64::new(10000).unwrap();
+    let p2p_ping_check_period = 30;
+    let p2p_ping_timeout = 60;
     let http_rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
     let ws_rpc_addr = SocketAddr::from_str("127.0.0.1:5433").unwrap();
     let backend_type = StorageBackendConfigFile::InMemory;
@@ -97,6 +99,8 @@ fn read_config_override_values() {
     let max_tip_age = 1000;
 
     let options = RunOptions {
+        storage_backend: Some(backend_type.clone()),
+        node_type: Some(node_type),
         max_db_commit_attempts: Some(max_db_commit_attempts),
         max_orphan_blocks: Some(max_orphan_blocks),
         tx_index_enabled: Some(false),
@@ -104,13 +108,13 @@ fn read_config_override_values() {
         p2p_add_node: Some(vec![p2p_add_node.to_owned()]),
         p2p_ban_threshold: Some(p2p_ban_threshold),
         p2p_outbound_connection_timeout: Some(p2p_timeout),
+        p2p_ping_check_period: Some(p2p_ping_check_period),
+        p2p_ping_timeout: Some(p2p_ping_timeout),
+        max_tip_age: Some(max_tip_age),
         http_rpc_addr: Some(http_rpc_addr),
         http_rpc_enabled: Some(true),
         ws_rpc_addr: Some(ws_rpc_addr),
         ws_rpc_enabled: Some(false),
-        storage_backend: Some(backend_type.clone()),
-        node_type: Some(node_type),
-        max_tip_age: Some(max_tip_age),
     };
     let datadir_opt = Some(data_dir.path().into());
     let config = NodeConfigFile::read(&config_path, &datadir_opt, &options).unwrap();
@@ -138,6 +142,8 @@ fn read_config_override_values() {
     assert_eq!(config.p2p.added_nodes, Some(vec!(p2p_add_node.to_owned())));
     assert_eq!(config.p2p.ban_threshold, Some(p2p_ban_threshold));
     assert_eq!(config.p2p.outbound_connection_timeout, Some(p2p_timeout));
+    assert_eq!(config.p2p.ping_check_period, Some(p2p_ping_check_period));
+    assert_eq!(config.p2p.ping_timeout, Some(p2p_ping_timeout));
     assert_eq!(config.p2p.node_type, Some(node_type));
 
     assert_eq!(config.rpc.http_bind_address, Some(http_rpc_addr));
@@ -196,6 +202,8 @@ fn custom_config_path_and_data_dir() {
 
 fn default_run_options() -> RunOptions {
     RunOptions {
+        storage_backend: None,
+        node_type: None,
         max_db_commit_attempts: None,
         max_orphan_blocks: None,
         tx_index_enabled: None,
@@ -203,12 +211,12 @@ fn default_run_options() -> RunOptions {
         p2p_add_node: None,
         p2p_ban_threshold: None,
         p2p_outbound_connection_timeout: None,
+        p2p_ping_check_period: None,
+        p2p_ping_timeout: None,
+        max_tip_age: None,
         http_rpc_addr: None,
         http_rpc_enabled: None,
         ws_rpc_addr: None,
         ws_rpc_enabled: None,
-        storage_backend: None,
-        node_type: None,
-        max_tip_age: None,
     }
 }
