@@ -823,7 +823,7 @@ where
     /// It can be used to distribute data in the gossip protocol
     /// (for example, to relay announced addresses to a small group of peers).
     pub fn random_peer_ids(&self, count: usize) -> Vec<T::PeerId> {
-        // TODO: Optimise this
+        // TODO: Optimize this
         let all_peer_ids = self.peers.keys().cloned().collect::<Vec<_>>();
         all_peer_ids
             .choose_multiple(&mut make_pseudo_rng(), count)

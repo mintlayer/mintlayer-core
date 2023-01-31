@@ -58,6 +58,11 @@ use super::{peer::PeerRole, transport::TransportAddress, types::HandshakeNonce};
 /// Active peer data
 struct PeerContext {
     subscriptions: BTreeSet<PubSubTopic>,
+
+    /// Channel used to send messages to the peer's event loop.
+    ///
+    /// Note that sending may fail unexpectedly if the connection is closed!
+    /// Do not propagate ChannelClosed error to the higher level, handle it locally!
     tx: mpsc::Sender<Event>,
 }
 
@@ -172,19 +177,21 @@ where
         }
     }
 
-    /// Disconnect remote peer by id
+    /// Disconnect remote peer by id. Might fail if the peer is already disconnected.
     async fn disconnect_peer(&mut self, peer_id: &PeerId) -> crate::Result<()> {
         self.request_mgr.unregister_peer(peer_id);
-        if let Some(context) = self.peers.remove(peer_id) {
-            context.tx.send(Event::Disconnect).await.map_err(P2pError::from)
-        } else {
-            // TODO: Think about error handling. Currently we simply follow the libp2p behaviour.
-            log::error!("{peer_id} peer doesn't exist");
-            Ok(())
-        }
+
+        let peer = self
+            .peers
+            .remove(peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+
+        peer.tx.send(Event::Disconnect).await.map_err(P2pError::from)?;
+
+        Ok(())
     }
 
-    /// Sends a request to the remote peer.
+    /// Sends a request to the remote peer. Might fail if the peer is already disconnected.
     async fn send_request(
         &mut self,
         request_id: RequestId,
@@ -202,7 +209,7 @@ where
         Ok(())
     }
 
-    /// Send response to a request
+    /// Send response to a request. Might fail if the peer is already disconnected.
     async fn send_response(
         &mut self,
         request_id: RequestId,
@@ -210,18 +217,19 @@ where
     ) -> crate::Result<()> {
         log::trace!("try to send response to request, request id {request_id}");
 
-        if let Some((peer_id, response)) = self.request_mgr.make_response(&request_id, response) {
-            return self
-                .peers
-                .get_mut(&peer_id)
-                .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
-                .tx
-                .send(Event::SendMessage(response))
-                .await
-                .map_err(P2pError::from);
-        }
+        let (peer_id, response) = self
+            .request_mgr
+            .make_response(&request_id, response)
+            .ok_or(P2pError::Other("unknown request id"))?;
 
-        log::error!("no request for request id {request_id} exist");
+        self.peers
+            .get_mut(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
+            .tx
+            .send(Event::SendMessage(response))
+            .await
+            .map_err(P2pError::from)?;
+
         Ok(())
     }
 
@@ -657,7 +665,14 @@ where
             }
             Command::Disconnect { peer_id } => async move {
                 boxed_cb(move |this: &mut Self| {
-                    async move { this.disconnect_peer(&peer_id).await }.boxed()
+                    async move {
+                        let res = this.disconnect_peer(&peer_id).await;
+                        if let Err(e) = res {
+                            log::debug!("Failed to disconnect peer {peer_id}: {e}")
+                        }
+                        Ok(())
+                    }
+                    .boxed()
                 })
             }
             .boxed(),
