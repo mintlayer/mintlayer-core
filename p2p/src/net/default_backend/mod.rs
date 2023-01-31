@@ -159,7 +159,7 @@ where
     S: NetworkingService<Address = T::Address, PeerId = PeerId, PeerRequestId = RequestId> + Send,
     T: TransportSocket,
 {
-    async fn connect(&mut self, address: S::Address) -> crate::Result<()> {
+    fn connect(&mut self, address: S::Address) -> crate::Result<()> {
         log::debug!(
             "try to establish outbound connection, address {:?}",
             address
@@ -170,7 +170,7 @@ where
         Ok(())
     }
 
-    async fn disconnect(&mut self, peer_id: S::PeerId) -> crate::Result<()> {
+    fn disconnect(&mut self, peer_id: S::PeerId) -> crate::Result<()> {
         log::debug!("close connection with remote, {peer_id}");
 
         self.cmd_tx.send(types::Command::Disconnect { peer_id })?;
@@ -178,7 +178,7 @@ where
         Ok(())
     }
 
-    async fn send_request(
+    fn send_request(
         &mut self,
         peer_id: S::PeerId,
         request: PeerManagerRequest,
@@ -194,7 +194,7 @@ where
         Ok(request_id)
     }
 
-    async fn send_response(
+    fn send_response(
         &mut self,
         request_id: S::PeerRequestId,
         response: PeerManagerResponse,
@@ -267,7 +267,7 @@ where
     S: NetworkingService<PeerId = PeerId, PeerRequestId = RequestId> + Send,
     T: TransportSocket,
 {
-    async fn send_request(
+    fn send_request(
         &mut self,
         peer_id: S::PeerId,
         request: SyncRequest,
@@ -283,7 +283,7 @@ where
         Ok(request_id)
     }
 
-    async fn send_response(
+    fn send_response(
         &mut self,
         request_id: S::PeerRequestId,
         response: SyncResponse,
@@ -295,10 +295,7 @@ where
         Ok(())
     }
 
-    async fn make_announcement(
-        &mut self,
-        announcement: message::Announcement,
-    ) -> crate::Result<()> {
+    fn make_announcement(&mut self, announcement: message::Announcement) -> crate::Result<()> {
         let message = announcement.encode();
         if message.len() > ANNOUNCEMENT_MAX_SIZE {
             return Err(P2pError::PublishError(PublishError::MessageTooLarge(
@@ -386,7 +383,7 @@ mod tests {
         .unwrap();
 
         let addr = conn2.local_addresses();
-        assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
+        assert_eq!(conn1.connect(addr[0].clone()), Ok(()));
 
         if let Ok(ConnectivityEvent::OutboundAccepted {
             address,
@@ -449,7 +446,8 @@ mod tests {
         .unwrap();
 
         let bind_address = conn2.local_addresses();
-        let (_res1, res2) = tokio::join!(conn1.connect(bind_address[0].clone()), conn2.poll_next());
+        conn1.connect(bind_address[0].clone()).unwrap();
+        let res2 = conn2.poll_next().await;
         match res2.unwrap() {
             ConnectivityEvent::InboundAccepted {
                 address: _,
@@ -507,10 +505,8 @@ mod tests {
         .await
         .unwrap();
 
-        let (_res1, res2) = tokio::join!(
-            conn1.connect(conn2.local_addresses()[0].clone()),
-            conn2.poll_next()
-        );
+        conn1.connect(conn2.local_addresses()[0].clone()).unwrap();
+        let res2 = conn2.poll_next().await;
 
         match res2.unwrap() {
             ConnectivityEvent::InboundAccepted {
@@ -518,7 +514,7 @@ mod tests {
                 peer_info,
                 receiver_address: _,
             } => {
-                assert_eq!(conn2.disconnect(peer_info.peer_id).await, Ok(()));
+                assert_eq!(conn2.disconnect(peer_info.peer_id), Ok(()));
             }
             _ => panic!("invalid event received, expected incoming connection"),
         }
@@ -567,7 +563,7 @@ mod tests {
 
         // Try connect to self
         let addr = conn1.local_addresses();
-        assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
+        assert_eq!(conn1.connect(addr[0].clone()), Ok(()));
 
         // ConnectionError should be reported
         if let Ok(ConnectivityEvent::ConnectionError { address, error }) = conn1.poll_next().await {
@@ -589,7 +585,7 @@ mod tests {
 
         // Check that we can still connect normally after
         let addr = conn2.local_addresses();
-        assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
+        assert_eq!(conn1.connect(addr[0].clone()), Ok(()));
         if let Ok(ConnectivityEvent::OutboundAccepted {
             address,
             peer_info,

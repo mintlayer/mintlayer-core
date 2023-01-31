@@ -163,7 +163,6 @@ where
                         request_id,
                         SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
                     )
-                    .await
                     .unwrap()
             }
             SyncingEvent::Request {
@@ -184,7 +183,6 @@ where
                         request_id,
                         SyncResponse::BlockListResponse(BlockListResponse::new(blocks)),
                     )
-                    .await
                     .unwrap();
             }
             SyncingEvent::Response {
@@ -260,7 +258,6 @@ where
                         request_id,
                         SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
                     )
-                    .await
                     .unwrap()
             }
             SyncingEvent::Response {
@@ -282,7 +279,6 @@ where
                             peer_id,
                             SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
                         )
-                        .await
                         .unwrap();
                 } else {
                     // all blocks have been downloaded
@@ -307,7 +303,6 @@ where
                         peer_id,
                         SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
                     )
-                    .await
                     .unwrap();
             }
             msg => panic!("invalid message received: {msg:?}"),
@@ -385,7 +380,6 @@ where
                         request_id,
                         SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
                     )
-                    .await
                     .unwrap()
             }
             SyncingEvent::Request {
@@ -406,7 +400,6 @@ where
                         request_id,
                         SyncResponse::BlockListResponse(BlockListResponse::new(blocks)),
                     )
-                    .await
                     .unwrap();
             }
             SyncingEvent::Response {
@@ -428,7 +421,6 @@ where
                             peer_id,
                             SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
                         )
-                        .await
                         .unwrap();
                 }
             }
@@ -449,7 +441,6 @@ where
                         peer_id,
                         SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
                     )
-                    .await
                     .unwrap();
             }
             msg => panic!("invalid message received: {msg:?}"),
@@ -529,7 +520,6 @@ where
                         request_id,
                         SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
                     )
-                    .await
                     .unwrap()
             }
             SyncingEvent::Request {
@@ -550,7 +540,6 @@ where
                         request_id,
                         SyncResponse::BlockListResponse(BlockListResponse::new(blocks)),
                     )
-                    .await
                     .unwrap();
             }
             SyncingEvent::Response {
@@ -572,7 +561,6 @@ where
                             peer_id,
                             SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
                         )
-                        .await
                         .unwrap();
                 }
             }
@@ -593,7 +581,6 @@ where
                         peer_id,
                         SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
                     )
-                    .await
                     .unwrap();
             }
             msg => panic!("invalid message received: {msg:?}"),
@@ -688,9 +675,9 @@ where
                 let msg = SyncResponse::HeaderListResponse(HeaderListResponse::new(headers));
 
                 if dest_peer_id == peer_info21.peer_id {
-                    mgr2.handle_mut().send_response(request_id, msg).await.unwrap()
+                    mgr2.handle_mut().send_response(request_id, msg).unwrap()
                 } else {
-                    mgr3.handle_mut().send_response(request_id, msg).await.unwrap()
+                    mgr3.handle_mut().send_response(request_id, msg).unwrap()
                 }
             }
             SyncingEvent::Request {
@@ -708,9 +695,9 @@ where
                     .unwrap()]));
 
                 if dest_peer_id == peer_info21.peer_id {
-                    mgr2.handle_mut().send_response(request_id, msg).await.unwrap();
+                    mgr2.handle_mut().send_response(request_id, msg).unwrap();
                 } else {
-                    mgr3.handle_mut().send_response(request_id, msg).await.unwrap();
+                    mgr3.handle_mut().send_response(request_id, msg).unwrap();
                 }
             }
             SyncingEvent::Response {
@@ -827,9 +814,9 @@ where
                 let msg = SyncResponse::HeaderListResponse(HeaderListResponse::new(headers));
 
                 if dest_peer_id == peer_info21.peer_id {
-                    mgr2.handle_mut().send_response(request_id, msg).await.unwrap()
+                    mgr2.handle_mut().send_response(request_id, msg).unwrap()
                 } else {
-                    mgr3.handle_mut().send_response(request_id, msg).await.unwrap()
+                    mgr3.handle_mut().send_response(request_id, msg).unwrap()
                 }
             }
             SyncingEvent::Request {
@@ -847,9 +834,9 @@ where
                     .unwrap()]));
 
                 if dest_peer_id == peer_info21.peer_id {
-                    mgr2.handle_mut().send_response(request_id, msg).await.unwrap();
+                    mgr2.handle_mut().send_response(request_id, msg).unwrap();
                 } else {
-                    mgr3.handle_mut().send_response(request_id, msg).await.unwrap();
+                    mgr3.handle_mut().send_response(request_id, msg).unwrap();
                 }
             }
             SyncingEvent::Response {
@@ -964,9 +951,9 @@ where
                 let msg = SyncResponse::HeaderListResponse(HeaderListResponse::new(headers));
 
                 if dest_peer_id == peer_info21.peer_id {
-                    mgr2.handle_mut().send_response(request_id, msg).await.unwrap()
+                    mgr2.handle_mut().send_response(request_id, msg).unwrap()
                 } else {
-                    mgr3.handle_mut().send_response(request_id, msg).await.unwrap()
+                    mgr3.handle_mut().send_response(request_id, msg).unwrap()
                 }
 
                 if gethdr_received.insert(dest_peer_id) {
@@ -994,9 +981,9 @@ where
                     .unwrap()]));
 
                 if dest_peer_id == peer_info21.peer_id {
-                    mgr2.handle_mut().send_response(request_id, msg).await.unwrap();
+                    mgr2.handle_mut().send_response(request_id, msg).unwrap();
                 } else {
-                    mgr3.handle_mut().send_response(request_id, msg).await.unwrap();
+                    mgr3.handle_mut().send_response(request_id, msg).unwrap();
                 }
             }
             SyncingEvent::Response {
@@ -1061,7 +1048,7 @@ where
     assert!(!mgr1_handle.call(|c| c.is_initial_block_download()).await.unwrap().unwrap());
 
     mgr1.unregister_peer(peer_info2.peer_id);
-    assert_eq!(conn1.disconnect(peer_info2.peer_id).await, Ok(()));
+    assert_eq!(conn1.disconnect(peer_info2.peer_id), Ok(()));
 
     let event = get_connectivity_event::<N>(&mut conn2).await;
     assert!(std::matches!(
@@ -1103,7 +1090,6 @@ where
                         request_id,
                         SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
                     )
-                    .await
                     .unwrap()
             }
             SyncingEvent::Request {
@@ -1124,7 +1110,6 @@ where
                         request_id,
                         SyncResponse::BlockListResponse(BlockListResponse::new(blocks)),
                     )
-                    .await
                     .unwrap();
             }
             SyncingEvent::Response {
@@ -1267,12 +1252,10 @@ where
                 .await
                 .unwrap()
                 .unwrap();
-            mgr.handle_mut()
-                .send_response(
-                    request_id,
-                    SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
-                )
-                .await
+            mgr.handle_mut().send_response(
+                request_id,
+                SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
+            )
         }
         _ => panic!("invalid message"),
     }

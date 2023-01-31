@@ -60,7 +60,7 @@ async fn test_peer_manager_connect<T: NetworkingService>(
     let config = Arc::new(config::create_mainnet());
     let mut peer_manager = make_peer_manager::<T>(transport, bind_addr, config).await;
 
-    peer_manager.try_connect(remote_addr).await.unwrap();
+    peer_manager.try_connect(remote_addr).unwrap();
 
     assert!(matches!(
         peer_manager.peer_connectivity_handle.poll_next().await,
@@ -124,7 +124,7 @@ where
 
     // "discover" the other networking service
     pm1.peerdb.peer_discovered(&addr).unwrap();
-    pm1.heartbeat().await.unwrap();
+    pm1.heartbeat().unwrap();
 
     assert_eq!(pm1.pending_connects.len(), 1);
     assert!(std::matches!(
@@ -260,7 +260,7 @@ where
     )
     .await;
     assert_eq!(
-        pm2.accept_inbound_connection(address, peer_info, None).await,
+        pm2.accept_inbound_connection(address, peer_info, None),
         Ok(())
     );
 }
@@ -315,7 +315,7 @@ where
     .await;
 
     assert_eq!(
-        pm2.accept_inbound_connection(address, peer_info, None).await,
+        pm2.accept_inbound_connection(address, peer_info, None),
         Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
             [1, 2, 3, 4],
             *config::create_mainnet().magic_bytes(),
@@ -379,7 +379,7 @@ where
     .await;
 
     assert_eq!(
-        pm2.peer_connectivity_handle.disconnect(peer_info.peer_id).await,
+        pm2.peer_connectivity_handle.disconnect(peer_info.peer_id),
         Ok(())
     );
     assert!(std::matches!(
@@ -419,7 +419,7 @@ where
     let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, Arc::clone(&config)).await;
 
     for peer in peers.into_iter() {
-        pm1.accept_connection(peer.0, Role::Inbound, peer.1, None).await.unwrap();
+        pm1.accept_connection(peer.0, Role::Inbound, peer.1, None).unwrap();
     }
     assert_eq!(
         pm1.active_peer_count(),
@@ -533,7 +533,7 @@ where
     let config = Arc::new(config::create_mainnet());
     let mut pm1 = make_peer_manager::<T>(transport, addr1, Arc::clone(&config)).await;
 
-    pm1.peer_connectivity_handle.connect(addr2).await.expect("dial to succeed");
+    pm1.peer_connectivity_handle.connect(addr2).expect("dial to succeed");
 
     match timeout(
         *pm1.p2p_config.outbound_connection_timeout,

@@ -407,7 +407,7 @@ where
                 // Handle peer events.
                 event = self.peer_chan.1.recv() => {
                     let (peer, event) = event.ok_or(P2pError::ChannelClosed)?;
-                    self.handle_peer_event(peer, event).await?;
+                    self.handle_peer_event(peer, event)?;
                 },
                 // Handle commands.
                 command = self.cmd_rx.recv() => {
@@ -512,7 +512,7 @@ where
         Ok(false)
     }
 
-    async fn handle_peer_event(&mut self, peer_id: PeerId, event: PeerEvent) -> crate::Result<()> {
+    fn handle_peer_event(&mut self, peer_id: PeerId, event: PeerEvent) -> crate::Result<()> {
         match event {
             PeerEvent::PeerInfoReceived {
                 network,
@@ -554,7 +554,7 @@ where
                     PeerRole::Inbound => {
                         self.conn_tx
                             .send(ConnectivityEvent::InboundAccepted {
-                                address: address.clone(),
+                                address,
                                 peer_info: PeerInfo {
                                     peer_id,
                                     network,
@@ -572,7 +572,7 @@ where
                 let _ = self.request_mgr.register_peer(peer_id);
             }
             PeerEvent::MessageReceived { message } => {
-                self.handle_message(peer_id, message).await?;
+                self.handle_message(peer_id, message)?;
             }
             PeerEvent::ConnectionClosed => {
                 self.pending.remove(&peer_id);
@@ -590,7 +590,7 @@ where
         Ok(())
     }
 
-    async fn handle_message(&mut self, peer_id: PeerId, message: Message) -> crate::Result<()> {
+    fn handle_message(&mut self, peer_id: PeerId, message: Message) -> crate::Result<()> {
         match message {
             Message::Handshake(_) => {
                 log::error!("peer {peer_id} sent handshaking message");

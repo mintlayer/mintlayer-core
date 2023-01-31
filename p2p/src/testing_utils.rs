@@ -161,7 +161,7 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr = conn2.local_addresses();
-    conn1.connect(addr[0].clone()).await.expect("dial to succeed");
+    conn1.connect(addr[0].clone()).expect("dial to succeed");
 
     let (address, peer_info1) = match timeout(Duration::from_secs(5), conn2.poll_next()).await {
         Ok(event) => match event.unwrap() {
