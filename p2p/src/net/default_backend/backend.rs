@@ -393,6 +393,22 @@ where
     pub async fn run(&mut self) -> crate::Result<()> {
         loop {
             tokio::select! {
+                // Select from the channels in the specified order
+                biased;
+
+                // Handle commands.
+                command = self.cmd_rx.recv() => {
+                    self.handle_command(command.ok_or(P2pError::ChannelClosed)?).await?;
+                },
+                // Process pending commands
+                callback = self.command_queue.select_next_some(), if !self.command_queue.is_empty() => {
+                    callback(self)?;
+                },
+                // Handle peer events.
+                event = self.peer_chan.1.recv() => {
+                    let (peer, event) = event.ok_or(P2pError::ChannelClosed)?;
+                    self.handle_peer_event(peer, event)?;
+                },
                 // Accept a new peer connection.
                 res = self.socket.accept() => {
                     let (stream, address) = res.map_err(|_| P2pError::Other("accept() failed"))?;
@@ -404,18 +420,6 @@ where
                         address,
                     )?;
                 }
-                // Handle peer events.
-                event = self.peer_chan.1.recv() => {
-                    let (peer, event) = event.ok_or(P2pError::ChannelClosed)?;
-                    self.handle_peer_event(peer, event)?;
-                },
-                // Handle commands.
-                command = self.cmd_rx.recv() => {
-                    self.handle_command(command.ok_or(P2pError::ChannelClosed)?).await?;
-                },
-                callback = self.command_queue.select_next_some(), if !self.command_queue.is_empty() => {
-                    callback(self)?;
-                },
             }
         }
     }

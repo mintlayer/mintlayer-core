@@ -203,6 +203,9 @@ where
 
         loop {
             tokio::select! {
+                // Sending messages should have higher priority
+                biased;
+
                 event = self.rx.recv() => match event.ok_or(P2pError::ChannelClosed)? {
                     Event::Disconnect => return Ok(()),
                     Event::SendMessage(message) => self.socket.send(*message).await?,
