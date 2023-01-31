@@ -29,7 +29,7 @@ pub use storage_core::Data;
 /// This is basically a type-safe version of [storage_core::DbIndex].
 pub struct DbIndex<Sch> {
     idx: storage_core::DbIndex,
-    _phantom: std::marker::PhantomData<Sch>,
+    _phantom: std::marker::PhantomData<fn() -> Sch>,
 }
 
 impl<Sch> DbIndex<Sch> {
