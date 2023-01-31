@@ -414,7 +414,7 @@ where
                     self.handle_command(command.ok_or(P2pError::ChannelClosed)?).await?;
                 },
                 callback = self.command_queue.select_next_some(), if !self.command_queue.is_empty() => {
-                    callback(self).await?;
+                    callback(self)?;
                 },
             }
         }
@@ -615,11 +615,10 @@ where
     }
 
     async fn handle_command(&mut self, command: Command<T>) -> crate::Result<()> {
-        // All handlings are separated to two parts, fast and slow:
-        // - "Slow", potentially blocking part (can't take reference to '&mut self' because they are run concurrently).
-        // - "Fast", non-blocking part (take mutable reference to self because they are run sequentially).
+        // All handlings are separated to two parts:
+        // - Async (can't take mutable reference to self because they are run concurrently).
+        // - Sync (take mutable reference to self because they are run sequentially).
         // Because the second part depends on result of the first part boxed closures are used.
-        // So the first future will return a closure that takes a reference to self and returns one more future.
 
         let backend_task: BackendTask<T> = match command {
             Command::Connect { address } => {
@@ -633,22 +632,17 @@ where
                         DialError::ConnectionRefusedOrTimedOut,
                     )));
 
-                    boxed_cb(move |this| {
-                        async move { this.handle_connect_res(address, connection_res) }.boxed()
-                    })
+                    boxed_cb(move |this| this.handle_connect_res(address, connection_res))
                 }
                 .boxed()
             }
             Command::Disconnect { peer_id } => async move {
                 boxed_cb(move |this: &mut Self| {
-                    async move {
-                        let res = this.disconnect_peer(&peer_id);
-                        if let Err(e) = res {
-                            log::debug!("Failed to disconnect peer {peer_id}: {e}")
-                        }
-                        Ok(())
+                    let res = this.disconnect_peer(&peer_id);
+                    if let Err(e) = res {
+                        log::debug!("Failed to disconnect peer {peer_id}: {e}")
                     }
-                    .boxed()
+                    Ok(())
                 })
             }
             .boxed(),
@@ -658,14 +652,11 @@ where
                 message,
             } => async move {
                 boxed_cb(move |this| {
-                    async move {
-                        let res = this.send_request(request_id, peer_id, message);
-                        if let Err(e) = res {
-                            log::debug!("Failed to send request to peer {peer_id}: {e}")
-                        }
-                        Ok(())
+                    let res = this.send_request(request_id, peer_id, message);
+                    if let Err(e) = res {
+                        log::debug!("Failed to send request to peer {peer_id}: {e}")
                     }
-                    .boxed()
+                    Ok(())
                 })
             }
             .boxed(),
@@ -674,27 +665,21 @@ where
                 message,
             } => async move {
                 boxed_cb(move |this| {
-                    async move {
-                        let res = this.send_response(request_id, message);
-                        if let Err(e) = res {
-                            log::debug!("Failed to send response to peer: {e}")
-                        }
-                        Ok(())
+                    let res = this.send_response(request_id, message);
+                    if let Err(e) = res {
+                        log::debug!("Failed to send response to peer: {e}")
                     }
-                    .boxed()
+                    Ok(())
                 })
             }
             .boxed(),
             Command::AnnounceData { topic, message } => async move {
                 boxed_cb(move |this| {
-                    async move {
-                        let res = this.announce_data(topic, message);
-                        if let Err(e) = res {
-                            log::error!("Failed to send announce data: {e}")
-                        }
-                        Ok(())
+                    let res = this.announce_data(topic, message);
+                    if let Err(e) = res {
+                        log::error!("Failed to send announce data: {e}")
                     }
-                    .boxed()
+                    Ok(())
                 })
             }
             .boxed(),
@@ -710,11 +695,12 @@ where
 
 type BackendTask<T> = BoxFuture<'static, BackendTaskCallback<T>>;
 
-type BackendTaskCallback<T> = Box<dyn FnOnce(&mut Backend<T>) -> BackendTaskFut + Send>;
+type BackendTaskCallback<T> = Box<dyn FnOnce(&mut Backend<T>) -> crate::Result<()> + Send>;
 
-type BackendTaskFut<'a> = BoxFuture<'a, crate::Result<()>>;
-
-fn boxed_cb<T: TransportSocket, F: FnOnce(&mut Backend<T>) -> BackendTaskFut + Send + 'static>(
+fn boxed_cb<
+    T: TransportSocket,
+    F: FnOnce(&mut Backend<T>) -> crate::Result<()> + Send + 'static,
+>(
     f: F,
 ) -> BackendTaskCallback<T> {
     Box::new(f)
