@@ -19,6 +19,7 @@ mod error;
 
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use std::borrow::Cow;
+use std::cmp::max;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 use std::vec::IntoIter;
@@ -32,8 +33,11 @@ use storage_core::{
 use utils::shallow_clone::ShallowClone;
 use utils::sync::Arc;
 
-/// The version of the SQLite key/value schema
-const SQLITE_SCHEMA_VERSION: i32 = 0;
+/// Return the table name that corresponds to a specific index
+/// TODO this is unoptimised and the returned values should be cached
+fn db_table_name(idx: usize) -> String {
+    format!("db_{}", idx)
+}
 
 /// Identifiers of the list of databases (key-value maps)
 #[derive(Eq, PartialEq, Debug, Clone)]
@@ -110,14 +114,20 @@ impl<'s, 'i> backend::PrefixIter<'i> for DbTx<'s> {
 
     fn prefix_iter<'t: 'i>(
         &'t self,
-        _idx: DbIndex,
+        idx: DbIndex,
         prefix: Data,
     ) -> storage_core::Result<Self::Iterator> {
         // TODO check if prefix.is_empty()
         // TODO Perform the filtering in the SQL query itself
         let mut stmt = self
             .connection
-            .prepare_cached("SELECT key, value FROM main ORDER BY key")
+            .prepare_cached(
+                format!(
+                    "SELECT key, value FROM {} ORDER BY key",
+                    db_table_name(idx.get())
+                )
+                .as_str(),
+            )
             .map_err(process_sqlite_error)?;
 
         let mut rows = stmt.query(()).map_err(process_sqlite_error)?;
@@ -138,15 +148,21 @@ impl<'s, 'i> backend::PrefixIter<'i> for DbTx<'s> {
 }
 
 impl backend::ReadOps for DbTx<'_> {
-    fn get(&self, _idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+    fn get(&self, idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
         let mut stmt = self
             .connection
-            .prepare_cached("SELECT value FROM main WHERE key = ?")
+            .prepare_cached(
+                format!(
+                    "SELECT value FROM {} WHERE key = ?",
+                    db_table_name(idx.get())
+                )
+                .as_str(),
+            )
             .map_err(process_sqlite_error)?;
 
-        let key = [key];
+        let params = (key,);
         let res = stmt
-            .query_row(key, |row| row.get::<usize, Vec<u8>>(0))
+            .query_row(params, |row| row.get::<usize, Vec<u8>>(0))
             .optional()
             .map_err(process_sqlite_error)?;
         let res = res.map(|v| v.into());
@@ -155,25 +171,34 @@ impl backend::ReadOps for DbTx<'_> {
 }
 
 impl backend::WriteOps for DbTx<'_> {
-    fn put(&mut self, _idx: DbIndex, key: Data, val: Data) -> storage_core::Result<()> {
+    fn put(&mut self, idx: DbIndex, key: Data, val: Data) -> storage_core::Result<()> {
         let mut stmt = self
             .connection
-            .prepare_cached("INSERT or REPLACE into main values(?, ?)")
+            .prepare_cached(
+                format!(
+                    "INSERT or REPLACE into {} values(?, ?)",
+                    db_table_name(idx.get())
+                )
+                .as_str(),
+            )
             .map_err(process_sqlite_error)?;
 
-        let kv = [key, val];
-        let _res = stmt.execute(kv).map_err(process_sqlite_error)?;
+        let params = (key, val);
+        let _res = stmt.execute(params).map_err(process_sqlite_error)?;
 
         Ok(())
     }
 
-    fn del(&mut self, _idx: DbIndex, key: &[u8]) -> storage_core::Result<()> {
+    fn del(&mut self, idx: DbIndex, key: &[u8]) -> storage_core::Result<()> {
         let mut stmt = self
             .connection
-            .prepare_cached("DELETE FROM main WHERE key = ?")
+            .prepare_cached(
+                format!("DELETE FROM {} WHERE key = ?", db_table_name(idx.get())).as_str(),
+            )
             .map_err(process_sqlite_error)?;
 
-        let _res = stmt.execute([key]).map_err(process_sqlite_error)?;
+        let params = (key,);
+        let _res = stmt.execute(params).map_err(process_sqlite_error)?;
 
         Ok(())
     }
@@ -236,7 +261,7 @@ impl Sqlite {
     }
 
     // fn open_db(self, desc: &MapDesc) -> storage_core::Result<Connection> {
-    fn open_db(self) -> rusqlite::Result<Connection> {
+    fn open_db(self, desc: DbDesc) -> rusqlite::Result<Connection> {
         let flags = OpenFlags::from_iter([
             OpenFlags::SQLITE_OPEN_FULL_MUTEX,
             OpenFlags::SQLITE_OPEN_READ_WRITE,
@@ -255,30 +280,34 @@ impl Sqlite {
         // Enable fullfsync
         connection.pragma_update(None, "fullfsync", "true")?;
 
-        // Check if key/value table exists
-        let table_exists = {
-            let mut stmt = connection.prepare_cached(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='main'",
-            )?;
-            stmt.query_row([], |row| row.get::<usize, String>(0)).optional()?.is_some()
-        };
+        // Create a table check sql statement
+        let mut exists_stmt = connection
+            .prepare_cached("SELECT name FROM sqlite_master WHERE type='table' AND name=?")?;
 
-        // Create the key/value table and set some metadata if needed
-        if !table_exists {
-            connection.execute(
-                "CREATE TABLE main(key BLOB PRIMARY KEY NOT NULL, value BLOB NOT NULL)",
-                (),
-            )?;
-
-            // TODO set the application id
-
-            // Set the schema version
-            connection.pragma_update(
-                None,
-                "schema_version",
-                format!("{}", SQLITE_SCHEMA_VERSION),
-            )?;
+        // Check if the required tables exist and if needed create them
+        for idx in 0..desc.len() {
+            let table_name = db_table_name(idx);
+            // Check if table is missing
+            let is_missing = exists_stmt
+                .query_row([table_name.as_str()], |row| row.get::<usize, String>(0))
+                .optional()?
+                .is_none();
+            // Create the table if needed
+            if is_missing {
+                connection.execute(
+                    format!(
+                        "CREATE TABLE {}(key BLOB PRIMARY KEY NOT NULL, value BLOB NOT NULL)",
+                        table_name
+                    )
+                    .as_str(),
+                    (),
+                )?;
+            }
         }
+        drop(exists_stmt);
+
+        // Set statement cache to fit all the prepared statements we use
+        connection.set_prepared_statement_cache_capacity(max(desc.len() * 4, 16));
 
         Ok(connection)
     }
@@ -287,7 +316,7 @@ impl Sqlite {
 impl backend::Backend for Sqlite {
     type Impl = SqliteImpl;
 
-    fn open(self, _desc: DbDesc) -> storage_core::Result<Self::Impl> {
+    fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
         // Attempt to create the parent storage directory
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent).map_err(error::process_io_error)?;
@@ -299,7 +328,7 @@ impl backend::Backend for Sqlite {
             .into());
         }
 
-        let connection = self.open_db().map_err(process_sqlite_error)?;
+        let connection = self.open_db(desc).map_err(process_sqlite_error)?;
 
         Ok(SqliteImpl {
             connection: Arc::new(Mutex::new(connection)),
