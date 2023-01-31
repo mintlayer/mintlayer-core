@@ -23,7 +23,7 @@ pub mod schema;
 
 use std::collections::BTreeMap;
 
-pub use internal::{utxo_db, Store};
+pub use internal::Store;
 
 use chainstate_types::BlockIndex;
 use common::chain::block::BlockReward;
