@@ -52,10 +52,10 @@ pub struct ConnectivityHandle<S: NetworkingService, T: TransportSocket> {
     local_addresses: Vec<S::Address>,
 
     /// TX channel for sending commands to default_backend backend
-    cmd_tx: mpsc::Sender<types::Command<T>>,
+    cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
 
     /// RX channel for receiving connectivity events from default_backend backend
-    conn_rx: mpsc::Receiver<types::ConnectivityEvent<T>>,
+    conn_rx: mpsc::UnboundedReceiver<types::ConnectivityEvent<T>>,
 
     _marker: PhantomData<fn() -> S>,
 }
@@ -63,8 +63,8 @@ pub struct ConnectivityHandle<S: NetworkingService, T: TransportSocket> {
 impl<S: NetworkingService, T: TransportSocket> ConnectivityHandle<S, T> {
     pub fn new(
         local_addresses: Vec<S::Address>,
-        cmd_tx: mpsc::Sender<types::Command<T>>,
-        conn_rx: mpsc::Receiver<types::ConnectivityEvent<T>>,
+        cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
+        conn_rx: mpsc::UnboundedReceiver<types::ConnectivityEvent<T>>,
     ) -> Self {
         Self {
             local_addresses,
@@ -81,10 +81,10 @@ where
     T: TransportSocket,
 {
     /// TX channel for sending commands to default_backend backend
-    _cmd_tx: mpsc::Sender<types::Command<T>>,
+    _cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
 
     /// RX channel for receiving pubsub events from default_backend backend
-    _pubsub_rx: mpsc::Receiver<types::PubSubEvent<T>>,
+    _pubsub_rx: mpsc::UnboundedReceiver<types::PubSubEvent<T>>,
 
     _marker: PhantomData<fn() -> S>,
 }
@@ -96,10 +96,11 @@ where
     T: TransportSocket,
 {
     /// TX channel for sending commands to default_backend backend
-    cmd_tx: mpsc::Sender<types::Command<T>>,
+    cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
 
     /// RX channel for receiving syncing events
-    sync_rx: mpsc::Receiver<types::SyncingEvent>,
+    sync_rx: mpsc::UnboundedReceiver<types::SyncingEvent>,
+
     _marker: PhantomData<fn() -> S>,
 }
 
@@ -119,9 +120,9 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
-        let (cmd_tx, cmd_rx) = mpsc::channel(16);
-        let (conn_tx, conn_rx) = mpsc::channel(16);
-        let (sync_tx, sync_rx) = mpsc::channel(16);
+        let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
+        let (conn_tx, conn_rx) = mpsc::unbounded_channel();
+        let (sync_tx, sync_rx) = mpsc::unbounded_channel();
         let socket = transport.bind(bind_addresses).await?;
         let local_addresses = socket.local_addresses().expect("to have bind address available");
 
@@ -164,7 +165,7 @@ where
             address
         );
 
-        self.cmd_tx.send(types::Command::Connect { address }).await?;
+        self.cmd_tx.send(types::Command::Connect { address })?;
 
         Ok(())
     }
@@ -172,7 +173,7 @@ where
     async fn disconnect(&mut self, peer_id: S::PeerId) -> crate::Result<()> {
         log::debug!("close connection with remote, {peer_id}");
 
-        self.cmd_tx.send(types::Command::Disconnect { peer_id }).await?;
+        self.cmd_tx.send(types::Command::Disconnect { peer_id })?;
 
         Ok(())
     }
@@ -184,13 +185,11 @@ where
     ) -> crate::Result<S::PeerRequestId> {
         let request_id = RequestId::new();
 
-        self.cmd_tx
-            .send(types::Command::SendRequest {
-                peer_id,
-                request_id,
-                message: request.into(),
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::SendRequest {
+            peer_id,
+            request_id,
+            message: request.into(),
+        })?;
 
         Ok(request_id)
     }
@@ -200,12 +199,10 @@ where
         request_id: S::PeerRequestId,
         response: PeerManagerResponse,
     ) -> crate::Result<()> {
-        self.cmd_tx
-            .send(types::Command::SendResponse {
-                request_id,
-                message: response.into(),
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::SendResponse {
+            request_id,
+            message: response.into(),
+        })?;
         Ok(())
     }
 
@@ -277,13 +274,11 @@ where
     ) -> crate::Result<S::PeerRequestId> {
         let request_id = RequestId::new();
 
-        self.cmd_tx
-            .send(types::Command::SendRequest {
-                peer_id,
-                request_id,
-                message: request.into(),
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::SendRequest {
+            peer_id,
+            request_id,
+            message: request.into(),
+        })?;
 
         Ok(request_id)
     }
@@ -293,12 +288,10 @@ where
         request_id: S::PeerRequestId,
         response: SyncResponse,
     ) -> crate::Result<()> {
-        self.cmd_tx
-            .send(types::Command::SendResponse {
-                request_id,
-                message: response.into(),
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::SendResponse {
+            request_id,
+            message: response.into(),
+        })?;
         Ok(())
     }
 
@@ -318,7 +311,7 @@ where
             message::Announcement::Block(_) => PubSubTopic::Blocks,
         };
 
-        self.cmd_tx.send(types::Command::AnnounceData { topic, message }).await?;
+        self.cmd_tx.send(types::Command::AnnounceData { topic, message })?;
 
         Ok(())
     }

@@ -42,8 +42,8 @@ async fn ping_timeout() {
     let ping_check_period = *p2p_config.ping_check_period;
     let ping_timeout = *p2p_config.ping_timeout;
 
-    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::channel(10);
-    let (conn_tx, conn_rx) = tokio::sync::mpsc::channel(10);
+    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_tx, peer_rx) =
         tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
     let time_getter = P2pTestTimeGetter::new();
@@ -82,7 +82,6 @@ async fn ping_timeout() {
             },
             receiver_address: None,
         })
-        .await
         .unwrap();
 
     // Receive ping requests and send responses normally
@@ -102,7 +101,6 @@ async fn ping_timeout() {
                         request_id,
                         response: PeerManagerResponse::PingResponse(PingResponse { nonce }),
                     })
-                    .await
                     .unwrap();
             }
             _ => panic!("unexpected event: {event:?}"),
@@ -127,7 +125,7 @@ async fn ping_timeout() {
     let event = cmd_rx.recv().await.unwrap();
     match event {
         Command::Disconnect { peer_id } => {
-            conn_tx.send(ConnectivityEvent::ConnectionClosed { peer_id }).await.unwrap();
+            conn_tx.send(ConnectivityEvent::ConnectionClosed { peer_id }).unwrap();
         }
         _ => panic!("unexpected event: {event:?}"),
     }

@@ -71,10 +71,10 @@ pub struct Peer<T: TransportSocket> {
     receiver_address: Option<PeerAddress>,
 
     /// TX channel for communicating with backend
-    tx: mpsc::Sender<(PeerId, PeerEvent)>,
+    tx: mpsc::UnboundedSender<(PeerId, PeerEvent)>,
 
     /// RX channel for receiving commands from backend
-    rx: mpsc::Receiver<Event>,
+    rx: mpsc::UnboundedReceiver<Event>,
 }
 
 impl<T> Peer<T>
@@ -89,8 +89,8 @@ where
         p2p_config: Arc<P2pConfig>,
         socket: T::Stream,
         receiver_address: Option<PeerAddress>,
-        tx: mpsc::Sender<(PeerId, PeerEvent)>,
-        rx: mpsc::Receiver<Event>,
+        tx: mpsc::UnboundedSender<(PeerId, PeerEvent)>,
+        rx: mpsc::UnboundedReceiver<Event>,
     ) -> Self {
         let socket = BufferedTranscoder::new(socket);
 
@@ -134,7 +134,6 @@ where
                             handshake_nonce,
                         },
                     ))
-                    .await
                     .map_err(P2pError::from)?;
 
                 self.socket
@@ -180,16 +179,11 @@ where
                             handshake_nonce,
                         },
                     ))
-                    .await
                     .map_err(P2pError::from)?;
             }
         }
 
         Ok(())
-    }
-
-    pub async fn destroy(self) {
-        let _ = self.tx.send((self.peer_id, types::PeerEvent::ConnectionClosed)).await;
     }
 
     pub async fn run(&mut self) -> crate::Result<()> {
@@ -226,12 +220,17 @@ where
                                     message
                                 },
                             ))
-                            .await
                             .map_err(P2pError::from)?;
                     }
                 }
             }
         }
+    }
+}
+
+impl<T: TransportSocket> Drop for Peer<T> {
+    fn drop(&mut self) {
+        let _ = self.tx.send((self.peer_id, types::PeerEvent::ConnectionClosed));
     }
 }
 
@@ -264,8 +263,8 @@ mod tests {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config = Arc::new(P2pConfig::default());
-        let (tx1, mut rx1) = mpsc::channel(16);
-        let (_tx2, rx2) = mpsc::channel(16);
+        let (tx1, mut rx1) = mpsc::unbounded_channel();
+        let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id2 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
@@ -337,8 +336,8 @@ mod tests {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config = Arc::new(P2pConfig::default());
-        let (tx1, mut rx1) = mpsc::channel(16);
-        let (_tx2, rx2) = mpsc::channel(16);
+        let (tx1, mut rx1) = mpsc::unbounded_channel();
+        let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id3 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
@@ -414,8 +413,8 @@ mod tests {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config = Arc::new(P2pConfig::default());
-        let (tx1, _rx1) = mpsc::channel(16);
-        let (_tx2, rx2) = mpsc::channel(16);
+        let (tx1, _rx1) = mpsc::unbounded_channel();
+        let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id3 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
@@ -472,8 +471,8 @@ mod tests {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config = Arc::new(P2pConfig::default());
-        let (tx1, _rx1) = mpsc::channel(16);
-        let (_tx2, rx2) = mpsc::channel(16);
+        let (tx1, _rx1) = mpsc::unbounded_channel();
+        let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id2 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
