@@ -73,11 +73,6 @@ const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
 /// Upper bound for how often [`PeerManager::heartbeat()`] is called
 const PEER_MGR_HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
 
-/// How often send ping requests to peers
-const PEER_MGR_PING_CHECK_PERIOD: Duration = Duration::from_secs(60);
-/// When a peer is detected as dead and disconnected
-const PEER_MGR_PING_TIMEOUT: Duration = Duration::from_secs(150);
-
 /// How many addresses are allowed to be sent
 const MAX_ADDRESS_COUNT: usize = 1000;
 
@@ -141,6 +136,10 @@ where
     ) -> crate::Result<Self> {
         let peerdb = peerdb::PeerDb::new(Arc::clone(&p2p_config), time_getter, peerdb_storage)?;
         let now = tokio::time::Instant::now();
+        utils::ensure!(
+            !p2p_config.ping_timeout.is_zero(),
+            P2pError::Other("ping timeout can't be 0")
+        );
         Ok(Self {
             peer_connectivity_handle: handle,
             rx_peer_manager,
@@ -845,7 +844,7 @@ where
             // If a ping has already been sent, wait for a reply first, do not send another ping request!
             match &peer.sent_ping {
                 Some(sent_ping) => {
-                    if now.duration_since(sent_ping.timestamp) > PEER_MGR_PING_TIMEOUT {
+                    if now.duration_since(sent_ping.timestamp) >= *self.p2p_config.ping_timeout {
                         log::info!("ping check: dead peer detected: {peer_id}");
                         dead_peers.push(*peer_id);
                     } else {
@@ -891,7 +890,13 @@ where
     /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
     /// have any events.
     pub async fn run(&mut self) -> crate::Result<void::Void> {
-        let mut ping_check_interval = tokio::time::interval(PEER_MGR_PING_CHECK_PERIOD);
+        let ping_check_enabled = !self.p2p_config.ping_check_period.is_zero();
+        let mut ping_check_interval = if ping_check_enabled {
+            tokio::time::interval(*self.p2p_config.ping_check_period)
+        } else {
+            // Use any valid (non-zero) value
+            tokio::time::interval(Duration::MAX)
+        };
 
         loop {
             tokio::select! {
@@ -901,7 +906,7 @@ where
                 event_res = self.peer_connectivity_handle.poll_next() => {
                     self.handle_connectivity_event_result(event_res).await?;
                 },
-                _event = ping_check_interval.tick() => {
+                _event = ping_check_interval.tick(), if ping_check_enabled => {
                     self.ping_check().await?;
                 }
                 _event = tokio::time::sleep(PEER_MGR_HEARTBEAT_INTERVAL_MAX) => {}

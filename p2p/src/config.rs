@@ -31,6 +31,8 @@ make_config_setting!(
 );
 make_config_setting!(NodeTypeSetting, NodeType, NodeType::Full);
 make_config_setting!(AllowDiscoverPrivateIps, bool, false);
+make_config_setting!(PingCheckPeriod, Duration, Duration::from_secs(60));
+make_config_setting!(PingTimeout, Duration, Duration::from_secs(150));
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]
@@ -70,6 +72,10 @@ pub struct P2pConfig {
     pub ban_duration: BanDuration,
     /// The outbound connection timeout value in seconds.
     pub outbound_connection_timeout: OutboundConnectionTimeout,
+    /// How often send ping requests to peers
+    pub ping_check_period: PingCheckPeriod,
+    /// When a peer is detected as dead and disconnected
+    pub ping_timeout: PingTimeout,
     /// A node type.
     pub node_type: NodeTypeSetting,
     /// Allow announcing and discovering local and private IPs. Should be used for testing only.

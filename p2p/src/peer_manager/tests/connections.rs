@@ -678,6 +678,8 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
     });
@@ -703,6 +705,8 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
     });
@@ -767,6 +771,8 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
     });
@@ -793,6 +799,8 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
     });
@@ -812,6 +820,8 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
     });

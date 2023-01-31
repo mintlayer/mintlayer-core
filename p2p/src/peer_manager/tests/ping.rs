@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common::chain::config;
 
 use crate::{
+    config::P2pConfig,
     event::PeerManagerEvent,
     message::{PeerManagerResponse, PingRequest, PingResponse, Request},
     net::{
@@ -28,7 +29,7 @@ use crate::{
         },
         types::PeerInfo,
     },
-    peer_manager::{PeerManager, PEER_MGR_PING_CHECK_PERIOD, PEER_MGR_PING_TIMEOUT},
+    peer_manager::PeerManager,
     testing_utils::{peerdb_inmemory_store, P2pTestTimeGetter},
 };
 
@@ -37,7 +38,9 @@ async fn ping_timeout() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
     let chain_config = Arc::new(config::create_mainnet());
-    let p2p_config = Arc::new(Default::default());
+    let p2p_config: Arc<P2pConfig> = Arc::new(Default::default());
+    let ping_check_period = *p2p_config.ping_check_period;
+    let ping_timeout = *p2p_config.ping_timeout;
 
     let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::channel(10);
     let (conn_tx, conn_rx) = tokio::sync::mpsc::channel(10);
@@ -84,7 +87,7 @@ async fn ping_timeout() {
 
     // Receive ping requests and send responses normally
     for _ in 0..30 {
-        time_getter.advance_time(PEER_MGR_PING_CHECK_PERIOD).await;
+        time_getter.advance_time(ping_check_period).await;
 
         let event = cmd_rx.recv().await.unwrap();
         match event {
@@ -107,7 +110,7 @@ async fn ping_timeout() {
     }
 
     // Receive one more ping request but do not send a ping response
-    time_getter.advance_time(PEER_MGR_PING_CHECK_PERIOD).await;
+    time_getter.advance_time(ping_check_period).await;
     let event = cmd_rx.recv().await.unwrap();
     match event {
         Command::SendRequest {
@@ -118,7 +121,7 @@ async fn ping_timeout() {
         _ => panic!("unexpected event: {event:?}"),
     }
 
-    time_getter.advance_time(PEER_MGR_PING_TIMEOUT).await;
+    time_getter.advance_time(ping_timeout).await;
 
     // PeerManager should ask backend to close connection
     let event = cmd_rx.recv().await.unwrap();
