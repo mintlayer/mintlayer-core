@@ -45,6 +45,9 @@ impl<S> PoSAccountingDB<S> {
 pub struct DataMergeUndo {
     pool_data_undo: BTreeMap<PoolId, Option<PoolData>>,
     delegation_data_undo: BTreeMap<DelegationId, Option<DelegationData>>,
+    pool_balances_undo: BTreeMap<PoolId, SignedAmount>,
+    pool_delegation_shares_undo: BTreeMap<(PoolId, DelegationId), SignedAmount>,
+    delegation_balances_undo: BTreeMap<DelegationId, SignedAmount>,
 }
 
 impl<S: PoSAccountingStorageWrite> PoSAccountingDB<S> {
@@ -66,21 +69,21 @@ impl<S: PoSAccountingStorageWrite> PoSAccountingDB<S> {
             |s, id| s.del_delegation_data(id),
         )?;
 
-        self.merge_balances_generic(
+        let pool_balances_undo = self.merge_balances_generic(
             other.pool_balances.consume().into_iter(),
             |s, id| s.get_pool_balance(id),
             |s, id, amount| s.set_pool_balance(id, amount),
             |s, id| s.del_pool_balance(id),
         )?;
 
-        self.merge_balances_generic(
+        let delegation_balances_undo = self.merge_balances_generic(
             other.delegation_balances.consume().into_iter(),
             |s, id| s.get_delegation_balance(id),
             |s, id, amount| s.set_delegation_balance(id, amount),
             |s, id| s.del_delegation_balance(id),
         )?;
 
-        self.merge_balances_generic(
+        let pool_delegation_shares_undo = self.merge_balances_generic(
             other.pool_delegation_shares.consume().into_iter(),
             |s, (pool_id, delegation_id)| s.get_pool_delegation_share(pool_id, delegation_id),
             |s, (pool_id, delegation_id), amount| {
@@ -92,14 +95,13 @@ impl<S: PoSAccountingStorageWrite> PoSAccountingDB<S> {
         Ok(DataMergeUndo {
             pool_data_undo,
             delegation_data_undo,
+            pool_balances_undo,
+            pool_delegation_shares_undo,
+            delegation_balances_undo,
         })
     }
 
-    pub fn undo_merge_with_delta(
-        &mut self,
-        other: PoSAccountingDeltaData,
-        undo: DataMergeUndo,
-    ) -> Result<(), Error> {
+    pub fn undo_merge_with_delta(&mut self, undo: DataMergeUndo) -> Result<(), Error> {
         self.undo_merge_data_generic(
             undo.pool_data_undo.into_iter(),
             |_, _| unreachable!(),
@@ -115,33 +117,21 @@ impl<S: PoSAccountingStorageWrite> PoSAccountingDB<S> {
         )?;
 
         self.merge_balances_generic(
-            other
-                .pool_balances
-                .consume()
-                .into_iter()
-                .map(|(k, v)| (k, v.neg().expect("amount negation some"))),
+            undo.pool_balances_undo.into_iter(),
             |s, id| s.get_pool_balance(id),
             |s, id, amount| s.set_pool_balance(id, amount),
             |s, id| s.del_pool_balance(id),
         )?;
 
         self.merge_balances_generic(
-            other
-                .delegation_balances
-                .consume()
-                .into_iter()
-                .map(|(k, v)| (k, v.neg().expect("amount negation some"))),
+            undo.delegation_balances_undo.into_iter(),
             |s, id| s.get_delegation_balance(id),
             |s, id, amount| s.set_delegation_balance(id, amount),
             |s, id| s.del_delegation_balance(id),
         )?;
 
         self.merge_balances_generic(
-            other
-                .pool_delegation_shares
-                .consume()
-                .into_iter()
-                .map(|(k, v)| (k, v.neg().expect("amount negation some"))),
+            undo.pool_delegation_shares_undo.into_iter(),
             |s, (pool_id, delegation_id)| s.get_pool_delegation_share(pool_id, delegation_id),
             |s, (pool_id, delegation_id), amount| {
                 s.set_pool_delegation_share(pool_id, delegation_id, amount)
@@ -154,11 +144,11 @@ impl<S: PoSAccountingStorageWrite> PoSAccountingDB<S> {
 
     fn merge_balances_generic<Iter, K: Ord + Copy, Getter, Setter, Deleter>(
         &mut self,
-        mut iter: Iter,
+        iter: Iter,
         getter: Getter,
         setter: Setter,
         deleter: Deleter,
-    ) -> Result<(), Error>
+    ) -> Result<BTreeMap<K, SignedAmount>, Error>
     where
         Iter: Iterator<Item = (K, SignedAmount)>,
         Getter: Fn(&S, K) -> Result<Option<Amount>, storage_result::Error>,
@@ -166,7 +156,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccountingDB<S> {
         Deleter: FnMut(&mut S, K) -> Result<(), storage_result::Error>,
     {
         let mut store = BorrowedStorageValue::new(&mut self.store, getter, setter, deleter);
-        iter.try_for_each(|(id, delta)| -> Result<(), Error> {
+        iter.map(|(id, delta)| -> Result<_, Error> {
             let balance = store.get(id)?;
             match combine_amount_delta(&balance, &Some(delta))? {
                 Some(result) => {
@@ -177,9 +167,11 @@ impl<S: PoSAccountingStorageWrite> PoSAccountingDB<S> {
                     }
                 }
                 None => store.delete(id)?,
-            }
-            Ok(())
+            };
+            let balance_undo = delta.neg().expect("amount negation some");
+            Ok((id, balance_undo))
         })
+        .collect::<Result<BTreeMap<_, _>, _>>()
     }
 
     fn merge_data_generic<K: Ord + Copy, T: Clone + Eq, Getter, Setter, Deleter>(

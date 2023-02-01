@@ -105,10 +105,7 @@ fn merge_delta_into_empty_collection(#[case] delta: DataDelta<char>) {
     collection.merge_delta_data_element(0, delta.clone()).unwrap();
 
     assert_eq!(collection.data.len(), 1);
-    assert_eq!(
-        collection.data.into_iter().next().unwrap().1.consume(),
-        delta
-    );
+    assert_eq!(collection.data.into_iter().next().unwrap().1, delta);
 }
 
 #[rstest]
@@ -123,10 +120,7 @@ fn merge_delta_undo_into_empty_collection(#[case] delta: DataDelta<char>) {
         .unwrap();
 
     assert_eq!(collection.data.len(), 1);
-    assert_eq!(
-        collection.data.into_iter().next().unwrap().1.consume(),
-        delta
-    );
+    assert_eq!(collection.data.into_iter().next().unwrap().1, delta);
 }
 
 #[rstest]
@@ -139,7 +133,7 @@ fn merge_delta_undo_into_empty_collection(#[case] delta: DataDelta<char>) {
 #[case(new_delta(Some('a'), Some('b')), new_delta(Some('b'), Some('c')))]
 fn delta_over_undo_is_an_error(#[case] delta1: DataDelta<char>, #[case] delta2: DataDelta<char>) {
     let mut collection1 = DeltaDataCollection::new();
-    let undo = collection1.merge_delta_data_element(1, delta1).unwrap().unwrap();
+    let undo = collection1.merge_delta_data_element(1, delta1).unwrap();
 
     let mut collection2 = DeltaDataCollection::new();
     collection2.undo_merge_delta_data_element(1, undo).unwrap();

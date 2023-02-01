@@ -15,8 +15,9 @@
 
 use std::collections::BTreeMap;
 
-use accounting::DeltaDataUndoCollection;
+use accounting::{DeltaAmountCollection, DeltaDataUndoCollection};
 use common::primitives::{signed_amount::SignedAmount, Amount, H256};
+use serialization::{Decode, Encode};
 
 use crate::{error::Error, DelegationId, PoolId};
 
@@ -34,9 +35,13 @@ pub struct PoSAccountingDelta<P> {
 }
 
 /// All the operations we have to do with the accounting state to undo a delta
+#[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
 pub struct DeltaMergeUndo {
     pool_data_undo: DeltaDataUndoCollection<PoolId, PoolData>,
     delegation_data_undo: DeltaDataUndoCollection<DelegationId, DelegationData>,
+    pool_balances_undo: DeltaAmountCollection<PoolId>,
+    pool_delegation_shares_undo: DeltaAmountCollection<(PoolId, DelegationId)>,
+    delegation_balances_undo: DeltaAmountCollection<DelegationId>,
 }
 
 impl<P: PoSAccountingView> PoSAccountingDelta<P> {
@@ -75,51 +80,15 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
         }
     }
 
-    pub fn undo_delta_merge(
-        &mut self,
-        already_merged: PoSAccountingDeltaData,
-        undo_data: DeltaMergeUndo,
-    ) -> Result<(), Error> {
-        self.data.pool_balances.undo_merge_delta_amounts(already_merged.pool_balances)?;
-
-        self.data
-            .pool_delegation_shares
-            .undo_merge_delta_amounts(already_merged.pool_delegation_shares)?;
-
-        self.data
-            .delegation_balances
-            .undo_merge_delta_amounts(already_merged.delegation_balances)?;
-
-        self.data.pool_data.undo_merge_delta_data(undo_data.pool_data_undo)?;
-
-        self.data
-            .delegation_data
-            .undo_merge_delta_data(undo_data.delegation_data_undo)?;
-
-        Ok(())
-    }
-
     pub fn merge_with_delta(
         &mut self,
         other: PoSAccountingDeltaData,
     ) -> Result<DeltaMergeUndo, Error> {
-        self.data.pool_balances.merge_delta_amounts(other.pool_balances)?;
+        self.data.merge_with_delta(other)
+    }
 
-        self.data
-            .pool_delegation_shares
-            .merge_delta_amounts(other.pool_delegation_shares)?;
-
-        self.data.delegation_balances.merge_delta_amounts(other.delegation_balances)?;
-
-        let pool_data_undo = self.data.pool_data.merge_delta_data(other.pool_data)?;
-
-        let delegation_data_undo =
-            self.data.delegation_data.merge_delta_data(other.delegation_data)?;
-
-        Ok(DeltaMergeUndo {
-            pool_data_undo,
-            delegation_data_undo,
-        })
+    pub fn undo_delta_merge(&mut self, undo_data: DeltaMergeUndo) -> Result<(), Error> {
+        self.data.undo_delta_merge(undo_data)
     }
 
     fn add_to_delegation_balance(

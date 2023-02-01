@@ -37,7 +37,7 @@ impl<T> DataDeltaUndo<T> {
 }
 
 #[must_use]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
 pub struct DeltaDataUndoCollection<K, T> {
     data: BTreeMap<K, DataDeltaUndo<T>>,
 }

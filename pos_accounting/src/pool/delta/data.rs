@@ -17,7 +17,7 @@ use accounting::{DeltaAmountCollection, DeltaDataCollection};
 
 use crate::{
     pool::{delegation::DelegationData, pool_data::PoolData},
-    DelegationId, PoolId,
+    DelegationId, DeltaMergeUndo, Error, PoolId,
 };
 
 use serialization::{Decode, Encode};
@@ -40,6 +40,47 @@ impl PoSAccountingDeltaData {
             delegation_balances: DeltaAmountCollection::new(),
             delegation_data: DeltaDataCollection::new(),
         }
+    }
+
+    pub fn merge_with_delta(
+        &mut self,
+        other: PoSAccountingDeltaData,
+    ) -> Result<DeltaMergeUndo, Error> {
+        let pool_balances_undo = other.pool_balances.clone();
+        self.pool_balances.merge_delta_amounts(other.pool_balances)?;
+
+        let pool_delegation_shares_undo = other.pool_delegation_shares.clone();
+        self.pool_delegation_shares.merge_delta_amounts(other.pool_delegation_shares)?;
+
+        let delegation_balances_undo = other.delegation_balances.clone();
+        self.delegation_balances.merge_delta_amounts(other.delegation_balances)?;
+
+        let pool_data_undo = self.pool_data.merge_delta_data(other.pool_data)?;
+        let delegation_data_undo = self.delegation_data.merge_delta_data(other.delegation_data)?;
+
+        Ok(DeltaMergeUndo {
+            pool_data_undo,
+            delegation_data_undo,
+            pool_balances_undo,
+            delegation_balances_undo,
+            pool_delegation_shares_undo,
+        })
+    }
+
+    pub fn undo_delta_merge(&mut self, undo_data: DeltaMergeUndo) -> Result<(), Error> {
+        self.pool_balances.undo_merge_delta_amounts(undo_data.pool_balances_undo)?;
+
+        self.pool_delegation_shares
+            .undo_merge_delta_amounts(undo_data.pool_delegation_shares_undo)?;
+
+        self.delegation_balances
+            .undo_merge_delta_amounts(undo_data.delegation_balances_undo)?;
+
+        self.pool_data.undo_merge_delta_data(undo_data.pool_data_undo)?;
+
+        self.delegation_data.undo_merge_delta_data(undo_data.delegation_data_undo)?;
+
+        Ok(())
     }
 }
 
