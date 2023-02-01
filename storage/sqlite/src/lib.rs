@@ -104,7 +104,7 @@ impl Drop for DbTx<'_> {
 
         let res = self.connection.execute("ROLLBACK TRANSACTION", ());
         if let Err(err) = res {
-            println!("Error: transaction rollback failed: {}", err.to_string());
+            println!("Error: transaction rollback failed: {}", err);
         }
     }
 }
@@ -220,7 +220,7 @@ pub struct SqliteImpl {
 
 impl SqliteImpl {
     /// Start a transaction using the low-level method provided
-    fn start_transaction<'a>(&'a self) -> storage_core::Result<DbTx<'a>> {
+    fn start_transaction(&self) -> storage_core::Result<DbTx<'_>> {
         let connection: MutexGuard<Connection> = self
             .connection
             .lock()

@@ -34,7 +34,7 @@ pub fn process_sqlite_error(err: rusqlite::Error) -> storage_core::Error {
     // TODO Improve error conversions
     match err {
         SqlError::SqliteFailure(err, err_str) => {
-            Fatal::InternalError(err_str.unwrap_or(err.to_string())).into()
+            Fatal::InternalError(err_str.unwrap_or_else(|| err.to_string())).into()
         }
         _ => Fatal::InternalError(err.to_string()).into(),
     }

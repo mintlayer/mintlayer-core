@@ -9,7 +9,6 @@ logging = { path = '../../logging' }
 storage-core = { path = '../core' }
 utils = { path = '../../utils' }
 
-ouroboros = "0.15"
 rusqlite = { version = "0.28.0", features = ["bundled"] }
 
 [dev-dependencies]
