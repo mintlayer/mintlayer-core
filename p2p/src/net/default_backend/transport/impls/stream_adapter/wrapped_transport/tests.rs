@@ -18,7 +18,9 @@ use std::{
     time::Duration,
 };
 
-use crate::testing_utils::{TestTransportChannel, TestTransportMaker, TestTransportTcp};
+use crate::testing_utils::{
+    P2pTestTimeGetter, TestTransportChannel, TestTransportMaker, TestTransportTcp,
+};
 use async_trait::async_trait;
 use futures::{future::BoxFuture, StreamExt};
 use tokio::{
@@ -282,6 +284,7 @@ async fn pending_handshakes() {
 
 #[tokio::test]
 async fn handshake_timeout() {
+    let time_getter = P2pTestTimeGetter::new();
     let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new(
         NoiseEncryptionAdapter::gen_new(),
         TcpTransportSocket::new(),
@@ -296,6 +299,9 @@ async fn handshake_timeout() {
     });
 
     let mut bad_client = tokio::net::TcpStream::connect(local_addr[0]).await.unwrap();
+    for _ in 0..30 {
+        time_getter.advance_time(Duration::from_secs(1)).await;
+    }
     // Server should disconnect the bad client because of handshake timeout
     let read_res = bad_client.read_u8().await;
     assert!(read_res.is_err());
