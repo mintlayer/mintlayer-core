@@ -47,6 +47,7 @@ use crate::{
         types::{PeerInfo, PubSubTopic},
         Announcement,
     },
+    utils::monitored_channel,
 };
 
 use super::{peer::PeerRole, transport::TransportAddress, types::HandshakeNonce};
@@ -59,7 +60,7 @@ struct PeerContext {
     ///
     /// Note that sending may fail unexpectedly if the connection is closed!
     /// Do not propagate ChannelClosed error to the higher level, handle it locally!
-    tx: mpsc::UnboundedSender<Event>,
+    tx: monitored_channel::UnboundedSender<Event>,
 }
 
 /// Pending peer data (until handshake message is received)
@@ -68,7 +69,7 @@ struct PendingPeerContext<A> {
 
     peer_role: PeerRole,
 
-    tx: mpsc::UnboundedSender<Event>,
+    tx: monitored_channel::UnboundedSender<Event>,
 }
 
 pub struct Backend<T: TransportSocket> {
@@ -96,8 +97,8 @@ pub struct Backend<T: TransportSocket> {
     /// RX channel for receiving events from peers
     #[allow(clippy::type_complexity)]
     peer_chan: (
-        mpsc::UnboundedSender<(PeerId, PeerEvent)>,
-        mpsc::UnboundedReceiver<(PeerId, PeerEvent)>,
+        monitored_channel::UnboundedSender<(PeerId, PeerEvent)>,
+        monitored_channel::UnboundedReceiver<(PeerId, PeerEvent)>,
     ),
 
     /// TX channel for sending events to the frontend
@@ -138,7 +139,7 @@ where
             sync_tx,
             peers: HashMap::new(),
             pending: HashMap::new(),
-            peer_chan: mpsc::unbounded_channel(),
+            peer_chan: monitored_channel::builder().with_name("peer_chan".to_owned()).build(),
             request_mgr: request_manager::RequestManager::new(),
             command_queue: FuturesUnordered::new(),
         }
@@ -430,7 +431,8 @@ where
         peer_role: PeerRole,
         address: T::Address,
     ) -> crate::Result<()> {
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (tx, rx) =
+            monitored_channel::builder().with_name(format!("peer {remote_peer_id}")).build();
 
         let receiver_address = Some(address.as_peer_address());
 

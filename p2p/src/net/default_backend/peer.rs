@@ -15,7 +15,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use tokio::{sync::mpsc, time::timeout};
+use tokio::time::timeout;
 
 use common::chain::ChainConfig;
 use logging::log;
@@ -31,6 +31,7 @@ use crate::{
         types::Role,
     },
     types::peer_address::PeerAddress,
+    utils::monitored_channel,
 };
 
 use super::{transport::BufferedTranscoder, types::HandshakeNonce};
@@ -71,10 +72,10 @@ pub struct Peer<T: TransportSocket> {
     receiver_address: Option<PeerAddress>,
 
     /// TX channel for communicating with backend
-    tx: mpsc::UnboundedSender<(PeerId, PeerEvent)>,
+    tx: monitored_channel::UnboundedSender<(PeerId, PeerEvent)>,
 
     /// RX channel for receiving commands from backend
-    rx: mpsc::UnboundedReceiver<Event>,
+    rx: monitored_channel::UnboundedReceiver<Event>,
 }
 
 impl<T> Peer<T>
@@ -89,8 +90,8 @@ where
         p2p_config: Arc<P2pConfig>,
         socket: T::Stream,
         receiver_address: Option<PeerAddress>,
-        tx: mpsc::UnboundedSender<(PeerId, PeerEvent)>,
-        rx: mpsc::UnboundedReceiver<Event>,
+        tx: monitored_channel::UnboundedSender<(PeerId, PeerEvent)>,
+        rx: monitored_channel::UnboundedReceiver<Event>,
     ) -> Self {
         let socket = BufferedTranscoder::new(socket);
 
@@ -266,8 +267,8 @@ mod tests {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config = Arc::new(P2pConfig::default());
-        let (tx1, mut rx1) = mpsc::unbounded_channel();
-        let (_tx2, rx2) = mpsc::unbounded_channel();
+        let (tx1, mut rx1) = monitored_channel::unbounded_channel();
+        let (_tx2, rx2) = monitored_channel::unbounded_channel();
         let peer_id2 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
@@ -339,8 +340,8 @@ mod tests {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config = Arc::new(P2pConfig::default());
-        let (tx1, mut rx1) = mpsc::unbounded_channel();
-        let (_tx2, rx2) = mpsc::unbounded_channel();
+        let (tx1, mut rx1) = monitored_channel::unbounded_channel();
+        let (_tx2, rx2) = monitored_channel::unbounded_channel();
         let peer_id3 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
@@ -416,8 +417,8 @@ mod tests {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config = Arc::new(P2pConfig::default());
-        let (tx1, _rx1) = mpsc::unbounded_channel();
-        let (_tx2, rx2) = mpsc::unbounded_channel();
+        let (tx1, _rx1) = monitored_channel::unbounded_channel();
+        let (_tx2, rx2) = monitored_channel::unbounded_channel();
         let peer_id3 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
@@ -474,8 +475,8 @@ mod tests {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
         let p2p_config = Arc::new(P2pConfig::default());
-        let (tx1, _rx1) = mpsc::unbounded_channel();
-        let (_tx2, rx2) = mpsc::unbounded_channel();
+        let (tx1, _rx1) = monitored_channel::unbounded_channel();
+        let (_tx2, rx2) = monitored_channel::unbounded_channel();
         let peer_id2 = PeerId::new();
 
         let mut peer = Peer::<T>::new(
