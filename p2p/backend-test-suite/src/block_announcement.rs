@@ -85,7 +85,6 @@ where
             )
             .unwrap(),
         ))
-        .await
         .unwrap();
 
     // Poll an event from the network for server2.
@@ -108,7 +107,6 @@ where
             )
             .unwrap(),
         ))
-        .await
         .unwrap();
 
     let block = match sync1.poll_next().await.unwrap() {
@@ -170,7 +168,6 @@ where
             )
             .unwrap(),
         ))
-        .await
         .unwrap();
 }
 
@@ -227,7 +224,7 @@ where
     let encoded_size = message.encode().len();
 
     assert_eq!(
-        sync1.make_announcement(message).await,
+        sync1.make_announcement(message),
         Err(P2pError::PublishError(PublishError::MessageTooLarge(
             encoded_size,
             ANNOUNCEMENT_MAX_SIZE

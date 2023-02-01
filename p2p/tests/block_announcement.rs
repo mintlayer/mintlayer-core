@@ -92,7 +92,6 @@ where
             )
             .unwrap(),
         ))
-        .await
         .unwrap();
 
     // Verify that all peers received the message even though they weren't directly connected.

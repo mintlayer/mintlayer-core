@@ -64,12 +64,8 @@ where
     }
 
     /// Sends a request to the given peer.
-    pub async fn send_request(
-        &mut self,
-        peer_id: T::PeerId,
-        request: SyncRequest,
-    ) -> crate::Result<()> {
-        self.peer_sync_handle.send_request(peer_id, request).await.map(|_| ())
+    pub fn send_request(&mut self, peer_id: T::PeerId, request: SyncRequest) -> crate::Result<()> {
+        self.peer_sync_handle.send_request(peer_id, request).map(|_| ())
     }
 
     /// Send block request to remote peer
@@ -81,7 +77,7 @@ where
     /// * `peer_id` - peer ID of the remote node
     /// * `block_id` - ID of the block that is requested
     /// * `retry_count` - how many times the request has been resent
-    pub async fn send_block_request(
+    pub fn send_block_request(
         &mut self,
         peer_id: T::PeerId,
         block_id: Id<Block>,
@@ -95,7 +91,7 @@ where
 
         // send request to remote peer and start tracking its progress
         let wanted_blocks = self.make_block_request(vec![block_id]);
-        self.send_request(peer_id, wanted_blocks).await?;
+        self.send_request(peer_id, wanted_blocks)?;
 
         self.peers
             .get_mut(&peer_id)
@@ -113,7 +109,7 @@ where
     /// * `peer_id` - peer ID of the remote node
     /// * `locator` - local locator object
     /// * `retry_count` - how many times the request has been resent
-    pub async fn send_header_request(
+    pub fn send_header_request(
         &mut self,
         peer_id: T::PeerId,
         locator: Locator,
@@ -127,7 +123,7 @@ where
 
         // send header request and start tracking its progress
         let wanted_headers = self.make_header_request(locator.clone());
-        self.send_request(peer_id, wanted_headers).await?;
+        self.send_request(peer_id, wanted_headers)?;
 
         self.peers
             .get_mut(&peer_id)
@@ -144,7 +140,7 @@ where
     /// # Arguments
     /// * `request_id` - ID of the request that this is a response to
     /// * `headers` - headers that the remote requested
-    pub async fn send_header_response(
+    pub fn send_header_response(
         &mut self,
         request_id: T::PeerRequestId,
         headers: Vec<BlockHeader>,
@@ -153,7 +149,7 @@ where
 
         // TODO: save sent header IDs somewhere and validate future requests against those?
         let message = self.make_header_response(headers);
-        self.peer_sync_handle.send_response(request_id, message).await
+        self.peer_sync_handle.send_response(request_id, message)
     }
 
     /// Send header response to remote peer
@@ -164,7 +160,7 @@ where
     /// # Arguments
     /// * `request_id` - ID of the request that this is a response to
     /// * `headers` - headers that the remote requested
-    pub async fn send_block_response(
+    pub fn send_block_response(
         &mut self,
         request_id: T::PeerRequestId,
         blocks: Vec<Block>,
@@ -173,6 +169,6 @@ where
 
         // TODO: save sent block IDs somewhere and validate future requests against those?
         let message = self.make_block_response(blocks);
-        self.peer_sync_handle.send_response(request_id, message).await
+        self.peer_sync_handle.send_response(request_id, message)
     }
 }

@@ -56,7 +56,6 @@ where
             peer_info2.peer_id,
             SyncRequest::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
-        .await
         .unwrap();
 
     if let Ok(SyncingEvent::Request {
@@ -75,7 +74,6 @@ where
                 request_id,
                 SyncResponse::HeaderListResponse(HeaderListResponse::new(vec![])),
             )
-            .await
             .unwrap();
     } else {
         panic!("invalid data received");
@@ -123,7 +121,6 @@ where
             peer_info2.peer_id,
             SyncRequest::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
-        .await
         .unwrap();
     request_ids.insert(id);
 
@@ -133,7 +130,6 @@ where
             peer_info2.peer_id,
             SyncRequest::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
-        .await
         .unwrap();
     request_ids.insert(id);
 
@@ -148,7 +144,6 @@ where
                             request_id,
                             SyncResponse::HeaderListResponse(HeaderListResponse::new(vec![])),
                         )
-                        .await
                         .unwrap();
                 }
                 _ => panic!("invalid event: {event:?}"),

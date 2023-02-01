@@ -129,7 +129,6 @@ where
             peer_id,
             SyncRequest::HeaderListRequest(message::HeaderListRequest::new(locator.clone())),
         )
-        .await
         .map(|_| {
             self.peers.insert(
                 peer_id,
@@ -154,7 +153,7 @@ where
 
         // TODO: check if remote has already asked for these headers?
         let headers = self.chainstate_handle.call(move |this| this.get_headers(locator)).await??;
-        self.send_header_response(request_id, headers).await
+        self.send_header_response(request_id, headers)
     }
 
     /// Process block request
@@ -181,7 +180,7 @@ where
             self.chainstate_handle.call(move |this| this.get_block(block_id)).await?;
 
         match block_result {
-            Ok(Some(block)) => self.send_block_response(request_id, vec![block]).await,
+            Ok(Some(block)) => self.send_block_response(request_id, vec![block]),
             Ok(None) => {
                 // TODO: check if remote has already asked for these headers?
                 Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
@@ -254,7 +253,7 @@ where
         headers: Vec<BlockHeader>,
     ) -> crate::Result<()> {
         match self.validate_header_response(&peer_id, headers).await {
-            Ok(Some(header)) => self.send_block_request(peer_id, header.get_id()).await,
+            Ok(Some(header)) => self.send_block_request(peer_id, header.get_id()),
             Ok(None) => {
                 self.peers
                     .get_mut(&peer_id)
@@ -315,11 +314,11 @@ where
         );
 
         match self.validate_block_response(&peer_id, blocks).await {
-            Ok(Some(next_block)) => self.send_block_request(peer_id, next_block.get_id()).await,
+            Ok(Some(next_block)) => self.send_block_request(peer_id, next_block.get_id()),
             Ok(None) => {
                 // last block from peer received, ask if peer knows of any new headers
                 let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
-                self.send_header_request(peer_id, locator).await
+                self.send_header_request(peer_id, locator)
             }
             Err(err) => Err(err),
         }
@@ -500,7 +499,7 @@ where
 
                     match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
                         Some(block) => {
-                            let _ = self.peer_sync_handle.make_announcement(Announcement::Block(block)).await.log_err();
+                            let _ = self.peer_sync_handle.make_announcement(Announcement::Block(block)).log_err();
                         }
                         None => log::error!("CRITICAL: best block not available"),
                     }

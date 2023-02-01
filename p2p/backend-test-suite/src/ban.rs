@@ -98,10 +98,9 @@ where
                 request_id,
                 SyncResponse::HeaderListResponse(HeaderListResponse::new(Vec::new())),
             )
-            .await
             .unwrap();
 
-        sync2.make_announcement(Announcement::Block(blocks[2].clone())).await.unwrap();
+        sync2.make_announcement(Announcement::Block(blocks[2].clone())).unwrap();
     });
 
     match rx_peer_manager.recv().await {

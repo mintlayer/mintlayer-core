@@ -101,7 +101,6 @@ where
     .unwrap();
 
     let conn_addr = service1.local_addresses().to_vec();
-    let (res1, res2) = tokio::join!(service1.poll_next(), service2.connect(conn_addr[0].clone()));
-    res1.unwrap();
-    res2.unwrap();
+    service2.connect(conn_addr[0].clone()).unwrap();
+    service1.poll_next().await.unwrap();
 }
