@@ -531,16 +531,19 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let config = Arc::new(config::create_mainnet());
-    let mut pm1 = make_peer_manager::<T>(transport, addr1, Arc::clone(&config)).await;
-
-    pm1.peer_connectivity_handle.connect(addr2).await.expect("dial to succeed");
-
-    match timeout(
-        *pm1.p2p_config.outbound_connection_timeout,
-        pm1.peer_connectivity_handle.poll_next(),
+    let (mut conn, _) = T::start(
+        transport,
+        vec![addr1],
+        Arc::clone(&config),
+        Default::default(),
     )
     .await
-    {
+    .unwrap();
+
+    // This will fail immediately because it is trying to connect to the closed port
+    conn.connect(addr2).await.expect("dial to succeed");
+
+    match timeout(Duration::from_secs(1), conn.poll_next()).await {
         Ok(res) => assert!(std::matches!(
             res,
             Ok(net::types::ConnectivityEvent::ConnectionError {
