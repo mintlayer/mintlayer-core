@@ -672,6 +672,7 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let time_getter = P2pTestTimeGetter::new();
     let chain_config = Arc::new(config::create_mainnet());
 
     // Start first peer manager
@@ -691,7 +692,7 @@ where
         A::make_address(),
         Arc::clone(&chain_config),
         p2p_config_1,
-        Default::default(),
+        time_getter.get_time_getter(),
     )
     .await;
 
@@ -718,14 +719,15 @@ where
         A::make_address(),
         Arc::clone(&chain_config),
         p2p_config_2,
-        Default::default(),
+        time_getter.get_time_getter(),
     )
     .await;
 
     // The first peer manager must report new connection after some time
     let started_at = Instant::now();
     loop {
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        time_getter.advance_time(Duration::from_secs(1)).await;
         let (rtx, rrx) = oneshot::channel();
         tx1.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
         let connected_peers = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
