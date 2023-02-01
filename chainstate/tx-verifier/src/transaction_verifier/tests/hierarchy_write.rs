@@ -24,7 +24,7 @@ use common::chain::{
     TxMainChainPosition,
 };
 use mockall::predicate::eq;
-use pos_accounting::{AccountingBlockUndo, AccountingTxUndo};
+use pos_accounting::{AccountingBlockUndo, AccountingTxUndo, DeltaMergeUndo};
 use rstest::rstest;
 use test_utils::random::Seed;
 use utxo::{UtxosBlockRewardUndo, UtxosBlockUndo, UtxosTxUndoWithSources};
@@ -75,7 +75,10 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
     store
         .expect_set_utxo_undo_data()
         .with(
@@ -152,7 +155,10 @@ fn tx_index_set_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
     store
         .expect_set_mainchain_tx_index()
         .with(eq(outpoint1.clone()), eq(tx_index_1.clone()))
@@ -219,7 +225,10 @@ fn tokens_set_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
     store
         .expect_set_token_aux_data()
         .with(eq(token_id_1), eq(token_data_1.clone()))
@@ -319,7 +328,10 @@ fn utxo_del_from_chain_hierarchy(#[case] seed: Seed) {
         .times(1)
         .return_const(Ok(()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
 
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
@@ -375,7 +387,10 @@ fn tx_index_del_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
     store
         .expect_del_mainchain_tx_index()
         .with(eq(outpoint1.clone()))
@@ -435,7 +450,10 @@ fn tokens_del_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
     store
         .expect_del_token_aux_data()
         .with(eq(token_id_1))
@@ -495,7 +513,10 @@ fn utxo_conflict_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
 
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
@@ -577,7 +598,10 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
         .times(1)
         .return_const(Ok(()));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
 
     let mut verifier1 =
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
@@ -635,7 +659,10 @@ fn tx_index_conflict_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
     store
         .expect_set_mainchain_tx_index()
         .with(eq(outpoint1.clone()), eq(tx_index_2.clone()))
@@ -696,7 +723,10 @@ fn tokens_conflict_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
     store
         .expect_set_token_aux_data()
         .with(eq(token_id_1), eq(token_data_1.clone()))
@@ -766,7 +796,10 @@ fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
 
     store
         .expect_get_pool_balance()
@@ -826,7 +859,10 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
 
     store.expect_get_pool_balance().return_const(Ok(None));
     store.expect_get_pool_data().return_const(Ok(None));
@@ -909,7 +945,10 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
         .expect_get_best_block_for_utxos()
         .return_const(Ok(Some(H256::zero().into())));
     store.expect_batch_write().times(1).return_const(Ok(()));
-    store.expect_batch_write_delta().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
 
     store.expect_get_pool_balance().return_const(Ok(None));
     store.expect_get_pool_data().return_const(Ok(None));

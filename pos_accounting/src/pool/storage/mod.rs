@@ -188,14 +188,14 @@ impl<S: PoSAccountingStorageWrite> PoSAccountingDB<S> {
             .map(|(id, delta)| -> Result<_, Error> {
                 let undo = delta.clone().invert();
                 let old_data = store.get(id)?;
-                match combine_data_with_delta(old_data.clone(), Some(delta))? {
+                match combine_data_with_delta(old_data, Some(delta))? {
                     Some(result) => store.set(id, &result)?,
                     None => store.delete(id)?,
                 };
                 Ok((id, undo))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
-        Ok(DeltaDataUndoCollection::new(undo))
+        Ok(DeltaDataUndoCollection::from_data(undo))
     }
 
     fn undo_merge_data_generic<K: Ord + Copy, T: Clone + Eq, Getter, Setter, Deleter>(
@@ -213,7 +213,7 @@ impl<S: PoSAccountingStorageWrite> PoSAccountingDB<S> {
         let mut store = BorrowedStorageValue::new(&mut self.store, getter, setter, deleter);
         undo.consume().into_iter().try_for_each(|(id, delta)| {
             let old_data = store.get(id)?;
-            match combine_data_with_delta(old_data.clone(), Some(delta.consume()))? {
+            match combine_data_with_delta(old_data, Some(delta.consume()))? {
                 Some(result) => store.set(id, &result)?,
                 None => store.delete(id)?,
             };

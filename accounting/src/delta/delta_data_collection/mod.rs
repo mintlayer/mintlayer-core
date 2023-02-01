@@ -110,7 +110,7 @@ impl<K: Ord + Copy, T: Clone + Eq> DeltaDataCollection<K, T> {
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
 
-        Ok(DeltaDataUndoCollection::new(data_undo))
+        Ok(DeltaDataUndoCollection::from_data(data_undo))
     }
 
     pub fn merge_delta_data_element(

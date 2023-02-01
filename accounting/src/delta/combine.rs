@@ -101,7 +101,7 @@ pub mod test {
         #[case] expected_result: Result<Option<char>, Error>,
     ) {
         assert_eq!(
-            combine_data_with_delta(data, delta.clone()),
+            combine_data_with_delta(data, delta),
             expected_result
         );
     }

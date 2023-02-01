@@ -29,8 +29,8 @@ use common::{
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    DelegationData, DelegationId, FlushablePoSAccountingView, PoSAccountingDeltaData,
-    PoSAccountingView, PoolData, PoolId,
+    DelegationData, DelegationId, DeltaMergeUndo, FlushablePoSAccountingView,
+    PoSAccountingDeltaData, PoSAccountingView, PoolData, PoolId,
 };
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead};
 
@@ -147,6 +147,6 @@ mockall::mock! {
     }
 
     impl FlushablePoSAccountingView for Store {
-        fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<(), pos_accounting::Error>;
+        fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<DeltaMergeUndo, pos_accounting::Error>;
     }
 }

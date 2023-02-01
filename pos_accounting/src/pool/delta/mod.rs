@@ -44,6 +44,18 @@ pub struct DeltaMergeUndo {
     pub(crate) delegation_balances_undo: DeltaAmountCollection<DelegationId>,
 }
 
+impl DeltaMergeUndo {
+    pub fn new() -> Self {
+        Self {
+            pool_data_undo: DeltaDataUndoCollection::new(),
+            delegation_data_undo: DeltaDataUndoCollection::new(),
+            pool_balances_undo: DeltaAmountCollection::new(),
+            pool_delegation_shares_undo: DeltaAmountCollection::new(),
+            delegation_balances_undo: DeltaAmountCollection::new(),
+        }
+    }
+}
+
 impl<P: PoSAccountingView> PoSAccountingDelta<P> {
     pub fn new(parent: P) -> Self {
         Self {

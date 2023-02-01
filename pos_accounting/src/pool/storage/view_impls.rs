@@ -26,7 +26,7 @@ use crate::{
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
     storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
-    DelegationId, PoSAccountingDB, PoolId,
+    DelegationId, DeltaMergeUndo, PoSAccountingDB, PoolId,
 };
 
 impl<S: PoSAccountingStorageRead> PoSAccountingView for PoSAccountingDB<S> {
@@ -72,7 +72,7 @@ impl<S: PoSAccountingStorageRead> PoSAccountingView for PoSAccountingDB<S> {
 }
 
 impl<S: PoSAccountingStorageWrite> FlushablePoSAccountingView for PoSAccountingDB<S> {
-    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<(), Error> {
-        self.merge_with_delta(data).map(|_| ())
+    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<DeltaMergeUndo, Error> {
+        self.merge_with_delta(data)
     }
 }

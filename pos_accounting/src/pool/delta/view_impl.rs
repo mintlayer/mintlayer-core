@@ -25,7 +25,7 @@ use crate::{
         pool_data::PoolData,
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
-    DelegationId, PoolId,
+    DelegationId, DeltaMergeUndo, PoolId,
 };
 
 use super::{data::PoSAccountingDeltaData, PoSAccountingDelta};
@@ -131,7 +131,7 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
 }
 
 impl<P: PoSAccountingView> FlushablePoSAccountingView for PoSAccountingDelta<P> {
-    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<(), Error> {
-        self.merge_with_delta(data).map(|_| ())
+    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<DeltaMergeUndo, Error> {
+        self.merge_with_delta(data)
     }
 }

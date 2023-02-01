@@ -34,8 +34,8 @@ use common::{
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, FlushablePoSAccountingView, PoSAccountingDB,
-    PoSAccountingDeltaData, PoSAccountingView, PoolData, PoolId,
+    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, FlushablePoSAccountingView,
+    PoSAccountingDB, PoSAccountingDeltaData, PoSAccountingView, PoolData, PoolId,
 };
 use tx_verifier::transaction_verifier::TransactionSource;
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosDB, UtxosStorageRead};
@@ -321,7 +321,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
     fn batch_write_delta(
         &mut self,
         data: PoSAccountingDeltaData,
-    ) -> Result<(), pos_accounting::Error> {
+    ) -> Result<DeltaMergeUndo, pos_accounting::Error> {
         let mut db = PoSAccountingDB::new(&mut self.db_tx);
         db.batch_write_delta(data)
     }

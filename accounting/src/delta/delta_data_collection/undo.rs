@@ -43,7 +43,13 @@ pub struct DeltaDataUndoCollection<K, T> {
 }
 
 impl<K: Ord, T: Clone> DeltaDataUndoCollection<K, T> {
-    pub fn new(data: BTreeMap<K, DataDeltaUndo<T>>) -> Self {
+    pub fn new() -> Self {
+        Self {
+            data: BTreeMap::new(),
+        }
+    }
+
+    pub fn from_data(data: BTreeMap<K, DataDeltaUndo<T>>) -> Self {
         Self { data }
     }
 
