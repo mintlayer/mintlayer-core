@@ -152,7 +152,7 @@ pub trait TransactionVerifierStorageMut:
         tx_source: TransactionSource,
     ) -> Result<(), TransactionVerifierStorageError>;
 
-    fn set_accounting_delta(
+    fn apply_accounting_delta(
         &mut self,
         tx_source: TransactionSource,
         delta: &PoSAccountingDeltaData,

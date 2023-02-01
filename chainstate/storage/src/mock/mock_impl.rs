@@ -158,7 +158,7 @@ mockall::mock! {
         fn set_accounting_undo_data(&mut self, id: Id<Block>, undo: &AccountingBlockUndo) -> crate::Result<()>;
         fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
-        fn set_accounting_delta(
+        fn apply_accounting_delta(
             &mut self,
             id: Id<Block>,
             delta: &PoSAccountingDeltaData,
@@ -473,7 +473,7 @@ mockall::mock! {
         fn set_accounting_undo_data(&mut self, id: Id<Block>, undo: &AccountingBlockUndo) -> crate::Result<()>;
         fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
-        fn set_accounting_delta(
+        fn apply_accounting_delta(
             &mut self,
             id: Id<Block>,
             delta: &PoSAccountingDeltaData,

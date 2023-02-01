@@ -135,7 +135,8 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
     });
 }
 
-// Create block1 from genesis and block2 from block1 using default chain config.
+// Create block1 from genesis and block2 from block1 using chain config
+// that will put them in the same epoch.
 // Every block creates a pool.
 // Check that block1 and block2 belong to the same epochs and no epoch was sealed.
 // Check that accounting info from both blocks got into tip and not into sealed storage.
@@ -147,7 +148,14 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let storage = Store::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
+        let chain_config = ConfigBuilder::test_chain()
+            .epoch_length(NonZeroU64::new(3).unwrap())
+            .sealed_epoch_distance_from_tip(2)
+            .build();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_storage(storage.clone())
+            .with_chain_config(chain_config)
+            .build();
         let amount_to_stake = Amount::from_atoms(100);
         let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
 
@@ -167,12 +175,24 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
             .build_and_process()
             .expect("ok")
             .expect("some");
+        assert_eq!(
+            tf.chainstate
+                .get_chain_config()
+                .epoch_index_from_height(&block1_index.block_height()),
+            0
+        );
         let block2_index = tf
             .make_block_builder()
             .add_transaction(tx2)
             .build_and_process()
             .expect("ok")
             .expect("some");
+        assert_eq!(
+            tf.chainstate
+                .get_chain_config()
+                .epoch_index_from_height(&block2_index.block_height()),
+            0
+        );
 
         // check that result is stored to tip
         let expected_tip_storage_data = pos_accounting::PoSAccountingData {
@@ -505,7 +525,6 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn accounting_storage_seal_every_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        // create block, check storage, seal an epoch, check preseal is empty
         let storage = Store::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let chain_config = ConfigBuilder::test_chain()

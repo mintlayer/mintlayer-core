@@ -101,7 +101,7 @@ pub fn flush_to_storage(
     storage.batch_write_delta(consumed.accounting_delta)?;
 
     for (tx_source, delta) in consumed.accounting_block_deltas {
-        storage.set_accounting_delta(tx_source, &delta)?;
+        storage.apply_accounting_delta(tx_source, &delta)?;
     }
 
     // flush accounting block undo

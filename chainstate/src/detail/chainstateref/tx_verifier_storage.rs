@@ -257,7 +257,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
         }
     }
 
-    fn set_accounting_delta(
+    fn apply_accounting_delta(
         &mut self,
         tx_source: TransactionSource,
         delta: &PoSAccountingDeltaData,
@@ -272,7 +272,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
                     .unwrap_or_default();
                 current_delta.merge_with_delta(delta.clone())?;
                 self.db_tx
-                    .set_accounting_delta(id, &current_delta)
+                    .apply_accounting_delta(id, &current_delta)
                     .map_err(TransactionVerifierStorageError::from)
             }
             TransactionSource::Mempool => {

@@ -233,7 +233,7 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
             .map_err(TransactionVerifierStorageError::AccountingBlockUndoError)
     }
 
-    fn set_accounting_delta(
+    fn apply_accounting_delta(
         &mut self,
         tx_source: TransactionSource,
         delta: &PoSAccountingDeltaData,

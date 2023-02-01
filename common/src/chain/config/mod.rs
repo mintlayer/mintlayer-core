@@ -90,7 +90,9 @@ pub struct ChainConfig {
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
+    /// Length of an epoch in blocks
     epoch_length: NonZeroU64,
+    /// Distance from the tip of the chain to the sealed state in epochs.
     sealed_epoch_distance_from_tip: usize,
     token_min_issuance_fee: Amount,
     token_max_uri_len: usize,
@@ -184,6 +186,11 @@ impl ChainConfig {
     pub fn epoch_index_from_height(&self, height: &BlockHeight) -> EpochIndex {
         let height: u64 = (*height).into();
         height / self.epoch_length
+    }
+
+    pub fn is_due_for_epoch_seal(&self, height: BlockHeight) -> bool {
+        let height: u64 = height.into();
+        height % self.epoch_length == 0
     }
 
     pub fn token_min_issuance_fee(&self) -> Amount {

@@ -180,7 +180,7 @@ fn stake_pool_reorg(#[case] seed: Seed, #[case] epoch_length: NonZeroU64) {
                     delegation_balances: DeltaAmountCollection::new(),
                     delegation_data: DeltaDataCollection::new(),
                 };
-                db_tx.set_accounting_delta(*block_a_index.block_id(), &block_a_delta).unwrap();
+                db_tx.apply_accounting_delta(*block_a_index.block_id(), &block_a_delta).unwrap();
 
                 db_tx.commit().unwrap();
             }

@@ -15,7 +15,6 @@
 
 //! A consensus related logic.
 
-pub mod pos;
 pub mod pow;
 
 pub use crate::{

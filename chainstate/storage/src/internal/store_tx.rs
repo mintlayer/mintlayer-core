@@ -437,7 +437,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         self.0.get_mut::<db::DBAccountingBlockUndo, _>().del(id).map_err(Into::into)
     }
 
-    fn set_accounting_delta(
+    fn apply_accounting_delta(
         &mut self,
         id: Id<Block>,
         delta: &PoSAccountingDeltaData,
