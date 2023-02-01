@@ -49,7 +49,7 @@ impl<T: Clone> DataDelta<T> {
 
     /// Returns an invert delta that has the opposite effect of the provided delta
     /// and serves as an undo object
-    fn invert(self) -> DataDeltaUndo<T> {
+    pub fn invert(self) -> DataDeltaUndo<T> {
         DataDeltaUndo::new(Self::new(self.new, self.old))
     }
 

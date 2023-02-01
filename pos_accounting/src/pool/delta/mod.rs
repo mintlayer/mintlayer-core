@@ -37,11 +37,11 @@ pub struct PoSAccountingDelta<P> {
 /// All the operations we have to do with the accounting state to undo a delta
 #[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
 pub struct DeltaMergeUndo {
-    pool_data_undo: DeltaDataUndoCollection<PoolId, PoolData>,
-    delegation_data_undo: DeltaDataUndoCollection<DelegationId, DelegationData>,
-    pool_balances_undo: DeltaAmountCollection<PoolId>,
-    pool_delegation_shares_undo: DeltaAmountCollection<(PoolId, DelegationId)>,
-    delegation_balances_undo: DeltaAmountCollection<DelegationId>,
+    pub(crate) pool_data_undo: DeltaDataUndoCollection<PoolId, PoolData>,
+    pub(crate) delegation_data_undo: DeltaDataUndoCollection<DelegationId, DelegationData>,
+    pub(crate) pool_balances_undo: DeltaAmountCollection<PoolId>,
+    pub(crate) pool_delegation_shares_undo: DeltaAmountCollection<(PoolId, DelegationId)>,
+    pub(crate) delegation_balances_undo: DeltaAmountCollection<DelegationId>,
 }
 
 impl<P: PoSAccountingView> PoSAccountingDelta<P> {
