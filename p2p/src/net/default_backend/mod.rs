@@ -165,17 +165,13 @@ where
             address
         );
 
-        self.cmd_tx.send(types::Command::Connect { address })?;
-
-        Ok(())
+        self.cmd_tx.send(types::Command::Connect { address }).map_err(P2pError::from)
     }
 
     fn disconnect(&mut self, peer_id: S::PeerId) -> crate::Result<()> {
         log::debug!("close connection with remote, {peer_id}");
 
-        self.cmd_tx.send(types::Command::Disconnect { peer_id })?;
-
-        Ok(())
+        self.cmd_tx.send(types::Command::Disconnect { peer_id }).map_err(P2pError::from)
     }
 
     fn send_request(
@@ -199,11 +195,12 @@ where
         request_id: S::PeerRequestId,
         response: PeerManagerResponse,
     ) -> crate::Result<()> {
-        self.cmd_tx.send(types::Command::SendResponse {
-            request_id,
-            message: response.into(),
-        })?;
-        Ok(())
+        self.cmd_tx
+            .send(types::Command::SendResponse {
+                request_id,
+                message: response.into(),
+            })
+            .map_err(P2pError::from)
     }
 
     fn local_addresses(&self) -> &[S::Address] {
@@ -308,9 +305,9 @@ where
             message::Announcement::Block(_) => PubSubTopic::Blocks,
         };
 
-        self.cmd_tx.send(types::Command::AnnounceData { topic, message })?;
-
-        Ok(())
+        self.cmd_tx
+            .send(types::Command::AnnounceData { topic, message })
+            .map_err(P2pError::from)
     }
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent<S>> {

@@ -183,9 +183,7 @@ where
             .remove(peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        peer.tx.send(Event::Disconnect).map_err(P2pError::from)?;
-
-        Ok(())
+        peer.tx.send(Event::Disconnect).map_err(P2pError::from)
     }
 
     /// Sends a request to the remote peer. Might fail if the peer is already disconnected.
@@ -201,9 +199,7 @@ where
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         let request = self.request_mgr.make_request(request_id, request)?;
-        peer.tx.send(Event::SendMessage(request)).map_err(P2pError::from)?;
-
-        Ok(())
+        peer.tx.send(Event::SendMessage(request)).map_err(P2pError::from)
     }
 
     /// Send response to a request. Might fail if the peer is already disconnected.
@@ -224,9 +220,7 @@ where
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
             .tx
             .send(Event::SendMessage(response))
-            .map_err(P2pError::from)?;
-
-        Ok(())
+            .map_err(P2pError::from)
     }
 
     /// Sends the announcement to all peers.
