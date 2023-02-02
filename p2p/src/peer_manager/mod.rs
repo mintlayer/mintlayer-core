@@ -30,10 +30,7 @@ use std::{
 };
 
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
-use tokio::{
-    sync::{mpsc, oneshot},
-    time::Instant,
-};
+use tokio::{sync::mpsc, time::Instant};
 
 use chainstate::ban_score::BanScore;
 use common::{chain::ChainConfig, primitives::semver::SemVer, time_getter::TimeGetter};
@@ -57,6 +54,7 @@ use crate::{
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
     types::peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
+    utils::oneshot_nofail,
 };
 
 use self::{
@@ -99,10 +97,10 @@ where
     tx_sync: mpsc::UnboundedSender<SyncControlEvent<T>>,
 
     /// Hashmap of pending outbound connections
-    pending_connects: HashMap<T::Address, Option<oneshot::Sender<crate::Result<()>>>>,
+    pending_connects: HashMap<T::Address, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
 
     /// Hashmap of pending disconnect requests
-    pending_disconnects: HashMap<T::PeerId, Option<oneshot::Sender<crate::Result<()>>>>,
+    pending_disconnects: HashMap<T::PeerId, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
 
     /// Set of active peers
     peers: BTreeMap<T::PeerId, PeerContext<T>>,
@@ -368,7 +366,7 @@ where
             self.tx_sync.send(SyncControlEvent::Disconnected(peer_id))?;
 
             if let Some(Some(response)) = self.pending_disconnects.remove(&peer_id) {
-                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
+                response.send(Ok(()));
             }
 
             self.peerdb.peer_disconnected(peer.address);
@@ -415,7 +413,7 @@ where
     /// update its own records.
     fn handle_outbound_error(&mut self, address: T::Address, error: P2pError) -> crate::Result<()> {
         if let Some(Some(channel)) = self.pending_connects.remove(&address) {
-            channel.send(Err(error)).map_err(|_| P2pError::ChannelClosed)?;
+            channel.send(Err(error));
         }
 
         self.peerdb.report_outbound_failure(address);
@@ -451,7 +449,7 @@ where
     fn connect(
         &mut self,
         address: T::Address,
-        response: Option<oneshot::Sender<crate::Result<()>>>,
+        response: Option<oneshot_nofail::Sender<crate::Result<()>>>,
     ) -> crate::Result<()> {
         log::debug!("try to establish outbound connection to peer at address {address:?}");
 
@@ -463,7 +461,7 @@ where
             }
             Err(e) => {
                 if let Some(response) = response {
-                    response.send(Err(e)).map_err(|_| P2pError::ChannelClosed)?;
+                    response.send(Err(e));
                 }
             }
         }
@@ -493,7 +491,7 @@ where
     fn disconnect(
         &mut self,
         peer_id: T::PeerId,
-        response: Option<oneshot::Sender<crate::Result<()>>>,
+        response: Option<oneshot_nofail::Sender<crate::Result<()>>>,
     ) -> crate::Result<()> {
         log::debug!("disconnect peer {peer_id}");
 
@@ -505,7 +503,7 @@ where
             }
             Err(e) => {
                 if let Some(response) = response {
-                    response.send(Err(e)).map_err(|_| P2pError::ChannelClosed)?;
+                    response.send(Err(e));
                 }
             }
         }
@@ -684,12 +682,10 @@ where
             PeerManagerEvent::AdjustPeerScore(peer_id, score, response) => {
                 log::debug!("adjust peer {peer_id} score: {score}");
 
-                response
-                    .send(self.adjust_peer_score(peer_id, score))
-                    .map_err(|_| P2pError::ChannelClosed)?;
+                response.send(self.adjust_peer_score(peer_id, score));
             }
             PeerManagerEvent::GetPeerCount(response) => {
-                response.send(self.active_peer_count()).map_err(|_| P2pError::ChannelClosed)?;
+                response.send(self.active_peer_count());
             }
             PeerManagerEvent::GetBindAddresses(response) => {
                 let addr = self
@@ -698,11 +694,11 @@ where
                     .iter()
                     .map(|addr| addr.to_string())
                     .collect();
-                response.send(addr).map_err(|_| P2pError::ChannelClosed)?;
+                response.send(addr);
             }
             PeerManagerEvent::GetConnectedPeers(response) => {
                 let peers = self.get_connected_peers();
-                response.send(peers).map_err(|_| P2pError::ChannelClosed)?
+                response.send(peers);
             }
         }
 
@@ -769,7 +765,7 @@ where
 
                     match self.pending_connects.remove(&address) {
                         Some(Some(channel)) => {
-                            channel.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?
+                            channel.send(Ok(()));
                         }
                         Some(None) => {}
                         None => log::error!("connection accepted but it's not pending?"),

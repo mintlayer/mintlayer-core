@@ -22,9 +22,9 @@ use crate::{
         TestTcpAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp,
     },
+    utils::oneshot_nofail,
 };
 use common::{chain::config, primitives::semver::SemVer};
-use tokio::sync::oneshot;
 
 use crate::{
     error::{P2pError, PeerError},
@@ -180,7 +180,7 @@ where
     }
     pm2.handle_connectivity_event_result(event).unwrap();
 
-    let (tx, rx) = oneshot::channel();
+    let (tx, rx) = oneshot_nofail::channel();
     pm2.connect(remote_addr, Some(tx)).unwrap();
     let res = rx.await.unwrap();
     match res {
