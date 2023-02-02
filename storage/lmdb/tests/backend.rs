@@ -28,7 +28,7 @@ fn main() {
                 test_dir.as_ref().to_path_buf(),
                 Default::default(),
                 Default::default(),
-                None,
+                Default::default(),
             )
         }
     };

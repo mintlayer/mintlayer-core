@@ -67,7 +67,7 @@ pub fn make_chainstate(
                 datadir.join(SUBDIRECTORY_LMDB),
                 Default::default(),
                 Default::default(),
-                None,
+                Default::default(),
             );
             make_chainstate_and_storage_impl(storage, chain_config, chainstate_config)
         }

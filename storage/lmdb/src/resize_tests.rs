@@ -79,7 +79,7 @@ fn auto_map_resize_between_txs(#[case] seed: Seed) {
             data_dir.into_path(),
             MemSize::from_bytes(initial_map_size).into(),
             resize_settings.clone(),
-            Some(resize_callback),
+            MapResizeCallback::new(resize_callback),
         );
 
         let lmdb_impl = lmdb.open(DbDesc::from_iter(vec![MapDesc::new("SomeDb")])).unwrap();
@@ -149,7 +149,7 @@ fn auto_map_resize_between_puts(#[case] seed: Seed) {
             data_dir.into_path(),
             MemSize::from_bytes(initial_map_size).into(),
             resize_settings.clone(),
-            Some(resize_callback),
+            MapResizeCallback::new(resize_callback),
         );
 
         let lmdb_impl = lmdb.open(DbDesc::from_iter(vec![MapDesc::new("SomeDb")])).unwrap();

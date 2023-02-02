@@ -16,12 +16,14 @@
 mod error;
 pub mod initial_map_size;
 pub mod memsize;
+pub mod resize_callback;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{borrow::Cow, path::PathBuf};
 
 use initial_map_size::InitialMapSize;
 use lmdb::Cursor;
+use resize_callback::MapResizeCallback;
 use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
     info::{DbDesc, MapDesc},
@@ -222,7 +224,7 @@ pub struct Lmdb {
     flags: lmdb::EnvironmentFlags,
     inital_map_size: InitialMapSize,
     resize_settings: DatabaseResizeSettings,
-    resize_callback: Option<Box<dyn Fn(DatabaseResizeInfo)>>,
+    resize_callback: MapResizeCallback,
 }
 
 impl Lmdb {
@@ -231,7 +233,7 @@ impl Lmdb {
         path: PathBuf,
         inital_map_size: InitialMapSize,
         resize_settings: DatabaseResizeSettings,
-        resize_callback: Option<Box<dyn Fn(DatabaseResizeInfo)>>,
+        resize_callback: MapResizeCallback,
     ) -> Self {
         Self {
             path,
@@ -278,7 +280,7 @@ impl backend::Backend for Lmdb {
             .set_flags(self.flags)
             .set_map_size(initial_map_size)
             .set_resize_settings(self.resize_settings)
-            .set_resize_callback(self.resize_callback)
+            .set_resize_callback(self.resize_callback.take())
             .open(&self.path)
             .or_else(error::process_with_err)?;
 

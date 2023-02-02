@@ -76,7 +76,7 @@ pub async fn initialize(
         node_config.datadir.join("peerdb-lmdb"),
         Default::default(),
         Default::default(),
-        None,
+        Default::default(),
     ))?;
     let p2p = manager.add_subsystem(
         "p2p",
