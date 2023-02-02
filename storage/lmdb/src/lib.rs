@@ -104,37 +104,16 @@ impl backend::WriteOps for DbTx<'_, lmdb::RwTransaction<'_>> {
     fn put(&mut self, idx: DbIndex, key: Data, val: Data) -> storage_core::Result<()> {
         self.tx
             .put(self.dbs[idx], &key, &val, lmdb::WriteFlags::empty())
-            .map_err(|err| schedule_map_resize_if_map_full(self.backend, err))
+            .map_err(|err| self.backend.schedule_map_resize_if_map_full(err))
             .or_else(error::process_with_unit)
     }
 
     fn del(&mut self, idx: DbIndex, key: &[u8]) -> storage_core::Result<()> {
         self.tx
             .del(self.dbs[idx], &key, None)
-            .map_err(|err| schedule_map_resize_if_map_full(self.backend, err))
+            .map_err(|err| self.backend.schedule_map_resize_if_map_full(err))
             .or_else(error::process_with_unit)
     }
-}
-
-/// If the lmdb map is full, perform a resize. This results in fixing
-/// a recoverable error of MDB_MAP_FULL to work out-of-the-box by just
-/// retrying one or more times
-fn resize_if_map_full(backend: &LmdbImpl, err: lmdb::Error) -> lmdb::Error {
-    if err == lmdb::Error::MapFull {
-        backend
-            .env
-            .do_resize(None)
-            .expect("Failed to resize after a write/commit failed with MDB_MAP_FULL");
-        backend.unschedule_map_resize();
-    }
-    err
-}
-
-fn schedule_map_resize_if_map_full(backend: &LmdbImpl, err: lmdb::Error) -> lmdb::Error {
-    if err == lmdb::Error::MapFull {
-        backend.schedule_map_resize();
-    }
-    err
 }
 
 impl backend::TxRo for DbTxRo<'_> {}
@@ -142,7 +121,7 @@ impl backend::TxRo for DbTxRo<'_> {}
 impl backend::TxRw for DbTxRw<'_> {
     fn commit(self) -> storage_core::Result<()> {
         lmdb::Transaction::commit(self.tx)
-            .map_err(|e| resize_if_map_full(self.backend, e))
+            .map_err(|e| self.backend.resize_if_map_full(e))
             .or_else(error::process_with_unit)
     }
 }
@@ -190,6 +169,26 @@ impl LmdbImpl {
         {
             self.env.do_resize(None).expect("Failed to resize after a trigger to resize");
         }
+    }
+
+    /// If the lmdb map is full, perform a resize. This results in fixing
+    /// a recoverable error of MDB_MAP_FULL to work out-of-the-box by just
+    /// retrying one or more times
+    fn resize_if_map_full(&self, err: lmdb::Error) -> lmdb::Error {
+        if err == lmdb::Error::MapFull {
+            self.env
+                .do_resize(None)
+                .expect("Failed to resize after a write/commit failed with MDB_MAP_FULL");
+            self.unschedule_map_resize();
+        }
+        err
+    }
+
+    fn schedule_map_resize_if_map_full(&self, err: lmdb::Error) -> lmdb::Error {
+        if err == lmdb::Error::MapFull {
+            self.schedule_map_resize();
+        }
+        err
     }
 }
 
