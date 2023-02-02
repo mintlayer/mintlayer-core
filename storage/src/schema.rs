@@ -31,22 +31,21 @@ pub trait DbMap: 'static {
 
 /// What constitutes a valid database schema
 pub trait Schema: internal::Sealed + 'static {
-    type DescIter: Iterator<Item = usize>;
+    type DescIter: Iterator<Item = ()>;
     fn desc_iter() -> Self::DescIter;
 }
 
 impl Schema for () {
-    type DescIter = std::iter::Empty<usize>;
+    type DescIter = std::iter::Empty<()>;
     fn desc_iter() -> Self::DescIter {
         std::iter::empty()
     }
 }
 
 impl<M: DbMap, Rest: Schema> Schema for (M, Rest) {
-    type DescIter = std::iter::Chain<std::iter::Once<usize>, Rest::DescIter>;
+    type DescIter = std::iter::Chain<std::iter::Once<()>, Rest::DescIter>;
     fn desc_iter() -> Self::DescIter {
-        // TODO(PR): Ensure this 0 is valid
-        std::iter::once(0).chain(Rest::desc_iter())
+        std::iter::once(()).chain(Rest::desc_iter())
     }
 }
 
