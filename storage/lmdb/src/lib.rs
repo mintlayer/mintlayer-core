@@ -70,7 +70,6 @@ impl<'tx, C: lmdb::Cursor<'tx>> Iterator for PrefixIter<'tx, C> {
 pub struct DbTx<'m, Tx> {
     tx: Tx,
     backend: &'m LmdbImpl,
-    dbs: &'m DbList,
 }
 
 type DbTxRo<'a> = DbTx<'a, lmdb::RoTransaction<'a>>;
@@ -84,7 +83,8 @@ impl<'s, 'i, Tx: lmdb::Transaction> backend::PrefixIter<'i> for DbTx<'s, Tx> {
         idx: DbIndex,
         prefix: Data,
     ) -> storage_core::Result<Self::Iterator> {
-        let cursor = self.tx.open_ro_cursor(self.dbs[idx]).or_else(error::process_with_err)?;
+        let cursor =
+            self.tx.open_ro_cursor(self.backend.dbs[idx]).or_else(error::process_with_err)?;
         let iter = if prefix.is_empty() {
             cursor.into_iter_start()
         } else {
@@ -97,7 +97,7 @@ impl<'s, 'i, Tx: lmdb::Transaction> backend::PrefixIter<'i> for DbTx<'s, Tx> {
 impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
     fn get(&self, idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
         self.tx
-            .get(self.dbs[idx], &key)
+            .get(self.backend.dbs[idx], &key)
             .map_or_else(error::process_with_none, |x| Ok(Some(x.into())))
     }
 }
@@ -105,14 +105,14 @@ impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
 impl backend::WriteOps for DbTx<'_, lmdb::RwTransaction<'_>> {
     fn put(&mut self, idx: DbIndex, key: Data, val: Data) -> storage_core::Result<()> {
         self.tx
-            .put(self.dbs[idx], &key, &val, lmdb::WriteFlags::empty())
+            .put(self.backend.dbs[idx], &key, &val, lmdb::WriteFlags::empty())
             .map_err(|err| self.backend.schedule_map_resize_if_map_full(err))
             .or_else(error::process_with_unit)
     }
 
     fn del(&mut self, idx: DbIndex, key: &[u8]) -> storage_core::Result<()> {
         self.tx
-            .del(self.dbs[idx], &key, None)
+            .del(self.backend.dbs[idx], &key, None)
             .map_err(|err| self.backend.schedule_map_resize_if_map_full(err))
             .or_else(error::process_with_unit)
     }
@@ -149,7 +149,6 @@ impl LmdbImpl {
         // Make sure map token is acquired before starting the transaction below
         Ok(DbTx {
             tx: start_tx(&self.env).or_else(error::process_with_err)?,
-            dbs: &self.dbs,
             backend: self,
         })
     }
