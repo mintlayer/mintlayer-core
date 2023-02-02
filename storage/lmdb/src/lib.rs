@@ -14,13 +14,14 @@
 // limitations under the License.
 
 mod error;
+pub mod initial_map_size;
 pub mod memsize;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{borrow::Cow, path::PathBuf};
 
+use initial_map_size::InitialMapSize;
 use lmdb::Cursor;
-use memsize::MemSize;
 use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
     info::{DbDesc, MapDesc},
@@ -219,7 +220,7 @@ impl backend::BackendImpl for LmdbImpl {}
 pub struct Lmdb {
     path: PathBuf,
     flags: lmdb::EnvironmentFlags,
-    inital_map_size: Option<MemSize>,
+    inital_map_size: InitialMapSize,
     resize_settings: DatabaseResizeSettings,
     resize_callback: Option<Box<dyn Fn(DatabaseResizeInfo)>>,
 }
@@ -228,7 +229,7 @@ impl Lmdb {
     /// New LMDB database backend
     pub fn new(
         path: PathBuf,
-        inital_map_size: Option<MemSize>,
+        inital_map_size: InitialMapSize,
         resize_settings: DatabaseResizeSettings,
         resize_callback: Option<Box<dyn Fn(DatabaseResizeInfo)>>,
     ) -> Self {
@@ -266,7 +267,7 @@ impl backend::Backend for Lmdb {
 
         let initial_map_size = self
             .inital_map_size
-            .unwrap_or(MemSize::ZERO)
+            .into_memsize()
             .as_bytes()
             .try_into()
             .expect("MemSize to usize conversion failed");

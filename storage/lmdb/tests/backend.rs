@@ -26,7 +26,7 @@ fn main() {
             let test_dir = test_root.fresh_test_dir("unknown");
             Lmdb::new(
                 test_dir.as_ref().to_path_buf(),
-                None,
+                Default::default(),
                 Default::default(),
                 None,
             )

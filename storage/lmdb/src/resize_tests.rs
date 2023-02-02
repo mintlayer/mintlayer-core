@@ -15,6 +15,7 @@
 
 use std::{collections::BTreeMap, sync::Mutex};
 
+use memsize::MemSize;
 use rstest::rstest;
 use storage_core::{
     backend::{ReadOps, TxRw, WriteOps},
@@ -76,7 +77,7 @@ fn auto_map_resize_between_txs(#[case] seed: Seed) {
         let data_dir = TempDir::new("lmdb_resize").unwrap();
         let lmdb = Lmdb::new(
             data_dir.into_path(),
-            Some(MemSize::from_bytes(initial_map_size)),
+            MemSize::from_bytes(initial_map_size).into(),
             resize_settings.clone(),
             Some(resize_callback),
         );
@@ -146,7 +147,7 @@ fn auto_map_resize_between_puts(#[case] seed: Seed) {
         let data_dir = TempDir::new("lmdb_resize").unwrap();
         let lmdb = Lmdb::new(
             data_dir.into_path(),
-            Some(MemSize::from_bytes(initial_map_size)),
+            MemSize::from_bytes(initial_map_size).into(),
             resize_settings.clone(),
             Some(resize_callback),
         );

@@ -65,7 +65,7 @@ pub fn make_chainstate(
         StorageBackendConfig::Lmdb => {
             let storage = storage_lmdb::Lmdb::new(
                 datadir.join(SUBDIRECTORY_LMDB),
-                None,
+                Default::default(),
                 Default::default(),
                 None,
             );
