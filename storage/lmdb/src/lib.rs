@@ -270,19 +270,22 @@ impl backend::Backend for Lmdb {
         let initial_map_size = self
             .inital_map_size
             .into_memsize()
-            .as_bytes()
-            .try_into()
-            .expect("MemSize to usize conversion failed");
+            .map(|v| v.as_bytes().try_into().expect("MemSize to usize conversion failed"));
 
         // Set up LMDB environment
-        let environment = lmdb::Environment::new()
-            .set_max_dbs(desc.len() as u32)
-            .set_flags(self.flags)
-            .set_map_size(initial_map_size)
-            .set_resize_settings(self.resize_settings)
-            .set_resize_callback(self.resize_callback.take())
-            .open(&self.path)
-            .or_else(error::process_with_err)?;
+        let environment = lmdb::Environment::new();
+
+        let environment = if let Some(sz) = initial_map_size {
+            environment.set_map_size(sz)
+        } else {
+            environment
+        }
+        .set_resize_settings(self.resize_settings)
+        .set_resize_callback(self.resize_callback.take())
+        .set_max_dbs(desc.len() as u32)
+        .set_flags(self.flags)
+        .open(&self.path)
+        .or_else(error::process_with_err)?;
 
         // Set up all the databases
         let dbs = desc

@@ -16,11 +16,11 @@
 use crate::memsize::MemSize;
 
 pub struct InitialMapSize {
-    initial_map_size: MemSize,
+    initial_map_size: Option<MemSize>,
 }
 
 impl InitialMapSize {
-    pub fn into_memsize(&self) -> MemSize {
+    pub fn into_memsize(&self) -> Option<MemSize> {
         self.initial_map_size
     }
 }
@@ -28,18 +28,20 @@ impl InitialMapSize {
 impl Default for InitialMapSize {
     fn default() -> Self {
         Self {
-            initial_map_size: MemSize::from_bytes(0),
+            initial_map_size: None,
         }
     }
 }
 
 impl From<MemSize> for InitialMapSize {
     fn from(initial_map_size: MemSize) -> Self {
-        Self { initial_map_size }
+        Self {
+            initial_map_size: Some(initial_map_size),
+        }
     }
 }
 
-impl From<InitialMapSize> for MemSize {
+impl From<InitialMapSize> for Option<MemSize> {
     fn from(initial_map_size: InitialMapSize) -> Self {
         initial_map_size.initial_map_size
     }
