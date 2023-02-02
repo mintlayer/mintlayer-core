@@ -42,7 +42,7 @@ impl MemSize {
 
     /// Get raw byte count in native representation
     pub fn as_bytes(self) -> u64 {
-        self.0.try_into().expect("Ran out of address space")
+        self.0
     }
 
     /// Division, rounding up
