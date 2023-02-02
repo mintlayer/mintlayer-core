@@ -24,7 +24,12 @@ fn main() {
         move || {
             // Each test case gets its own subdirectory to avoid clashes
             let test_dir = test_root.fresh_test_dir("unknown");
-            Lmdb::new(test_dir.as_ref().to_path_buf())
+            Lmdb::new(
+                test_dir.as_ref().to_path_buf(),
+                None,
+                Default::default(),
+                None,
+            )
         }
     };
 

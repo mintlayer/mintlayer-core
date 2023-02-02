@@ -63,7 +63,12 @@ pub fn make_chainstate(
     // a different set of generic parameters in each case.
     match storage_backend {
         StorageBackendConfig::Lmdb => {
-            let storage = storage_lmdb::Lmdb::new(datadir.join(SUBDIRECTORY_LMDB));
+            let storage = storage_lmdb::Lmdb::new(
+                datadir.join(SUBDIRECTORY_LMDB),
+                None,
+                Default::default(),
+                None,
+            );
             make_chainstate_and_storage_impl(storage, chain_config, chainstate_config)
         }
         StorageBackendConfig::InMemory => {

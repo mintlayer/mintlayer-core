@@ -219,18 +219,25 @@ impl backend::BackendImpl for LmdbImpl {}
 pub struct Lmdb {
     path: PathBuf,
     flags: lmdb::EnvironmentFlags,
+    inital_map_size: Option<usize>,
     resize_settings: DatabaseResizeSettings,
     resize_callback: Option<Box<dyn Fn(DatabaseResizeInfo)>>,
 }
 
 impl Lmdb {
     /// New LMDB database backend
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(
+        path: PathBuf,
+        inital_map_size: Option<usize>,
+        resize_settings: DatabaseResizeSettings,
+        resize_callback: Option<Box<dyn Fn(DatabaseResizeInfo)>>,
+    ) -> Self {
         Self {
             path,
             flags: lmdb::EnvironmentFlags::default(),
-            resize_settings: DatabaseResizeSettings::default(),
-            resize_callback: None,
+            inital_map_size,
+            resize_settings,
+            resize_callback,
         }
     }
 
@@ -261,6 +268,7 @@ impl backend::Backend for Lmdb {
         let environment = lmdb::Environment::new()
             .set_max_dbs(desc.len() as u32)
             .set_flags(self.flags)
+            .set_map_size(self.inital_map_size.unwrap_or(0))
             .set_resize_settings(self.resize_settings)
             .set_resize_callback(self.resize_callback)
             .open(&self.path)
@@ -280,3 +288,6 @@ impl backend::Backend for Lmdb {
         })
     }
 }
+
+#[cfg(test)]
+mod resize_tests;
