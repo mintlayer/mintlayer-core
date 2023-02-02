@@ -15,6 +15,9 @@
 
 //! Simple wrapper for the `tokio::sync::oneshot` channel
 //! that does not return an error if the receiver is disconnected.
+//!
+//! The wrapper could be used when sending to a closed channel is not considered an error
+//! (for example, when the async receiver was canceled for some reason).
 
 use std::{
     future::Future,
