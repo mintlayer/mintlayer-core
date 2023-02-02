@@ -157,7 +157,7 @@ fn get_set_transactions() {
         let thr1 = {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
-                let mut tx = store.transaction_rw().unwrap();
+                let mut tx = store.transaction_rw(None).unwrap();
                 let v = tx.get_storage_version().unwrap();
                 tx.set_storage_version(v + 1).unwrap();
                 tx.commit().unwrap();
@@ -191,7 +191,7 @@ fn test_storage_transactions() {
         let thr0 = {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
-                let mut tx = store.transaction_rw().unwrap();
+                let mut tx = store.transaction_rw(None).unwrap();
                 let v = tx.get_storage_version().unwrap();
                 tx.set_storage_version(v + 3).unwrap();
                 tx.commit().unwrap();
@@ -200,7 +200,7 @@ fn test_storage_transactions() {
         let thr1 = {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
-                let mut tx = store.transaction_rw().unwrap();
+                let mut tx = store.transaction_rw(None).unwrap();
                 let v = tx.get_storage_version().unwrap();
                 tx.set_storage_version(v + 5).unwrap();
                 tx.commit().unwrap();
@@ -224,7 +224,7 @@ fn test_storage_transactions_with_result_check() {
         let thr0 = {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
-                let mut tx = store.transaction_rw().unwrap();
+                let mut tx = store.transaction_rw(None).unwrap();
                 let v = tx.get_storage_version().unwrap();
                 assert!(tx.set_storage_version(v + 3).is_ok());
                 assert!(tx.commit().is_ok());
@@ -233,7 +233,7 @@ fn test_storage_transactions_with_result_check() {
         let thr1 = {
             let store = Store::clone(&store);
             utils::thread::spawn(move || {
-                let mut tx = store.transaction_rw().unwrap();
+                let mut tx = store.transaction_rw(None).unwrap();
                 let v = tx.get_storage_version().unwrap();
                 assert!(tx.set_storage_version(v + 5).is_ok());
                 assert!(tx.commit().is_ok());

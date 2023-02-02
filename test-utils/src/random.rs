@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::random::{Rng, SeedableRng};
-use rand_chacha::{rand_core::CryptoRng, ChaChaRng};
+pub use crypto::random::{CryptoRng, Rng, SeedableRng};
+use rand_chacha::ChaChaRng;
 use std::{num::ParseIntError, str::FromStr};
 
 #[derive(Debug, Copy, Clone)]

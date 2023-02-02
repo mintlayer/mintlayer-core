@@ -133,7 +133,7 @@ impl<'tx, T: 'tx + ReadOps> backend::TransactionalRo<'tx> for TransactionLockImp
 impl<'tx, T: 'tx + ReadOps + WriteOps> backend::TransactionalRw<'tx> for TransactionLockImpl<T> {
     type TxRw = TxRw<'tx, T>;
 
-    fn transaction_rw<'st: 'tx>(&'st self) -> crate::Result<Self::TxRw> {
+    fn transaction_rw<'st: 'tx>(&'st self, _: Option<usize>) -> crate::Result<Self::TxRw> {
         Ok(TxRw {
             db: self.db.write().expect("lock to be alive"),
             deltas: vec![BTreeMap::new(); self.num_maps],

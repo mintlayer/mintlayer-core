@@ -32,5 +32,5 @@ pub trait Construct: Sized {
 
 /// Core operations on storage without transaction support
 pub trait CoreOps: backend::ReadOps + backend::WriteOps + Construct {}
-// CoreOps is automatically implemented if pre-requisits are satisfied
+// CoreOps is automatically implemented if pre-requisites are satisfied
 impl<T: backend::ReadOps + backend::WriteOps + Construct> CoreOps for T {}

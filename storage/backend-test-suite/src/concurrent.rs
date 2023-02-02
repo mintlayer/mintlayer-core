@@ -20,7 +20,7 @@ const TEST_KEY: &[u8] = b"foo";
 fn setup<B: Backend>(backend: B, init: Vec<u8>) -> B::Impl {
     let store = backend.open(desc(1)).expect("db open to succeed");
 
-    let mut dbtx = store.transaction_rw().unwrap();
+    let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(IDX.0, TEST_KEY.to_vec(), init).unwrap();
     dbtx.commit().unwrap();
 
@@ -33,7 +33,7 @@ fn read_initialize_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     let thr0 = thread::spawn({
         let store = store.clone();
         move || {
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.put(IDX.0, TEST_KEY.to_vec(), vec![2]).unwrap();
             dbtx.commit().unwrap();
         }
@@ -53,7 +53,7 @@ fn read_write_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     let thr0 = thread::spawn({
         let store = store.clone();
         move || {
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.put(IDX.0, TEST_KEY.to_vec(), vec![2]).unwrap();
             dbtx.commit().unwrap();
         }
@@ -74,7 +74,7 @@ fn commutative_read_modify_write<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
     let thr0 = thread::spawn({
         let store = store.clone();
         move || {
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             let v = dbtx.get(IDX.0, TEST_KEY).unwrap().unwrap();
             let b = v.first().unwrap();
             dbtx.put(IDX.0, TEST_KEY.to_vec(), vec![b + 5]).unwrap();
@@ -84,7 +84,7 @@ fn commutative_read_modify_write<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
     let thr1 = thread::spawn({
         let store = store.clone();
         move || {
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             let v = dbtx.get(IDX.0, TEST_KEY).unwrap().unwrap();
             let b = v.first().unwrap();
             dbtx.put(IDX.0, TEST_KEY.to_vec(), vec![b + 3]).unwrap();
@@ -142,7 +142,7 @@ fn write_different_keys_and_iterate<B: Backend, F: BackendFn<B>>(backend_fn: Arc
     let thr0 = thread::spawn({
         let store = store.clone();
         move || {
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.put(IDX.0, vec![0x01], vec![0xf1]).unwrap();
             dbtx.commit().unwrap();
         }
@@ -150,7 +150,7 @@ fn write_different_keys_and_iterate<B: Backend, F: BackendFn<B>>(backend_fn: Arc
     let thr1 = thread::spawn({
         let store = store.clone();
         move || {
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.put(IDX.0, vec![0x02], vec![0xf2]).unwrap();
             dbtx.commit().unwrap();
         }

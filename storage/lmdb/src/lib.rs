@@ -14,19 +14,24 @@
 // limitations under the License.
 
 mod error;
-mod remap;
+pub mod initial_map_size;
+pub mod memsize;
+pub mod resize_callback;
 
-pub use remap::MemSize;
-
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{borrow::Cow, path::PathBuf};
 
+use initial_map_size::InitialMapSize;
 use lmdb::Cursor;
+use resize_callback::MapResizeCallback;
 use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
     info::{DbDesc, MapDesc},
     Data, DbIndex,
 };
-use utils::sync::{Arc, RwLock, RwLockReadGuard};
+use utils::sync::Arc;
+
+pub use lmdb::{DatabaseResizeInfo, DatabaseResizeSettings};
 
 /// Identifiers of the list of databases (key-value maps)
 #[derive(Eq, PartialEq, Debug, Clone)]
@@ -67,8 +72,7 @@ impl<'tx, C: lmdb::Cursor<'tx>> Iterator for PrefixIter<'tx, C> {
 
 pub struct DbTx<'m, Tx> {
     tx: Tx,
-    dbs: &'m DbList,
-    _map_token: RwLockReadGuard<'m, remap::MemMapController>,
+    backend: &'m LmdbImpl,
 }
 
 type DbTxRo<'a> = DbTx<'a, lmdb::RoTransaction<'a>>;
@@ -82,7 +86,8 @@ impl<'s, 'i, Tx: lmdb::Transaction> backend::PrefixIter<'i> for DbTx<'s, Tx> {
         idx: DbIndex,
         prefix: Data,
     ) -> storage_core::Result<Self::Iterator> {
-        let cursor = self.tx.open_ro_cursor(self.dbs[idx]).or_else(error::process_with_err)?;
+        let cursor =
+            self.tx.open_ro_cursor(self.backend.dbs[idx]).or_else(error::process_with_err)?;
         let iter = if prefix.is_empty() {
             cursor.into_iter_start()
         } else {
@@ -95,7 +100,7 @@ impl<'s, 'i, Tx: lmdb::Transaction> backend::PrefixIter<'i> for DbTx<'s, Tx> {
 impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
     fn get(&self, idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
         self.tx
-            .get(self.dbs[idx], &key)
+            .get(self.backend.dbs[idx], &key)
             .map_or_else(error::process_with_none, |x| Ok(Some(x.into())))
     }
 }
@@ -103,12 +108,16 @@ impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
 impl backend::WriteOps for DbTx<'_, lmdb::RwTransaction<'_>> {
     fn put(&mut self, idx: DbIndex, key: Data, val: Data) -> storage_core::Result<()> {
         self.tx
-            .put(self.dbs[idx], &key, &val, lmdb::WriteFlags::empty())
+            .put(self.backend.dbs[idx], &key, &val, lmdb::WriteFlags::empty())
+            .map_err(|err| self.backend.schedule_map_resize_if_map_full(err))
             .or_else(error::process_with_unit)
     }
 
     fn del(&mut self, idx: DbIndex, key: &[u8]) -> storage_core::Result<()> {
-        self.tx.del(self.dbs[idx], &key, None).or_else(error::process_with_unit)
+        self.tx
+            .del(self.backend.dbs[idx], &key, None)
+            .map_err(|err| self.backend.schedule_map_resize_if_map_full(err))
+            .or_else(error::process_with_unit)
     }
 }
 
@@ -116,7 +125,9 @@ impl backend::TxRo for DbTxRo<'_> {}
 
 impl backend::TxRw for DbTxRw<'_> {
     fn commit(self) -> storage_core::Result<()> {
-        lmdb::Transaction::commit(self.tx).or_else(error::process_with_unit)
+        lmdb::Transaction::commit(self.tx)
+            .map_err(|e| self.backend.resize_if_map_full(e))
+            .or_else(error::process_with_unit)
     }
 }
 
@@ -128,14 +139,8 @@ pub struct LmdbImpl {
     /// List of open databases
     dbs: DbList,
 
-    /// Guards access to memory map.
-    ///
-    /// * Shared (read) lock is required for running transactions, both read-only and read-write.
-    /// * Exclusive (write) lock is required to reallocate the memory map
-    map_token: Arc<RwLock<remap::MemMapController>>,
-
-    /// Size required to write a transaction
-    tx_size: MemSize,
+    /// Schedule a database resize of the database map
+    map_resize_scheduled: Arc<AtomicBool>,
 }
 
 impl LmdbImpl {
@@ -145,12 +150,49 @@ impl LmdbImpl {
         start_tx: impl FnOnce(&'a lmdb::Environment) -> Result<Tx, lmdb::Error>,
     ) -> storage_core::Result<DbTx<'a, Tx>> {
         // Make sure map token is acquired before starting the transaction below
-        let _map_token = self.map_token.read().expect("mutex to be alive");
         Ok(DbTx {
             tx: start_tx(&self.env).or_else(error::process_with_err)?,
-            dbs: &self.dbs,
-            _map_token,
+            backend: self,
         })
+    }
+
+    fn schedule_map_resize(&self) {
+        self.map_resize_scheduled.store(true, Ordering::SeqCst);
+    }
+
+    fn unschedule_map_resize(&self) {
+        self.map_resize_scheduled.store(false, Ordering::SeqCst);
+    }
+
+    fn resize_if_resize_scheduled(&self) {
+        // simulate an atomic test_and_set(), where we check if a resize is scheduled, and we also set it to false
+        if self
+            .map_resize_scheduled
+            .compare_exchange(true, false, Ordering::Acquire, Ordering::Relaxed)
+            .unwrap_or(false)
+        {
+            self.env.do_resize(None).expect("Failed to resize after a trigger to resize");
+        }
+    }
+
+    /// If the lmdb map is full, perform a resize. This results in fixing
+    /// a recoverable error of MDB_MAP_FULL to work out-of-the-box by just
+    /// retrying one or more times
+    fn resize_if_map_full(&self, err: lmdb::Error) -> lmdb::Error {
+        if err == lmdb::Error::MapFull {
+            self.env
+                .do_resize(None)
+                .expect("Failed to resize after a write/commit failed with MDB_MAP_FULL");
+            self.unschedule_map_resize();
+        }
+        err
+    }
+
+    fn schedule_map_resize_if_map_full(&self, err: lmdb::Error) -> lmdb::Error {
+        if err == lmdb::Error::MapFull {
+            self.schedule_map_resize();
+        }
+        err
     }
 }
 
@@ -165,56 +207,41 @@ impl<'tx> TransactionalRo<'tx> for LmdbImpl {
 impl<'tx> TransactionalRw<'tx> for LmdbImpl {
     type TxRw = DbTxRw<'tx>;
 
-    fn transaction_rw<'st: 'tx>(&'st self) -> storage_core::Result<Self::TxRw> {
-        remap::remap(
-            &self.env,
-            // Acquire exclusive memory map token to make sure no transactions are active for
-            // the duration of memory remapping.
-            self.map_token.write().expect("mmap lock to be alive"),
-            self.tx_size,
-        )?;
-        self.start_transaction(lmdb::Environment::begin_rw_txn)
+    fn transaction_rw<'st: 'tx>(
+        &'st self,
+        size: Option<usize>,
+    ) -> storage_core::Result<Self::TxRw> {
+        self.resize_if_resize_scheduled();
+        self.start_transaction(|env| lmdb::Environment::begin_rw_txn(env, size))
     }
 }
 
 impl utils::shallow_clone::ShallowClone for LmdbImpl {}
 impl backend::BackendImpl for LmdbImpl {}
 
-#[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Lmdb {
     path: PathBuf,
     flags: lmdb::EnvironmentFlags,
-    map_size: MemSize,
-    tx_size: MemSize,
+    inital_map_size: InitialMapSize,
+    resize_settings: DatabaseResizeSettings,
+    resize_callback: MapResizeCallback,
 }
 
 impl Lmdb {
-    /// Amount of space the memory map is initialized with
-    pub const DEFAULT_MAP_SIZE: MemSize = MemSize::from_megabytes(16);
-
-    /// Amount of space needed for a transaction by default
-    pub const DEFAULT_TX_SIZE: MemSize = MemSize::from_megabytes(8);
-
     /// New LMDB database backend
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(
+        path: PathBuf,
+        inital_map_size: InitialMapSize,
+        resize_settings: DatabaseResizeSettings,
+        resize_callback: MapResizeCallback,
+    ) -> Self {
         Self {
             path,
             flags: lmdb::EnvironmentFlags::default(),
-            map_size: Self::DEFAULT_MAP_SIZE,
-            tx_size: Self::DEFAULT_TX_SIZE,
+            inital_map_size,
+            resize_settings,
+            resize_callback,
         }
-    }
-
-    /// Set the initial memory map size
-    pub fn with_map_size(mut self, map_size: MemSize) -> Self {
-        self.map_size = map_size;
-        self
-    }
-
-    /// Set maximum transaction size
-    pub fn with_tx_size(mut self, tx_size: MemSize) -> Self {
-        self.tx_size = tx_size;
-        self
     }
 
     /// Use a writable memory map.
@@ -240,13 +267,25 @@ impl backend::Backend for Lmdb {
         // Attempt to create the storage directory
         std::fs::create_dir_all(&self.path).map_err(error::process_io_error)?;
 
+        let initial_map_size = self
+            .inital_map_size
+            .into_memsize()
+            .map(|v| v.as_bytes().try_into().expect("MemSize to usize conversion failed"));
+
         // Set up LMDB environment
-        let environment = lmdb::Environment::new()
-            .set_max_dbs(desc.len() as u32)
-            .set_flags(self.flags)
-            .set_map_size(self.map_size.as_bytes())
-            .open(&self.path)
-            .or_else(error::process_with_err)?;
+        let environment = lmdb::Environment::new();
+
+        let environment = if let Some(sz) = initial_map_size {
+            environment.set_map_size(sz)
+        } else {
+            environment
+        }
+        .set_resize_settings(self.resize_settings)
+        .set_resize_callback(self.resize_callback.take())
+        .set_max_dbs(desc.len() as u32)
+        .set_flags(self.flags)
+        .open(&self.path)
+        .or_else(error::process_with_err)?;
 
         // Set up all the databases
         let dbs = desc
@@ -258,8 +297,10 @@ impl backend::Backend for Lmdb {
         Ok(LmdbImpl {
             env: Arc::new(environment),
             dbs,
-            map_token: Arc::new(RwLock::new(remap::MemMapController::new())),
-            tx_size: self.tx_size,
+            map_resize_scheduled: Arc::new(AtomicBool::new(false)),
         })
     }
 }
+
+#[cfg(test)]
+mod resize_tests;
