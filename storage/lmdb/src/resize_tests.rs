@@ -94,7 +94,7 @@ fn auto_map_resize_between_txs(#[case] seed: Seed) {
         rw_tx.put(DbIndex::new(0), key.clone(), val.clone()).unwrap();
         match rw_tx.commit() {
             Ok(_) => resizes_via_commit_count += 1,
-            Err(e) => panic!("Failed to commit: {:?}", e),
+            Err(e) => panic!("Failed to commit: {e:?}"),
         }
     }
 

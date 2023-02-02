@@ -74,6 +74,9 @@ pub async fn initialize(
     // TODO: Replace Lmdb with Sqlite backend when it's ready
     let peerdb_storage = PeerDbStorageImpl::new(storage_lmdb::Lmdb::new(
         node_config.datadir.join("peerdb-lmdb"),
+        None,
+        Default::default(),
+        None,
     ))?;
     let p2p = manager.add_subsystem(
         "p2p",

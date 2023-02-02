@@ -28,7 +28,7 @@ pub enum Recoverable {
     #[error("The database has temporarily exhausted some resource")]
     TemporarilyUnavailable,
 
-    /// Database file failed to initialise. For example, if the DB file format is wrong.
+    /// Database file failed to initialize. For example, if the DB file format is wrong.
     #[error("The database file failed to initialize")]
     DbInit,
 
