@@ -18,7 +18,7 @@ use crate::prelude::*;
 const TEST_KEY: &[u8] = b"foo";
 
 fn setup<B: Backend>(backend: B, init: Vec<u8>) -> B::Impl {
-    let store = backend.open(desc(1)).expect("db open to succeed");
+    let store = backend.open(1.try_into().unwrap()).expect("db open to succeed");
 
     let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(IDX.0, TEST_KEY.to_vec(), init).unwrap();
@@ -28,7 +28,7 @@ fn setup<B: Backend>(backend: B, init: Vec<u8>) -> B::Impl {
 }
 
 fn read_initialize_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+    let store = backend_fn().open(1.try_into().unwrap()).expect("db open to succeed");
 
     let thr0 = thread::spawn({
         let store = store.clone();
@@ -137,7 +137,7 @@ fn threaded_reads_consistent<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 }
 
 fn write_different_keys_and_iterate<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+    let store = backend_fn().open(1.try_into().unwrap()).expect("db open to succeed");
 
     let thr0 = thread::spawn({
         let store = store.clone();

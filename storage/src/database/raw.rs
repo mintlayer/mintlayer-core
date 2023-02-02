@@ -62,25 +62,6 @@ impl<Sch: Schema> DbIndex<Sch> {
         utils::ensure!(idx < Sch::desc_iter().count());
         Some(Self::from_usize_unchecked(idx))
     }
-
-    /// Database index from key-value map name
-    pub fn from_name<S: AsRef<str>>(name: S) -> Option<Self> {
-        Sch::desc_iter()
-            .position(|desc| desc.name == name.as_ref())
-            .map(Self::from_usize_unchecked)
-    }
-
-    /// Get index info
-    pub fn info(&self) -> storage_core::info::MapDesc {
-        Sch::desc_iter()
-            .nth(self.idx.get())
-            .expect("index to be in range due to schema")
-    }
-
-    /// Get map name at this index
-    pub fn name(&self) -> String {
-        self.info().name
-    }
 }
 
 impl<Sch> Ord for DbIndex<Sch> {
@@ -162,10 +143,6 @@ mod test {
         assert_eq!(TestDbIndex::from_usize(0), Some(idx0));
         assert_eq!(TestDbIndex::from_usize(1), Some(idx1));
         assert_eq!(TestDbIndex::from_usize(2), None);
-
-        assert_eq!(TestDbIndex::from_name("Db0"), Some(idx0));
-        assert_eq!(TestDbIndex::from_name("Db1"), Some(idx1));
-        assert_eq!(TestDbIndex::from_name("DbX"), None);
     }
 
     #[test]

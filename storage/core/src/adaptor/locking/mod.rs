@@ -21,12 +21,12 @@ mod prefix_iter_rw;
 use crate::{
     adaptor::{Construct, CoreOps},
     backend,
-    info::{DbDesc, DbIndex},
+    info::DbIndex,
     Data,
 };
 use backend::{PrefixIter, ReadOps, WriteOps};
 
-use std::{borrow::Cow, collections::BTreeMap};
+use std::{borrow::Cow, collections::BTreeMap, num::NonZeroUsize};
 use utils::sync;
 
 // Read-only transaction just holds a read lock to the database
@@ -108,7 +108,7 @@ impl<'tx, T: ReadOps + WriteOps> backend::TxRw for TxRw<'tx, T> {
 
 pub struct TransactionLockImpl<T> {
     db: sync::Arc<sync::RwLock<T>>,
-    num_maps: usize,
+    num_maps: NonZeroUsize,
 }
 
 impl<T> Clone for TransactionLockImpl<T> {
@@ -136,7 +136,7 @@ impl<'tx, T: 'tx + ReadOps + WriteOps> backend::TransactionalRw<'tx> for Transac
     fn transaction_rw<'st: 'tx>(&'st self, _: Option<usize>) -> crate::Result<Self::TxRw> {
         Ok(TxRw {
             db: self.db.write().expect("lock to be alive"),
-            deltas: vec![BTreeMap::new(); self.num_maps],
+            deltas: vec![BTreeMap::new(); self.num_maps.into()],
         })
     }
 }
@@ -165,10 +165,12 @@ where
 {
     type Impl = TransactionLockImpl<T>;
 
-    fn open(self, desc: DbDesc) -> crate::Result<Self::Impl> {
-        let num_maps = desc.len();
-        let db = sync::Arc::new(sync::RwLock::new(T::construct(self.0, desc)?));
-        Ok(TransactionLockImpl { db, num_maps })
+    fn open(self, db_count: NonZeroUsize) -> crate::Result<Self::Impl> {
+        let db = sync::Arc::new(sync::RwLock::new(T::construct(self.0, db_count)?));
+        Ok(TransactionLockImpl {
+            db,
+            num_maps: db_count,
+        })
     }
 }
 

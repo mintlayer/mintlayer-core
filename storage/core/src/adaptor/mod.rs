@@ -17,6 +17,8 @@
 
 mod locking;
 
+use std::num::NonZeroUsize;
+
 pub use locking::Locking;
 
 use crate::backend;
@@ -26,11 +28,11 @@ pub trait Construct: Sized {
     /// Type the storage can be initialized from
     type From;
 
-    /// Construct storage from the initializer and database description
-    fn construct(init: Self::From, desc: crate::info::DbDesc) -> crate::Result<Self>;
+    /// Construct storage from the initializer and number of databases required
+    fn construct(init: Self::From, db_count: NonZeroUsize) -> crate::Result<Self>;
 }
 
 /// Core operations on storage without transaction support
 pub trait CoreOps: backend::ReadOps + backend::WriteOps + Construct {}
-// CoreOps is automatically implemented if pre-requisits are satisfied
+// CoreOps is automatically implemented if pre-requisites are satisfied
 impl<T: backend::ReadOps + backend::WriteOps + Construct> CoreOps for T {}

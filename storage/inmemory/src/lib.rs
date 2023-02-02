@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use storage_core::{adaptor, backend, util, Data, DbDesc, DbIndex};
+use storage_core::{adaptor, backend, util, Data, DbIndex};
 
-use std::{borrow::Cow, collections::BTreeMap};
+use std::{borrow::Cow, collections::BTreeMap, num::NonZeroUsize};
 
 type Map = BTreeMap<Data, Data>;
 
@@ -67,8 +67,8 @@ impl backend::WriteOps for StorageMaps {
 impl adaptor::Construct for StorageMaps {
     type From = ();
 
-    fn construct(_: (), desc: DbDesc) -> storage_core::Result<Self> {
-        Ok(Self(vec![Map::new(); desc.len()]))
+    fn construct(_: (), db_count: NonZeroUsize) -> storage_core::Result<Self> {
+        Ok(Self(vec![Map::new(); db_count.into()]))
     }
 }
 
@@ -78,8 +78,8 @@ pub struct InMemory(adaptor::Locking<StorageMaps>);
 impl backend::Backend for InMemory {
     type Impl = <adaptor::Locking<StorageMaps> as backend::Backend>::Impl;
 
-    fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
-        self.0.open(desc)
+    fn open(self, db_count: NonZeroUsize) -> storage_core::Result<Self::Impl> {
+        self.0.open(db_count)
     }
 }
 

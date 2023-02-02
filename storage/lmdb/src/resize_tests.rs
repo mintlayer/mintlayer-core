@@ -81,7 +81,7 @@ fn auto_map_resize_between_txs(#[case] seed: Seed) {
             Some(resize_callback),
         );
 
-        let lmdb_impl = lmdb.open(DbDesc::from_iter(vec![MapDesc::new("SomeDb")])).unwrap();
+        let lmdb_impl = lmdb.open(1.try_into().unwrap()).unwrap();
 
         // generate random values with a predefined target size that surpasses the current map size
         let data = create_random_data_map_with_target_byte_size(
@@ -151,7 +151,7 @@ fn auto_map_resize_between_puts(#[case] seed: Seed) {
             Some(resize_callback),
         );
 
-        let lmdb_impl = lmdb.open(DbDesc::from_iter(vec![MapDesc::new("SomeDb")])).unwrap();
+        let lmdb_impl = lmdb.open(1.try_into().unwrap()).unwrap();
 
         // generate random values with a predefined target size that surpasses the current map size
         let data = create_random_data_map_with_target_byte_size(

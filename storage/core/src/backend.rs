@@ -15,14 +15,11 @@
 
 //! Low-level interface implemented by storage backends.
 
-use std::borrow::Cow;
+use std::{borrow::Cow, num::NonZeroUsize};
 
 use utils::shallow_clone::ShallowClone;
 
-pub use crate::{
-    info::{DbDesc, DbIndex},
-    Data,
-};
+pub use crate::{info::DbIndex, Data};
 
 /// Types providing capability of iterating over keys with given prefix
 pub trait PrefixIter<'i> {
@@ -95,5 +92,5 @@ pub trait Backend {
     type Impl: BackendImpl;
 
     /// Open the database, giving an implementation-specific handle
-    fn open(self, desc: DbDesc) -> crate::Result<Self::Impl>;
+    fn open(self, db_count: NonZeroUsize) -> crate::Result<Self::Impl>;
 }

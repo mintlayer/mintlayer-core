@@ -15,15 +15,12 @@
 
 //! Describe the database schema at type level
 
-pub use storage_core::{info::MapDesc, DbIndex};
+pub use storage_core::DbIndex;
 
 /// Describes single key-value map
 pub trait DbMap: 'static {
     /// Map name.
     const NAME: &'static str;
-
-    /// Expected size of values in the map. May be used for storage optimization.
-    const SIZE_HINT: core::ops::Range<usize> = 0..usize::MAX;
 
     /// Type of keys in the map
     type Key: serialization::Codec;
@@ -34,25 +31,22 @@ pub trait DbMap: 'static {
 
 /// What constitutes a valid database schema
 pub trait Schema: internal::Sealed + 'static {
-    type DescIter: Iterator<Item = MapDesc>;
+    type DescIter: Iterator<Item = usize>;
     fn desc_iter() -> Self::DescIter;
 }
 
 impl Schema for () {
-    type DescIter = std::iter::Empty<MapDesc>;
+    type DescIter = std::iter::Empty<usize>;
     fn desc_iter() -> Self::DescIter {
         std::iter::empty()
     }
 }
 
 impl<M: DbMap, Rest: Schema> Schema for (M, Rest) {
-    type DescIter = std::iter::Chain<std::iter::Once<MapDesc>, Rest::DescIter>;
+    type DescIter = std::iter::Chain<std::iter::Once<usize>, Rest::DescIter>;
     fn desc_iter() -> Self::DescIter {
-        let map_desc = MapDesc {
-            name: M::NAME.to_string(),
-            size_hint: M::SIZE_HINT,
-        };
-        std::iter::once(map_desc).chain(Rest::desc_iter())
+        // TODO(PR): Ensure this 0 is valid
+        std::iter::once(0).chain(Rest::desc_iter())
     }
 }
 

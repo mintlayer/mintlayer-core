@@ -18,7 +18,7 @@
 use crate::prelude::*;
 
 fn put_and_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+    let store = backend_fn().open(1.try_into().unwrap()).expect("db open to succeed");
 
     // Create a transaction, modify storage and abort transaction
     let mut dbtx = store.transaction_rw(None).unwrap();
@@ -35,7 +35,7 @@ fn put_and_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 }
 
 fn put_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+    let store = backend_fn().open(1.try_into().unwrap()).expect("db open to succeed");
 
     // Create a transaction, modify storage and abort transaction
     let mut dbtx = store.transaction_rw(None).unwrap();
@@ -49,7 +49,7 @@ fn put_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 }
 
 fn put_two_under_different_keys<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+    let store = backend_fn().open(1.try_into().unwrap()).expect("db open to succeed");
 
     // Create a transaction, modify storage and commit
     let mut dbtx = store.transaction_rw(None).unwrap();
@@ -89,7 +89,7 @@ fn put_two_under_different_keys<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>)
 }
 
 fn put_twice_then_commit_read_last<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+    let store = backend_fn().open(1.try_into().unwrap()).expect("db open to succeed");
 
     let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(IDX.0, b"hello".to_vec(), b"a".to_vec()).unwrap();
@@ -112,7 +112,7 @@ fn put_twice_then_commit_read_last<B: Backend, F: BackendFn<B>>(backend_fn: Arc<
 }
 
 fn put_iterator_count_matches<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+    let store = backend_fn().open(1.try_into().unwrap()).expect("db open to succeed");
 
     let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.put(IDX.0, vec![0x00], vec![]).unwrap();
@@ -126,7 +126,7 @@ fn put_iterator_count_matches<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 }
 
 fn put_and_iterate_over_prefixes<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+    let store = backend_fn().open(1.try_into().unwrap()).expect("db open to succeed");
 
     // Populate the database with some values
     let mut dbtx = store.transaction_rw(None).unwrap();
@@ -180,7 +180,7 @@ fn check_prefix<Tx: ReadOps>(dbtx: &Tx, prefix: Data, expected: &[(&str, &str)])
 }
 
 fn put_and_iterate_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-    let store = backend_fn().open(desc(1)).expect("db open to succeed");
+    let store = backend_fn().open(1.try_into().unwrap()).expect("db open to succeed");
 
     let expected_full_0 =
         [("aa", "0"), ("ab", "1"), ("ac", "2"), ("aca", "3"), ("acb", "4"), ("b", "5")];

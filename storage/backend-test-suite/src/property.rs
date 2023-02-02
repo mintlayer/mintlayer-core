@@ -68,7 +68,7 @@ fn overwrite_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
         (gen::key(100), gen::any::<Data>(), gen::any::<Data>())
             .prop_filter("not equal", |(_, a, b)| a != b),
         |backend, (key, val0, val1)| {
-            let store = backend.open(desc(1)).expect("db open to succeed");
+            let store = backend.open(1.try_into().unwrap()).expect("db open to succeed");
 
             // Check the store returns None for given key initially
             let dbtx = store.transaction_ro().unwrap();
@@ -124,7 +124,7 @@ fn add_and_delete<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
         backend_fn,
         gen::entries(NUM_DBS, 0usize..20),
         |backend, entries| {
-            let store = backend.open(desc(NUM_DBS)).expect("db open to succeed");
+            let store = backend.open(NUM_DBS.try_into().unwrap()).expect("db open to succeed");
 
             // Add all entries to the database
             let mut dbtx = store.transaction_rw(None).unwrap();
@@ -169,7 +169,7 @@ fn last_write_wins<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             gen::prop::collection::vec(gen::any::<Data>(), 0..100),
         ),
         |backend, (key, vals)| {
-            let store = backend.open(desc(1)).expect("db open to succeed");
+            let store = backend.open(1.try_into().unwrap()).expect("db open to succeed");
             let last = vals.last().cloned();
 
             // Add all entries to the database
@@ -199,7 +199,7 @@ fn add_and_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             proptest::collection::vec((gen::idx(NUM_DBS), gen::big_key()), 0usize..10),
         ),
         |backend, (entries1, entries2, extra_keys)| {
-            let store = backend.open(desc(NUM_DBS)).expect("db open to succeed");
+            let store = backend.open(NUM_DBS.try_into().unwrap()).expect("db open to succeed");
 
             // Add all entries to the database
             let mut dbtx = store.transaction_rw(None).unwrap();
@@ -255,7 +255,7 @@ fn add_modify_abort_modify_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F
         ),
         |backend, (to_prepopulate, to_abort, to_commit)| {
             let model = Model::from_actions(to_prepopulate.clone());
-            let store = backend.open(desc(1)).expect("db open to succeed");
+            let store = backend.open(1.try_into().unwrap()).expect("db open to succeed");
 
             // Pre-populate the db with initial data, check the contents against the model
             let mut dbtx = store.transaction_rw(None).unwrap();
@@ -295,7 +295,7 @@ fn add_modify_abort_replay_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F
         backend_fn,
         (gen::actions(100, 0..20), gen::actions(100, 0..20)),
         |backend, (initial, actions)| {
-            let store = backend.open(desc(1)).expect("db open to succeed");
+            let store = backend.open(1.try_into().unwrap()).expect("db open to succeed");
 
             // Pre-populate the db with initial data, check the contents against the model
             let mut dbtx = store.transaction_rw(None).unwrap();
@@ -326,7 +326,7 @@ fn db_writes_do_not_interfere<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
         backend_fn,
         (gen::actions(100, 0..20), gen::actions(100, 0..20)),
         |backend, (actions0, actions1)| {
-            let store = backend.open(desc(2)).expect("db open to succeed");
+            let store = backend.open(2.try_into().unwrap()).expect("db open to succeed");
 
             // Apply one set of operations to key-value map 0
             let mut dbtx = store.transaction_rw(None).unwrap();
@@ -354,7 +354,7 @@ fn empty_after_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             gen::prop::collection::vec(gen::key(100), 0..20),
         ),
         |backend, (actions, keys)| {
-            let store = backend.open(desc(5)).expect("db open to succeed");
+            let store = backend.open(5.try_into().unwrap()).expect("db open to succeed");
 
             // Apply one set of operations to key-value map 0
             let model = Model::from_actions(actions.clone());
@@ -393,7 +393,7 @@ fn prefix_iteration<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
                 actions_b.into_iter().map(|act| act.map_key(|k| add_prefix(b'b', k))).collect();
 
             // Open storage
-            let store = backend.open(desc(5)).expect("db open to succeed");
+            let store = backend.open(5.try_into().unwrap()).expect("db open to succeed");
 
             // Populate the database
             let mut dbtx = store.transaction_rw(None).unwrap();
@@ -443,7 +443,7 @@ fn post_commit_consistency<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
         gen::actions(100, 0..50),
         |backend, actions| {
             // Open storage
-            let store = backend.open(desc(1)).expect("db open to succeed");
+            let store = backend.open(1.try_into().unwrap()).expect("db open to succeed");
 
             let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.apply_actions(IDX.0, actions.into_iter());

@@ -15,13 +15,13 @@
 
 mod error;
 
+use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{borrow::Cow, path::PathBuf};
 
 use lmdb::Cursor;
 use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
-    info::{DbDesc, MapDesc},
     Data, DbIndex,
 };
 use utils::sync::Arc;
@@ -250,23 +250,23 @@ impl Lmdb {
         self
     }
 
-    fn open_db(env: &lmdb::Environment, desc: &MapDesc) -> storage_core::Result<lmdb::Database> {
-        let name = Some(desc.name.as_ref());
+    fn open_db(env: &lmdb::Environment, db_index: usize) -> storage_core::Result<lmdb::Database> {
         let flags = lmdb::DatabaseFlags::default();
-        env.create_db(name, flags).or_else(error::process_with_err)
+        env.create_db(Some(db_index.to_string().as_str()), flags)
+            .or_else(error::process_with_err)
     }
 }
 
 impl backend::Backend for Lmdb {
     type Impl = LmdbImpl;
 
-    fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
+    fn open(self, db_count: NonZeroUsize) -> storage_core::Result<Self::Impl> {
         // Attempt to create the storage directory
         std::fs::create_dir_all(&self.path).map_err(error::process_io_error)?;
 
         // Set up LMDB environment
         let environment = lmdb::Environment::new()
-            .set_max_dbs(desc.len() as u32)
+            .set_max_dbs(db_count.get() as u32)
             .set_flags(self.flags)
             .set_map_size(self.inital_map_size.unwrap_or(0))
             .set_resize_settings(self.resize_settings)
@@ -275,9 +275,9 @@ impl backend::Backend for Lmdb {
             .or_else(error::process_with_err)?;
 
         // Set up all the databases
-        let dbs = desc
-            .iter()
-            .map(|desc| Self::open_db(&environment, desc))
+        let dbs = (0..db_count.into())
+            .into_iter()
+            .map(|db_index| Self::open_db(&environment, db_index))
             .collect::<storage_core::Result<Vec<_>>>()
             .map(DbList)?;
 

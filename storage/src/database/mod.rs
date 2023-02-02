@@ -53,7 +53,8 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
     /// Create new storage with given backend
     pub fn new(backend: B) -> crate::Result<Self> {
         Ok(Self {
-            backend: backend.open(Sch::desc_iter().collect())?,
+            backend: backend
+                .open(Sch::desc_iter().count().try_into().expect("Empty schema provided"))?,
             _schema: Default::default(),
         })
     }
