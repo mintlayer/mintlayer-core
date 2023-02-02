@@ -15,6 +15,7 @@
 
 use crate::memsize::MemSize;
 
+#[derive(Default)]
 pub struct InitialMapSize {
     initial_map_size: Option<MemSize>,
 }
@@ -22,14 +23,6 @@ pub struct InitialMapSize {
 impl InitialMapSize {
     pub fn into_memsize(&self) -> Option<MemSize> {
         self.initial_map_size
-    }
-}
-
-impl Default for InitialMapSize {
-    fn default() -> Self {
-        Self {
-            initial_map_size: None,
-        }
     }
 }
 
