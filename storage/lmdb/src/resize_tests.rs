@@ -76,7 +76,7 @@ fn auto_map_resize_between_txs(#[case] seed: Seed) {
         let data_dir = TempDir::new("lmdb_resize").unwrap();
         let lmdb = Lmdb::new(
             data_dir.into_path(),
-            Some(initial_map_size),
+            Some(MemSize::from_bytes(initial_map_size)),
             resize_settings.clone(),
             Some(resize_callback),
         );
@@ -86,7 +86,7 @@ fn auto_map_resize_between_txs(#[case] seed: Seed) {
         // generate random values with a predefined target size that surpasses the current map size
         let data = create_random_data_map_with_target_byte_size(
             &mut rng,
-            initial_map_size * 5,
+            (initial_map_size * 5) as usize,
             500,
             10000,
         );
@@ -146,7 +146,7 @@ fn auto_map_resize_between_puts(#[case] seed: Seed) {
         let data_dir = TempDir::new("lmdb_resize").unwrap();
         let lmdb = Lmdb::new(
             data_dir.into_path(),
-            Some(initial_map_size),
+            Some(MemSize::from_bytes(initial_map_size)),
             resize_settings.clone(),
             Some(resize_callback),
         );
@@ -156,7 +156,7 @@ fn auto_map_resize_between_puts(#[case] seed: Seed) {
         // generate random values with a predefined target size that surpasses the current map size
         let data = create_random_data_map_with_target_byte_size(
             &mut rng,
-            initial_map_size * 5,
+            (initial_map_size * 5) as usize,
             500,
             10000,
         );
