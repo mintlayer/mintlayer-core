@@ -726,6 +726,9 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
                 GenBlockIndex::Block(block_index) => block_index,
             };
             to_disconnect = self.disconnect_tip(Some(to_disconnect_block.block_id())).log_err()?;
+
+            // check if we need to rollback the epoch seal
+            self.rollback_epoch_seal(to_disconnect.block_height().next_height())?;
         }
         Ok(())
     }
@@ -748,8 +751,8 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
 
         let common_ancestor_id = {
             let err = "This vector cannot be empty since there is at least one block to connect";
-            let first_block = &new_chain.first().expect(err);
-            &first_block.prev_block_id()
+            let first_block = new_chain.first().expect(err);
+            first_block.prev_block_id()
         };
 
         // Disconnect the current chain if it is not a genesis
@@ -767,7 +770,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         // Connect the new chain
         for block_index in new_chain {
             self.connect_tip(&block_index).log_err()?;
-            self.activate_epoch_seal(block_index.block_height())?;
+            self.advance_epoch_seal(block_index.block_height())?;
         }
 
         Ok(())
@@ -956,24 +959,24 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         }
     }
 
-    fn activate_epoch_seal(&mut self, height: BlockHeight) -> Result<(), BlockError> {
-        if self.chain_config.is_due_for_epoch_seal(height) {
-            let current_epoch_index = self.chain_config.epoch_index_from_height(&height);
+    fn advance_epoch_seal(&mut self, tip_height: BlockHeight) -> Result<(), BlockError> {
+        if self.chain_config.is_due_for_epoch_seal(&tip_height) {
+            let current_epoch_index = self.chain_config.epoch_index_from_height(&tip_height);
             let sealed_epoch_distance_from_tip =
                 self.chain_config.sealed_epoch_distance_from_tip() as u64;
 
+            // start sealing only if tip epoch is far enough, after that we can seal every epoch step
             if current_epoch_index >= sealed_epoch_distance_from_tip {
                 let epoch_index_to_seal = current_epoch_index - sealed_epoch_distance_from_tip;
-
                 let epoch_length = self.chain_config.epoch_length().get();
                 let first_block_epoch_to_seal = epoch_index_to_seal * epoch_length;
-                let last_block_epoch_to_seal = first_block_epoch_to_seal + epoch_length - 1;
+                let end_block_epoch_to_seal = first_block_epoch_to_seal + epoch_length;
 
                 // iterate over every block in the epoch and merge every block delta into a singe delta
-                let epoch_delta = (first_block_epoch_to_seal..=last_block_epoch_to_seal)
+                let epoch_delta = (first_block_epoch_to_seal..end_block_epoch_to_seal)
                     .try_fold(
-                        PoSAccountingDeltaData::new(),
-                        |mut delta: PoSAccountingDeltaData, height| -> Result<_, BlockError> {
+                        None,
+                        |delta: Option<PoSAccountingDeltaData>, height| -> Result<_, BlockError> {
                             let genblock_id = self
                                 .db_tx
                                 .get_block_id_by_height(&BlockHeight::new(height))?
@@ -986,21 +989,64 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
                                     if let Some(block_delta) =
                                         self.db_tx.get_accounting_delta(block_id)?
                                     {
+                                        let mut delta = delta.unwrap_or_default();
                                         delta.merge_with_delta(block_delta)?;
+                                        return Ok(Some(delta));
                                     }
                                 }
                             };
+                            // TODO: delete block deltas?
                             Ok(delta)
                         },
                     )
                     .log_err()?;
 
-                // flush delta to sealed storage
-                let mut db = PoSAccountingDB::<_, SealedStorageTag>::new(&mut self.db_tx);
-                db.batch_write_delta(epoch_delta).map_err(BlockError::from).log_err()?;
+                // it is possible that an epoch doesn't have any accounting data so no delta is stored in that case
+                if let Some(epoch_delta) = epoch_delta {
+                    // apply delta to sealed storage
+                    let mut db = PoSAccountingDB::<_, SealedStorageTag>::new(&mut self.db_tx);
+                    let epoch_undo =
+                        db.batch_write_delta(epoch_delta).map_err(BlockError::from).log_err()?;
+
+                    // store undo delta for sealed epoch
+                    self.db_tx
+                        .set_accounting_epoch_undo_delta(epoch_index_to_seal, &epoch_undo)
+                        .log_err()?;
+                }
             }
         }
+        Ok(())
+    }
 
+    fn rollback_epoch_seal(
+        &mut self,
+        disconnected_tip_height: BlockHeight,
+    ) -> Result<(), BlockError> {
+        // if a block was disconnected and that was an epoch boundary then the epoch seal should be moved back
+        if self.chain_config.is_due_for_epoch_seal(&disconnected_tip_height) {
+            let current_epoch_index =
+                self.chain_config.epoch_index_from_height(&disconnected_tip_height);
+            let sealed_epoch_distance_from_tip =
+                self.chain_config.sealed_epoch_distance_from_tip() as u64;
+
+            if let Some(epoch_index_to_unseal) =
+                current_epoch_index.checked_sub(sealed_epoch_distance_from_tip)
+            {
+                let epoch_undo = self
+                    .db_tx
+                    .get_accounting_epoch_undo_delta(epoch_index_to_unseal)
+                    .map_err(BlockError::from)
+                    .log_err()?;
+
+                // if no undo found just skip
+                if let Some(epoch_undo) = epoch_undo {
+                    let mut db = PoSAccountingDB::<_, SealedStorageTag>::new(&mut self.db_tx);
+                    db.undo_merge_with_delta(epoch_undo)?;
+
+                    self.db_tx.del_accounting_epoch_undo_delta(epoch_index_to_unseal)?;
+                }
+            };
+        }
         Ok(())
     }
 }

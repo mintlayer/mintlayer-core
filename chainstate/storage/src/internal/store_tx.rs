@@ -17,6 +17,7 @@ use chainstate_types::BlockIndex;
 use common::{
     chain::{
         block::BlockReward,
+        config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
         Block, GenBlock, OutPoint, OutPointSourceId,
@@ -24,7 +25,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id, Idable, H256},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, PoSAccountingDeltaData,
+    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, PoSAccountingDeltaData,
     PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData, PoolId,
 };
 use serialization::{Codec, Decode, DecodeAll, Encode, EncodeLike};
@@ -188,6 +189,13 @@ macro_rules! impl_read_ops {
                 id: Id<Block>,
             ) -> crate::Result<Option<PoSAccountingDeltaData>> {
                 self.read::<db::DBAccountingBlockDelta, _, _>(id)
+            }
+
+            fn get_accounting_epoch_undo_delta(
+                &self,
+                epoch_index: EpochIndex,
+            ) -> crate::Result<Option<DeltaMergeUndo>> {
+                self.read::<db::DBAccountingEpochDeltaUndo, _, _>(epoch_index)
             }
         }
 
@@ -447,6 +455,21 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     fn del_accounting_delta(&mut self, id: Id<Block>) -> crate::Result<()> {
         self.0.get_mut::<db::DBAccountingBlockDelta, _>().del(id).map_err(Into::into)
+    }
+
+    fn set_accounting_epoch_undo_delta(
+        &mut self,
+        epoch_index: EpochIndex,
+        undo: &DeltaMergeUndo,
+    ) -> crate::Result<()> {
+        self.write::<db::DBAccountingEpochDeltaUndo, _, _, _>(epoch_index, undo)
+    }
+
+    fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()> {
+        self.0
+            .get_mut::<db::DBAccountingEpochDeltaUndo, _>()
+            .del(epoch_index)
+            .map_err(Into::into)
     }
 }
 

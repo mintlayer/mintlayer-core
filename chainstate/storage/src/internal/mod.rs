@@ -19,6 +19,7 @@ use chainstate_types::BlockIndex;
 use common::{
     chain::{
         block::BlockReward,
+        config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
         Block, GenBlock, OutPoint, OutPointSourceId,
@@ -26,7 +27,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, PoSAccountingDeltaData,
+    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, PoSAccountingDeltaData,
     PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData, PoolId,
 };
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
@@ -240,6 +241,11 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
             &self,
             id: Id<Block>,
         ) -> crate::Result<Option<PoSAccountingDeltaData>>;
+
+        fn get_accounting_epoch_undo_delta(
+            &self,
+            epoch_index: EpochIndex,
+        ) -> crate::Result<Option<DeltaMergeUndo>>;
     }
 }
 
@@ -379,6 +385,14 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
         ) -> crate::Result<()>;
 
         fn del_accounting_delta(&mut self, id: Id<Block>) -> crate::Result<()>;
+
+        fn set_accounting_epoch_undo_delta(
+            &mut self,
+            epoch_index: EpochIndex,
+            undo: &DeltaMergeUndo,
+        ) -> crate::Result<()>;
+
+        fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
     }
 }
 

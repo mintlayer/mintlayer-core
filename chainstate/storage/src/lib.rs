@@ -27,12 +27,13 @@ pub use internal::Store;
 
 use chainstate_types::BlockIndex;
 use common::chain::block::BlockReward;
+use common::chain::config::EpochIndex;
 use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::{Block, GenBlock, OutPointSourceId};
 use common::primitives::{BlockHeight, Id};
 use pos_accounting::{
-    AccountingBlockUndo, PoSAccountingDeltaData, PoSAccountingStorageRead,
+    AccountingBlockUndo, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead,
     PoSAccountingStorageWrite,
 };
 use utxo::{UtxosStorageRead, UtxosStorageWrite};
@@ -101,6 +102,12 @@ pub trait BlockchainStorageRead:
 
     /// Get accounting delta for specific block
     fn get_accounting_delta(&self, id: Id<Block>) -> crate::Result<Option<PoSAccountingDeltaData>>;
+
+    /// Get accounting undo delta for specific epoch
+    fn get_accounting_epoch_undo_delta(
+        &self,
+        epoch_index: EpochIndex,
+    ) -> crate::Result<Option<DeltaMergeUndo>>;
 }
 
 /// Modifying operations on persistent blockchain data
@@ -187,6 +194,16 @@ pub trait BlockchainStorageWrite:
 
     // Remove accounting delta for specific block
     fn del_accounting_delta(&mut self, id: Id<Block>) -> crate::Result<()>;
+
+    // Set accounting undo for specific epoch
+    fn set_accounting_epoch_undo_delta(
+        &mut self,
+        epoch_index: EpochIndex,
+        undo: &DeltaMergeUndo,
+    ) -> crate::Result<()>;
+
+    // Remove accounting block undo data for specific block
+    fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction

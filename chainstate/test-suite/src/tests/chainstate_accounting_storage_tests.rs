@@ -218,13 +218,13 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
         assert!(storage.read_accounting_data_sealed().unwrap().is_empty());
 
         // check that deltas per block are stored
-        let pool_data = PoolData::new(pub_key.clone(), Amount::from_atoms(100));
+        let pool_data = PoolData::new(pub_key.clone(), amount_to_stake);
         let expected_block1_delta = pos_accounting::PoSAccountingDeltaData {
             pool_data: DeltaDataCollection::from_iter(
                 [(pool_id1, DataDelta::new(None, Some(pool_data.clone())))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
-                [(pool_id1, SignedAmount::from_atoms(100))].into_iter(),
+                [(pool_id1, amount_to_stake.into_signed().unwrap())].into_iter(),
             ),
             pool_delegation_shares: DeltaAmountCollection::new(),
             delegation_balances: DeltaAmountCollection::new(),
@@ -242,7 +242,7 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
                 [(pool_id2, DataDelta::new(None, Some(pool_data)))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
-                [(pool_id2, SignedAmount::from_atoms(100))].into_iter(),
+                [(pool_id2, amount_to_stake.into_signed().unwrap())].into_iter(),
             ),
             pool_delegation_shares: DeltaAmountCollection::new(),
             delegation_balances: DeltaAmountCollection::new(),
@@ -254,6 +254,8 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
             .expect("ok")
             .expect("some");
         assert_eq!(block2_delta, expected_block2_delta);
+
+        assert!(storage.get_accounting_epoch_undo_delta(0).unwrap().is_none());
     });
 }
 
@@ -340,7 +342,7 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
         assert!(storage.read_accounting_data_sealed().unwrap().is_empty());
 
         // check that deltas per block are stored
-        let pool_data = PoolData::new(pub_key.clone(), Amount::from_atoms(100));
+        let pool_data = PoolData::new(pub_key.clone(), amount_to_stake);
         let expected_block1_delta = pos_accounting::PoSAccountingDeltaData {
             pool_data: DeltaDataCollection::from_iter(
                 [(pool_id1, DataDelta::new(None, Some(pool_data.clone())))].into_iter(),
@@ -364,7 +366,7 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
                 [(pool_id2, DataDelta::new(None, Some(pool_data)))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
-                [(pool_id2, SignedAmount::from_atoms(100))].into_iter(),
+                [(pool_id2, amount_to_stake.into_signed().unwrap())].into_iter(),
             ),
             pool_delegation_shares: DeltaAmountCollection::new(),
             delegation_balances: DeltaAmountCollection::new(),
@@ -376,6 +378,8 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             .expect("ok")
             .expect("some");
         assert_eq!(block2_delta, expected_block2_delta);
+
+        assert!(storage.get_accounting_epoch_undo_delta(0).unwrap().is_none());
     });
 }
 
@@ -482,7 +486,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
                 [(pool_id1, DataDelta::new(None, Some(pool_data.clone())))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
-                [(pool_id1, SignedAmount::from_atoms(100))].into_iter(),
+                [(pool_id1, amount_to_stake.into_signed().unwrap())].into_iter(),
             ),
             pool_delegation_shares: DeltaAmountCollection::new(),
             delegation_balances: DeltaAmountCollection::new(),
@@ -500,7 +504,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
                 [(pool_id2, DataDelta::new(None, Some(pool_data)))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
-                [(pool_id2, SignedAmount::from_atoms(100))].into_iter(),
+                [(pool_id2, amount_to_stake.into_signed().unwrap())].into_iter(),
             ),
             pool_delegation_shares: DeltaAmountCollection::new(),
             delegation_balances: DeltaAmountCollection::new(),
@@ -512,6 +516,10 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             .expect("ok")
             .expect("some");
         assert_eq!(block2_delta, expected_block2_delta);
+
+        assert!(storage.get_accounting_epoch_undo_delta(0).unwrap().is_none());
+        assert!(storage.get_accounting_epoch_undo_delta(1).unwrap().is_some());
+        assert!(storage.get_accounting_epoch_undo_delta(2).unwrap().is_none());
     });
 }
 
@@ -582,7 +590,7 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
                 [(pool_id1, DataDelta::new(None, Some(pool_data)))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
-                [(pool_id1, SignedAmount::from_atoms(100))].into_iter(),
+                [(pool_id1, amount_to_stake.into_signed().unwrap())].into_iter(),
             ),
             pool_delegation_shares: DeltaAmountCollection::new(),
             delegation_balances: DeltaAmountCollection::new(),
@@ -594,5 +602,76 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
             .expect("ok")
             .expect("some");
         assert_eq!(block1_delta, expected_block1_delta);
+
+        assert!(storage.get_accounting_epoch_undo_delta(0).unwrap().is_none());
+        assert!(storage.get_accounting_epoch_undo_delta(1).unwrap().is_some());
+    });
+}
+
+// Config chain to seal an epoch every block and the distance between tip and sealed to 0
+// (meaning every block is sealed thus tip == sealed).
+// Create block1 from genesis that spend a coin (no accounting data).
+// Check that epoch is changed, but tip and sealed storages are empty.
+// Check that deltas per block and undo per epoch are empty.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn accounting_storage_no_accounting_data(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let storage = Store::new_empty().unwrap();
+        let mut rng = make_seedable_rng(seed);
+        let chain_config = ConfigBuilder::test_chain()
+            .epoch_length(NonZeroU64::new(1).unwrap())
+            .sealed_epoch_distance_from_tip(0)
+            .build();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_storage(storage.clone())
+            .with_chain_config(chain_config)
+            .build();
+
+        let tx1 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                OutputPurpose::Transfer(anyonecanspend_address()),
+            ))
+            .build();
+
+        let block1_index = tf
+            .make_block_builder()
+            .add_transaction(tx1)
+            .build_and_process()
+            .expect("ok")
+            .expect("some");
+        // genesis block takes epoch 0, so new blocks start from epoch 1
+        assert_eq!(
+            tf.chainstate
+                .get_chain_config()
+                .epoch_index_from_height(&block1_index.block_height()),
+            1
+        );
+
+        // check that result is stored to tip and sealed
+        assert_eq!(
+            storage.read_accounting_data_tip().unwrap(),
+            pos_accounting::PoSAccountingData::new()
+        );
+        assert_eq!(
+            storage.read_accounting_data_sealed().unwrap(),
+            pos_accounting::PoSAccountingData::new()
+        );
+
+        // check that deltas per block are not stored
+        assert!(storage.get_accounting_delta(*block1_index.block_id()).unwrap().is_none());
+
+        // check that undo per epoch are not stored
+        assert!(storage.get_accounting_epoch_undo_delta(0).unwrap().is_none());
+        assert!(storage.get_accounting_epoch_undo_delta(1).unwrap().is_none());
     });
 }

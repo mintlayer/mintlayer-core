@@ -22,13 +22,15 @@ use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::{
     chain::{
         block::BlockReward,
+        config::EpochIndex,
         transaction::{OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition},
         Block, GenBlock, OutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, PoSAccountingDeltaData, PoolData, PoolId,
+    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, PoSAccountingDeltaData,
+    PoolData, PoolId,
 };
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
@@ -76,6 +78,11 @@ mockall::mock! {
         fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
 
         fn get_accounting_delta(&self, id: Id<Block>) -> crate::Result<Option<PoSAccountingDeltaData>>;
+
+        fn get_accounting_epoch_undo_delta(
+            &self,
+            epoch_index: EpochIndex,
+        ) -> crate::Result<Option<DeltaMergeUndo>>;
     }
 
     impl UtxosStorageRead for Store {
@@ -164,6 +171,13 @@ mockall::mock! {
             delta: &PoSAccountingDeltaData,
         ) -> crate::Result<()>;
         fn del_accounting_delta(&mut self, id: Id<Block>) -> crate::Result<()>;
+
+        fn set_accounting_epoch_undo_delta(
+            &mut self,
+            epoch_index: EpochIndex,
+            undo: &DeltaMergeUndo,
+        ) -> crate::Result<()>;
+        fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for Store {
@@ -294,6 +308,11 @@ mockall::mock! {
         fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
 
         fn get_accounting_delta(&self, id: Id<Block>) -> crate::Result<Option<PoSAccountingDeltaData>>;
+
+        fn get_accounting_epoch_undo_delta(
+            &self,
+            epoch_index: EpochIndex,
+        ) -> crate::Result<Option<DeltaMergeUndo>>;
     }
 
     impl crate::UtxosStorageRead for StoreTxRo {
@@ -390,6 +409,11 @@ mockall::mock! {
         fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
 
         fn get_accounting_delta(&self, id: Id<Block>) -> crate::Result<Option<PoSAccountingDeltaData>>;
+
+        fn get_accounting_epoch_undo_delta(
+            &self,
+            epoch_index: EpochIndex,
+        ) -> crate::Result<Option<DeltaMergeUndo>>;
     }
 
     impl UtxosStorageRead for StoreTxRw {
@@ -479,6 +503,13 @@ mockall::mock! {
             delta: &PoSAccountingDeltaData,
         ) -> crate::Result<()>;
         fn del_accounting_delta(&mut self, id: Id<Block>) -> crate::Result<()>;
+
+        fn set_accounting_epoch_undo_delta(
+            &mut self,
+            epoch_index: EpochIndex,
+            undo: &DeltaMergeUndo,
+        ) -> crate::Result<()>;
+        fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for StoreTxRw {

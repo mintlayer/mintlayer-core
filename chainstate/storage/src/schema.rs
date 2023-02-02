@@ -18,13 +18,15 @@
 use chainstate_types::BlockIndex;
 use common::{
     chain::{
+        config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
         Block, GenBlock, OutPoint, OutPointSourceId, Transaction, TxMainChainIndex,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, PoSAccountingDeltaData, PoolData, PoolId,
+    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, PoSAccountingDeltaData,
+    PoolData, PoolId,
 };
 use utxo::{Utxo, UtxosBlockUndo};
 
@@ -43,7 +45,6 @@ storage::decl_schema! {
         pub DBBlockByHeight: Map<BlockHeight, Id<GenBlock>>,
         /// Store for Utxo Entries
         pub DBUtxo: Map<OutPoint, Utxo>,
-        // TODO: no need to store info for sealed blocks
         /// Store for utxo BlockUndo
         pub DBUtxosBlockUndo: Map<Id<Block>, UtxosBlockUndo>,
         /// Store for token's info; created on issuance
@@ -51,11 +52,12 @@ storage::decl_schema! {
         /// Store of issuance tx id vs token id
         pub DBIssuanceTxVsTokenId: Map<Id<Transaction>, TokenId>,
 
-        // TODO: no need to store info for sealed blocks
         /// Store for accounting BlockUndo
         pub DBAccountingBlockUndo: Map<Id<Block>, AccountingBlockUndo>,
         /// Store for accounting deltas per block
         pub DBAccountingBlockDelta: Map<Id<Block>, PoSAccountingDeltaData>,
+        /// Store for accounting undo deltas per epoch
+        pub DBAccountingEpochDeltaUndo: Map<EpochIndex, DeltaMergeUndo>,
 
         /// Accounting data is stored as 2 different sets: tip, sealed
         /// `Tip` is the current state of the accounting data. It is updated on every block.

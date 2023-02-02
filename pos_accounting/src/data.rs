@@ -45,6 +45,7 @@ impl PoSAccountingData {
         }
     }
 
+    // TODO: avoid manual implementation (mintlayer/mintlayer-core#669)
     pub fn is_empty(&self) -> bool {
         self.pool_data.is_empty()
             && self.pool_balances.is_empty()
