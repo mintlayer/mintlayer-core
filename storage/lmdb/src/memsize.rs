@@ -35,41 +35,14 @@ impl MemSize {
         Self::from_kilobytes(1024 * megabytes)
     }
 
-    /// Get raw byte count as u64
-    pub fn as_bytes_u64(self) -> u64 {
-        self.0
-    }
-
     /// Get raw byte count in native representation
     pub fn as_bytes(self) -> u64 {
         self.0
-    }
-
-    /// Division, rounding up
-    pub fn div_ceil(self, rhs: Self) -> u64 {
-        // TODO: Use u64::div_ceil once stable
-        self.0 / rhs.0 + (self.0 % rhs.0 > 0) as u64
     }
 }
 
 impl std::fmt::Display for MemSize {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}B", self.0)
-    }
-}
-
-impl std::ops::Add for MemSize {
-    type Output = MemSize;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Self(self.0 + rhs.0)
-    }
-}
-
-impl std::ops::Mul<MemSize> for u64 {
-    type Output = MemSize;
-
-    fn mul(self, rhs: MemSize) -> Self::Output {
-        MemSize(self * rhs.0)
     }
 }
