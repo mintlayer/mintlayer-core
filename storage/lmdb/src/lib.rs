@@ -26,8 +26,7 @@ use lmdb::Cursor;
 use resize_callback::MapResizeCallback;
 use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
-    info::{DbDesc, MapDesc},
-    Data, MapIndex,
+    Data, DbDesc, MapDesc, MapIndex,
 };
 use utils::sync::Arc;
 

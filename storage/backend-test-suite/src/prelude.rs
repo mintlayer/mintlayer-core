@@ -19,7 +19,7 @@ pub use storage_core::{
     backend::{
         Backend, Data, PrefixIter, ReadOps, TransactionalRo, TransactionalRw, TxRo, TxRw, WriteOps,
     },
-    info::{self, DbDesc, MapDesc, MapIndex},
+    DbDesc, MapDesc, MapIndex,
 };
 pub use utils::{sync, thread};
 

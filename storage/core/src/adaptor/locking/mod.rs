@@ -20,11 +20,9 @@ mod prefix_iter_rw;
 
 use crate::{
     adaptor::{Construct, CoreOps},
-    backend,
-    info::{DbDesc, MapIndex},
-    Data,
+    backend::{self, PrefixIter, ReadOps, WriteOps},
+    Data, DbDesc, MapIndex,
 };
-use backend::{PrefixIter, ReadOps, WriteOps};
 
 use std::{borrow::Cow, collections::BTreeMap};
 use utils::sync;

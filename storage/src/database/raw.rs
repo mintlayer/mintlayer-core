@@ -71,7 +71,7 @@ impl<Sch: Schema> MapIndex<Sch> {
     }
 
     /// Get index info
-    pub fn info(&self) -> storage_core::info::MapDesc {
+    pub fn info(&self) -> storage_core::MapDesc {
         Sch::desc_iter()
             .nth(self.idx.get())
             .expect("index to be in range due to schema")

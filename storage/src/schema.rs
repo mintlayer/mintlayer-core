@@ -15,7 +15,7 @@
 
 //! Describe the database schema at type level
 
-pub use storage_core::{info::MapDesc, MapIndex};
+pub use storage_core::{MapDesc, MapIndex};
 
 /// Describes single key-value map
 pub trait DbMap: 'static {

@@ -19,10 +19,7 @@ use std::borrow::Cow;
 
 use utils::shallow_clone::ShallowClone;
 
-pub use crate::{
-    info::{DbDesc, MapIndex},
-    Data,
-};
+pub use crate::{Data, DbDesc, MapIndex};
 
 /// Types providing capability of iterating over keys with given prefix
 pub trait PrefixIter<'i> {
