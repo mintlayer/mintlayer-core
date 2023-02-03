@@ -15,6 +15,8 @@
 
 //! Low-level runtime database layout description
 
+use std::collections::BTreeSet;
+
 /// Database index type, just a thin wrapper over usize
 #[derive(Eq, PartialEq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct MapIndex(usize);
@@ -73,8 +75,15 @@ impl std::ops::Index<MapIndex> for DbDesc {
     }
 }
 
+fn assert_no_map_duplicates(map_descs: &Vec<MapDesc>) {
+    let set = map_descs.iter().cloned().map(|desc| desc.name).collect::<BTreeSet<String>>();
+    assert!(set.len() == map_descs.len(), "Duplicate map names found");
+}
+
 impl FromIterator<MapDesc> for DbDesc {
     fn from_iter<T: IntoIterator<Item = MapDesc>>(iter: T) -> Self {
-        Self(iter.into_iter().collect())
+        let result = iter.into_iter().collect();
+        assert_no_map_duplicates(&result);
+        Self(result)
     }
 }
