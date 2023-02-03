@@ -19,7 +19,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use tokio::{sync::oneshot, time::timeout};
+use tokio::time::timeout;
 
 use crate::{
     config::P2pConfig,
@@ -29,6 +29,7 @@ use crate::{
         connect_services, get_connectivity_event, peerdb_inmemory_store, P2pTestTimeGetter,
         TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
+    utils::oneshot_nofail,
 };
 use common::chain::config;
 
@@ -623,7 +624,7 @@ async fn connection_timeout_rpc_notified<T>(
         peer_manager.run().await.unwrap();
     });
 
-    let (rtx, rrx) = oneshot::channel();
+    let (rtx, rrx) = oneshot_nofail::channel();
     tx.send(PeerManagerEvent::Connect(addr2, rtx)).unwrap();
 
     match timeout(*p2p_config.outbound_connection_timeout, rrx).await {
@@ -697,7 +698,7 @@ where
     .await;
 
     // Get the first peer manager's bind address
-    let (rtx, rrx) = oneshot::channel();
+    let (rtx, rrx) = oneshot_nofail::channel();
     tx1.send(PeerManagerEvent::GetBindAddresses(rtx)).unwrap();
     let bind_addresses = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
@@ -728,7 +729,7 @@ where
     loop {
         tokio::time::sleep(Duration::from_millis(10)).await;
         time_getter.advance_time(Duration::from_secs(1)).await;
-        let (rtx, rrx) = oneshot::channel();
+        let (rtx, rrx) = oneshot_nofail::channel();
         tx1.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
         let connected_peers = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
         if connected_peers.len() == 1 {
@@ -791,7 +792,7 @@ where
     .await;
 
     // Get the first peer manager's bind address
-    let (rtx, rrx) = oneshot::channel();
+    let (rtx, rrx) = oneshot_nofail::channel();
     tx1.send(PeerManagerEvent::GetBindAddresses(rtx)).unwrap();
 
     let bind_addresses = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();

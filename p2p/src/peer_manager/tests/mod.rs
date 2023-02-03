@@ -20,10 +20,7 @@ mod ping;
 use std::{sync::Arc, time::Duration};
 
 use common::time_getter::TimeGetter;
-use tokio::{
-    sync::{mpsc::UnboundedSender, oneshot},
-    time::timeout,
-};
+use tokio::{sync::mpsc::UnboundedSender, time::timeout};
 
 use crate::{
     event::PeerManagerEvent,
@@ -31,6 +28,7 @@ use crate::{
     net::{ConnectivityService, NetworkingService},
     peer_manager::PeerManager,
     testing_utils::peerdb_inmemory_store,
+    utils::oneshot_nofail,
     P2pConfig,
 };
 
@@ -120,7 +118,7 @@ where
 async fn get_connected_peers<T: NetworkingService + std::fmt::Debug>(
     tx: &UnboundedSender<PeerManagerEvent<T>>,
 ) -> Vec<ConnectedPeer> {
-    let (rtx, rrx) = oneshot::channel();
+    let (rtx, rrx) = oneshot_nofail::channel();
     tx.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
     timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap()
 }

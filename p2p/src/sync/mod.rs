@@ -22,7 +22,7 @@ mod request;
 
 use std::{collections::HashMap, sync::Arc};
 
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 use void::Void;
 
 use chainstate::{ban_score::BanScore, chainstate_interface, BlockError, ChainstateError, Locator};
@@ -42,6 +42,7 @@ use crate::{
     event::{PeerManagerEvent, SyncControlEvent},
     message::{self, Announcement, SyncRequest},
     net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
+    utils::oneshot_nofail,
 };
 
 // TODO: from config? global constant?
@@ -379,7 +380,7 @@ where
             Err(P2pError::ProtocolError(err)) => {
                 log::error!("Peer {peer_id} committed a protocol error: {err}");
 
-                let (tx, rx) = oneshot::channel();
+                let (tx, rx) = oneshot_nofail::channel();
                 self.tx_peer_manager
                     .send(PeerManagerEvent::AdjustPeerScore(
                         peer_id,
@@ -392,7 +393,7 @@ where
             Err(P2pError::ChainstateError(err)) => match err {
                 ChainstateError::ProcessBlockError(err) => {
                     if err.ban_score() > 0 {
-                        let (tx, rx) = oneshot::channel();
+                        let (tx, rx) = oneshot_nofail::channel();
                         self.tx_peer_manager
                             .send(PeerManagerEvent::AdjustPeerScore(
                                 peer_id,
@@ -419,7 +420,7 @@ where
 
                 if err.ban_score() > 0 {
                     // TODO: better abstraction over channels
-                    let (tx, rx) = oneshot::channel();
+                    let (tx, rx) = oneshot_nofail::channel();
                     self.tx_peer_manager
                         .send(PeerManagerEvent::AdjustPeerScore(
                             peer_id,
@@ -563,7 +564,7 @@ where
 
         if score > 0 {
             // TODO: better abstraction over channels
-            let (tx, rx) = oneshot::channel();
+            let (tx, rx) = oneshot_nofail::channel();
             self.tx_peer_manager
                 .send(PeerManagerEvent::AdjustPeerScore(peer_id, score, tx))
                 .map_err(P2pError::from)?;

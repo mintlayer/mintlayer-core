@@ -13,14 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
-
-use tokio::sync::oneshot;
-
 use crate::{
     error::{ConversionError, P2pError},
     event::PeerManagerEvent,
     net::NetworkingService,
+    utils::oneshot_nofail,
     P2p,
 };
 
@@ -31,12 +28,8 @@ impl<T> P2pInterface for P2p<T>
 where
     T: NetworkingService,
 {
-    async fn connect(&mut self, addr: String) -> crate::Result<()>
-    where
-        <T as NetworkingService>::Address: FromStr,
-        <T as NetworkingService>::PeerId: FromStr,
-    {
-        let (tx, rx) = oneshot::channel();
+    async fn connect(&mut self, addr: String) -> crate::Result<()> {
+        let (tx, rx) = oneshot_nofail::channel();
         let addr = addr
             .parse::<T::Address>()
             .map_err(|_| P2pError::ConversionError(ConversionError::InvalidAddress(addr)))?;
@@ -46,11 +39,8 @@ where
         rx.await.map_err(P2pError::from)?
     }
 
-    async fn disconnect(&mut self, peer_id: String) -> crate::Result<()>
-    where
-        <T as NetworkingService>::PeerId: FromStr,
-    {
-        let (tx, rx) = oneshot::channel();
+    async fn disconnect(&mut self, peer_id: String) -> crate::Result<()> {
+        let (tx, rx) = oneshot_nofail::channel();
         let peer_id = peer_id
             .parse::<T::PeerId>()
             .map_err(|_| P2pError::ConversionError(ConversionError::InvalidPeerId(peer_id)))?;
@@ -62,7 +52,7 @@ where
     }
 
     async fn get_peer_count(&self) -> crate::Result<usize> {
-        let (tx, rx) = oneshot::channel();
+        let (tx, rx) = oneshot_nofail::channel();
         self.tx_peer_manager
             .send(PeerManagerEvent::GetPeerCount(tx))
             .map_err(P2pError::from)?;
@@ -70,7 +60,7 @@ where
     }
 
     async fn get_bind_addresses(&self) -> crate::Result<Vec<String>> {
-        let (tx, rx) = oneshot::channel();
+        let (tx, rx) = oneshot_nofail::channel();
         self.tx_peer_manager
             .send(PeerManagerEvent::GetBindAddresses(tx))
             .map_err(P2pError::from)?;
@@ -78,7 +68,7 @@ where
     }
 
     async fn get_connected_peers(&self) -> crate::Result<Vec<ConnectedPeer>> {
-        let (tx, rx) = oneshot::channel();
+        let (tx, rx) = oneshot_nofail::channel();
         self.tx_peer_manager
             .send(PeerManagerEvent::GetConnectedPeers(tx))
             .map_err(P2pError::from)?;
