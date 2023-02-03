@@ -19,7 +19,7 @@ use std::borrow::Cow;
 
 use utils::shallow_clone::ShallowClone;
 
-pub use crate::{Data, DbDesc, MapIndex};
+pub use crate::{Data, DbDesc, DbMapId};
 
 /// Types providing capability of iterating over keys with given prefix
 pub trait PrefixIter<'i> {
@@ -27,22 +27,22 @@ pub trait PrefixIter<'i> {
     type Iterator: 'i + Iterator<Item = (Data, Data)>;
 
     /// Get iterator over key-value pairs where the key has given prefix
-    fn prefix_iter<'m: 'i>(&'m self, idx: MapIndex, prefix: Data) -> crate::Result<Self::Iterator>;
+    fn prefix_iter<'m: 'i>(&'m self, idx: DbMapId, prefix: Data) -> crate::Result<Self::Iterator>;
 }
 
 /// Read-only database operations
 pub trait ReadOps: for<'i> PrefixIter<'i> {
     /// Get value associated with given key.
-    fn get(&self, idx: MapIndex, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>>;
+    fn get(&self, idx: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>>;
 }
 
 /// Write database operation
 pub trait WriteOps {
     /// Set value associated with given key.
-    fn put(&mut self, idx: MapIndex, key: Data, val: Data) -> crate::Result<()>;
+    fn put(&mut self, idx: DbMapId, key: Data, val: Data) -> crate::Result<()>;
 
     /// Delete the value associated with given key.
-    fn del(&mut self, idx: MapIndex, key: &[u8]) -> crate::Result<()>;
+    fn del(&mut self, idx: DbMapId, key: &[u8]) -> crate::Result<()>;
 }
 
 /// Read-only transaction

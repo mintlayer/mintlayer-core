@@ -26,29 +26,29 @@ pub use storage_core::Data;
 
 /// Database index, parametrized by schema
 ///
-/// This is basically a type-safe version of [storage_core::MapIndex].
-pub struct MapIndex<Sch> {
-    idx: storage_core::MapIndex,
+/// This is basically a type-safe version of [storage_core::DbMapId].
+pub struct DbMapId<Sch> {
+    idx: storage_core::DbMapId,
     _phantom: std::marker::PhantomData<fn() -> Sch>,
 }
 
-impl<Sch> MapIndex<Sch> {
-    fn from_idx_unchecked(idx: storage_core::MapIndex) -> Self {
+impl<Sch> DbMapId<Sch> {
+    fn from_idx_unchecked(idx: storage_core::DbMapId) -> Self {
         let _phantom = Default::default();
         Self { idx, _phantom }
     }
 
     fn from_usize_unchecked(idx: usize) -> Self {
-        Self::from_idx_unchecked(storage_core::MapIndex::new(idx))
+        Self::from_idx_unchecked(storage_core::DbMapId::new(idx))
     }
 
     /// Get index as usize
     pub fn as_usize(&self) -> usize {
-        self.idx.get()
+        self.idx.as_usize()
     }
 }
 
-impl<Sch: Schema> MapIndex<Sch> {
+impl<Sch: Schema> DbMapId<Sch> {
     /// New database index from the database identifier
     pub fn new<M: schema::DbMap, I>() -> Self
     where
@@ -71,9 +71,9 @@ impl<Sch: Schema> MapIndex<Sch> {
     }
 
     /// Get index info
-    pub fn info(&self) -> storage_core::MapDesc {
+    pub fn info(&self) -> storage_core::DbMapDesc {
         Sch::desc_iter()
-            .nth(self.idx.get())
+            .nth(self.idx.as_usize())
             .expect("index to be in range due to schema")
     }
 
@@ -83,35 +83,35 @@ impl<Sch: Schema> MapIndex<Sch> {
     }
 }
 
-impl<Sch> Ord for MapIndex<Sch> {
+impl<Sch> Ord for DbMapId<Sch> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.idx.cmp(&other.idx)
     }
 }
 
-impl<Sch> PartialOrd for MapIndex<Sch> {
+impl<Sch> PartialOrd for DbMapId<Sch> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.idx.partial_cmp(&other.idx)
     }
 }
 
-impl<Sch> PartialEq for MapIndex<Sch> {
+impl<Sch> PartialEq for DbMapId<Sch> {
     fn eq(&self, other: &Self) -> bool {
         self.idx.eq(&other.idx)
     }
 }
 
-impl<Sch> Eq for MapIndex<Sch> {}
+impl<Sch> Eq for DbMapId<Sch> {}
 
-impl<Sch> Clone for MapIndex<Sch> {
+impl<Sch> Clone for DbMapId<Sch> {
     fn clone(&self) -> Self {
         Self::from_idx_unchecked(self.idx)
     }
 }
 
-impl<Sch> Copy for MapIndex<Sch> {}
+impl<Sch> Copy for DbMapId<Sch> {}
 
-impl<Sch> std::fmt::Debug for MapIndex<Sch> {
+impl<Sch> std::fmt::Debug for DbMapId<Sch> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.idx.fmt(f)
     }
@@ -121,7 +121,7 @@ impl<Sch> std::fmt::Debug for MapIndex<Sch> {
 pub type MapContents = BTreeMap<Data, Data>;
 
 /// Low-level representation of the whole storage
-pub type StorageContents<Sch> = BTreeMap<MapIndex<Sch>, MapContents>;
+pub type StorageContents<Sch> = BTreeMap<DbMapId<Sch>, MapContents>;
 
 /// Get raw database by dumping database data
 pub fn dump_storage<B: Backend, Sch: Schema>(
@@ -131,9 +131,9 @@ pub fn dump_storage<B: Backend, Sch: Schema>(
     Sch::desc_iter()
         .enumerate()
         .map(|(idx, _dbinfo)| {
-            let idx = storage_core::MapIndex::new(idx);
+            let idx = storage_core::DbMapId::new(idx);
             let items = dbtx.dbtx.prefix_iter(idx, Vec::new())?;
-            Ok((MapIndex::from_idx_unchecked(idx), items.collect()))
+            Ok((DbMapId::from_idx_unchecked(idx), items.collect()))
         })
         .collect::<crate::Result<StorageContents<Sch>>>()
 }
@@ -152,28 +152,28 @@ mod test {
 
     #[test]
     fn indices() {
-        type TestMapIndex = MapIndex<TestSchema>;
-        let idx0: TestMapIndex = MapIndex::from_usize_unchecked(0);
-        let idx1: TestMapIndex = MapIndex::from_usize_unchecked(1);
+        type TestDbMapId = DbMapId<TestSchema>;
+        let idx0: TestDbMapId = DbMapId::from_usize_unchecked(0);
+        let idx1: TestDbMapId = DbMapId::from_usize_unchecked(1);
 
-        assert_eq!(TestMapIndex::new::<Db0, _>(), idx0);
-        assert_eq!(TestMapIndex::new::<Db1, _>(), idx1);
+        assert_eq!(TestDbMapId::new::<Db0, _>(), idx0);
+        assert_eq!(TestDbMapId::new::<Db1, _>(), idx1);
 
-        assert_eq!(TestMapIndex::from_usize(0), Some(idx0));
-        assert_eq!(TestMapIndex::from_usize(1), Some(idx1));
-        assert_eq!(TestMapIndex::from_usize(2), None);
+        assert_eq!(TestDbMapId::from_usize(0), Some(idx0));
+        assert_eq!(TestDbMapId::from_usize(1), Some(idx1));
+        assert_eq!(TestDbMapId::from_usize(2), None);
 
-        assert_eq!(TestMapIndex::from_name("Db0"), Some(idx0));
-        assert_eq!(TestMapIndex::from_name("Db1"), Some(idx1));
-        assert_eq!(TestMapIndex::from_name("DbX"), None);
+        assert_eq!(TestDbMapId::from_name("Db0"), Some(idx0));
+        assert_eq!(TestDbMapId::from_name("Db1"), Some(idx1));
+        assert_eq!(TestDbMapId::from_name("DbX"), None);
     }
 
     #[test]
     fn basic_dump() {
         utils::concurrency::model(|| {
             let storage = Storage::<_, TestSchema>::new(InMemory::new()).unwrap();
-            let db1 = MapIndex::new::<Db0, _>();
-            let db2 = MapIndex::new::<Db1, _>();
+            let db1 = DbMapId::new::<Db0, _>();
+            let db2 = DbMapId::new::<Db1, _>();
 
             {
                 // Check the DB dump is empty initially

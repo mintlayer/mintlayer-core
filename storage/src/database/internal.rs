@@ -21,7 +21,7 @@ use crate::schema;
 use serialization::{encoded::Encoded, EncodeLike};
 use storage_core::{
     backend::{self, PrefixIter, ReadOps},
-    Backend, MapIndex,
+    Backend, DbMapId,
 };
 
 /// Map high-level transaction type to the backend-specific implementation type
@@ -42,7 +42,7 @@ impl<'tx, B: Backend, Sch> TxImpl for super::TransactionRw<'tx, B, Sch> {
 #[allow(clippy::type_complexity)]
 pub fn get<DbMap: schema::DbMap, Tx: ReadOps, K: EncodeLike<DbMap::Key>>(
     dbtx: &Tx,
-    idx: MapIndex,
+    idx: DbMapId,
     key: K,
 ) -> crate::Result<Option<Encoded<Cow<[u8]>, DbMap::Value>>> {
     key.using_encoded(|key| dbtx.get(idx, key).map(|x| x.map(Encoded::from_bytes_unchecked)))
@@ -61,7 +61,7 @@ impl<DbMap: schema::DbMap, I: Iterator<Item = (DbMap::Key, Encoded<Vec<u8>, DbMa
 
 pub fn prefix_iter<'tx, DbMap: schema::DbMap, Tx: PrefixIter<'tx>>(
     dbtx: &'tx Tx,
-    idx: MapIndex,
+    idx: DbMapId,
     prefix: Vec<u8>,
 ) -> crate::Result<impl 'tx + EntryIterator<DbMap>> {
     dbtx.prefix_iter(idx, prefix).map(|iter| {

@@ -15,34 +15,96 @@
 
 //! Low-level runtime database layout description
 
-use std::collections::BTreeSet;
-
-/// Database index type, just a thin wrapper over usize
+/// Used to identify particular key-value map in the database
 #[derive(Eq, PartialEq, PartialOrd, Ord, Clone, Copy, Debug)]
-pub struct MapIndex(usize);
+pub struct DbMapId(usize);
 
-impl MapIndex {
+impl DbMapId {
     /// New index
     pub const fn new(idx: usize) -> Self {
-        MapIndex(idx)
+        DbMapId(idx)
     }
 
     /// Get the index as usize
-    pub const fn get(&self) -> usize {
+    pub const fn as_usize(&self) -> usize {
         self.0
+    }
+}
+
+/// Number of key-value maps in the database
+#[derive(Eq, PartialEq, PartialOrd, Ord, Clone, Copy, Debug)]
+pub struct DbMapCount(usize);
+
+impl DbMapCount {
+    /// Convert to `usize`
+    pub const fn as_usize(self) -> usize {
+        self.0
+    }
+
+    /// Iterator over all database indices
+    pub fn indices(self) -> impl Iterator<Item = DbMapId> + ExactSizeIterator {
+        (0..self.0).map(DbMapId::new)
+    }
+}
+
+/// Associate data of type `T` with each database map
+#[derive(Eq, PartialEq, Clone, Debug)]
+pub struct DbMapsData<T>(Vec<T>);
+
+impl<T> DbMapsData<T> {
+    /// New maps data for given number of key-value maps
+    pub fn new(map_count: DbMapCount, constructor: impl FnMut(DbMapId) -> T) -> Self {
+        Self(map_count.indices().map(constructor).collect())
+    }
+
+    /// Get the number of maps
+    pub fn map_count(&self) -> DbMapCount {
+        DbMapCount(self.0.len())
+    }
+
+    /// Apply given function to each map and collect the results
+    pub fn transform<U>(&self, func: impl FnMut(&T) -> U) -> DbMapsData<U> {
+        DbMapsData(self.0.iter().map(func).collect::<Vec<_>>())
+    }
+
+    /// Like [Self::transform] but fallible
+    pub fn try_transform<U, E>(
+        &self,
+        func: impl FnMut(&T) -> Result<U, E>,
+    ) -> Result<DbMapsData<U>, E> {
+        self.0.iter().map(func).collect::<Result<Vec<_>, _>>().map(DbMapsData)
+    }
+
+    /// Convert into iterator over map indices together with associated data
+    pub fn into_idx_iter(self) -> impl Iterator<Item = (DbMapId, T)> + ExactSizeIterator {
+        self.0.into_iter().enumerate().map(|(i, m)| (DbMapId::new(i), m))
+    }
+}
+
+impl<T> std::ops::Index<DbMapId> for DbMapsData<T> {
+    type Output = T;
+    fn index(&self, idx: DbMapId) -> &Self::Output {
+        &self.0[idx.0]
+    }
+}
+
+impl<T> std::ops::IndexMut<DbMapId> for DbMapsData<T> {
+    fn index_mut(&mut self, idx: DbMapId) -> &mut Self::Output {
+        &mut self.0[idx.0]
     }
 }
 
 /// Description of one key-value store in a database
 #[derive(Eq, PartialEq, Clone, Debug)]
-pub struct MapDesc {
+pub struct DbMapDesc {
     /// Key-value map name
     pub name: String,
     /// Value size hint
     pub size_hint: core::ops::Range<usize>,
 }
 
-impl MapDesc {
+impl DbMapDesc {
+    /// New map description
     pub fn new(name: impl Into<String>) -> Self {
         let size_hint = 0..usize::MAX;
         let name = name.into();
@@ -50,40 +112,42 @@ impl MapDesc {
     }
 }
 
-/// A database backend implementation can be seen as a map of maps, in the form: Map<MapIndex, Map<Key, Value>>
-/// DbDesc is the description of the outer map; we call that the database, which is a collection of key-value maps
-#[derive(Eq, PartialEq, Clone, Debug)]
-pub struct DbDesc(Vec<MapDesc>);
+/// Metadata about the whole database
+pub struct DbDesc {
+    map_descs: DbMapsData<DbMapDesc>,
+}
 
-#[allow(clippy::len_without_is_empty)]
 impl DbDesc {
+    /// Get descriptions of individual key-value maps
+    pub fn maps(&self) -> &DbMapsData<DbMapDesc> {
+        &self.map_descs
+    }
+
     /// Number of maps in the database
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    /// Iterate over map descriptions of this database
-    pub fn iter(&self) -> impl '_ + Iterator<Item = &MapDesc> + ExactSizeIterator {
-        self.0.iter()
+    pub fn map_count(&self) -> DbMapCount {
+        self.map_descs.map_count()
     }
 }
 
-impl std::ops::Index<MapIndex> for DbDesc {
-    type Output = MapDesc;
-    fn index(&self, idx: MapIndex) -> &MapDesc {
-        &self.0[idx.0]
+/// Internal constructors.
+///
+/// Only to be used by storage framework and testing. Not for use by backend implementations.
+pub mod construct {
+    use super::{DbDesc, DbMapDesc, DbMapsData};
+
+    /// Construct database description.
+    pub fn db_desc(iter: impl Iterator<Item = DbMapDesc>) -> DbDesc {
+        let map_descs = DbMapsData(iter.collect());
+        assert_names_unique(&map_descs);
+        DbDesc { map_descs }
     }
-}
 
-fn assert_no_map_duplicates(map_descs: &Vec<MapDesc>) {
-    let set = map_descs.iter().cloned().map(|desc| desc.name).collect::<BTreeSet<String>>();
-    assert!(set.len() == map_descs.len(), "Duplicate map names found");
-}
-
-impl FromIterator<MapDesc> for DbDesc {
-    fn from_iter<T: IntoIterator<Item = MapDesc>>(iter: T) -> Self {
-        let result = iter.into_iter().collect();
-        assert_no_map_duplicates(&result);
-        Self(result)
+    fn assert_names_unique(maps: &DbMapsData<DbMapDesc>) {
+        let set: std::collections::BTreeSet<_> = maps.0.iter().map(|desc| &desc.name).collect();
+        assert_eq!(
+            set.len(),
+            maps.map_count().as_usize(),
+            "Duplicate map names found"
+        );
     }
 }

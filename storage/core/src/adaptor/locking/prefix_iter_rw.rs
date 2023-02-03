@@ -15,7 +15,7 @@
 
 //! Internal functions and types used in the implementation of prefix iterator for RW transactions
 
-use super::{Data, MapIndex, PrefixIter, TxRw};
+use super::{Data, DbMapId, PrefixIter, TxRw};
 use itertools::EitherOrBoth;
 
 // The prefix iterator type for mutable transaction is a fairly complicated type. Here, we
@@ -50,12 +50,12 @@ fn merger(item: EitherOrBoth<DataPair, DataPairRef<'_>>) -> Option<(Data, Data)>
 /// Create the iterator
 pub fn iter<'tx, 'i, 'm: 'i, T: PrefixIter<'i>>(
     tx: &'m TxRw<'tx, T>,
-    idx: MapIndex,
+    idx: DbMapId,
     prefix: Data,
 ) -> crate::Result<Iter<'i, T>> {
     // Initialize the iterator over the underlying db and the deltas
     let db_iter = tx.db.prefix_iter(idx, prefix.clone())?;
-    let delta_iter = crate::util::PrefixIter::new(&tx.deltas[idx.get()], prefix);
+    let delta_iter = crate::util::PrefixIter::new(&tx.deltas[idx], prefix);
 
     // Merge the entries from the two iterators
     let iter = itertools::merge_join_by(db_iter, delta_iter, comparator as KeyCompareFn)

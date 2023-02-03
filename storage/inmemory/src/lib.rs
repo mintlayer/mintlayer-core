@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use storage_core::{adaptor, backend, util, Data, DbDesc, MapIndex};
+use storage_core::{adaptor, backend, util, Data, DbDesc, DbMapId, DbMapsData};
 
 use std::{borrow::Cow, collections::BTreeMap};
 
@@ -29,11 +29,11 @@ impl<'i> Iterator for PrefixIter<'i> {
     }
 }
 
-pub struct StorageMaps(Vec<Map>);
+pub struct StorageMaps(DbMapsData<Map>);
 
 impl backend::ReadOps for StorageMaps {
-    fn get(&self, idx: MapIndex, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
-        Ok(self.0[idx.get()].get(key).map(|p| p.into()))
+    fn get(&self, idx: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+        Ok(self.0[idx].get(key).map(|p| p.into()))
     }
 }
 
@@ -42,24 +42,21 @@ impl<'i> backend::PrefixIter<'i> for StorageMaps {
 
     fn prefix_iter<'m: 'i>(
         &'m self,
-        idx: MapIndex,
+        idx: DbMapId,
         prefix: Data,
     ) -> storage_core::Result<Self::Iterator> {
-        Ok(PrefixIter(util::PrefixIter::new(
-            &self.0[idx.get()],
-            prefix,
-        )))
+        Ok(PrefixIter(util::PrefixIter::new(&self.0[idx], prefix)))
     }
 }
 
 impl backend::WriteOps for StorageMaps {
-    fn put(&mut self, idx: MapIndex, key: Data, val: Data) -> storage_core::Result<()> {
-        let _ = self.0[idx.get()].insert(key, val);
+    fn put(&mut self, idx: DbMapId, key: Data, val: Data) -> storage_core::Result<()> {
+        let _ = self.0[idx].insert(key, val);
         Ok(())
     }
 
-    fn del(&mut self, idx: MapIndex, key: &[u8]) -> storage_core::Result<()> {
-        let _ = self.0[idx.get()].remove(key);
+    fn del(&mut self, idx: DbMapId, key: &[u8]) -> storage_core::Result<()> {
+        let _ = self.0[idx].remove(key);
         Ok(())
     }
 }
@@ -68,7 +65,7 @@ impl adaptor::Construct for StorageMaps {
     type From = ();
 
     fn construct(_: (), desc: DbDesc) -> storage_core::Result<Self> {
-        Ok(Self(vec![Map::new(); desc.len()]))
+        Ok(Self(desc.maps().transform(|_| Map::new())))
     }
 }
 

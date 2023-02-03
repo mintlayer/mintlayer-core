@@ -19,7 +19,7 @@ pub use storage_core::{
     backend::{
         Backend, Data, PrefixIter, ReadOps, TransactionalRo, TransactionalRw, TxRo, TxRw, WriteOps,
     },
-    DbDesc, MapDesc, MapIndex,
+    DbDesc, DbMapCount, DbMapDesc, DbMapId, DbMapsData,
 };
 pub use utils::{sync, thread};
 
@@ -30,11 +30,11 @@ pub trait BackendFn<B: Backend>: 'static + Fn() -> B + Send + Sync {}
 impl<B: Backend, F: 'static + Fn() -> B + Send + Sync> BackendFn<B> for F {}
 
 /// A couple of DB index constants
-pub const IDX: (MapIndex, MapIndex) = (MapIndex::new(0), MapIndex::new(1));
+pub const IDX: (DbMapId, DbMapId) = (DbMapId::new(0), DbMapId::new(1));
 
 /// Sample database description with `n` maps
 pub fn desc(n: usize) -> DbDesc {
-    (0..n).map(|x| MapDesc::new(format!("map_{x:02}"))).collect()
+    storage_core::info::construct::db_desc((0..n).map(|i| DbMapDesc::new(format!("map_{i:02}"))))
 }
 
 /// Run tests with backend using proptest

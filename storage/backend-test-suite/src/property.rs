@@ -22,16 +22,16 @@ use proptest::prelude::Strategy;
 mod gen {
     use super::WriteAction;
     pub use proptest::prelude::*;
-    use storage_core::{Data, MapIndex};
+    use storage_core::{Data, DbMapId};
 
-    pub fn idx(num_dbs: usize) -> impl Strategy<Value = MapIndex> {
-        (0..num_dbs).prop_map(MapIndex::new)
+    pub fn idx(num_dbs: usize) -> impl Strategy<Value = DbMapId> {
+        (0..num_dbs).prop_map(DbMapId::new)
     }
 
     pub fn entries(
         num_dbs: usize,
         num_entries: impl Into<proptest::collection::SizeRange>,
-    ) -> impl Strategy<Value = std::collections::BTreeMap<(MapIndex, Data), Data>> {
+    ) -> impl Strategy<Value = std::collections::BTreeMap<(DbMapId, Data), Data>> {
         proptest::collection::btree_map((idx(num_dbs), big_key()), any::<Data>(), num_entries)
     }
 
