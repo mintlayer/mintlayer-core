@@ -28,9 +28,9 @@ fn make_collections_with_undo(
     let collection1 = DeltaDataCollection::from_iter([(1, delta1)]);
 
     let mut collection2 = DeltaDataCollection::new();
-    let undo = collection2.merge_delta_data_element(1, delta2).unwrap().unwrap();
+    let undo = collection2.merge_delta_data_element(1, delta2).unwrap();
 
-    let collection3 = DeltaDataCollection::from_iter([(1, DeltaMapElement::DeltaUndo(undo))]);
+    let collection3 = DeltaDataCollection::from_iter([(1, undo.consume())]);
 
     (collection1, collection2, collection3)
 }
@@ -78,7 +78,7 @@ fn delta_delta_undo_associativity(
         let mut collection = DeltaDataCollection::new();
         let _ = collection.merge_delta_data_element(1, delta1).unwrap();
 
-        let undo = collection.merge_delta_data_element(1, delta2).unwrap().unwrap();
+        let undo = collection.merge_delta_data_element(1, delta2).unwrap();
         collection.undo_merge_delta_data_element(1, undo).unwrap();
 
         assert_eq!(collection, expected_collection);

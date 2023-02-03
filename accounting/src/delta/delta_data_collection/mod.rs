@@ -49,35 +49,12 @@ impl<T: Clone> DataDelta<T> {
 
     /// Returns an invert delta that has the opposite effect of the provided delta
     /// and serves as an undo object
-    fn invert(self) -> DataDeltaUndo<T> {
+    pub fn invert(self) -> DataDeltaUndo<T> {
         DataDeltaUndo::new(Self::new(self.new, self.old))
     }
 
     pub fn consume(self) -> (Option<T>, Option<T>) {
         (self.old, self.new)
-    }
-}
-
-/// Elements inside `DeltaDataCollection` can store either a delta or an undo.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
-pub enum DeltaMapElement<T> {
-    Delta(DataDelta<T>),
-    DeltaUndo(DataDeltaUndo<T>),
-}
-
-impl<T> DeltaMapElement<T> {
-    pub fn get_data_delta(&self) -> &DataDelta<T> {
-        match self {
-            DeltaMapElement::Delta(d) => d,
-            DeltaMapElement::DeltaUndo(d) => d.as_delta(),
-        }
-    }
-
-    pub fn consume(self) -> DataDelta<T> {
-        match self {
-            DeltaMapElement::Delta(d) => d,
-            DeltaMapElement::DeltaUndo(u) => u.consume(),
-        }
     }
 }
 
@@ -93,7 +70,7 @@ pub enum GetDataResult<T> {
 #[must_use]
 #[derive(PartialEq, Eq, Clone, Encode, Decode, Debug)]
 pub struct DeltaDataCollection<K, T> {
-    data: BTreeMap<K, DeltaMapElement<T>>,
+    data: BTreeMap<K, DataDelta<T>>,
 }
 
 impl<K: Ord + Copy, T: Clone + Eq> DeltaDataCollection<K, T> {
@@ -103,23 +80,20 @@ impl<K: Ord + Copy, T: Clone + Eq> DeltaDataCollection<K, T> {
         }
     }
 
-    pub fn data(&self) -> &BTreeMap<K, DeltaMapElement<T>> {
+    pub fn data(&self) -> &BTreeMap<K, DataDelta<T>> {
         &self.data
     }
 
-    pub fn consume(self) -> BTreeMap<K, DeltaMapElement<T>> {
+    pub fn consume(self) -> BTreeMap<K, DataDelta<T>> {
         self.data
     }
 
     pub fn get_data(&self, key: &K) -> GetDataResult<&T> {
         match self.data.get(key) {
-            Some(d) => {
-                let delta = d.get_data_delta();
-                match &delta.new {
-                    None => GetDataResult::Deleted,
-                    Some(d) => GetDataResult::Present(d),
-                }
-            }
+            Some(delta) => match &delta.new {
+                None => GetDataResult::Deleted,
+                Some(d) => GetDataResult::Present(d),
+            },
             None => GetDataResult::Missing,
         }
     }
@@ -131,39 +105,23 @@ impl<K: Ord + Copy, T: Clone + Eq> DeltaDataCollection<K, T> {
         let data_undo = other
             .data
             .into_iter()
-            .filter_map(|(key, other_pool_data)| {
-                match self.merge_delta_data_element_impl(key, other_pool_data) {
-                    Ok(delta_op) => delta_op.map(|d| Ok((key, d))),
-                    Err(e) => Some(Err(e)),
-                }
+            .map(|(key, other_pool_data)| {
+                Ok((key, self.merge_delta_data_element(key, other_pool_data)?))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
 
-        Ok(DeltaDataUndoCollection::new(data_undo))
+        Ok(DeltaDataUndoCollection::from_data(data_undo))
     }
 
     pub fn merge_delta_data_element(
         &mut self,
         key: K,
         other: DataDelta<T>,
-    ) -> Result<Option<DataDeltaUndo<T>>, Error> {
-        self.merge_delta_data_element_impl(key, DeltaMapElement::Delta(other))
-    }
-
-    fn merge_delta_data_element_impl(
-        &mut self,
-        key: K,
-        other: DeltaMapElement<T>,
-    ) -> Result<Option<DataDeltaUndo<T>>, Error> {
-        let undo = match &other {
-            DeltaMapElement::Delta(other_delta) => Some(other_delta.clone().invert()),
-            DeltaMapElement::DeltaUndo(_) => None,
-        };
+    ) -> Result<DataDeltaUndo<T>, Error> {
+        let undo = other.clone().invert();
 
         let el = match self.data.entry(key) {
-            Entry::Occupied(e) => {
-                DeltaMapElement::Delta(combine_delta_data(e.remove().consume(), other.consume())?)
-            }
+            Entry::Occupied(e) => combine_delta_data(e.remove(), other)?,
             Entry::Vacant(_) => other,
         };
 
@@ -187,25 +145,14 @@ impl<K: Ord + Copy, T: Clone + Eq> DeltaDataCollection<K, T> {
         key: K,
         undo: DataDeltaUndo<T>,
     ) -> Result<(), Error> {
-        self.merge_delta_data_element_impl(key, DeltaMapElement::DeltaUndo(undo))
-            .map(|_| ())
-    }
-}
-
-impl<K: Ord + Copy, T: Clone> FromIterator<(K, DeltaMapElement<T>)> for DeltaDataCollection<K, T> {
-    fn from_iter<I: IntoIterator<Item = (K, DeltaMapElement<T>)>>(iter: I) -> Self {
-        DeltaDataCollection {
-            data: BTreeMap::<K, DeltaMapElement<T>>::from_iter(iter),
-        }
+        self.merge_delta_data_element(key, undo.consume()).map(|_| ())
     }
 }
 
 impl<K: Ord + Copy, T: Clone> FromIterator<(K, DataDelta<T>)> for DeltaDataCollection<K, T> {
     fn from_iter<I: IntoIterator<Item = (K, DataDelta<T>)>>(iter: I) -> Self {
         DeltaDataCollection {
-            data: BTreeMap::<K, DeltaMapElement<T>>::from_iter(
-                iter.into_iter().map(|(k, d)| (k, DeltaMapElement::Delta(d))),
-            ),
+            data: BTreeMap::<K, DataDelta<T>>::from_iter(iter.into_iter()),
         }
     }
 }

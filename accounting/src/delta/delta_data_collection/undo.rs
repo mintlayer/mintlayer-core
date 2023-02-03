@@ -37,13 +37,19 @@ impl<T> DataDeltaUndo<T> {
 }
 
 #[must_use]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
 pub struct DeltaDataUndoCollection<K, T> {
     data: BTreeMap<K, DataDeltaUndo<T>>,
 }
 
 impl<K: Ord, T: Clone> DeltaDataUndoCollection<K, T> {
-    pub fn new(data: BTreeMap<K, DataDeltaUndo<T>>) -> Self {
+    pub fn new() -> Self {
+        Self {
+            data: BTreeMap::new(),
+        }
+    }
+
+    pub fn from_data(data: BTreeMap<K, DataDeltaUndo<T>>) -> Self {
         Self { data }
     }
 

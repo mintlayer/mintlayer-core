@@ -313,7 +313,6 @@ impl BanScore for pos_accounting::Error {
             E::PledgeValueToSignedError => 100,
             E::InvariantErrorDelegationUndoFailedDataNotFound => 100,
             E::DuplicatesInDeltaAndUndo => 100,
-            E::FailedToCreateDeltaUndo => 100,
         }
     }
 }

@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, ops::Deref};
 
 use common::primitives::Amount;
 
-use crate::{error::Error, DelegationId, PoolId};
+use crate::{error::Error, DelegationId, DeltaMergeUndo, PoolId};
 
 use super::{delegation::DelegationData, delta::data::PoSAccountingDeltaData, pool_data::PoolData};
 
@@ -48,7 +48,7 @@ pub trait PoSAccountingView {
 }
 
 pub trait FlushablePoSAccountingView {
-    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<(), Error>;
+    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<DeltaMergeUndo, Error>;
 }
 
 impl<T> PoSAccountingView for T

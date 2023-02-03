@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{combine_data_with_delta, DataDelta, DeltaDataCollection, DeltaMapElement};
+use crate::{combine_data_with_delta, DataDelta, DeltaDataCollection};
 
 use rstest::rstest;
 
@@ -24,7 +24,7 @@ use rstest::rstest;
 #[case(Some('a'), DataDelta::new(Some('a'), Some('b')))]
 fn data_delta_undo_associativity(#[case] origin_data: Option<char>, #[case] delta: DataDelta<char>) {
     let mut collection_with_delta = DeltaDataCollection::new();
-    let undo_create = collection_with_delta.merge_delta_data_element(1, delta).unwrap().unwrap();
+    let undo_create = collection_with_delta.merge_delta_data_element(1, delta).unwrap();
 
     let mut collection_with_undo = DeltaDataCollection::new();
     collection_with_undo.undo_merge_delta_data_element(1, undo_create).unwrap();
@@ -221,7 +221,7 @@ fn data_delta_delta_undo_associativity(
     {
         let collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
         let mut collection2 = DeltaDataCollection::new();
-        let undo = collection2.merge_delta_data_element(1, delta2.clone()).unwrap().unwrap();
+        let undo = collection2.merge_delta_data_element(1, delta2.clone()).unwrap();
         let mut collection3 = DeltaDataCollection::new();
         collection3.undo_merge_delta_data_element(1, undo).unwrap();
 
@@ -249,7 +249,7 @@ fn data_delta_delta_undo_associativity(
     {
         let mut collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
         let mut collection2 = DeltaDataCollection::new();
-        let undo = collection2.merge_delta_data_element(1, delta2.clone()).unwrap().unwrap();
+        let undo = collection2.merge_delta_data_element(1, delta2.clone()).unwrap();
         let mut collection3 = DeltaDataCollection::new();
         collection3.undo_merge_delta_data_element(1, undo).unwrap();
 
@@ -268,7 +268,7 @@ fn data_delta_delta_undo_associativity(
     {
         let collection1 = DeltaDataCollection::from_iter([(1, delta1.clone())]);
         let mut collection2 = DeltaDataCollection::new();
-        let undo = collection2.merge_delta_data_element(1, delta2.clone()).unwrap().unwrap();
+        let undo = collection2.merge_delta_data_element(1, delta2.clone()).unwrap();
         let mut collection3 = DeltaDataCollection::new();
         collection3.undo_merge_delta_data_element(1, undo).unwrap();
 
@@ -292,7 +292,7 @@ fn data_delta_delta_undo_associativity(
     {
         let mut collection1 = DeltaDataCollection::from_iter([(1, delta1)]);
         let mut collection2 = DeltaDataCollection::new();
-        let undo = collection2.merge_delta_data_element(1, delta2).unwrap().unwrap();
+        let undo = collection2.merge_delta_data_element(1, delta2).unwrap();
         let mut collection3 = DeltaDataCollection::new();
         collection3.undo_merge_delta_data_element(1, undo).unwrap();
 
@@ -330,8 +330,7 @@ fn data_and_delta_gives_error_as_delta_and_delta(
     let delta1 = DataDelta::new(x0, x1);
     let delta2 = DataDelta::new(x2, x3);
 
-    let is_err_1 =
-        combine_data_with_delta(x1, Some(DeltaMapElement::Delta(delta2.clone()))).is_err();
+    let is_err_1 = combine_data_with_delta(x1, Some(delta2.clone())).is_err();
 
     let is_err_2 = {
         let mut collection = DeltaDataCollection::from_iter([(1, delta1)]);

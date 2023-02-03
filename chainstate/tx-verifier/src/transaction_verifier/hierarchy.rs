@@ -33,7 +33,7 @@ use common::{
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, FlushablePoSAccountingView,
+    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, FlushablePoSAccountingView,
     PoSAccountingDeltaData, PoSAccountingView, PoolData, PoolId,
 };
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosStorageRead, UtxosView};
@@ -291,7 +291,7 @@ impl<C, S, U, A: PoSAccountingView> FlushablePoSAccountingView for TransactionVe
     fn batch_write_delta(
         &mut self,
         data: PoSAccountingDeltaData,
-    ) -> Result<(), pos_accounting::Error> {
+    ) -> Result<DeltaMergeUndo, pos_accounting::Error> {
         self.accounting_delta.batch_write_delta(data)
     }
 }
