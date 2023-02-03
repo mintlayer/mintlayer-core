@@ -9,7 +9,7 @@ logging = { path = '../../logging' }
 storage-core = { path = '../core' }
 utils = { path = '../../utils' }
 
-rusqlite = { version = "0.28.0", features = ["bundled"] }
+rusqlite = { version = "0.28", features = ["bundled"] }
 
 [dev-dependencies]
 storage-backend-test-suite = { path = "../backend-test-suite" }

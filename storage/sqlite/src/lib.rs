@@ -16,15 +16,16 @@
 extern crate core;
 
 mod error;
+mod queries;
 
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use std::borrow::Cow;
 use std::cmp::max;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
-use std::vec::IntoIter;
 
-use crate::error::process_sqlite_error;
+use crate::queries::SqliteQueries;
+use error::process_sqlite_error;
 use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
     info::DbDesc,
@@ -33,35 +34,17 @@ use storage_core::{
 use utils::shallow_clone::ShallowClone;
 use utils::sync::Arc;
 
-/// Return the table name that corresponds to a specific index
-/// TODO this is unoptimised and the returned values should be cached
-fn db_table_name(idx: usize) -> String {
-    format!("db_{}", idx)
-}
-
-/// Identifiers of the list of databases (key-value maps)
-#[derive(Eq, PartialEq, Debug, Clone)]
-struct DbList(Vec<()>);
-
-impl std::ops::Index<DbIndex> for DbList {
-    type Output = ();
-
-    fn index(&self, index: DbIndex) -> &Self::Output {
-        &self.0[index.get()]
-    }
-}
-
 /// Sqlite iterator over entries with given key prefix
 pub struct PrefixIter {
     /// Underlying iterator
-    iter: IntoIter<(Vec<u8>, Vec<u8>)>,
+    iter: std::vec::IntoIter<(Vec<u8>, Vec<u8>)>,
 
     /// Prefix to iterate over
     prefix: Data,
 }
 
 impl PrefixIter {
-    fn new(iter: IntoIter<(Vec<u8>, Vec<u8>)>, prefix: Data) -> Self {
+    fn new(iter: std::vec::IntoIter<(Vec<u8>, Vec<u8>)>, prefix: Data) -> Self {
         PrefixIter { iter, prefix }
     }
 }
@@ -78,16 +61,24 @@ impl Iterator for PrefixIter {
 
 pub struct DbTx<'m> {
     connection: MutexGuard<'m, Connection>,
+    queries: &'m SqliteQueries,
 }
 
 impl<'m> DbTx<'m> {
-    pub fn start_transaction(connection: MutexGuard<'m, Connection>) -> storage_core::Result<Self> {
-        let tx = DbTx { connection };
+    fn start_transaction(sqlite: &'m SqliteImpl) -> storage_core::Result<Self> {
+        let connection: MutexGuard<Connection> = sqlite
+            .connection
+            .lock()
+            .map_err(|_| storage_core::error::Recoverable::TemporarilyUnavailable)?;
+        let tx = DbTx {
+            connection,
+            queries: &sqlite.queries,
+        };
         tx.connection.execute("BEGIN TRANSACTION", ()).map_err(process_sqlite_error)?;
         Ok(tx)
     }
 
-    pub fn commit_transaction(&self) -> storage_core::Result<()> {
+    fn commit_transaction(&self) -> storage_core::Result<()> {
         let _res = self
             .connection
             .execute("COMMIT TRANSACTION", ())
@@ -104,7 +95,7 @@ impl Drop for DbTx<'_> {
 
         let res = self.connection.execute("ROLLBACK TRANSACTION", ());
         if let Err(err) = res {
-            println!("Error: transaction rollback failed: {}", err);
+            logging::log::error!("Error: transaction rollback failed: {}", err);
         }
     }
 }
@@ -121,13 +112,7 @@ impl<'s, 'i> backend::PrefixIter<'i> for DbTx<'s> {
         // TODO Perform the filtering in the SQL query itself
         let mut stmt = self
             .connection
-            .prepare_cached(
-                format!(
-                    "SELECT key, value FROM {} ORDER BY key",
-                    db_table_name(idx.get())
-                )
-                .as_str(),
-            )
+            .prepare_cached(self.queries[idx].prefix_iter_query.as_str())
             .map_err(process_sqlite_error)?;
 
         let mut rows = stmt.query(()).map_err(process_sqlite_error)?;
@@ -151,13 +136,7 @@ impl backend::ReadOps for DbTx<'_> {
     fn get(&self, idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
         let mut stmt = self
             .connection
-            .prepare_cached(
-                format!(
-                    "SELECT value FROM {} WHERE key = ?",
-                    db_table_name(idx.get())
-                )
-                .as_str(),
-            )
+            .prepare_cached(self.queries[idx].get_query.as_str())
             .map_err(process_sqlite_error)?;
 
         let params = (key,);
@@ -174,13 +153,7 @@ impl backend::WriteOps for DbTx<'_> {
     fn put(&mut self, idx: DbIndex, key: Data, val: Data) -> storage_core::Result<()> {
         let mut stmt = self
             .connection
-            .prepare_cached(
-                format!(
-                    "INSERT or REPLACE into {} values(?, ?)",
-                    db_table_name(idx.get())
-                )
-                .as_str(),
-            )
+            .prepare_cached(self.queries[idx].put_query.as_str())
             .map_err(process_sqlite_error)?;
 
         let params = (key, val);
@@ -192,9 +165,7 @@ impl backend::WriteOps for DbTx<'_> {
     fn del(&mut self, idx: DbIndex, key: &[u8]) -> storage_core::Result<()> {
         let mut stmt = self
             .connection
-            .prepare_cached(
-                format!("DELETE FROM {} WHERE key = ?", db_table_name(idx.get())).as_str(),
-            )
+            .prepare_cached(self.queries[idx].delete_query.as_str())
             .map_err(process_sqlite_error)?;
 
         let params = (key,);
@@ -216,16 +187,15 @@ impl backend::TxRw for DbTx<'_> {
 pub struct SqliteImpl {
     /// Handle to an Sqlite database connection
     connection: Arc<Mutex<Connection>>,
+
+    /// List of sql queries
+    queries: SqliteQueries,
 }
 
 impl SqliteImpl {
     /// Start a transaction using the low-level method provided
     fn start_transaction(&self) -> storage_core::Result<DbTx<'_>> {
-        let connection: MutexGuard<Connection> = self
-            .connection
-            .lock()
-            .map_err(|_| storage_core::error::Recoverable::TemporarilyUnavailable)?;
-        DbTx::start_transaction(connection)
+        DbTx::start_transaction(self)
     }
 }
 
@@ -240,7 +210,10 @@ impl<'tx> TransactionalRo<'tx> for SqliteImpl {
 impl<'tx> TransactionalRw<'tx> for SqliteImpl {
     type TxRw = DbTx<'tx>;
 
-    fn transaction_rw<'st: 'tx>(&'st self) -> storage_core::Result<Self::TxRw> {
+    fn transaction_rw<'st: 'tx>(
+        &'st self,
+        _size: Option<usize>,
+    ) -> storage_core::Result<Self::TxRw> {
         self.start_transaction()
     }
 }
@@ -286,22 +259,15 @@ impl Sqlite {
 
         // Check if the required tables exist and if needed create them
         for idx in 0..desc.len() {
-            let table_name = db_table_name(idx);
+            let table_name = queries::db_table_name(idx);
             // Check if table is missing
             let is_missing = exists_stmt
-                .query_row([table_name.as_str()], |row| row.get::<usize, String>(0))
+                .query_row([&table_name], |row| row.get::<usize, String>(0))
                 .optional()?
                 .is_none();
             // Create the table if needed
             if is_missing {
-                connection.execute(
-                    format!(
-                        "CREATE TABLE {}(key BLOB PRIMARY KEY NOT NULL, value BLOB NOT NULL)",
-                        table_name
-                    )
-                    .as_str(),
-                    (),
-                )?;
+                connection.execute(queries::create_table_query(&table_name).as_str(), ())?;
             }
         }
         drop(exists_stmt);
@@ -328,10 +294,13 @@ impl backend::Backend for Sqlite {
             .into());
         }
 
+        let queries = SqliteQueries::new(&desc);
+
         let connection = self.open_db(desc).map_err(process_sqlite_error)?;
 
         Ok(SqliteImpl {
             connection: Arc::new(Mutex::new(connection)),
+            queries,
         })
     }
 }
