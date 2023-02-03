@@ -66,13 +66,14 @@ pub struct DbTx<'m> {
 
 impl<'m> DbTx<'m> {
     fn start_transaction(sqlite: &'m SqliteImpl) -> storage_core::Result<Self> {
-        let connection: MutexGuard<Connection> = sqlite
+        let connection = sqlite
+            .0
             .connection
             .lock()
             .map_err(|e| storage_core::error::Fatal::InternalError(e.to_string()))?;
         let tx = DbTx {
             connection,
-            queries: &sqlite.queries,
+            queries: &sqlite.0.queries,
         };
         tx.connection.execute("BEGIN TRANSACTION", ()).map_err(process_sqlite_error)?;
         Ok(tx)
@@ -183,14 +184,17 @@ impl backend::TxRw for DbTx<'_> {
     }
 }
 
-#[derive(Clone)]
-pub struct SqliteImpl {
+/// Struct that holds the details for an Sqlite connection
+pub struct SqliteConnection {
     /// Handle to an Sqlite database connection
-    connection: Arc<Mutex<Connection>>,
+    connection: Mutex<Connection>,
 
     /// List of sql queries
-    queries: Arc<SqliteQueries>,
+    queries: SqliteQueries,
 }
+
+#[derive(Clone)]
+pub struct SqliteImpl(Arc<SqliteConnection>);
 
 impl SqliteImpl {
     /// Start a transaction using the low-level method provided
@@ -298,9 +302,9 @@ impl backend::Backend for Sqlite {
 
         let connection = self.open_db(desc).map_err(process_sqlite_error)?;
 
-        Ok(SqliteImpl {
-            connection: Arc::new(Mutex::new(connection)),
-            queries: Arc::new(queries),
-        })
+        Ok(SqliteImpl(Arc::new(SqliteConnection {
+            connection: Mutex::new(connection),
+            queries,
+        })))
     }
 }
