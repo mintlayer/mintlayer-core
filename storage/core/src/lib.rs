@@ -14,6 +14,29 @@
 // limitations under the License.
 
 //! Definitions used to implement storage backends
+//!
+//! # High-level overview
+//!
+//! A database can be thought of as a collection of key-value maps.
+//!
+//! ```ignore
+//! Map<DbMapId, Map<Key, Value>>
+//! ```
+//!
+//! [DbMapId] is used to identify a particular key-value map. `Key` and `Value` are raw byte
+//! sequences ([Data]). To access a particular value, the database needs to be indexed first by a
+//! [DbMapId] (to get the key-value map) and then by key.
+//!
+//! The inner key-value map is often referred to as just map. The set of maps is fixed for the
+//! duration of backend lifetime but their contents may change.
+//!
+//! ## Database description
+//!
+//! The backend is given access to a collection of metadata describing the database structure.
+//!
+//! # Backend implementation guidelines
+//!
+//! ## Initialization
 
 pub mod adaptor;
 pub mod backend;
