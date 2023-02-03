@@ -69,7 +69,7 @@ impl<'m> DbTx<'m> {
         let connection: MutexGuard<Connection> = sqlite
             .connection
             .lock()
-            .map_err(|_| storage_core::error::Recoverable::TemporarilyUnavailable)?;
+            .map_err(|e| storage_core::error::Fatal::InternalError(e.to_string()))?;
         let tx = DbTx {
             connection,
             queries: &sqlite.queries,
@@ -189,7 +189,7 @@ pub struct SqliteImpl {
     connection: Arc<Mutex<Connection>>,
 
     /// List of sql queries
-    queries: SqliteQueries,
+    queries: Arc<SqliteQueries>,
 }
 
 impl SqliteImpl {
@@ -300,7 +300,7 @@ impl backend::Backend for Sqlite {
 
         Ok(SqliteImpl {
             connection: Arc::new(Mutex::new(connection)),
-            queries,
+            queries: Arc::new(queries),
         })
     }
 }
