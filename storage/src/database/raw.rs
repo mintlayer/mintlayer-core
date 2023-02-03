@@ -28,18 +28,18 @@ pub use storage_core::Data;
 ///
 /// This is basically a type-safe version of [storage_core::DbIndex].
 pub struct DbIndex<Sch> {
-    idx: storage_core::DbIndex,
+    idx: storage_core::MapIndex,
     _phantom: std::marker::PhantomData<fn() -> Sch>,
 }
 
 impl<Sch> DbIndex<Sch> {
-    fn from_idx_unchecked(idx: storage_core::DbIndex) -> Self {
+    fn from_idx_unchecked(idx: storage_core::MapIndex) -> Self {
         let _phantom = Default::default();
         Self { idx, _phantom }
     }
 
     fn from_usize_unchecked(idx: usize) -> Self {
-        Self::from_idx_unchecked(storage_core::DbIndex::new(idx))
+        Self::from_idx_unchecked(storage_core::MapIndex::new(idx))
     }
 
     /// Get index as usize
@@ -131,7 +131,7 @@ pub fn dump_storage<B: Backend, Sch: Schema>(
     Sch::desc_iter()
         .enumerate()
         .map(|(idx, _dbinfo)| {
-            let idx = storage_core::DbIndex::new(idx);
+            let idx = storage_core::MapIndex::new(idx);
             let items = dbtx.dbtx.prefix_iter(idx, Vec::new())?;
             Ok((DbIndex::from_idx_unchecked(idx), items.collect()))
         })

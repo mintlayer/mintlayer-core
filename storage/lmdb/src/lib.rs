@@ -27,7 +27,7 @@ use resize_callback::MapResizeCallback;
 use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
     info::{DbDesc, MapDesc},
-    Data, DbIndex,
+    Data, MapIndex,
 };
 use utils::sync::Arc;
 
@@ -37,10 +37,10 @@ pub use lmdb::{DatabaseResizeInfo, DatabaseResizeSettings};
 #[derive(Eq, PartialEq, Debug, Clone)]
 struct DbList(Vec<lmdb::Database>);
 
-impl std::ops::Index<DbIndex> for DbList {
+impl std::ops::Index<MapIndex> for DbList {
     type Output = lmdb::Database;
 
-    fn index(&self, index: DbIndex) -> &Self::Output {
+    fn index(&self, index: MapIndex) -> &Self::Output {
         &self.0[index.get()]
     }
 }
@@ -83,7 +83,7 @@ impl<'s, 'i, Tx: lmdb::Transaction> backend::PrefixIter<'i> for DbTx<'s, Tx> {
 
     fn prefix_iter<'t: 'i>(
         &'t self,
-        idx: DbIndex,
+        idx: MapIndex,
         prefix: Data,
     ) -> storage_core::Result<Self::Iterator> {
         let cursor =
@@ -98,7 +98,7 @@ impl<'s, 'i, Tx: lmdb::Transaction> backend::PrefixIter<'i> for DbTx<'s, Tx> {
 }
 
 impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
-    fn get(&self, idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+    fn get(&self, idx: MapIndex, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
         self.tx
             .get(self.backend.dbs[idx], &key)
             .map_or_else(error::process_with_none, |x| Ok(Some(x.into())))
@@ -106,14 +106,14 @@ impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
 }
 
 impl backend::WriteOps for DbTx<'_, lmdb::RwTransaction<'_>> {
-    fn put(&mut self, idx: DbIndex, key: Data, val: Data) -> storage_core::Result<()> {
+    fn put(&mut self, idx: MapIndex, key: Data, val: Data) -> storage_core::Result<()> {
         self.tx
             .put(self.backend.dbs[idx], &key, &val, lmdb::WriteFlags::empty())
             .map_err(|err| self.backend.schedule_map_resize_if_map_full(err))
             .or_else(error::process_with_unit)
     }
 
-    fn del(&mut self, idx: DbIndex, key: &[u8]) -> storage_core::Result<()> {
+    fn del(&mut self, idx: MapIndex, key: &[u8]) -> storage_core::Result<()> {
         self.tx
             .del(self.backend.dbs[idx], &key, None)
             .map_err(|err| self.backend.schedule_map_resize_if_map_full(err))

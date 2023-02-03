@@ -15,7 +15,7 @@
 
 //! Describe the database schema at type level
 
-pub use storage_core::{info::MapDesc, DbIndex};
+pub use storage_core::{info::MapDesc, MapIndex};
 
 /// Describes single key-value map
 pub trait DbMap: 'static {
@@ -59,13 +59,13 @@ impl<M: DbMap, Rest: Schema> Schema for (M, Rest) {
 /// Require a schema to contain given map (identified by a type tag)
 pub trait HasDbMap<M: DbMap, I>: Schema {
     /// Index of the map in the schema
-    const INDEX: DbIndex;
+    const INDEX: MapIndex;
 }
 impl<M: DbMap, Rest: Schema> HasDbMap<M, ()> for (M, Rest) {
-    const INDEX: DbIndex = DbIndex::new(0);
+    const INDEX: MapIndex = MapIndex::new(0);
 }
 impl<M: DbMap, Head: DbMap, Rest: HasDbMap<M, I>, I> HasDbMap<M, (I,)> for (Head, Rest) {
-    const INDEX: DbIndex = DbIndex::new(Rest::INDEX.get() + 1);
+    const INDEX: MapIndex = MapIndex::new(Rest::INDEX.get() + 1);
 }
 
 mod internal {
@@ -123,8 +123,8 @@ mod test {
     #[test]
     fn schema() {
         // Check calculated column indices
-        assert_eq!(<MySchema as HasDbMap<DBIdx0, _>>::INDEX, DbIndex::new(0));
-        assert_eq!(<MySchema as HasDbMap<DBIdx1, _>>::INDEX, DbIndex::new(1));
-        assert_eq!(<MySchema as HasDbMap<DBIdx2, _>>::INDEX, DbIndex::new(2));
+        assert_eq!(<MySchema as HasDbMap<DBIdx0, _>>::INDEX, MapIndex::new(0));
+        assert_eq!(<MySchema as HasDbMap<DBIdx1, _>>::INDEX, MapIndex::new(1));
+        assert_eq!(<MySchema as HasDbMap<DBIdx2, _>>::INDEX, MapIndex::new(2));
     }
 }

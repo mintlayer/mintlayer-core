@@ -24,7 +24,7 @@ pub mod util;
 // Re-export some commonly used items
 pub use backend::Backend;
 pub use error::Error;
-pub use info::{DbDesc, DbIndex};
+pub use info::{DbDesc, MapIndex};
 
 pub type Data = Vec<u8>;
 pub type Result<T> = std::result::Result<T, Error>;

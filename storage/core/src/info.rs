@@ -17,12 +17,12 @@
 
 /// Database index type, just a thin wrapper over usize
 #[derive(Eq, PartialEq, PartialOrd, Ord, Clone, Copy, Debug)]
-pub struct DbIndex(usize);
+pub struct MapIndex(usize);
 
-impl DbIndex {
+impl MapIndex {
     /// New index
     pub const fn new(idx: usize) -> Self {
-        DbIndex(idx)
+        MapIndex(idx)
     }
 
     /// Get the index as usize
@@ -48,13 +48,14 @@ impl MapDesc {
     }
 }
 
-/// Description of a database, i.e. a collection of key-value maps
+/// A database backend implementation can be seen as a map of maps, in the form: Map<MapIndex, Map<Key, Value>>
+/// DbDesc is the description of the outer map; we call that the database, which is a collection of key-value maps
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct DbDesc(Vec<MapDesc>);
 
 #[allow(clippy::len_without_is_empty)]
 impl DbDesc {
-    /// Number of databases
+    /// Number of maps in the database
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -65,9 +66,9 @@ impl DbDesc {
     }
 }
 
-impl std::ops::Index<DbIndex> for DbDesc {
+impl std::ops::Index<MapIndex> for DbDesc {
     type Output = MapDesc;
-    fn index(&self, idx: DbIndex) -> &MapDesc {
+    fn index(&self, idx: MapIndex) -> &MapDesc {
         &self.0[idx.0]
     }
 }

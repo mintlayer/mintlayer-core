@@ -21,7 +21,7 @@ mod prefix_iter_rw;
 use crate::{
     adaptor::{Construct, CoreOps},
     backend,
-    info::{DbDesc, DbIndex},
+    info::{DbDesc, MapIndex},
     Data,
 };
 use backend::{PrefixIter, ReadOps, WriteOps};
@@ -33,7 +33,7 @@ use utils::sync;
 pub struct TxRo<'tx, T>(sync::RwLockReadGuard<'tx, T>);
 
 impl<'tx, T: ReadOps> ReadOps for TxRo<'tx, T> {
-    fn get(&self, idx: DbIndex, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
+    fn get(&self, idx: MapIndex, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
         self.0.get(idx, key)
     }
 }
@@ -41,7 +41,7 @@ impl<'tx, T: ReadOps> ReadOps for TxRo<'tx, T> {
 impl<'tx, 'i, T: PrefixIter<'i>> PrefixIter<'i> for TxRo<'tx, T> {
     type Iterator = T::Iterator;
 
-    fn prefix_iter<'m: 'i>(&'m self, idx: DbIndex, prefix: Data) -> crate::Result<Self::Iterator> {
+    fn prefix_iter<'m: 'i>(&'m self, idx: MapIndex, prefix: Data) -> crate::Result<Self::Iterator> {
         self.0.prefix_iter(idx, prefix)
     }
 }
@@ -58,14 +58,14 @@ pub struct TxRw<'tx, T> {
 }
 
 impl<'tx, T> TxRw<'tx, T> {
-    fn update(&mut self, idx: DbIndex, key: Data, val: Option<Data>) -> crate::Result<()> {
+    fn update(&mut self, idx: MapIndex, key: Data, val: Option<Data>) -> crate::Result<()> {
         self.deltas[idx.get()].insert(key, val);
         Ok(())
     }
 }
 
 impl<'tx, T: ReadOps> ReadOps for TxRw<'tx, T> {
-    fn get(&self, idx: DbIndex, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
+    fn get(&self, idx: MapIndex, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
         self.deltas[idx.get()].get(key).map_or_else(
             || self.db.get(idx, key),
             |x| Ok(x.as_deref().map(|p| p.into())),
@@ -76,24 +76,24 @@ impl<'tx, T: ReadOps> ReadOps for TxRw<'tx, T> {
 impl<'tx, 'i, T: PrefixIter<'i>> PrefixIter<'i> for TxRw<'tx, T> {
     type Iterator = prefix_iter_rw::Iter<'i, T>;
 
-    fn prefix_iter<'m: 'i>(&'m self, idx: DbIndex, prefix: Data) -> crate::Result<Self::Iterator> {
+    fn prefix_iter<'m: 'i>(&'m self, idx: MapIndex, prefix: Data) -> crate::Result<Self::Iterator> {
         prefix_iter_rw::iter(self, idx, prefix)
     }
 }
 
 impl<'tx, T> WriteOps for TxRw<'tx, T> {
-    fn put(&mut self, idx: DbIndex, key: Data, val: Data) -> crate::Result<()> {
+    fn put(&mut self, idx: MapIndex, key: Data, val: Data) -> crate::Result<()> {
         self.update(idx, key, Some(val))
     }
 
-    fn del(&mut self, idx: DbIndex, key: &[u8]) -> crate::Result<()> {
+    fn del(&mut self, idx: MapIndex, key: &[u8]) -> crate::Result<()> {
         self.update(idx, key.to_vec(), None)
     }
 }
 
 impl<'tx, T: ReadOps + WriteOps> backend::TxRw for TxRw<'tx, T> {
     fn commit(mut self) -> crate::Result<()> {
-        let entries = self.deltas.into_iter().enumerate().map(|(i, m)| (DbIndex::new(i), m));
+        let entries = self.deltas.into_iter().enumerate().map(|(i, m)| (MapIndex::new(i), m));
         for (idx, kvmap) in entries {
             for (key, val) in kvmap {
                 match val {

@@ -24,7 +24,7 @@ use internal::{EntryIterator, TxImpl};
 
 use crate::schema::{self, Schema};
 use serialization::{encoded::Encoded, Encode, EncodeLike};
-use storage_core::{backend, Backend, DbIndex};
+use storage_core::{backend, Backend, MapIndex};
 
 /// The main storage type
 pub struct Storage<B: Backend, Sch> {
@@ -141,12 +141,12 @@ impl<'tx, B: Backend, Sch: Schema> TransactionRw<'tx, B, Sch> {
 /// Represents an immutable view of a key-value map
 pub struct MapRef<'tx, Tx: internal::TxImpl, DbMap: schema::DbMap> {
     dbtx: &'tx Tx::Impl,
-    idx: DbIndex,
+    idx: MapIndex,
     _phantom: std::marker::PhantomData<fn() -> DbMap>,
 }
 
 impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapRef<'tx, Tx, DbMap> {
-    fn new(dbtx: &'tx Tx::Impl, idx: DbIndex) -> Self {
+    fn new(dbtx: &'tx Tx::Impl, idx: MapIndex) -> Self {
         let _phantom = Default::default();
         Self {
             dbtx,
@@ -195,12 +195,12 @@ where
 /// Represents a mutable view of a key-value map
 pub struct MapMut<'tx, Tx: TxImpl, DbMap: schema::DbMap> {
     dbtx: &'tx mut Tx::Impl,
-    idx: DbIndex,
+    idx: MapIndex,
     _phantom: std::marker::PhantomData<fn() -> DbMap>,
 }
 
 impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapMut<'tx, Tx, DbMap> {
-    fn new(dbtx: &'tx mut Tx::Impl, idx: DbIndex) -> Self {
+    fn new(dbtx: &'tx mut Tx::Impl, idx: MapIndex) -> Self {
         let _phantom = Default::default();
         Self {
             dbtx,
