@@ -1,0 +1,112 @@
+[sources.allow-org]
+github = [
+    "mintlayer", #allow any code from mintlayer's github
+]
+
+[bans]
+multiple-versions = "deny" #catch mutliple versions of a crate
+deny = []
+
+#skip quick-error for "reasons" that i cba to explain just about as much as i cba to fix
+skip = [
+    {name = "aead", version = "=0.4.3"},
+    {name = "base64", version = "=0.10.1"},
+    {name = "bech32", version = "=0.8.1"},
+    {name = "blake2", version = "=0.9.2"},
+    {name = "block-buffer", version = "=0.9.0"},
+    {name = "chacha20", version = "=0.8.2"},
+    {name = "chacha20poly1305", version = "=0.9.1"},
+    {name = "cipher", version = "=0.3.0"},
+    {name = "clap", version = "=2.34.0"},
+    {name = "curve25519-dalek", version = "=3.2.0"},
+    {name = "digest", version = "=0.9.0"},
+    {name = "getrandom", version = "0.1.16"},
+    {name = "heck", version = "=0.3.3"},
+    {name = "parking_lot", version = "=0.11.2"},
+    {name = "parking_lot_core", version = "=0.8.5"},
+    {name = "poly1305", version = "=0.7.2"},
+    {name = "quick-error", version = "=1.2.3"},
+    {name = "rand", version = "=0.7.3"},
+    {name = "rand_chacha", version = "=0.2.2"},
+    {name = "rand_core", version = "=0.5.1"},
+    {name = "rustc_version", version = "=0.3.3"},
+    {name = "semver", version = "=0.11.0"},
+    {name = "sha-1", version = "=0.9.8"},
+    {name = "sha2", version = "=0.9.9"},
+    {name = "sha3", version = "=0.9.1"},
+    {name = "strsim", version = "=0.8.0"},
+    {name = "textwrap", version = "=0.11.0"},
+    {name = "universal-hash", version = "=0.4.1"},
+    {name = "wasi", version = "=0.10.0"},
+    {name = "wasi", version = "=0.9.0"},
+    {name = "windows", version = "=0.32.0"},
+    {name = "windows-sys", version = "=0.36.1"},
+    {name = "windows-sys", version = "=0.42.0"},
+    {name = "windows_aarch64_msvc", version = "=0.34.0"},
+    {name = "windows_aarch64_msvc", version = "=0.36.1"},
+    {name = "windows_aarch64_msvc", version = "=0.42.0"},
+    {name = "windows_i686_gnu", version = "=0.34.0"},
+    {name = "windows_i686_gnu", version = "=0.36.1"},
+    {name = "windows_i686_gnu", version = "=0.42.0"},
+    {name = "windows_i686_msvc", version = "=0.34.0"},
+    {name = "windows_i686_msvc", version = "=0.36.1"},
+    {name = "windows_i686_msvc", version = "=0.42.0"},
+    {name = "windows_x86_64_gnu", version = "=0.34.0"},
+    {name = "windows_x86_64_gnu", version = "=0.36.1"},
+    {name = "windows_x86_64_gnu", version = "=0.42.0"},
+    {name = "windows_x86_64_msvc", version = "=0.34.0"},
+    {name = "windows_x86_64_msvc", version = "=0.36.1"},
+    {name = "windows_x86_64_msvc", version = "=0.42.0"},
+]
+
+[licenses]
+#we reject code without a license
+unlicensed = "deny"
+confidence-threshold = 0.92
+allow = [
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "ISC",
+    "LicenseRef-ring",
+    "LicenseRef-webpki",
+    "MIT",
+    "MPL-2.0",
+    "Unicode-DFS-2016",
+    "Unlicense", #this is a specific license rather than no license at all
+    "WTFPL",
+    "Zlib",
+] #deny a license not in this set of licenses
+
+[[licenses.clarify]]
+name = "ring"
+expression = "LicenseRef-ring"
+license-files = [
+    { path = "LICENSE", hash = 0xbd0eed23 },
+]
+
+[[licenses.clarify]]
+name = "webpki"
+expression = "LicenseRef-webpki"
+license-files = [
+    { path = "LICENSE", hash = 0x001c7e6c },
+]
+
+[advisories]
+db-path = "~/.cargo/advisory-dbs"
+db-urls = [ "https://github.com/RustSec/advisory-db" ]
+vulnerability = "deny"
+unmaintained = "warn"
+unsound = "warn"
+yanked = "warn"
+notice = "warn"
+severity-threshold = "medium"
+ignore = [
+    # time/chrono problems, have not been a problem in practice
+    "RUSTSEC-2020-0159",
+    "RUSTSEC-2020-0071",
+    # TODO: remove once mintlayer/mintlayer-core#334 is fixed
+    "RUSTSEC-2022-0040",
+]
