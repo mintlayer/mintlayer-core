@@ -50,6 +50,20 @@ impl DbMapCount {
 }
 
 /// Associate data of type `T` with each DB map
+///
+/// This is used to associate certain data with each DB map. The data can be metadata containing
+/// names and other information about the maps, like [DbMapDesc]. It can also be used by the
+/// backend to store for example handles to open key-value maps.
+///
+/// The interface of this type is deliberately constrained to make it hard to use inappropriately.
+/// It can be constructed in two ways:
+/// 1. The [Self::new] method takes in the number of DB maps. The map count is in a type wrapper to
+///    make it harder to use arbitrary number there.
+/// 2. The [Self::transform] method is used to derive one piece of data from another. It preserves
+///    the data count and ensures the DB map IDs remain consistent between the original and the
+///    derived [DbMapsData] instance.
+/// 3. The data can only be accessed by a [DbMapId] so it's only indexed into using a valid DB
+///    map identifier.
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct DbMapsData<T>(Vec<T>);
 
