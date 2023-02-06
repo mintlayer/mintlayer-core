@@ -23,7 +23,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 use void::Void;
 
 use chainstate::{ban_score::BanScore, chainstate_interface, BlockError, ChainstateError, Locator};
@@ -44,6 +44,7 @@ use crate::{
     message::{self, Announcement, BlockResponse, SyncRequest, SyncResponse},
     net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
     Result,
+    utils::oneshot_nofail,
 };
 
 // TODO: FIXME: Move to the peer module.

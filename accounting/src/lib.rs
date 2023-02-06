@@ -22,7 +22,7 @@ pub use crate::{
         delta_amount_collection::DeltaAmountCollection,
         delta_data_collection::{
             undo::{DataDeltaUndo, DeltaDataUndoCollection},
-            DataDelta, DeltaDataCollection, DeltaMapElement, GetDataResult,
+            DataDelta, DeltaDataCollection, GetDataResult,
         },
     },
     error::Error,

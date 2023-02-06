@@ -23,7 +23,7 @@ pub mod types;
 use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 
 use logging::log;
 use serialization::Encode;
@@ -52,12 +52,27 @@ pub struct ConnectivityHandle<S: NetworkingService, T: TransportSocket> {
     local_addresses: Vec<S::Address>,
 
     /// TX channel for sending commands to default_backend backend
-    cmd_tx: mpsc::Sender<types::Command<T>>,
+    cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
 
     /// RX channel for receiving connectivity events from default_backend backend
-    conn_rx: mpsc::Receiver<types::ConnectivityEvent<T>>,
+    conn_rx: mpsc::UnboundedReceiver<types::ConnectivityEvent<T>>,
 
     _marker: PhantomData<fn() -> S>,
+}
+
+impl<S: NetworkingService, T: TransportSocket> ConnectivityHandle<S, T> {
+    pub fn new(
+        local_addresses: Vec<S::Address>,
+        cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
+        conn_rx: mpsc::UnboundedReceiver<types::ConnectivityEvent<T>>,
+    ) -> Self {
+        Self {
+            local_addresses,
+            cmd_tx,
+            conn_rx,
+            _marker: PhantomData,
+        }
+    }
 }
 
 pub struct PubSubHandle<S, T>
@@ -66,10 +81,10 @@ where
     T: TransportSocket,
 {
     /// TX channel for sending commands to default_backend backend
-    _cmd_tx: mpsc::Sender<types::Command<T>>,
+    _cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
 
     /// RX channel for receiving pubsub events from default_backend backend
-    _pubsub_rx: mpsc::Receiver<types::PubSubEvent<T>>,
+    _pubsub_rx: mpsc::UnboundedReceiver<types::PubSubEvent<T>>,
 
     _marker: PhantomData<fn() -> S>,
 }
@@ -81,10 +96,11 @@ where
     T: TransportSocket,
 {
     /// TX channel for sending commands to default_backend backend
-    cmd_tx: mpsc::Sender<types::Command<T>>,
+    cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
 
     /// RX channel for receiving syncing events
-    sync_rx: mpsc::Receiver<types::SyncingEvent>,
+    sync_rx: mpsc::UnboundedReceiver<types::SyncingEvent>,
+
     _marker: PhantomData<fn() -> S>,
 }
 
@@ -104,9 +120,9 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
-        let (cmd_tx, cmd_rx) = mpsc::channel(16);
-        let (conn_tx, conn_rx) = mpsc::channel(16);
-        let (sync_tx, sync_rx) = mpsc::channel(16);
+        let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
+        let (conn_tx, conn_rx) = mpsc::unbounded_channel();
+        let (sync_tx, sync_rx) = mpsc::unbounded_channel();
         let socket = transport.bind(bind_addresses).await?;
         let local_addresses = socket.local_addresses().expect("to have bind address available");
 
@@ -127,12 +143,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         });
 
         Ok((
-            Self::ConnectivityHandle {
-                local_addresses,
-                cmd_tx: cmd_tx.clone(),
-                conn_rx,
-                _marker: Default::default(),
-            },
+            ConnectivityHandle::new(local_addresses, cmd_tx.clone(), conn_rx),
             Self::SyncingMessagingHandle {
                 cmd_tx,
                 sync_rx,
@@ -148,56 +159,38 @@ where
     S: NetworkingService<Address = T::Address, PeerId = PeerId, PeerRequestId = RequestId> + Send,
     T: TransportSocket,
 {
-    async fn connect(&mut self, address: S::Address) -> crate::Result<()> {
+    fn connect(&mut self, address: S::Address) -> crate::Result<()> {
         log::debug!(
             "try to establish outbound connection, address {:?}",
             address
         );
 
-        let (tx, rx) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::Connect {
-                address,
-                response: tx,
-            })
-            .await?;
-
-        rx.await?
+        self.cmd_tx.send(types::Command::Connect { address }).map_err(P2pError::from)
     }
 
-    async fn disconnect(&mut self, peer_id: S::PeerId) -> crate::Result<()> {
+    fn disconnect(&mut self, peer_id: S::PeerId) -> crate::Result<()> {
         log::debug!("close connection with remote, {peer_id}");
 
-        let (tx, rx) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::Disconnect {
-                peer_id,
-                response: tx,
-            })
-            .await?;
-
-        rx.await?
+        self.cmd_tx.send(types::Command::Disconnect { peer_id }).map_err(P2pError::from)
     }
 
-    async fn send_request(
+    fn send_request(
         &mut self,
         peer_id: S::PeerId,
         request: PeerManagerRequest,
     ) -> crate::Result<S::PeerRequestId> {
         let request_id = RequestId::new();
 
-        self.cmd_tx
-            .send(types::Command::SendRequest {
-                peer_id,
-                request_id,
-                message: request.into(),
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::SendRequest {
+            peer_id,
+            request_id,
+            message: request.into(),
+        })?;
 
         Ok(request_id)
     }
 
-    async fn send_response(
+    fn send_response(
         &mut self,
         request_id: S::PeerRequestId,
         response: PeerManagerResponse,
@@ -207,8 +200,7 @@ where
                 request_id,
                 message: response.into(),
             })
-            .await?;
-        Ok(())
+            .map_err(P2pError::from)
     }
 
     fn local_addresses(&self) -> &[S::Address] {
@@ -272,42 +264,35 @@ where
     S: NetworkingService<PeerId = PeerId, PeerRequestId = RequestId> + Send,
     T: TransportSocket,
 {
-    async fn send_request(
+    fn send_request(
         &mut self,
         peer_id: S::PeerId,
         request: SyncRequest,
     ) -> crate::Result<S::PeerRequestId> {
         let request_id = RequestId::new();
 
-        self.cmd_tx
-            .send(types::Command::SendRequest {
-                peer_id,
-                request_id,
-                message: request.into(),
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::SendRequest {
+            peer_id,
+            request_id,
+            message: request.into(),
+        })?;
 
         Ok(request_id)
     }
 
-    async fn send_response(
+    fn send_response(
         &mut self,
         request_id: S::PeerRequestId,
         response: SyncResponse,
     ) -> crate::Result<()> {
-        self.cmd_tx
-            .send(types::Command::SendResponse {
-                request_id,
-                message: response.into(),
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::SendResponse {
+            request_id,
+            message: response.into(),
+        })?;
         Ok(())
     }
 
-    async fn make_announcement(
-        &mut self,
-        announcement: message::Announcement,
-    ) -> crate::Result<()> {
+    fn make_announcement(&mut self, announcement: message::Announcement) -> crate::Result<()> {
         let message = announcement.encode();
         if message.len() > ANNOUNCEMENT_MAX_SIZE {
             return Err(P2pError::PublishError(PublishError::MessageTooLarge(
@@ -320,9 +305,9 @@ where
             message::Announcement::Block(_) => PubSubTopic::Blocks,
         };
 
-        self.cmd_tx.send(types::Command::AnnounceData { topic, message }).await?;
-
-        Ok(())
+        self.cmd_tx
+            .send(types::Command::AnnounceData { topic, message })
+            .map_err(P2pError::from)
     }
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent<S>> {
@@ -395,7 +380,7 @@ mod tests {
         .unwrap();
 
         let addr = conn2.local_addresses();
-        assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
+        assert_eq!(conn1.connect(addr[0].clone()), Ok(()));
 
         if let Ok(ConnectivityEvent::OutboundAccepted {
             address,
@@ -458,7 +443,8 @@ mod tests {
         .unwrap();
 
         let bind_address = conn2.local_addresses();
-        let (_res1, res2) = tokio::join!(conn1.connect(bind_address[0].clone()), conn2.poll_next());
+        conn1.connect(bind_address[0].clone()).unwrap();
+        let res2 = conn2.poll_next().await;
         match res2.unwrap() {
             ConnectivityEvent::InboundAccepted {
                 address: _,
@@ -516,10 +502,8 @@ mod tests {
         .await
         .unwrap();
 
-        let (_res1, res2) = tokio::join!(
-            conn1.connect(conn2.local_addresses()[0].clone()),
-            conn2.poll_next()
-        );
+        conn1.connect(conn2.local_addresses()[0].clone()).unwrap();
+        let res2 = conn2.poll_next().await;
 
         match res2.unwrap() {
             ConnectivityEvent::InboundAccepted {
@@ -527,7 +511,7 @@ mod tests {
                 peer_info,
                 receiver_address: _,
             } => {
-                assert_eq!(conn2.disconnect(peer_info.peer_id).await, Ok(()));
+                assert_eq!(conn2.disconnect(peer_info.peer_id), Ok(()));
             }
             _ => panic!("invalid event received, expected incoming connection"),
         }
@@ -576,7 +560,7 @@ mod tests {
 
         // Try connect to self
         let addr = conn1.local_addresses();
-        assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
+        assert_eq!(conn1.connect(addr[0].clone()), Ok(()));
 
         // ConnectionError should be reported
         if let Ok(ConnectivityEvent::ConnectionError { address, error }) = conn1.poll_next().await {
@@ -598,7 +582,7 @@ mod tests {
 
         // Check that we can still connect normally after
         let addr = conn2.local_addresses();
-        assert_eq!(conn1.connect(addr[0].clone()).await, Ok(()));
+        assert_eq!(conn1.connect(addr[0].clone()), Ok(()));
         if let Ok(ConnectivityEvent::OutboundAccepted {
             address,
             peer_info,

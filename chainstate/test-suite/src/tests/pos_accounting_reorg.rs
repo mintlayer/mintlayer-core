@@ -147,7 +147,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
 
             {
                 // manually add block_a info
-                let mut db_tx = storage.transaction_rw().unwrap();
+                let mut db_tx = storage.transaction_rw(None).unwrap();
                 db_tx.set_block_index(&block_a_index).unwrap();
                 db_tx.add_block(&block_a).unwrap();
                 db_tx.commit().unwrap();

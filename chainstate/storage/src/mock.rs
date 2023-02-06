@@ -183,7 +183,7 @@ mockall::mock! {
         type TransactionRo = MockStoreTxRo;
         type TransactionRw = MockStoreTxRw;
         fn transaction_ro<'st>(&'st self) -> crate::Result<MockStoreTxRo> where 'st: 'tx;
-        fn transaction_rw<'st>(&'st self) -> crate::Result<MockStoreTxRw> where 'st: 'tx;
+        fn transaction_rw<'st>(&'st self, size: Option<usize>) -> crate::Result<MockStoreTxRw> where 'st: 'tx;
     }
 
     impl crate::BlockchainStorage for Store {}
@@ -486,7 +486,7 @@ mod tests {
     fn mock_transaction() {
         // Set up the mock store
         let mut store = MockStore::new();
-        store.expect_transaction_rw().returning(|| {
+        store.expect_transaction_rw().returning(|_| {
             let mut mock_tx = MockStoreTxRw::new();
             mock_tx.expect_get_storage_version().return_const(Ok(3));
             mock_tx
@@ -498,7 +498,7 @@ mod tests {
         });
 
         // Test some code against the mock
-        let mut tx = store.transaction_rw().unwrap();
+        let mut tx = store.transaction_rw(None).unwrap();
         let v = tx.get_storage_version().unwrap();
         tx.set_storage_version(v + 1).unwrap();
         tx.commit().unwrap();
@@ -524,7 +524,7 @@ mod tests {
         block: &Block,
     ) -> &'static str {
         (|| {
-            let mut tx = store.transaction_rw().unwrap();
+            let mut tx = store.transaction_rw(None).unwrap();
             // Get current best block ID
             let _best_id = match tx.get_best_block_id()? {
                 None => return Ok("top not set"),
@@ -592,7 +592,7 @@ mod tests {
         let (block0, block1) = sample_data();
         let block1_id = block1.get_id();
         let mut store = MockStore::new();
-        store.expect_transaction_rw().returning(move || {
+        store.expect_transaction_rw().returning(move |_| {
             let mut tx = MockStoreTxRw::new();
             tx.expect_get_best_block_id().return_const(Ok(Some(block0.get_id().into())));
             tx.expect_add_block().return_const(Ok(()));
@@ -612,7 +612,7 @@ mod tests {
     fn attach_to_top_no_best_block() {
         let (_block0, block1) = sample_data();
         let mut store = MockStore::new();
-        store.expect_transaction_rw().returning(move || {
+        store.expect_transaction_rw().returning(move |_| {
             let mut tx = MockStoreTxRw::new();
             tx.expect_get_best_block_id().return_const(Ok(None));
             tx.expect_abort().return_const(());
@@ -628,7 +628,7 @@ mod tests {
         let (_block0, block1) = sample_data();
         let top_id = Id::new(H256([0x99; 32]));
         let mut store = MockStore::new();
-        store.expect_transaction_rw().returning(move || {
+        store.expect_transaction_rw().returning(move |_| {
             let mut tx = MockStoreTxRw::new();
             tx.expect_get_best_block_id().return_const(Ok(Some(top_id)));
             tx.expect_abort().return_const(());
@@ -644,7 +644,7 @@ mod tests {
         let (block0, block1) = sample_data();
         let block1_id = block1.get_id();
         let mut store = MockStore::new();
-        store.expect_transaction_rw().returning(move || {
+        store.expect_transaction_rw().returning(move |_| {
             let mut tx = MockStoreTxRw::new();
             tx.expect_get_best_block_id().return_const(Ok(Some(block0.get_id().into())));
             tx.expect_add_block().return_const(Ok(()));

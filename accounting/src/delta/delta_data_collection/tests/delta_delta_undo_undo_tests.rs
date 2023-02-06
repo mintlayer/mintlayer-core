@@ -24,10 +24,10 @@ type FourCollections = (
 
 fn make_collections_with_undo(delta1: DataDelta<char>, delta2: DataDelta<char>) -> FourCollections {
     let mut collection1 = DeltaDataCollection::new();
-    let undo_delta1 = collection1.merge_delta_data_element(1, delta1).unwrap().unwrap();
+    let undo_delta1 = collection1.merge_delta_data_element(1, delta1).unwrap();
 
     let mut collection2 = DeltaDataCollection::new();
-    let undo_delta2 = collection2.merge_delta_data_element(1, delta2).unwrap().unwrap();
+    let undo_delta2 = collection2.merge_delta_data_element(1, delta2).unwrap();
 
     let mut collection3 = DeltaDataCollection::new();
     collection3.undo_merge_delta_data_element(1, undo_delta2).unwrap();
@@ -103,8 +103,8 @@ fn delta_delta_undo_undo_associativity(
         // ((Delta1 + Delta2) + Undo1) + Undo2 = Delta
         // every delta is applied to the same collection
         let mut collection = DeltaDataCollection::new();
-        let undo1 = collection.merge_delta_data_element(1, delta1).unwrap().unwrap();
-        let undo2 = collection.merge_delta_data_element(1, delta2).unwrap().unwrap();
+        let undo1 = collection.merge_delta_data_element(1, delta1).unwrap();
+        let undo2 = collection.merge_delta_data_element(1, delta2).unwrap();
         collection.undo_merge_delta_data_element(1, undo2).unwrap();
         collection.undo_merge_delta_data_element(1, undo1).unwrap();
 

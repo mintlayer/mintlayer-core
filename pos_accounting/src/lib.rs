@@ -35,7 +35,7 @@ pub use crate::{
     pool::{
         block_undo::{AccountingBlockUndo, AccountingBlockUndoError, AccountingTxUndo},
         delegation::DelegationData,
-        delta::{data::PoSAccountingDeltaData, PoSAccountingDelta},
+        delta::{data::PoSAccountingDeltaData, DeltaMergeUndo, PoSAccountingDelta},
         helpers::make_pool_id,
         operations::{PoSAccountingOperations, PoSAccountingUndo},
         pool_data::PoolData,

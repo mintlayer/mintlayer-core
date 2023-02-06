@@ -26,6 +26,7 @@ pub mod sync;
 #[cfg(feature = "testing_utils")]
 pub mod testing_utils;
 pub mod types;
+pub mod utils;
 
 use std::sync::Arc;
 

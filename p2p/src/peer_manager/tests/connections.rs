@@ -19,7 +19,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use tokio::{sync::oneshot, time::timeout};
+use tokio::time::timeout;
 
 use crate::{
     config::P2pConfig,
@@ -29,6 +29,7 @@ use crate::{
         connect_services, get_connectivity_event, peerdb_inmemory_store, P2pTestTimeGetter,
         TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
+    utils::oneshot_nofail,
 };
 use common::chain::config;
 
@@ -60,7 +61,7 @@ async fn test_peer_manager_connect<T: NetworkingService>(
     let config = Arc::new(config::create_mainnet());
     let mut peer_manager = make_peer_manager::<T>(transport, bind_addr, config).await;
 
-    peer_manager.connect(remote_addr).await.unwrap();
+    peer_manager.try_connect(remote_addr).unwrap();
 
     assert!(matches!(
         peer_manager.peer_connectivity_handle.poll_next().await,
@@ -124,9 +125,9 @@ where
 
     // "discover" the other networking service
     pm1.peerdb.peer_discovered(&addr).unwrap();
-    pm1.heartbeat().await.unwrap();
+    pm1.heartbeat().unwrap();
 
-    assert_eq!(pm1.pending.len(), 1);
+    assert_eq!(pm1.pending_connects.len(), 1);
     assert!(std::matches!(
         pm1.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::OutboundAccepted { .. })
@@ -260,7 +261,7 @@ where
     )
     .await;
     assert_eq!(
-        pm2.accept_inbound_connection(address, peer_info, None).await,
+        pm2.accept_inbound_connection(address, peer_info, None),
         Ok(())
     );
 }
@@ -315,7 +316,7 @@ where
     .await;
 
     assert_eq!(
-        pm2.accept_inbound_connection(address, peer_info, None).await,
+        pm2.accept_inbound_connection(address, peer_info, None),
         Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
             [1, 2, 3, 4],
             *config::create_mainnet().magic_bytes(),
@@ -379,7 +380,7 @@ where
     .await;
 
     assert_eq!(
-        pm2.peer_connectivity_handle.disconnect(peer_info.peer_id).await,
+        pm2.peer_connectivity_handle.disconnect(peer_info.peer_id),
         Ok(())
     );
     assert!(std::matches!(
@@ -418,11 +419,11 @@ where
     let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
     let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, Arc::clone(&config)).await;
 
-    peers.into_iter().for_each(|peer| {
-        pm1.peerdb.peer_connected(peer.0, Role::Inbound, peer.1);
-    });
+    for peer in peers.into_iter() {
+        pm1.accept_connection(peer.0, Role::Inbound, peer.1, None).unwrap();
+    }
     assert_eq!(
-        pm1.peerdb.active_peer_count(),
+        pm1.active_peer_count(),
         peer_manager::MAX_ACTIVE_CONNECTIONS
     );
 
@@ -531,16 +532,19 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let config = Arc::new(config::create_mainnet());
-    let mut pm1 = make_peer_manager::<T>(transport, addr1, Arc::clone(&config)).await;
-
-    pm1.peer_connectivity_handle.connect(addr2).await.expect("dial to succeed");
-
-    match timeout(
-        *pm1.p2p_config.outbound_connection_timeout,
-        pm1.peer_connectivity_handle.poll_next(),
+    let (mut conn, _) = T::start(
+        transport,
+        vec![addr1],
+        Arc::clone(&config),
+        Default::default(),
     )
     .await
-    {
+    .unwrap();
+
+    // This will fail immediately because it is trying to connect to the closed port
+    conn.connect(addr2).expect("dial to succeed");
+
+    match timeout(Duration::from_secs(1), conn.poll_next()).await {
         Ok(res) => assert!(std::matches!(
             res,
             Ok(net::types::ConnectivityEvent::ConnectionError {
@@ -620,7 +624,7 @@ async fn connection_timeout_rpc_notified<T>(
         peer_manager.run().await.unwrap();
     });
 
-    let (rtx, rrx) = oneshot::channel();
+    let (rtx, rrx) = oneshot_nofail::channel();
     tx.send(PeerManagerEvent::Connect(addr2, rtx)).unwrap();
 
     match timeout(*p2p_config.outbound_connection_timeout, rrx).await {
@@ -669,6 +673,7 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let time_getter = P2pTestTimeGetter::new();
     let chain_config = Arc::new(config::create_mainnet());
 
     // Start first peer manager
@@ -678,6 +683,8 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
     });
@@ -686,12 +693,12 @@ where
         A::make_address(),
         Arc::clone(&chain_config),
         p2p_config_1,
-        Default::default(),
+        time_getter.get_time_getter(),
     )
     .await;
 
     // Get the first peer manager's bind address
-    let (rtx, rrx) = oneshot::channel();
+    let (rtx, rrx) = oneshot_nofail::channel();
     tx1.send(PeerManagerEvent::GetBindAddresses(rtx)).unwrap();
     let bind_addresses = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
@@ -703,6 +710,8 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
     });
@@ -711,15 +720,16 @@ where
         A::make_address(),
         Arc::clone(&chain_config),
         p2p_config_2,
-        Default::default(),
+        time_getter.get_time_getter(),
     )
     .await;
 
     // The first peer manager must report new connection after some time
     let started_at = Instant::now();
     loop {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let (rtx, rrx) = oneshot::channel();
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        time_getter.advance_time(Duration::from_secs(1)).await;
+        let (rtx, rrx) = oneshot_nofail::channel();
         tx1.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
         let connected_peers = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
         if connected_peers.len() == 1 {
@@ -767,6 +777,8 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
     });
@@ -780,7 +792,7 @@ where
     .await;
 
     // Get the first peer manager's bind address
-    let (rtx, rrx) = oneshot::channel();
+    let (rtx, rrx) = oneshot_nofail::channel();
     tx1.send(PeerManagerEvent::GetBindAddresses(rtx)).unwrap();
 
     let bind_addresses = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
@@ -793,6 +805,8 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
     });
@@ -812,6 +826,8 @@ where
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
     });

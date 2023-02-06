@@ -61,6 +61,10 @@ pub struct P2pConfigFile {
     pub ban_duration: Option<u64>,
     /// The outbound connection timeout value in seconds.
     pub outbound_connection_timeout: Option<NonZeroU64>,
+    /// How often send ping requests to peers.
+    pub ping_check_period: Option<u64>,
+    /// When a peer is detected as dead and disconnected.
+    pub ping_timeout: Option<u64>,
     /// A node type.
     pub node_type: Option<NodeTypeConfigFile>,
 }
@@ -76,6 +80,8 @@ impl From<P2pConfigFile> for P2pConfig {
                 .outbound_connection_timeout
                 .map(|t| Duration::from_secs(t.into()))
                 .into(),
+            ping_check_period: c.ping_check_period.map(Duration::from_secs).into(),
+            ping_timeout: c.ping_timeout.map(Duration::from_secs).into(),
             node_type: c.node_type.map(Into::into).into(),
             allow_discover_private_ips: Default::default(),
             header_limit: Default::default(),

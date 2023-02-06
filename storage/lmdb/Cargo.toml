@@ -9,11 +9,13 @@ logging = { path = '../../logging' }
 storage-core = { path = '../core' }
 utils = { path = '../../utils' }
 
-lmdb-mintlayer = { git = 'https://github.com/mintlayer/lmdb-rs-mintlayer.git', tag = 'v0.15.3' }
+lmdb-mintlayer = { git = 'https://github.com/mintlayer/lmdb-rs-mintlayer.git', tag = 'v0.16.2' }
 
 [dev-dependencies]
 storage-backend-test-suite = { path = "../backend-test-suite" }
 test-utils = { path = "../../test-utils" }
+tempdir = "0.3"
+rstest = "0.16"
 
 [[test]]
 name = "backend"

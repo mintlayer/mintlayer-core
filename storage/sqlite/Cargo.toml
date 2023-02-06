@@ -1,0 +1,20 @@
+[package]
+name = "storage-sqlite"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+logging = { path = '../../logging' }
+storage-core = { path = '../core' }
+utils = { path = '../../utils' }
+
+rusqlite = { version = "0.28", features = ["bundled"] }
+
+[dev-dependencies]
+storage-backend-test-suite = { path = "../backend-test-suite" }
+test-utils = { path = "../../test-utils" }
+
+[[test]]
+name = "backend"
+harness = false

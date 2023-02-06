@@ -13,33 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use tokio::sync::oneshot;
-
 use common::chain::block::Block;
 
-use crate::{interface::types::ConnectedPeer, net::NetworkingService};
+use crate::{interface::types::ConnectedPeer, net::NetworkingService, utils::oneshot_nofail};
 
 #[derive(Debug)]
 pub enum PeerManagerEvent<T: NetworkingService> {
     /// Try to establish connection with a remote peer
-    Connect(T::Address, oneshot::Sender<crate::Result<()>>),
+    Connect(T::Address, oneshot_nofail::Sender<crate::Result<()>>),
 
     /// Disconnect node using peer ID
-    Disconnect(T::PeerId, oneshot::Sender<crate::Result<()>>),
+    Disconnect(T::PeerId, oneshot_nofail::Sender<crate::Result<()>>),
 
     /// Get the total number of peers local node has a connection with
-    GetPeerCount(oneshot::Sender<usize>),
+    GetPeerCount(oneshot_nofail::Sender<usize>),
 
     /// Get the bind address of the local node
-    GetBindAddresses(oneshot::Sender<Vec<String>>),
+    GetBindAddresses(oneshot_nofail::Sender<Vec<String>>),
 
     /// Get peer IDs and addresses of connected peers
-    GetConnectedPeers(oneshot::Sender<Vec<ConnectedPeer>>),
+    GetConnectedPeers(oneshot_nofail::Sender<Vec<ConnectedPeer>>),
 
     /// Increases the ban score of a peer by the given amount.
     ///
     /// The peer is banned if the new score exceeds the threshold (`P2pConfig::ban_threshold`).
-    AdjustPeerScore(T::PeerId, u32, oneshot::Sender<crate::Result<()>>),
+    AdjustPeerScore(T::PeerId, u32, oneshot_nofail::Sender<crate::Result<()>>),
 }
 
 #[derive(Debug)]

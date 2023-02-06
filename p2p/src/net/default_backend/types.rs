@@ -20,8 +20,6 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use tokio::sync::oneshot;
-
 use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
 
@@ -35,14 +33,13 @@ use crate::{
     types::peer_address::PeerAddress,
 };
 
+#[derive(Debug)]
 pub enum Command<T: TransportSocket> {
     Connect {
         address: T::Address,
-        response: oneshot::Sender<crate::Result<()>>,
     },
     Disconnect {
         peer_id: PeerId,
-        response: oneshot::Sender<crate::Result<()>>,
     },
     SendRequest {
         peer_id: PeerId,

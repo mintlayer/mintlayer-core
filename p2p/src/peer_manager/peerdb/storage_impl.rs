@@ -44,7 +44,7 @@ impl<'tx, B: storage::Backend + 'tx> PeerDbTransactional<'tx> for PeerDbStorageI
     }
 
     fn transaction_rw<'st: 'tx>(&'st self) -> crate::Result<Self::TransactionRw> {
-        self.0.transaction_rw().map_err(crate::P2pError::from).map(PeerDbStoreTxRw)
+        self.0.transaction_rw(None).map_err(crate::P2pError::from).map(PeerDbStoreTxRw)
     }
 }
 

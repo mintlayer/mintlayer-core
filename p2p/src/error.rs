@@ -47,16 +47,12 @@ pub enum ProtocolError {
 pub enum PeerError {
     #[error("Peer disconnected")]
     PeerDisconnected,
-    #[error("No peers")]
-    NoPeers,
     #[error("Peer doesn't exist")]
     PeerDoesntExist,
     #[error("Peer already exists")]
     PeerAlreadyExists,
     #[error("Address {0} is banned")]
     BannedAddress(String),
-    #[error("Peer {0} is banned")]
-    BannedPeer(String),
     #[error("PeerManager has too many peers")]
     TooManyPeers,
     #[error("Connection to address {0} already pending")]
@@ -66,33 +62,17 @@ pub enum PeerError {
 /// PubSub errors for announcements
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum PublishError {
-    #[error("Failed to sign message")]
-    SigningFailed,
     #[error("Message is too large. Tried to send {0:?} bytes when limit is {1:?}")]
     MessageTooLarge(usize, usize),
-    #[error("Failed to compress the message")]
-    TransformFailed,
 }
 
 /// Errors related to establishing a connection with a remote peer
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum DialError {
-    #[error("Peer is banned")]
-    Banned,
-    #[error("Limit for outgoing connections reached: {0}")]
-    ConnectionLimit(usize),
     #[error("Tried to dial self")]
     AttemptToDialSelf,
     #[error("Peer doesn't have any known addresses")]
     NoAddresses,
-    #[error("Peer state not correct for dialing")]
-    DialPeerConditionFalse,
-    #[error("Connection has been aborted")]
-    Aborted,
-    #[error("Invalid PeerId")]
-    InvalidPeerId,
-    #[error("PeerId doesn't match the PeerId of endpoint")]
-    WrongPeerId,
     #[error("Connection refused or timed out")]
     ConnectionRefusedOrTimedOut,
     #[error("I/O error: `{0:?}`")]
@@ -211,9 +191,7 @@ impl BanScore for ProtocolError {
 impl BanScore for PublishError {
     fn ban_score(&self) -> u32 {
         match self {
-            PublishError::SigningFailed => 0,
             PublishError::MessageTooLarge(_, _) => 100,
-            PublishError::TransformFailed => 0,
         }
     }
 }

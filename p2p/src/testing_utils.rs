@@ -161,7 +161,7 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr = conn2.local_addresses();
-    conn1.connect(addr[0].clone()).await.expect("dial to succeed");
+    conn1.connect(addr[0].clone()).expect("dial to succeed");
 
     let (address, peer_info1) = match timeout(Duration::from_secs(5), conn2.poll_next()).await {
         Ok(event) => match event.unwrap() {
@@ -254,10 +254,8 @@ impl P2pTestTimeGetter {
 
     pub async fn advance_time(&self, duration: Duration) {
         tokio::time::pause();
-        self.current_time_millis.store(
-            self.current_time_millis.load(Ordering::SeqCst) + duration.as_millis() as u64,
-            Ordering::SeqCst,
-        );
+        self.current_time_millis
+            .fetch_add(duration.as_millis() as u64, Ordering::SeqCst);
         tokio::time::advance(duration).await;
         tokio::time::resume();
     }

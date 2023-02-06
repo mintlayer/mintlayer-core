@@ -19,21 +19,18 @@
 //!
 //!
 
-#![allow(rustdoc::private_intra_doc_links)]
-
 mod global_ip;
+pub mod peer_context;
 pub mod peerdb;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
     time::Duration,
 };
 
-use tokio::{
-    sync::{mpsc, oneshot},
-    time::Instant,
-};
+use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
+use tokio::{sync::mpsc, time::Instant};
 
 use chainstate::ban_score::BanScore;
 use common::{chain::ChainConfig, primitives::semver::SemVer, time_getter::TimeGetter};
@@ -44,9 +41,10 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
+    interface::types::ConnectedPeer,
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, AnnounceAddrResponse,
-        PeerManagerRequest, PeerManagerResponse,
+        PeerManagerRequest, PeerManagerResponse, PingRequest, PingResponse,
     },
     net::{
         self,
@@ -56,9 +54,14 @@ use crate::{
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
     types::peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
+    utils::oneshot_nofail,
 };
 
-use self::{global_ip::IsGlobalIp, peerdb::storage::PeerDbStorage};
+use self::{
+    global_ip::IsGlobalIp,
+    peer_context::{PeerContext, SentPing},
+    peerdb::storage::PeerDbStorage,
+};
 
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
 const MAX_ACTIVE_CONNECTIONS: usize = 128;
@@ -94,7 +97,13 @@ where
     tx_sync: mpsc::UnboundedSender<SyncControlEvent<T>>,
 
     /// Hashmap of pending outbound connections
-    pending: HashMap<T::Address, Option<oneshot::Sender<crate::Result<()>>>>,
+    pending_connects: HashMap<T::Address, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
+
+    /// Hashmap of pending disconnect requests
+    pending_disconnects: HashMap<T::PeerId, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
+
+    /// Set of active peers
+    peers: BTreeMap<T::PeerId, PeerContext<T>>,
 
     /// Peer database
     peerdb: peerdb::PeerDb<T, S>,
@@ -124,15 +133,22 @@ where
         peerdb_storage: S,
     ) -> crate::Result<Self> {
         let peerdb = peerdb::PeerDb::new(Arc::clone(&p2p_config), time_getter, peerdb_storage)?;
+        let now = tokio::time::Instant::now();
+        utils::ensure!(
+            !p2p_config.ping_timeout.is_zero(),
+            P2pError::Other("ping timeout can't be 0")
+        );
         Ok(Self {
             peer_connectivity_handle: handle,
             rx_peer_manager,
             tx_sync,
             peerdb,
-            pending: HashMap::new(),
+            peers: BTreeMap::new(),
+            pending_connects: HashMap::new(),
+            pending_disconnects: HashMap::new(),
             chain_config,
             p2p_config,
-            last_heartbeat: tokio::time::Instant::now(),
+            last_heartbeat: now,
             announced_addresses: HashMap::new(),
         })
     }
@@ -164,7 +180,7 @@ where
     /// *receiver_address* is this host socket address as seen and reported by remote peer.
     /// This should work for hosts with public IPs and for hosts behind NAT with port forwarding (same port is assumed).
     /// This won't work for majority of nodes but that should be accepted.
-    async fn handle_outbound_receiver_address(
+    fn handle_outbound_receiver_address(
         &mut self,
         peer_id: T::PeerId,
         receiver_address: PeerAddress,
@@ -200,27 +216,25 @@ where
             .collect::<Vec<_>>();
 
         for address in discovered_own_addresses {
-            self.send_announced_address(peer_id, address).await?;
+            self.send_announced_address(peer_id, address)?;
         }
 
         Ok(())
     }
 
-    async fn send_announced_address(
+    fn send_announced_address(
         &mut self,
         peer_id: T::PeerId,
         address: T::Address,
     ) -> crate::Result<()> {
         let peer_addresses = self.announced_addresses.entry(peer_id).or_default();
         if !peer_addresses.contains(&address) {
-            self.peer_connectivity_handle
-                .send_request(
-                    peer_id,
-                    PeerManagerRequest::AnnounceAddrRequest(AnnounceAddrRequest {
-                        address: address.as_peer_address(),
-                    }),
-                )
-                .await?;
+            self.peer_connectivity_handle.send_request(
+                peer_id,
+                PeerManagerRequest::AnnounceAddrRequest(AnnounceAddrRequest {
+                    address: address.as_peer_address(),
+                }),
+            )?;
             peer_addresses.insert(address);
         }
         Ok(())
@@ -231,7 +245,7 @@ where
     /// The event is received from the networking backend and it's either a result of an incoming
     /// connection from a remote peer or a response to an outbound connection that was initiated
     /// by the node as result of the peer manager maintenance.
-    async fn accept_connection(
+    fn accept_connection(
         &mut self,
         address: T::Address,
         role: Role,
@@ -255,7 +269,7 @@ where
             ))
         );
         ensure!(
-            !self.peerdb.is_active_peer(&info.peer_id),
+            !self.is_peer_connected(&info.peer_id),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
         ensure!(
@@ -264,20 +278,36 @@ where
         );
 
         if let (Some(receiver_address), Role::Outbound) = (receiver_address, role) {
-            self.handle_outbound_receiver_address(peer_id, receiver_address).await?;
+            self.handle_outbound_receiver_address(peer_id, receiver_address)?;
         }
 
         if role == Role::Outbound {
-            self.peer_connectivity_handle
-                .send_request(
-                    peer_id,
-                    PeerManagerRequest::AddrListRequest(AddrListRequest {}),
-                )
-                .await?;
+            self.peer_connectivity_handle.send_request(
+                peer_id,
+                PeerManagerRequest::AddrListRequest(AddrListRequest {}),
+            )?;
         }
 
-        log::debug!("peer {peer_id} connected, address {address:?}, {info}");
-        self.peerdb.peer_connected(address, role, info);
+        log::info!(
+            "peer connected, peer_id: {}, address: {address:?}, {:?}",
+            info.peer_id,
+            role
+        );
+
+        let old_value = self.peers.insert(
+            info.peer_id,
+            PeerContext {
+                info,
+                address: address.clone(),
+                role,
+                score: 0,
+                sent_ping: None,
+            },
+        );
+        assert!(old_value.is_none());
+
+        self.peerdb.peer_connected(address);
+
         self.tx_sync.send(SyncControlEvent::Connected(peer_id)).map_err(P2pError::from)
     }
 
@@ -290,7 +320,7 @@ where
     /// This function verifies that neither address the nor the peer ID are on the
     /// list of banned IPs/peer IDs. It also checks that the maximum number of
     /// connections `PeerManager` is configured to have has not been reached.
-    async fn accept_inbound_connection(
+    fn accept_inbound_connection(
         &mut self,
         address: T::Address,
         info: net::types::PeerInfo<T::PeerId>,
@@ -299,7 +329,7 @@ where
         log::debug!("validate inbound connection, inbound address {address:?}");
 
         ensure!(
-            !self.peerdb.is_active_peer(&info.peer_id),
+            !self.is_peer_connected(&info.peer_id),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
 
@@ -313,43 +343,61 @@ where
         // accepted even if it's valid. The peer is still reported to the PeerDb which
         // knows of all peers and later on if the number of connections falls below
         // the desired threshold, `PeerManager::heartbeat()` may connect to this peer.
-        if self.peerdb.active_peer_count() >= MAX_ACTIVE_CONNECTIONS {
+        if self.active_peer_count() >= MAX_ACTIVE_CONNECTIONS {
             return Err(P2pError::PeerError(PeerError::TooManyPeers));
         }
 
-        self.accept_connection(address, Role::Inbound, info, receiver_address).await
+        self.accept_connection(address, Role::Inbound, info, receiver_address)
     }
 
-    /// Close connection to a remote peer
+    /// The connection to a remote peer is reported as closed.
     ///
-    /// The decision to close the connection is made either by the user via RPC
-    /// or by the [`PeerManager::heartbeat()`] function which has decided to cull
-    /// this connection in favor of another potential connection.
-    fn close_connection(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+    /// This can happen when the remote peer has dropped its connection
+    /// or if a disconnect request has been sent by PeerManager to the backend.
+    fn connection_closed(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
         // The backend is always sending ConnectionClosed event when somebody disconnects, ensure that the peer is active
-        if self.peerdb.is_active_peer(&peer_id) {
-            log::debug!("connection closed for peer {peer_id}");
+        if let Some(peer) = self.peers.remove(&peer_id) {
+            log::info!(
+                "peer disconnected, peer_id: {}, address: {:?}",
+                peer.info.peer_id,
+                peer.address
+            );
 
             self.tx_sync.send(SyncControlEvent::Disconnected(peer_id))?;
 
-            self.peerdb.peer_disconnected(&peer_id);
-        }
+            if let Some(Some(response)) = self.pending_disconnects.remove(&peer_id) {
+                response.send(Ok(()));
+            }
 
-        self.announced_addresses.remove(&peer_id);
+            self.peerdb.peer_disconnected(peer.address);
+
+            self.announced_addresses.remove(&peer_id);
+        }
 
         Ok(())
     }
 
     /// Adjust peer score
     ///
-    /// If after adjustment the peer score is more than the ban threshold, the peer is banned
-    /// which makes the `PeerDb` mark is banned and prevents any further connections with the peer
-    /// and also bans the peer in the networking backend.
-    async fn adjust_peer_score(&mut self, peer_id: T::PeerId, score: u32) -> crate::Result<()> {
+    /// If the peer is known, update its existing peer score and report
+    /// if it should be disconnected when score reached the threshold.
+    /// Unknown peers are reported as to be disconnected.
+    ///
+    /// If peer is banned, it is removed from the connected peers
+    /// and its address is marked as banned.
+    fn adjust_peer_score(&mut self, peer_id: T::PeerId, score: u32) -> crate::Result<()> {
         log::debug!("adjusting score for peer {peer_id}, adjustment {score}");
 
-        if self.peerdb.adjust_peer_score(&peer_id, score)? {
-            let _ = self.peer_connectivity_handle.disconnect(peer_id).await;
+        let peer = match self.peers.get_mut(&peer_id) {
+            Some(peer) => peer,
+            None => return Ok(()),
+        };
+
+        peer.score = peer.score.saturating_add(score);
+
+        if peer.score >= *self.p2p_config.ban_threshold {
+            self.peerdb.ban_peer(&peer.address)?;
+            self.disconnect(peer_id, None)?;
         }
 
         Ok(())
@@ -364,8 +412,8 @@ where
     /// Inform the [`crate::peer_manager::peerdb::PeerDb`] about the address failure so it knows to
     /// update its own records.
     fn handle_outbound_error(&mut self, address: T::Address, error: P2pError) -> crate::Result<()> {
-        if let Some(Some(channel)) = self.pending.remove(&address) {
-            channel.send(Err(error)).map_err(|_| P2pError::ChannelClosed)?;
+        if let Some(Some(channel)) = self.pending_connects.remove(&address) {
+            channel.send(Err(error));
         }
 
         self.peerdb.report_outbound_failure(address);
@@ -377,9 +425,9 @@ where
     /// This function doesn't block on the call but sends a command to the
     /// networking backend which then reports at some point in the future
     /// whether the connection failed or succeeded.
-    async fn connect(&mut self, address: T::Address) -> crate::Result<()> {
+    fn try_connect(&mut self, address: T::Address) -> crate::Result<()> {
         ensure!(
-            !self.pending.contains_key(&address),
+            !self.pending_connects.contains_key(&address),
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
 
@@ -394,7 +442,73 @@ where
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
-        self.peer_connectivity_handle.connect(address).await
+        self.peer_connectivity_handle.connect(address)
+    }
+
+    /// Establish an outbound connection
+    fn connect(
+        &mut self,
+        address: T::Address,
+        response: Option<oneshot_nofail::Sender<crate::Result<()>>>,
+    ) -> crate::Result<()> {
+        log::debug!("try to establish outbound connection to peer at address {address:?}");
+
+        let res = self.try_connect(address.clone());
+
+        match res {
+            Ok(()) => {
+                self.pending_connects.insert(address, response);
+            }
+            Err(e) => {
+                if let Some(response) = response {
+                    response.send(Err(e));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn try_disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+        ensure!(
+            !self.pending_disconnects.contains_key(&peer_id),
+            P2pError::PeerError(PeerError::Pending(peer_id.to_string())),
+        );
+
+        ensure!(
+            self.peers.contains_key(&peer_id),
+            P2pError::PeerError(PeerError::PeerDisconnected),
+        );
+
+        self.peer_connectivity_handle.disconnect(peer_id)
+    }
+
+    /// Disconnect an existing connection (inbound or outbound)
+    ///
+    /// The decision to close the connection is made either by the user via RPC
+    /// or by the [`PeerManager::heartbeat()`] function which has decided to cull
+    /// this connection in favor of another potential connection.
+    fn disconnect(
+        &mut self,
+        peer_id: T::PeerId,
+        response: Option<oneshot_nofail::Sender<crate::Result<()>>>,
+    ) -> crate::Result<()> {
+        log::debug!("disconnect peer {peer_id}");
+
+        let res = self.try_disconnect(peer_id);
+
+        match res {
+            Ok(()) => {
+                self.pending_disconnects.insert(peer_id, response);
+            }
+            Err(e) => {
+                if let Some(response) = response {
+                    response.send(Err(e));
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Maintains the peer manager state.
@@ -418,26 +532,18 @@ where
     /// the number of desired connections and there are available peers, the function tries to
     /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
-    async fn heartbeat(&mut self) -> crate::Result<()> {
+    fn heartbeat(&mut self) -> crate::Result<()> {
         let count = std::cmp::min(
             self.peerdb.available_addresses_count(),
             MAX_ACTIVE_CONNECTIONS
                 .saturating_sub(self.peerdb.available_addresses_count())
-                .saturating_sub(self.pending.len()),
+                .saturating_sub(self.pending_connects.len()),
         );
 
         let addresses = self.peerdb.random_known_addresses(count);
 
         for address in addresses {
-            match self.connect(address.clone()).await {
-                Ok(_) => {
-                    self.pending.insert(address, None);
-                }
-                Err(err) => {
-                    self.peerdb.report_outbound_failure(address.clone());
-                    self.handle_result(None, Err(err)).await?;
-                }
-            }
+            self.connect(address, None)?;
         }
 
         // TODO: update peer scores
@@ -445,7 +551,7 @@ where
         Ok(())
     }
 
-    async fn handle_incoming_request(
+    fn handle_incoming_request(
         &mut self,
         peer_id: T::PeerId,
         request_id: T::PeerRequestId,
@@ -461,12 +567,10 @@ where
                     .filter(|address| self.is_peer_address_valid(address))
                     .collect();
 
-                self.peer_connectivity_handle
-                    .send_response(
-                        request_id,
-                        PeerManagerResponse::AddrListResponse(AddrListResponse { addresses }),
-                    )
-                    .await
+                self.peer_connectivity_handle.send_response(
+                    request_id,
+                    PeerManagerResponse::AddrListResponse(AddrListResponse { addresses }),
+                )
             }
             PeerManagerRequest::AnnounceAddrRequest(AnnounceAddrRequest { address }) => {
                 // TODO: Rate limit announce address requests to prevent DoS attacks.
@@ -480,19 +584,25 @@ where
 
                     self.announced_addresses.entry(peer_id).or_default().insert(address.clone());
 
-                    let peer_ids = self.peerdb.random_peer_ids(ANNOUNCED_RESEND_COUNT);
+                    let peer_ids = self.random_peer_ids(ANNOUNCED_RESEND_COUNT);
                     for new_peer_id in peer_ids {
-                        self.send_announced_address(new_peer_id, address.clone()).await?;
+                        self.send_announced_address(new_peer_id, address.clone())?;
                     }
                 }
                 Ok(())
+            }
+            PeerManagerRequest::PingRequest(PingRequest { nonce }) => {
+                self.peer_connectivity_handle.send_response(
+                    request_id,
+                    PeerManagerResponse::PingResponse(PingResponse { nonce }),
+                )
             }
         }
     }
 
     fn handle_incoming_response(
         &mut self,
-        _peer_id: T::PeerId,
+        peer_id: T::PeerId,
         _request_id: T::PeerRequestId,
         response: PeerManagerResponse,
     ) -> crate::Result<()> {
@@ -510,6 +620,15 @@ where
                 Ok(())
             }
             PeerManagerResponse::AnnounceAddrResponse(AnnounceAddrResponse {}) => Ok(()),
+            PeerManagerResponse::PingResponse(PingResponse { nonce }) => {
+                if let Some(peer) = self.peers.get_mut(&peer_id) {
+                    if peer.sent_ping.as_ref().map(|sent_ping| sent_ping.nonce) == Some(nonce) {
+                        // Correct reply received, clear pending request.
+                        peer.sent_ping = None;
+                    }
+                }
+                Ok(())
+            }
         }
     }
 
@@ -525,7 +644,7 @@ where
     /// # Arguments
     /// `peer_id` - peer ID of the remote peer, if available
     /// `result` - result of the operation that was performed
-    pub async fn handle_result(
+    pub fn handle_result(
         &mut self,
         peer_id: Option<T::PeerId>,
         result: crate::Result<()>,
@@ -541,7 +660,7 @@ where
 
                 if let Some(peer_id) = peer_id {
                     log::info!("adjust peer score for peer {peer_id}, reason {err}");
-                    return self.adjust_peer_score(peer_id, err.ban_score()).await;
+                    return self.adjust_peer_score(peer_id, err.ban_score());
                 }
 
                 Ok(())
@@ -552,34 +671,21 @@ where
     /// Handle control event.
     ///
     /// Handle events from an outside controller (rpc, for example) that sets/gets values for PeerManager
-    async fn handle_control_event(&mut self, event: PeerManagerEvent<T>) -> crate::Result<()> {
+    fn handle_control_event(&mut self, event: PeerManagerEvent<T>) -> crate::Result<()> {
         match event {
-            PeerManagerEvent::Connect(addr, response) => {
-                log::debug!("try to establish outbound connection to peer at address {addr:?}");
-
-                let res = self.connect(addr.clone()).await.map(|_| {
-                    self.pending.insert(addr.clone(), Some(response));
-                });
-                self.handle_result(None, res).await?;
+            PeerManagerEvent::Connect(address, response) => {
+                self.connect(address, Some(response))?;
             }
             PeerManagerEvent::Disconnect(peer_id, response) => {
-                log::debug!("disconnect peer {peer_id}");
-
-                response
-                    .send(self.peer_connectivity_handle.disconnect(peer_id).await)
-                    .map_err(|_| P2pError::ChannelClosed)?;
+                self.disconnect(peer_id, Some(response))?;
             }
             PeerManagerEvent::AdjustPeerScore(peer_id, score, response) => {
                 log::debug!("adjust peer {peer_id} score: {score}");
 
-                response
-                    .send(self.adjust_peer_score(peer_id, score).await)
-                    .map_err(|_| P2pError::ChannelClosed)?;
+                response.send(self.adjust_peer_score(peer_id, score));
             }
             PeerManagerEvent::GetPeerCount(response) => {
-                response
-                    .send(self.peerdb.active_peer_count())
-                    .map_err(|_| P2pError::ChannelClosed)?;
+                response.send(self.active_peer_count());
             }
             PeerManagerEvent::GetBindAddresses(response) => {
                 let addr = self
@@ -588,11 +694,11 @@ where
                     .iter()
                     .map(|addr| addr.to_string())
                     .collect();
-                response.send(addr).map_err(|_| P2pError::ChannelClosed)?;
+                response.send(addr);
             }
             PeerManagerEvent::GetConnectedPeers(response) => {
-                let peers = self.peerdb.get_connected_peers();
-                response.send(peers).map_err(|_| P2pError::ChannelClosed)?
+                let peers = self.get_connected_peers();
+                response.send(peers);
             }
         }
 
@@ -600,7 +706,7 @@ where
     }
 
     /// Handle connectivity event.
-    async fn handle_connectivity_event_result(
+    fn handle_connectivity_event_result(
         &mut self,
         event_res: crate::Result<ConnectivityEvent<T>>,
     ) -> crate::Result<()> {
@@ -611,7 +717,7 @@ where
                     request_id,
                     request,
                 } => {
-                    self.handle_incoming_request(peer_id, request_id, request).await?;
+                    self.handle_incoming_request(peer_id, request_id, request)?;
                 }
                 net::types::ConnectivityEvent::Response {
                     peer_id,
@@ -627,17 +733,16 @@ where
                 } => {
                     let peer_id = peer_info.peer_id;
 
-                    match self.accept_inbound_connection(address, peer_info, receiver_address).await
-                    {
+                    match self.accept_inbound_connection(address, peer_info, receiver_address) {
                         Ok(_) => {}
                         Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
                         Err(P2pError::PeerError(err)) => {
                             log::warn!("peer error for peer {peer_id}: {err}");
-                            self.peer_connectivity_handle.disconnect(peer_id).await?;
+                            self.peer_connectivity_handle.disconnect(peer_id)?;
                         }
                         Err(P2pError::ProtocolError(err)) => {
                             log::warn!("peer error for peer {peer_id}: {err}");
-                            self.adjust_peer_score(peer_id, err.ban_score()).await?;
+                            self.adjust_peer_score(peer_id, err.ban_score())?;
                         }
                         Err(err) => {
                             log::error!("unknown error for peer {peer_id}: {err}");
@@ -650,41 +755,103 @@ where
                     receiver_address,
                 } => {
                     let peer_id = peer_info.peer_id;
-                    let res = self
-                        .accept_connection(
-                            address.clone(),
-                            Role::Outbound,
-                            peer_info,
-                            receiver_address,
-                        )
-                        .await;
-                    self.handle_result(Some(peer_id), res).await?;
+                    let res = self.accept_connection(
+                        address.clone(),
+                        Role::Outbound,
+                        peer_info,
+                        receiver_address,
+                    );
+                    self.handle_result(Some(peer_id), res)?;
 
-                    match self.pending.remove(&address) {
+                    match self.pending_connects.remove(&address) {
                         Some(Some(channel)) => {
-                            channel.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?
+                            channel.send(Ok(()));
                         }
                         Some(None) => {}
                         None => log::error!("connection accepted but it's not pending?"),
                     }
                 }
                 net::types::ConnectivityEvent::ConnectionClosed { peer_id } => {
-                    let res = self.close_connection(peer_id);
-                    self.handle_result(Some(peer_id), res).await?;
+                    let res = self.connection_closed(peer_id);
+                    self.handle_result(Some(peer_id), res)?;
                 }
                 net::types::ConnectivityEvent::ConnectionError { address, error } => {
                     let res = self.handle_outbound_error(address, error);
-                    self.handle_result(None, res).await?;
+                    self.handle_result(None, res)?;
                 }
                 net::types::ConnectivityEvent::Misbehaved { peer_id, error } => {
-                    let res = self.adjust_peer_score(peer_id, error.ban_score()).await;
-                    self.handle_result(Some(peer_id), res).await?;
+                    let res = self.adjust_peer_score(peer_id, error.ban_score());
+                    self.handle_result(Some(peer_id), res)?;
                 }
             },
             Err(err) => {
                 log::error!("failed to read network event: {err:?}");
-                self.handle_result(None, Err(err)).await?;
+                self.handle_result(None, Err(err))?;
             }
+        }
+
+        Ok(())
+    }
+
+    /// Get the number of active peers
+    pub fn active_peer_count(&self) -> usize {
+        self.peers.len()
+    }
+
+    /// Returns short info about all connected peers
+    pub fn get_connected_peers(&self) -> Vec<ConnectedPeer> {
+        self.peers.values().map(Into::into).collect()
+    }
+
+    /// Selects requested count of connected peer ids randomly.
+    ///
+    /// It can be used to distribute data in the gossip protocol
+    /// (for example, to relay announced addresses to a small group of peers).
+    pub fn random_peer_ids(&self, count: usize) -> Vec<T::PeerId> {
+        // TODO: Optimize this
+        let all_peer_ids = self.peers.keys().cloned().collect::<Vec<_>>();
+        all_peer_ids
+            .choose_multiple(&mut make_pseudo_rng(), count)
+            .cloned()
+            .collect::<Vec<_>>()
+    }
+
+    /// Checks if the peer is in active state
+    pub fn is_peer_connected(&self, peer_id: &T::PeerId) -> bool {
+        self.peers.get(peer_id).is_some()
+    }
+
+    /// Sends ping requests and disconnects peers that do not respond in time
+    fn ping_check(&mut self) -> crate::Result<()> {
+        let now = Instant::now();
+        let mut dead_peers = Vec::new();
+        for (peer_id, peer) in self.peers.iter_mut() {
+            // If a ping has already been sent, wait for a reply first, do not send another ping request!
+            match &peer.sent_ping {
+                Some(sent_ping) => {
+                    if now.duration_since(sent_ping.timestamp) >= *self.p2p_config.ping_timeout {
+                        log::info!("ping check: dead peer detected: {peer_id}");
+                        dead_peers.push(*peer_id);
+                    } else {
+                        log::debug!("ping check: slow peer detected: {peer_id}");
+                    }
+                }
+                None => {
+                    let nonce = make_pseudo_rng().gen();
+                    self.peer_connectivity_handle.send_request(
+                        *peer_id,
+                        PeerManagerRequest::PingRequest(PingRequest { nonce }),
+                    )?;
+                    peer.sent_ping = Some(SentPing {
+                        nonce,
+                        timestamp: now,
+                    });
+                }
+            }
+        }
+
+        for peer_id in dead_peers {
+            self.disconnect(peer_id, None)?;
         }
 
         Ok(())
@@ -692,11 +859,12 @@ where
 
     /// Runs the `PeerManager` event loop.
     ///
-    /// The event loop has three main responsibilities:
+    /// The event loop has this main responsibilities:
     /// - listening to and handling control events from [`crate::sync::SyncManager`]/
     /// [`crate::pubsub::PubSubMessageHandler`]/RPC
     /// - listening to network events
     /// - updating internal state
+    /// - sending and checking ping requests
     ///
     /// After handling an event from one of the aforementioned sources, the event loop
     /// handles the error (if any) and runs the [`PeerManager::heartbeat()`] function
@@ -705,21 +873,32 @@ where
     /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
     /// have any events.
     pub async fn run(&mut self) -> crate::Result<void::Void> {
+        let ping_check_enabled = !self.p2p_config.ping_check_period.is_zero();
+        let mut ping_check_interval = if ping_check_enabled {
+            tokio::time::interval(*self.p2p_config.ping_check_period)
+        } else {
+            // Use any valid (non-zero) value
+            tokio::time::interval(Duration::MAX)
+        };
+
         loop {
             tokio::select! {
                 event = self.rx_peer_manager.recv() => {
-                    self.handle_control_event(event.ok_or(P2pError::ChannelClosed)?).await?;
+                    self.handle_control_event(event.ok_or(P2pError::ChannelClosed)?)?;
                 },
                 event_res = self.peer_connectivity_handle.poll_next() => {
-                    self.handle_connectivity_event_result(event_res).await?;
+                    self.handle_connectivity_event_result(event_res)?;
                 },
+                _event = ping_check_interval.tick(), if ping_check_enabled => {
+                    self.ping_check()?;
+                }
                 _event = tokio::time::sleep(PEER_MGR_HEARTBEAT_INTERVAL_MAX) => {}
             }
 
             // finally update peer manager state
             let now = tokio::time::Instant::now();
             if now.duration_since(self.last_heartbeat) > PEER_MGR_HEARTBEAT_INTERVAL_MIN {
-                self.heartbeat().await?;
+                self.heartbeat()?;
                 self.last_heartbeat = now;
             }
         }

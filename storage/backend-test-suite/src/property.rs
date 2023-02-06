@@ -76,7 +76,7 @@ fn overwrite_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             drop(dbtx);
 
             // Create a transaction, put the value in the storage and commit
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.put(IDX.0, key.clone(), val0.clone()).unwrap();
             dbtx.commit().expect("commit to succeed");
 
@@ -89,7 +89,7 @@ fn overwrite_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             drop(dbtx);
 
             // Create a transaction, modify storage and abort
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.put(IDX.0, key.clone(), val1.clone()).unwrap();
             drop(dbtx);
 
@@ -102,7 +102,7 @@ fn overwrite_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             drop(dbtx);
 
             // Create a transaction, overwrite the value and commit
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.put(IDX.0, key.clone(), val1.clone()).unwrap();
             dbtx.commit().expect("commit to succeed");
 
@@ -127,7 +127,7 @@ fn add_and_delete<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             let store = backend.open(desc(NUM_DBS)).expect("db open to succeed");
 
             // Add all entries to the database
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             for ((db, key), val) in &entries {
                 dbtx.put(*db, key.clone(), val.clone()).unwrap();
             }
@@ -144,7 +144,7 @@ fn add_and_delete<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             drop(dbtx);
 
             // remove all entries
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             for (db, key) in entries.keys() {
                 dbtx.del(*db, key).unwrap();
             }
@@ -173,7 +173,7 @@ fn last_write_wins<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             let last = vals.last().cloned();
 
             // Add all entries to the database
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             for val in vals.into_iter() {
                 dbtx.put(IDX.0, key.clone(), val).unwrap();
             }
@@ -202,7 +202,7 @@ fn add_and_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             let store = backend.open(desc(NUM_DBS)).expect("db open to succeed");
 
             // Add all entries to the database
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             for ((db, key), val) in entries1.iter().chain(entries2.iter()) {
                 dbtx.put(*db, key.clone(), val.clone()).unwrap();
             }
@@ -220,7 +220,7 @@ fn add_and_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             drop(dbtx);
 
             // remove entries from the second set
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             for (db, key) in entries2.keys() {
                 dbtx.del(*db, key).unwrap();
             }
@@ -258,7 +258,7 @@ fn add_modify_abort_modify_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F
             let store = backend.open(desc(1)).expect("db open to succeed");
 
             // Pre-populate the db with initial data, check the contents against the model
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.apply_actions(IDX.0, to_prepopulate.into_iter());
             dbtx.commit().unwrap();
             assert_eq!(model, Model::from_db(&store, IDX.0));
@@ -269,7 +269,7 @@ fn add_modify_abort_modify_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F
                 tx_model.extend(to_abort.clone().into_iter());
                 tx_model
             };
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.apply_actions(IDX.0, to_abort.into_iter());
             assert_eq!(tx_model, Model::from_tx(&dbtx, IDX.0));
             drop(dbtx);
@@ -281,7 +281,7 @@ fn add_modify_abort_modify_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F
                 model.extend(to_commit.clone().into_iter());
                 model
             };
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.apply_actions(IDX.0, to_commit.into_iter());
             dbtx.commit().unwrap();
             assert_eq!(model, Model::from_db(&store, IDX.0));
@@ -298,21 +298,21 @@ fn add_modify_abort_replay_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F
             let store = backend.open(desc(1)).expect("db open to succeed");
 
             // Pre-populate the db with initial data, check the contents against the model
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.apply_actions(IDX.0, initial.into_iter());
             dbtx.commit().unwrap();
 
             let initial_model = Model::from_db(&store, IDX.0);
 
             // Apply another set of changes but abort the transaction, check nothing changed
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.apply_actions(IDX.0, actions.clone().into_iter());
             let modified_model = Model::from_tx(&dbtx, IDX.0);
             drop(dbtx);
             assert_eq!(Model::from_db(&store, IDX.0), initial_model);
 
             // Apply the same changes again, and check that we get to the same state after commit
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.apply_actions(IDX.0, actions.into_iter());
             dbtx.commit().unwrap();
             assert_eq!(modified_model, Model::from_db(&store, IDX.0));
@@ -329,13 +329,13 @@ fn db_writes_do_not_interfere<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             let store = backend.open(desc(2)).expect("db open to succeed");
 
             // Apply one set of operations to key-value map 0
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.apply_actions(IDX.0, actions0.into_iter());
             dbtx.commit().unwrap();
             let model = Model::from_db(&store, IDX.0);
 
             // Apply another set of operations to key-value map 1
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.apply_actions(IDX.1, actions1.into_iter());
             dbtx.commit().unwrap();
 
@@ -358,7 +358,7 @@ fn empty_after_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
             // Apply one set of operations to key-value map 0
             let model = Model::from_actions(actions.clone());
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.apply_actions(IDX.0, actions.into_iter());
             for key in &keys {
                 assert_eq!(
@@ -396,7 +396,7 @@ fn prefix_iteration<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             let store = backend.open(desc(5)).expect("db open to succeed");
 
             // Populate the database
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.apply_actions(IDX.0, actions_a.iter().chain(actions_b.iter()).cloned());
             dbtx.commit().unwrap();
 
@@ -420,7 +420,7 @@ fn prefix_iteration<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             drop(dbtx);
 
             // Take all entries prefixed "a" and remove them
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             let keys_a: Vec<_> =
                 dbtx.prefix_iter(IDX.0, vec![b'a']).unwrap().map(|(k, _)| k).collect();
             for key in keys_a {
@@ -445,7 +445,7 @@ fn post_commit_consistency<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             // Open storage
             let store = backend.open(desc(1)).expect("db open to succeed");
 
-            let mut dbtx = store.transaction_rw().unwrap();
+            let mut dbtx = store.transaction_rw(None).unwrap();
             dbtx.apply_actions(IDX.0, actions.into_iter());
             let model = Model::from_tx(&dbtx, IDX.0);
             dbtx.commit().unwrap();

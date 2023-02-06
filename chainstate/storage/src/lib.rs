@@ -190,7 +190,7 @@ pub trait Transactional<'t> {
     fn transaction_ro<'s: 't>(&'s self) -> crate::Result<Self::TransactionRo>;
 
     /// Start a read-write transaction.
-    fn transaction_rw<'s: 't>(&'s self) -> crate::Result<Self::TransactionRw>;
+    fn transaction_rw<'s: 't>(&'s self, size: Option<usize>) -> crate::Result<Self::TransactionRw>;
 }
 
 pub trait BlockchainStorage: BlockchainStorageWrite + for<'tx> Transactional<'tx> + Send {}

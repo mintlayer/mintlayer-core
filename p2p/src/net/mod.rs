@@ -108,20 +108,20 @@ where
     ///
     /// # Arguments
     /// `address` - socket address of the peer
-    async fn connect(&mut self, address: T::Address) -> crate::Result<()>;
+    fn connect(&mut self, address: T::Address) -> crate::Result<()>;
 
     /// Disconnect active connection
     ///
     /// # Arguments
     /// `peer_id` - Peer ID of the remote node
-    async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()>;
+    fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()>;
 
     /// Send PeerManager's request to remote
     ///
     /// # Arguments
     /// * `peer_id` - Unique ID of the peer the request is sent to
     /// * `request` - Request to be sent
-    async fn send_request(
+    fn send_request(
         &mut self,
         peer_id: T::PeerId,
         request: PeerManagerRequest,
@@ -132,7 +132,7 @@ where
     /// # Arguments
     /// * `request_id` - ID of the request this is a response to
     /// * `response` - Response to be sent
-    async fn send_response(
+    fn send_response(
         &mut self,
         request_id: T::PeerRequestId,
         response: PeerManagerResponse,
@@ -162,7 +162,7 @@ where
     /// # Arguments
     /// * `peer_id` - Unique ID of the peer the request is sent to
     /// * `request` - Request to be sent
-    async fn send_request(
+    fn send_request(
         &mut self,
         peer_id: T::PeerId,
         request: SyncRequest,
@@ -173,14 +173,14 @@ where
     /// # Arguments
     /// * `request_id` - ID of the request this is a response to
     /// * `response` - Response to be sent
-    async fn send_response(
+    fn send_response(
         &mut self,
         request_id: T::PeerRequestId,
         response: SyncResponse,
     ) -> crate::Result<()>;
 
     /// Publishes an announcement on the network.
-    async fn make_announcement(&mut self, announcement: Announcement) -> crate::Result<()>;
+    fn make_announcement(&mut self, announcement: Announcement) -> crate::Result<()>;
 
     /// Poll syncing-related event from the networking service
     async fn poll_next(&mut self) -> crate::Result<types::SyncingEvent<T>>;

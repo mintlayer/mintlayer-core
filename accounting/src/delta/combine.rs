@@ -15,18 +15,18 @@
 
 use common::primitives::{signed_amount::SignedAmount, Amount};
 
-use crate::{delta::delta_data_collection::DeltaMapElement, error::Error};
+use crate::{error::Error, DataDelta};
 
 /// Combine data with an element of `DeltaDataCollection`.
 /// An element can be either a Delta or a result of delta undo.
 pub fn combine_data_with_delta<T: Clone + Eq>(
     lhs: Option<T>,
-    rhs: Option<DeltaMapElement<T>>,
+    rhs: Option<DataDelta<T>>,
 ) -> Result<Option<T>, Error> {
     match (lhs, rhs) {
         (lhs, None) => Ok(lhs),
         (None, Some(d)) => {
-            let (prev, next) = d.consume().consume();
+            let (prev, next) = d.consume();
             match (prev, next) {
                 (None, next) => Ok(next),
                 (Some(_), None) => Err(Error::RemoveNonexistingData),
@@ -34,7 +34,7 @@ pub fn combine_data_with_delta<T: Clone + Eq>(
             }
         }
         (Some(data), Some(d)) => {
-            let (prev, next) = d.consume().consume();
+            let (prev, next) = d.consume();
             match (prev, next) {
                 (None, None) => Err(Error::DeltaDataMismatch),
                 (None, Some(_)) => Err(Error::DataCreatedMultipleTimes),
@@ -74,7 +74,7 @@ pub fn combine_amount_delta(
 
 #[cfg(test)]
 pub mod test {
-    use crate::{DataDelta, DataDeltaUndo};
+    use crate::DataDelta;
 
     use super::*;
     use common::primitives::{amount::UnsignedIntType, signed_amount::SignedIntType};
@@ -101,15 +101,7 @@ pub mod test {
         #[case] expected_result: Result<Option<char>, Error>,
     ) {
         assert_eq!(
-            combine_data_with_delta(data, delta.clone().map(DeltaMapElement::Delta)),
-            expected_result
-        );
-
-        assert_eq!(
-            combine_data_with_delta(
-                data,
-                delta.map(|d| DeltaMapElement::DeltaUndo(DataDeltaUndo::new(d)))
-            ),
+            combine_data_with_delta(data, delta),
             expected_result
         );
     }

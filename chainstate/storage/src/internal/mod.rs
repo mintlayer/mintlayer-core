@@ -155,37 +155,36 @@ impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
         self.0.transaction_ro().map_err(crate::Error::from).map(StoreTxRo)
     }
 
-    fn transaction_rw<'st: 'tx>(&'st self) -> crate::Result<Self::TransactionRw> {
-        self.0.transaction_rw().map_err(crate::Error::from).map(StoreTxRw)
+    fn transaction_rw<'st: 'tx>(
+        &'st self,
+        size: Option<usize>,
+    ) -> crate::Result<Self::TransactionRw> {
+        self.0.transaction_rw(size).map_err(crate::Error::from).map(StoreTxRw)
     }
 }
 
 impl<B: storage::Backend + 'static> BlockchainStorage for Store<B> {}
 
 macro_rules! delegate_to_transaction {
-    ($(fn $f:ident $args:tt -> $ret:ty;)*) => {
-        $(delegate_to_transaction!(@SELF [$f ($ret)] $args);)*
+    ($($(#[size=$s:expr])? fn $func:ident $args:tt -> $ret:ty;)*) => {
+        $(delegate_to_transaction!(@FN $(#[size = $s])? $func $args -> $ret);)*
     };
-    (@SELF $done:tt (&self $(, $($rest:tt)*)?)) => {
-        delegate_to_transaction!(
-            @BODY transaction_ro (Ok) $done ($($($rest)*)?)
-        );
-    };
-    (@SELF $done:tt (&mut self $(, $($rest:tt)*)?)) => {
-        delegate_to_transaction!(
-            @BODY transaction_rw (StoreTxRw::commit) mut $done ($($($rest)*)?)
-        );
-    };
-    (@BODY $txfunc:ident ($commit:path) $($mut:ident)?
-        [$f:ident ($ret:ty)]
-        ($($arg:ident: $aty:ty),* $(,)?)
-    ) => {
-        fn $f(&$($mut)? self $(, $arg: $aty)*) -> $ret {
-            let $($mut)? tx = self.$txfunc()?;
-            let val = tx.$f($($arg),*)?;
-            $commit(tx).map(|_| val)
+    (@FN $f:ident(&self $(, $arg:ident: $aty:ty)* $(,)?) -> $ret:ty) => {
+        fn $f(&self $(, $arg: $aty)*) -> $ret {
+            self.transaction_ro().and_then(|tx| tx.$f($($arg),*))
         }
     };
+    (@FN $(#[size=$s:expr])? $f:ident(&mut self $(, $arg:ident: $aty:ty)* $(,)?) -> $ret:ty) => {
+        fn $f(&mut self $(, $arg: $aty)*) -> $ret {
+            let size = delegate_to_transaction!(@SIZE $($s)?);
+            let mut tx = self.transaction_rw(size)?;
+            let val = tx.$f($($arg),*)?;
+            tx.commit()?;
+            Ok(val)
+        }
+    };
+    (@SIZE) => { None };
+    (@SIZE $s:literal) => { Some($s) };
 }
 
 impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
