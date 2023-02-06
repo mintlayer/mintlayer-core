@@ -357,7 +357,7 @@ mod tests {
         #[case] block_height: BlockHeight,
         #[case] expected: bool,
     ) {
-        let config = Builder::new(ChainType::Regtest).epoch_length(epoch_length).build();
+        let config = Builder::test_chain().epoch_length(epoch_length).build();
         assert_eq!(expected, config.is_due_for_epoch_seal(&block_height));
     }
 
@@ -380,7 +380,7 @@ mod tests {
         #[case] block_height: BlockHeight,
         #[case] expected: EpochIndex,
     ) {
-        let config = Builder::new(ChainType::Regtest).epoch_length(epoch_length).build();
+        let config = Builder::test_chain().epoch_length(epoch_length).build();
         assert_eq!(expected, config.epoch_index_from_height(&block_height));
     }
 }

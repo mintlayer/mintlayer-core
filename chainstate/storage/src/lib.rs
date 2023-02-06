@@ -108,6 +108,9 @@ pub trait BlockchainStorageRead:
         &self,
         epoch_index: EpochIndex,
     ) -> crate::Result<Option<DeltaMergeUndo>>;
+
+    /// Get sealed epoch height
+    fn get_sealed_epoch_height(&mut self) -> crate::Result<Option<BlockHeight>>;
 }
 
 /// Modifying operations on persistent blockchain data
@@ -204,6 +207,9 @@ pub trait BlockchainStorageWrite:
 
     // Remove accounting block undo data for specific block
     fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
+
+    /// Set sealed epoch height
+    fn set_sealed_epoch_height(&mut self, height: BlockHeight) -> crate::Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction
