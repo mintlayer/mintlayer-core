@@ -163,7 +163,7 @@ where
     type Impl = TransactionLockImpl<T>;
 
     fn open(self, desc: DbDesc) -> crate::Result<Self::Impl> {
-        let num_maps = desc.map_count();
+        let num_maps = desc.db_map_count();
         let db = sync::Arc::new(sync::RwLock::new(T::construct(self.0, desc)?));
         Ok(TransactionLockImpl { db, num_maps })
     }

@@ -269,13 +269,13 @@ impl backend::Backend for Lmdb {
         }
         .set_resize_settings(self.resize_settings)
         .set_resize_callback(self.resize_callback.take())
-        .set_max_dbs(desc.map_count().as_usize() as u32)
+        .set_max_dbs(desc.db_map_count().as_usize() as u32)
         .set_flags(self.flags)
         .open(&self.path)
         .or_else(error::process_with_err)?;
 
         // Set up all the databases
-        let dbs = desc.maps().try_transform(|desc| Self::open_db(&environment, desc))?;
+        let dbs = desc.db_maps().try_transform(|desc| Self::open_db(&environment, desc))?;
 
         Ok(LmdbImpl {
             env: Arc::new(environment),

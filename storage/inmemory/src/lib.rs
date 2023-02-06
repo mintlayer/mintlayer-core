@@ -65,7 +65,7 @@ impl adaptor::Construct for StorageMaps {
     type From = ();
 
     fn construct(_: (), desc: DbDesc) -> storage_core::Result<Self> {
-        Ok(Self(desc.maps().transform(|_| Map::new())))
+        Ok(Self(desc.db_maps().transform(|_| Map::new())))
     }
 }
 

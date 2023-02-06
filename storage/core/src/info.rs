@@ -47,18 +47,18 @@ impl DbMapCount {
     }
 }
 
-/// Associate data of type `T` with each database map
+/// Associate data of type `T` with each DB map
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct DbMapsData<T>(Vec<T>);
 
 impl<T> DbMapsData<T> {
-    /// New maps data for given number of key-value maps
+    /// New maps data for given number of key-value maps and initialization function
     pub fn new(map_count: DbMapCount, constructor: impl FnMut(DbMapId) -> T) -> Self {
         Self(map_count.indices().map(constructor).collect())
     }
 
     /// Get the number of maps
-    pub fn map_count(&self) -> DbMapCount {
+    pub fn db_map_count(&self) -> DbMapCount {
         DbMapCount(self.0.len())
     }
 
@@ -119,13 +119,13 @@ pub struct DbDesc {
 
 impl DbDesc {
     /// Get descriptions of individual key-value maps
-    pub fn maps(&self) -> &DbMapsData<DbMapDesc> {
+    pub fn db_maps(&self) -> &DbMapsData<DbMapDesc> {
         &self.map_descs
     }
 
     /// Number of maps in the database
-    pub fn map_count(&self) -> DbMapCount {
-        self.map_descs.map_count()
+    pub fn db_map_count(&self) -> DbMapCount {
+        self.map_descs.db_map_count()
     }
 }
 
@@ -146,7 +146,7 @@ pub mod construct {
         let set: std::collections::BTreeSet<_> = maps.0.iter().map(|desc| &desc.name).collect();
         assert_eq!(
             set.len(),
-            maps.map_count().as_usize(),
+            maps.db_map_count().as_usize(),
             "Duplicate map names found"
         );
     }

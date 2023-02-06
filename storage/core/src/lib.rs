@@ -27,8 +27,8 @@
 //! sequences ([Data]). To access a particular value, the database needs to be indexed first by a
 //! [DbMapId] (to get the key-value map) and then by key.
 //!
-//! The inner key-value map is often referred to as just map. The set of maps is fixed for the
-//! duration of backend lifetime but their contents may change.
+//! The inner key-value map is often referred to as DB map or even just map. The set of DB maps is
+//! fixed for the duration of backend lifetime but their contents may change.
 //!
 //! ## Database description
 //!

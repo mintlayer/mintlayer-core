@@ -261,8 +261,8 @@ impl Sqlite {
             .prepare_cached("SELECT name FROM sqlite_master WHERE type='table' AND name=?")?;
 
         // Check if the required tables exist and if needed create them
-        for idx in desc.map_count().indices() {
-            let table_name = &desc.maps()[idx].name;
+        for idx in desc.db_map_count().indices() {
+            let table_name = &desc.db_maps()[idx].name;
             // Check if table is missing
             let is_missing = exists_stmt
                 .query_row([&table_name], |row| row.get::<usize, String>(0))
@@ -276,7 +276,8 @@ impl Sqlite {
         drop(exists_stmt);
 
         // Set statement cache to fit all the prepared statements we use
-        connection.set_prepared_statement_cache_capacity(max(desc.map_count().as_usize() * 4, 16));
+        let statement_cap = max(desc.db_map_count().as_usize() * 4, 16);
+        connection.set_prepared_statement_cache_capacity(statement_cap);
 
         Ok(connection)
     }
@@ -297,7 +298,7 @@ impl backend::Backend for Sqlite {
             .into());
         }
 
-        let queries = desc.maps().transform(queries::SqliteQuery::from_desc);
+        let queries = desc.db_maps().transform(queries::SqliteQuery::from_desc);
 
         let connection = self.open_db(desc).map_err(process_sqlite_error)?;
 
