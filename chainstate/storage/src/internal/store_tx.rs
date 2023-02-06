@@ -39,7 +39,7 @@ use crate::{
 };
 
 mod well_known {
-    use super::{BlockHeight, Codec, GenBlock, Id};
+    use super::{Codec, GenBlock, Id};
 
     /// Pre-defined database keys
     pub trait Entry {
@@ -63,7 +63,6 @@ mod well_known {
     declare_entry!(BestBlockId: Id<GenBlock>);
     declare_entry!(UtxosBestBlockId: Id<GenBlock>);
     declare_entry!(TxIndexEnabled: bool);
-    declare_entry!(SealedEpochHeight: BlockHeight);
 }
 
 /// Read-only chainstate storage transaction
@@ -197,10 +196,6 @@ macro_rules! impl_read_ops {
                 epoch_index: EpochIndex,
             ) -> crate::Result<Option<DeltaMergeUndo>> {
                 self.read::<db::DBAccountingEpochDeltaUndo, _, _>(epoch_index)
-            }
-
-            fn get_sealed_epoch_height(&mut self) -> crate::Result<Option<BlockHeight>> {
-                self.read_value::<well_known::SealedEpochHeight>()
             }
         }
 
@@ -475,10 +470,6 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
             .get_mut::<db::DBAccountingEpochDeltaUndo, _>()
             .del(epoch_index)
             .map_err(Into::into)
-    }
-
-    fn set_sealed_epoch_height(&mut self, height: BlockHeight) -> crate::Result<()> {
-        self.write_value::<well_known::SealedEpochHeight>(&height)
     }
 }
 

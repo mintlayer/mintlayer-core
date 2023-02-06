@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -23,21 +23,30 @@ use utils::tap_error_log::LogError;
 
 use crate::BlockError;
 
-mod epoch_seal_op;
-use epoch_seal_op::EpochSealOp;
+pub enum BlockStateEvent {
+    Connect(BlockHeight),
+    Disconnect(BlockHeight),
+}
 
 pub fn activate_epoch_seal<S: BlockchainStorageWrite>(
     db_tx: &mut S,
     chain_config: &ChainConfig,
-    tip_height: BlockHeight,
+    block_op: BlockStateEvent,
 ) -> Result<(), BlockError> {
-    let sealed_epoch_height = db_tx.get_sealed_epoch_height()?;
-    let epoch_seal_op = EpochSealOp::new(chain_config, sealed_epoch_height, tip_height);
-    match epoch_seal_op {
-        EpochSealOp::Seal => advance_epoch_seal(db_tx, chain_config, tip_height),
-        EpochSealOp::Unseal => rollback_epoch_seal(db_tx, chain_config, tip_height),
-        EpochSealOp::None => Ok(()),
-    }
+    match block_op {
+        BlockStateEvent::Connect(tip_height) => {
+            if chain_config.is_due_for_epoch_seal(&tip_height) {
+                advance_epoch_seal(db_tx, chain_config, tip_height)?;
+            }
+        }
+        BlockStateEvent::Disconnect(tip_height) => {
+            let disconnected_tip = tip_height.next_height();
+            if chain_config.is_due_for_epoch_seal(&disconnected_tip) {
+                rollback_epoch_seal(db_tx, chain_config, disconnected_tip)?;
+            }
+        }
+    };
+    Ok(())
 }
 
 fn advance_epoch_seal<S: BlockchainStorageWrite>(
@@ -88,11 +97,6 @@ fn advance_epoch_seal<S: BlockchainStorageWrite>(
             .log_err()?;
     }
 
-    // update sealed epoch height anyway
-    db_tx
-        .set_sealed_epoch_height((epoch_index_to_seal * epoch_length).into())
-        .log_err()?;
-
     Ok(())
 }
 
@@ -101,7 +105,7 @@ fn rollback_epoch_seal<S: BlockchainStorageWrite>(
     chain_config: &ChainConfig,
     tip_height: BlockHeight,
 ) -> Result<(), BlockError> {
-    let current_epoch_index = chain_config.epoch_index_from_height(&tip_height.next_height());
+    let current_epoch_index = chain_config.epoch_index_from_height(&tip_height);
     let epoch_index_to_unseal = current_epoch_index
         .checked_sub(chain_config.sealed_epoch_distance_from_tip() as u64)
         .expect("always positive");
@@ -118,10 +122,6 @@ fn rollback_epoch_seal<S: BlockchainStorageWrite>(
 
         db_tx.del_accounting_epoch_undo_delta(epoch_index_to_unseal)?;
     }
-
-    // update sealed epoch height anyway
-    let sealed_epoch_height = epoch_index_to_unseal * chain_config.epoch_length().get();
-    db_tx.set_sealed_epoch_height(sealed_epoch_height.into()).log_err()?;
 
     Ok(())
 }

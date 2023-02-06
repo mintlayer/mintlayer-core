@@ -246,8 +246,6 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
             &self,
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
-
-        fn get_sealed_epoch_height(&mut self) -> crate::Result<Option<BlockHeight>>;
     }
 }
 
@@ -395,8 +393,6 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
         ) -> crate::Result<()>;
 
         fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
-
-        fn set_sealed_epoch_height(&mut self, height: BlockHeight) -> crate::Result<()>;
     }
 }
 

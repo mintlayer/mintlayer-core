@@ -83,8 +83,6 @@ mockall::mock! {
             &self,
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
-
-        fn get_sealed_epoch_height(&mut self) -> crate::Result<Option<BlockHeight>>;
     }
 
     impl UtxosStorageRead for Store {
@@ -180,8 +178,6 @@ mockall::mock! {
             undo: &DeltaMergeUndo,
         ) -> crate::Result<()>;
         fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
-
-        fn set_sealed_epoch_height(&mut self, height: BlockHeight) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for Store {
@@ -317,8 +313,6 @@ mockall::mock! {
             &self,
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
-
-        fn get_sealed_epoch_height(&mut self) -> crate::Result<Option<BlockHeight>>;
     }
 
     impl crate::UtxosStorageRead for StoreTxRo {
@@ -420,8 +414,6 @@ mockall::mock! {
             &self,
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
-
-        fn get_sealed_epoch_height(&mut self) -> crate::Result<Option<BlockHeight>>;
     }
 
     impl UtxosStorageRead for StoreTxRw {
@@ -518,8 +510,6 @@ mockall::mock! {
             undo: &DeltaMergeUndo,
         ) -> crate::Result<()>;
         fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
-
-        fn set_sealed_epoch_height(&mut self, height: BlockHeight) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for StoreTxRw {

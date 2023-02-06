@@ -189,8 +189,12 @@ impl ChainConfig {
     }
 
     pub fn is_due_for_epoch_seal(&self, height: &BlockHeight) -> bool {
+        let sealed_epoch_distance_from_tip = self.sealed_epoch_distance_from_tip() as u64;
+        let current_epoch_index = self.epoch_index_from_height(height);
         let next_height: u64 = height.next_height().into();
-        next_height % self.epoch_length == 0
+
+        (next_height % self.epoch_length() == 0)
+            && current_epoch_index >= sealed_epoch_distance_from_tip
     }
 
     pub fn token_min_issuance_fee(&self) -> Amount {
@@ -339,25 +343,48 @@ mod tests {
     }
 
     #[rstest]
-    #[case(NonZeroU64::new(1).unwrap(), BlockHeight::from(0), true)]
-    #[case(NonZeroU64::new(1).unwrap(), BlockHeight::from(1), true)]
-    #[case(NonZeroU64::new(1).unwrap(), BlockHeight::from(2), true)]
-    #[case(NonZeroU64::new(2).unwrap(), BlockHeight::from(0), false)]
-    #[case(NonZeroU64::new(2).unwrap(), BlockHeight::from(1), true)]
-    #[case(NonZeroU64::new(2).unwrap(), BlockHeight::from(2), false)]
-    #[case(NonZeroU64::new(2).unwrap(), BlockHeight::from(3), true)]
-    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(0), false)]
-    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(1), false)]
-    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(2), true)]
-    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(3), false)]
-    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(4), false)]
-    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(5), true)]
+    #[case(NonZeroU64::new(1).unwrap(), 0, BlockHeight::from(0), true)]
+    #[case(NonZeroU64::new(1).unwrap(), 0, BlockHeight::from(1), true)]
+    #[case(NonZeroU64::new(1).unwrap(), 0, BlockHeight::from(2), true)]
+    #[case(NonZeroU64::new(1).unwrap(), 0, BlockHeight::from(3), true)]
+    //----------------------------------------------------------------//
+    #[case(NonZeroU64::new(1).unwrap(), 1, BlockHeight::from(0), false)]
+    #[case(NonZeroU64::new(1).unwrap(), 1, BlockHeight::from(1), true)]
+    #[case(NonZeroU64::new(1).unwrap(), 1, BlockHeight::from(2), true)]
+    #[case(NonZeroU64::new(1).unwrap(), 1, BlockHeight::from(3), true)]
+    //----------------------------------------------------------------//
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(0), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(1), true)]
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(2), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(3), true)]
+    //----------------------------------------------------------------//
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(0), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(1), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(2), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(3), true)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(4), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(5), true)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(6), false)]
+    //----------------------------------------------------------------//
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(0), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(1), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(2), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(3), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(4), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(5), true)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(6), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(7), true)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(8), false)]
     fn is_due_for_epoch_seal(
         #[case] epoch_length: NonZeroU64,
+        #[case] seal_to_tip_distance: usize,
         #[case] block_height: BlockHeight,
         #[case] expected: bool,
     ) {
-        let config = Builder::test_chain().epoch_length(epoch_length).build();
+        let config = Builder::test_chain()
+            .epoch_length(epoch_length)
+            .sealed_epoch_distance_from_tip(seal_to_tip_distance)
+            .build();
         assert_eq!(expected, config.is_due_for_epoch_seal(&block_height));
     }
 

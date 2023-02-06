@@ -729,7 +729,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
             epoch_seal::activate_epoch_seal(
                 &mut self.db_tx,
                 self.chain_config,
-                to_disconnect.block_height(),
+                epoch_seal::BlockStateEvent::Disconnect(to_disconnect.block_height()),
             )?;
         }
         Ok(())
@@ -775,7 +775,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
             epoch_seal::activate_epoch_seal(
                 &mut self.db_tx,
                 self.chain_config,
-                block_index.block_height(),
+                epoch_seal::BlockStateEvent::Connect(block_index.block_height()),
             )?;
         }
 
