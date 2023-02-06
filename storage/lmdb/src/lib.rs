@@ -241,7 +241,7 @@ impl Lmdb {
     }
 
     fn open_db(env: &lmdb::Environment, desc: &DbMapDesc) -> storage_core::Result<lmdb::Database> {
-        let name = Some(desc.name.as_ref());
+        let name = Some(desc.name());
         let flags = lmdb::DatabaseFlags::default();
         env.create_db(name, flags).or_else(error::process_with_err)
     }

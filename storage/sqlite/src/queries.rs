@@ -36,7 +36,7 @@ pub struct SqliteQuery {
 
 impl SqliteQuery {
     pub fn from_desc(desc: &DbMapDesc) -> Self {
-        let name = &desc.name;
+        let name = desc.name();
         Self {
             get_query: format!("SELECT value FROM {name} WHERE key = ?"),
             prefix_iter_query: format!("SELECT key, value FROM {name} ORDER BY key"),

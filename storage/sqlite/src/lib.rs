@@ -262,7 +262,7 @@ impl Sqlite {
 
         // Check if the required tables exist and if needed create them
         for idx in desc.db_map_count().indices() {
-            let table_name = &desc.db_maps()[idx].name;
+            let table_name = &desc.db_maps()[idx].name();
             // Check if table is missing
             let is_missing = exists_stmt
                 .query_row([&table_name], |row| row.get::<usize, String>(0))

@@ -66,7 +66,7 @@ impl<Sch: Schema> DbMapId<Sch> {
     /// Database index from key-value map name
     pub fn from_name<S: AsRef<str>>(name: S) -> Option<Self> {
         Sch::desc_iter()
-            .position(|desc| desc.name == name.as_ref())
+            .position(|desc| desc.name() == name.as_ref())
             .map(Self::from_usize_unchecked)
     }
 
@@ -79,7 +79,7 @@ impl<Sch: Schema> DbMapId<Sch> {
 
     /// Get map name at this index
     pub fn name(&self) -> String {
-        self.info().name
+        self.info().name().into()
     }
 }
 

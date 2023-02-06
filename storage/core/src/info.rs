@@ -15,6 +15,8 @@
 
 //! Low-level runtime database layout description
 
+use core::ops::Range;
+
 /// Used to identify particular key-value map in the database
 #[derive(Eq, PartialEq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct DbMapId(usize);
@@ -98,17 +100,33 @@ impl<T> std::ops::IndexMut<DbMapId> for DbMapsData<T> {
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct DbMapDesc {
     /// Key-value map name
-    pub name: String,
+    name: String,
     /// Value size hint
-    pub size_hint: core::ops::Range<usize>,
+    value_size_hint: Range<usize>,
 }
 
 impl DbMapDesc {
-    /// New map description
+    /// New DB map description
     pub fn new(name: impl Into<String>) -> Self {
-        let size_hint = 0..usize::MAX;
-        let name = name.into();
-        Self { name, size_hint }
+        Self::new_with_details(name.into(), 0..usize::MAX)
+    }
+
+    /// New DB map description with all details
+    pub fn new_with_details(name: String, value_size_hint: Range<usize>) -> Self {
+        Self {
+            name,
+            value_size_hint,
+        }
+    }
+
+    /// Get DB map name
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Get value size hint
+    pub fn value_size_hint(&self) -> &Range<usize> {
+        &self.value_size_hint
     }
 }
 
