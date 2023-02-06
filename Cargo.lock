@@ -456,6 +456,7 @@ dependencies = [
  "chainstate",
  "chainstate-storage",
  "common",
+ "logging",
  "storage",
  "storage-inmemory",
  "storage-lmdb",
