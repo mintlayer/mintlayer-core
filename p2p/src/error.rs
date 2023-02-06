@@ -25,10 +25,21 @@ pub enum ProtocolError {
     DifferentNetwork([u8; 4], [u8; 4]),
     #[error("Peer has an unsupported version. Our version {0}, their version {1}")]
     InvalidVersion(SemVer, SemVer),
+    // TODO: FIXME: Replace this error by more specific ones?
     #[error("Peer sent an invalid message")]
     InvalidMessage,
     #[error("Peer is unresponsive")]
     Unresponsive,
+    #[error("Locator size ({0}) exceeds allowed limit ({1})")]
+    LocatorSizeExceeded(usize, usize),
+    #[error("Requested {0} blocks with limit of {1}")]
+    BlocksRequestLimitExceeded(usize, usize),
+    #[error("Number of headers in message ({0}) exceeds allowed limit ({1})")]
+    HeadersLimitExceeded(usize, usize),
+    #[error("A peer requested an unknown block")]
+    UnknownBlockRequested,
+    #[error("Headers aren't connected")]
+    DisconnectedHeaders,
 }
 
 /// Peer state errors (Errors either for an individual peer or for the [`PeerManager`])
@@ -121,6 +132,7 @@ pub enum P2pError {
     ConversionError(ConversionError),
     #[error("Noise protocol handshake error")]
     NoiseHandshakeError(String),
+    // TODO: FIXME: Remove this error.
     #[error("Other: `{0}`")]
     Other(&'static str),
 }
@@ -187,6 +199,11 @@ impl BanScore for ProtocolError {
             ProtocolError::InvalidVersion(_, _) => 100,
             ProtocolError::InvalidMessage => 100,
             ProtocolError::Unresponsive => 100,
+            ProtocolError::LocatorSizeExceeded(_, _) => 20,
+            ProtocolError::BlocksRequestLimitExceeded(_, _) => 20,
+            ProtocolError::HeadersLimitExceeded(_, _) => 20,
+            ProtocolError::UnknownBlockRequested => 20,
+            ProtocolError::DisconnectedHeaders => 20,
         }
     }
 }

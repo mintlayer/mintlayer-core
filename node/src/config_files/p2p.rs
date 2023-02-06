@@ -78,6 +78,9 @@ impl From<P2pConfigFile> for P2pConfig {
                 .into(),
             node_type: c.node_type.map(Into::into).into(),
             allow_discover_private_ips: Default::default(),
+            header_limit: Default::default(),
+            max_locator_size: Default::default(),
+            requested_blocks_limit: Default::default(),
         }
     }
 }

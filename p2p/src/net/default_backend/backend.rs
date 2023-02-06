@@ -196,7 +196,7 @@ where
             .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        let request = self.request_mgr.make_request(request_id, request)?;
+        let request = self.request_mgr.make_request(request_id, request);
         peer.tx.send(Event::SendMessage(request)).await.map_err(P2pError::from)?;
 
         Ok(())
@@ -323,12 +323,12 @@ where
                 })
                 .await
                 .map_err(P2pError::from),
-            message::Response::BlockListResponse(response) => self
+            message::Response::BlockResponse(response) => self
                 .sync_tx
                 .send(SyncingEvent::Response {
                     peer_id,
                     request_id,
-                    response: SyncResponse::BlockListResponse(response),
+                    response: SyncResponse::BlockResponse(response),
                 })
                 .await
                 .map_err(P2pError::from),

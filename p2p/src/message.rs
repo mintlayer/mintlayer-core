@@ -112,21 +112,21 @@ impl HeaderListResponse {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct BlockListResponse {
-    blocks: Vec<Block>,
+pub struct BlockResponse {
+    block: Block,
 }
 
-impl BlockListResponse {
-    pub fn new(blocks: Vec<Block>) -> Self {
-        Self { blocks }
+impl BlockResponse {
+    pub fn new(block: Block) -> Self {
+        Self { block }
     }
 
-    pub fn blocks(&self) -> &[Block] {
-        &self.blocks
+    pub fn block(&self) -> &Block {
+        &self.block
     }
 
-    pub fn into_blocks(self) -> Vec<Block> {
-        self.blocks
+    pub fn into_block(self) -> Block {
+        self.block
     }
 }
 
@@ -143,7 +143,7 @@ pub enum Response {
     #[codec(index = 0)]
     HeaderListResponse(HeaderListResponse),
     #[codec(index = 1)]
-    BlockListResponse(BlockListResponse),
+    BlockResponse(BlockResponse),
     #[codec(index = 2)]
     AddrListResponse(AddrListResponse),
     #[codec(index = 3)]
@@ -152,8 +152,11 @@ pub enum Response {
 
 #[derive(Debug, Clone)]
 pub enum SyncResponse {
+    /// This message is sent as a response to HeaderListRequest.
     HeaderListResponse(HeaderListResponse),
-    BlockListResponse(BlockListResponse),
+    /// This message contains a single block, so multiple such messages can be sent as a response
+    /// to BlockListRequest.
+    BlockResponse(BlockResponse),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -165,7 +168,7 @@ pub enum PeerManagerResponse {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Announcement {
     #[codec(index = 0)]
-    Block(Block),
+    Block(BlockHeader),
 }
 
 impl From<PeerManagerRequest> for Request {
@@ -203,7 +206,7 @@ impl From<SyncResponse> for Response {
     fn from(response: SyncResponse) -> Self {
         match response {
             SyncResponse::HeaderListResponse(response) => Response::HeaderListResponse(response),
-            SyncResponse::BlockListResponse(response) => Response::BlockListResponse(response),
+            SyncResponse::BlockResponse(response) => Response::BlockResponse(response),
         }
     }
 }

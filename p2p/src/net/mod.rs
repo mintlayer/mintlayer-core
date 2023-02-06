@@ -168,7 +168,7 @@ where
         request: SyncRequest,
     ) -> crate::Result<T::PeerRequestId>;
 
-    /// Send block/header response to remote
+    /// Sends block/header response to remote
     ///
     /// # Arguments
     /// * `request_id` - ID of the request this is a response to

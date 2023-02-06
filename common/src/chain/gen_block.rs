@@ -45,8 +45,20 @@ impl PartialEq<Id<Block>> for Id<GenBlock> {
     }
 }
 
+impl PartialEq<Id<GenBlock>> for Id<Block> {
+    fn eq(&self, other: &Id<GenBlock>) -> bool {
+        self.get() == other.get()
+    }
+}
+
 impl PartialEq<Id<Genesis>> for Id<GenBlock> {
     fn eq(&self, other: &Id<Genesis>) -> bool {
+        self.get() == other.get()
+    }
+}
+
+impl PartialEq<Id<GenBlock>> for Id<Genesis> {
+    fn eq(&self, other: &Id<GenBlock>) -> bool {
         self.get() == other.get()
     }
 }

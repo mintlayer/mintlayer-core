@@ -183,7 +183,6 @@ pub enum SyncingEvent<T: NetworkingService> {
 pub enum PubSubTopic {
     /// Transactions
     Transactions,
-
     /// Blocks
     Blocks,
 }

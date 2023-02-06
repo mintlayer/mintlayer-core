@@ -72,11 +72,11 @@ impl RequestManager {
         &mut self,
         request_id: types::RequestId,
         request: message::Request,
-    ) -> crate::Result<Box<types::Message>> {
-        Ok(Box::new(types::Message::Request {
+    ) -> Box<types::Message> {
+        Box::new(types::Message::Request {
             request_id,
             request,
-        }))
+        })
     }
 
     /// Create new outgoing response
