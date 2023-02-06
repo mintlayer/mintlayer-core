@@ -43,8 +43,8 @@ use crate::{
     event::{PeerManagerEvent, SyncControlEvent},
     message::{self, Announcement, BlockResponse, SyncRequest, SyncResponse},
     net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
-    Result,
     utils::oneshot_nofail,
+    Result,
 };
 
 // TODO: FIXME: Move to the peer module.
@@ -226,12 +226,10 @@ where
         }
 
         let headers = self.chainstate_handle.call(|c| c.get_headers(locator)).await??;
-        self.messaging_handle
-            .send_response(
-                request_id,
-                SyncResponse::HeaderListResponse(message::HeaderListResponse::new(headers)),
-            )
-            .await?;
+        self.messaging_handle.send_response(
+            request_id,
+            SyncResponse::HeaderListResponse(message::HeaderListResponse::new(headers)),
+        )?;
 
         // TODO: FIXME: Check if we need `pindexBestHeaderSent` in the peer context and if so, update it here.
         Ok(())
@@ -269,12 +267,10 @@ where
             let block = self.chainstate_handle.call(move |c| c.get_block(id)).await??.ok_or(
                 P2pError::ProtocolError(ProtocolError::UnknownBlockRequested),
             )?;
-            self.messaging_handle
-                .send_response(
-                    request_id,
-                    SyncResponse::BlockResponse(BlockResponse::new(block)),
-                )
-                .await?;
+            self.messaging_handle.send_response(
+                request_id,
+                SyncResponse::BlockResponse(BlockResponse::new(block)),
+            )?;
         }
 
         Ok(())
@@ -472,12 +468,10 @@ where
         log::debug!("register peer {peer} to sync manager");
 
         let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
-        self.messaging_handle
-            .send_request(
-                peer,
-                SyncRequest::HeaderListRequest(message::HeaderListRequest::new(locator.clone())),
-            )
-            .await?;
+        self.messaging_handle.send_request(
+            peer,
+            SyncRequest::HeaderListRequest(message::HeaderListRequest::new(locator.clone())),
+        )?;
 
         match self.peers.insert(peer, PeerContext { locator }) {
             // This should never happen because a peer can only connect once.
@@ -503,7 +497,7 @@ where
             .expect("A new tip block unavailable")
             .header()
             .clone();
-        self.messaging_handle.make_announcement(Announcement::Block(header)).await
+        self.messaging_handle.make_announcement(Announcement::Block(header))
     }
 
     /// Handles an error occurred during request/response processing.
@@ -606,7 +600,7 @@ where
     async fn adjust_peer_score(&mut self, peer: T::PeerId, score: u32, reason: &str) -> Result<()> {
         log::debug!("Adjusting the '{peer}' peer score by {score}. {reason}");
 
-        let (sender, receiver) = oneshot::channel();
+        let (sender, receiver) = oneshot_nofail::channel();
         // Sending can only fail if the channel is closed that can only occurs on shutdown.
         self.peer_manager_sender
             .send(PeerManagerEvent::AdjustPeerScore(peer, score, sender))?;
