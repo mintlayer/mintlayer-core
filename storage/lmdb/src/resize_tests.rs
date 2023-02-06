@@ -82,7 +82,7 @@ fn auto_map_resize_between_txs(#[case] seed: Seed) {
             MapResizeCallback::new(resize_callback),
         );
 
-        let desc = storage_core::info::construct::db_desc([DbMapDesc::new("SomeDb")].into_iter());
+        let desc = storage_core::types::construct::db_desc([DbMapDesc::new("SomeDb")].into_iter());
         let lmdb_impl = lmdb.open(desc).unwrap();
 
         // generate random values with a predefined target size that surpasses the current map size
@@ -153,7 +153,7 @@ fn auto_map_resize_between_puts(#[case] seed: Seed) {
             MapResizeCallback::new(resize_callback),
         );
 
-        let desc = storage_core::info::construct::db_desc([DbMapDesc::new("SomeDb")].into_iter());
+        let desc = storage_core::types::construct::db_desc([DbMapDesc::new("SomeDb")].into_iter());
         let lmdb_impl = lmdb.open(desc).unwrap();
 
         // generate random values with a predefined target size that surpasses the current map size

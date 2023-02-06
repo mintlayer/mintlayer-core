@@ -41,13 +41,13 @@
 pub mod adaptor;
 pub mod backend;
 pub mod error;
-pub mod info;
+pub mod types;
 pub mod util;
 
 // Re-export some commonly used items
 pub use backend::Backend;
 pub use error::Error;
-pub use info::{DbDesc, DbMapCount, DbMapDesc, DbMapId, DbMapsData};
+pub use types::{DbDesc, DbMapCount, DbMapDesc, DbMapId, DbMapsData};
 
 /// Raw byte sequences, used to represent store keys and values
 pub type Data = Vec<u8>;

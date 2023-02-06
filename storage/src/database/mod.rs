@@ -52,7 +52,7 @@ impl<B: Backend, Sch> utils::shallow_clone::ShallowClone for Storage<B, Sch> whe
 impl<B: Backend, Sch: Schema> Storage<B, Sch> {
     /// Create new storage with given backend
     pub fn new(backend: B) -> crate::Result<Self> {
-        let backend = backend.open(storage_core::info::construct::db_desc(Sch::desc_iter()))?;
+        let backend = backend.open(storage_core::types::construct::db_desc(Sch::desc_iter()))?;
         let _schema = std::marker::PhantomData;
         Ok(Self { backend, _schema })
     }

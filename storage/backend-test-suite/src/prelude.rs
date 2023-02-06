@@ -34,7 +34,7 @@ pub const IDX: (DbMapId, DbMapId) = (DbMapId::new(0), DbMapId::new(1));
 
 /// Sample database description with `n` maps
 pub fn desc(n: usize) -> DbDesc {
-    storage_core::info::construct::db_desc((0..n).map(|i| DbMapDesc::new(format!("map_{i:02}"))))
+    storage_core::types::construct::db_desc((0..n).map(|i| DbMapDesc::new(format!("map_{i:02}"))))
 }
 
 /// Run tests with backend using proptest
