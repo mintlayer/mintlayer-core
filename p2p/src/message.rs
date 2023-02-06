@@ -167,7 +167,7 @@ pub enum Response {
 
 #[derive(Debug, Clone)]
 pub enum SyncResponse {
-    /// This message is sent as a response to HeaderListRequest.
+    /// This message is sent as a response to `HeaderListRequest`.
     HeaderListResponse(HeaderListResponse),
     /// This message contains a single block, so multiple such messages can be sent as a response
     /// to BlockListRequest.

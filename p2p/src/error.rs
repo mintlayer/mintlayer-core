@@ -40,6 +40,8 @@ pub enum ProtocolError {
     UnknownBlockRequested,
     #[error("Headers aren't connected")]
     DisconnectedHeaders,
+    #[error("Received a response with a block that wasn't requested")]
+    UnrequestedBlock,
 }
 
 /// Peer state errors (Errors either for an individual peer or for the [`PeerManager`])
@@ -184,6 +186,7 @@ impl BanScore for ProtocolError {
             ProtocolError::HeadersLimitExceeded(_, _) => 20,
             ProtocolError::UnknownBlockRequested => 20,
             ProtocolError::DisconnectedHeaders => 20,
+            ProtocolError::UnrequestedBlock => 20,
         }
     }
 }

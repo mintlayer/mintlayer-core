@@ -21,7 +21,10 @@
 //
 // mod request;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap, VecDeque},
+    sync::Arc,
+};
 
 use tokio::sync::mpsc;
 use void::Void;
@@ -41,7 +44,7 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
-    message::{self, Announcement, BlockResponse, SyncRequest, SyncResponse},
+    message::{self, Announcement, BlockListRequest, BlockResponse, SyncRequest, SyncResponse},
     net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
     utils::oneshot_nofail,
     Result,
@@ -49,10 +52,23 @@ use crate::{
 
 // TODO: FIXME: Move to the peer module.
 // TODO: FIXME: Use enum as in the previous version?
-// TODO: FIXME: Recheck if all fields are really needed.
 struct PeerContext {
-    // TODO: FIXME: Do we need it here?
-    locator: Locator,
+    /// A number of blocks that a peer has requested. This shouldn't be bigger than the
+    /// `P2pConfig::requested_blocks_limit` value.
+    sending_to: usize,
+
+    /// A list of blocks that we requested from this peer.
+    requested_from: BTreeSet<Id<Block>>,
+}
+
+// TODO: FIXME: Move to the peer module.
+impl PeerContext {
+    pub fn new() -> Self {
+        Self {
+            sending_to: 0,
+            requested_from: Default::default(),
+        }
+    }
 }
 
 // TODO: FIXME: Update the description.
@@ -85,6 +101,13 @@ pub struct BlockSyncManager<T: NetworkingService> {
 
     /// A handle to the chainstate subsystem.
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+
+    /// A queue of the blocks requested by peers.
+    ///
+    /// The block identifiers are added to the queue as a result of BlockListRequest processing
+    /// and removed either after sending a response or when the peer is disconnected. A number of
+    /// blocks is limited by `P2pConfig::requested_blocks_limit` per peer.
+    blocks_queue: VecDeque<(T::PeerId, T::PeerRequestId, Id<Block>)>,
 }
 
 /// Syncing manager
@@ -112,6 +135,7 @@ where
             peer_manager_sender,
             chainstate_handle,
             peers: Default::default(),
+            blocks_queue: Default::default(),
         }
     }
 
@@ -129,14 +153,16 @@ where
                         request_id,
                         request,
                     } => {
-                        self.handle_request(peer_id, request_id, request).await.or_else(|e| self.handle_error(peer_id, e))?;
+                        let res = self.handle_request(peer_id, request_id, request).await;
+                        self.handle_result(peer_id, res).await?;
                     },
                     SyncingEvent::Response {
                         peer_id,
                         request_id,
                         response,
                     } => {
-                        self.handle_response(peer_id, request_id, response).await.or_else(|e| self.handle_error(peer_id, e))?;
+                        let res = self.handle_response(peer_id, request_id, response).await;
+                        self.handle_result(peer_id, res).await?;
                     },
                     SyncingEvent::Announcement{ peer_id, announcement } => {
                         self.handle_announcement(peer_id, announcement).await?;
@@ -150,6 +176,9 @@ where
                     // This error can only occur when chainstate drops an events subscriber.
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
                     self.handle_new_tip(block_id).await?;
+                }
+                _ = async {}, if !self.blocks_queue.is_empty() => {
+                    self.handle_block_queue().await?
                 }
             }
         }
@@ -242,7 +271,7 @@ where
         &mut self,
         peer: T::PeerId,
         request_id: T::PeerRequestId,
-        block_ids: Vec<Id<Block>>,
+        mut block_ids: Vec<Id<Block>>,
     ) -> Result<()> {
         log::debug!("process block request (id {request_id:?}) from peer {peer}");
 
@@ -251,27 +280,31 @@ where
             return Ok(());
         }
 
-        if block_ids.len() > self.p2p_config.requested_blocks_limit.clone().into() {
+        let requested_blocks_limit = self.p2p_config.requested_blocks_limit.clone().into();
+        if block_ids.len() > requested_blocks_limit {
             return Err(P2pError::ProtocolError(
-                ProtocolError::BlocksRequestLimitExceeded(
-                    block_ids.len(),
-                    self.p2p_config.requested_blocks_limit.clone().into(),
-                ),
+                ProtocolError::BlocksRequestLimitExceeded(block_ids.len(), requested_blocks_limit),
             ));
         }
         log::trace!("requested block ids: {block_ids:#?}");
 
-        // TODO: FIXME: Check for more conditions before sending blocks.
-        // TODO: FIXME: Don't send all blocks at once?..
-        for id in block_ids {
-            let block = self.chainstate_handle.call(move |c| c.get_block(id)).await??.ok_or(
+        // Check that all blocks are known.
+        for id in block_ids.clone() {
+            self.chainstate_handle.call(move |c| c.get_block_index(&id)).await??.ok_or(
                 P2pError::ProtocolError(ProtocolError::UnknownBlockRequested),
             )?;
-            self.messaging_handle.send_response(
-                request_id,
-                SyncResponse::BlockResponse(BlockResponse::new(block)),
-            )?;
         }
+
+        let peer_state = self
+            .peers
+            .get_mut(&peer)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+
+        debug_assert!(peer_state.sending_to <= requested_blocks_limit);
+        block_ids.truncate(requested_blocks_limit - peer_state.sending_to);
+
+        peer_state.sending_to += block_ids.len();
+        self.blocks_queue.extend(block_ids.into_iter().map(|id| (peer, request_id, id)));
 
         Ok(())
     }
@@ -346,12 +379,25 @@ where
             return Err(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders));
         }
 
-        let headers = self
+        let mut headers = self
             .chainstate_handle
             .call(|c| c.filter_already_existing_blocks(headers))
             .await??;
 
-        // TODO: FIXME: Send the blocks request, but keep `requested_blocks_limit` in mind.
+        // TODO: FIXME: NEXT: Recheck!
+        // TODO: FIXME: Save remaining available headers in the peer context.
+
+        if headers.len() > self.p2p_config.requested_blocks_limit.clone().into() {
+            let remaining_headers =
+                headers.split_off(self.p2p_config.requested_blocks_limit.clone().into());
+        }
+
+        let block_ids: Vec<_> = headers.into_iter().map(|h| h.get_id()).collect();
+        self.messaging_handle.send_request(
+            peer,
+            SyncRequest::BlockListRequest(BlockListRequest::new(block_ids.clone())),
+        )?;
+        peer_state.requested_from.extend(block_ids);
 
         todo!();
         todo!()
@@ -378,29 +424,35 @@ where
     ) -> Result<()> {
         log::debug!("process block response (id {request_id:?}) from peer {peer}");
 
-        todo!();
-        todo!()
-        // log::trace!(
-        //     "# of received blocks: {}, block ids: {:#?}",
-        //     response.blocks().len(),
-        //     response.blocks().iter().map(|block| block.get_id()).collect::<Vec<_>>(),
-        // );
-        //
-        // // TODO: remove the limitation of sending only one block, and allow sending multiple blocks (up to a cap)
-        // ensure!(
-        //     blocks.len() == 1,
-        //     P2pError::ProtocolError(ProtocolError::InvalidMessage),
-        // );
-        //
-        // match self.validate_block_response(&peer_id, blocks).await {
-        //     Ok(Some(next_block)) => self.send_block_request(peer_id, next_block.get_id()).await,
-        //     Ok(None) => {
-        //         // last block from peer received, ask if peer knows of any new headers
-        //         let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
-        //         self.send_header_request(peer_id, locator).await
-        //     }
-        //     Err(err) => Err(err),
-        // }
+        let peer_state = self
+            .peers
+            .get_mut(&peer)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+
+        if peer_state.requested_from.take(&block.get_id()).is_none() {
+            return Err(P2pError::ProtocolError(ProtocolError::UnrequestedBlock));
+        }
+
+        //let a = self.chainstate_handle.call(|c| c.preliminary_block_check(block)).await;
+        match self
+            .chainstate_handle
+            .call_mut(|c| {
+                c.preliminary_block_check(block)
+                    .and_then(|block| c.process_block(block, chainstate::BlockSource::Peer))
+            })
+            .await?
+        {
+            // It is OK to receive an already processed block.
+            Ok(_) | Err(ChainstateError::ProcessBlockError(BlockError::BlockAlreadyExists(_))) => {}
+            Err(e) => return Err(P2pError::ChainstateError(e)),
+        }
+
+        if peer_state.requested_from.is_empty() {
+            // TODO: FIXME: Request more blocks.
+            // TODO: FIXME: And ask for more headers.
+        }
+
+        Ok(())
     }
 
     // TODO: This shouldn't be public.
@@ -422,7 +474,7 @@ where
         //  TODO: FIXME: Change the logic to handle headers instead of blocks!
 
         // TODO: FIXME: NEXT: "nCount < MAX_BLOCKS_TO_ANNOUNCE) {"
-        // TODO: FIXME: Checl if the header is connected!
+        // TODO: FIXME: Check if the header is connected!
 
         // let result = match self
         //     .chainstate_handle
@@ -473,7 +525,7 @@ where
             SyncRequest::HeaderListRequest(message::HeaderListRequest::new(locator.clone())),
         )?;
 
-        match self.peers.insert(peer, PeerContext { locator }) {
+        match self.peers.insert(peer, PeerContext::new()) {
             // This should never happen because a peer can only connect once.
             Some(_) => Err(P2pError::PeerError(PeerError::PeerAlreadyExists)),
             None => Ok(()),
@@ -484,6 +536,10 @@ where
     /// Removes the state (`PeerContext`) of the given peer.
     pub fn unregister_peer(&mut self, peer: T::PeerId) {
         log::debug!("unregister peer {peer} from sync manager");
+
+        // Remove the queued block responses associated with the disconnected peer.
+        self.blocks_queue.retain(|(p, _, _)| p != &peer);
+
         self.peers.remove(&peer);
     }
 
@@ -500,7 +556,29 @@ where
         self.messaging_handle.make_announcement(Announcement::Block(header))
     }
 
-    /// Handles an error occurred during request/response processing.
+    async fn handle_block_queue(&mut self) -> Result<()> {
+        debug_assert!(!self.blocks_queue.is_empty());
+
+        let (peer, request_id, block_id) = self
+            .blocks_queue
+            .pop_front()
+            // This function is only called when the queue isn't empty.
+            .expect("The block queue is empty");
+        match self.peers.get_mut(&peer) {
+            Some(state) => state.sending_to -= 1,
+            None => return Ok(()),
+        }
+
+        let block = self.chainstate_handle.call(move |c| c.get_block(block_id)).await??.ok_or(
+            P2pError::ProtocolError(ProtocolError::UnknownBlockRequested),
+        )?;
+        self.messaging_handle.send_response(
+            request_id,
+            SyncResponse::BlockResponse(BlockResponse::new(block)),
+        )
+    }
+
+    /// Handles a result of request/response processing.
     ///
     /// There are three possible types of errors:
     /// - Fatal errors will be propagated by this function effectively stopping the sync manager
@@ -508,9 +586,32 @@ where
     /// - Non-fatal errors aren't propagated, but the peer score will be increased by the
     ///   "ban score" value of the given error.
     /// - Ignored errors aren't propagated and don't affect the peer score.
-    fn handle_error(&mut self, peer: T::PeerId, error: P2pError) -> Result<()> {
+    async fn handle_result(&mut self, peer: T::PeerId, result: Result<()>) -> Result<()> {
+        let error = match result {
+            Ok(()) => return Ok(()),
+            Err(e) => e,
+        };
+
         match error {
-            P2pError::ProtocolError(FIXME) => todo!(),
+            // A protocol error - increase the ban score of a peer.
+            P2pError::ProtocolError(e) => {
+                log::debug!(
+                    "Adjusting the '{peer}' peer score by {}: {:?}",
+                    e.ban_score(),
+                    e
+                );
+
+                let (sender, receiver) = oneshot_nofail::channel();
+                self.peer_manager_sender.send(PeerManagerEvent::AdjustPeerScore(
+                    peer,
+                    e.ban_score(),
+                    sender,
+                ))?;
+                receiver.await?.or_else(|e| match e {
+                    P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
+                    e => Err(e),
+                })
+            }
             P2pError::PublishError(FIXME) => todo!(),
             P2pError::DialError(FIXME) => todo!(),
             // Due to the fact that p2p is split into several tasks, it is possible to send a
@@ -521,7 +622,7 @@ where
             P2pError::ChainstateError(FIXME) => todo!(),
             P2pError::StorageFailure(FIXME) => todo!(),
             P2pError::ConversionError(FIXME) => todo!(),
-            P2pError::NoiseHandshakeError(String) => todo!(),
+            P2pError::NoiseHandshakeError(FIXME) => todo!(),
             // Fatal errors, simply propagate them to stop the sync manager.
             e @ (P2pError::ChannelClosed | P2pError::SubsystemFailure | P2pError::Other(_)) => {
                 Err(e)
@@ -607,42 +708,6 @@ where
         // The peer manager ignores non-existing peers, and all other errors are considered fatal.
         receiver.await?
     }
-
-    // /// Validate incoming block response
-    // async fn validate_block_response(
-    //     &mut self,
-    //     peer_id: &T::PeerId,
-    //     blocks: Vec<Block>,
-    // ) -> crate::Result<Option<BlockHeader>> {
-    //     let peer = self
-    //         .peers
-    //         .get_mut(peer_id)
-    //         .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-    //
-    //     let block = blocks.into_iter().next().expect("block to exist");
-    //     let header = block.header().clone();
-    //
-    //     let result = match self
-    //         .chainstate_handle
-    //         .call(move |this| this.preliminary_block_check(block))
-    //         .await?
-    //     {
-    //         Ok(block) => {
-    //             self.chainstate_handle
-    //                 .call_mut(move |this| this.process_block(block, chainstate::BlockSource::Peer))
-    //                 .await?
-    //         }
-    //         Err(err) => Err(err),
-    //     };
-    //
-    //     match result {
-    //         Ok(_) => {}
-    //         Err(ChainstateError::ProcessBlockError(BlockError::BlockAlreadyExists(_id))) => {}
-    //         Err(err) => return Err(P2pError::ChainstateError(err)),
-    //     }
-    //
-    //     peer.register_block_response(&header)
-    // }
 }
 
 #[cfg(test)]

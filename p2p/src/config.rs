@@ -87,7 +87,6 @@ pub struct P2pConfig {
     pub header_limit: HeaderLimit,
     /// A maximum number of the elements in the locator.
     pub max_locator_size: MaxLocatorSize,
-    // TODO: FIXME: Remove?
     /// A maximum number of blocks that can be requested from a single peer.
     pub requested_blocks_limit: RequestedBlocksLimit,
 }
