@@ -25,7 +25,7 @@ clap = { version = "4", features = ["derive"] }
 jsonrpsee = { workspace = true, features = ["macros"] }
 tokio = { workspace = true, default-features = false }
 serde = { workspace = true, features = ["derive"] }
-toml = "0.5"
+toml = "0.7"
 directories = "4.0"
 paste = "1.0"
 
