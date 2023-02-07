@@ -5,6 +5,7 @@ on:
   pull_reuqest:
     branches:
       - master
+
 name: Code Coverage
 
 jobs:

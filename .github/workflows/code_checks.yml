@@ -5,6 +5,7 @@ on:
   pull_request:
     branches:
       - master
+
 name: Static code checks
 jobs:
   clippy_check_ubuntu:
