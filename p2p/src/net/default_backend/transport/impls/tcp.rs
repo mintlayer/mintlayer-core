@@ -118,6 +118,10 @@ impl TcpTransportListener {
 #[async_trait]
 impl TransportListener<TcpTransportStream, SocketAddr> for TcpTransportListener {
     async fn accept(&mut self) -> Result<(TcpTransportStream, SocketAddr)> {
+        // select_next_some will panic if polled while empty
+        if self.listeners.is_empty() {
+            return std::future::pending().await;
+        }
         let mut tasks: FuturesUnordered<_> =
             self.listeners.iter().map(|listener| listener.accept()).collect();
         let (stream, address) = tasks.select_next_some().await?;
