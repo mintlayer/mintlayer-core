@@ -32,7 +32,7 @@ use serialization::{Decode, Encode};
 
 use crate::{
     config::P2pConfig,
-    error::{DialError, P2pError, PeerError, PublishError},
+    error::{DialError, P2pError, PeerError, ProtocolError, PublishError},
     message::{self, PeerManagerRequest, PeerManagerResponse, SyncRequest, SyncResponse},
     net::{
         default_backend::{
@@ -213,7 +213,7 @@ where
         let (peer_id, response) = self
             .request_mgr
             .make_response(&request_id, response)
-            .ok_or(P2pError::Other("unknown request id"))?;
+            .ok_or(P2pError::ProtocolError(ProtocolError::UnknownRequestId))?;
 
         self.peers
             .get_mut(&peer_id)
@@ -405,7 +405,7 @@ where
                 },
                 // Accept a new peer connection.
                 res = self.socket.accept() => {
-                    let (stream, address) = res.map_err(|_| P2pError::Other("accept() failed"))?;
+                    let (stream, address) = res.map_err(|_| P2pError::DialError(DialError::AcceptFailed))?;
 
                     self.create_peer(
                         stream,

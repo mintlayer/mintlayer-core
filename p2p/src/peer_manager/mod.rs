@@ -136,7 +136,7 @@ where
         let now = tokio::time::Instant::now();
         utils::ensure!(
             !p2p_config.ping_timeout.is_zero(),
-            P2pError::Other("ping timeout can't be 0")
+            P2pError::InvalidConfigurationValue("ping timeout can't be 0".into())
         );
         Ok(Self {
             peer_connectivity_handle: handle,

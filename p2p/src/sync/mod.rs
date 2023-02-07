@@ -592,90 +592,23 @@ where
                     e => Err(e),
                 })
             }
-            P2pError::PublishError(FIXME) => todo!(),
-            P2pError::DialError(FIXME) => todo!(),
             // Due to the fact that p2p is split into several tasks, it is possible to send a
             // request/response after a peer is disconnected, but before receiving the disconnect
             // event. Therefore this error can be safely ignored.
             P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
-            P2pError::PeerError(FIXME) => todo!(),
             P2pError::ChainstateError(FIXME) => todo!(),
             P2pError::StorageFailure(FIXME) => todo!(),
-            P2pError::ConversionError(FIXME) => todo!(),
-            P2pError::NoiseHandshakeError(FIXME) => todo!(),
+            // Some of these errors aren't technically fatal, but they shouldn't occur in the sync
+            // manager.
+            e @ (P2pError::DialError(_)
+            | P2pError::ConversionError(_)
+            | P2pError::PeerError(_)
+            | P2pError::NoiseHandshakeError(_)
+            | P2pError::PublishError(_)
+            | P2pError::InvalidConfigurationValue(_)) => Err(e),
             // Fatal errors, simply propagate them to stop the sync manager.
-            e @ (P2pError::ChannelClosed | P2pError::SubsystemFailure | P2pError::Other(_)) => {
-                Err(e)
-            }
+            e @ (P2pError::ChannelClosed | P2pError::SubsystemFailure) => Err(e),
         }
-
-        // // TODO: refactor this
-        // pub async fn handle_error(
-        //     &mut self,
-        //     peer_id: T::PeerId,
-        //     result: crate::Result<()>,
-        // ) -> crate::Result<()> {
-        //     match result {
-        //         Ok(_) => Ok(()),
-        //         Err(P2pError::ChannelClosed) => Err(P2pError::ChannelClosed),
-        //         Err(P2pError::ProtocolError(err)) => {
-        //             log::error!("Peer {peer_id} committed a protocol error: {err}");
-        //
-        //             let (tx, rx) = oneshot::channel();
-        //             self.tx_peer_manager
-        //                 .send(PeerManagerEvent::AdjustPeerScore(
-        //                     peer_id,
-        //                     err.ban_score(),
-        //                     tx,
-        //                 ))
-        //                 .map_err(P2pError::from)?;
-        //             rx.await.map_err(P2pError::from)?
-        //         }
-        //         Err(P2pError::ChainstateError(err)) => match err {
-        //             ChainstateError::ProcessBlockError(err) => {
-        //                 if err.ban_score() > 0 {
-        //                     let (tx, rx) = oneshot::channel();
-        //                     self.tx_peer_manager
-        //                         .send(PeerManagerEvent::AdjustPeerScore(
-        //                             peer_id,
-        //                             err.ban_score(),
-        //                             tx,
-        //                         ))
-        //                         .map_err(P2pError::from)?;
-        //                     let _ = rx.await.map_err(P2pError::from);
-        //                 }
-        //
-        //                 Ok(())
-        //             }
-        //             err => {
-        //                 log::error!("Peer {peer_id} caused a chainstate error: {err}");
-        //                 Ok(())
-        //             }
-        //         },
-        //         Err(P2pError::PeerError(err)) => {
-        //             log::error!("Peer error: {err}");
-        //             Ok(())
-        //         }
-        //         Err(err) => {
-        //             log::error!("Unexpected error occurred: {err}");
-        //
-        //             if err.ban_score() > 0 {
-        //                 // TODO: better abstraction over channels
-        //                 let (tx, rx) = oneshot::channel();
-        //                 self.tx_peer_manager
-        //                     .send(PeerManagerEvent::AdjustPeerScore(
-        //                         peer_id,
-        //                         err.ban_score(),
-        //                         tx,
-        //                     ))
-        //                     .map_err(P2pError::from)?;
-        //                 let _ = rx.await.map_err(P2pError::from);
-        //             }
-        //
-        //             Ok(())
-        //         }
-        //     }
-        // }
     }
 }
 

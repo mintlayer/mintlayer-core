@@ -42,6 +42,8 @@ pub enum ProtocolError {
     DisconnectedHeaders,
     #[error("Received a response with a block that wasn't requested")]
     UnrequestedBlock,
+    #[error("Unknown request identifier")]
+    UnknownRequestId,
 }
 
 /// Peer state errors (Errors either for an individual peer or for the [`PeerManager`])
@@ -79,6 +81,8 @@ pub enum DialError {
     ConnectionRefusedOrTimedOut,
     #[error("I/O error: `{0:?}`")]
     IoError(std::io::ErrorKind),
+    #[error("Accept failed")]
+    AcceptFailed,
 }
 
 /// Conversion errors
@@ -114,9 +118,8 @@ pub enum P2pError {
     ConversionError(ConversionError),
     #[error("Noise protocol handshake error")]
     NoiseHandshakeError(String),
-    // TODO: FIXME: Remove this error.
-    #[error("Other: `{0}`")]
-    Other(&'static str),
+    #[error("The configuration value is invalid: {0}")]
+    InvalidConfigurationValue(String),
 }
 
 impl From<std::io::Error> for P2pError {
@@ -169,7 +172,7 @@ impl BanScore for P2pError {
             P2pError::ConversionError(err) => err.ban_score(),
             // Could be a noise protocol violation but also a network error, do not ban peer
             P2pError::NoiseHandshakeError(_) => 0,
-            P2pError::Other(_) => 0,
+            P2pError::InvalidConfigurationValue(_) => 0,
         }
     }
 }
@@ -187,6 +190,7 @@ impl BanScore for ProtocolError {
             ProtocolError::UnknownBlockRequested => 20,
             ProtocolError::DisconnectedHeaders => 20,
             ProtocolError::UnrequestedBlock => 20,
+            ProtocolError::UnknownRequestId => 20,
         }
     }
 }
