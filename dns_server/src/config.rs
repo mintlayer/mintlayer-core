@@ -16,6 +16,8 @@
 use clap::Parser;
 use directories::UserDirs;
 
+// TODO: Allow using with testnet and regtest
+
 #[derive(Parser, Debug)]
 pub struct DnsServerConfig {
     /// The path to the data directory
@@ -51,6 +53,6 @@ fn default_data_dir() -> String {
         .home_dir()
         .join(DEFAULT_DATA_DIR_NAME)
         .to_str()
-        .expect("expected valid work name")
+        .expect("expected valid default data dir path")
         .to_owned()
 }

@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # Mintlayer DNS seed server
+
 use std::{
     collections::BTreeMap,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -59,7 +61,10 @@ const DEFAULT_RETRY: i32 = 86400;
 const DEFAULT_EXPIRE: i32 = 2592000;
 const DEFAULT_MINIMUM: u32 = 604800;
 
+// Maximum number of IPv4 addresses in result
 const MAX_IPV4_RECORDS: usize = 24;
+
+// Maximum number of IPv6 addresses in result
 const MAX_IPV6_RECORDS: usize = 14;
 
 impl Server {
@@ -126,6 +131,7 @@ impl Server {
     }
 }
 
+/// Wrapper for InMemoryAuthority that selects random addresses every second
 struct AuthorityImpl {
     serial: AtomicU32,
     host: Name,

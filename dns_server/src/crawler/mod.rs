@@ -13,6 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # Mintlayer network crawler
+//!
+//! To keep things simple, the server will try to keep connections open to all reachable nodes.
+//! When a new outbound connection is made, a new DNS record is added (but only for nodes on default ports).
+//! When the connection is closed, the DNS record is removed.
+//! When a connection fails, the server increases the backoff time between connection attempts.
+//! If the number of failed connection attempts exceeds the limit, the address is removed from the list.
+//! Once-reachable and newer-reachable addresses have different connection failure limits
+//! (equivalent to about 1 month and about 1 hour, respectively).
+
 pub mod storage;
 pub mod storage_impl;
 
@@ -64,7 +74,7 @@ const PURGE_UNREACHABLE_FAIL_COUNT: u32 = 4;
 /// Such a long time is useful if the server itself has prolonged connectivity problems.
 const PURGE_REACHABLE_FAIL_COUNT: u32 = 35;
 
-/// All (outbound) connection states of a potential node address
+/// Connection state of a potential node address (outbound only)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AddressState {
     Disconnected,
@@ -72,29 +82,44 @@ enum AddressState {
     Connected,
 }
 
+/// Additional state of a potential node address
 struct AddressData {
+    /// Connection state
     state: AddressState,
 
+    /// Last time when the connection state was updated
     state_updated_at: tokio::time::Instant,
 
+    /// The number of failed connection attempts.
+    /// New connection attempts are made after a progressive backoff time.
+    /// Resets to 0 when an outbound connection to the address is successful.
     fail_count: u32,
 
+    /// Whether this address was reachable at least once.
+    /// Addresses that were once reachable are stored in the DB.
     was_reachable: bool,
 }
 
 pub struct Crawler<N: NetworkingService, S> {
+    /// Chain config. Required for the network check
     chain_config: Arc<ChainConfig>,
 
+    /// Backend's ConnectivityHandle
     conn: N::ConnectivityHandle,
 
+    /// Backend's SyncingMessagingHandle
     sync: N::SyncingMessagingHandle,
 
+    /// Map of all known addresses (including currently unreachable)
     addresses: BTreeMap<N::Address, AddressData>,
 
+    /// Map of all currently connected peers
     peers: BTreeMap<N::PeerId, N::Address>,
 
+    /// Storage implementation
     storage: S,
 
+    /// Channel used to manage the DNS server
     command_tx: mpsc::UnboundedSender<ServerCommands>,
 }
 
@@ -112,6 +137,7 @@ where
         storage: S,
         command_tx: mpsc::UnboundedSender<ServerCommands>,
     ) -> Result<Self, DnsServerError> {
+        // Load all persistent addresses
         let tx = storage.transaction_ro()?;
         let mut addresses = BTreeMap::new();
         for address in tx.get_addresses()?.iter().filter_map(|address| address.parse().ok()) {
@@ -119,6 +145,7 @@ where
         }
         tx.close();
 
+        // Add addresses that were specified from the command line as reachable
         for address in config.add_node.iter() {
             let address = address.parse()?;
             Self::new_address(&mut addresses, address, true);
@@ -151,7 +178,9 @@ where
         request: PeerManagerRequest,
     ) {
         match request {
-            PeerManagerRequest::AddrListRequest(_) => {}
+            PeerManagerRequest::AddrListRequest(_) => {
+                // Ignored
+            }
             PeerManagerRequest::AnnounceAddrRequest(AnnounceAddrRequest { address }) => {
                 // TODO: Rate limit AnnounceAddrRequest requests
                 if let Some(address) = TransportAddress::from_peer_address(&address) {
@@ -171,13 +200,9 @@ where
         &mut self,
         _peer_id: N::PeerId,
         _request_id: N::PeerRequestId,
-        response: PeerManagerResponse,
+        _response: PeerManagerResponse,
     ) {
-        match response {
-            PeerManagerResponse::AddrListResponse(_) => {}
-            PeerManagerResponse::AnnounceAddrResponse(_) => {}
-            PeerManagerResponse::PingResponse(_) => {}
-        }
+        // Ignore all
     }
 
     fn handle_outbound_accepted(
@@ -186,11 +211,14 @@ where
         peer_info: PeerInfo<N::PeerId>,
         _receiver_address: Option<PeerAddress>,
     ) {
-        let address_data = self.addresses.get_mut(&address).expect("must be known");
+        let address_data = self
+            .addresses
+            .get_mut(&address)
+            .expect("address in the Connecting state must be known");
         let valid = peer_info.network == *self.chain_config.magic_bytes();
 
         if !valid {
-            log::debug!("invalid network at {}", address.to_string());
+            log::debug!("invalid peer detected at {}", address.to_string());
             self.conn.disconnect(peer_info.peer_id).expect("disconnect must succeed");
             Self::change_address_state(
                 &address,
@@ -223,7 +251,10 @@ where
     }
 
     fn handle_connection_error(&mut self, address: N::Address, _error: P2pError) {
-        let address_data = self.addresses.get_mut(&address).expect("must be known");
+        let address_data = self
+            .addresses
+            .get_mut(&address)
+            .expect("address in the Connecting state must be known");
         Self::change_address_state(
             &address,
             address_data,
@@ -235,7 +266,10 @@ where
 
     fn handle_connection_closed(&mut self, peer_id: N::PeerId) {
         if let Some(address) = self.peers.remove(&peer_id) {
-            let address_data = self.addresses.get_mut(&address).expect("must be known");
+            let address_data = self
+                .addresses
+                .get_mut(&address)
+                .expect("address in the Connected state must be known");
             Self::change_address_state(
                 &address,
                 address_data,
@@ -312,6 +346,9 @@ where
         }
     }
 
+    /// Update address state.
+    ///
+    /// The only place where the address state can be updated.
     fn change_address_state(
         address: &N::Address,
         address_data: &mut AddressData,
@@ -331,7 +368,7 @@ where
         address_data.state = new_state;
         address_data.state_updated_at = tokio::time::Instant::now();
 
-        // Add only nodes listening on the default port to DNS
+        // Only add nodes listening on the default port to DNS
         let dns_ip: Option<IpAddr> = match address.as_peer_address() {
             PeerAddress::Ip4(addr) if addr.port == DEFAULT_BIND_PORT => {
                 Some(Ipv4Addr::from(addr.ip).into())
@@ -369,35 +406,39 @@ where
         }
     }
 
+    /// Returns true when it is time to attempt a new outbound connection
     fn connect_now(now: tokio::time::Instant, address_data: &AddressData) -> bool {
-        let age = now.duration_since(address_data.state_updated_at);
-
         match address_data.state {
             AddressState::Connected | AddressState::Connecting => false,
-            AddressState::Disconnected => match address_data.fail_count {
-                0 => true,
-                1 => age > Duration::from_secs(10),
-                2 => age > Duration::from_secs(60),
-                3 => age > Duration::from_secs(360),
-                4 => age > Duration::from_secs(3600),
-                5 => age > Duration::from_secs(3 * 3600),
-                6 => age > Duration::from_secs(6 * 3600),
-                7 => age > Duration::from_secs(12 * 3600),
-                _ => age > Duration::from_secs(24 * 3600),
-            },
+            AddressState::Disconnected => {
+                let age = now.duration_since(address_data.state_updated_at);
+
+                match address_data.fail_count {
+                    0 => true,
+                    1 => age > Duration::from_secs(10),
+                    2 => age > Duration::from_secs(60),
+                    3 => age > Duration::from_secs(360),
+                    4 => age > Duration::from_secs(3600),
+                    5 => age > Duration::from_secs(3 * 3600),
+                    6 => age > Duration::from_secs(6 * 3600),
+                    7 => age > Duration::from_secs(12 * 3600),
+                    _ => age > Duration::from_secs(24 * 3600),
+                }
+            }
         }
     }
 
+    /// Returns true if the address should be kept in memory
     fn retain_address(
         address: &N::Address,
         address_data: &mut AddressData,
         storage: &mut S,
     ) -> bool {
-        if address_data.was_reachable
-            && address_data.state == AddressState::Disconnected
+        if address_data.state == AddressState::Disconnected
+            && address_data.was_reachable
             && address_data.fail_count >= PURGE_REACHABLE_FAIL_COUNT
         {
-            log::debug!("purge old reachable address {}", address.to_string());
+            log::debug!("purge old (once reachable) address {}", address.to_string());
 
             let mut tx = storage.transaction_rw().expect("tx must succeed");
             tx.del_address(&address.to_string()).expect("adding address must succeed");
@@ -406,11 +447,11 @@ where
             return false;
         }
 
-        if !address_data.was_reachable
-            && address_data.state == AddressState::Disconnected
+        if address_data.state == AddressState::Disconnected
+            && !address_data.was_reachable
             && address_data.fail_count >= PURGE_UNREACHABLE_FAIL_COUNT
         {
-            log::debug!("purge old unreachable address {}", address.to_string());
+            log::debug!("purge old (unreachable) address {}", address.to_string());
 
             return false;
         }
@@ -418,6 +459,7 @@ where
         true
     }
 
+    /// Address list maintaince
     fn heartbeat(&mut self) {
         let now = tokio::time::Instant::now();
 
