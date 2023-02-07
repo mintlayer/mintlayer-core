@@ -16,7 +16,7 @@
 use clap::Parser;
 use directories::UserDirs;
 
-// TODO: Allow using with testnet and regtest
+// TODO: Allow using with testnet
 
 #[derive(Parser, Debug)]
 pub struct DnsServerConfig {

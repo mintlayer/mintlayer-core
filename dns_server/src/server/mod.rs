@@ -56,10 +56,15 @@ pub struct Server {
 }
 
 // Same values as in `https://github.com/sipa/bitcoin-seeder/blob/master/dns.cpp`
-const DEFAULT_REFRESH: i32 = 604800;
-const DEFAULT_RETRY: i32 = 86400;
-const DEFAULT_EXPIRE: i32 = 2592000;
-const DEFAULT_MINIMUM: u32 = 604800;
+const SOA_REFRESH: i32 = 604800;
+const SOA_RETRY: i32 = 86400;
+const SOA_EXPIRE: i32 = 2592000;
+const SOA_MINIMUM: u32 = 604800;
+
+// Same values as in `https://github.com/sipa/bitcoin-seeder/blob/master/dns.cpp`
+const TTL_IP: u32 = 3600;
+const TTL_NS: u32 = 21600;
+const TTL_SOA: u32 = 21600;
 
 // Maximum number of IPv4 addresses in result
 const MAX_IPV4_RECORDS: usize = 24;
@@ -169,19 +174,19 @@ impl AuthorityImpl {
             .cloned()
             .collect::<Vec<_>>();
 
-        let mut soa_rec = RecordSet::new(&self.host, RecordType::SOA, 0);
-        let mut ns_rec = RecordSet::new(&self.host, RecordType::NS, 0);
-        let mut ipv4_rec = RecordSet::new(&self.host, RecordType::A, 0);
-        let mut ipv6_rec = RecordSet::new(&self.host, RecordType::AAAA, 0);
+        let mut soa_rec = RecordSet::with_ttl(self.host.clone(), RecordType::SOA, TTL_SOA);
+        let mut ns_rec = RecordSet::with_ttl(self.host.clone(), RecordType::NS, TTL_NS);
+        let mut ipv4_rec = RecordSet::with_ttl(self.host.clone(), RecordType::A, TTL_IP);
+        let mut ipv6_rec = RecordSet::with_ttl(self.host.clone(), RecordType::AAAA, TTL_IP);
 
         soa_rec.add_rdata(RData::SOA(SOA::new(
             self.host.clone(),
             self.mbox.clone(),
             new_serial,
-            DEFAULT_REFRESH,
-            DEFAULT_RETRY,
-            DEFAULT_EXPIRE,
-            DEFAULT_MINIMUM,
+            SOA_REFRESH,
+            SOA_RETRY,
+            SOA_EXPIRE,
+            SOA_MINIMUM,
         )));
 
         ns_rec.add_rdata(RData::NS(self.ns.clone()));
