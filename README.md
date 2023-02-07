@@ -1,4 +1,4 @@
-# Mintlayer core
+# Mintlayer core - d
 
 https://www.mintlayer.org/
 
