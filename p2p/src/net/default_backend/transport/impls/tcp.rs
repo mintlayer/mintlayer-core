@@ -20,7 +20,6 @@ use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::{
-    config::DEFAULT_BIND_PORT,
     net::{
         default_backend::transport::{
             traits::TransportAddress, PeerStream, TransportListener, TransportSocket,
@@ -75,15 +74,6 @@ pub struct TcpTransportListener {
 
 impl TcpTransportListener {
     fn new(addresses: Vec<SocketAddr>) -> Result<Self> {
-        let addresses = if addresses.is_empty() {
-            vec![
-                SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), DEFAULT_BIND_PORT),
-                SocketAddr::new(std::net::Ipv6Addr::UNSPECIFIED.into(), DEFAULT_BIND_PORT),
-            ]
-        } else {
-            addresses
-        };
-
         let listeners = addresses
             .into_iter()
             .map(|address| -> Result<TcpListener> {

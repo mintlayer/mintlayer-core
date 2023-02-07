@@ -38,7 +38,7 @@ use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom};
 use logging::log;
 use p2p::{
-    config::{P2pConfig, DEFAULT_BIND_PORT},
+    config::P2pConfig,
     error::P2pError,
     message::{
         AnnounceAddrRequest, PeerManagerRequest, PeerManagerResponse, PingRequest, PingResponse,
@@ -151,7 +151,6 @@ where
             Self::new_address(&mut addresses, address, true);
         }
 
-        // TODO: Prevent binding to default listening ports
         let (conn, sync) = N::start(
             transport,
             vec![],
@@ -243,11 +242,10 @@ where
     fn handle_inbound_accepted(
         &mut self,
         _address: N::Address,
-        peer_info: PeerInfo<N::PeerId>,
+        _peer_info: PeerInfo<N::PeerId>,
         _receiver_address: Option<PeerAddress>,
     ) {
-        log::error!("unexpected inbound connection");
-        self.conn.disconnect(peer_info.peer_id).expect("disconnect must succeed");
+        unreachable!("unexpected inbound connection");
     }
 
     fn handle_connection_error(&mut self, address: N::Address, _error: P2pError) {
