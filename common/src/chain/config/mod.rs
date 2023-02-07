@@ -287,6 +287,10 @@ pub fn create_mainnet() -> ChainConfig {
     Builder::new(ChainType::Mainnet).build()
 }
 
+pub fn create_testnet() -> ChainConfig {
+    Builder::new(ChainType::Testnet).build()
+}
+
 pub fn create_regtest() -> ChainConfig {
     Builder::new(ChainType::Regtest).build()
 }

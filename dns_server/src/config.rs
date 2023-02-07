@@ -16,13 +16,15 @@
 use clap::Parser;
 use directories::UserDirs;
 
-// TODO: Allow using with testnet
-
 #[derive(Parser, Debug)]
 pub struct DnsServerConfig {
     /// The path to the data directory
     #[clap(long, default_value_t = default_data_dir())]
     pub datadir: String,
+
+    /// Use testnet
+    #[clap(long)]
+    pub testnet: bool,
 
     /// IP address and UDP port to listen on
     #[clap(long, default_values_t = vec!["[::]:53".to_string()])]

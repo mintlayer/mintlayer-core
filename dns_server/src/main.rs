@@ -35,7 +35,13 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
     let stream_adapter = NoiseEncryptionAdapter::gen_new();
     let base_transport = TcpTransportSocket::new();
     let transport = NoiseTcpTransport::new(stream_adapter, base_transport);
-    let chain_config = Arc::new(common::chain::config::create_mainnet());
+
+    let chain_config = if config.testnet {
+        Arc::new(common::chain::config::create_testnet())
+    } else {
+        Arc::new(common::chain::config::create_mainnet())
+    };
+
     let p2p_config = Default::default();
 
     let storage = DnsServerStorageImpl::new(storage_lmdb::Lmdb::new(
