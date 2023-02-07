@@ -2,7 +2,9 @@ on:
   push:
     branches:
       - '**' # target all branches
-
+  pull_reuqest:
+    branches:
+      - master
 name: Code Coverage
 
 jobs:

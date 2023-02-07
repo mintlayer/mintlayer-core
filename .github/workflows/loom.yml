@@ -4,7 +4,9 @@ on:
   push:
     branches:
       - '**' # target all branches
-
+  pull_request:
+    branches:
+      - master
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: --cfg=loom
