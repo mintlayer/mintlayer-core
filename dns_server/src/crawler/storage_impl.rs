@@ -19,14 +19,22 @@ use super::storage::{
     DnsServerStorage, DnsServerStorageRead, DnsServerStorageWrite, DnsServerTransactionRo,
     DnsServerTransactionRw, DnsServerTransactional,
 };
+use serialization::{encoded::Encoded, DecodeAll, Encode};
+
+type ValueId = u32;
 
 storage::decl_schema! {
     /// Database schema for peer db storage
     pub Schema {
+        /// Storage for individual values
+        pub DBValue: Map<ValueId, Vec<u8>>,
+
         /// Table for all reachable addresses
         pub DBAddresses: Map<String, ()>,
     }
 }
+
+const VALUE_ID_VERSION: ValueId = 1;
 
 pub struct DnsServerStoreTxRo<'st, B: storage::Backend>(storage::TransactionRo<'st, B, Schema>);
 
@@ -60,6 +68,13 @@ impl<B: storage::Backend> DnsServerStorageImpl<B> {
 }
 
 impl<'st, B: storage::Backend> DnsServerStorageWrite for DnsServerStoreTxRw<'st, B> {
+    fn set_version(&mut self, version: u32) -> Result<(), DnsServerError> {
+        self.0
+            .get_mut::<DBValue, _>()
+            .put(VALUE_ID_VERSION, version.encode())
+            .map_err(Into::into)
+    }
+
     fn add_address(&mut self, address: &str) -> Result<(), DnsServerError> {
         self.0.get_mut::<DBAddresses, _>().put(address, ()).map_err(Into::into)
     }
@@ -80,6 +95,14 @@ impl<'st, B: storage::Backend> DnsServerTransactionRw for DnsServerStoreTxRw<'st
 }
 
 impl<'st, B: storage::Backend> DnsServerStorageRead for DnsServerStoreTxRo<'st, B> {
+    fn get_version(&self) -> Result<Option<u32>, DnsServerError> {
+        let map = self.0.get::<DBValue, _>();
+        let vec_opt = map.get(VALUE_ID_VERSION)?.as_ref().map(Encoded::decode);
+        Ok(vec_opt.map(|vec| {
+            u32::decode_all(&mut vec.as_ref()).expect("db values to be encoded correctly")
+        }))
+    }
+
     fn get_addresses(&self) -> Result<Vec<String>, DnsServerError> {
         let map = self.0.get::<DBAddresses, _>();
         let iter = map.prefix_iter_decoded(&())?.map(|(addr, ())| addr);

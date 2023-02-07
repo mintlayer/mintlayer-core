@@ -16,10 +16,14 @@
 use crate::error::DnsServerError;
 
 pub trait DnsServerStorageRead {
+    fn get_version(&self) -> Result<Option<u32>, DnsServerError>;
+
     fn get_addresses(&self) -> Result<Vec<String>, DnsServerError>;
 }
 
 pub trait DnsServerStorageWrite {
+    fn set_version(&mut self, version: u32) -> Result<(), DnsServerError>;
+
     fn add_address(&mut self, address: &str) -> Result<(), DnsServerError>;
 
     fn del_address(&mut self, address: &str) -> Result<(), DnsServerError>;

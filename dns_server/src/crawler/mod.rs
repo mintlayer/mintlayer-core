@@ -74,6 +74,8 @@ const PURGE_UNREACHABLE_FAIL_COUNT: u32 = 4;
 /// Such a long time is useful if the server itself has prolonged connectivity problems.
 const PURGE_REACHABLE_FAIL_COUNT: u32 = 35;
 
+const STORAGE_VERSION: u32 = 1;
+
 /// Connection state of a potential node address (outbound only)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AddressState {
@@ -139,11 +141,23 @@ where
     ) -> Result<Self, DnsServerError> {
         // Load all persistent addresses
         let tx = storage.transaction_ro()?;
+
+        let storage_version = tx.get_version()?;
+        if storage_version.is_some() && storage_version != Some(STORAGE_VERSION) {
+            return Err(DnsServerError::Other("Unexpected storage version"));
+        }
+
         let mut addresses = BTreeMap::new();
         for address in tx.get_addresses()?.iter().filter_map(|address| address.parse().ok()) {
             Self::new_address(&mut addresses, address, true);
         }
         tx.close();
+
+        if storage_version.is_none() {
+            let mut tx = storage.transaction_rw()?;
+            tx.set_version(STORAGE_VERSION)?;
+            tx.commit()?;
+        }
 
         // Add addresses that were specified from the command line as reachable
         for address in config.add_node.iter() {
