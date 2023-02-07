@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Low-level runtime database layout description
+//! Database backend support building blocks
 
 use core::ops::Range;
 

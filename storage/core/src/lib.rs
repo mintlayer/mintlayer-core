@@ -59,7 +59,7 @@
 //! ## Transactions
 //!
 //! Currently, all data accesses in backend happen through transactions. This restriction may be
-//! lifted in the future, allowing primitive opertations to be performed without a transaction for
+//! lifted in the future, allowing primitive operations to be performed without a transaction for
 //! performance reasons.
 //!
 //! Starting read-only and read-write transactions is defined by implementing the
