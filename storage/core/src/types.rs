@@ -24,7 +24,7 @@ pub struct DbMapId(usize);
 impl DbMapId {
     /// New index
     pub const fn new(id: usize) -> Self {
-        DbMapId(id)
+        Self(id)
     }
 
     /// Get the index as usize
