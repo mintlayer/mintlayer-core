@@ -70,11 +70,13 @@ impl<'s, 'i, Tx: lmdb::Transaction> backend::PrefixIter<'i> for DbTx<'s, Tx> {
 
     fn prefix_iter<'t: 'i>(
         &'t self,
-        idx: DbMapId,
+        map_id: DbMapId,
         prefix: Data,
     ) -> storage_core::Result<Self::Iterator> {
-        let cursor =
-            self.tx.open_ro_cursor(self.backend.dbs[idx]).or_else(error::process_with_err)?;
+        let cursor = self
+            .tx
+            .open_ro_cursor(self.backend.dbs[map_id])
+            .or_else(error::process_with_err)?;
         let iter = if prefix.is_empty() {
             cursor.into_iter_start()
         } else {
@@ -85,24 +87,25 @@ impl<'s, 'i, Tx: lmdb::Transaction> backend::PrefixIter<'i> for DbTx<'s, Tx> {
 }
 
 impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
-    fn get(&self, idx: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
         self.tx
-            .get(self.backend.dbs[idx], &key)
+            .get(self.backend.dbs[map_id], &key)
             .map_or_else(error::process_with_none, |x| Ok(Some(x.into())))
     }
 }
 
 impl backend::WriteOps for DbTx<'_, lmdb::RwTransaction<'_>> {
-    fn put(&mut self, idx: DbMapId, key: Data, val: Data) -> storage_core::Result<()> {
+    fn put(&mut self, map_id: DbMapId, key: Data, val: Data) -> storage_core::Result<()> {
+        let db = self.backend.dbs[map_id];
         self.tx
-            .put(self.backend.dbs[idx], &key, &val, lmdb::WriteFlags::empty())
+            .put(db, &key, &val, lmdb::WriteFlags::empty())
             .map_err(|err| self.backend.schedule_map_resize_if_map_full(err))
             .or_else(error::process_with_unit)
     }
 
-    fn del(&mut self, idx: DbMapId, key: &[u8]) -> storage_core::Result<()> {
+    fn del(&mut self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<()> {
         self.tx
-            .del(self.backend.dbs[idx], &key, None)
+            .del(self.backend.dbs[map_id], &key, None)
             .map_err(|err| self.backend.schedule_map_resize_if_map_full(err))
             .or_else(error::process_with_unit)
     }

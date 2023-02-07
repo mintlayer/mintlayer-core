@@ -105,14 +105,14 @@ impl<'s, 'i> backend::PrefixIter<'i> for DbTx<'s> {
 
     fn prefix_iter<'t: 'i>(
         &'t self,
-        idx: DbMapId,
+        map_id: DbMapId,
         prefix: Data,
     ) -> storage_core::Result<Self::Iterator> {
         // TODO check if prefix.is_empty()
         // TODO Perform the filtering in the SQL query itself
         let mut stmt = self
             .connection
-            .prepare_cached(self.queries[idx].prefix_iter_query.as_str())
+            .prepare_cached(self.queries[map_id].prefix_iter_query.as_str())
             .map_err(process_sqlite_error)?;
 
         let mut rows = stmt.query(()).map_err(process_sqlite_error)?;
@@ -133,10 +133,10 @@ impl<'s, 'i> backend::PrefixIter<'i> for DbTx<'s> {
 }
 
 impl backend::ReadOps for DbTx<'_> {
-    fn get(&self, idx: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
         let mut stmt = self
             .connection
-            .prepare_cached(self.queries[idx].get_query.as_str())
+            .prepare_cached(self.queries[map_id].get_query.as_str())
             .map_err(process_sqlite_error)?;
 
         let params = (key,);
@@ -150,10 +150,10 @@ impl backend::ReadOps for DbTx<'_> {
 }
 
 impl backend::WriteOps for DbTx<'_> {
-    fn put(&mut self, idx: DbMapId, key: Data, val: Data) -> storage_core::Result<()> {
+    fn put(&mut self, map_id: DbMapId, key: Data, val: Data) -> storage_core::Result<()> {
         let mut stmt = self
             .connection
-            .prepare_cached(self.queries[idx].put_query.as_str())
+            .prepare_cached(self.queries[map_id].put_query.as_str())
             .map_err(process_sqlite_error)?;
 
         let params = (key, val);
@@ -162,10 +162,10 @@ impl backend::WriteOps for DbTx<'_> {
         Ok(())
     }
 
-    fn del(&mut self, idx: DbMapId, key: &[u8]) -> storage_core::Result<()> {
+    fn del(&mut self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<()> {
         let mut stmt = self
             .connection
-            .prepare_cached(self.queries[idx].delete_query.as_str())
+            .prepare_cached(self.queries[map_id].delete_query.as_str())
             .map_err(process_sqlite_error)?;
 
         let params = (key,);

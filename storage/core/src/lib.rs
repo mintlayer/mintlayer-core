@@ -65,8 +65,8 @@
 //! Starting read-only and read-write transactions is defined by implementing the
 //! [backend::TransactionalRo] and [backend::TransactionalRw] traits on [Backend::Impl].
 //!
-//! Committing a read-write transaction is defined in defined by implementing [backend::TxRw].
-//! A read-only transaction type has to be marked with the [backend::TxRo] trait.
+//! Committing a read-write transaction is defined by implementing [backend::TxRw]. A read-only
+//! transaction type has to be marked with the [backend::TxRo] trait.
 //!
 //! Rolling back read-write transaction and closing read-only transaction is defined by dropping
 //! the corresponding transaction object. If any special processing is required, [Drop] has to be
@@ -83,8 +83,8 @@
 //!
 //! ## Adaptor pattern
 //!
-//! Sometimes, it is useful to create a database backend that wraps an arbitrary other backend and
-//! adds some functionality. Use cases include but are not limited to logging and caching.
+//! Sometimes, it is useful to create a database backend that wraps another backend and adds
+//! functionality. Use cases include but are not limited to logging and caching.
 
 pub mod adaptor;
 pub mod backend;

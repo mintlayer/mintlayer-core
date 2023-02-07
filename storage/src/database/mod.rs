@@ -138,16 +138,16 @@ impl<'tx, B: Backend, Sch: Schema> TransactionRw<'tx, B, Sch> {
 /// Represents an immutable view of a key-value map
 pub struct MapRef<'tx, Tx: internal::TxImpl, DbMap: schema::DbMap> {
     dbtx: &'tx Tx::Impl,
-    idx: DbMapId,
+    map_id: DbMapId,
     _phantom: std::marker::PhantomData<fn() -> DbMap>,
 }
 
 impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapRef<'tx, Tx, DbMap> {
-    fn new(dbtx: &'tx Tx::Impl, idx: DbMapId) -> Self {
+    fn new(dbtx: &'tx Tx::Impl, map_id: DbMapId) -> Self {
         let _phantom = Default::default();
         Self {
             dbtx,
-            idx,
+            map_id,
             _phantom,
         }
     }
@@ -163,7 +163,7 @@ where
         &self,
         key: K,
     ) -> crate::Result<Option<Encoded<Cow<[u8]>, DbMap::Value>>> {
-        internal::get::<DbMap, _, _>(self.dbtx, self.idx, key)
+        internal::get::<DbMap, _, _>(self.dbtx, self.map_id, key)
     }
 
     /// Iterator over entries with key starting with given prefix
@@ -172,7 +172,7 @@ where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
     {
-        internal::prefix_iter(self.dbtx, self.idx, prefix.encode())
+        internal::prefix_iter(self.dbtx, self.map_id, prefix.encode())
     }
 
     /// Iterator over decoded entries with key starting with given prefix
@@ -184,24 +184,23 @@ where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
     {
-        internal::prefix_iter::<DbMap, <Tx as TxImpl>::Impl>(self.dbtx, self.idx, prefix.encode())
-            .map(|item| item.map(|(k, v)| (k, v.decode())))
+        self.prefix_iter(prefix).map(|item| item.map(|(k, v)| (k, v.decode())))
     }
 }
 
 /// Represents a mutable view of a key-value map
 pub struct MapMut<'tx, Tx: TxImpl, DbMap: schema::DbMap> {
     dbtx: &'tx mut Tx::Impl,
-    idx: DbMapId,
+    map_id: DbMapId,
     _phantom: std::marker::PhantomData<fn() -> DbMap>,
 }
 
 impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapMut<'tx, Tx, DbMap> {
-    fn new(dbtx: &'tx mut Tx::Impl, idx: DbMapId) -> Self {
+    fn new(dbtx: &'tx mut Tx::Impl, map_id: DbMapId) -> Self {
         let _phantom = Default::default();
         Self {
             dbtx,
-            idx,
+            map_id,
             _phantom,
         }
     }
@@ -217,7 +216,7 @@ where
         &self,
         key: K,
     ) -> crate::Result<Option<Encoded<Cow<[u8]>, DbMap::Value>>> {
-        internal::get::<DbMap, _, _>(self.dbtx, self.idx, key)
+        internal::get::<DbMap, _, _>(self.dbtx, self.map_id, key)
     }
 
     /// Iterator over entries with key starting with given prefix
@@ -226,7 +225,7 @@ where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
     {
-        internal::prefix_iter(self.dbtx, self.idx, prefix.encode())
+        internal::prefix_iter(self.dbtx, self.map_id, prefix.encode())
     }
 }
 
@@ -240,12 +239,12 @@ where
         key: K,
         value: V,
     ) -> crate::Result<()> {
-        backend::WriteOps::put(self.dbtx, self.idx, key.encode(), value.encode())
+        backend::WriteOps::put(self.dbtx, self.map_id, key.encode(), value.encode())
     }
 
     /// Remove value associated with given key.
     pub fn del<K: EncodeLike<DbMap::Key>>(&mut self, key: K) -> crate::Result<()> {
-        key.using_encoded(|key| backend::WriteOps::del(self.dbtx, self.idx, key))
+        key.using_encoded(|key| backend::WriteOps::del(self.dbtx, self.map_id, key))
     }
 }
 

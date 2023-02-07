@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2022-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -23,8 +23,8 @@ pub struct DbMapId(usize);
 
 impl DbMapId {
     /// New index
-    pub const fn new(idx: usize) -> Self {
-        DbMapId(idx)
+    pub const fn new(id: usize) -> Self {
+        DbMapId(id)
     }
 
     /// Get the index as usize
@@ -92,21 +92,21 @@ impl<T> DbMapsData<T> {
     }
 
     /// Convert into iterator over map indices together with associated data
-    pub fn into_idx_iter(self) -> impl Iterator<Item = (DbMapId, T)> + ExactSizeIterator {
+    pub fn into_iter_with_id(self) -> impl Iterator<Item = (DbMapId, T)> + ExactSizeIterator {
         self.0.into_iter().enumerate().map(|(i, m)| (DbMapId::new(i), m))
     }
 }
 
 impl<T> std::ops::Index<DbMapId> for DbMapsData<T> {
     type Output = T;
-    fn index(&self, idx: DbMapId) -> &Self::Output {
-        &self.0[idx.0]
+    fn index(&self, map_id: DbMapId) -> &Self::Output {
+        &self.0[map_id.0]
     }
 }
 
 impl<T> std::ops::IndexMut<DbMapId> for DbMapsData<T> {
-    fn index_mut(&mut self, idx: DbMapId) -> &mut Self::Output {
-        &mut self.0[idx.0]
+    fn index_mut(&mut self, map_id: DbMapId) -> &mut Self::Output {
+        &mut self.0[map_id.0]
     }
 }
 

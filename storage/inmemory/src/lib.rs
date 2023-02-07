@@ -32,8 +32,8 @@ impl<'i> Iterator for PrefixIter<'i> {
 pub struct StorageMaps(DbMapsData<Map>);
 
 impl backend::ReadOps for StorageMaps {
-    fn get(&self, idx: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
-        Ok(self.0[idx].get(key).map(|p| p.into()))
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+        Ok(self.0[map_id].get(key).map(|p| p.into()))
     }
 }
 
@@ -42,21 +42,21 @@ impl<'i> backend::PrefixIter<'i> for StorageMaps {
 
     fn prefix_iter<'m: 'i>(
         &'m self,
-        idx: DbMapId,
+        map_id: DbMapId,
         prefix: Data,
     ) -> storage_core::Result<Self::Iterator> {
-        Ok(PrefixIter(util::PrefixIter::new(&self.0[idx], prefix)))
+        Ok(PrefixIter(util::PrefixIter::new(&self.0[map_id], prefix)))
     }
 }
 
 impl backend::WriteOps for StorageMaps {
-    fn put(&mut self, idx: DbMapId, key: Data, val: Data) -> storage_core::Result<()> {
-        let _ = self.0[idx].insert(key, val);
+    fn put(&mut self, map_id: DbMapId, key: Data, val: Data) -> storage_core::Result<()> {
+        let _ = self.0[map_id].insert(key, val);
         Ok(())
     }
 
-    fn del(&mut self, idx: DbMapId, key: &[u8]) -> storage_core::Result<()> {
-        let _ = self.0[idx].remove(key);
+    fn del(&mut self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<()> {
+        let _ = self.0[map_id].remove(key);
         Ok(())
     }
 }
