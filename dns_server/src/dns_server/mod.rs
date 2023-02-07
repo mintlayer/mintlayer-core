@@ -47,7 +47,7 @@ pub enum ServerCommands {
     DelAddress(IpAddr),
 }
 
-pub struct Server {
+pub struct DnsServer {
     auth: Arc<AuthorityImpl>,
 
     server: ServerFuture<Catalog>,
@@ -72,7 +72,7 @@ const MAX_IPV4_RECORDS: usize = 24;
 // Maximum number of IPv6 addresses in result
 const MAX_IPV6_RECORDS: usize = 14;
 
-impl Server {
+impl DnsServer {
     pub async fn new(
         config: Arc<DnsServerConfig>,
         command_tx: mpsc::UnboundedReceiver<ServerCommands>,
@@ -116,7 +116,7 @@ impl Server {
     }
 
     pub async fn run(self) -> Result<void::Void, DnsServerError> {
-        let Server {
+        let DnsServer {
             auth,
             server,
             mut command_tx,

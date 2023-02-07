@@ -26,8 +26,8 @@ use tokio::sync::mpsc;
 
 mod config;
 mod crawler;
+mod dns_server;
 mod error;
-mod server;
 
 fn make_p2p_transport() -> NoiseTcpTransport {
     let stream_adapter = NoiseEncryptionAdapter::gen_new();
@@ -65,7 +65,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
     )
     .await?;
 
-    let server = server::Server::new(config, command_rx).await?;
+    let server = dns_server::DnsServer::new(config, command_rx).await?;
 
     // Spawn for better parallelism
     let crawler_task = tokio::spawn(crawler.run());

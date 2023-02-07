@@ -55,8 +55,8 @@ use tokio::sync::mpsc;
 use crate::{
     config::DnsServerConfig,
     crawler::storage::{DnsServerStorageWrite, DnsServerTransactionRw},
+    dns_server::ServerCommands,
     error::DnsServerError,
-    server::ServerCommands,
 };
 
 use self::storage::{DnsServerStorage, DnsServerStorageRead, DnsServerTransactionRo};
