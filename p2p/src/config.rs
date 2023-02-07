@@ -19,6 +19,7 @@ use utils::make_config_setting;
 
 use crate::net::types::PubSubTopic;
 
+// TODO: Use different ports on testnet and regtest
 pub const DEFAULT_BIND_PORT: u16 = 3031;
 
 make_config_setting!(BanThreshold, u32, 100);

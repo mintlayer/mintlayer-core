@@ -18,6 +18,7 @@ members = [
   "common",                       # Everything else, until it's moved to another crate.
   "consensus",                    # Consensus related logic.
   "crypto",                       # Cryptographic primitives and their interfaces.
+  "dns_server",                   # DNS-server.
   "logging",                      # Logging engine and its interfaces.
   "mempool",                      # Mempool interface and implementation.
   "node",                         # Node executable.
