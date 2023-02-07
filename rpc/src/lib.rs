@@ -191,9 +191,9 @@ mod tests {
     #[tokio::test]
     async fn rpc_server_http() -> anyhow::Result<()> {
         let rpc_config = RpcConfig {
-            http_bind_address: "127.0.0.1:3030".parse::<SocketAddr>().unwrap().into(),
+            http_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
             http_enabled: true.into(),
-            ws_bind_address: "127.0.0.1:3031".parse::<SocketAddr>().unwrap().into(),
+            ws_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
             ws_enabled: false.into(),
         };
         let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
@@ -217,9 +217,9 @@ mod tests {
     #[tokio::test]
     async fn rpc_server_websocket() -> anyhow::Result<()> {
         let rpc_config = RpcConfig {
-            http_bind_address: "127.0.0.1:3030".parse::<SocketAddr>().unwrap().into(),
+            http_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
             http_enabled: false.into(),
-            ws_bind_address: "127.0.0.1:3031".parse::<SocketAddr>().unwrap().into(),
+            ws_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
             ws_enabled: true.into(),
         };
         let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
