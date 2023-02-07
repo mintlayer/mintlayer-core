@@ -2,7 +2,7 @@ on:
   push:
     branches:
       - '**' # target all branches
-  pull_reuqest:
+  pull_request:
     branches:
       - master
 
