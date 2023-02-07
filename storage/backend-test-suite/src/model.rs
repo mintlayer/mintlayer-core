@@ -15,7 +15,7 @@
 
 //! A dead-simple reference implementation of some aspects of a storage backend
 
-use storage_core::{backend, Data, DbIndex};
+use storage_core::{backend, Data, DbMapId};
 
 /// A modifying action to apply to a backend or a model
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -38,19 +38,19 @@ impl WriteAction {
 
 pub trait ApplyActions {
     /// Apply a sequence of actions to a transaction
-    fn apply_actions(&mut self, idx: DbIndex, iter: impl Iterator<Item = WriteAction>) {
-        iter.for_each(|act| self.apply_action(idx, act));
+    fn apply_actions(&mut self, map_id: DbMapId, iter: impl Iterator<Item = WriteAction>) {
+        iter.for_each(|act| self.apply_action(map_id, act));
     }
 
     /// Apply one action to a transaction
-    fn apply_action(&mut self, idx: DbIndex, action: WriteAction);
+    fn apply_action(&mut self, map_id: DbMapId, action: WriteAction);
 }
 
 impl<T: backend::WriteOps> ApplyActions for T {
-    fn apply_action(&mut self, idx: DbIndex, action: WriteAction) {
+    fn apply_action(&mut self, map_id: DbMapId, action: WriteAction) {
         match action {
-            WriteAction::Put(key, val) => self.put(idx, key, val).expect("put to succeed"),
-            WriteAction::Del(key) => self.del(idx, key.as_ref()).expect("del to succeed"),
+            WriteAction::Put(key, val) => self.put(map_id, key, val).expect("put to succeed"),
+            WriteAction::Del(key) => self.del(map_id, key.as_ref()).expect("del to succeed"),
         }
     }
 }
@@ -73,14 +73,14 @@ impl Model {
     }
 
     /// New model obtained by dumping a database
-    pub fn from_db<B: backend::BackendImpl>(storage: &B, idx: DbIndex) -> Self {
+    pub fn from_db<B: backend::BackendImpl>(storage: &B, map_id: DbMapId) -> Self {
         let dbtx = storage.transaction_ro().unwrap();
-        Self::from_tx(&dbtx, idx)
+        Self::from_tx(&dbtx, map_id)
     }
 
     /// New model obtained by dumping a database in a transaction. May contain uncommitted changes.
-    pub fn from_tx<Tx: for<'tx> backend::PrefixIter<'tx>>(tx: &Tx, idx: DbIndex) -> Self {
-        Model(backend::PrefixIter::prefix_iter(tx, idx, Data::new()).unwrap().collect())
+    pub fn from_tx<Tx: for<'tx> backend::PrefixIter<'tx>>(tx: &Tx, map_id: DbMapId) -> Self {
+        Model(backend::PrefixIter::prefix_iter(tx, map_id, Data::new()).unwrap().collect())
     }
 
     /// Get the inner map

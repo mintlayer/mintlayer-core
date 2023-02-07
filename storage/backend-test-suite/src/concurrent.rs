@@ -21,7 +21,7 @@ fn setup<B: Backend>(backend: B, init: Vec<u8>) -> B::Impl {
     let store = backend.open(desc(1)).expect("db open to succeed");
 
     let mut dbtx = store.transaction_rw(None).unwrap();
-    dbtx.put(IDX.0, TEST_KEY.to_vec(), init).unwrap();
+    dbtx.put(MAPID.0, TEST_KEY.to_vec(), init).unwrap();
     dbtx.commit().unwrap();
 
     store
@@ -34,14 +34,14 @@ fn read_initialize_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
         let store = store.clone();
         move || {
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.put(IDX.0, TEST_KEY.to_vec(), vec![2]).unwrap();
+            dbtx.put(MAPID.0, TEST_KEY.to_vec(), vec![2]).unwrap();
             dbtx.commit().unwrap();
         }
     });
 
     let dbtx = store.transaction_ro().unwrap();
     let expected = [None, Some([2].as_ref())];
-    assert!(expected.contains(&dbtx.get(IDX.0, TEST_KEY).unwrap().as_ref().map(|v| v.as_ref())));
+    assert!(expected.contains(&dbtx.get(MAPID.0, TEST_KEY).unwrap().as_ref().map(|v| v.as_ref())));
     drop(dbtx);
 
     thr0.join().unwrap();
@@ -54,7 +54,7 @@ fn read_write_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
         let store = store.clone();
         move || {
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.put(IDX.0, TEST_KEY.to_vec(), vec![2]).unwrap();
+            dbtx.put(MAPID.0, TEST_KEY.to_vec(), vec![2]).unwrap();
             dbtx.commit().unwrap();
         }
     });
@@ -62,7 +62,7 @@ fn read_write_race<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     let dbtx = store.transaction_ro().unwrap();
     let expected = [[0u8].as_ref(), [2].as_ref()];
     assert!(expected
-        .contains(&dbtx.get(IDX.0, TEST_KEY).unwrap().as_ref().map(|v| v.as_ref()).unwrap()));
+        .contains(&dbtx.get(MAPID.0, TEST_KEY).unwrap().as_ref().map(|v| v.as_ref()).unwrap()));
     drop(dbtx);
 
     thr0.join().unwrap();
@@ -75,9 +75,9 @@ fn commutative_read_modify_write<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
         let store = store.clone();
         move || {
             let mut dbtx = store.transaction_rw(None).unwrap();
-            let v = dbtx.get(IDX.0, TEST_KEY).unwrap().unwrap();
+            let v = dbtx.get(MAPID.0, TEST_KEY).unwrap().unwrap();
             let b = v.first().unwrap();
-            dbtx.put(IDX.0, TEST_KEY.to_vec(), vec![b + 5]).unwrap();
+            dbtx.put(MAPID.0, TEST_KEY.to_vec(), vec![b + 5]).unwrap();
             dbtx.commit().unwrap();
         }
     });
@@ -85,9 +85,9 @@ fn commutative_read_modify_write<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
         let store = store.clone();
         move || {
             let mut dbtx = store.transaction_rw(None).unwrap();
-            let v = dbtx.get(IDX.0, TEST_KEY).unwrap().unwrap();
+            let v = dbtx.get(MAPID.0, TEST_KEY).unwrap().unwrap();
             let b = v.first().unwrap();
-            dbtx.put(IDX.0, TEST_KEY.to_vec(), vec![b + 3]).unwrap();
+            dbtx.put(MAPID.0, TEST_KEY.to_vec(), vec![b + 3]).unwrap();
             dbtx.commit().unwrap();
         }
     });
@@ -97,7 +97,7 @@ fn commutative_read_modify_write<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
 
     let dbtx = store.transaction_ro().unwrap();
     assert_eq!(
-        dbtx.get(IDX.0, TEST_KEY).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        dbtx.get(MAPID.0, TEST_KEY).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
         [8].as_ref()
     );
 }
@@ -112,7 +112,7 @@ fn threaded_reads_consistent<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             store
                 .transaction_ro()
                 .unwrap()
-                .get(IDX.0, TEST_KEY)
+                .get(MAPID.0, TEST_KEY)
                 .unwrap()
                 .unwrap()
                 .as_ref()
@@ -124,7 +124,7 @@ fn threaded_reads_consistent<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             store
                 .transaction_ro()
                 .unwrap()
-                .get(IDX.0, TEST_KEY)
+                .get(MAPID.0, TEST_KEY)
                 .unwrap()
                 .unwrap()
                 .as_ref()
@@ -143,7 +143,7 @@ fn write_different_keys_and_iterate<B: Backend, F: BackendFn<B>>(backend_fn: Arc
         let store = store.clone();
         move || {
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.put(IDX.0, vec![0x01], vec![0xf1]).unwrap();
+            dbtx.put(MAPID.0, vec![0x01], vec![0xf1]).unwrap();
             dbtx.commit().unwrap();
         }
     });
@@ -151,7 +151,7 @@ fn write_different_keys_and_iterate<B: Backend, F: BackendFn<B>>(backend_fn: Arc
         let store = store.clone();
         move || {
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.put(IDX.0, vec![0x02], vec![0xf2]).unwrap();
+            dbtx.put(MAPID.0, vec![0x02], vec![0xf2]).unwrap();
             dbtx.commit().unwrap();
         }
     });
@@ -160,7 +160,7 @@ fn write_different_keys_and_iterate<B: Backend, F: BackendFn<B>>(backend_fn: Arc
     thr1.join().unwrap();
 
     let dbtx = store.transaction_ro().unwrap();
-    let contents = dbtx.prefix_iter(IDX.0, vec![]).unwrap();
+    let contents = dbtx.prefix_iter(MAPID.0, vec![]).unwrap();
     let expected = [(vec![0x01], vec![0xf1]), (vec![0x02], vec![0xf2])];
     assert!(contents.eq(expected));
 }

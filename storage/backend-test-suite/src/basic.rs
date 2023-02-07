@@ -22,13 +22,13 @@ fn put_and_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
     // Create a transaction, modify storage and abort transaction
     let mut dbtx = store.transaction_rw(None).unwrap();
-    dbtx.put(IDX.0, b"hello".to_vec(), b"world".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"hello".to_vec(), b"world".to_vec()).unwrap();
     dbtx.commit().expect("commit to succeed");
 
     // Check the modification did not happen
     let dbtx = store.transaction_ro().unwrap();
     assert_eq!(
-        dbtx.get(IDX.0, b"hello").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        dbtx.get(MAPID.0, b"hello").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
         b"world".as_ref()
     );
     drop(dbtx);
@@ -39,12 +39,12 @@ fn put_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
     // Create a transaction, modify storage and abort transaction
     let mut dbtx = store.transaction_rw(None).unwrap();
-    dbtx.put(IDX.0, b"hello".to_vec(), b"world".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"hello".to_vec(), b"world".to_vec()).unwrap();
     drop(dbtx);
 
     // Check the modification did not happen
     let dbtx = store.transaction_ro().unwrap();
-    assert_eq!(dbtx.get(IDX.0, b"hello"), Ok(None));
+    assert_eq!(dbtx.get(MAPID.0, b"hello"), Ok(None));
     drop(dbtx);
 }
 
@@ -53,36 +53,36 @@ fn put_two_under_different_keys<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>)
 
     // Create a transaction, modify storage and commit
     let mut dbtx = store.transaction_rw(None).unwrap();
-    dbtx.put(IDX.0, b"a".to_vec(), b"0".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"b".to_vec(), b"1".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"a".to_vec(), b"0".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"b".to_vec(), b"1".to_vec()).unwrap();
     dbtx.commit().expect("commit to succeed");
 
     // Check the values are in place
     let dbtx = store.transaction_ro().unwrap();
     assert_eq!(
-        dbtx.get(IDX.0, b"a").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        dbtx.get(MAPID.0, b"a").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
         b"0".as_ref()
     );
     assert_eq!(
-        dbtx.get(IDX.0, b"b").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        dbtx.get(MAPID.0, b"b").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
         b"1".as_ref()
     );
     drop(dbtx);
 
     // Create a transaction, modify storage and abort
     let mut dbtx = store.transaction_rw(None).unwrap();
-    dbtx.put(IDX.0, b"a".to_vec(), b"00".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"b".to_vec(), b"11".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"a".to_vec(), b"00".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"b".to_vec(), b"11".to_vec()).unwrap();
     drop(dbtx);
 
     // Check the modification did not happen
     let dbtx = store.transaction_ro().unwrap();
     assert_eq!(
-        dbtx.get(IDX.0, b"a").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        dbtx.get(MAPID.0, b"a").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
         b"0".as_ref()
     );
     assert_eq!(
-        dbtx.get(IDX.0, b"b").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        dbtx.get(MAPID.0, b"b").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
         b"1".as_ref()
     );
     drop(dbtx);
@@ -92,21 +92,21 @@ fn put_twice_then_commit_read_last<B: Backend, F: BackendFn<B>>(backend_fn: Arc<
     let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     let mut dbtx = store.transaction_rw(None).unwrap();
-    dbtx.put(IDX.0, b"hello".to_vec(), b"a".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"hello".to_vec(), b"a".to_vec()).unwrap();
     assert_eq!(
-        dbtx.get(IDX.0, b"hello").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        dbtx.get(MAPID.0, b"hello").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
         b"a".as_ref(),
     );
-    dbtx.put(IDX.0, b"hello".to_vec(), b"b".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"hello".to_vec(), b"b".to_vec()).unwrap();
     assert_eq!(
-        dbtx.get(IDX.0, b"hello").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        dbtx.get(MAPID.0, b"hello").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
         b"b".as_ref(),
     );
     dbtx.commit().expect("commit to succeed");
 
     let dbtx = store.transaction_ro().unwrap();
     assert_eq!(
-        dbtx.get(IDX.0, b"hello").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+        dbtx.get(MAPID.0, b"hello").unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
         b"b".as_ref(),
     );
 }
@@ -115,14 +115,14 @@ fn put_iterator_count_matches<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     let mut dbtx = store.transaction_rw(None).unwrap();
-    dbtx.put(IDX.0, vec![0x00], vec![]).unwrap();
-    dbtx.put(IDX.0, vec![0x01], vec![]).unwrap();
-    dbtx.put(IDX.0, vec![0x02], vec![]).unwrap();
-    dbtx.put(IDX.0, vec![0x03], vec![]).unwrap();
+    dbtx.put(MAPID.0, vec![0x00], vec![]).unwrap();
+    dbtx.put(MAPID.0, vec![0x01], vec![]).unwrap();
+    dbtx.put(MAPID.0, vec![0x02], vec![]).unwrap();
+    dbtx.put(MAPID.0, vec![0x03], vec![]).unwrap();
     dbtx.commit().expect("commit to succeed");
 
     let dbtx = store.transaction_ro().unwrap();
-    assert_eq!(dbtx.prefix_iter(IDX.0, vec![]).unwrap().count(), 4);
+    assert_eq!(dbtx.prefix_iter(MAPID.0, vec![]).unwrap().count(), 4);
 }
 
 fn put_and_iterate_over_prefixes<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
@@ -130,16 +130,16 @@ fn put_and_iterate_over_prefixes<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
 
     // Populate the database with some values
     let mut dbtx = store.transaction_rw(None).unwrap();
-    dbtx.put(IDX.0, b"ac".to_vec(), b"2".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"bf".to_vec(), b"7".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"ab".to_vec(), b"1".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"aca".to_vec(), b"3".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"bz".to_vec(), b"8".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"x".to_vec(), b"9".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"bb".to_vec(), b"6".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"b".to_vec(), b"5".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"acb".to_vec(), b"4".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"aa".to_vec(), b"0".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"ac".to_vec(), b"2".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"bf".to_vec(), b"7".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"ab".to_vec(), b"1".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"aca".to_vec(), b"3".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"bz".to_vec(), b"8".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"x".to_vec(), b"9".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"bb".to_vec(), b"6".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"b".to_vec(), b"5".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"acb".to_vec(), b"4".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"aa".to_vec(), b"0".to_vec()).unwrap();
     dbtx.commit().expect("commit to succeed");
 
     // Check for a non-existent prefix
@@ -147,7 +147,7 @@ fn put_and_iterate_over_prefixes<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
         store
             .transaction_ro()
             .unwrap()
-            .prefix_iter(IDX.0, b"foo".to_vec())
+            .prefix_iter(MAPID.0, b"foo".to_vec())
             .unwrap()
             .next(),
         None,
@@ -156,7 +156,8 @@ fn put_and_iterate_over_prefixes<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
     // Check for items that are supposed to be present
     let check = |range: std::ops::RangeInclusive<usize>, prefix: Data| {
         let dbtx = store.transaction_ro().unwrap();
-        let vals: Vec<_> = dbtx.prefix_iter(IDX.0, prefix.clone()).unwrap().map(|x| x.1).collect();
+        let vals: Vec<_> =
+            dbtx.prefix_iter(MAPID.0, prefix.clone()).unwrap().map(|x| x.1).collect();
         let expected: Vec<_> = range.map(|x| Data::from(x.to_string())).collect();
         assert_eq!(vals, expected, "prefix={prefix:?}");
         drop(dbtx);
@@ -172,7 +173,7 @@ fn put_and_iterate_over_prefixes<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
 
 // Check for items that are supposed to be present
 fn check_prefix<Tx: ReadOps>(dbtx: &Tx, prefix: Data, expected: &[(&str, &str)]) {
-    let entries = dbtx.prefix_iter(IDX.0, prefix).unwrap();
+    let entries = dbtx.prefix_iter(MAPID.0, prefix).unwrap();
     let expected = expected
         .iter()
         .map(|(x, y)| (Data::from(x.to_string()), Data::from(y.to_string())));
@@ -189,12 +190,12 @@ fn put_and_iterate_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) 
 
     // Populate the database with some
     let mut dbtx = store.transaction_rw(None).unwrap();
-    dbtx.put(IDX.0, b"aa".to_vec(), b"0".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"ab".to_vec(), b"1".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"ac".to_vec(), b"2".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"aca".to_vec(), b"3".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"acb".to_vec(), b"4".to_vec()).unwrap();
-    dbtx.put(IDX.0, b"b".to_vec(), b"5".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"aa".to_vec(), b"0".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"ab".to_vec(), b"1".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"ac".to_vec(), b"2".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"aca".to_vec(), b"3".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"acb".to_vec(), b"4".to_vec()).unwrap();
+    dbtx.put(MAPID.0, b"b".to_vec(), b"5".to_vec()).unwrap();
     // Check db contents
     check_prefix(&dbtx, b"".to_vec(), &expected_full_0);
     check_prefix(&dbtx, b"aa".to_vec(), &expected_aa_0);
@@ -214,8 +215,8 @@ fn put_and_iterate_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) 
 
     // Delete some entries
     let mut dbtx = store.transaction_rw(None).unwrap();
-    dbtx.del(IDX.0, b"aca").unwrap();
-    dbtx.del(IDX.0, b"ab").unwrap();
+    dbtx.del(MAPID.0, b"aca").unwrap();
+    dbtx.del(MAPID.0, b"ab").unwrap();
     // Check updated contents
     check_prefix(&dbtx, b"".to_vec(), &expected_full_1);
     check_prefix(&dbtx, b"aa".to_vec(), &expected_aa_1);
@@ -232,8 +233,8 @@ fn put_and_iterate_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) 
 
     // Delete the items, this time for real
     let mut dbtx = store.transaction_rw(None).unwrap();
-    dbtx.del(IDX.0, b"aca").unwrap();
-    dbtx.del(IDX.0, b"ab").unwrap();
+    dbtx.del(MAPID.0, b"aca").unwrap();
+    dbtx.del(MAPID.0, b"ab").unwrap();
     // Check updated contents
     check_prefix(&dbtx, b"".to_vec(), &expected_full_1);
     check_prefix(&dbtx, b"aa".to_vec(), &expected_aa_1);

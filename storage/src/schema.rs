@@ -15,7 +15,7 @@
 
 //! Describe the database schema at type level
 
-pub use storage_core::{info::MapDesc, DbIndex};
+pub use storage_core::{DbMapDesc, DbMapId};
 
 /// Describes single key-value map
 pub trait DbMap: 'static {
@@ -34,24 +34,21 @@ pub trait DbMap: 'static {
 
 /// What constitutes a valid database schema
 pub trait Schema: internal::Sealed + 'static {
-    type DescIter: Iterator<Item = MapDesc>;
+    type DescIter: Iterator<Item = DbMapDesc>;
     fn desc_iter() -> Self::DescIter;
 }
 
 impl Schema for () {
-    type DescIter = std::iter::Empty<MapDesc>;
+    type DescIter = std::iter::Empty<DbMapDesc>;
     fn desc_iter() -> Self::DescIter {
         std::iter::empty()
     }
 }
 
 impl<M: DbMap, Rest: Schema> Schema for (M, Rest) {
-    type DescIter = std::iter::Chain<std::iter::Once<MapDesc>, Rest::DescIter>;
+    type DescIter = std::iter::Chain<std::iter::Once<DbMapDesc>, Rest::DescIter>;
     fn desc_iter() -> Self::DescIter {
-        let map_desc = MapDesc {
-            name: M::NAME.to_string(),
-            size_hint: M::SIZE_HINT,
-        };
+        let map_desc = DbMapDesc::new_with_details(M::NAME.to_string(), M::SIZE_HINT);
         std::iter::once(map_desc).chain(Rest::desc_iter())
     }
 }
@@ -59,13 +56,13 @@ impl<M: DbMap, Rest: Schema> Schema for (M, Rest) {
 /// Require a schema to contain given map (identified by a type tag)
 pub trait HasDbMap<M: DbMap, I>: Schema {
     /// Index of the map in the schema
-    const INDEX: DbIndex;
+    const INDEX: DbMapId;
 }
 impl<M: DbMap, Rest: Schema> HasDbMap<M, ()> for (M, Rest) {
-    const INDEX: DbIndex = DbIndex::new(0);
+    const INDEX: DbMapId = DbMapId::new(0);
 }
 impl<M: DbMap, Head: DbMap, Rest: HasDbMap<M, I>, I> HasDbMap<M, (I,)> for (Head, Rest) {
-    const INDEX: DbIndex = DbIndex::new(Rest::INDEX.get() + 1);
+    const INDEX: DbMapId = DbMapId::new(Rest::INDEX.as_usize() + 1);
 }
 
 mod internal {
@@ -123,8 +120,8 @@ mod test {
     #[test]
     fn schema() {
         // Check calculated column indices
-        assert_eq!(<MySchema as HasDbMap<DBIdx0, _>>::INDEX, DbIndex::new(0));
-        assert_eq!(<MySchema as HasDbMap<DBIdx1, _>>::INDEX, DbIndex::new(1));
-        assert_eq!(<MySchema as HasDbMap<DBIdx2, _>>::INDEX, DbIndex::new(2));
+        assert_eq!(<MySchema as HasDbMap<DBIdx0, _>>::INDEX, DbMapId::new(0));
+        assert_eq!(<MySchema as HasDbMap<DBIdx1, _>>::INDEX, DbMapId::new(1));
+        assert_eq!(<MySchema as HasDbMap<DBIdx2, _>>::INDEX, DbMapId::new(2));
     }
 }

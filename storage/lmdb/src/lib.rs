@@ -26,24 +26,11 @@ use lmdb::Cursor;
 use resize_callback::MapResizeCallback;
 use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
-    info::{DbDesc, MapDesc},
-    Data, DbIndex,
+    Data, DbDesc, DbMapDesc, DbMapId, DbMapsData,
 };
 use utils::sync::Arc;
 
 pub use lmdb::{DatabaseResizeInfo, DatabaseResizeSettings};
-
-/// Identifiers of the list of databases (key-value maps)
-#[derive(Eq, PartialEq, Debug, Clone)]
-struct DbList(Vec<lmdb::Database>);
-
-impl std::ops::Index<DbIndex> for DbList {
-    type Output = lmdb::Database;
-
-    fn index(&self, index: DbIndex) -> &Self::Output {
-        &self.0[index.get()]
-    }
-}
 
 /// LMDB iterator over entries with given key prefix
 pub struct PrefixIter<'tx, C> {
@@ -83,11 +70,13 @@ impl<'s, 'i, Tx: lmdb::Transaction> backend::PrefixIter<'i> for DbTx<'s, Tx> {
 
     fn prefix_iter<'t: 'i>(
         &'t self,
-        idx: DbIndex,
+        map_id: DbMapId,
         prefix: Data,
     ) -> storage_core::Result<Self::Iterator> {
-        let cursor =
-            self.tx.open_ro_cursor(self.backend.dbs[idx]).or_else(error::process_with_err)?;
+        let cursor = self
+            .tx
+            .open_ro_cursor(self.backend.dbs[map_id])
+            .or_else(error::process_with_err)?;
         let iter = if prefix.is_empty() {
             cursor.into_iter_start()
         } else {
@@ -98,24 +87,25 @@ impl<'s, 'i, Tx: lmdb::Transaction> backend::PrefixIter<'i> for DbTx<'s, Tx> {
 }
 
 impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
-    fn get(&self, idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
         self.tx
-            .get(self.backend.dbs[idx], &key)
+            .get(self.backend.dbs[map_id], &key)
             .map_or_else(error::process_with_none, |x| Ok(Some(x.into())))
     }
 }
 
 impl backend::WriteOps for DbTx<'_, lmdb::RwTransaction<'_>> {
-    fn put(&mut self, idx: DbIndex, key: Data, val: Data) -> storage_core::Result<()> {
+    fn put(&mut self, map_id: DbMapId, key: Data, val: Data) -> storage_core::Result<()> {
+        let db = self.backend.dbs[map_id];
         self.tx
-            .put(self.backend.dbs[idx], &key, &val, lmdb::WriteFlags::empty())
+            .put(db, &key, &val, lmdb::WriteFlags::empty())
             .map_err(|err| self.backend.schedule_map_resize_if_map_full(err))
             .or_else(error::process_with_unit)
     }
 
-    fn del(&mut self, idx: DbIndex, key: &[u8]) -> storage_core::Result<()> {
+    fn del(&mut self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<()> {
         self.tx
-            .del(self.backend.dbs[idx], &key, None)
+            .del(self.backend.dbs[map_id], &key, None)
             .map_err(|err| self.backend.schedule_map_resize_if_map_full(err))
             .or_else(error::process_with_unit)
     }
@@ -137,7 +127,7 @@ pub struct LmdbImpl {
     env: Arc<lmdb::Environment>,
 
     /// List of open databases
-    dbs: DbList,
+    dbs: DbMapsData<lmdb::Database>,
 
     /// Schedule a database resize of the database map
     map_resize_scheduled: Arc<AtomicBool>,
@@ -253,8 +243,8 @@ impl Lmdb {
         self
     }
 
-    fn open_db(env: &lmdb::Environment, desc: &MapDesc) -> storage_core::Result<lmdb::Database> {
-        let name = Some(desc.name.as_ref());
+    fn open_db(env: &lmdb::Environment, desc: &DbMapDesc) -> storage_core::Result<lmdb::Database> {
+        let name = Some(desc.name());
         let flags = lmdb::DatabaseFlags::default();
         env.create_db(name, flags).or_else(error::process_with_err)
     }
@@ -282,17 +272,13 @@ impl backend::Backend for Lmdb {
         }
         .set_resize_settings(self.resize_settings)
         .set_resize_callback(self.resize_callback.take())
-        .set_max_dbs(desc.len() as u32)
+        .set_max_dbs(desc.db_map_count().as_usize() as u32)
         .set_flags(self.flags)
         .open(&self.path)
         .or_else(error::process_with_err)?;
 
         // Set up all the databases
-        let dbs = desc
-            .iter()
-            .map(|desc| Self::open_db(&environment, desc))
-            .collect::<storage_core::Result<Vec<_>>>()
-            .map(DbList)?;
+        let dbs = desc.db_maps().try_transform(|desc| Self::open_db(&environment, desc))?;
 
         Ok(LmdbImpl {
             env: Arc::new(environment),

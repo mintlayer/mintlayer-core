@@ -27,7 +27,7 @@ pub trait Construct: Sized {
     type From;
 
     /// Construct storage from the initializer and database description
-    fn construct(init: Self::From, desc: crate::info::DbDesc) -> crate::Result<Self>;
+    fn construct(init: Self::From, desc: crate::DbDesc) -> crate::Result<Self>;
 }
 
 /// Core operations on storage without transaction support
