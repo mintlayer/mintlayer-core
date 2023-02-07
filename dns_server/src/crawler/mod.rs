@@ -220,6 +220,7 @@ where
             log::debug!("invalid peer detected at {}", address.to_string());
             self.conn.disconnect(peer_info.peer_id).expect("disconnect must succeed");
             Self::change_address_state(
+                &self.chain_config,
                 &address,
                 address_data,
                 AddressState::Disconnected,
@@ -230,6 +231,7 @@ where
         }
 
         Self::change_address_state(
+            &self.chain_config,
             &address,
             address_data,
             AddressState::Connected,
@@ -254,6 +256,7 @@ where
             .get_mut(&address)
             .expect("address in the Connecting state must be known");
         Self::change_address_state(
+            &self.chain_config,
             &address,
             address_data,
             AddressState::Disconnected,
@@ -269,6 +272,7 @@ where
                 .get_mut(&address)
                 .expect("address in the Connected state must be known");
             Self::change_address_state(
+                &self.chain_config,
                 &address,
                 address_data,
                 AddressState::Disconnected,
@@ -348,6 +352,7 @@ where
     ///
     /// The only place where the address state can be updated.
     fn change_address_state(
+        chain_config: &ChainConfig,
         address: &N::Address,
         address_data: &mut AddressData,
         new_state: AddressState,
@@ -368,10 +373,10 @@ where
 
         // Only add nodes listening on the default port to DNS
         let dns_ip: Option<IpAddr> = match address.as_peer_address() {
-            PeerAddress::Ip4(addr) if addr.port == DEFAULT_BIND_PORT => {
+            PeerAddress::Ip4(addr) if addr.port == chain_config.p2p_port() => {
                 Some(Ipv4Addr::from(addr.ip).into())
             }
-            PeerAddress::Ip6(addr) if addr.port == DEFAULT_BIND_PORT => {
+            PeerAddress::Ip6(addr) if addr.port == chain_config.p2p_port() => {
                 Some(Ipv6Addr::from(addr.ip).into())
             }
             _ => None,
@@ -469,6 +474,7 @@ where
 
         for (address, address_data) in connecting_addresses {
             Self::change_address_state(
+                &self.chain_config,
                 address,
                 address_data,
                 AddressState::Connecting,
@@ -480,6 +486,7 @@ where
             if let Err(e) = res {
                 log::debug!("connection to {} failed: {}", address.to_string(), e);
                 Self::change_address_state(
+                    &self.chain_config,
                     address,
                     address_data,
                     AddressState::Disconnected,
