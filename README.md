@@ -1,4 +1,4 @@
-# Mintlayer core - test - test
+# Mintlayer core - 
 
 https://www.mintlayer.org/
 
