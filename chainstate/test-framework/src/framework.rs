@@ -55,7 +55,7 @@ impl TestFramework {
         self.chainstate
     }
 
-    /// Returns a block builder instance that can be used for a block construction and processing.
+    /// Returns a block builder instance that can be used for block construction and processing.
     pub fn make_block_builder(&mut self) -> BlockBuilder {
         BlockBuilder::new(self)
     }
@@ -77,7 +77,7 @@ impl TestFramework {
     }
 
     /// The default TimeGetter of the test framework allows setting a custom time;
-    /// this function sets the time value to whatever provided
+    /// this function sets the time value to whatever is provided
     pub fn set_time_seconds_since_epoch(&mut self, val: u64) {
         match &self.time_value {
             Some(v) => v.store(val, std::sync::atomic::Ordering::SeqCst),

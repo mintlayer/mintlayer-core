@@ -61,7 +61,7 @@
 //!     // Get the storage map, identified by the index type.
 //!     let mut map = tx.get_mut::<MyMap, _>();
 //!
-//!     // Associate the value "bar" with the key "foo"
+//!     // Associate the value 1337 with the key "foo"
 //!     map.put("foo", &1337)?;
 //!
 //!     // Get the value out again.

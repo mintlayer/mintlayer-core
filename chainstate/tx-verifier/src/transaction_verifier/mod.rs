@@ -170,7 +170,7 @@ pub struct TransactionVerifierDelta {
     accounting_delta_undo: BTreeMap<TransactionSource, AccountingBlockUndoEntry>,
 }
 
-/// The tool used to verify transaction and cache their updated states in memory
+/// The tool used to verify transactions and cache their updated states in memory
 pub struct TransactionVerifier<C, S, U, A> {
     chain_config: C,
     storage: S,
