@@ -13,18 +13,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    error::{P2pError, ProtocolError},
-    net::NetworkingService,
-};
-use chainstate::Locator;
-use common::{
-    chain::block::{Block, BlockHeader},
-    primitives::{Id, Idable},
-};
-use std::collections::VecDeque;
-use utils::ensure;
+use std::collections::BTreeSet;
 
+use common::{chain::block::Block, primitives::Id};
+
+// TODO: FIXME: Use enum as in the previous version?
+// TODO: FIXME: Private fields?
+pub struct PeerContext {
+    /// A number of blocks that a peer has requested. This shouldn't be bigger than the
+    /// `P2pConfig::requested_blocks_limit` value.
+    pub sending_to: usize,
+
+    /// A list of blocks that we requested from this peer.
+    pub requested_from: BTreeSet<Id<Block>>,
+}
+
+// TODO: FIXME: Move to the peer module.
+impl PeerContext {
+    pub fn new() -> Self {
+        Self {
+            sending_to: 0,
+            requested_from: Default::default(),
+        }
+    }
+}
+
+/*
 /// State of the peer
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PeerSyncState {
@@ -156,3 +170,4 @@ mod tests {
         assert_eq!(peer.state, PeerSyncState::UploadingBlocks(header.get_id()));
     }
 }
+*/

@@ -16,13 +16,10 @@
 //! This module is responsible for both initial syncing and further blocks processing (the reaction
 //! to block announcement from peers and the announcement of blocks produced by this node).
 
-// TODO: FIXME:
-// pub mod peer;
-//
-// mod request;
+mod peer_context;
 
 use std::{
-    collections::{BTreeSet, HashMap, VecDeque},
+    collections::{HashMap, VecDeque},
     sync::Arc,
 };
 
@@ -44,32 +41,15 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
-    message::{self, Announcement, BlockListRequest, BlockResponse, SyncRequest, SyncResponse},
+    message::{
+        Announcement, BlockListRequest, BlockResponse, HeaderListRequest, HeaderListResponse,
+        SyncRequest, SyncResponse,
+    },
     net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
+    sync::peer_context::PeerContext,
     utils::oneshot_nofail,
     Result,
 };
-
-// TODO: FIXME: Move to the peer module.
-// TODO: FIXME: Use enum as in the previous version?
-struct PeerContext {
-    /// A number of blocks that a peer has requested. This shouldn't be bigger than the
-    /// `P2pConfig::requested_blocks_limit` value.
-    sending_to: usize,
-
-    /// A list of blocks that we requested from this peer.
-    requested_from: BTreeSet<Id<Block>>,
-}
-
-// TODO: FIXME: Move to the peer module.
-impl PeerContext {
-    pub fn new() -> Self {
-        Self {
-            sending_to: 0,
-            requested_from: Default::default(),
-        }
-    }
-}
 
 // TODO: FIXME: Update the description.
 /// Sync manager is responsible for syncing the local blockchain to the chain with most trust
@@ -257,7 +237,7 @@ where
         let headers = self.chainstate_handle.call(|c| c.get_headers(locator)).await??;
         self.messaging_handle.send_response(
             request_id,
-            SyncResponse::HeaderListResponse(message::HeaderListResponse::new(headers)),
+            SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
         )?;
 
         // TODO: FIXME: Check if we need `pindexBestHeaderSent` in the peer context and if so, update it here.
@@ -522,7 +502,7 @@ where
         let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
         self.messaging_handle.send_request(
             peer,
-            SyncRequest::HeaderListRequest(message::HeaderListRequest::new(locator.clone())),
+            SyncRequest::HeaderListRequest(HeaderListRequest::new(locator.clone())),
         )?;
 
         match self.peers.insert(peer, PeerContext::new()) {
@@ -696,17 +676,6 @@ where
         //         }
         //     }
         // }
-    }
-
-    async fn adjust_peer_score(&mut self, peer: T::PeerId, score: u32, reason: &str) -> Result<()> {
-        log::debug!("Adjusting the '{peer}' peer score by {score}. {reason}");
-
-        let (sender, receiver) = oneshot_nofail::channel();
-        // Sending can only fail if the channel is closed that can only occurs on shutdown.
-        self.peer_manager_sender
-            .send(PeerManagerEvent::AdjustPeerScore(peer, score, sender))?;
-        // The peer manager ignores non-existing peers, and all other errors are considered fatal.
-        receiver.await?
     }
 }
 
