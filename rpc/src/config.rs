@@ -28,7 +28,7 @@ make_config_setting!(HttpRpcEnabled, bool, true);
 make_config_setting!(
     WebsocketBindAddress,
     SocketAddr,
-    SocketAddr::from_str("127.0.0.1:3031").expect("Address must be correct")
+    SocketAddr::from_str("127.0.0.1:3032").expect("Address must be correct")
 );
 
 make_config_setting!(WebsocketRpcEnabled, bool, true);
