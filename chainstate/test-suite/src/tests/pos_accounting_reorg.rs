@@ -175,6 +175,8 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             // Construct fresh `genesis -> b -> c` chain as a reference
             let expected_storage = {
                 let storage = Store::new_empty().unwrap();
+                let block_a_epoch =
+                    chain_config.epoch_index_from_height(&block_a_index.block_height());
                 let mut tf = TestFramework::builder(&mut rng)
                     .with_storage(storage.clone())
                     .with_chainstate_config(tf.chainstate().get_chainstate_config())
@@ -198,9 +200,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                         delegation_balances: DeltaAmountCollection::new(),
                         delegation_data: DeltaDataCollection::new(),
                     };
-                    db_tx
-                        .apply_accounting_delta(*block_a_index.block_id(), &block_a_delta)
-                        .unwrap();
+                    db_tx.set_accounting_epoch_delta(block_a_epoch, &block_a_delta).unwrap();
 
                     db_tx.commit().unwrap();
                 }

@@ -726,7 +726,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
             to_disconnect = self.disconnect_tip(Some(to_disconnect_block.block_id())).log_err()?;
 
             // check if we need to rollback the epoch seal
-            epoch_seal::activate_epoch_seal(
+            epoch_seal::update_epoch_seal(
                 &mut self.db_tx,
                 self.chain_config,
                 epoch_seal::BlockStateEvent::Disconnect(to_disconnect.block_height()),
@@ -772,7 +772,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         // Connect the new chain
         for block_index in new_chain {
             self.connect_tip(&block_index).log_err()?;
-            epoch_seal::activate_epoch_seal(
+            epoch_seal::update_epoch_seal(
                 &mut self.db_tx,
                 self.chain_config,
                 epoch_seal::BlockStateEvent::Connect(block_index.block_height()),

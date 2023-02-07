@@ -237,9 +237,9 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
             id: Id<Block>,
         ) -> crate::Result<Option<AccountingBlockUndo>>;
 
-        fn get_accounting_delta(
+        fn get_accounting_epoch_delta(
             &self,
-            id: Id<Block>,
+            epoch_index: EpochIndex,
         ) -> crate::Result<Option<PoSAccountingDeltaData>>;
 
         fn get_accounting_epoch_undo_delta(
@@ -378,13 +378,13 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
         ) -> crate::Result<()>;
         fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
-        fn apply_accounting_delta(
+        fn set_accounting_epoch_delta(
             &mut self,
-            id: Id<Block>,
+            epoch_index: EpochIndex,
             delta: &PoSAccountingDeltaData,
         ) -> crate::Result<()>;
 
-        fn del_accounting_delta(&mut self, id: Id<Block>) -> crate::Result<()>;
+        fn del_accounting_epoch_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
 
         fn set_accounting_epoch_undo_delta(
             &mut self,

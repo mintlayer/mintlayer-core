@@ -14,11 +14,8 @@
 // limitations under the License.
 
 use chainstate_storage::{BlockchainStorageWrite, SealedStorageTag};
-use common::{
-    chain::{ChainConfig, GenBlockId},
-    primitives::BlockHeight,
-};
-use pos_accounting::{FlushablePoSAccountingView, PoSAccountingDB, PoSAccountingDeltaData};
+use common::{chain::ChainConfig, primitives::BlockHeight};
+use pos_accounting::{FlushablePoSAccountingView, PoSAccountingDB};
 use utils::tap_error_log::LogError;
 
 use crate::BlockError;
@@ -28,7 +25,7 @@ pub enum BlockStateEvent {
     Disconnect(BlockHeight),
 }
 
-pub fn activate_epoch_seal<S: BlockchainStorageWrite>(
+pub fn update_epoch_seal<S: BlockchainStorageWrite>(
     db_tx: &mut S,
     chain_config: &ChainConfig,
     block_op: BlockStateEvent,
@@ -57,33 +54,9 @@ fn advance_epoch_seal<S: BlockchainStorageWrite>(
     let current_epoch_index = chain_config.epoch_index_from_height(&tip_height);
     let epoch_index_to_seal =
         current_epoch_index - chain_config.sealed_epoch_distance_from_tip() as u64;
-    let epoch_length = chain_config.epoch_length().get();
-    let first_block_epoch_to_seal = epoch_index_to_seal * epoch_length;
-    let end_block_epoch_to_seal = first_block_epoch_to_seal + epoch_length;
 
-    // iterate over every block in the epoch and merge every block delta into a singe delta
-    let epoch_delta = (first_block_epoch_to_seal..end_block_epoch_to_seal)
-        .try_fold(
-            None,
-            |delta: Option<PoSAccountingDeltaData>, height| -> Result<_, BlockError> {
-                let genblock_id = db_tx
-                    .get_block_id_by_height(&BlockHeight::new(height))?
-                    .ok_or_else(|| BlockError::BlockAtHeightNotFound(BlockHeight::new(height)))?;
-                match genblock_id.classify(chain_config) {
-                    GenBlockId::Genesis(_) => (), /* skip genesis block for now */
-                    GenBlockId::Block(block_id) => {
-                        if let Some(block_delta) = db_tx.get_accounting_delta(block_id)? {
-                            let mut delta = delta.unwrap_or_default();
-                            delta.merge_with_delta(block_delta)?;
-                            return Ok(Some(delta));
-                        }
-                    }
-                };
-                // TODO: delete block deltas?
-                Ok(delta)
-            },
-        )
-        .log_err()?;
+    // retrieve delta for the epoch to seal
+    let epoch_delta = db_tx.get_accounting_epoch_delta(epoch_index_to_seal).log_err()?;
 
     // it is possible that an epoch doesn't have any accounting data so no delta is stored in that case
     if let Some(epoch_delta) = epoch_delta {
@@ -110,6 +83,7 @@ fn rollback_epoch_seal<S: BlockchainStorageWrite>(
         .checked_sub(chain_config.sealed_epoch_distance_from_tip() as u64)
         .expect("always positive");
 
+    // retrieve delta undo for the epoch to unseal
     let epoch_undo = db_tx
         .get_accounting_epoch_undo_delta(epoch_index_to_unseal)
         .map_err(BlockError::from)

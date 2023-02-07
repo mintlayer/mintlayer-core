@@ -184,11 +184,11 @@ macro_rules! impl_read_ops {
                 self.read::<db::DBAccountingBlockUndo, _, _>(id)
             }
 
-            fn get_accounting_delta(
+            fn get_accounting_epoch_delta(
                 &self,
-                id: Id<Block>,
+                epoch_index: EpochIndex,
             ) -> crate::Result<Option<PoSAccountingDeltaData>> {
-                self.read::<db::DBAccountingBlockDelta, _, _>(id)
+                self.read::<db::DBAccountingEpochDelta, _, _>(epoch_index)
             }
 
             fn get_accounting_epoch_undo_delta(
@@ -445,16 +445,19 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         self.0.get_mut::<db::DBAccountingBlockUndo, _>().del(id).map_err(Into::into)
     }
 
-    fn apply_accounting_delta(
+    fn set_accounting_epoch_delta(
         &mut self,
-        id: Id<Block>,
+        epoch_index: EpochIndex,
         delta: &PoSAccountingDeltaData,
     ) -> crate::Result<()> {
-        self.write::<db::DBAccountingBlockDelta, _, _, _>(id, delta)
+        self.write::<db::DBAccountingEpochDelta, _, _, _>(epoch_index, delta)
     }
 
-    fn del_accounting_delta(&mut self, id: Id<Block>) -> crate::Result<()> {
-        self.0.get_mut::<db::DBAccountingBlockDelta, _>().del(id).map_err(Into::into)
+    fn del_accounting_epoch_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()> {
+        self.0
+            .get_mut::<db::DBAccountingEpochDelta, _>()
+            .del(epoch_index)
+            .map_err(Into::into)
     }
 
     fn set_accounting_epoch_undo_delta(

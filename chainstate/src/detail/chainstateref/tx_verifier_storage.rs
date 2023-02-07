@@ -265,14 +265,23 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
         // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
         match tx_source {
             TransactionSource::Chain(id) => {
-                let mut current_delta = self
+                let block_index = self
                     .db_tx
-                    .get_accounting_delta(id)
+                    .get_block_index(&id)
+                    .map_err(TransactionVerifierStorageError::from)?
+                    .ok_or(
+                        TransactionVerifierStorageError::GenBlockIndexRetrievalFailed(id.into()),
+                    )?;
+                let current_epoch_index =
+                    self.chain_config().epoch_index_from_height(&block_index.block_height());
+                let mut current_epoch_delta = self
+                    .db_tx
+                    .get_accounting_epoch_delta(current_epoch_index)
                     .map_err(TransactionVerifierStorageError::from)?
                     .unwrap_or_default();
-                current_delta.merge_with_delta(delta.clone())?;
+                current_epoch_delta.merge_with_delta(delta.clone())?;
                 self.db_tx
-                    .apply_accounting_delta(id, &current_delta)
+                    .set_accounting_epoch_delta(current_epoch_index, &current_epoch_delta)
                     .map_err(TransactionVerifierStorageError::from)
             }
             TransactionSource::Mempool => {

@@ -100,8 +100,11 @@ pub trait BlockchainStorageRead:
     /// Get accounting undo for specific block
     fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
 
-    /// Get accounting delta for specific block
-    fn get_accounting_delta(&self, id: Id<Block>) -> crate::Result<Option<PoSAccountingDeltaData>>;
+    /// Get accounting delta for specific epoch
+    fn get_accounting_epoch_delta(
+        &self,
+        epoch_index: EpochIndex,
+    ) -> crate::Result<Option<PoSAccountingDeltaData>>;
 
     /// Get accounting undo delta for specific epoch
     fn get_accounting_epoch_undo_delta(
@@ -186,14 +189,14 @@ pub trait BlockchainStorageWrite:
     fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
     // Set accounting delta for specific block
-    fn apply_accounting_delta(
+    fn set_accounting_epoch_delta(
         &mut self,
-        id: Id<Block>,
+        epoch_index: EpochIndex,
         delta: &PoSAccountingDeltaData,
     ) -> crate::Result<()>;
 
     // Remove accounting delta for specific block
-    fn del_accounting_delta(&mut self, id: Id<Block>) -> crate::Result<()>;
+    fn del_accounting_epoch_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
 
     // Set accounting undo for specific epoch
     fn set_accounting_epoch_undo_delta(
