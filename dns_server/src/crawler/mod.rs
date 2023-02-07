@@ -67,7 +67,7 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(60);
 /// How many outbound connection attempts can be made per heartbeat
 const MAX_CONNECTS_PER_HEARTBEAT: usize = 10;
 
-/// When the server drops the unreachable node address. Useful for for negative caching. Should be about an hour.
+/// When the server drops the unreachable node address. Useful for negative caching. Should be about an hour.
 const PURGE_UNREACHABLE_FAIL_COUNT: u32 = 4;
 
 /// When the server drops the unreachable node address that was once reachable. This should take about a month.
@@ -462,7 +462,7 @@ where
         true
     }
 
-    /// Address list maintaince
+    /// Address list maintenance
     fn heartbeat(&mut self) {
         let now = tokio::time::Instant::now();
 
