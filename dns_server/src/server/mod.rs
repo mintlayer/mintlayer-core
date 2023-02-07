@@ -55,13 +55,13 @@ pub struct Server {
     command_tx: mpsc::UnboundedReceiver<ServerCommands>,
 }
 
-// Same values as in `https://github.com/sipa/bitcoin-seeder/blob/master/dns.cpp`
+// Same values as in `https://github.com/sipa/bitcoin-seeder/blob/3ef602de83a76bc95a06867d4bfc239f13992140/dns.cpp`
 const SOA_REFRESH: i32 = 604800;
 const SOA_RETRY: i32 = 86400;
 const SOA_EXPIRE: i32 = 2592000;
 const SOA_MINIMUM: u32 = 604800;
 
-// Same values as in `https://github.com/sipa/bitcoin-seeder/blob/master/dns.cpp`
+// Same values as in `https://github.com/sipa/bitcoin-seeder/blob/3ef602de83a76bc95a06867d4bfc239f13992140/dns.cpp`
 const TTL_IP: u32 = 3600;
 const TTL_NS: u32 = 21600;
 const TTL_SOA: u32 = 21600;

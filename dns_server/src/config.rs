@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use clap::Parser;
-use directories::UserDirs;
+use directories::BaseDirs;
 
 #[derive(Parser, Debug)]
 pub struct DnsServerConfig {
@@ -47,12 +47,12 @@ pub struct DnsServerConfig {
     pub mbox: String,
 }
 
-const DEFAULT_DATA_DIR_NAME: &str = ".mintlayer";
+const DEFAULT_DATA_DIR_NAME: &str = "mintlayer_dns_server";
 
 fn default_data_dir() -> String {
-    UserDirs::new()
-        .expect("Unable to get home directory")
-        .home_dir()
+    BaseDirs::new()
+        .expect("BaseDirs build failed")
+        .data_dir()
         .join(DEFAULT_DATA_DIR_NAME)
         .to_str()
         .expect("expected valid default data dir path")
