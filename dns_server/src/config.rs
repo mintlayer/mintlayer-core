@@ -42,7 +42,8 @@ pub struct DnsServerConfig {
     #[clap(long)]
     pub ns: String,
 
-    /// E-Mail address reported in SOA records (RNAME)
+    /// E-Mail address reported in SOA records (RNAME).
+    /// `@` symbol should be replaced with `.`.
     #[clap(long)]
     pub mbox: String,
 }
