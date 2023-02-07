@@ -17,6 +17,11 @@ jobs:
   rustfmt:
     runs-on: ubuntu-latest
     steps:
+      - id: skip-check
+        uses: fkirc/skip-duplicate-actions@v5.3.0
+        with:
+          concurrent_skipping: "same_content_newer"
+          skip_after_successful_duplicate: "true"
       - uses: actions/checkout@v2
       - name: Install rust stable
         uses: actions-rs/toolchain@v1
@@ -36,6 +41,11 @@ jobs:
     runs-on: windows-latest
     # if: github.ref == 'refs/heads/master'
     steps:
+    - id: skip-check
+      uses: fkirc/skip-duplicate-actions@v5.3.0
+      with:
+        concurrent_skipping: "same_content_newer"
+        skip_after_successful_duplicate: "true"
     - uses: actions/checkout@v2
     - name: Install rust stable
       uses: actions-rs/toolchain@v1
@@ -66,6 +76,11 @@ jobs:
     runs-on: ubuntu-latest
     # if: github.ref == 'refs/heads/master'
     steps:
+    - id: skip-check
+      uses: fkirc/skip-duplicate-actions@v5.3.0
+      with:
+        concurrent_skipping: "same_content_newer"
+        skip_after_successful_duplicate: "true"
     - uses: actions/checkout@v2
     - name: Install rust stable
       uses: actions-rs/toolchain@v1
@@ -96,6 +111,11 @@ jobs:
     runs-on: macos-latest
     # if: github.ref == 'refs/heads/master'
     steps:
+    - id: skip-check
+      uses: fkirc/skip-duplicate-actions@v5.3.0
+      with:
+        concurrent_skipping: "same_content_newer"
+        skip_after_successful_duplicate: "true"
     - uses: actions/checkout@v2
     - name: Install rust stable
       uses: actions-rs/toolchain@v1
