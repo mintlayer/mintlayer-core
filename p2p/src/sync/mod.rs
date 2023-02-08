@@ -280,10 +280,10 @@ where
             .get_mut(&peer)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        debug_assert!(peer_state.sending_to <= requested_blocks_limit);
-        block_ids.truncate(requested_blocks_limit - peer_state.sending_to);
+        debug_assert!(peer_state.num_blocks_to_send <= requested_blocks_limit);
+        block_ids.truncate(requested_blocks_limit - peer_state.num_blocks_to_send);
 
-        peer_state.sending_to += block_ids.len();
+        peer_state.num_blocks_to_send += block_ids.len();
         self.blocks_queue.extend(block_ids.into_iter().map(|id| (peer, request_id, id)));
 
         Ok(())
@@ -364,11 +364,12 @@ where
             .call(|c| c.filter_already_existing_blocks(headers))
             .await??;
 
-        // TODO: FIXME: NEXT: Recheck!
-        // TODO: FIXME: Save remaining available headers in the peer context.
+        for header in headers.clone() {
+            self.chainstate_handle.call(|c| c.preliminary_header_check(header)).await??;
+        }
 
         if headers.len() > self.p2p_config.requested_blocks_limit.clone().into() {
-            let remaining_headers =
+            peer_state.known_headers =
                 headers.split_off(self.p2p_config.requested_blocks_limit.clone().into());
         }
 
@@ -377,22 +378,9 @@ where
             peer,
             SyncRequest::BlockListRequest(BlockListRequest::new(block_ids.clone())),
         )?;
-        peer_state.requested_from.extend(block_ids);
+        peer_state.requested_blocks.extend(block_ids);
 
-        todo!();
-        todo!()
-
-        // match self.validate_header_response(&peer_id, headers).await {
-        //     Ok(Some(header)) => self.send_block_request(peer_id, header.get_id()).await,
-        //     Ok(None) => {
-        //         self.peers
-        //             .get_mut(&peer_id)
-        //             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
-        //             .set_state(peer::PeerSyncState::Idle);
-        //         Ok(())
-        //     }
-        //     Err(err) => Err(err),
-        // }
+        Ok(())
     }
 
     // TODO: This shouldn't be public.
@@ -409,11 +397,10 @@ where
             .get_mut(&peer)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        if peer_state.requested_from.take(&block.get_id()).is_none() {
+        if peer_state.requested_blocks.take(&block.get_id()).is_none() {
             return Err(P2pError::ProtocolError(ProtocolError::UnrequestedBlock));
         }
 
-        //let a = self.chainstate_handle.call(|c| c.preliminary_block_check(block)).await;
         match self
             .chainstate_handle
             .call_mut(|c| {
@@ -427,9 +414,14 @@ where
             Err(e) => return Err(P2pError::ChainstateError(e)),
         }
 
-        if peer_state.requested_from.is_empty() {
-            // TODO: FIXME: Request more blocks.
-            // TODO: FIXME: And ask for more headers.
+        if peer_state.requested_blocks.is_empty() {
+            if peer_state.known_headers.is_empty() {
+                // Request more headers.
+                // TODO: FIXME: NEXT:
+            } else {
+                // Download remaining blocks.
+                // TODO: FIXME:
+            }
         }
 
         Ok(())
@@ -545,7 +537,7 @@ where
             // This function is only called when the queue isn't empty.
             .expect("The block queue is empty");
         match self.peers.get_mut(&peer) {
-            Some(state) => state.sending_to -= 1,
+            Some(state) => state.num_blocks_to_send -= 1,
             None => return Ok(()),
         }
 
@@ -596,8 +588,6 @@ where
             // request/response after a peer is disconnected, but before receiving the disconnect
             // event. Therefore this error can be safely ignored.
             P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
-            P2pError::ChainstateError(FIXME) => todo!(),
-            P2pError::StorageFailure(FIXME) => todo!(),
             // Some of these errors aren't technically fatal, but they shouldn't occur in the sync
             // manager.
             e @ (P2pError::DialError(_)
@@ -605,9 +595,13 @@ where
             | P2pError::PeerError(_)
             | P2pError::NoiseHandshakeError(_)
             | P2pError::PublishError(_)
-            | P2pError::InvalidConfigurationValue(_)) => Err(e),
+            | P2pError::InvalidConfigurationValue(_)
+            // TODO: FIXME: Recheck chainstate errors.
+            | P2pError::ChainstateError(_)) => Err(e),
             // Fatal errors, simply propagate them to stop the sync manager.
-            e @ (P2pError::ChannelClosed | P2pError::SubsystemFailure) => Err(e),
+            e @ (P2pError::ChannelClosed
+            | P2pError::SubsystemFailure
+            | P2pError::StorageFailure(_)) => Err(e),
         }
     }
 }

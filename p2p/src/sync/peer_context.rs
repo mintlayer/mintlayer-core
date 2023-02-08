@@ -15,25 +15,33 @@
 
 use std::collections::BTreeSet;
 
-use common::{chain::block::Block, primitives::Id};
+use common::{
+    chain::block::{Block, BlockHeader},
+    primitives::Id,
+};
 
 // TODO: FIXME: Use enum as in the previous version?
-// TODO: FIXME: Private fields?
 pub struct PeerContext {
     /// A number of blocks that a peer has requested. This shouldn't be bigger than the
-    /// `P2pConfig::requested_blocks_limit` value.
-    pub sending_to: usize,
+    /// `P2pConfig::requested_blocks_limit` value. The actual block identifiers are stored in
+    /// `BlockSyncManager::blocks_queue`.
+    pub num_blocks_to_send: usize,
 
     /// A list of blocks that we requested from this peer.
-    pub requested_from: BTreeSet<Id<Block>>,
+    pub requested_blocks: BTreeSet<Id<Block>>,
+
+    /// A list of headers received via the `HeaderListResponse` message that we haven't yet
+    /// requested the blocks for.
+    pub known_headers: Vec<BlockHeader>,
 }
 
 // TODO: FIXME: Move to the peer module.
 impl PeerContext {
     pub fn new() -> Self {
         Self {
-            sending_to: 0,
-            requested_from: Default::default(),
+            num_blocks_to_send: 0,
+            requested_blocks: Default::default(),
+            known_headers: Default::default(),
         }
     }
 }
