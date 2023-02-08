@@ -24,7 +24,7 @@ use common::primitives::{signed_amount::SignedAmount, Amount};
 
 use crate::{
     error::Error, pool::delta::data::PoSAccountingDeltaData, storage::PoSAccountingStorageWrite,
-    DelegationId, DeltaMergeUndo, PoolId,
+    DelegationId, DeltaMergeUndo, PoolId, StorageTag,
 };
 
 pub mod operator_impls;
@@ -33,17 +33,21 @@ pub mod view_impls;
 mod helpers;
 use helpers::BorrowedStorageValue;
 
-pub struct PoSAccountingDB<S> {
+pub struct PoSAccountingDB<S, T> {
     store: S,
+    _phantom: std::marker::PhantomData<T>,
 }
 
-impl<S> PoSAccountingDB<S> {
+impl<S, T> PoSAccountingDB<S, T> {
     pub fn new(store: S) -> Self {
-        Self { store }
+        Self {
+            store,
+            _phantom: Default::default(),
+        }
     }
 }
 
-impl<S: PoSAccountingStorageWrite> PoSAccountingDB<S> {
+impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
     pub fn merge_with_delta(
         &mut self,
         other: PoSAccountingDeltaData,
@@ -169,16 +173,16 @@ impl<S: PoSAccountingStorageWrite> PoSAccountingDB<S> {
         Ok(DeltaAmountCollection::from_iter(undo.into_iter()))
     }
 
-    fn merge_data_generic<K: Ord + Copy, T: Clone + Eq, Getter, Setter, Deleter>(
+    fn merge_data_generic<K: Ord + Copy, V: Clone + Eq, Getter, Setter, Deleter>(
         &mut self,
-        delta: DeltaDataCollection<K, T>,
+        delta: DeltaDataCollection<K, V>,
         getter: Getter,
         setter: Setter,
         deleter: Deleter,
-    ) -> Result<DeltaDataUndoCollection<K, T>, Error>
+    ) -> Result<DeltaDataUndoCollection<K, V>, Error>
     where
-        Getter: Fn(&S, K) -> Result<Option<T>, storage_result::Error>,
-        Setter: FnMut(&mut S, K, &T) -> Result<(), storage_result::Error>,
+        Getter: Fn(&S, K) -> Result<Option<V>, storage_result::Error>,
+        Setter: FnMut(&mut S, K, &V) -> Result<(), storage_result::Error>,
         Deleter: FnMut(&mut S, K) -> Result<(), storage_result::Error>,
     {
         let mut store = BorrowedStorageValue::new(&mut self.store, getter, setter, deleter);
@@ -198,16 +202,16 @@ impl<S: PoSAccountingStorageWrite> PoSAccountingDB<S> {
         Ok(DeltaDataUndoCollection::from_data(undo))
     }
 
-    fn undo_merge_data_generic<K: Ord + Copy, T: Clone + Eq, Getter, Setter, Deleter>(
+    fn undo_merge_data_generic<K: Ord + Copy, V: Clone + Eq, Getter, Setter, Deleter>(
         &mut self,
-        undo: DeltaDataUndoCollection<K, T>,
+        undo: DeltaDataUndoCollection<K, V>,
         getter: Getter,
         setter: Setter,
         deleter: Deleter,
     ) -> Result<(), Error>
     where
-        Getter: Fn(&S, K) -> Result<Option<T>, storage_result::Error>,
-        Setter: FnMut(&mut S, K, &T) -> Result<(), storage_result::Error>,
+        Getter: Fn(&S, K) -> Result<Option<V>, storage_result::Error>,
+        Setter: FnMut(&mut S, K, &V) -> Result<(), storage_result::Error>,
         Deleter: FnMut(&mut S, K) -> Result<(), storage_result::Error>,
     {
         let mut store = BorrowedStorageValue::new(&mut self.store, getter, setter, deleter);

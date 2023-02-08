@@ -16,44 +16,48 @@
 use crate::{
     error::Error,
     storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
+    StorageTag,
 };
 use chainstate_types::storage_result;
 
-pub struct BorrowedStorageValue<'a, S, Getter, Setter, Deleter> {
+pub struct BorrowedStorageValue<'a, T, S, Getter, Setter, Deleter> {
     store: &'a mut S,
     getter: Getter,
     setter: Setter,
     deleter: Deleter,
+
+    _phantom: std::marker::PhantomData<T>,
 }
 
-impl<'a, S, Getter, Setter, Deleter> BorrowedStorageValue<'a, S, Getter, Setter, Deleter> {
+impl<'a, T, S, Getter, Setter, Deleter> BorrowedStorageValue<'a, T, S, Getter, Setter, Deleter> {
     pub fn new(store: &'a mut S, getter: Getter, setter: Setter, deleter: Deleter) -> Self {
         Self {
             store,
             getter,
             setter,
             deleter,
+            _phantom: Default::default(),
         }
     }
 }
 
-impl<'a, S: PoSAccountingStorageRead, Getter, Setter, Deleter>
-    BorrowedStorageValue<'a, S, Getter, Setter, Deleter>
+impl<'a, T: StorageTag, S: PoSAccountingStorageRead<T>, Getter, Setter, Deleter>
+    BorrowedStorageValue<'a, T, S, Getter, Setter, Deleter>
 {
-    pub fn get<K: Ord + Copy, T: Clone>(&self, id: K) -> Result<Option<T>, Error>
+    pub fn get<K: Ord + Copy, V: Clone>(&self, id: K) -> Result<Option<V>, Error>
     where
-        Getter: Fn(&S, K) -> Result<Option<T>, storage_result::Error>,
+        Getter: Fn(&S, K) -> Result<Option<V>, storage_result::Error>,
     {
         (self.getter)(self.store, id).map_err(Error::StorageError)
     }
 }
 
-impl<'a, S: PoSAccountingStorageWrite, Getter, Setter, Deleter>
-    BorrowedStorageValue<'a, S, Getter, Setter, Deleter>
+impl<'a, T: StorageTag, S: PoSAccountingStorageWrite<T>, Getter, Setter, Deleter>
+    BorrowedStorageValue<'a, T, S, Getter, Setter, Deleter>
 {
-    pub fn set<K: Ord + Copy, T: Clone>(&mut self, id: K, value: T) -> Result<(), Error>
+    pub fn set<K: Ord + Copy, V: Clone>(&mut self, id: K, value: V) -> Result<(), Error>
     where
-        Setter: FnMut(&mut S, K, T) -> Result<(), storage_result::Error>,
+        Setter: FnMut(&mut S, K, V) -> Result<(), storage_result::Error>,
     {
         (self.setter)(self.store, id, value).map_err(Error::StorageError)
     }

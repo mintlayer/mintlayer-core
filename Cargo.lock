@@ -507,6 +507,7 @@ dependencies = [
 name = "chainstate-test-suite"
 version = "0.1.0"
 dependencies = [
+ "accounting",
  "chainstate",
  "chainstate-storage",
  "chainstate-test-framework",

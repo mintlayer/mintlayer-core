@@ -23,7 +23,7 @@ use super::{
 use chainstate_types::PropertyQueryError;
 use common::{
     chain::{Block, GenBlock, Transaction},
-    primitives::{BlockDistance, Id},
+    primitives::{BlockDistance, BlockHeight, Id},
 };
 use consensus::ConsensusVerificationError;
 use thiserror::Error;
@@ -47,6 +47,8 @@ pub enum BlockError {
     InvariantErrorInvalidTip,
     #[error("The previous block not found")]
     PrevBlockNotFound,
+    #[error("Block at height {0} not found")]
+    BlockAtHeightNotFound(BlockHeight),
     #[error("Block {0} already exists")]
     BlockAlreadyExists(Id<Block>),
     #[error("Failed to commit block state update to database for block: {0} after {1} attempts with error {2}")]
@@ -59,6 +61,8 @@ pub enum BlockError {
     TxIndexConfigError,
     #[error("Transaction index construction error: {0}")]
     TxIndexConstructionError(#[from] TxIndexError),
+    #[error("PoS accounting error: {0}")]
+    PoSAccountingError(#[from] pos_accounting::Error),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

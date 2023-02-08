@@ -43,12 +43,14 @@ impl BanScore for BlockError {
             BlockError::InvariantErrorInvalidTip => 0,
             // Even though this should've been caught by orphans check, its mere presence means a peer sent a block they're not supposed to send
             BlockError::PrevBlockNotFound => 100,
+            BlockError::BlockAtHeightNotFound(_) => 0,
             BlockError::BlockAlreadyExists(_) => 0,
             BlockError::DatabaseCommitError(_, _, _) => 0,
             BlockError::BlockProofCalculationError(_) => 100,
             BlockError::TransactionVerifierError(err) => err.ban_score(),
             BlockError::TxIndexConfigError => 0,
             BlockError::TxIndexConstructionError(_) => 100,
+            BlockError::PoSAccountingError(err) => err.ban_score(),
         }
     }
 }

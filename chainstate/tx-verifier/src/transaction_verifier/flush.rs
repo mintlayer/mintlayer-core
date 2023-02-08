@@ -100,6 +100,10 @@ pub fn flush_to_storage(
     // flush pos accounting
     storage.batch_write_delta(consumed.accounting_delta)?;
 
+    for (tx_source, delta) in consumed.accounting_block_deltas {
+        storage.apply_accounting_delta(tx_source, &delta)?;
+    }
+
     // flush accounting block undo
     for (tx_source, entry) in consumed.accounting_delta_undo {
         if entry.is_fresh {

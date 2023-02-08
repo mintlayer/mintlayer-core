@@ -31,11 +31,20 @@ use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::semver::SemVer;
 use crate::primitives::{Amount, BlockDistance, BlockHeight};
 use std::collections::BTreeMap;
+use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
 pub const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
+const DEFAULT_EPOCH_LENGTH: NonZeroU64 =
+    match NonZeroU64::new((5 * 24 * 60 * 60) / DEFAULT_TARGET_BLOCK_SPACING.as_secs()) {
+        Some(v) => v,
+        None => panic!("epoch length cannot be 0"),
+    };
+const DEFAULT_SEALED_EPOCH_DISTANCE_FROM_TIP: usize = 2;
+
+pub type EpochIndex = u64;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ChainType {
@@ -91,6 +100,10 @@ pub struct ChainConfig {
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
+    /// Length of an epoch in blocks
+    epoch_length: NonZeroU64,
+    /// Distance from the tip of the chain to the sealed state in epochs.
+    sealed_epoch_distance_from_tip: usize,
     token_min_issuance_fee: Amount,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
@@ -159,6 +172,14 @@ impl ChainConfig {
         &self.max_future_block_time_offset
     }
 
+    pub fn epoch_length(&self) -> NonZeroU64 {
+        self.epoch_length
+    }
+
+    pub fn sealed_epoch_distance_from_tip(&self) -> usize {
+        self.sealed_epoch_distance_from_tip
+    }
+
     pub fn block_subsidy_at_height(&self, height: &BlockHeight) -> Amount {
         self.emission_schedule().subsidy(*height).to_amount_atoms()
     }
@@ -173,6 +194,21 @@ impl ChainConfig {
 
     pub fn max_block_size_from_smart_contracts(&self) -> usize {
         self.max_block_size_with_smart_contracts
+    }
+
+    #[must_use]
+    pub fn epoch_index_from_height(&self, height: &BlockHeight) -> EpochIndex {
+        let height: u64 = (*height).into();
+        height / self.epoch_length
+    }
+
+    pub fn is_due_for_epoch_seal(&self, height: &BlockHeight) -> bool {
+        let sealed_epoch_distance_from_tip = self.sealed_epoch_distance_from_tip() as u64;
+        let current_epoch_index = self.epoch_index_from_height(height);
+        let next_height: u64 = height.next_height().into();
+
+        (next_height % self.epoch_length() == 0)
+            && current_epoch_index >= sealed_epoch_distance_from_tip
     }
 
     pub fn token_min_issuance_fee(&self) -> Amount {
@@ -305,6 +341,7 @@ pub fn create_unit_test_config() -> ChainConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     #[test]
     fn mainnet_creation() {
@@ -321,5 +358,74 @@ mod tests {
         let config2 = Builder::new(ChainType::Regtest).magic_bytes([1, 2, 3, 4]).build();
 
         assert_ne!(config1.magic_bytes(), config2.magic_bytes());
+    }
+
+    #[rstest]
+    #[case(NonZeroU64::new(1).unwrap(), 0, BlockHeight::from(0), true)]
+    #[case(NonZeroU64::new(1).unwrap(), 0, BlockHeight::from(1), true)]
+    #[case(NonZeroU64::new(1).unwrap(), 0, BlockHeight::from(2), true)]
+    #[case(NonZeroU64::new(1).unwrap(), 0, BlockHeight::from(3), true)]
+    //----------------------------------------------------------------//
+    #[case(NonZeroU64::new(1).unwrap(), 1, BlockHeight::from(0), false)]
+    #[case(NonZeroU64::new(1).unwrap(), 1, BlockHeight::from(1), true)]
+    #[case(NonZeroU64::new(1).unwrap(), 1, BlockHeight::from(2), true)]
+    #[case(NonZeroU64::new(1).unwrap(), 1, BlockHeight::from(3), true)]
+    //----------------------------------------------------------------//
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(0), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(1), true)]
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(2), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(3), true)]
+    //----------------------------------------------------------------//
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(0), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(1), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(2), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(3), true)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(4), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(5), true)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(6), false)]
+    //----------------------------------------------------------------//
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(0), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(1), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(2), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(3), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(4), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(5), true)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(6), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(7), true)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(8), false)]
+    fn is_due_for_epoch_seal(
+        #[case] epoch_length: NonZeroU64,
+        #[case] seal_to_tip_distance: usize,
+        #[case] block_height: BlockHeight,
+        #[case] expected: bool,
+    ) {
+        let config = Builder::test_chain()
+            .epoch_length(epoch_length)
+            .sealed_epoch_distance_from_tip(seal_to_tip_distance)
+            .build();
+        assert_eq!(expected, config.is_due_for_epoch_seal(&block_height));
+    }
+
+    #[rstest]
+    #[case(NonZeroU64::new(1).unwrap(), BlockHeight::from(0), 0)]
+    #[case(NonZeroU64::new(1).unwrap(), BlockHeight::from(1), 1)]
+    #[case(NonZeroU64::new(1).unwrap(), BlockHeight::from(2), 2)]
+    #[case(NonZeroU64::new(2).unwrap(), BlockHeight::from(0), 0)]
+    #[case(NonZeroU64::new(2).unwrap(), BlockHeight::from(1), 0)]
+    #[case(NonZeroU64::new(2).unwrap(), BlockHeight::from(2), 1)]
+    #[case(NonZeroU64::new(2).unwrap(), BlockHeight::from(3), 1)]
+    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(0), 0)]
+    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(1), 0)]
+    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(2), 0)]
+    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(3), 1)]
+    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(4), 1)]
+    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(5), 1)]
+    fn epoch_index_from_height(
+        #[case] epoch_length: NonZeroU64,
+        #[case] block_height: BlockHeight,
+        #[case] expected: EpochIndex,
+    ) {
+        let config = Builder::test_chain().epoch_length(epoch_length).build();
+        assert_eq!(expected, config.epoch_index_from_height(&block_height));
     }
 }

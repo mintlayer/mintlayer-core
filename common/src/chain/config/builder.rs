@@ -23,6 +23,7 @@ use crate::primitives::{id::WithId, semver::SemVer, BlockHeight};
 use crate::primitives::{Amount, BlockDistance};
 
 use std::collections::BTreeMap;
+use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -96,6 +97,8 @@ pub struct Builder {
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
+    epoch_length: NonZeroU64,
+    sealed_epoch_distance_from_tip: usize,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     genesis_block: GenesisBlockInit,
     emission_schedule: EmissionScheduleInit,
@@ -124,6 +127,8 @@ impl Builder {
             max_block_size_with_standard_txs: super::MAX_BLOCK_TXS_SIZE,
             max_block_size_with_smart_contracts: super::MAX_BLOCK_CONTRACTS_SIZE,
             max_future_block_time_offset: super::DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
+            epoch_length: super::DEFAULT_EPOCH_LENGTH,
+            sealed_epoch_distance_from_tip: super::DEFAULT_SEALED_EPOCH_DISTANCE_FROM_TIP,
             target_block_spacing: super::DEFAULT_TARGET_BLOCK_SPACING,
             genesis_block: chain_type.default_genesis_init(),
             emission_schedule: EmissionScheduleInit::Mainnet,
@@ -160,6 +165,8 @@ impl Builder {
             max_block_size_with_standard_txs,
             max_block_size_with_smart_contracts,
             max_future_block_time_offset,
+            epoch_length,
+            sealed_epoch_distance_from_tip,
             target_block_spacing,
             genesis_block,
             emission_schedule,
@@ -203,6 +210,8 @@ impl Builder {
             max_block_size_with_standard_txs,
             max_block_size_with_smart_contracts,
             max_future_block_time_offset,
+            epoch_length,
+            sealed_epoch_distance_from_tip,
             target_block_spacing,
             genesis_block,
             height_checkpoint_data: BTreeMap::new(),
@@ -246,6 +255,8 @@ impl Builder {
     builder_method!(max_block_size_with_smart_contracts: usize);
     builder_method!(net_upgrades: NetUpgrades<UpgradeVersion>);
     builder_method!(empty_consensus_reward_maturity_distance: BlockDistance);
+    builder_method!(epoch_length: NonZeroU64);
+    builder_method!(sealed_epoch_distance_from_tip: usize);
 
     /// Set the genesis block to be the unit test version
     pub fn genesis_unittest(mut self, premine_destination: Destination) -> Self {

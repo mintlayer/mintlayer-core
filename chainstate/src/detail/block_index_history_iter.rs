@@ -19,7 +19,7 @@ use logging::log;
 
 use super::GenBlockIndex;
 
-/// An iterator that starts at some block starting from a given it, and at every `next()` member call will provide the previous block index,
+/// An iterator that starts at some block, then at every `next()` call, will provide the previous block index,
 /// The last viable block index is of the genesis block
 pub struct BlockIndexHistoryIterator<'a, H> {
     next_id: Option<Id<GenBlock>>,

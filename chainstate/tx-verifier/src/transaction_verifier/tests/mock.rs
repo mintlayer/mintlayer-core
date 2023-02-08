@@ -111,6 +111,12 @@ mockall::mock! {
             &mut self,
             tx_source: TransactionSource,
         ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn apply_accounting_delta(
+            &mut self,
+            tx_source: TransactionSource,
+            delta: &PoSAccountingDeltaData,
+        ) -> Result<(), TransactionVerifierStorageError>;
     }
 
     impl UtxosStorageRead for Store {
