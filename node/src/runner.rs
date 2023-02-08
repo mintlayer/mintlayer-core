@@ -178,15 +178,15 @@ fn prepare_data_dir<F: Fn() -> PathBuf>(
     let data_dir = match datadir_path_opt {
         Some(data_dir) => {
             if !data_dir.exists() {
-                return Err(anyhow::anyhow!("Custom data directory '{data_dir:?}' does not exist. Please create it or use the default data directory."));
+                return Err(anyhow::anyhow!("Custom data directory '{}' does not exist. Please create it or use the default data directory.", data_dir.display()));
             }
             data_dir.clone()
         }
         None => {
             std::fs::create_dir_all(default_data_dir_getter()).with_context(|| {
                 format!(
-                    "Failed to create the '{:?}' data directory",
-                    default_data_dir_getter()
+                    "Failed to create the '{}' data directory",
+                    default_data_dir_getter().display()
                 )
             })?;
             default_data_dir_getter()
