@@ -30,11 +30,9 @@ use std::{
     collections::{btree_map::Entry, BTreeMap},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     str::FromStr,
-    sync::Arc,
     time::Duration,
 };
 
-use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom};
 use logging::log;
 use p2p::{
@@ -53,7 +51,6 @@ use p2p::{
 use tokio::sync::mpsc;
 
 use crate::{
-    config::DnsServerConfig,
     crawler::storage::{DnsServerStorageWrite, DnsServerTransactionRw},
     dns_server::ServerCommands,
     error::DnsServerError,
@@ -102,9 +99,18 @@ struct AddressData {
     was_reachable: bool,
 }
 
+#[derive(Clone)]
+pub struct CrawlerConfig {
+    pub add_node: Vec<String>,
+
+    pub network: [u8; 4],
+
+    pub p2p_port: u16,
+}
+
 pub struct Crawler<N: NetworkingService, S> {
-    /// Chain config. Required for the network check
-    chain_config: Arc<ChainConfig>,
+    /// Crawler config
+    config: CrawlerConfig,
 
     /// Backend's ConnectivityHandle
     conn: N::ConnectivityHandle,
@@ -131,9 +137,8 @@ where
     N::ConnectivityHandle: ConnectivityService<N>,
     DnsServerError: From<<<N as NetworkingService>::Address as FromStr>::Err>,
 {
-    pub async fn new(
-        config: Arc<DnsServerConfig>,
-        chain_config: Arc<ChainConfig>,
+    pub fn new(
+        config: CrawlerConfig,
         conn: N::ConnectivityHandle,
         sync: N::SyncingMessagingHandle,
         storage: S,
@@ -166,7 +171,7 @@ where
         }
 
         Ok(Self {
-            chain_config,
+            config,
             conn,
             sync,
             addresses,
@@ -220,13 +225,13 @@ where
             .addresses
             .get_mut(&address)
             .expect("address in the Connecting state must be known");
-        let valid = peer_info.network == *self.chain_config.magic_bytes();
+        let valid = peer_info.network == self.config.network;
 
         if !valid {
             log::debug!("invalid peer detected at {}", address.to_string());
             self.conn.disconnect(peer_info.peer_id).expect("disconnect must succeed");
             Self::change_address_state(
-                &self.chain_config,
+                &self.config,
                 &address,
                 address_data,
                 AddressState::Disconnected,
@@ -237,7 +242,7 @@ where
         }
 
         Self::change_address_state(
-            &self.chain_config,
+            &self.config,
             &address,
             address_data,
             AddressState::Connected,
@@ -256,13 +261,14 @@ where
         unreachable!("unexpected inbound connection");
     }
 
-    fn handle_connection_error(&mut self, address: N::Address, _error: P2pError) {
+    fn handle_connection_error(&mut self, address: N::Address, error: P2pError) {
+        log::debug!("connection to {} failed: {}", address.to_string(), error);
         let address_data = self
             .addresses
             .get_mut(&address)
             .expect("address in the Connecting state must be known");
         Self::change_address_state(
-            &self.chain_config,
+            &self.config,
             &address,
             address_data,
             AddressState::Disconnected,
@@ -272,13 +278,14 @@ where
     }
 
     fn handle_connection_closed(&mut self, peer_id: N::PeerId) {
+        log::debug!("connection from peer {} closed", peer_id);
         if let Some(address) = self.peers.remove(&peer_id) {
             let address_data = self
                 .addresses
                 .get_mut(&address)
                 .expect("address in the Connected state must be known");
             Self::change_address_state(
-                &self.chain_config,
+                &self.config,
                 &address,
                 address_data,
                 AddressState::Disconnected,
@@ -354,11 +361,28 @@ where
         }
     }
 
+    fn get_dns_ip(address: &N::Address, p2p_port: u16) -> Option<IpAddr> {
+        // Only add nodes listening on the default port to DNS
+        match address.as_peer_address() {
+            PeerAddress::Ip4(addr)
+                if Ipv4Addr::from(addr.ip).is_global_unicast_ip() && addr.port == p2p_port =>
+            {
+                Some(Ipv4Addr::from(addr.ip).into())
+            }
+            PeerAddress::Ip6(addr)
+                if Ipv6Addr::from(addr.ip).is_global_unicast_ip() && addr.port == p2p_port =>
+            {
+                Some(Ipv6Addr::from(addr.ip).into())
+            }
+            _ => None,
+        }
+    }
+
     /// Update address state.
     ///
     /// The only place where the address state can be updated.
     fn change_address_state(
-        chain_config: &ChainConfig,
+        config: &CrawlerConfig,
         address: &N::Address,
         address_data: &mut AddressData,
         new_state: AddressState,
@@ -374,25 +398,24 @@ where
             address.to_string(),
             new_state
         );
+
+        let old_state = address_data.state;
         address_data.state = new_state;
         address_data.state_updated_at = tokio::time::Instant::now();
 
-        // Only add nodes listening on the default port to DNS
-        let dns_ip: Option<IpAddr> = match address.as_peer_address() {
-            PeerAddress::Ip4(addr)
-                if Ipv4Addr::from(addr.ip).is_global_unicast_ip()
-                    && addr.port == chain_config.p2p_port() =>
-            {
-                Some(Ipv4Addr::from(addr.ip).into())
+        let dns_ip = Self::get_dns_ip(address, config.p2p_port);
+
+        match old_state {
+            AddressState::Disconnected | AddressState::Connecting => {
+                // Do nothing
             }
-            PeerAddress::Ip6(addr)
-                if Ipv6Addr::from(addr.ip).is_global_unicast_ip()
-                    && addr.port == chain_config.p2p_port() =>
-            {
-                Some(Ipv6Addr::from(addr.ip).into())
+            AddressState::Connected => {
+                // Reachable node has disconnected, update DNS
+                if let Some(ip) = dns_ip {
+                    command_tx.send(ServerCommands::DelAddress(ip)).expect("sending must succeed");
+                }
             }
-            _ => None,
-        };
+        }
 
         match new_state {
             AddressState::Connecting => {
@@ -412,10 +435,6 @@ where
                 address_data.was_reachable = true;
             }
             AddressState::Disconnected => {
-                if let Some(ip) = dns_ip {
-                    command_tx.send(ServerCommands::DelAddress(ip)).expect("sending must succeed");
-                }
-
                 address_data.fail_count += 1;
             }
         }
@@ -486,7 +505,7 @@ where
 
         for (address, address_data) in connecting_addresses {
             Self::change_address_state(
-                &self.chain_config,
+                &self.config,
                 address,
                 address_data,
                 AddressState::Connecting,
@@ -498,7 +517,7 @@ where
             if let Err(e) = res {
                 log::debug!("connection to {} failed: {}", address.to_string(), e);
                 Self::change_address_state(
-                    &self.chain_config,
+                    &self.config,
                     address,
                     address_data,
                     AddressState::Disconnected,
@@ -513,7 +532,7 @@ where
         });
     }
 
-    pub async fn run(mut self) -> Result<void::Void, DnsServerError> {
+    pub async fn run(&mut self) -> Result<void::Void, DnsServerError> {
         let mut heartbeat_timer = tokio::time::interval(HEARTBEAT_INTERVAL);
 
         loop {
@@ -531,3 +550,6 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

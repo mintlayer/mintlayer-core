@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use config::DnsServerConfig;
-use crawler::{storage_impl::DnsServerStorageImpl, Crawler};
+use crawler::{storage_impl::DnsServerStorageImpl, Crawler, CrawlerConfig};
 use p2p::{
     config::P2pConfig,
     net::{
@@ -79,20 +79,24 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         Default::default(),
     ))?;
 
-    let crawler = Crawler::<DefaultNetworkingService<_>, _>::new(
-        Arc::clone(&config),
-        chain_config,
+    let crawler_config = CrawlerConfig {
+        add_node: config.add_node.clone(),
+        network: *chain_config.magic_bytes(),
+        p2p_port: chain_config.p2p_port(),
+    };
+
+    let mut crawler = Crawler::<DefaultNetworkingService<_>, _>::new(
+        crawler_config,
         conn,
         sync,
         storage,
         command_tx,
-    )
-    .await?;
+    )?;
 
     let server = dns_server::DnsServer::new(config, command_rx).await?;
 
     // Spawn for better parallelism
-    let crawler_task = tokio::spawn(crawler.run());
+    let crawler_task = tokio::spawn(async move { crawler.run().await });
     let server_task = tokio::spawn(server.run());
 
     tokio::select! {

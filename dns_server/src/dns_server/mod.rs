@@ -40,7 +40,7 @@ use trust_dns_server::{
 
 use crate::{config::DnsServerConfig, error::DnsServerError};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ServerCommands {
     AddAddress(IpAddr),
 
