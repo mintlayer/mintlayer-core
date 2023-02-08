@@ -18,9 +18,12 @@ use std::sync::Arc;
 use clap::Parser;
 use config::DnsServerConfig;
 use crawler::{storage_impl::DnsServerStorageImpl, Crawler};
-use p2p::net::default_backend::{
-    transport::{NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket},
-    DefaultNetworkingService,
+use p2p::{
+    config::P2pConfig,
+    net::default_backend::{
+        transport::{NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket},
+        DefaultNetworkingService,
+    },
 };
 use tokio::sync::mpsc;
 
@@ -44,7 +47,17 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         Arc::new(common::chain::config::create_mainnet())
     };
 
-    let p2p_config = Default::default();
+    let p2p_config = Arc::new(P2pConfig {
+        bind_addresses: Vec::new(),
+        added_nodes: Vec::new(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+    });
 
     let transport = make_p2p_transport();
 
