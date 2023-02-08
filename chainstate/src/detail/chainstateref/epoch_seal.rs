@@ -20,11 +20,17 @@ use utils::tap_error_log::LogError;
 
 use crate::BlockError;
 
+/// Indicates whether a block was connected or disconnected.
+/// Stores current tip height.
 pub enum BlockStateEvent {
     Connect(BlockHeight),
     Disconnect(BlockHeight),
 }
 
+/// Every time a block is connected or disconnected, it should be checked if the epoch seal
+/// should be updated.
+/// Sealed epoch is the state of accounting that is `epoch_length` * `sealed_epoch_distance_from_tip` blocks
+/// behind the tip and is used for PoS calculations.
 pub fn update_epoch_seal<S: BlockchainStorageWrite>(
     db_tx: &mut S,
     chain_config: &ChainConfig,
@@ -46,14 +52,17 @@ pub fn update_epoch_seal<S: BlockchainStorageWrite>(
     Ok(())
 }
 
+/// If a block was connected and it was the last block of the epoch, the epoch seal must be advanced.
+/// Meaning merging all the data from the epoch after current sealed state.
 fn advance_epoch_seal<S: BlockchainStorageWrite>(
     db_tx: &mut S,
     chain_config: &ChainConfig,
     tip_height: BlockHeight,
 ) -> Result<(), BlockError> {
     let current_epoch_index = chain_config.epoch_index_from_height(&tip_height);
-    let epoch_index_to_seal =
-        current_epoch_index - chain_config.sealed_epoch_distance_from_tip() as u64;
+    let epoch_index_to_seal = current_epoch_index
+        .checked_sub(chain_config.sealed_epoch_distance_from_tip() as u64)
+        .expect("always >= 0; because the epoch to seal cannot be higher than the current epoch");
 
     // retrieve delta for the epoch to seal
     let epoch_delta = db_tx.get_accounting_epoch_delta(epoch_index_to_seal).log_err()?;
@@ -73,6 +82,8 @@ fn advance_epoch_seal<S: BlockchainStorageWrite>(
     Ok(())
 }
 
+/// If a block was disconnected and it was the last block of the epoch, the epoch seal must be rolled back.
+/// Meaning undo merging of all the data from the last sealed epoch.
 fn rollback_epoch_seal<S: BlockchainStorageWrite>(
     db_tx: &mut S,
     chain_config: &ChainConfig,
@@ -81,7 +92,7 @@ fn rollback_epoch_seal<S: BlockchainStorageWrite>(
     let current_epoch_index = chain_config.epoch_index_from_height(&tip_height);
     let epoch_index_to_unseal = current_epoch_index
         .checked_sub(chain_config.sealed_epoch_distance_from_tip() as u64)
-        .expect("always positive");
+        .expect("always >= 0; because the epoch to unseal cannot be higher than the current epoch");
 
     // retrieve delta undo for the epoch to unseal
     let epoch_undo = db_tx
