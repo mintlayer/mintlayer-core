@@ -54,7 +54,7 @@ impl NodeConfigFile {
         })
     }
 
-    fn read_config_file_to_string<P: AsRef<Path>>(config_path: P) -> Result<String> {
+    fn read_to_string_with_policy<P: AsRef<Path>>(config_path: P) -> Result<String> {
         let config_as_str = if config_path.as_ref().exists() {
             if config_path.as_ref().is_file() {
                 fs::read_to_string(config_path.as_ref()).context(format!(
@@ -75,7 +75,7 @@ impl NodeConfigFile {
 
     /// Reads a configuration from the specified path and overrides the provided parameters.
     pub fn read(config_path: &Path, options: &RunOptions) -> Result<Self> {
-        let config_as_str = Self::read_config_file_to_string(config_path)?;
+        let config_as_str = Self::read_to_string_with_policy(config_path)?;
 
         let NodeConfigFile {
             chainstate,
@@ -201,6 +201,10 @@ fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+
+    use crypto::random::{distributions::Alphanumeric, make_pseudo_rng, Rng};
+
     use super::*;
 
     #[test]
@@ -211,5 +215,41 @@ mod tests {
         let _config: chainstate::ChainstateConfigFile = toml::from_str("").unwrap();
         let _config: p2p::P2pConfigFile = toml::from_str("").unwrap();
         let _config: rpc::RpcConfigFile = toml::from_str("").unwrap();
+    }
+
+    #[test]
+    fn read_config_file_nonexistent() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config_path = dir.path().join("config.toml");
+        let config_file_data = NodeConfigFile::read_to_string_with_policy(config_path).unwrap();
+        assert_eq!(config_file_data, "");
+    }
+
+    #[test]
+    fn read_config_file_exists_with_data() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config_path = dir.path().join("config.toml");
+        let injected_config_data = make_pseudo_rng()
+            .sample_iter(&Alphanumeric)
+            .take(1024)
+            .map(char::from)
+            .collect::<String>();
+
+        {
+            let mut file = fs::File::create(config_path.clone()).unwrap();
+            file.write_all(injected_config_data.as_bytes()).unwrap();
+        }
+        let read_config_data = NodeConfigFile::read_to_string_with_policy(config_path).unwrap();
+        assert_eq!(read_config_data, injected_config_data);
+    }
+
+    #[test]
+    fn read_config_file_path_exists_but_is_not_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config_path = dir.path().join("config.toml");
+
+        fs::create_dir(config_path.clone()).unwrap();
+
+        let _err = NodeConfigFile::read_to_string_with_policy(config_path).unwrap_err();
     }
 }
