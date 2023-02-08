@@ -171,7 +171,7 @@ pub struct TransactionVerifierDelta {
     accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
 }
 
-/// The tool used to verify transaction and cache their updated states in memory
+/// The tool used to verify transactions and cache their updated states in memory
 pub struct TransactionVerifier<C, S, U, A> {
     chain_config: C,
     storage: S,
