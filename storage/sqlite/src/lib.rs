@@ -227,13 +227,13 @@ impl backend::BackendImpl for SqliteImpl {}
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Sqlite {
-    path: PathBuf,
+    path: Option<PathBuf>,
 }
 
 impl Sqlite {
     /// New Sqlite database backend
     pub fn new(path: PathBuf) -> Self {
-        Self { path }
+        Self { path: Some(path) }
     }
 
     // fn open_db(self, desc: &MapDesc) -> storage_core::Result<Connection> {
@@ -244,7 +244,10 @@ impl Sqlite {
             OpenFlags::SQLITE_OPEN_CREATE,
         ]);
 
-        let connection = Connection::open_with_flags(self.path, flags)?;
+        let connection = match self.path {
+            None => Connection::open_in_memory_with_flags(flags)?,
+            Some(path) => Connection::open_with_flags(path, flags)?,
+        };
 
         // Set the locking mode to exclusive
         connection.pragma_update(None, "locking_mode", "exclusive")?;
@@ -283,19 +286,28 @@ impl Sqlite {
     }
 }
 
+/// Implements in memory database, useful for testing
+impl Default for Sqlite {
+    fn default() -> Self {
+        Self { path: None }
+    }
+}
+
 impl backend::Backend for Sqlite {
     type Impl = SqliteImpl;
 
     fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
-        // Attempt to create the parent storage directory
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent).map_err(error::process_io_error)?;
-        } else {
-            return Err(storage_core::error::Recoverable::Io(
-                std::io::ErrorKind::NotFound,
-                "Cannot find the parent directory".to_string(),
-            )
-            .into());
+        // Attempt to create the parent storage directory if using a file
+        if let Some(ref path) = self.path {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).map_err(error::process_io_error)?;
+            } else {
+                return Err(storage_core::error::Recoverable::Io(
+                    std::io::ErrorKind::NotFound,
+                    "Cannot find the parent directory".to_string(),
+                )
+                .into());
+            }
         }
 
         let queries = desc.db_maps().transform(queries::SqliteQuery::from_desc);

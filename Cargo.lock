@@ -3955,6 +3955,19 @@ name = "wallet"
 version = "0.1.0"
 dependencies = [
  "logging",
+ "wallet-storage",
+]
+
+[[package]]
+name = "wallet-storage"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "serialization",
+ "storage",
+ "storage-sqlite",
+ "test-utils",
+ "utxo",
 ]
 
 [[package]]

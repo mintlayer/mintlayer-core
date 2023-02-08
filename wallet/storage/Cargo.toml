@@ -1,0 +1,18 @@
+[package]
+name = "wallet-storage"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common = { path = '../../common' }
+serialization = { path = "../../serialization" }
+storage = { path = '../../storage', features = ['inmemory'] }
+storage-sqlite = { path = "../../storage/sqlite" }
+
+utxo = { path = '../../utxo' }
+
+[dev-dependencies]
+test-utils = {path = '../../test-utils'}
