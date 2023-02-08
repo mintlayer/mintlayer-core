@@ -48,6 +48,7 @@ use p2p::{
         types::{ConnectivityEvent, PeerInfo, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
+    peer_manager::global_ip::IsGlobalIp,
     types::peer_address::PeerAddress,
 };
 use tokio::sync::mpsc;
@@ -387,10 +388,16 @@ where
 
         // Only add nodes listening on the default port to DNS
         let dns_ip: Option<IpAddr> = match address.as_peer_address() {
-            PeerAddress::Ip4(addr) if addr.port == chain_config.p2p_port() => {
+            PeerAddress::Ip4(addr)
+                if Ipv4Addr::from(addr.ip).is_global_unicast_ip()
+                    && addr.port == chain_config.p2p_port() =>
+            {
                 Some(Ipv4Addr::from(addr.ip).into())
             }
-            PeerAddress::Ip6(addr) if addr.port == chain_config.p2p_port() => {
+            PeerAddress::Ip6(addr)
+                if Ipv6Addr::from(addr.ip).is_global_unicast_ip()
+                    && addr.port == chain_config.p2p_port() =>
+            {
                 Some(Ipv6Addr::from(addr.ip).into())
             }
             _ => None,

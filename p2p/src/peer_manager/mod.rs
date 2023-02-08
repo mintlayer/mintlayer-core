@@ -19,7 +19,7 @@
 //!
 //!
 
-mod global_ip;
+pub mod global_ip;
 pub mod peer_context;
 pub mod peerdb;
 
