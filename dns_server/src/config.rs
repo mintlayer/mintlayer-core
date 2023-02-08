@@ -26,7 +26,7 @@ pub struct DnsServerConfig {
     #[clap(long)]
     pub testnet: bool,
 
-    /// IP address and UDP port to listen on
+    /// List of UDP socket addresses to listen on
     #[clap(long, default_values_t = vec!["[::]:53".to_string()])]
     pub bind_addr: Vec<String>,
 
@@ -38,9 +38,9 @@ pub struct DnsServerConfig {
     #[clap(long)]
     pub host: String,
 
-    /// Hostname of the nameserver
+    /// Hostname of the nameserver (NS record)
     #[clap(long)]
-    pub ns: String,
+    pub nameserver: String,
 
     /// E-Mail address reported in SOA records (RNAME).
     /// `@` symbol should be replaced with `.`.

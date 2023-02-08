@@ -78,7 +78,7 @@ impl DnsServer {
         command_tx: mpsc::UnboundedReceiver<ServerCommands>,
     ) -> Result<Self, DnsServerError> {
         let host = Name::from_str(&config.host)?;
-        let ns = Name::from_str(&config.ns)?;
+        let ns = Name::from_str(&config.nameserver)?;
         let mbox = Name::from_str(&config.mbox)?;
 
         let inner = InMemoryAuthority::empty(host.clone(), ZoneType::Primary, false);
