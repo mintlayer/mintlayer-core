@@ -54,9 +54,28 @@ impl NodeConfigFile {
         })
     }
 
+    fn read_config_file_to_string<P: AsRef<Path>>(config_path: P) -> Result<String> {
+        let config_as_str = if config_path.as_ref().exists() {
+            if config_path.as_ref().is_file() {
+                fs::read_to_string(config_path.as_ref()).context(format!(
+                    "Config file found in '{}' but could not be read",
+                    config_path.as_ref().display()
+                ))?
+            } else {
+                return Err(anyhow::anyhow!(
+                    "An object was found at the path of the config file '{}' but it is not a file",
+                    config_path.as_ref().display()
+                ));
+            }
+        } else {
+            "".into()
+        };
+        Ok(config_as_str)
+    }
+
     /// Reads a configuration from the specified path and overrides the provided parameters.
     pub fn read(config_path: &Path, options: &RunOptions) -> Result<Self> {
-        let config_as_str = fs::read_to_string(config_path).unwrap_or_default();
+        let config_as_str = Self::read_config_file_to_string(config_path)?;
 
         let NodeConfigFile {
             chainstate,
