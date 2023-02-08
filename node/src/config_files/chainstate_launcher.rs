@@ -21,9 +21,10 @@ use serde::{Deserialize, Serialize};
 use super::chainstate::ChainstateConfigFile;
 
 /// Storage type to use
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub enum StorageBackendConfigFile {
     #[serde(rename = "lmdb")]
+    #[default]
     Lmdb,
     #[serde(rename = "inmemory", alias = "in-memory")]
     InMemory,
@@ -44,12 +45,6 @@ impl std::str::FromStr for StorageBackendConfigFile {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let de = serde::de::value::StrDeserializer::new(s);
         Deserialize::deserialize(de)
-    }
-}
-
-impl Default for StorageBackendConfigFile {
-    fn default() -> Self {
-        Self::Lmdb
     }
 }
 
