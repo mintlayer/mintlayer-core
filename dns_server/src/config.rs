@@ -26,11 +26,11 @@ pub struct DnsServerConfig {
     #[clap(long)]
     pub testnet: bool,
 
-    /// List of UDP socket addresses to listen on
+    /// UDP socket address to listen on. Can be specified multiple times.
     #[clap(long, default_values_t = vec!["[::]:53".to_string()])]
     pub bind_addr: Vec<String>,
 
-    /// Optional list of initial node addresses to connect
+    /// Initial node address to connect. Can be specified multiple times.
     #[clap(long)]
     pub add_node: Vec<String>,
 
