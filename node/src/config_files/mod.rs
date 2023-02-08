@@ -22,12 +22,7 @@ mod chainstate_launcher;
 mod p2p;
 mod rpc;
 
-use std::{
-    fs,
-    net::SocketAddr,
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use std::{fs, net::SocketAddr, path::Path, str::FromStr};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -42,56 +37,40 @@ use self::{
 /// The node configuration.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NodeConfigFile {
-    /// The path to the data directory.
-    ///
-    /// By default the config file is created inside of the data directory.
-    pub datadir: PathBuf,
-
     // Subsystems configurations.
-    pub chainstate: ChainstateLauncherConfigFile,
-    pub p2p: P2pConfigFile,
-    pub rpc: RpcConfigFile,
+    pub chainstate: Option<ChainstateLauncherConfigFile>,
+    pub p2p: Option<P2pConfigFile>,
+    pub rpc: Option<RpcConfigFile>,
 }
 
 impl NodeConfigFile {
     /// Creates a new `Config` instance with the given data directory path.
-    pub fn new(datadir: PathBuf) -> Result<Self> {
-        let chainstate = ChainstateLauncherConfigFile::new();
-        let p2p = P2pConfigFile::default();
-        let rpc = RpcConfigFile::default();
+    pub fn new() -> Result<Self> {
         Ok(Self {
-            datadir,
-            chainstate,
-            p2p,
-            rpc,
+            chainstate: None,
+            p2p: None,
+            rpc: None,
         })
     }
 
     /// Reads a configuration from the specified path and overrides the provided parameters.
-    pub fn read(
-        config_path: &Path,
-        datadir_path_opt: &Option<PathBuf>,
-        options: &RunOptions,
-    ) -> Result<Self> {
+    pub fn read(config_path: &Path, options: &RunOptions) -> Result<Self> {
         let config = fs::read_to_string(config_path)
             .with_context(|| format!("Failed to read '{config_path:?}' config"))?;
         let NodeConfigFile {
-            datadir,
             chainstate,
             p2p,
             rpc,
         } = toml::from_str(&config).context("Failed to parse config")?;
 
-        let datadir = datadir_path_opt.clone().unwrap_or(datadir);
-        let chainstate = chainstate_config(chainstate, options);
-        let p2p = p2p_config(p2p, options);
-        let rpc = rpc_config(rpc, options);
+        let chainstate = chainstate_config(chainstate.unwrap_or_default(), options);
+        let p2p = p2p_config(p2p.unwrap_or_default(), options);
+        let rpc = rpc_config(rpc.unwrap_or_default(), options);
 
         Ok(Self {
-            datadir,
-            chainstate,
-            p2p,
-            rpc,
+            chainstate: Some(chainstate),
+            p2p: Some(p2p),
+            rpc: Some(rpc),
         })
     }
 }

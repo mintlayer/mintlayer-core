@@ -54,7 +54,7 @@ impl Default for StorageBackendConfigFile {
 }
 
 /// Storage configuration
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct ChainstateLauncherConfigFile {
     /// Storage backend to use
     #[serde(default)]

@@ -15,7 +15,12 @@
 
 //! Node initialization routine.
 
-use std::{fs, path::Path, str::FromStr, sync::Arc, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
+};
 
 use anyhow::{anyhow, Context, Result};
 use paste::paste;
@@ -35,13 +40,14 @@ use p2p::{peer_manager::peerdb::storage_impl::PeerDbStorageImpl, rpc::P2pRpcServ
 
 use crate::{
     config_files::NodeConfigFile,
-    options::{Command, Options, RunOptions},
+    options::{default_data_dir, Command, Options, RunOptions},
     regtest_options::ChainConfigOptions,
 };
 
 /// Initialize the node, giving caller the opportunity to add more subsystems before start.
 pub async fn initialize(
     chain_config: ChainConfig,
+    data_dir: PathBuf,
     node_config: NodeConfigFile,
 ) -> Result<subsystem::Manager> {
     let chain_config = Arc::new(chain_config);
@@ -53,9 +59,9 @@ pub async fn initialize(
 
     // Chainstate subsystem
     let chainstate = chainstate_launcher::make_chainstate(
-        &node_config.datadir,
+        &data_dir,
         Arc::clone(&chain_config),
-        node_config.chainstate.into(),
+        node_config.chainstate.unwrap_or_default().into(),
     )?;
     let chainstate = manager.add_subsystem("chainstate", chainstate);
 
@@ -73,7 +79,7 @@ pub async fn initialize(
     // P2P subsystem
     // TODO: Replace Lmdb with Sqlite backend when it's ready
     let peerdb_storage = PeerDbStorageImpl::new(storage_lmdb::Lmdb::new(
-        node_config.datadir.join("peerdb-lmdb"),
+        data_dir.join("peerdb-lmdb"),
         Default::default(),
         Default::default(),
         Default::default(),
@@ -82,7 +88,7 @@ pub async fn initialize(
         "p2p",
         p2p::make_p2p(
             Arc::clone(&chain_config),
-            Arc::new(node_config.p2p.into()),
+            Arc::new(node_config.p2p.unwrap_or_default().into()),
             chainstate.clone(),
             mempool.clone(),
             Default::default(),
@@ -104,12 +110,14 @@ pub async fn initialize(
         .await?,
     );
 
+    let rpc_config = node_config.rpc.unwrap_or_default();
+
     // RPC subsystem
-    if node_config.rpc.http_enabled.unwrap_or(true) || node_config.rpc.ws_enabled.unwrap_or(true) {
+    if rpc_config.http_enabled.unwrap_or(true) || rpc_config.ws_enabled.unwrap_or(true) {
         // TODO: get rid of the unwrap_or() after fixing the issue in #446
         let _rpc = manager.add_subsystem(
             "rpc",
-            rpc::Builder::new(node_config.rpc.into())
+            rpc::Builder::new(rpc_config.into())
                 .register(crate::rpc::init(manager.make_shutdown_trigger()))
                 .register(chainstate.clone().into_rpc())
                 .register(mempool.into_rpc())
@@ -125,15 +133,6 @@ pub async fn initialize(
 /// Processes options and potentially runs the node.
 pub async fn run(options: Options) -> Result<()> {
     match options.command {
-        Command::CreateConfig => {
-            let path = options.config_path();
-            let config = NodeConfigFile::new(options.data_dir())?;
-            let config = toml::to_string(&config).context("Failed to serialize config")?;
-            log::trace!("Saving config to {path:?}\n: {config:#?}");
-            fs::write(&path, config)
-                .with_context(|| format!("Failed to write config to the '{path:?}' file"))?;
-            Ok(())
-        }
         Command::Mainnet(ref run_options) => {
             let chain_config = common::chain::config::create_mainnet();
             start(
@@ -167,16 +166,40 @@ pub async fn run(options: Options) -> Result<()> {
     }
 }
 
+// TODO(PR): write tests for this
+fn prepare_data_dir(
+    default_data_dir_maker: fn() -> PathBuf,
+    datadir_path_opt: &Option<std::path::PathBuf>,
+) -> Result<PathBuf> {
+    match datadir_path_opt {
+        Some(data_dir) => {
+            assert!(data_dir.is_dir(), "Custom data directory '{data_dir:?}' does not exist. Please create it or use the default data directory.");
+        }
+        None => std::fs::create_dir_all(default_data_dir_maker()).with_context(|| {
+            format!(
+                "Failed to create the '{:?}' data directory",
+                default_data_dir()
+            )
+        })?,
+    }
+    let data_dir = datadir_path_opt.clone().unwrap_or(default_data_dir());
+    Ok(data_dir)
+}
+
 async fn start(
     config_path: &Path,
     datadir_path_opt: &Option<std::path::PathBuf>,
     run_options: &RunOptions,
     chain_config: ChainConfig,
 ) -> Result<()> {
-    let node_config = NodeConfigFile::read(config_path, datadir_path_opt, run_options)
-        .context("Failed to initialize config")?;
+    let node_config =
+        NodeConfigFile::read(config_path, run_options).context("Failed to initialize config")?;
+
+    let data_dir = prepare_data_dir(default_data_dir, datadir_path_opt)
+        .expect("Failed to prepare data directory");
+
     log::info!("Starting with the following config:\n {node_config:#?}");
-    let manager = initialize(chain_config, node_config).await?;
+    let manager = initialize(chain_config, data_dir, node_config).await?;
     manager.main().await;
     Ok(())
 }
