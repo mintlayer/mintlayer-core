@@ -13,17 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use storage_core::{DbDesc, DbIndex};
-
-/// Return the prefix of the database key/value tables
-#[inline]
-pub fn db_table_name(idx: usize) -> String {
-    format!("db_{idx}")
-}
+use storage_core::{DbMapDesc, DbMapsData};
 
 /// Returns an SQL query to create a table
 #[inline]
-pub fn create_table_query(table_name: &String) -> String {
+pub fn create_table_query(table_name: &str) -> String {
     format!("CREATE TABLE {table_name}(key BLOB PRIMARY KEY NOT NULL, value BLOB NOT NULL)")
 }
 
@@ -40,30 +34,17 @@ pub struct SqliteQuery {
     pub delete_query: String,
 }
 
+impl SqliteQuery {
+    pub fn from_desc(desc: &DbMapDesc) -> Self {
+        let name = desc.name();
+        Self {
+            get_query: format!("SELECT value FROM {name} WHERE key = ?"),
+            prefix_iter_query: format!("SELECT key, value FROM {name} ORDER BY key"),
+            put_query: format!("INSERT or REPLACE into {name} values(?, ?)"),
+            delete_query: format!("DELETE FROM {name} WHERE key = ?"),
+        }
+    }
+}
+
 /// Holds typical SQL queries like for retrieving, inserting, deleting key/values
-#[derive(Eq, PartialEq, Debug, Clone)]
-pub struct SqliteQueries(Vec<SqliteQuery>);
-
-impl SqliteQueries {
-    pub fn new(desc: &DbDesc) -> Self {
-        // Set up all the databases
-        let queries = (0..desc.len())
-            .map(|i| SqliteQuery {
-                get_query: format!("SELECT value FROM db_{i} WHERE key = ?"),
-                prefix_iter_query: format!("SELECT key, value FROM db_{i} ORDER BY key"),
-                put_query: format!("INSERT or REPLACE into db_{i} values(?, ?)"),
-                delete_query: format!("DELETE FROM db_{i} WHERE key = ?"),
-            })
-            .collect();
-
-        Self(queries)
-    }
-}
-
-impl std::ops::Index<DbIndex> for SqliteQueries {
-    type Output = SqliteQuery;
-
-    fn index(&self, index: DbIndex) -> &Self::Output {
-        &self.0[index.get()]
-    }
-}
+pub type SqliteQueries = DbMapsData<SqliteQuery>;

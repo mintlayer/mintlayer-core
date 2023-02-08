@@ -28,8 +28,7 @@ use crate::queries::SqliteQueries;
 use error::process_sqlite_error;
 use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
-    info::DbDesc,
-    Data, DbIndex,
+    Data, DbDesc, DbMapId,
 };
 use utils::shallow_clone::ShallowClone;
 use utils::sync::Arc;
@@ -106,14 +105,14 @@ impl<'s, 'i> backend::PrefixIter<'i> for DbTx<'s> {
 
     fn prefix_iter<'t: 'i>(
         &'t self,
-        idx: DbIndex,
+        map_id: DbMapId,
         prefix: Data,
     ) -> storage_core::Result<Self::Iterator> {
         // TODO check if prefix.is_empty()
         // TODO Perform the filtering in the SQL query itself
         let mut stmt = self
             .connection
-            .prepare_cached(self.queries[idx].prefix_iter_query.as_str())
+            .prepare_cached(self.queries[map_id].prefix_iter_query.as_str())
             .map_err(process_sqlite_error)?;
 
         let mut rows = stmt.query(()).map_err(process_sqlite_error)?;
@@ -134,10 +133,10 @@ impl<'s, 'i> backend::PrefixIter<'i> for DbTx<'s> {
 }
 
 impl backend::ReadOps for DbTx<'_> {
-    fn get(&self, idx: DbIndex, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
         let mut stmt = self
             .connection
-            .prepare_cached(self.queries[idx].get_query.as_str())
+            .prepare_cached(self.queries[map_id].get_query.as_str())
             .map_err(process_sqlite_error)?;
 
         let params = (key,);
@@ -151,10 +150,10 @@ impl backend::ReadOps for DbTx<'_> {
 }
 
 impl backend::WriteOps for DbTx<'_> {
-    fn put(&mut self, idx: DbIndex, key: Data, val: Data) -> storage_core::Result<()> {
+    fn put(&mut self, map_id: DbMapId, key: Data, val: Data) -> storage_core::Result<()> {
         let mut stmt = self
             .connection
-            .prepare_cached(self.queries[idx].put_query.as_str())
+            .prepare_cached(self.queries[map_id].put_query.as_str())
             .map_err(process_sqlite_error)?;
 
         let params = (key, val);
@@ -163,10 +162,10 @@ impl backend::WriteOps for DbTx<'_> {
         Ok(())
     }
 
-    fn del(&mut self, idx: DbIndex, key: &[u8]) -> storage_core::Result<()> {
+    fn del(&mut self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<()> {
         let mut stmt = self
             .connection
-            .prepare_cached(self.queries[idx].delete_query.as_str())
+            .prepare_cached(self.queries[map_id].delete_query.as_str())
             .map_err(process_sqlite_error)?;
 
         let params = (key,);
@@ -262,8 +261,8 @@ impl Sqlite {
             .prepare_cached("SELECT name FROM sqlite_master WHERE type='table' AND name=?")?;
 
         // Check if the required tables exist and if needed create them
-        for idx in 0..desc.len() {
-            let table_name = queries::db_table_name(idx);
+        for idx in desc.db_map_count().indices() {
+            let table_name = &desc.db_maps()[idx].name();
             // Check if table is missing
             let is_missing = exists_stmt
                 .query_row([&table_name], |row| row.get::<usize, String>(0))
@@ -271,13 +270,14 @@ impl Sqlite {
                 .is_none();
             // Create the table if needed
             if is_missing {
-                connection.execute(queries::create_table_query(&table_name).as_str(), ())?;
+                connection.execute(queries::create_table_query(table_name).as_str(), ())?;
             }
         }
         drop(exists_stmt);
 
         // Set statement cache to fit all the prepared statements we use
-        connection.set_prepared_statement_cache_capacity(max(desc.len() * 4, 16));
+        let statement_cap = max(desc.db_map_count().as_usize() * 4, 16);
+        connection.set_prepared_statement_cache_capacity(statement_cap);
 
         Ok(connection)
     }
@@ -298,7 +298,7 @@ impl backend::Backend for Sqlite {
             .into());
         }
 
-        let queries = SqliteQueries::new(&desc);
+        let queries = desc.db_maps().transform(queries::SqliteQuery::from_desc);
 
         let connection = self.open_db(desc).map_err(process_sqlite_error)?;
 

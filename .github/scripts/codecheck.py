@@ -79,9 +79,9 @@ def check_crate_versions():
     print()
     return ok
 
-# Check license header
-def check_licenses():
-    print("==== Checking license headers:")
+# Check license header in current project crates
+def check_local_licenses():
+    print("==== Checking local license headers:")
     
     # list of files exempted from license check
     exempted_files = [
@@ -134,7 +134,7 @@ def run_checks():
     return all([
             disallow(SCALECODEC_RE, exclude = ['serialization/core']),
             disallow(JSONRPSEE_RE, exclude = ['rpc']),
-            check_licenses(),
+            check_local_licenses(),
             check_crate_versions(),
             check_todos()
         ])

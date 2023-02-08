@@ -24,7 +24,7 @@ use internal::{EntryIterator, TxImpl};
 
 use crate::schema::{self, Schema};
 use serialization::{encoded::Encoded, Encode, EncodeLike};
-use storage_core::{backend, Backend, DbIndex};
+use storage_core::{backend, Backend, DbMapId};
 
 /// The main storage type
 pub struct Storage<B: Backend, Sch> {
@@ -52,10 +52,9 @@ impl<B: Backend, Sch> utils::shallow_clone::ShallowClone for Storage<B, Sch> whe
 impl<B: Backend, Sch: Schema> Storage<B, Sch> {
     /// Create new storage with given backend
     pub fn new(backend: B) -> crate::Result<Self> {
-        Ok(Self {
-            backend: backend.open(Sch::desc_iter().collect())?,
-            _schema: Default::default(),
-        })
+        let backend = backend.open(storage_core::types::construct::db_desc(Sch::desc_iter()))?;
+        let _schema = std::marker::PhantomData;
+        Ok(Self { backend, _schema })
     }
 
     /// Dump raw database contents into a data structure
@@ -65,10 +64,9 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
 
     /// Start a read-only transaction
     pub fn transaction_ro<'tx, 'st: 'tx>(&'st self) -> crate::Result<TransactionRo<'tx, B, Sch>> {
-        Ok(TransactionRo {
-            dbtx: backend::TransactionalRo::transaction_ro(&self.backend)?,
-            _schema: Default::default(),
-        })
+        let dbtx = backend::TransactionalRo::transaction_ro(&self.backend)?;
+        let _schema = std::marker::PhantomData;
+        Ok(TransactionRo { dbtx, _schema })
     }
 
     /// Start a read-write transaction
@@ -76,10 +74,9 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
         &'st self,
         size: Option<usize>,
     ) -> crate::Result<TransactionRw<'tx, B, Sch>> {
-        Ok(TransactionRw {
-            dbtx: backend::TransactionalRw::transaction_rw(&self.backend, size)?,
-            _schema: Default::default(),
-        })
+        let dbtx = backend::TransactionalRw::transaction_rw(&self.backend, size)?;
+        let _schema = std::marker::PhantomData;
+        Ok(TransactionRw { dbtx, _schema })
     }
 }
 
@@ -141,16 +138,16 @@ impl<'tx, B: Backend, Sch: Schema> TransactionRw<'tx, B, Sch> {
 /// Represents an immutable view of a key-value map
 pub struct MapRef<'tx, Tx: internal::TxImpl, DbMap: schema::DbMap> {
     dbtx: &'tx Tx::Impl,
-    idx: DbIndex,
+    map_id: DbMapId,
     _phantom: std::marker::PhantomData<fn() -> DbMap>,
 }
 
 impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapRef<'tx, Tx, DbMap> {
-    fn new(dbtx: &'tx Tx::Impl, idx: DbIndex) -> Self {
+    fn new(dbtx: &'tx Tx::Impl, map_id: DbMapId) -> Self {
         let _phantom = Default::default();
         Self {
             dbtx,
-            idx,
+            map_id,
             _phantom,
         }
     }
@@ -166,7 +163,7 @@ where
         &self,
         key: K,
     ) -> crate::Result<Option<Encoded<Cow<[u8]>, DbMap::Value>>> {
-        internal::get::<DbMap, _, _>(self.dbtx, self.idx, key)
+        internal::get::<DbMap, _, _>(self.dbtx, self.map_id, key)
     }
 
     /// Iterator over entries with key starting with given prefix
@@ -175,7 +172,7 @@ where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
     {
-        internal::prefix_iter(self.dbtx, self.idx, prefix.encode())
+        internal::prefix_iter(self.dbtx, self.map_id, prefix.encode())
     }
 
     /// Iterator over decoded entries with key starting with given prefix
@@ -187,24 +184,23 @@ where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
     {
-        internal::prefix_iter::<DbMap, <Tx as TxImpl>::Impl>(self.dbtx, self.idx, prefix.encode())
-            .map(|item| item.map(|(k, v)| (k, v.decode())))
+        self.prefix_iter(prefix).map(|item| item.map(|(k, v)| (k, v.decode())))
     }
 }
 
 /// Represents a mutable view of a key-value map
 pub struct MapMut<'tx, Tx: TxImpl, DbMap: schema::DbMap> {
     dbtx: &'tx mut Tx::Impl,
-    idx: DbIndex,
+    map_id: DbMapId,
     _phantom: std::marker::PhantomData<fn() -> DbMap>,
 }
 
 impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapMut<'tx, Tx, DbMap> {
-    fn new(dbtx: &'tx mut Tx::Impl, idx: DbIndex) -> Self {
+    fn new(dbtx: &'tx mut Tx::Impl, map_id: DbMapId) -> Self {
         let _phantom = Default::default();
         Self {
             dbtx,
-            idx,
+            map_id,
             _phantom,
         }
     }
@@ -220,7 +216,7 @@ where
         &self,
         key: K,
     ) -> crate::Result<Option<Encoded<Cow<[u8]>, DbMap::Value>>> {
-        internal::get::<DbMap, _, _>(self.dbtx, self.idx, key)
+        internal::get::<DbMap, _, _>(self.dbtx, self.map_id, key)
     }
 
     /// Iterator over entries with key starting with given prefix
@@ -229,7 +225,7 @@ where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
     {
-        internal::prefix_iter(self.dbtx, self.idx, prefix.encode())
+        internal::prefix_iter(self.dbtx, self.map_id, prefix.encode())
     }
 }
 
@@ -243,12 +239,12 @@ where
         key: K,
         value: V,
     ) -> crate::Result<()> {
-        backend::WriteOps::put(self.dbtx, self.idx, key.encode(), value.encode())
+        backend::WriteOps::put(self.dbtx, self.map_id, key.encode(), value.encode())
     }
 
     /// Remove value associated with given key.
     pub fn del<K: EncodeLike<DbMap::Key>>(&mut self, key: K) -> crate::Result<()> {
-        key.using_encoded(|key| backend::WriteOps::del(self.dbtx, self.idx, key))
+        key.using_encoded(|key| backend::WriteOps::del(self.dbtx, self.map_id, key))
     }
 }
 

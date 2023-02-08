@@ -20,11 +20,9 @@ mod prefix_iter_rw;
 
 use crate::{
     adaptor::{Construct, CoreOps},
-    backend,
-    info::{DbDesc, DbIndex},
-    Data,
+    backend::{self, PrefixIter, ReadOps, WriteOps},
+    Data, DbDesc, DbMapCount, DbMapId, DbMapsData,
 };
-use backend::{PrefixIter, ReadOps, WriteOps};
 
 use std::{borrow::Cow, collections::BTreeMap};
 use utils::sync;
@@ -33,16 +31,20 @@ use utils::sync;
 pub struct TxRo<'tx, T>(sync::RwLockReadGuard<'tx, T>);
 
 impl<'tx, T: ReadOps> ReadOps for TxRo<'tx, T> {
-    fn get(&self, idx: DbIndex, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
-        self.0.get(idx, key)
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
+        self.0.get(map_id, key)
     }
 }
 
 impl<'tx, 'i, T: PrefixIter<'i>> PrefixIter<'i> for TxRo<'tx, T> {
     type Iterator = T::Iterator;
 
-    fn prefix_iter<'m: 'i>(&'m self, idx: DbIndex, prefix: Data) -> crate::Result<Self::Iterator> {
-        self.0.prefix_iter(idx, prefix)
+    fn prefix_iter<'m: 'i>(
+        &'m self,
+        map_id: DbMapId,
+        prefix: Data,
+    ) -> crate::Result<Self::Iterator> {
+        self.0.prefix_iter(map_id, prefix)
     }
 }
 
@@ -54,20 +56,20 @@ type DeltaMap = BTreeMap<Data, Option<Data>>;
 // RW transaction holds a write lock to the database and a list of changes performed
 pub struct TxRw<'tx, T> {
     db: sync::RwLockWriteGuard<'tx, T>,
-    deltas: Vec<DeltaMap>,
+    deltas: DbMapsData<DeltaMap>,
 }
 
 impl<'tx, T> TxRw<'tx, T> {
-    fn update(&mut self, idx: DbIndex, key: Data, val: Option<Data>) -> crate::Result<()> {
-        self.deltas[idx.get()].insert(key, val);
+    fn update(&mut self, map_id: DbMapId, key: Data, val: Option<Data>) -> crate::Result<()> {
+        self.deltas[map_id].insert(key, val);
         Ok(())
     }
 }
 
 impl<'tx, T: ReadOps> ReadOps for TxRw<'tx, T> {
-    fn get(&self, idx: DbIndex, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
-        self.deltas[idx.get()].get(key).map_or_else(
-            || self.db.get(idx, key),
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
+        self.deltas[map_id].get(key).map_or_else(
+            || self.db.get(map_id, key),
             |x| Ok(x.as_deref().map(|p| p.into())),
         )
     }
@@ -76,25 +78,28 @@ impl<'tx, T: ReadOps> ReadOps for TxRw<'tx, T> {
 impl<'tx, 'i, T: PrefixIter<'i>> PrefixIter<'i> for TxRw<'tx, T> {
     type Iterator = prefix_iter_rw::Iter<'i, T>;
 
-    fn prefix_iter<'m: 'i>(&'m self, idx: DbIndex, prefix: Data) -> crate::Result<Self::Iterator> {
-        prefix_iter_rw::iter(self, idx, prefix)
+    fn prefix_iter<'m: 'i>(
+        &'m self,
+        map_id: DbMapId,
+        prefix: Data,
+    ) -> crate::Result<Self::Iterator> {
+        prefix_iter_rw::iter(self, map_id, prefix)
     }
 }
 
 impl<'tx, T> WriteOps for TxRw<'tx, T> {
-    fn put(&mut self, idx: DbIndex, key: Data, val: Data) -> crate::Result<()> {
-        self.update(idx, key, Some(val))
+    fn put(&mut self, map_id: DbMapId, key: Data, val: Data) -> crate::Result<()> {
+        self.update(map_id, key, Some(val))
     }
 
-    fn del(&mut self, idx: DbIndex, key: &[u8]) -> crate::Result<()> {
-        self.update(idx, key.to_vec(), None)
+    fn del(&mut self, map_id: DbMapId, key: &[u8]) -> crate::Result<()> {
+        self.update(map_id, key.to_vec(), None)
     }
 }
 
 impl<'tx, T: ReadOps + WriteOps> backend::TxRw for TxRw<'tx, T> {
     fn commit(mut self) -> crate::Result<()> {
-        let entries = self.deltas.into_iter().enumerate().map(|(i, m)| (DbIndex::new(i), m));
-        for (idx, kvmap) in entries {
+        for (idx, kvmap) in self.deltas.into_iter_with_id() {
             for (key, val) in kvmap {
                 match val {
                     None => self.db.del(idx, &key)?,
@@ -108,7 +113,7 @@ impl<'tx, T: ReadOps + WriteOps> backend::TxRw for TxRw<'tx, T> {
 
 pub struct TransactionLockImpl<T> {
     db: sync::Arc<sync::RwLock<T>>,
-    num_maps: usize,
+    num_maps: DbMapCount,
 }
 
 impl<T> Clone for TransactionLockImpl<T> {
@@ -136,7 +141,7 @@ impl<'tx, T: 'tx + ReadOps + WriteOps> backend::TransactionalRw<'tx> for Transac
     fn transaction_rw<'st: 'tx>(&'st self, _: Option<usize>) -> crate::Result<Self::TxRw> {
         Ok(TxRw {
             db: self.db.write().expect("lock to be alive"),
-            deltas: vec![BTreeMap::new(); self.num_maps],
+            deltas: DbMapsData::new(self.num_maps, |_| BTreeMap::new()),
         })
     }
 }
@@ -166,7 +171,7 @@ where
     type Impl = TransactionLockImpl<T>;
 
     fn open(self, desc: DbDesc) -> crate::Result<Self::Impl> {
-        let num_maps = desc.len();
+        let num_maps = desc.db_map_count();
         let db = sync::Arc::new(sync::RwLock::new(T::construct(self.0, desc)?));
         Ok(TransactionLockImpl { db, num_maps })
     }
