@@ -56,13 +56,13 @@ impl NodeConfigFile {
 
     /// Reads a configuration from the specified path and overrides the provided parameters.
     pub fn read(config_path: &Path, options: &RunOptions) -> Result<Self> {
-        let config = fs::read_to_string(config_path)
-            .with_context(|| format!("Failed to read '{config_path:?}' config"))?;
+        let config_as_str = fs::read_to_string(config_path).unwrap_or_default();
+
         let NodeConfigFile {
             chainstate,
             p2p,
             rpc,
-        } = toml::from_str(&config).context("Failed to parse config")?;
+        } = toml::from_str(&config_as_str).context("Failed to parse config")?;
 
         let chainstate = chainstate_config(chainstate.unwrap_or_default(), options);
         let p2p = p2p_config(p2p.unwrap_or_default(), options);
