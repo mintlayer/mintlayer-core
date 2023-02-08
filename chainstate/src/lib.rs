@@ -80,7 +80,7 @@ pub fn make_chainstate<
     custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
     time_getter: TimeGetter,
 ) -> Result<Box<dyn ChainstateInterface>, ChainstateError> {
-    let cons = Chainstate::new(
+    let chainstate = Chainstate::new(
         chain_config,
         chainstate_config,
         chainstate_storage,
@@ -88,6 +88,6 @@ pub fn make_chainstate<
         custom_orphan_error_hook,
         time_getter,
     )?;
-    let cons_interface = ChainstateInterfaceImpl::new(cons);
-    Ok(Box::new(cons_interface))
+    let chainstate_interface = ChainstateInterfaceImpl::new(chainstate);
+    Ok(Box::new(chainstate_interface))
 }
