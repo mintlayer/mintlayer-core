@@ -49,6 +49,7 @@ impl FromStr for NodeTypeConfigFile {
 }
 
 /// The p2p subsystem configuration.
+#[must_use]
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct P2pConfigFile {
     /// Address to bind P2P to.

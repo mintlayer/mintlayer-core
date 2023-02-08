@@ -40,8 +40,6 @@ fn create_empty_file(path: impl AsRef<Path>) {
     let _file = std::fs::File::create(path).unwrap();
 }
 
-// TODO(PR): ensure that no subconfigs are required when only the section in a toml file is specified
-
 #[test]
 fn create_default_config() {
     let data_dir = TempDir::new().unwrap();

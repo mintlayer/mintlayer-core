@@ -180,7 +180,7 @@ fn prepare_data_dir<F: Fn() -> PathBuf>(
             if !data_dir.exists() {
                 return Err(anyhow::anyhow!("Custom data directory '{data_dir:?}' does not exist. Please create it or use the default data directory."));
             }
-            data_dir.to_owned()
+            data_dir.clone()
         }
         None => {
             std::fs::create_dir_all(default_data_dir_getter()).with_context(|| {
@@ -306,7 +306,7 @@ mod test {
         let file_data: Vec<u8> = (0..1024).map(|_| make_pseudo_rng().gen::<u8>()).collect();
         {
             let mut file = std::fs::File::create(&file_path).unwrap();
-            file.write(&file_data).unwrap();
+            file.write_all(&file_data).unwrap();
         }
 
         test_file_data(&file_path, &file_data);
@@ -370,7 +370,7 @@ mod test {
         let file_data: Vec<u8> = (0..1024).map(|_| make_pseudo_rng().gen::<u8>()).collect();
         {
             let mut file = std::fs::File::create(&file_path).unwrap();
-            file.write(&file_data).unwrap();
+            file.write_all(&file_data).unwrap();
         }
 
         test_file_data(&file_path, &file_data);

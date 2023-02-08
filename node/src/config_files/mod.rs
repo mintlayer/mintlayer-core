@@ -35,6 +35,7 @@ use self::{
 };
 
 /// The node configuration.
+#[must_use]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NodeConfigFile {
     // Subsystems configurations.
@@ -176,5 +177,20 @@ fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
         http_enabled: Some(http_enabled),
         ws_bind_address: Some(ws_bind_address),
         ws_enabled: Some(ws_enabled),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn no_values_required_in_toml_files() {
+        let _config: NodeConfigFile = toml::from_str("").unwrap();
+        let _config: chainstate_launcher::ChainstateLauncherConfigFile =
+            toml::from_str("").unwrap();
+        let _config: chainstate::ChainstateConfigFile = toml::from_str("").unwrap();
+        let _config: p2p::P2pConfigFile = toml::from_str("").unwrap();
+        let _config: rpc::RpcConfigFile = toml::from_str("").unwrap();
     }
 }
