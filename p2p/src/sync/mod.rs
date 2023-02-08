@@ -417,10 +417,22 @@ where
         if peer_state.requested_blocks.is_empty() {
             if peer_state.known_headers.is_empty() {
                 // Request more headers.
-                // TODO: FIXME: NEXT:
+                self.request_headers(peer)
             } else {
                 // Download remaining blocks.
-                // TODO: FIXME:
+                // TODO: FIXME: NEXT
+                // TODO: FIXME: Move to a function?
+                // if headers.len() > self.p2p_config.requested_blocks_limit.clone().into() {
+                //     peer_state.known_headers =
+                //         headers.split_off(self.p2p_config.requested_blocks_limit.clone().into());
+                // }
+                //
+                // let block_ids: Vec<_> = headers.into_iter().map(|h| h.get_id()).collect();
+                // self.messaging_handle.send_request(
+                //     peer,
+                //     SyncRequest::BlockListRequest(BlockListRequest::new(block_ids.clone())),
+                // )?;
+                // peer_state.requested_blocks.extend(block_ids);
             }
         }
 
@@ -488,15 +500,12 @@ where
 
     // TODO: This shouldn't be public.
     /// Registers the connected peer by creating a context for it.
+    ///
+    /// The `HeaderListRequest` message is sent to newly connected peers.
     pub async fn register_peer(&mut self, peer: T::PeerId) -> Result<()> {
         log::debug!("register peer {peer} to sync manager");
 
-        let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
-        self.messaging_handle.send_request(
-            peer,
-            SyncRequest::HeaderListRequest(HeaderListRequest::new(locator.clone())),
-        )?;
-
+        self.request_headers(peer).await?;
         match self.peers.insert(peer, PeerContext::new()) {
             // This should never happen because a peer can only connect once.
             Some(_) => Err(P2pError::PeerError(PeerError::PeerAlreadyExists)),
@@ -603,6 +612,16 @@ where
             | P2pError::SubsystemFailure
             | P2pError::StorageFailure(_)) => Err(e),
         }
+    }
+
+    async fn request_headers(&mut self, peer: T::PeerId) -> Result<()> {
+        let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
+        self.messaging_handle
+            .send_request(
+                peer,
+                SyncRequest::HeaderListRequest(HeaderListRequest::new(locator.clone())),
+            )
+            .map(|_| ())
     }
 }
 
