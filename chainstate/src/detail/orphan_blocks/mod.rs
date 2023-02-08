@@ -18,3 +18,6 @@ pub use orphans_refs::*;
 
 mod pool;
 pub use pool::*;
+
+mod orphans_proxy;
+pub use orphans_proxy::*;
