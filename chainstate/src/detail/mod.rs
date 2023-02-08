@@ -43,7 +43,9 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 
-use chainstate_storage::{BlockchainStorage, BlockchainStorageRead, Transactional};
+use chainstate_storage::{
+    BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
+};
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
@@ -233,7 +235,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     /// Check that transaction index state is consistent between DB and config.
     fn process_tx_index_enabled_flag(&mut self) -> Result<(), BlockError> {
-        use chainstate_storage::{BlockchainStorageWrite, TransactionRw};
         let mut db_tx = self
             .chainstate_storage
             .transaction_rw(None)
@@ -378,8 +379,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     /// Initialize chainstate with genesis block
     pub fn process_genesis(&mut self) -> Result<(), BlockError> {
-        use chainstate_storage::{BlockchainStorageWrite, TransactionRw};
-
         // Gather information about genesis.
         let genesis = self.chain_config.genesis_block();
         let genesis_id = self.chain_config.genesis_block_id();

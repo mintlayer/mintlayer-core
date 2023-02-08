@@ -26,10 +26,10 @@ use crate::{
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
     storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
-    DelegationId, DeltaMergeUndo, PoSAccountingDB, PoolId,
+    DelegationId, DeltaMergeUndo, PoSAccountingDB, PoolId, StorageTag,
 };
 
-impl<S: PoSAccountingStorageRead> PoSAccountingView for PoSAccountingDB<S> {
+impl<S: PoSAccountingStorageRead<T>, T: StorageTag> PoSAccountingView for PoSAccountingDB<S, T> {
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
         self.get_pool_data(pool_id).map(|v| v.is_some())
     }
@@ -71,7 +71,9 @@ impl<S: PoSAccountingStorageRead> PoSAccountingView for PoSAccountingDB<S> {
     }
 }
 
-impl<S: PoSAccountingStorageWrite> FlushablePoSAccountingView for PoSAccountingDB<S> {
+impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> FlushablePoSAccountingView
+    for PoSAccountingDB<S, T>
+{
     fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<DeltaMergeUndo, Error> {
         self.merge_with_delta(data)
     }

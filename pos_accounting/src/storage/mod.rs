@@ -27,7 +27,12 @@ use crate::{
 
 use chainstate_types::storage_result;
 
-pub trait PoSAccountingStorageRead {
+pub trait StorageTag {}
+
+pub struct DefaultStorageTag;
+impl StorageTag for DefaultStorageTag {}
+
+pub trait PoSAccountingStorageRead<Tag: StorageTag = DefaultStorageTag> {
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, storage_result::Error>;
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, storage_result::Error>;
@@ -54,7 +59,9 @@ pub trait PoSAccountingStorageRead {
     ) -> Result<Option<Amount>, storage_result::Error>;
 }
 
-pub trait PoSAccountingStorageWrite: PoSAccountingStorageRead {
+pub trait PoSAccountingStorageWrite<Tag: StorageTag = DefaultStorageTag>:
+    PoSAccountingStorageRead<Tag>
+{
     fn set_pool_balance(
         &mut self,
         pool_id: PoolId,
@@ -107,10 +114,11 @@ pub trait PoSAccountingStorageWrite: PoSAccountingStorageRead {
     ) -> Result<(), storage_result::Error>;
 }
 
-impl<T> PoSAccountingStorageRead for T
+impl<V, T> PoSAccountingStorageRead<T> for V
 where
-    T: Deref,
-    <T as Deref>::Target: PoSAccountingStorageRead,
+    V: Deref,
+    T: StorageTag,
+    <V as Deref>::Target: PoSAccountingStorageRead<T>,
 {
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, storage_result::Error> {
         self.deref().get_pool_balance(pool_id)
@@ -150,10 +158,11 @@ where
     }
 }
 
-impl<T> PoSAccountingStorageWrite for T
+impl<V, T> PoSAccountingStorageWrite<T> for V
 where
-    T: DerefMut,
-    <T as Deref>::Target: PoSAccountingStorageWrite,
+    V: DerefMut,
+    T: StorageTag,
+    <V as Deref>::Target: PoSAccountingStorageWrite<T>,
 {
     fn set_pool_balance(
         &mut self,
