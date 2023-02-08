@@ -72,9 +72,6 @@ jobs:
           - advisories
           - licenses
 
-    # Prevent sudden announcement of a new advisory from failing ci:
-    continue-on-error: ${{ matrix.checks == 'advisories' }}
-
     steps:
       - id: skip-check
         uses: fkirc/skip-duplicate-actions@v5.3.0
