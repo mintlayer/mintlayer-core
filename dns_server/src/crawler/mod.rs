@@ -38,7 +38,6 @@ use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom};
 use logging::log;
 use p2p::{
-    config::P2pConfig,
     error::P2pError,
     message::{
         AnnounceAddrRequest, PeerManagerRequest, PeerManagerResponse, PingRequest, PingResponse,
@@ -135,8 +134,8 @@ where
     pub async fn new(
         config: Arc<DnsServerConfig>,
         chain_config: Arc<ChainConfig>,
-        p2p_config: Arc<P2pConfig>,
-        transport: N::Transport,
+        conn: N::ConnectivityHandle,
+        sync: N::SyncingMessagingHandle,
         storage: S,
         command_tx: mpsc::UnboundedSender<ServerCommands>,
     ) -> Result<Self, DnsServerError> {
@@ -165,14 +164,6 @@ where
             let address = address.parse()?;
             Self::new_address(&mut addresses, address, true);
         }
-
-        let (conn, sync) = N::start(
-            transport,
-            vec![],
-            Arc::clone(&chain_config),
-            Arc::clone(&p2p_config),
-        )
-        .await?;
 
         Ok(Self {
             chain_config,

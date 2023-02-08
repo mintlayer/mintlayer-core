@@ -20,9 +20,12 @@ use config::DnsServerConfig;
 use crawler::{storage_impl::DnsServerStorageImpl, Crawler};
 use p2p::{
     config::P2pConfig,
-    net::default_backend::{
-        transport::{NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket},
-        DefaultNetworkingService,
+    net::{
+        default_backend::{
+            transport::{NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket},
+            DefaultNetworkingService,
+        },
+        NetworkingService,
     },
 };
 use tokio::sync::mpsc;
@@ -61,6 +64,14 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
 
     let transport = make_p2p_transport();
 
+    let (conn, sync) = DefaultNetworkingService::<NoiseTcpTransport>::start(
+        transport,
+        vec![],
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+    )
+    .await?;
+
     let storage = DnsServerStorageImpl::new(storage_lmdb::Lmdb::new(
         config.datadir.clone().into(),
         Default::default(),
@@ -71,8 +82,8 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
     let crawler = Crawler::<DefaultNetworkingService<_>, _>::new(
         Arc::clone(&config),
         chain_config,
-        p2p_config,
-        transport,
+        conn,
+        sync,
         storage,
         command_tx,
     )
