@@ -29,6 +29,8 @@ pub struct OrphansProxy {
     tx: mpsc::Sender<RemoteCall>,
 }
 
+// TODO: remove #[allow(dead_code)] from the functions below
+
 impl OrphansProxy {
     #[allow(dead_code)]
     pub fn new(max_orphans: usize) -> Self {
@@ -70,7 +72,7 @@ impl OrphansProxy {
                 let result = f(subsys);
                 tx.send(result).unwrap();
             })))
-            .log_err();
+            .log_err_pfx("Orphans call");
         rx
     }
 }
@@ -86,11 +88,27 @@ impl Drop for OrphansProxy {
 
 #[cfg(test)]
 mod tests {
+    use common::primitives::H256;
+
     use super::*;
 
     #[test]
     fn test_orphans_proxy_control() {
         let orphans_proxy = OrphansProxy::new(500);
         assert_eq!(orphans_proxy.call(|o| o.len()).recv().unwrap(), 0);
+        assert_eq!(
+            orphans_proxy
+                .call(|o| o.is_already_an_orphan(&H256::zero().into()))
+                .recv()
+                .unwrap(),
+            false
+        );
+        assert_eq!(
+            orphans_proxy
+                .call_mut(|o| o.take_all_children_of(&H256::zero().into()))
+                .recv()
+                .unwrap(),
+            Vec::new()
+        );
     }
 }
