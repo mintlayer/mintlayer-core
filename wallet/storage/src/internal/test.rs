@@ -32,7 +32,7 @@ impl Store<storage_sqlite::Sqlite> {
 type TestStore = Store<storage_sqlite::Sqlite>;
 
 #[test]
-fn test_storage_get_default_version_in_tx() {
+fn storage_get_default_version_in_tx() {
     utils::concurrency::model(|| {
         let store = TestStore::new_in_memory().unwrap();
         let vtx = store.transaction_ro().unwrap().get_storage_version().unwrap();
@@ -46,7 +46,7 @@ fn test_storage_get_default_version_in_tx() {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn utxo_test(#[case] seed: Seed) {
+fn read_write_utxo_in_db_transaction(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut db_interface = TestStore::new_in_memory().unwrap();
 

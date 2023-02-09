@@ -25,7 +25,6 @@ use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
 use crate::queries::SqliteQueries;
-use crate::SqliteBackend::{File, InMemory};
 use error::process_sqlite_error;
 use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
@@ -239,13 +238,15 @@ pub struct Sqlite {
 
 impl Sqlite {
     pub fn new_in_memory() -> Self {
-        Self { backend: InMemory }
+        Self {
+            backend: SqliteBackend::InMemory,
+        }
     }
 
     /// New Sqlite database backend
     pub fn new(path: PathBuf) -> Self {
         Self {
-            backend: File(path),
+            backend: SqliteBackend::File(path),
         }
     }
 
@@ -258,8 +259,8 @@ impl Sqlite {
         ]);
 
         let connection = match self.backend {
-            InMemory => Connection::open_in_memory_with_flags(flags)?,
-            File(path) => Connection::open_with_flags(path, flags)?,
+            SqliteBackend::InMemory => Connection::open_in_memory_with_flags(flags)?,
+            SqliteBackend::File(path) => Connection::open_with_flags(path, flags)?,
         };
 
         // Set the locking mode to exclusive
@@ -305,7 +306,7 @@ impl backend::Backend for Sqlite {
     fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
         // Attempt to create the parent storage directory if using a file
 
-        if let File(ref path) = self.backend {
+        if let SqliteBackend::File(ref path) = self.backend {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent).map_err(error::process_io_error)?;
             } else {
