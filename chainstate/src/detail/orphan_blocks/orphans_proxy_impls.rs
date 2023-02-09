@@ -26,7 +26,7 @@ impl OrphanBlocks for OrphansProxy {
         &self,
         block_id: &common::primitives::Id<common::chain::Block>,
     ) -> bool {
-        let block_id = block_id.clone();
+        let block_id = *block_id;
         self.call(move |o| o.is_already_an_orphan(&block_id))
             .recv()
             .expect(RECV_ERR_MSG)
@@ -49,7 +49,7 @@ impl OrphanBlocksMut for OrphansProxy {
         &mut self,
         block_id: &common::primitives::Id<common::chain::GenBlock>,
     ) -> Vec<common::primitives::id::WithId<common::chain::Block>> {
-        let block_id = block_id.clone();
+        let block_id = *block_id;
         self.call_mut(move |o| o.take_all_children_of(&block_id))
             .recv()
             .expect(RECV_ERR_MSG)
