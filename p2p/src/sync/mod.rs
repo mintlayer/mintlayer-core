@@ -364,16 +364,28 @@ where
             return Err(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders));
         }
 
+        let is_max_headers =
+            headers.len() == Into::<usize>::into(self.p2p_config.header_limit.clone());
         let headers = self
             .chainstate_handle
             .call(|c| c.filter_already_existing_blocks(headers))
             .await??;
+        if headers.is_empty() {
+            // A peer can have more headers if we have received the maximum amount of them.
+            if is_max_headers {
+                self.request_headers(peer).await?;
+            }
+            return Ok(());
+        }
 
-        // TODO: FIXME:
-        // for header in headers.clone() {
-        //     self.chainstate_handle.call(|c| c.preliminary_header_check(header)).await??;
-        // }
-
+        let first_header = headers
+            .first()
+            // This is OK because of the `headers.is_empty()` check above.
+            .expect("Headers shouldn't be empty")
+            .clone();
+        self.chainstate_handle
+            .call(|c| c.preliminary_header_check(first_header))
+            .await??;
         self.request_blocks(peer, headers).await
     }
 
