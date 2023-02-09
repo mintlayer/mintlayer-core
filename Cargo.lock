@@ -3967,6 +3967,7 @@ dependencies = [
  "storage",
  "storage-sqlite",
  "test-utils",
+ "utils",
  "utxo",
 ]
 

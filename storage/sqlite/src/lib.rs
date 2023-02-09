@@ -25,6 +25,7 @@ use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
 use crate::queries::SqliteQueries;
+use crate::SqliteBackend::{File, InMemory};
 use error::process_sqlite_error;
 use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
@@ -226,14 +227,26 @@ impl ShallowClone for SqliteImpl {}
 impl backend::BackendImpl for SqliteImpl {}
 
 #[derive(Eq, PartialEq, Clone, Debug)]
+enum SqliteBackend {
+    InMemory,
+    File(PathBuf),
+}
+
+#[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Sqlite {
-    path: Option<PathBuf>,
+    backend: SqliteBackend,
 }
 
 impl Sqlite {
+    pub fn new_in_memory() -> Self {
+        Self { backend: InMemory }
+    }
+
     /// New Sqlite database backend
     pub fn new(path: PathBuf) -> Self {
-        Self { path: Some(path) }
+        Self {
+            backend: File(path),
+        }
     }
 
     // fn open_db(self, desc: &MapDesc) -> storage_core::Result<Connection> {
@@ -244,9 +257,9 @@ impl Sqlite {
             OpenFlags::SQLITE_OPEN_CREATE,
         ]);
 
-        let connection = match self.path {
-            None => Connection::open_in_memory_with_flags(flags)?,
-            Some(path) => Connection::open_with_flags(path, flags)?,
+        let connection = match self.backend {
+            InMemory => Connection::open_in_memory_with_flags(flags)?,
+            File(path) => Connection::open_with_flags(path, flags)?,
         };
 
         // Set the locking mode to exclusive
@@ -289,7 +302,7 @@ impl Sqlite {
 /// Implements in memory database, useful for testing
 impl Default for Sqlite {
     fn default() -> Self {
-        Self { path: None }
+        Sqlite::new_in_memory()
     }
 }
 
@@ -298,11 +311,12 @@ impl backend::Backend for Sqlite {
 
     fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
         // Attempt to create the parent storage directory if using a file
-        if let Some(ref path) = self.path {
+
+        if let File(ref path) = self.backend {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent).map_err(error::process_io_error)?;
             } else {
-                return Err(storage_core::error::Recoverable::Io(
+                return Err(storage_core::error::Fatal::Io(
                     std::io::ErrorKind::NotFound,
                     "Cannot find the parent directory".to_string(),
                 )

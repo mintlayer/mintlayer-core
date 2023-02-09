@@ -16,3 +16,4 @@ utxo = { path = '../../utxo' }
 
 [dev-dependencies]
 test-utils = {path = '../../test-utils'}
+utils = { path = '../../utils' }
