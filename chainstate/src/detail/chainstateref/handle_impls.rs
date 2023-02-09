@@ -13,15 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_storage::BlockchainStorageRead;
+use chainstate_storage::{BlockchainStorageRead, SealedStorageTag};
 use chainstate_types::{
-    BlockIndex, BlockIndexHandle, EpochData, GenBlockIndex, PropertyQueryError,
-    TransactionIndexHandle,
+    BlockIndex, BlockIndexHandle, EpochData, GenBlockIndex, PoSAccountingSealedHandle,
+    PropertyQueryError, TransactionIndexHandle,
 };
 use common::{
-    chain::{block::BlockReward, Block, GenBlock, OutPointSourceId},
-    primitives::{BlockHeight, Id},
+    chain::{block::BlockReward, Block, GenBlock, OutPointSourceId, PoolId},
+    primitives::{Amount, BlockHeight, Id},
 };
+use pos_accounting::PoSAccountingStorageRead;
 
 use crate::{detail::orphan_blocks::OrphanBlocks, TransactionVerificationStrategy};
 
@@ -80,5 +81,14 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
         tx_index: &common::chain::TxMainChainPosition,
     ) -> Result<Option<common::chain::Transaction>, PropertyQueryError> {
         self.get_mainchain_tx_by_position(tx_index)
+    }
+}
+
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    PoSAccountingSealedHandle for ChainstateRef<'a, S, O, V>
+{
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, PropertyQueryError> {
+        PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&self.db_tx, pool_id)
+            .map_err(PropertyQueryError::from)
     }
 }

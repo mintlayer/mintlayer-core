@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{OutPoint, OutPointSourceId},
+    chain::{DelegationId, OutPoint, OutPointSourceId, PoolId},
     primitives::{Amount, Id, H256},
 };
 use crypto::{
@@ -38,7 +38,6 @@ use crate::{
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
     storage::in_memory::InMemoryPoSAccounting,
-    DelegationId, PoolId,
 };
 
 fn create_pool(

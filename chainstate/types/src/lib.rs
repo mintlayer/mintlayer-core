@@ -28,6 +28,7 @@ pub use crate::{
     gen_block_index::GenBlockIndex,
     height_skip::get_skip_height,
     locator::Locator,
+    pos_accounting_handle::PoSAccountingSealedHandle,
     preconnect_data::{BlockPreconnectData, ConsensusExtraData},
     transaction_index_handle::TransactionIndexHandle,
 };
@@ -40,5 +41,6 @@ mod error;
 mod gen_block_index;
 mod height_skip;
 mod locator;
+mod pos_accounting_handle;
 mod preconnect_data;
 mod transaction_index_handle;

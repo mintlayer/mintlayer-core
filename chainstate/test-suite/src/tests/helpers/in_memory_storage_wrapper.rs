@@ -22,13 +22,13 @@ use chainstate_storage::{inmemory::Store, BlockchainStorageRead, TipStorageTag};
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
-        tokens::{TokenAuxiliaryData, TokenId},
+        tokens::{TokenAuxiliaryData, TokenId}, PoolId, DelegationId,
         Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction, TxMainChainIndex,
     },
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    DelegationData, DelegationId, PoSAccountingStorageRead, PoSAccountingView, PoolData, PoolId,
+    DelegationData, PoSAccountingStorageRead, PoSAccountingView, PoolData, 
 };
 use utxo::UtxosStorageRead;
 

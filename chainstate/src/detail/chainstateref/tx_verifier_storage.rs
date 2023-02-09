@@ -29,14 +29,14 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction,
+        Block, ChainConfig, DelegationId, GenBlock, GenBlockId, OutPointSourceId, PoolId,
+        Transaction,
     },
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, FlushablePoSAccountingView,
+    AccountingBlockUndo, DelegationData, DeltaMergeUndo, FlushablePoSAccountingView,
     PoSAccountingDB, PoSAccountingDeltaData, PoSAccountingStorageRead, PoSAccountingView, PoolData,
-    PoolId,
 };
 use tx_verifier::transaction_verifier::TransactionSource;
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosDB, UtxosStorageRead};

@@ -13,25 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod block;
-pub mod config;
-pub mod gen_block;
-pub mod genesis;
-mod mlt;
-mod pos;
-mod pow;
-pub mod tokens;
-pub mod transaction;
-mod upgrades;
+use typename::TypeName;
 
-pub use signed_transaction::SignedTransaction;
-pub use transaction::*;
+use crate::primitives::Id;
 
-pub use block::Block;
-pub use config::ChainConfig;
-pub use gen_block::{GenBlock, GenBlockId};
-pub use genesis::Genesis;
-pub use mlt::Mlt;
-pub use pos::{DelegationId, PoolId};
-pub use pow::PoWChainConfig;
-pub use upgrades::*;
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, TypeName)]
+pub struct Pool;
+pub type PoolId = Id<Pool>;
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, TypeName)]
+pub struct Delegation;
+pub type DelegationId = Id<Delegation>;

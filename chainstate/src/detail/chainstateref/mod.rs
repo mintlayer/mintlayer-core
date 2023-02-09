@@ -53,7 +53,7 @@ use super::{
 };
 
 mod epoch_seal;
-mod handle_impl;
+mod handle_impls;
 mod tx_verifier_storage;
 
 pub struct ChainstateRef<'a, S, O, V> {

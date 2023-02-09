@@ -23,14 +23,14 @@ use super::storage::{
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
-        tokens::{TokenAuxiliaryData, TokenId},
+        tokens::{TokenAuxiliaryData, TokenId}, PoolId, DelegationId,
         Block, GenBlock, OutPoint, OutPointSourceId, Transaction, TxMainChainIndex,
     },
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    DelegationData, DelegationId, DeltaMergeUndo, FlushablePoSAccountingView,
-    PoSAccountingDeltaData, PoSAccountingView, PoolData, PoolId,
+    DelegationData, DeltaMergeUndo, FlushablePoSAccountingView,
+    PoSAccountingDeltaData, PoSAccountingView, PoolData, 
 };
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead};
 

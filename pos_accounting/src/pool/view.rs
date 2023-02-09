@@ -15,9 +15,12 @@
 
 use std::{collections::BTreeMap, ops::Deref};
 
-use common::primitives::Amount;
+use common::{
+    chain::{DelegationId, PoolId},
+    primitives::Amount,
+};
 
-use crate::{error::Error, DelegationId, DeltaMergeUndo, PoolId};
+use crate::{error::Error, DeltaMergeUndo};
 
 use super::{delegation::DelegationData, delta::data::PoSAccountingDeltaData, pool_data::PoolData};
 

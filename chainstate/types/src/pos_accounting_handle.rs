@@ -13,25 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod block;
-pub mod config;
-pub mod gen_block;
-pub mod genesis;
-mod mlt;
-mod pos;
-mod pow;
-pub mod tokens;
-pub mod transaction;
-mod upgrades;
+use common::{chain::PoolId, primitives::Amount};
 
-pub use signed_transaction::SignedTransaction;
-pub use transaction::*;
+use crate::PropertyQueryError;
 
-pub use block::Block;
-pub use config::ChainConfig;
-pub use gen_block::{GenBlock, GenBlockId};
-pub use genesis::Genesis;
-pub use mlt::Mlt;
-pub use pos::{DelegationId, PoolId};
-pub use pow::PoWChainConfig;
-pub use upgrades::*;
+/// The interface for getting PoS accounting sealed data.
+pub trait PoSAccountingSealedHandle {
+    /// Returns total balance of the pool.
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, PropertyQueryError>;
+}

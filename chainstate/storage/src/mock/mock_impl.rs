@@ -24,13 +24,12 @@ use common::{
         block::BlockReward,
         config::EpochIndex,
         transaction::{OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition},
-        Block, GenBlock, OutPoint,
+        Block, DelegationId, GenBlock, OutPoint, PoolId,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, PoSAccountingDeltaData,
-    PoolData, PoolId,
+    AccountingBlockUndo, DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoolData,
 };
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
