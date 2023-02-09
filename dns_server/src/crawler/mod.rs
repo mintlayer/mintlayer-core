@@ -65,7 +65,7 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(60);
 const MAX_CONNECTS_PER_HEARTBEAT: usize = 10;
 
 /// When the server drops the unreachable node address. Used for negative caching.
-const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(1 * 3600);
+const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(3600);
 
 /// When the server drops the unreachable node address that was once reachable. This should take about a month.
 /// Such a long time is useful if the server itself has prolonged connectivity problems.
