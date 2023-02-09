@@ -177,9 +177,6 @@ impl AuthorityImpl {
 
         let mut new_records = BTreeMap::new();
 
-        let mut ipv4_rec = RecordSet::with_ttl(self.host.clone(), RecordType::A, TTL_IP);
-        let mut ipv6_rec = RecordSet::with_ttl(self.host.clone(), RecordType::AAAA, TTL_IP);
-
         if let Some(mbox) = self.mbox.as_ref() {
             let mut soa_rec = RecordSet::with_ttl(self.host.clone(), RecordType::SOA, TTL_SOA);
             soa_rec.add_rdata(RData::SOA(SOA::new(
@@ -206,22 +203,26 @@ impl AuthorityImpl {
             );
         }
 
+        // A records
+        let mut ipv4_rec = RecordSet::with_ttl(self.host.clone(), RecordType::A, TTL_IP);
         for ip in ipv4 {
             ipv4_rec.add_rdata(RData::A(ip));
         }
-
-        for ip in ipv6 {
-            ipv6_rec.add_rdata(RData::AAAA(ip));
-        }
-
         new_records.insert(
             RrKey::new(ipv4_rec.name().clone().into(), ipv4_rec.record_type()),
             Arc::new(ipv4_rec),
         );
+
+        // AAAA records
+        let mut ipv6_rec = RecordSet::with_ttl(self.host.clone(), RecordType::AAAA, TTL_IP);
+        for ip in ipv6 {
+            ipv6_rec.add_rdata(RData::AAAA(ip));
+        }
         new_records.insert(
             RrKey::new(ipv6_rec.name().clone().into(), ipv6_rec.record_type()),
             Arc::new(ipv6_rec),
         );
+
         *self.inner.records_mut().await = new_records;
     }
 }
