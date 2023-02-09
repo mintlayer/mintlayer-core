@@ -371,3 +371,49 @@ async fn dns_crawler_announced_offline() {
     );
     assert_eq!(state.connection_attempts.lock().unwrap().len(), 3);
 }
+
+#[tokio::test]
+async fn dns_private_ip_non_default_port() {
+    let node1: SocketAddr = "1.0.0.1:3031".parse().unwrap();
+    let node2: SocketAddr = "[2a00::1]:3031".parse().unwrap();
+    let node3: SocketAddr = "192.168.0.1:3031".parse().unwrap();
+    let node4: SocketAddr = "[fe80::1]:3031".parse().unwrap();
+    let node5: SocketAddr = "1.0.0.2:12345".parse().unwrap();
+    let node6: SocketAddr = "[2a00::2]:12345".parse().unwrap();
+    let (mut crawler, state, mut command_rx, time_getter) =
+        test_crawler(vec![node1, node2, node3, node4, node5, node6]);
+
+    state.node_online(node1);
+    state.node_online(node2);
+    state.node_online(node3);
+    state.node_online(node4);
+    state.node_online(node5);
+    state.node_online(node6);
+
+    advance_time(&mut crawler, &time_getter, 24).await;
+
+    // Check that only nodes with public addresses and on the default port are added to DNS
+    assert_eq!(
+        command_rx.recv().await.unwrap(),
+        ServerCommands::AddAddress(node1.ip())
+    );
+    assert_eq!(
+        command_rx.recv().await.unwrap(),
+        ServerCommands::AddAddress(node2.ip())
+    );
+    assert!(command_rx.try_recv().is_err());
+
+    // Check that all reachable nodes are stored in the DB
+    let mut addresses = crawler.storage.transaction_ro().unwrap().get_addresses().unwrap();
+    let mut addresses_expected = vec![
+        node1.to_string(),
+        node2.to_string(),
+        node3.to_string(),
+        node4.to_string(),
+        node5.to_string(),
+        node6.to_string(),
+    ];
+    addresses.sort();
+    addresses_expected.sort();
+    assert_eq!(addresses, addresses_expected);
+}
