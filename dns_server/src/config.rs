@@ -16,15 +16,21 @@
 use clap::Parser;
 use directories::BaseDirs;
 
+#[derive(clap::ValueEnum, Clone, Debug)]
+pub enum Network {
+    Mainnet,
+    Testnet,
+}
+
 #[derive(Parser, Debug)]
 pub struct DnsServerConfig {
     /// The path to the data directory
     #[clap(long, default_value_t = default_data_dir())]
     pub datadir: String,
 
-    /// Use testnet
-    #[clap(long)]
-    pub testnet: bool,
+    /// Network
+    #[arg(long, value_enum, default_value_t = Network::Mainnet)]
+    pub network: Network,
 
     /// UDP socket address to listen on. Can be specified multiple times.
     #[clap(long, default_values_t = vec!["[::]:53".to_string()])]

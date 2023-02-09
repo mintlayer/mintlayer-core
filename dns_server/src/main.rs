@@ -44,10 +44,9 @@ fn make_p2p_transport() -> NoiseTcpTransport {
 async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServerError> {
     let (command_tx, command_rx) = mpsc::unbounded_channel();
 
-    let chain_config = if config.testnet {
-        Arc::new(common::chain::config::create_testnet())
-    } else {
-        Arc::new(common::chain::config::create_mainnet())
+    let chain_config = match config.network {
+        config::Network::Mainnet => Arc::new(common::chain::config::create_mainnet()),
+        config::Network::Testnet => Arc::new(common::chain::config::create_testnet()),
     };
 
     let p2p_config = Arc::new(P2pConfig {
