@@ -299,13 +299,6 @@ impl Sqlite {
     }
 }
 
-/// Implements in memory database, useful for testing
-impl Default for Sqlite {
-    fn default() -> Self {
-        Sqlite::new_in_memory()
-    }
-}
-
 impl backend::Backend for Sqlite {
     type Impl = SqliteImpl;
 

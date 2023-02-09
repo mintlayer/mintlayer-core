@@ -14,6 +14,9 @@ storage-sqlite = { path = "../../storage/sqlite" }
 
 utxo = { path = '../../utxo' }
 
+rstest = "0.16"
+
 [dev-dependencies]
 test-utils = {path = '../../test-utils'}
 utils = { path = '../../utils' }
+crypto = { path = '../../crypto' }

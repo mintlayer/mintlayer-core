@@ -53,13 +53,6 @@ impl<B: storage::Backend> Store<B> {
     }
 }
 
-impl<B: Default + storage::Backend> Store<B> {
-    /// Create a default storage (mostly for testing, may want to remove this later)
-    pub fn new_empty() -> crate::Result<Self> {
-        Self::new(B::default())
-    }
-}
-
 impl<B: storage::Backend> Clone for Store<B>
 where
     B::Impl: Clone,
