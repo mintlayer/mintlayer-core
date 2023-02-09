@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::{Deref, DerefMut};
+
 use super::{OrphanAddError, OrphanBlocksPool};
 use common::{
     chain::{Block, GenBlock},
@@ -30,56 +32,36 @@ pub trait OrphanBlocksMut: OrphanBlocks {
     fn take_all_children_of(&mut self, block_id: &Id<GenBlock>) -> Vec<WithId<Block>>;
 }
 
-pub struct OrphanBlocksRef<'a> {
-    inner: &'a OrphanBlocksPool,
-}
-
-impl<'a> OrphanBlocksRef<'a> {
-    pub fn new(inner: &'a OrphanBlocksPool) -> Self {
-        Self { inner }
-    }
-}
-
-impl<'a> OrphanBlocks for OrphanBlocksRef<'a> {
+impl OrphanBlocks for &OrphanBlocksPool {
     fn len(&self) -> usize {
-        self.inner.len()
+        self.deref().len()
     }
 
     fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool {
-        self.inner.is_already_an_orphan(block_id)
+        self.deref().is_already_an_orphan(block_id)
     }
 }
 
-pub struct OrphanBlocksRefMut<'a> {
-    inner: &'a mut OrphanBlocksPool,
-}
-
-impl<'a> OrphanBlocksRefMut<'a> {
-    pub fn new(inner: &'a mut OrphanBlocksPool) -> Self {
-        Self { inner }
-    }
-}
-
-impl<'a> OrphanBlocks for OrphanBlocksRefMut<'a> {
+impl OrphanBlocks for &mut OrphanBlocksPool {
     fn len(&self) -> usize {
-        self.inner.len()
+        self.deref().len()
     }
 
     fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool {
-        self.inner.is_already_an_orphan(block_id)
+        self.deref().is_already_an_orphan(block_id)
     }
 }
 
-impl<'a> OrphanBlocksMut for OrphanBlocksRefMut<'a> {
+impl OrphanBlocksMut for &mut OrphanBlocksPool {
     fn clear(&mut self) {
-        self.inner.clear()
+        self.deref_mut().clear()
     }
 
     fn add_block(&mut self, block: WithId<Block>) -> Result<(), Box<OrphanAddError>> {
-        self.inner.add_block(block)
+        self.deref_mut().add_block(block)
     }
 
     fn take_all_children_of(&mut self, block_id: &Id<GenBlock>) -> Vec<WithId<Block>> {
-        self.inner.take_all_children_of(block_id)
+        self.deref_mut().take_all_children_of(block_id)
     }
 }

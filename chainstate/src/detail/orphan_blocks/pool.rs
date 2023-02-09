@@ -15,7 +15,6 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use super::{OrphanBlocksRef, OrphanBlocksRefMut};
 use common::chain::{Block, GenBlock};
 use common::primitives::id::WithId;
 use common::primitives::{Id, Idable};
@@ -148,14 +147,6 @@ impl OrphanBlocksPool {
             })
             .collect();
         res
-    }
-
-    pub fn as_ro_ref(&self) -> OrphanBlocksRef {
-        OrphanBlocksRef::new(self)
-    }
-
-    pub fn as_rw_ref(&mut self) -> OrphanBlocksRefMut {
-        OrphanBlocksRefMut::new(self)
     }
 }
 

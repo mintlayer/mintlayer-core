@@ -63,11 +63,7 @@ use utils::{
 };
 use utxo::UtxosDB;
 
-use self::{
-    orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut},
-    query::ChainstateQuery,
-    tx_verification_strategy::TransactionVerificationStrategy,
-};
+use self::{query::ChainstateQuery, tx_verification_strategy::TransactionVerificationStrategy};
 use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
 
 type TxRw<'a, S> = <S as Transactional<'a>>::TransactionRw;
@@ -106,22 +102,23 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     fn make_db_tx(
         &mut self,
-    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRw<'_, S>, OrphanBlocksRefMut, V>>
-    {
+    ) -> chainstate_storage::Result<
+        chainstateref::ChainstateRef<TxRw<'_, S>, &mut OrphanBlocksPool, V>,
+    > {
         let db_tx = self.chainstate_storage.transaction_rw(None)?;
         Ok(chainstateref::ChainstateRef::new_rw(
             &self.chain_config,
             &self.chainstate_config,
             &self.tx_verification_strategy,
             db_tx,
-            self.orphan_blocks.as_rw_ref(),
+            &mut self.orphan_blocks,
             self.time_getter.getter(),
         ))
     }
 
     pub(crate) fn make_db_tx_ro(
         &self,
-    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRo<'_, S>, OrphanBlocksRef, V>>
+    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRo<'_, S>, &OrphanBlocksPool, V>>
     {
         let db_tx = self.chainstate_storage.transaction_ro()?;
         Ok(chainstateref::ChainstateRef::new_ro(
@@ -129,14 +126,14 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             &self.chainstate_config,
             &self.tx_verification_strategy,
             db_tx,
-            self.orphan_blocks.as_ro_ref(),
+            &self.orphan_blocks,
             self.time_getter.getter(),
         ))
     }
 
     pub fn query(
         &self,
-    ) -> Result<ChainstateQuery<TxRo<'_, S>, OrphanBlocksRef, V>, PropertyQueryError> {
+    ) -> Result<ChainstateQuery<TxRo<'_, S>, &OrphanBlocksPool, V>, PropertyQueryError> {
         self.make_db_tx_ro().map(ChainstateQuery::new).map_err(PropertyQueryError::from)
     }
 
