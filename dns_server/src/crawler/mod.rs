@@ -144,15 +144,35 @@ where
         storage: S,
         command_tx: mpsc::UnboundedSender<ServerCommands>,
     ) -> Result<Self, DnsServerError> {
-        // Load all persistent addresses
+        let addresses = Self::load_addresses(&storage, &config)?;
+
+        Ok(Self {
+            config,
+            conn,
+            sync,
+            addresses,
+            peers: BTreeMap::new(),
+            storage,
+            command_tx,
+        })
+    }
+
+    fn load_addresses(
+        storage: &S,
+        config: &CrawlerConfig,
+    ) -> Result<BTreeMap<N::Address, AddressData>, DnsServerError> {
         let tx = storage.transaction_ro()?;
 
         let storage_version = tx.get_version()?;
-        if storage_version.is_some() && storage_version != Some(STORAGE_VERSION) {
-            return Err(DnsServerError::Other("Unexpected storage version"));
+        match storage_version {
+            Some(STORAGE_VERSION) | None => {}
+            Some(_version) => {
+                return Err(DnsServerError::Other("Unexpected storage version"));
+            }
         }
 
         let mut addresses = BTreeMap::new();
+        // Load all persistent addresses
         for address in tx.get_addresses()?.iter().filter_map(|address| address.parse().ok()) {
             Self::new_address(&mut addresses, address, true);
         }
@@ -170,15 +190,7 @@ where
             Self::new_address(&mut addresses, address, true);
         }
 
-        Ok(Self {
-            config,
-            conn,
-            sync,
-            addresses,
-            peers: BTreeMap::new(),
-            storage,
-            command_tx,
-        })
+        Ok(addresses)
     }
 
     fn handle_conn_request(
