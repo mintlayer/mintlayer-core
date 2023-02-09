@@ -68,7 +68,10 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
 };
-use crypto::random::{seq, CryptoRng, Rng};
+use crypto::{
+    random::{seq, CryptoRng, Rng},
+    vrf::{transcript::TranscriptAssembler, VRFKeyKind},
+};
 use itertools::Itertools;
 use rstest::rstest;
 use std::collections::BTreeMap;
@@ -677,6 +680,9 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
     let inputs = vec![TxInput::new(outpoint.tx_id(), outpoint.output_index())];
     let outputs = create_tx_outputs(&mut rng, 1);
 
+    let (sk, _pk) = crypto::vrf::VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+    let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+
     let block = Block::new(
         vec![],
         Id::new(H256::random_using(&mut rng)),
@@ -684,6 +690,7 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
         ConsensusData::PoS(PoSData::new(
             inputs,
             vec![InputWitness::NoSignature(None)],
+            vrf_data,
             Compact(1),
         )),
         BlockReward::new(outputs),
@@ -769,6 +776,9 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
     let inputs = vec![TxInput::new(outpoint.tx_id(), outpoint.output_index())];
     let outputs = create_tx_outputs(&mut rng, 1);
 
+    let (sk, _pk) = crypto::vrf::VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+    let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+
     let block = Block::new(
         vec![],
         Id::new(H256::random_using(&mut rng)),
@@ -776,6 +786,7 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
         ConsensusData::PoS(PoSData::new(
             inputs,
             vec![InputWitness::NoSignature(None)],
+            vrf_data,
             Compact(1),
         )),
         BlockReward::new(outputs),
@@ -817,6 +828,9 @@ fn check_burn_output_in_block_reward(#[case] seed: Seed) {
         OutputPurpose::Burn,
     )];
 
+    let (sk, _pk) = crypto::vrf::VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+    let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+
     let block = Block::new(
         vec![],
         Id::new(H256::random_using(&mut rng)),
@@ -824,6 +838,7 @@ fn check_burn_output_in_block_reward(#[case] seed: Seed) {
         ConsensusData::PoS(PoSData::new(
             inputs,
             vec![InputWitness::NoSignature(None)],
+            vrf_data,
             Compact(1),
         )),
         BlockReward::new(outputs),

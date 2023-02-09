@@ -19,8 +19,7 @@ use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, Chain
 use crate::chain::{
     ConsensusUpgrade, Destination, Genesis, Mlt, NetUpgrades, PoWChainConfig, UpgradeVersion,
 };
-use crate::primitives::{id::WithId, semver::SemVer, BlockHeight};
-use crate::primitives::{Amount, BlockDistance};
+use crate::primitives::{id::WithId, semver::SemVer, Amount, BlockDistance, BlockHeight, H256};
 
 use std::collections::BTreeMap;
 use std::num::NonZeroU64;
@@ -98,6 +97,7 @@ pub struct Builder {
     max_block_size_with_smart_contracts: usize,
     epoch_length: NonZeroU64,
     sealed_epoch_distance_from_tip: usize,
+    initial_randomness: H256,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     genesis_block: GenesisBlockInit,
     emission_schedule: EmissionScheduleInit,
@@ -127,6 +127,7 @@ impl Builder {
             max_future_block_time_offset: super::DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
             epoch_length: super::DEFAULT_EPOCH_LENGTH,
             sealed_epoch_distance_from_tip: super::DEFAULT_SEALED_EPOCH_DISTANCE_FROM_TIP,
+            initial_randomness: H256::zero(),
             target_block_spacing: super::DEFAULT_TARGET_BLOCK_SPACING,
             genesis_block: chain_type.default_genesis_init(),
             emission_schedule: EmissionScheduleInit::Mainnet,
@@ -164,6 +165,7 @@ impl Builder {
             max_future_block_time_offset,
             epoch_length,
             sealed_epoch_distance_from_tip,
+            initial_randomness,
             target_block_spacing,
             genesis_block,
             emission_schedule,
@@ -208,6 +210,7 @@ impl Builder {
             max_future_block_time_offset,
             epoch_length,
             sealed_epoch_distance_from_tip,
+            initial_randomness,
             target_block_spacing,
             genesis_block,
             height_checkpoint_data: BTreeMap::new(),

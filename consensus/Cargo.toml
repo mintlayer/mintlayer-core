@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 common = {path = '../common'}
+utils = {path = "../utils"}
 chainstate-types = {path = '../chainstate/types'}
 chainstate-storage = {path = '../chainstate/storage'}
 

@@ -17,8 +17,9 @@ use std::{collections::BTreeSet, convert::TryInto};
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{
-    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, GenBlockIndex,
-    GetAncestorError, PropertyQueryError,
+    block_index_ancestor_getter, get_skip_height,
+    preconnect_data::{BlockPreconnectData, ConsensusExtraData},
+    BlockIndex, BlockIndexHandle, EpochData, GenBlockIndex, GetAncestorError, PropertyQueryError,
 };
 use common::{
     chain::{
@@ -33,7 +34,7 @@ use common::{
     time_getter::TimeGetterFn,
     Uint256,
 };
-use consensus::TransactionIndexHandle;
+use consensus::{compute_extra_consensus_data, TransactionIndexHandle};
 use logging::log;
 use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
 use utils::{ensure, tap_error_log::LogError};
@@ -95,6 +96,10 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
         block_index: &BlockIndex,
     ) -> Result<Option<BlockReward>, PropertyQueryError> {
         self.get_block_reward(block_index)
+    }
+
+    fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, PropertyQueryError> {
+        self.get_epoch_data(epoch_index)
     }
 }
 
@@ -213,6 +218,10 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
         self.db_tx
             .get_mainchain_tx_by_position(tx_index)
             .map_err(PropertyQueryError::from)
+    }
+
+    fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, PropertyQueryError> {
+        self.db_tx.get_epoch_data(epoch_index).map_err(PropertyQueryError::from)
     }
 
     pub fn get_block_id_by_height(
@@ -394,7 +403,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
     pub fn check_block_header(&self, header: &BlockHeader) -> Result<(), CheckBlockError> {
         self.check_header_size(header).log_err()?;
 
-        consensus::validate_consensus(self.chain_config, header, self)
+        consensus::validate_consensus(self.chain_config, header, self, self)
             .map_err(CheckBlockError::ConsensusVerificationFailed)
             .log_err()?;
 
@@ -889,6 +898,15 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         Ok(prev_block_index)
     }
 
+    fn prepare_epoch_data(&mut self, height: BlockHeight) -> Result<(), BlockError> {
+        if self.chain_config.is_due_for_epoch_seal(&height) {
+            // TODO: calculate the data that has to go to the EpochData type and store it to database
+        }
+        // TODO
+
+        Ok(())
+    }
+
     pub fn activate_best_chain(
         &mut self,
         new_block_index: BlockIndex,
@@ -903,6 +921,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
 
         if new_block_index.chain_trust() > current_best_block_index.chain_trust() {
             self.reorganize(&best_block_id, &new_block_index).log_err()?;
+            self.prepare_epoch_data(new_block_index.block_height())?;
             return Ok(Some(new_block_index));
         }
 
@@ -939,9 +958,27 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         let time_max = std::cmp::max(prev_block_index.chain_timestamps_max(), block.timestamp());
 
         // Set Chain Trust
+        let consensus_extra = match &prev_block_index {
+            GenBlockIndex::Block(prev_bi) => compute_extra_consensus_data(
+                self.chain_config,
+                prev_bi,
+                block.header(),
+                self,
+                self,
+            )?,
+            GenBlockIndex::Genesis(_) => ConsensusExtraData::None,
+        };
+
         let chain_trust =
             *prev_block_index.chain_trust() + self.get_block_proof(block).log_err()?;
-        let block_index = BlockIndex::new(block, chain_trust, some_ancestor, height, time_max);
+        let block_index = BlockIndex::new(
+            block,
+            chain_trust,
+            some_ancestor,
+            height,
+            time_max,
+            BlockPreconnectData::new(consensus_extra),
+        );
         Ok(block_index)
     }
 

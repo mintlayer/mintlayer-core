@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 RBB S.r.l
+// Copyright (c) 2021 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,20 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A consensus related logic.
+use thiserror::Error;
 
-pub mod pos;
-pub mod pow;
+use chainstate_types::pos_randomness::PoSRandomnessError;
+use common::{chain::Block, primitives::Id};
 
-pub use crate::{
-    error::ConsensusVerificationError,
-    pos::error::ConsensusPoSError,
-    pow::ConsensusPoWError,
-    validator::{
-        compute_extra_consensus_data, validate_consensus, ExtraConsensusDataError,
-        TransactionIndexHandle,
-    },
-};
-
-mod error;
-mod validator;
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum ExtraConsensusDataError {
+    #[error("Kernel output was not found in block: {0}")]
+    PoSKernelOutputRetrievalFailed(Id<Block>),
+    #[error("Randomness calculation failed: {0}")]
+    PoSRandomnessCalculationFailed(#[from] PoSRandomnessError),
+}

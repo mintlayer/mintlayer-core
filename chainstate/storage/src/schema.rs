@@ -15,7 +15,7 @@
 
 //! Chainstate database schema
 
-use chainstate_types::BlockIndex;
+use chainstate_types::{BlockIndex, EpochData};
 use common::{
     chain::{
         config::EpochIndex,
@@ -47,6 +47,8 @@ storage::decl_schema! {
         pub DBUtxo: Map<OutPoint, Utxo>,
         /// Store for utxo BlockUndo
         pub DBUtxosBlockUndo: Map<Id<Block>, UtxosBlockUndo>,
+        /// Store for EpochData
+        pub DBEpochData: Map<u64, EpochData>,
         /// Store for token's info; created on issuance
         pub DBTokensAuxData: Map<TokenId, TokenAuxiliaryData>,
         /// Store of issuance tx id vs token id

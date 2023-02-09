@@ -21,7 +21,7 @@ use common::{
     primitives::Id,
 };
 
-use crate::ConsensusPoWError;
+use crate::{pos::error::ConsensusPoSError, ConsensusPoWError};
 
 /// A consensus related error.
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -35,7 +35,9 @@ pub enum ConsensusVerificationError {
     #[error("Block consensus type does not match our chain configuration: {0}")]
     ConsensusTypeMismatch(String),
     #[error("PoW error: {0}")]
-    PoWError(ConsensusPoWError),
+    PoWError(#[from] ConsensusPoWError),
+    #[error("PoS error: {0}")]
+    PoSError(#[from] ConsensusPoSError),
     #[error("Unsupported consensus type")]
     UnsupportedConsensusType,
 }

@@ -51,6 +51,8 @@ impl PartialEq<Id<Genesis>> for Id<GenBlock> {
     }
 }
 
+// impl Eq for Id<GenBlock> {}
+
 impl Id<GenBlock> {
     /// Figure out if this [Id] refers to a [Genesis] or a proper [Block].
     pub fn classify(&self, c: &crate::chain::config::ChainConfig) -> GenBlockId {

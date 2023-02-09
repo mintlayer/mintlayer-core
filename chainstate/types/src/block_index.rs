@@ -20,6 +20,7 @@ use common::primitives::{BlockHeight, Id, Idable};
 use common::Uint256;
 use serialization::{Decode, Encode};
 
+use crate::preconnect_data::BlockPreconnectData;
 use crate::GenBlockIndex;
 
 #[derive(Debug, Clone, Encode, Decode)]
@@ -30,6 +31,7 @@ pub struct BlockIndex {
     chain_trust: Uint256,
     height: BlockHeight,
     time_max: BlockTimestamp,
+    preconnect_data: BlockPreconnectData,
 }
 
 impl BlockIndex {
@@ -39,6 +41,7 @@ impl BlockIndex {
         some_ancestor: Id<GenBlock>,
         height: BlockHeight,
         time_max: BlockTimestamp,
+        preconnect_data: BlockPreconnectData,
     ) -> Self {
         // We have to use the whole block because we are not able to take block_hash from the header
         Self {
@@ -48,6 +51,7 @@ impl BlockIndex {
             chain_trust,
             height,
             time_max,
+            preconnect_data,
         }
     }
 
@@ -89,5 +93,9 @@ impl BlockIndex {
 
     pub fn into_gen_block_index(self) -> GenBlockIndex {
         self.into()
+    }
+
+    pub fn preconnect_data(&self) -> &BlockPreconnectData {
+        &self.preconnect_data
     }
 }

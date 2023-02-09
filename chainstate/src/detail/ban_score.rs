@@ -13,6 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate_types::pos_randomness::PoSRandomnessError;
+use consensus::{
+    ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError, ExtraConsensusDataError,
+};
+
 use super::{
     transaction_verifier::{
         error::{ConnectTransactionError, TokensError},
@@ -22,7 +27,6 @@ use super::{
 };
 use crate::BlockError;
 use chainstate_types::GetAncestorError;
-use consensus::{ConsensusPoWError, ConsensusVerificationError};
 
 // TODO: use a ban_score macro in a form similar to thiserror::Error in order to define the ban score
 //       value of an error on the error enum arms instead of separately like in this file
@@ -47,6 +51,7 @@ impl BanScore for BlockError {
             BlockError::BlockAlreadyExists(_) => 0,
             BlockError::DatabaseCommitError(_, _, _) => 0,
             BlockError::BlockProofCalculationError(_) => 100,
+            BlockError::ConsensusExtraDataError(e) => e.ban_score(),
             BlockError::TransactionVerifierError(err) => err.ban_score(),
             BlockError::TxIndexConfigError => 0,
             BlockError::TxIndexConstructionError(_) => 100,
@@ -236,6 +241,7 @@ impl BanScore for ConsensusVerificationError {
             ConsensusVerificationError::ConsensusTypeMismatch(_) => 100,
             ConsensusVerificationError::PoWError(err) => err.ban_score(),
             ConsensusVerificationError::UnsupportedConsensusType => 100,
+            ConsensusVerificationError::PoSError(ref err) => err.ban_score(),
         }
     }
 }
@@ -260,6 +266,55 @@ impl BanScore for BlockSizeError {
             BlockSizeError::Header(_, _) => 100,
             BlockSizeError::SizeOfTxs(_, _) => 100,
             BlockSizeError::SizeOfSmartContracts(_, _) => 100,
+        }
+    }
+}
+
+impl BanScore for ConsensusPoSError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            ConsensusPoSError::StorageError(_) => 0,
+            ConsensusPoSError::StakeKernelHashTooHigh => 100,
+            ConsensusPoSError::TimestampViolation(_, _) => 100,
+            ConsensusPoSError::NoKernel => 100,
+            ConsensusPoSError::MultipleKernels => 100,
+            ConsensusPoSError::OutpointTransactionRetrievalError => 100,
+            ConsensusPoSError::OutpointTransactionNotFound => 100,
+            ConsensusPoSError::InIndexOutpointAccessError => 100,
+            ConsensusPoSError::KernelOutputAlreadySpent => 100,
+            ConsensusPoSError::KernelBlockIndexLoadError(_) => 0,
+            ConsensusPoSError::KernelBlockIndexNotFound(_) => 100,
+            ConsensusPoSError::KernelTransactionRetrievalFailed(_) => 0,
+            ConsensusPoSError::KernelOutputIndexOutOfRange(_) => 100,
+            ConsensusPoSError::KernelTransactionNotFound => 100,
+            ConsensusPoSError::KernelHeaderOutputDoesNotExist(_) => 100,
+            ConsensusPoSError::KernelHeaderOutputIndexOutOfRange(_, _) => 100,
+            ConsensusPoSError::BitsToTargetConversionFailed(_) => 100,
+            ConsensusPoSError::PrevBlockIndexNotFound(_) => 100,
+            ConsensusPoSError::KernelAncestryCheckFailed(_) => 100,
+            ConsensusPoSError::InvalidOutputPurposeInStakeKernel(_) => 100,
+            ConsensusPoSError::VRFDataVerificationFailed(_) => 100,
+            ConsensusPoSError::EpochDataRetrievalQueryError(_, _) => 0,
+            ConsensusPoSError::EpochDataNotFound(_) => 0,
+            ConsensusPoSError::KernelBlockRewardRetrievalFailed(_) => 100,
+        }
+    }
+}
+
+impl BanScore for PoSRandomnessError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            PoSRandomnessError::InvalidOutputPurposeInStakeKernel(_) => 100,
+            PoSRandomnessError::VRFDataVerificationFailed(_) => 100,
+        }
+    }
+}
+
+impl BanScore for ExtraConsensusDataError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            ExtraConsensusDataError::PoSKernelOutputRetrievalFailed(_) => 100,
+            ExtraConsensusDataError::PoSRandomnessCalculationFailed(e) => e.ban_score(),
         }
     }
 }

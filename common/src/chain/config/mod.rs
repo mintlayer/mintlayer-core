@@ -29,14 +29,14 @@ use crate::chain::{Block, GenBlock, Genesis};
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::semver::SemVer;
-use crate::primitives::{Amount, BlockDistance, BlockHeight};
+use crate::primitives::{Amount, BlockDistance, BlockHeight, H256};
 use std::collections::BTreeMap;
 use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
-pub const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
+const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
 const DEFAULT_EPOCH_LENGTH: NonZeroU64 =
     match NonZeroU64::new((5 * 24 * 60 * 60) / DEFAULT_TARGET_BLOCK_SPACING.as_secs()) {
         Some(v) => v,
@@ -94,6 +94,7 @@ pub struct ChainConfig {
     epoch_length: NonZeroU64,
     /// Distance from the tip of the chain to the sealed state in epochs.
     sealed_epoch_distance_from_tip: usize,
+    initial_randomness: H256,
     token_min_issuance_fee: Amount,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
@@ -180,6 +181,10 @@ impl ChainConfig {
 
     pub fn max_block_size_from_smart_contracts(&self) -> usize {
         self.max_block_size_with_smart_contracts
+    }
+
+    pub fn initial_randomness(&self) -> &H256 {
+        &self.initial_randomness
     }
 
     #[must_use]

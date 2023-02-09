@@ -10,6 +10,9 @@ license = "MIT"
 serialization = { path = "../../serialization" }
 common = { path = "../../common/" }
 storage = { path = "../../storage/" }
+crypto = { path = "../../crypto" }
 
 thiserror.workspace = true
 parity-scale-codec.workspace = true
+generic-array = "0.14"
+replace_with = "0.1"
