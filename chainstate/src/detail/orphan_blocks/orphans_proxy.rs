@@ -38,13 +38,10 @@ impl OrphansProxy {
         let thread_handle = Some(std::thread::spawn(move || {
             let mut orphans_pool = OrphanBlocksPool::new(max_orphans);
             let receiver: mpsc::Receiver<RemoteCall> = rx;
-            loop {
-                match receiver.recv() {
-                    Ok(f) => match f {
-                        Some(func) => func(&mut orphans_pool),
-                        None => break,
-                    },
-                    Err(_) => break,
+            while let Ok(f) = receiver.recv() {
+                match f {
+                    Some(func) => func(&mut orphans_pool),
+                    None => break,
                 }
             }
         }));
