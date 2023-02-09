@@ -282,3 +282,6 @@ fn handle_command(auth: &AuthorityImpl, command: ServerCommands) {
         }
     };
 }
+
+#[cfg(test)]
+mod tests;
