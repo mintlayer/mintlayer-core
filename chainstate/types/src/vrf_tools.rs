@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{chain::block::BlockHeader, primitives::H256};
+use common::{
+    chain::{block::BlockHeader, config::EpochIndex},
+    primitives::H256,
+};
 use crypto::vrf::{
     transcript::{TranscriptAssembler, TranscriptComponent, WrappedTranscript},
     VRFError, VRFPublicKey, VRFReturn,
@@ -27,7 +30,7 @@ pub enum ProofOfStakeVRFError {
 }
 
 fn construct_transcript(
-    epoch_index: u64,
+    epoch_index: EpochIndex,
     random_seed: &H256,
     spender_block_header: &BlockHeader,
 ) -> WrappedTranscript {
@@ -61,7 +64,7 @@ fn extract_vrf_output(
 }
 
 pub fn verify_vrf_and_get_vrf_output(
-    epoch_index: u64,
+    epoch_index: EpochIndex,
     random_seed: &H256,
     vrf_data: &VRFReturn,
     vrf_public_key: &VRFPublicKey,

@@ -347,7 +347,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
     pub fn check_block_header(&self, header: &BlockHeader) -> Result<(), CheckBlockError> {
         self.check_header_size(header).log_err()?;
 
-        consensus::validate_consensus(self.chain_config, header, self, self)
+        consensus::validate_consensus(self.chain_config, header, self, self, self)
             .map_err(CheckBlockError::ConsensusVerificationFailed)
             .log_err()?;
 

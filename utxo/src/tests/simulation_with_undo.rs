@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::test_helper::create_tx_outputs;
+use super::test_helper::{create_tx_outputs, empty_test_utxos_view};
 use crate::{
     ConsumedUtxoCache, FlushableUtxoView, UtxoSource, UtxosCache, UtxosTxUndoWithSources, UtxosView,
 };
@@ -52,7 +52,7 @@ fn cache_simulation_with_undo(
 ) {
     let mut rng = make_seedable_rng(seed);
     let mut result: ResultWithUndo = Default::default();
-    let test_view = super::empty_test_utxos_view(H256::zero().into());
+    let test_view = empty_test_utxos_view(H256::zero().into());
     let mut base = UtxosCache::new(test_view);
 
     let new_consumed_cache = simulation_step(

@@ -15,9 +15,9 @@
 
 use thiserror::Error;
 
-use chainstate_types::{vrf_tools::ProofOfStakeVRFError, PropertyQueryError};
+use chainstate_types::vrf_tools::ProofOfStakeVRFError;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, GenBlock},
+    chain::{block::timestamp::BlockTimestamp, Block, GenBlock, PoolId},
     primitives::{Compact, Id},
 };
 
@@ -25,6 +25,8 @@ use common::{
 pub enum ConsensusPoSError {
     #[error("Block storage error: `{0}`")]
     StorageError(#[from] chainstate_storage::Error),
+    #[error("Property query error: `{0}`")]
+    PropertyQueryError(#[from] chainstate_types::PropertyQueryError),
     #[error("Stake kernel hash failed to meet the target requirement")]
     StakeKernelHashTooHigh,
     #[error(
@@ -35,22 +37,14 @@ pub enum ConsensusPoSError {
     NoKernel,
     #[error("Only one kernel allowed")]
     MultipleKernels,
-    #[error("Could not load the transaction pointed to by an outpoint")]
-    OutpointTransactionRetrievalError,
     #[error("Could not find the transaction pointed to by an outpoint")]
     OutpointTransactionNotFound,
     #[error("Outpoint access error. Possibly invalid")]
     InIndexOutpointAccessError,
     #[error("Output already spent")]
     KernelOutputAlreadySpent,
-    #[error("Kernel block index load error with block id: {0}")]
-    KernelBlockIndexLoadError(Id<GenBlock>),
     #[error("Kernel block index not found with block id: {0}")]
     KernelBlockIndexNotFound(Id<GenBlock>),
-    #[error("Kernel input transaction retrieval error: {0}")]
-    KernelTransactionRetrievalFailed(PropertyQueryError),
-    #[error("Kernel block reward does not exist: {0}")]
-    KernelBlockRewardRetrievalFailed(PropertyQueryError),
     #[error("Kernel output index out of range: {0}")]
     KernelOutputIndexOutOfRange(u32),
     #[error("Kernel input transaction not found")]
@@ -69,8 +63,8 @@ pub enum ConsensusPoSError {
     InvalidOutputPurposeInStakeKernel(Id<Block>),
     #[error("Failed to verify VRF data with error: {0}")]
     VRFDataVerificationFailed(ProofOfStakeVRFError),
-    #[error("Error while attempting to retrieve epoch data of index {0} with error: {1}")]
-    EpochDataRetrievalQueryError(u64, PropertyQueryError),
     #[error("Epoch data not found for index: {0}")]
     EpochDataNotFound(u64),
+    #[error("Balance for pool {0} not found")]
+    PoolBalanceNotFound(PoolId),
 }

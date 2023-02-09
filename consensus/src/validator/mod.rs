@@ -17,7 +17,7 @@ pub use self::error::ExtraConsensusDataError;
 
 use chainstate_types::{
     pos_randomness::PoSRandomness, BlockIndex, BlockIndexHandle, ConsensusExtraData,
-    TransactionIndexHandle,
+    PoSAccountingSealedHandle, TransactionIndexHandle,
 };
 use common::{
     chain::{
@@ -37,12 +37,18 @@ use crate::{
 };
 
 /// Checks if the given block identified by the header contains the correct consensus data.  
-pub fn validate_consensus<H: BlockIndexHandle, T: TransactionIndexHandle>(
+pub fn validate_consensus<B, T, P>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
-    block_index_handle: &H,
+    block_index_handle: &B,
     transaction_index_handle: &T,
-) -> Result<(), ConsensusVerificationError> {
+    pos_accounting_handle: &P,
+) -> Result<(), ConsensusVerificationError>
+where
+    B: BlockIndexHandle,
+    T: TransactionIndexHandle,
+    P: PoSAccountingSealedHandle,
+{
     let prev_block_id = *header.prev_block_id();
 
     let prev_block_height = block_index_handle
@@ -57,13 +63,20 @@ pub fn validate_consensus<H: BlockIndexHandle, T: TransactionIndexHandle>(
 
     let block_height = prev_block_height.next_height();
     let consensus_status = chain_config.net_upgrade().consensus_status(block_height);
-    do_validate(
-        chain_config,
-        header,
-        &consensus_status,
-        block_index_handle,
-        transaction_index_handle,
-    )
+    match consensus_status {
+        RequiredConsensus::PoW(pow_status) => {
+            validate_pow_consensus(chain_config, header, &pow_status, block_index_handle)
+        }
+        RequiredConsensus::IgnoreConsensus => validate_ignore_consensus(header),
+        RequiredConsensus::PoS => validate_pos_consensus(
+            chain_config,
+            block_index_handle,
+            transaction_index_handle,
+            pos_accounting_handle,
+            header,
+        ),
+        RequiredConsensus::DSA => Err(ConsensusVerificationError::UnsupportedConsensusType),
+    }
 }
 
 fn compute_current_randomness<H: BlockIndexHandle, T: TransactionIndexHandle>(
@@ -140,38 +153,22 @@ fn validate_ignore_consensus(header: &BlockHeader) -> Result<(), ConsensusVerifi
     }
 }
 
-fn validate_pos_consensus<H: BlockIndexHandle, T: TransactionIndexHandle>(
+fn validate_pos_consensus<B, T, P>(
     chain_config: &ChainConfig,
-    block_index_handle: &H,
+    block_index_handle: &B,
     transaction_index_handle: &T,
+    pos_accounting_handle: &P,
     header: &BlockHeader,
-) -> Result<(), ConsensusVerificationError> {
+) -> Result<(), ConsensusVerificationError>
+where
+    B: BlockIndexHandle,
+    T: TransactionIndexHandle,
+    P: PoSAccountingSealedHandle,
+{
     match header.consensus_data() {
         ConsensusData::None | ConsensusData::PoW(_)=>  Err(ConsensusVerificationError::ConsensusTypeMismatch(
             "Chain configuration says consensus should be empty but block consensus data is not `None`.".into(),
         )),
-        ConsensusData::PoS(pos_data) => check_proof_of_stake(chain_config,  header, pos_data, block_index_handle, transaction_index_handle).map_err(Into::into),
-    }
-}
-
-fn do_validate<H: BlockIndexHandle, T: TransactionIndexHandle>(
-    chain_config: &ChainConfig,
-    header: &BlockHeader,
-    consensus_status: &RequiredConsensus,
-    block_index_handle: &H,
-    transaction_index_handle: &T,
-) -> Result<(), ConsensusVerificationError> {
-    match consensus_status {
-        RequiredConsensus::PoW(pow_status) => {
-            validate_pow_consensus(chain_config, header, pow_status, block_index_handle)
-        }
-        RequiredConsensus::IgnoreConsensus => validate_ignore_consensus(header),
-        RequiredConsensus::PoS => validate_pos_consensus(
-            chain_config,
-            block_index_handle,
-            transaction_index_handle,
-            header,
-        ),
-        RequiredConsensus::DSA => Err(ConsensusVerificationError::UnsupportedConsensusType),
+        ConsensusData::PoS(pos_data) => check_proof_of_stake(chain_config, header, pos_data, block_index_handle, transaction_index_handle, pos_accounting_handle).map_err(Into::into),
     }
 }

@@ -15,7 +15,7 @@
 
 use crate::{
     utxo_entry::{IsDirty, IsFresh, UtxoEntry},
-    Utxo, UtxosCache,
+    Utxo, UtxosCache, UtxosView,
 };
 use common::{
     chain::{
@@ -29,6 +29,32 @@ use crypto::{
     random::{seq, CryptoRng, Rng},
 };
 use itertools::Itertools;
+
+struct EmptyUtxosView {
+    best_block_hash: Id<GenBlock>,
+}
+
+impl UtxosView for EmptyUtxosView {
+    fn utxo(&self, _outpoint: &OutPoint) -> Option<Utxo> {
+        None
+    }
+
+    fn has_utxo(&self, _outpoint: &OutPoint) -> bool {
+        false
+    }
+
+    fn best_block_hash(&self) -> Id<GenBlock> {
+        self.best_block_hash
+    }
+
+    fn estimated_size(&self) -> Option<usize> {
+        None
+    }
+}
+
+pub fn empty_test_utxos_view(best_block_hash: Id<GenBlock>) -> Box<dyn UtxosView> {
+    Box::new(EmptyUtxosView { best_block_hash })
+}
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum Presence {

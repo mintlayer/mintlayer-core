@@ -19,10 +19,10 @@ use utils::ensure;
 
 use crate::pos::error::ConsensusPoSError;
 
-pub fn get_kernel_block_index(
+pub fn get_kernel_block_index<B: BlockIndexHandle, T: TransactionIndexHandle>(
     pos_data: &PoSData,
-    block_index_handle: &dyn BlockIndexHandle,
-    tx_index_retriever: &dyn TransactionIndexHandle,
+    block_index_handle: &B,
+    tx_index_retriever: &T,
 ) -> Result<GenBlockIndex, ConsensusPoSError> {
     ensure!(
         !pos_data.kernel_inputs().is_empty(),
@@ -37,24 +37,22 @@ pub fn get_kernel_block_index(
     let kernel_outpoint =
         pos_data.kernel_inputs().get(0).ok_or(ConsensusPoSError::NoKernel)?.outpoint();
     let kernel_tx_index = tx_index_retriever
-        .get_mainchain_tx_index(&kernel_outpoint.tx_id())
-        .map_err(|_| ConsensusPoSError::OutpointTransactionRetrievalError)?
+        .get_mainchain_tx_index(&kernel_outpoint.tx_id())?
         .ok_or(ConsensusPoSError::OutpointTransactionNotFound)?;
 
     let kernel_block_id = kernel_tx_index.position().block_id_anyway();
 
     let kernel_block_index = block_index_handle
-        .get_gen_block_index(&kernel_block_id)
-        .map_err(|_| ConsensusPoSError::KernelBlockIndexLoadError(kernel_block_id))?
+        .get_gen_block_index(&kernel_block_id)?
         .ok_or(ConsensusPoSError::KernelBlockIndexNotFound(kernel_block_id))?;
 
     Ok(kernel_block_index)
 }
 
-pub fn get_kernel_output(
+pub fn get_kernel_output<B: BlockIndexHandle, T: TransactionIndexHandle>(
     pos_data: &PoSData,
-    block_index_handle: &dyn BlockIndexHandle,
-    tx_index_retriever: &dyn TransactionIndexHandle,
+    block_index_handle: &B,
+    tx_index_retriever: &T,
 ) -> Result<TxOutput, ConsensusPoSError> {
     ensure!(
         !pos_data.kernel_inputs().is_empty(),
@@ -69,21 +67,18 @@ pub fn get_kernel_output(
     let kernel_outpoint =
         pos_data.kernel_inputs().get(0).ok_or(ConsensusPoSError::NoKernel)?.outpoint();
     let kernel_tx_index = tx_index_retriever
-        .get_mainchain_tx_index(&kernel_outpoint.tx_id())
-        .map_err(|_| ConsensusPoSError::OutpointTransactionRetrievalError)?
+        .get_mainchain_tx_index(&kernel_outpoint.tx_id())?
         .ok_or(ConsensusPoSError::OutpointTransactionNotFound)?;
 
     let kernel_block_id = kernel_tx_index.position().block_id_anyway();
 
     let kernel_block_index = block_index_handle
-        .get_gen_block_index(&kernel_block_id)
-        .map_err(|_| ConsensusPoSError::KernelBlockIndexLoadError(kernel_block_id))?
+        .get_gen_block_index(&kernel_block_id)?
         .ok_or(ConsensusPoSError::KernelBlockIndexNotFound(kernel_block_id))?;
 
     let kernel_output = match kernel_tx_index.position() {
         common::chain::SpendablePosition::Transaction(tx_pos) => tx_index_retriever
-            .get_mainchain_tx_by_position(tx_pos)
-            .map_err(ConsensusPoSError::KernelTransactionRetrievalFailed)?
+            .get_mainchain_tx_by_position(tx_pos)?
             .ok_or(ConsensusPoSError::KernelTransactionNotFound)?
             .outputs()
             .get(kernel_outpoint.output_index() as usize)
@@ -93,8 +88,7 @@ pub fn get_kernel_output(
             .clone(),
         common::chain::SpendablePosition::BlockReward(block_id) => match kernel_block_index {
             GenBlockIndex::Block(block_index) => block_index_handle
-                .get_block_reward(&block_index)
-                .map_err(ConsensusPoSError::KernelBlockRewardRetrievalFailed)?
+                .get_block_reward(&block_index)?
                 .ok_or(ConsensusPoSError::KernelHeaderOutputDoesNotExist(*block_id))?
                 .outputs()
                 .get(kernel_outpoint.output_index() as usize)

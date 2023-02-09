@@ -13,40 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod simulation;
-pub mod simulation_with_undo;
+mod simulation;
+mod simulation_with_undo;
 pub mod test_helper;
-
-pub struct EmptyUtxosView {
-    best_block_hash: Id<GenBlock>,
-}
-
-impl UtxosView for EmptyUtxosView {
-    fn utxo(&self, _outpoint: &OutPoint) -> Option<Utxo> {
-        None
-    }
-
-    fn has_utxo(&self, _outpoint: &OutPoint) -> bool {
-        false
-    }
-
-    fn best_block_hash(&self) -> Id<GenBlock> {
-        self.best_block_hash
-    }
-
-    fn estimated_size(&self) -> Option<usize> {
-        None
-    }
-}
-
-pub fn empty_test_utxos_view(best_block_hash: Id<GenBlock>) -> Box<dyn UtxosView> {
-    Box::new(EmptyUtxosView { best_block_hash })
-}
 
 use crate::{
     flush_to_base,
     tests::test_helper::{
-        create_tx_outputs,
+        create_tx_outputs, empty_test_utxos_view,
         Presence::{self, *},
     },
     utxo_entry::{IsDirty, IsFresh, UtxoEntry},
@@ -63,7 +37,7 @@ use common::{
         },
         signature::inputsig::InputWitness,
         tokens::OutputValue,
-        Destination, GenBlock, OutPoint, OutPointSourceId, OutputPurpose, Transaction, TxInput,
+        Destination, OutPoint, OutPointSourceId, OutputPurpose, PoolId, Transaction, TxInput,
         TxOutput,
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
@@ -76,6 +50,10 @@ use itertools::Itertools;
 use rstest::rstest;
 use std::collections::BTreeMap;
 use test_utils::random::{make_seedable_rng, Seed};
+
+fn make_pool_id(rng: &mut impl Rng) -> PoolId {
+    H256::random_using(rng).into()
+}
 
 /// Checks `add_utxo` method behavior.
 /// # Arguments
@@ -682,6 +660,7 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
 
     let (sk, _pk) = crypto::vrf::VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
     let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+    let pool_id = make_pool_id(&mut rng);
 
     let block = Block::new(
         vec![],
@@ -690,6 +669,7 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
         ConsensusData::PoS(PoSData::new(
             inputs,
             vec![InputWitness::NoSignature(None)],
+            pool_id,
             vrf_data,
             Compact(1),
         )),
@@ -778,6 +758,7 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
 
     let (sk, _pk) = crypto::vrf::VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
     let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+    let pool_id = make_pool_id(&mut rng);
 
     let block = Block::new(
         vec![],
@@ -786,6 +767,7 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
         ConsensusData::PoS(PoSData::new(
             inputs,
             vec![InputWitness::NoSignature(None)],
+            pool_id,
             vrf_data,
             Compact(1),
         )),
@@ -802,7 +784,7 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
     assert!(!cache.has_utxo_in_cache(&outpoint));
     assert!(undo1.inner().len() == 1);
 
-    //undo spending
+    // undo spending of block reward but miss reward_undo
     let res = cache.disconnect_block_transactable(&reward, &block.get_id().into(), None);
     assert_eq!(
         res,
@@ -830,6 +812,7 @@ fn check_burn_output_in_block_reward(#[case] seed: Seed) {
 
     let (sk, _pk) = crypto::vrf::VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
     let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+    let pool_id = make_pool_id(&mut rng);
 
     let block = Block::new(
         vec![],
@@ -838,6 +821,7 @@ fn check_burn_output_in_block_reward(#[case] seed: Seed) {
         ConsensusData::PoS(PoSData::new(
             inputs,
             vec![InputWitness::NoSignature(None)],
+            pool_id,
             vrf_data,
             Compact(1),
         )),

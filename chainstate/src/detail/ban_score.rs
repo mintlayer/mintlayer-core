@@ -274,17 +274,15 @@ impl BanScore for ConsensusPoSError {
     fn ban_score(&self) -> u32 {
         match self {
             ConsensusPoSError::StorageError(_) => 0,
+            ConsensusPoSError::PropertyQueryError(_) => 0,
             ConsensusPoSError::StakeKernelHashTooHigh => 100,
             ConsensusPoSError::TimestampViolation(_, _) => 100,
             ConsensusPoSError::NoKernel => 100,
             ConsensusPoSError::MultipleKernels => 100,
-            ConsensusPoSError::OutpointTransactionRetrievalError => 100,
             ConsensusPoSError::OutpointTransactionNotFound => 100,
             ConsensusPoSError::InIndexOutpointAccessError => 100,
             ConsensusPoSError::KernelOutputAlreadySpent => 100,
-            ConsensusPoSError::KernelBlockIndexLoadError(_) => 0,
             ConsensusPoSError::KernelBlockIndexNotFound(_) => 100,
-            ConsensusPoSError::KernelTransactionRetrievalFailed(_) => 0,
             ConsensusPoSError::KernelOutputIndexOutOfRange(_) => 100,
             ConsensusPoSError::KernelTransactionNotFound => 100,
             ConsensusPoSError::KernelHeaderOutputDoesNotExist(_) => 100,
@@ -294,9 +292,8 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::KernelAncestryCheckFailed(_) => 100,
             ConsensusPoSError::InvalidOutputPurposeInStakeKernel(_) => 100,
             ConsensusPoSError::VRFDataVerificationFailed(_) => 100,
-            ConsensusPoSError::EpochDataRetrievalQueryError(_, _) => 0,
             ConsensusPoSError::EpochDataNotFound(_) => 0,
-            ConsensusPoSError::KernelBlockRewardRetrievalFailed(_) => 100,
+            ConsensusPoSError::PoolBalanceNotFound(_) => 0,
         }
     }
 }

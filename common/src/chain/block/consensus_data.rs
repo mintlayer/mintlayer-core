@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::chain::signature::inputsig::InputWitness;
-use crate::chain::ChainConfig;
+use crate::chain::{ChainConfig, PoolId};
 use crate::{chain::TxInput, primitives::BlockDistance, primitives::Compact, Uint256};
 use crypto::vrf::VRFReturn;
 
@@ -55,6 +55,7 @@ impl ConsensusData {
 pub struct PoSData {
     kernel_inputs: Vec<TxInput>,
     kernel_witness: Vec<InputWitness>,
+    stake_pool_id: PoolId,
     vrf_data: VRFReturn,
     bits: Compact,
 }
@@ -63,12 +64,14 @@ impl PoSData {
     pub fn new(
         kernel_inputs: Vec<TxInput>,
         kernel_witness: Vec<InputWitness>,
+        stake_pool_id: PoolId,
         vrf_data: VRFReturn,
         bits: Compact,
     ) -> Self {
         Self {
             kernel_inputs,
             kernel_witness,
+            stake_pool_id,
             vrf_data,
             bits,
         }
@@ -80,6 +83,10 @@ impl PoSData {
 
     pub fn kernel_witness(&self) -> &Vec<InputWitness> {
         &self.kernel_witness
+    }
+
+    pub fn stake_pool_id(&self) -> &PoolId {
+        &self.stake_pool_id
     }
 
     pub fn bits(&self) -> &Compact {
