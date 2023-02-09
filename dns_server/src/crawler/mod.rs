@@ -64,8 +64,8 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(60);
 /// How many outbound connection attempts can be made per heartbeat
 const MAX_CONNECTS_PER_HEARTBEAT: usize = 10;
 
-/// When the server drops the unreachable node address. Useful for negative caching. Should be about an hour.
-const PURGE_UNREACHABLE_FAIL_COUNT: u32 = 4;
+/// When the server drops the unreachable node address. Used for negative caching.
+const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(1 * 3600);
 
 /// When the server drops the unreachable node address that was once reachable. This should take about a month.
 /// Such a long time is useful if the server itself has prolonged connectivity problems.
@@ -444,26 +444,30 @@ where
     fn connect_now(now: tokio::time::Instant, address_data: &AddressData) -> bool {
         match address_data.state {
             AddressState::Connected | AddressState::Connecting => false,
-            AddressState::Disconnected => {
+            AddressState::Disconnected if address_data.was_reachable => {
                 let age = now.duration_since(address_data.state_updated_at);
 
                 match address_data.fail_count {
                     0 => true,
-                    1 => age > Duration::from_secs(10),
-                    2 => age > Duration::from_secs(60),
-                    3 => age > Duration::from_secs(360),
-                    4 => age > Duration::from_secs(3600),
-                    5 => age > Duration::from_secs(3 * 3600),
-                    6 => age > Duration::from_secs(6 * 3600),
-                    7 => age > Duration::from_secs(12 * 3600),
+                    1 => age > Duration::from_secs(60),
+                    2 => age > Duration::from_secs(360),
+                    3 => age > Duration::from_secs(3600),
+                    4 => age > Duration::from_secs(3 * 3600),
+                    5 => age > Duration::from_secs(6 * 3600),
+                    6 => age > Duration::from_secs(12 * 3600),
                     _ => age > Duration::from_secs(24 * 3600),
                 }
+            }
+            AddressState::Disconnected => {
+                // The address was never reachable, try to connect just once
+                address_data.fail_count == 0
             }
         }
     }
 
     /// Returns true if the address should be kept in memory
     fn retain_address(
+        now: tokio::time::Instant,
         address: &N::Address,
         address_data: &mut AddressData,
         storage: &mut S,
@@ -483,7 +487,8 @@ where
 
         if address_data.state == AddressState::Disconnected
             && !address_data.was_reachable
-            && address_data.fail_count >= PURGE_UNREACHABLE_FAIL_COUNT
+            && address_data.fail_count > 0
+            && now.duration_since(address_data.state_updated_at) >= PURGE_UNREACHABLE_TIME
         {
             log::debug!("purge old (unreachable) address {}", address.to_string());
 
@@ -496,7 +501,6 @@ where
     /// Address list maintenance
     fn heartbeat(&mut self) {
         let now = tokio::time::Instant::now();
-
         let connecting_addresses = self
             .addresses
             .iter_mut()
@@ -527,8 +531,9 @@ where
             }
         }
 
+        let now = tokio::time::Instant::now();
         self.addresses.retain(|address, address_data| {
-            Self::retain_address(address, address_data, &mut self.storage)
+            Self::retain_address(now, address, address_data, &mut self.storage)
         });
     }
 
