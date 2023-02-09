@@ -38,7 +38,7 @@ fn construct_transcript(
         )
         .attach(
             b"Slot",
-            TranscriptComponent::U64(spender_block_header.timestamp().as_int_seconds() as u64),
+            TranscriptComponent::U64(spender_block_header.timestamp().as_int_seconds()),
         )
         .attach(b"EpochIndex", TranscriptComponent::U64(epoch_index))
         .finalize()

@@ -22,10 +22,7 @@ pub use crate::{
     error::ConsensusVerificationError,
     pos::error::ConsensusPoSError,
     pow::ConsensusPoWError,
-    validator::{
-        compute_extra_consensus_data, validate_consensus, ExtraConsensusDataError,
-        TransactionIndexHandle,
-    },
+    validator::{compute_extra_consensus_data, validate_consensus, ExtraConsensusDataError},
 };
 
 mod error;

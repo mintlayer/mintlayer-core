@@ -13,13 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use self::{error::ExtraConsensusDataError, transaction_index_handle::TransactionIndexHandle};
-
-mod transaction_index_handle;
+pub use self::error::ExtraConsensusDataError;
 
 use chainstate_types::{
-    pos_randomness::PoSRandomness, preconnect_data::ConsensusExtraData, BlockIndex,
-    BlockIndexHandle,
+    pos_randomness::PoSRandomness, BlockIndex, BlockIndexHandle, ConsensusExtraData,
+    TransactionIndexHandle,
 };
 use common::{
     chain::{
@@ -79,11 +77,11 @@ fn compute_current_randomness<H: BlockIndexHandle, T: TransactionIndexHandle>(
     let prev_randomness = prev_block_index.preconnect_data().pos_randomness();
     let kernel_output = get_kernel_output(pos_data, block_index_handle, tx_index_retriever)
         .map_err(|_| ExtraConsensusDataError::PoSKernelOutputRetrievalFailed(header.get_id()))?;
-    let current_randomness = PoSRandomness::from_new_block(
+    let current_randomness = PoSRandomness::from_block(
         chain_config,
-        prev_randomness,
-        prev_block_index,
+        &prev_block_index.block_height().next_height(),
         header,
+        prev_randomness,
         &kernel_output,
         pos_data,
     )?;
@@ -109,8 +107,7 @@ pub fn compute_extra_consensus_data<H: BlockIndexHandle, T: TransactionIndexHand
                 block_index_handle,
                 tx_index_retriever,
             )?;
-            let data = ConsensusExtraData::PoS(current_randomness);
-            Ok(data)
+            Ok(ConsensusExtraData::PoS(current_randomness))
         }
     }
 }

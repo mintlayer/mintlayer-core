@@ -18,10 +18,18 @@ pub mod storage_result;
 pub mod vrf_tools;
 
 pub use crate::{
-    ancestor::block_index_ancestor_getter, ancestor::gen_block_index_getter,
-    block_index::BlockIndex, block_index_handle::BlockIndexHandle, epoch_data::EpochData,
-    error::GetAncestorError, error::PropertyQueryError, gen_block_index::GenBlockIndex,
-    height_skip::get_skip_height, locator::Locator,
+    ancestor::block_index_ancestor_getter,
+    ancestor::gen_block_index_getter,
+    block_index::BlockIndex,
+    block_index_handle::BlockIndexHandle,
+    epoch_data::EpochData,
+    error::GetAncestorError,
+    error::PropertyQueryError,
+    gen_block_index::GenBlockIndex,
+    height_skip::get_skip_height,
+    locator::Locator,
+    preconnect_data::{BlockPreconnectData, ConsensusExtraData},
+    transaction_index_handle::TransactionIndexHandle,
 };
 
 mod ancestor;
@@ -32,5 +40,5 @@ mod error;
 mod gen_block_index;
 mod height_skip;
 mod locator;
-pub mod postconnect_data;
-pub mod preconnect_data;
+mod preconnect_data;
+mod transaction_index_handle;

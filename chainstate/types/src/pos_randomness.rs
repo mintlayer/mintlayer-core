@@ -20,16 +20,13 @@ use common::{
     },
     primitives::{
         id::{hash_encoded_to, DefaultHashAlgoStream},
-        Id, Idable, H256,
+        BlockHeight, Id, Idable, H256,
     },
 };
 use serialization::{Decode, Encode};
 use thiserror::Error;
 
-use crate::{
-    block_index::BlockIndex,
-    vrf_tools::{verify_vrf_and_get_vrf_output, ProofOfStakeVRFError},
-};
+use crate::vrf_tools::{verify_vrf_and_get_vrf_output, ProofOfStakeVRFError};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum PoSRandomnessError {
@@ -49,11 +46,11 @@ impl PoSRandomness {
         Self { value }
     }
 
-    pub fn from_new_block(
+    pub fn from_block(
         chain_config: &ChainConfig,
-        previous_randomness: Option<&PoSRandomness>,
-        prev_block_index: &BlockIndex,
+        block_height: &BlockHeight,
         header: &BlockHeader,
+        previous_randomness: Option<&PoSRandomness>,
         kernel_output: &TxOutput,
         pos_data: &PoSData,
     ) -> Result<Self, PoSRandomnessError> {
@@ -63,8 +60,7 @@ impl PoSRandomness {
             previous_randomness.cloned().unwrap_or_else(|| Self::at_genesis(chain_config));
         let prev_randomness_val = prev_randomness.value();
 
-        let epoch_index =
-            chain_config.epoch_index_from_height(&prev_block_index.block_height().next_height());
+        let epoch_index = chain_config.epoch_index_from_height(block_height);
 
         let pool_data = match kernel_output.purpose() {
             OutputPurpose::Transfer(_)
@@ -75,7 +71,6 @@ impl PoSRandomness {
                     header.get_id(),
                 ));
             }
-
             OutputPurpose::StakePool(d) => d.as_ref(),
         };
 

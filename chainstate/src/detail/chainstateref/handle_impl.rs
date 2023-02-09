@@ -1,0 +1,84 @@
+// Copyright (c) 2023 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use chainstate_storage::BlockchainStorageRead;
+use chainstate_types::{
+    BlockIndex, BlockIndexHandle, EpochData, GenBlockIndex, PropertyQueryError,
+    TransactionIndexHandle,
+};
+use common::{
+    chain::{block::BlockReward, Block, GenBlock, OutPointSourceId},
+    primitives::{BlockHeight, Id},
+};
+
+use crate::{detail::orphan_blocks::OrphanBlocks, TransactionVerificationStrategy};
+
+use super::ChainstateRef;
+
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    BlockIndexHandle for ChainstateRef<'a, S, O, V>
+{
+    fn get_block_index(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<Option<BlockIndex>, PropertyQueryError> {
+        self.get_block_index(block_id)
+    }
+
+    fn get_gen_block_index(
+        &self,
+        block_id: &Id<GenBlock>,
+    ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
+        self.get_gen_block_index(block_id)
+    }
+
+    fn get_ancestor(
+        &self,
+        block_index: &BlockIndex,
+        ancestor_height: BlockHeight,
+    ) -> Result<GenBlockIndex, PropertyQueryError> {
+        self.get_ancestor(&GenBlockIndex::Block(block_index.clone()), ancestor_height)
+            .map_err(PropertyQueryError::from)
+    }
+
+    fn get_block_reward(
+        &self,
+        block_index: &BlockIndex,
+    ) -> Result<Option<BlockReward>, PropertyQueryError> {
+        self.get_block_reward(block_index)
+    }
+
+    fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, PropertyQueryError> {
+        self.get_epoch_data(epoch_index)
+    }
+}
+
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+    TransactionIndexHandle for ChainstateRef<'a, S, O, V>
+{
+    fn get_mainchain_tx_index(
+        &self,
+        tx_id: &OutPointSourceId,
+    ) -> Result<Option<common::chain::TxMainChainIndex>, PropertyQueryError> {
+        self.get_mainchain_tx_index(tx_id)
+    }
+
+    fn get_mainchain_tx_by_position(
+        &self,
+        tx_index: &common::chain::TxMainChainPosition,
+    ) -> Result<Option<common::chain::Transaction>, PropertyQueryError> {
+        self.get_mainchain_tx_by_position(tx_index)
+    }
+}

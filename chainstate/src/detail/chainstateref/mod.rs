@@ -17,9 +17,8 @@ use std::{collections::BTreeSet, convert::TryInto};
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{
-    block_index_ancestor_getter, get_skip_height,
-    preconnect_data::{BlockPreconnectData, ConsensusExtraData},
-    BlockIndex, BlockIndexHandle, EpochData, GenBlockIndex, GetAncestorError, PropertyQueryError,
+    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockPreconnectData,
+    ConsensusExtraData, EpochData, GenBlockIndex, GetAncestorError, PropertyQueryError,
 };
 use common::{
     chain::{
@@ -34,7 +33,7 @@ use common::{
     time_getter::TimeGetterFn,
     Uint256,
 };
-use consensus::{compute_extra_consensus_data, TransactionIndexHandle};
+use consensus::compute_extra_consensus_data;
 use logging::log;
 use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
 use utils::{ensure, tap_error_log::LogError};
@@ -54,6 +53,7 @@ use super::{
 };
 
 mod epoch_seal;
+mod handle_impl;
 mod tx_verifier_storage;
 
 pub struct ChainstateRef<'a, S, O, V> {
@@ -63,62 +63,6 @@ pub struct ChainstateRef<'a, S, O, V> {
     db_tx: S,
     orphan_blocks: O,
     time_getter: &'a TimeGetterFn,
-}
-
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
-    BlockIndexHandle for ChainstateRef<'a, S, O, V>
-{
-    fn get_block_index(
-        &self,
-        block_id: &Id<Block>,
-    ) -> Result<Option<BlockIndex>, PropertyQueryError> {
-        self.get_block_index(block_id)
-    }
-
-    fn get_gen_block_index(
-        &self,
-        block_id: &Id<GenBlock>,
-    ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
-        self.get_gen_block_index(block_id)
-    }
-
-    fn get_ancestor(
-        &self,
-        block_index: &BlockIndex,
-        ancestor_height: BlockHeight,
-    ) -> Result<GenBlockIndex, PropertyQueryError> {
-        self.get_ancestor(&GenBlockIndex::Block(block_index.clone()), ancestor_height)
-            .map_err(PropertyQueryError::from)
-    }
-
-    fn get_block_reward(
-        &self,
-        block_index: &BlockIndex,
-    ) -> Result<Option<BlockReward>, PropertyQueryError> {
-        self.get_block_reward(block_index)
-    }
-
-    fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, PropertyQueryError> {
-        self.get_epoch_data(epoch_index)
-    }
-}
-
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
-    TransactionIndexHandle for ChainstateRef<'a, S, O, V>
-{
-    fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<Option<common::chain::TxMainChainIndex>, PropertyQueryError> {
-        self.get_mainchain_tx_index(tx_id)
-    }
-
-    fn get_mainchain_tx_by_position(
-        &self,
-        tx_index: &common::chain::TxMainChainPosition,
-    ) -> Result<Option<common::chain::Transaction>, PropertyQueryError> {
-        self.get_mainchain_tx_by_position(tx_index)
-    }
 }
 
 impl<'a, S: TransactionRw, O, V> ChainstateRef<'a, S, O, V> {
