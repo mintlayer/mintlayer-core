@@ -29,17 +29,16 @@ pub struct OrphansProxy {
     tx: mpsc::Sender<RemoteCall>,
 }
 
-// TODO: remove #[allow(dead_code)] from the functions below
+// TODO: remove #[allow(dead_code)] from the functions below once this is integrated into chainstate
 
 impl OrphansProxy {
     #[allow(dead_code)]
     pub fn new(max_orphans: usize) -> Self {
         let (tx, rx) = mpsc::channel();
-        let stop_control = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let thread_handle = Some(std::thread::spawn(move || {
             let mut orphans_pool = OrphanBlocksPool::new(max_orphans);
             let receiver: mpsc::Receiver<RemoteCall> = rx;
-            while !stop_control.load(std::sync::atomic::Ordering::Relaxed) {
+            loop {
                 match receiver.recv() {
                     Ok(f) => match f {
                         Some(func) => func(&mut orphans_pool),
