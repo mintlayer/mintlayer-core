@@ -24,3 +24,6 @@ pub use orphans_proxy::*;
 
 mod orphans_proxy_impls;
 pub use orphans_proxy_impls::*;
+
+mod pool_impls;
+pub use pool_impls::*;
