@@ -18,7 +18,6 @@
 use std::{
     collections::BTreeMap,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
-    str::FromStr,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc, Mutex,
@@ -77,17 +76,13 @@ impl DnsServer {
         config: Arc<DnsServerConfig>,
         command_tx: mpsc::UnboundedReceiver<ServerCommands>,
     ) -> Result<Self, DnsServerError> {
-        let host = Name::from_str(&config.host)?;
-        let nameserver = config.nameserver.as_ref().map(|name| Name::from_str(name)).transpose()?;
-        let mbox = config.mbox.as_ref().map(|name| Name::from_str(name)).transpose()?;
-
-        let inner = InMemoryAuthority::empty(host.clone(), ZoneType::Primary, false);
+        let inner = InMemoryAuthority::empty(config.host.clone(), ZoneType::Primary, false);
 
         let auth = Arc::new(AuthorityImpl {
             serial: Default::default(),
-            host,
-            nameserver,
-            mbox,
+            host: config.host.clone(),
+            nameserver: config.nameserver.clone(),
+            mbox: config.mbox.clone(),
             inner,
             ip4: Default::default(),
             ip6: Default::default(),
@@ -95,10 +90,7 @@ impl DnsServer {
 
         let mut catalog = Catalog::new();
 
-        catalog.upsert(
-            LowerName::from_str(&config.host)?,
-            Box::new(Arc::clone(&auth)),
-        );
+        catalog.upsert(config.host.clone().into(), Box::new(Arc::clone(&auth)));
 
         let mut server = ServerFuture::new(catalog);
 

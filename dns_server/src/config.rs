@@ -15,6 +15,7 @@
 
 use clap::Parser;
 use directories::BaseDirs;
+use trust_dns_client::rr::Name;
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 pub enum Network {
@@ -42,18 +43,18 @@ pub struct DnsServerConfig {
 
     /// Hostname of the DNS seed
     #[clap(long)]
-    pub host: String,
+    pub host: Name,
 
     /// Hostname of the nameserver.
     /// If set, the NS record will be added.
     #[clap(long)]
-    pub nameserver: Option<String>,
+    pub nameserver: Option<Name>,
 
     /// Email address reported in SOA records.
     /// `@` symbol should be replaced with `.`.
     /// If set, the SOA record will be added.
     #[clap(long)]
-    pub mbox: Option<String>,
+    pub mbox: Option<Name>,
 }
 
 const DEFAULT_DATA_DIR_NAME: &str = "mintlayer_dns_server";
