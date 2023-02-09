@@ -78,15 +78,16 @@ impl DnsServer {
         command_tx: mpsc::UnboundedReceiver<ServerCommands>,
     ) -> Result<Self, DnsServerError> {
         let host = Name::from_str(&config.host)?;
-        let ns = Name::from_str(&config.nameserver)?;
-        let mbox = Name::from_str(&config.mbox)?;
+        let nameserver =
+            config.nameserver.as_ref().map(|name| Name::from_str(&name)).transpose()?;
+        let mbox = config.mbox.as_ref().map(|name| Name::from_str(&name)).transpose()?;
 
         let inner = InMemoryAuthority::empty(host.clone(), ZoneType::Primary, false);
 
         let auth = Arc::new(AuthorityImpl {
             serial: Default::default(),
             host,
-            ns,
+            nameserver,
             mbox,
             inner,
             ip4: Default::default(),
@@ -140,8 +141,8 @@ impl DnsServer {
 struct AuthorityImpl {
     serial: AtomicU32,
     host: Name,
-    ns: Name,
-    mbox: Name,
+    nameserver: Option<Name>,
+    mbox: Option<Name>,
     inner: InMemoryAuthority,
     ip4: Mutex<Vec<Ipv4Addr>>,
     ip6: Mutex<Vec<Ipv6Addr>>,
@@ -174,22 +175,36 @@ impl AuthorityImpl {
             .cloned()
             .collect::<Vec<_>>();
 
-        let mut soa_rec = RecordSet::with_ttl(self.host.clone(), RecordType::SOA, TTL_SOA);
-        let mut ns_rec = RecordSet::with_ttl(self.host.clone(), RecordType::NS, TTL_NS);
+        let mut new_records = BTreeMap::new();
+
         let mut ipv4_rec = RecordSet::with_ttl(self.host.clone(), RecordType::A, TTL_IP);
         let mut ipv6_rec = RecordSet::with_ttl(self.host.clone(), RecordType::AAAA, TTL_IP);
 
-        soa_rec.add_rdata(RData::SOA(SOA::new(
-            self.host.clone(),
-            self.mbox.clone(),
-            new_serial,
-            SOA_REFRESH,
-            SOA_RETRY,
-            SOA_EXPIRE,
-            SOA_MINIMUM,
-        )));
+        if let Some(mbox) = self.mbox.as_ref() {
+            let mut soa_rec = RecordSet::with_ttl(self.host.clone(), RecordType::SOA, TTL_SOA);
+            soa_rec.add_rdata(RData::SOA(SOA::new(
+                self.host.clone(),
+                mbox.clone(),
+                new_serial,
+                SOA_REFRESH,
+                SOA_RETRY,
+                SOA_EXPIRE,
+                SOA_MINIMUM,
+            )));
+            new_records.insert(
+                RrKey::new(soa_rec.name().clone().into(), soa_rec.record_type()),
+                Arc::new(soa_rec),
+            );
+        }
 
-        ns_rec.add_rdata(RData::NS(self.ns.clone()));
+        if let Some(nameserver) = self.nameserver.as_ref() {
+            let mut ns_rec = RecordSet::with_ttl(self.host.clone(), RecordType::NS, TTL_NS);
+            ns_rec.add_rdata(RData::NS(nameserver.clone()));
+            new_records.insert(
+                RrKey::new(ns_rec.name().clone().into(), ns_rec.record_type()),
+                Arc::new(ns_rec),
+            );
+        }
 
         for ip in ipv4 {
             ipv4_rec.add_rdata(RData::A(ip));
@@ -199,15 +214,6 @@ impl AuthorityImpl {
             ipv6_rec.add_rdata(RData::AAAA(ip));
         }
 
-        let mut new_records = BTreeMap::new();
-        new_records.insert(
-            RrKey::new(soa_rec.name().clone().into(), soa_rec.record_type()),
-            Arc::new(soa_rec),
-        );
-        new_records.insert(
-            RrKey::new(ns_rec.name().clone().into(), ns_rec.record_type()),
-            Arc::new(ns_rec),
-        );
         new_records.insert(
             RrKey::new(ipv4_rec.name().clone().into(), ipv4_rec.record_type()),
             Arc::new(ipv4_rec),

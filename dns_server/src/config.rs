@@ -38,14 +38,16 @@ pub struct DnsServerConfig {
     #[clap(long)]
     pub host: String,
 
-    /// Hostname of the nameserver (NS record)
+    /// Hostname of the nameserver.
+    /// If set, the NS record will be added.
     #[clap(long)]
-    pub nameserver: String,
+    pub nameserver: Option<String>,
 
-    /// E-Mail address reported in SOA records (RNAME).
+    /// Email address reported in SOA records.
     /// `@` symbol should be replaced with `.`.
+    /// If set, the SOA record will be added.
     #[clap(long)]
-    pub mbox: String,
+    pub mbox: Option<String>,
 }
 
 const DEFAULT_DATA_DIR_NAME: &str = "mintlayer_dns_server";
