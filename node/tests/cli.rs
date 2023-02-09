@@ -130,75 +130,59 @@ fn read_config_override_values() {
     let config = NodeConfigFile::read(&config_path, &options).unwrap();
 
     assert_eq!(
-        config
-            .chainstate
-            .clone()
-            .unwrap_or_default()
-            .chainstate_config
-            .max_db_commit_attempts,
+        config.chainstate.clone().unwrap().chainstate_config.max_db_commit_attempts,
         Some(max_db_commit_attempts)
     );
     assert_eq!(
-        config
-            .chainstate
-            .clone()
-            .unwrap_or_default()
-            .chainstate_config
-            .max_orphan_blocks,
+        config.chainstate.clone().unwrap().chainstate_config.max_orphan_blocks,
         Some(max_orphan_blocks)
     );
     assert_eq!(
-        config.chainstate.clone().unwrap_or_default().chainstate_config.tx_index_enabled,
+        config.chainstate.clone().unwrap().chainstate_config.tx_index_enabled,
         Some(false)
     );
     assert_eq!(
-        config.chainstate.clone().unwrap_or_default().chainstate_config.max_tip_age,
+        config.chainstate.clone().unwrap().chainstate_config.max_tip_age,
         Some(max_tip_age)
     );
 
     assert_eq!(
-        config.p2p.clone().unwrap_or_default().bind_addresses,
+        config.p2p.clone().unwrap().bind_addresses,
         Some(vec!(p2p_addr.to_owned()))
     );
     assert_eq!(
-        config.p2p.clone().unwrap_or_default().added_nodes,
+        config.p2p.clone().unwrap().added_nodes,
         Some(vec!(p2p_add_node.to_owned()))
     );
     assert_eq!(
-        config.p2p.clone().unwrap_or_default().ban_threshold,
+        config.p2p.clone().unwrap().ban_threshold,
         Some(p2p_ban_threshold)
     );
     assert_eq!(
-        config.p2p.clone().unwrap_or_default().outbound_connection_timeout,
+        config.p2p.clone().unwrap().outbound_connection_timeout,
         Some(p2p_timeout)
     );
     assert_eq!(
-        config.p2p.clone().unwrap_or_default().ping_check_period,
+        config.p2p.clone().unwrap().ping_check_period,
         Some(p2p_ping_check_period)
     );
     assert_eq!(
-        config.p2p.clone().unwrap_or_default().ping_timeout,
+        config.p2p.clone().unwrap().ping_timeout,
         Some(p2p_ping_timeout)
     );
-    assert_eq!(
-        config.p2p.clone().unwrap_or_default().node_type,
-        Some(node_type)
-    );
+    assert_eq!(config.p2p.clone().unwrap().node_type, Some(node_type));
 
     assert_eq!(
-        config.rpc.clone().unwrap_or_default().http_bind_address,
+        config.rpc.clone().unwrap().http_bind_address,
         Some(http_rpc_addr)
     );
-    assert!(config.rpc.clone().unwrap_or_default().http_enabled.unwrap());
+    assert!(config.rpc.clone().unwrap().http_enabled.unwrap());
 
     assert_eq!(
-        config.rpc.clone().unwrap_or_default().ws_bind_address,
+        config.rpc.clone().unwrap().ws_bind_address,
         Some(ws_rpc_addr)
     );
-    assert!(!config.rpc.clone().unwrap_or_default().ws_enabled.unwrap());
+    assert!(!config.rpc.clone().unwrap().ws_enabled.unwrap());
 
-    assert_eq!(
-        config.chainstate.unwrap_or_default().storage_backend,
-        backend_type
-    );
+    assert_eq!(config.chainstate.unwrap().storage_backend, backend_type);
 }
