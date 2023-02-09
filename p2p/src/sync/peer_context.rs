@@ -20,7 +20,8 @@ use common::{
     primitives::Id,
 };
 
-// TODO: FIXME: Use enum as in the previous version?
+// TODO: FIXME: Private fields.
+// TODO: FIXME: Recheck every field.
 pub struct PeerContext {
     /// A number of blocks that a peer has requested. This shouldn't be bigger than the
     /// `P2pConfig::requested_blocks_limit` value. The actual block identifiers are stored in
@@ -35,7 +36,6 @@ pub struct PeerContext {
     pub known_headers: Vec<BlockHeader>,
 }
 
-// TODO: FIXME: Move to the peer module.
 impl PeerContext {
     pub fn new() -> Self {
         Self {

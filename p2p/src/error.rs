@@ -40,8 +40,8 @@ pub enum ProtocolError {
     UnknownBlockRequested,
     #[error("Headers aren't connected")]
     DisconnectedHeaders,
-    #[error("Received a response with a block that wasn't requested")]
-    UnrequestedBlock,
+    #[error("Received a message ({0}) that wasn't expected")]
+    UnexpectedMessage(&'static str),
     #[error("Unknown request identifier")]
     UnknownRequestId,
 }
@@ -189,7 +189,7 @@ impl BanScore for ProtocolError {
             ProtocolError::HeadersLimitExceeded(_, _) => 20,
             ProtocolError::UnknownBlockRequested => 20,
             ProtocolError::DisconnectedHeaders => 20,
-            ProtocolError::UnrequestedBlock => 20,
+            ProtocolError::UnexpectedMessage(_) => 20,
             ProtocolError::UnknownRequestId => 20,
         }
     }
