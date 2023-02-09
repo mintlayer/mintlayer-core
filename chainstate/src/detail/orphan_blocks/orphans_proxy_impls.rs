@@ -17,7 +17,7 @@ use super::{OrphanBlocksMut, OrphanBlocksRef, OrphansProxy};
 
 const RECV_ERR_MSG: &str = "Failed to recv from orphan blocks proxy. This should never happen as the destruction of the proxy should end the communication; but something else did";
 
-impl OrphanBlocksRef for OrphansProxy {
+impl OrphanBlocksRef for &OrphansProxy {
     fn len(&self) -> usize {
         self.call(move |o| o.len()).recv().expect(RECV_ERR_MSG)
     }
@@ -33,7 +33,23 @@ impl OrphanBlocksRef for OrphansProxy {
     }
 }
 
-impl OrphanBlocksMut for OrphansProxy {
+impl OrphanBlocksRef for &mut OrphansProxy {
+    fn len(&self) -> usize {
+        self.call(move |o| o.len()).recv().expect(RECV_ERR_MSG)
+    }
+
+    fn is_already_an_orphan(
+        &self,
+        block_id: &common::primitives::Id<common::chain::Block>,
+    ) -> bool {
+        let block_id = *block_id;
+        self.call(move |o| o.is_already_an_orphan(&block_id))
+            .recv()
+            .expect(RECV_ERR_MSG)
+    }
+}
+
+impl OrphanBlocksMut for &mut OrphansProxy {
     fn clear(&mut self) {
         self.call_mut(move |o| o.clear()).recv().expect(RECV_ERR_MSG)
     }
