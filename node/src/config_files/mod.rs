@@ -55,17 +55,10 @@ impl NodeConfigFile {
 
     fn read_to_string_with_policy<P: AsRef<Path>>(config_path: P) -> Result<String> {
         let config_as_str = if config_path.as_ref().exists() {
-            if config_path.as_ref().is_file() {
-                fs::read_to_string(config_path.as_ref()).context(format!(
-                    "Config file found in '{}' but could not be read",
-                    config_path.as_ref().display()
-                ))?
-            } else {
-                return Err(anyhow::anyhow!(
-                    "An object was found at the path of the config file '{}' but it is not a file",
-                    config_path.as_ref().display()
-                ));
-            }
+            fs::read_to_string(config_path.as_ref()).context(format!(
+                "Unable to read config file in {}",
+                config_path.as_ref().display()
+            ))?
         } else {
             "".into()
         };
