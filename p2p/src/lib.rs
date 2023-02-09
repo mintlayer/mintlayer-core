@@ -28,7 +28,10 @@ pub mod testing_utils;
 pub mod types;
 pub mod utils;
 
-use std::sync::Arc;
+use std::{
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr},
+    sync::Arc,
+};
 
 use interface::p2p_interface::P2pInterface;
 use peer_manager::peerdb::storage::PeerDbStorage;
@@ -75,6 +78,7 @@ where
     /// This function starts the networking backend and individual manager objects.
     pub async fn new<S: PeerDbStorage + 'static>(
         transport: T::Transport,
+        bind_addresses: Vec<T::Address>,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
@@ -82,16 +86,6 @@ where
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> crate::Result<Self> {
-        let bind_addresses = p2p_config
-            .bind_addresses
-            .iter()
-            .map(|address| {
-                address.parse::<T::Address>().map_err(|_| {
-                    P2pError::ConversionError(ConversionError::InvalidAddress(address.clone()))
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-
         let (conn, sync) = T::start(
             transport,
             bind_addresses,
@@ -174,8 +168,27 @@ pub async fn make_p2p<S: PeerDbStorage + 'static>(
 ) -> Result<Box<dyn P2pInterface>> {
     let transport = make_p2p_transport();
 
+    let bind_addresses = if !p2p_config.bind_addresses.is_empty() {
+        p2p_config
+            .bind_addresses
+            .iter()
+            .map(|address| {
+                address.parse::<<P2pNetworkingService as NetworkingService>::Address>().map_err(
+                    |_| P2pError::ConversionError(ConversionError::InvalidAddress(address.clone())),
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+    } else {
+        // Bind to default addresses if none are specified by the user
+        vec![
+            SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), chain_config.p2p_port()),
+            SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), chain_config.p2p_port()),
+        ]
+    };
+
     let p2p = P2p::<P2pNetworkingService>::new(
         transport,
+        bind_addresses,
         chain_config,
         p2p_config,
         chainstate_handle,
