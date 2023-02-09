@@ -45,7 +45,6 @@ pub struct NodeConfigFile {
 }
 
 impl NodeConfigFile {
-    /// Creates a new `Config` instance with the given data directory path.
     pub fn new() -> Result<Self> {
         Ok(Self {
             chainstate: None,
