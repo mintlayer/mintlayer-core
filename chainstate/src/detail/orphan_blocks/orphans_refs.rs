@@ -21,18 +21,18 @@ use common::{
     primitives::{id::WithId, Id},
 };
 
-pub trait OrphanBlocks {
+pub trait OrphanBlocksRef {
     fn len(&self) -> usize;
     fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool;
 }
 
-pub trait OrphanBlocksMut: OrphanBlocks {
+pub trait OrphanBlocksMut: OrphanBlocksRef {
     fn clear(&mut self);
     fn add_block(&mut self, block: WithId<Block>) -> Result<(), Box<OrphanAddError>>;
     fn take_all_children_of(&mut self, block_id: &Id<GenBlock>) -> Vec<WithId<Block>>;
 }
 
-impl OrphanBlocks for &OrphanBlocksPool {
+impl OrphanBlocksRef for &OrphanBlocksPool {
     fn len(&self) -> usize {
         self.deref().len()
     }
@@ -42,7 +42,7 @@ impl OrphanBlocks for &OrphanBlocksPool {
     }
 }
 
-impl OrphanBlocks for &mut OrphanBlocksPool {
+impl OrphanBlocksRef for &mut OrphanBlocksPool {
     fn len(&self) -> usize {
         self.deref().len()
     }

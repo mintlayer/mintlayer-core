@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{OrphanBlocks, OrphanBlocksMut, OrphansProxy};
+use super::{OrphanBlocksMut, OrphanBlocksRef, OrphansProxy};
 
 const RECV_ERR_MSG: &str = "Failed to recv from orphan blocks proxy. This should never happen as the destruction of the proxy should end the communication; but something else did";
 
-impl OrphanBlocks for OrphansProxy {
+impl OrphanBlocksRef for OrphansProxy {
     fn len(&self) -> usize {
         self.call(move |o| o.len()).recv().expect(RECV_ERR_MSG)
     }

@@ -45,7 +45,7 @@ use self::tx_verifier_storage::gen_block_index_getter;
 
 use super::{
     median_time::calculate_median_time_past,
-    orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
+    orphan_blocks::{OrphanBlocksMut, OrphanBlocksRef},
     tokens::check_tokens_data,
     transaction_verifier::{error::TokensError, flush::flush_to_storage},
     tx_verification_strategy::TransactionVerificationStrategy,
@@ -64,7 +64,7 @@ pub struct ChainstateRef<'a, S, O, V> {
     time_getter: &'a TimeGetterFn,
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocksRef, V: TransactionVerificationStrategy>
     BlockIndexHandle for ChainstateRef<'a, S, O, V>
 {
     fn get_block_index(
@@ -98,7 +98,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
     }
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocksRef, V: TransactionVerificationStrategy>
     TransactionIndexHandle for ChainstateRef<'a, S, O, V>
 {
     fn get_mainchain_tx_index(
@@ -122,7 +122,7 @@ impl<'a, S: TransactionRw, O, V> ChainstateRef<'a, S, O, V> {
     }
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocksRef, V: TransactionVerificationStrategy>
     ChainstateRef<'a, S, O, V>
 {
     pub fn new_rw(
