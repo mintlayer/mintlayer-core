@@ -18,28 +18,13 @@ use std::sync::Arc;
 use clap::Parser;
 use config::DnsServerConfig;
 use crawler::{storage_impl::DnsServerStorageImpl, Crawler, CrawlerConfig};
-use p2p::{
-    config::P2pConfig,
-    net::{
-        default_backend::{
-            transport::{NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket},
-            DefaultNetworkingService,
-        },
-        NetworkingService,
-    },
-};
+use p2p::{config::P2pConfig, net::NetworkingService};
 use tokio::sync::mpsc;
 
 mod config;
 mod crawler;
 mod dns_server;
 mod error;
-
-fn make_p2p_transport() -> NoiseTcpTransport {
-    let stream_adapter = NoiseEncryptionAdapter::gen_new();
-    let base_transport = TcpTransportSocket::new();
-    NoiseTcpTransport::new(stream_adapter, base_transport)
-}
 
 async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServerError> {
     let (command_tx, command_rx) = mpsc::unbounded_channel();
@@ -61,9 +46,9 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         allow_discover_private_ips: Default::default(),
     });
 
-    let transport = make_p2p_transport();
+    let transport = p2p::make_p2p_transport();
 
-    let (conn, sync) = DefaultNetworkingService::<NoiseTcpTransport>::start(
+    let (conn, sync) = p2p::P2pNetworkingService::start(
         transport,
         vec![],
         Arc::clone(&chain_config),
@@ -84,7 +69,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         p2p_port: chain_config.p2p_port(),
     };
 
-    let mut crawler = Crawler::<DefaultNetworkingService<_>, _>::new(
+    let mut crawler = Crawler::<p2p::P2pNetworkingService, _>::new(
         crawler_config,
         conn,
         sync,

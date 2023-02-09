@@ -156,6 +156,14 @@ impl subsystem::Subsystem for Box<dyn P2pInterface> {}
 
 pub type P2pHandle = subsystem::Handle<Box<dyn P2pInterface>>;
 
+pub fn make_p2p_transport() -> NoiseTcpTransport {
+    let stream_adapter = NoiseEncryptionAdapter::gen_new();
+    let base_transport = net::default_backend::transport::TcpTransportSocket::new();
+    NoiseTcpTransport::new(stream_adapter, base_transport)
+}
+
+pub type P2pNetworkingService = DefaultNetworkingService<NoiseTcpTransport>;
+
 pub async fn make_p2p<S: PeerDbStorage + 'static>(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
@@ -164,11 +172,9 @@ pub async fn make_p2p<S: PeerDbStorage + 'static>(
     time_getter: TimeGetter,
     peerdb_storage: S,
 ) -> Result<Box<dyn P2pInterface>> {
-    let stream_adapter = NoiseEncryptionAdapter::gen_new();
-    let base_transport = net::default_backend::transport::TcpTransportSocket::new();
-    let transport = NoiseTcpTransport::new(stream_adapter, base_transport);
+    let transport = make_p2p_transport();
 
-    let p2p = P2p::<DefaultNetworkingService<NoiseTcpTransport>>::new(
+    let p2p = P2p::<P2pNetworkingService>::new(
         transport,
         chain_config,
         p2p_config,
