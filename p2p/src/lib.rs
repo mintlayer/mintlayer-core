@@ -76,6 +76,7 @@ where
     /// Start the P2P subsystem
     ///
     /// This function starts the networking backend and individual manager objects.
+    #[allow(clippy::too_many_arguments)]
     pub async fn new<S: PeerDbStorage + 'static>(
         transport: T::Transport,
         bind_addresses: Vec<T::Address>,
