@@ -13,18 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
+use std::rc::Rc;
 
 use common::chain::{Block, GenBlock};
 use common::primitives::id::WithId;
 use common::primitives::{Id, Idable};
 use crypto::random::SliceRandom;
 
-// TODO: The Arc here is unnecessary: https://github.com/mintlayer/mintlayer-core/issues/164
 pub struct OrphanBlocksPool {
     orphan_ids: Vec<Id<Block>>,
-    orphan_by_id: BTreeMap<Id<Block>, Arc<WithId<Block>>>,
-    orphan_by_prev_id: BTreeMap<Id<GenBlock>, Vec<Arc<WithId<Block>>>>,
+    orphan_by_id: BTreeMap<Id<Block>, Rc<WithId<Block>>>,
+    orphan_by_prev_id: BTreeMap<Id<GenBlock>, Vec<Rc<WithId<Block>>>>,
     max_orphans: usize,
 }
 
@@ -103,7 +103,7 @@ impl OrphanBlocksPool {
             )));
         }
 
-        let rc_block = Arc::new(block);
+        let rc_block = Rc::new(block);
         self.orphan_by_id.insert(block_id, rc_block.clone());
         self.orphan_ids.push(block_id);
         self.orphan_by_prev_id
@@ -142,7 +142,7 @@ impl OrphanBlocksPool {
         let res = res
             .drain(..)
             .map(|blk| {
-                Arc::try_unwrap(blk)
+                Rc::try_unwrap(blk)
                     .expect("There cannot be more than one copy of the Rc. This is unexpected.")
             })
             .collect();
@@ -250,7 +250,7 @@ mod tests {
             assert!(orphans_pool.is_already_an_orphan(&block.get_id()));
 
             if let Some(blocks) = orphans_pool.orphan_by_prev_id.get(&block.prev_block_id()) {
-                assert!(blocks.contains(&Arc::new(block.clone())))
+                assert!(blocks.contains(&Rc::new(block.clone())))
             } else {
                 panic!("the block {block:#?} is not in `orphan_by_prev_id` field.");
             }
@@ -616,7 +616,7 @@ mod tests {
 
         // all blocks in sim_blocks should appear in the children list
         sim_blocks.into_iter().for_each(|child| {
-            assert!(children.contains(&Arc::new(child.into())));
+            assert!(children.contains(&Rc::new(child.into())));
         });
 
         // the remaining blocks in the pool should all belong to conn_blocks
