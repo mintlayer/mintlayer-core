@@ -22,12 +22,7 @@ mod chainstate_launcher;
 mod p2p;
 mod rpc;
 
-use std::{
-    fs,
-    net::SocketAddr,
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use std::{fs, net::SocketAddr, path::Path, str::FromStr};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -40,58 +35,54 @@ use self::{
 };
 
 /// The node configuration.
+#[must_use]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NodeConfigFile {
-    /// The path to the data directory.
-    ///
-    /// By default the config file is created inside of the data directory.
-    pub datadir: PathBuf,
-
     // Subsystems configurations.
-    pub chainstate: ChainstateLauncherConfigFile,
-    pub p2p: P2pConfigFile,
-    pub rpc: RpcConfigFile,
+    pub chainstate: Option<ChainstateLauncherConfigFile>,
+    pub p2p: Option<P2pConfigFile>,
+    pub rpc: Option<RpcConfigFile>,
 }
 
 impl NodeConfigFile {
-    /// Creates a new `Config` instance with the given data directory path.
-    pub fn new(datadir: PathBuf) -> Result<Self> {
-        let chainstate = ChainstateLauncherConfigFile::new();
-        let p2p = P2pConfigFile::default();
-        let rpc = RpcConfigFile::default();
+    pub fn new() -> Result<Self> {
         Ok(Self {
-            datadir,
-            chainstate,
-            p2p,
-            rpc,
+            chainstate: None,
+            p2p: None,
+            rpc: None,
         })
     }
 
+    fn read_to_string_with_policy<P: AsRef<Path>>(config_path: P) -> Result<String> {
+        let config_as_str = if config_path.as_ref().exists() {
+            fs::read_to_string(config_path.as_ref()).context(format!(
+                "Unable to read config file in {}",
+                config_path.as_ref().display()
+            ))?
+        } else {
+            "".into()
+        };
+        Ok(config_as_str)
+    }
+
     /// Reads a configuration from the specified path and overrides the provided parameters.
-    pub fn read(
-        config_path: &Path,
-        datadir_path_opt: &Option<PathBuf>,
-        options: &RunOptions,
-    ) -> Result<Self> {
-        let config = fs::read_to_string(config_path)
-            .with_context(|| format!("Failed to read '{config_path:?}' config"))?;
+    pub fn read(config_path: &Path, options: &RunOptions) -> Result<Self> {
+        let config_as_str = Self::read_to_string_with_policy(config_path)?;
+
         let NodeConfigFile {
-            datadir,
             chainstate,
             p2p,
             rpc,
-        } = toml::from_str(&config).context("Failed to parse config")?;
+        } = toml::from_str(&config_as_str).context("Failed to parse config")?;
 
-        let datadir = datadir_path_opt.clone().unwrap_or(datadir);
-        let chainstate = chainstate_config(chainstate, options);
-        let p2p = p2p_config(p2p, options);
-        let rpc = rpc_config(rpc, options);
+        let chainstate = chainstate_config(chainstate.unwrap_or_default(), options);
+        let p2p = p2p_config(p2p.unwrap_or_default(), options);
+        let rpc = rpc_config(rpc.unwrap_or_default(), options);
 
         Ok(Self {
-            datadir,
-            chainstate,
-            p2p,
-            rpc,
+            chainstate: Some(chainstate),
+            p2p: Some(p2p),
+            rpc: Some(rpc),
         })
     }
 }
@@ -197,5 +188,60 @@ fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
         http_enabled: Some(http_enabled),
         ws_bind_address: Some(ws_bind_address),
         ws_enabled: Some(ws_enabled),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use crypto::random::{distributions::Alphanumeric, make_pseudo_rng, Rng};
+
+    use super::*;
+
+    #[test]
+    fn no_values_required_in_toml_files() {
+        let _config: NodeConfigFile = toml::from_str("").unwrap();
+        let _config: chainstate_launcher::ChainstateLauncherConfigFile =
+            toml::from_str("").unwrap();
+        let _config: chainstate::ChainstateConfigFile = toml::from_str("").unwrap();
+        let _config: p2p::P2pConfigFile = toml::from_str("").unwrap();
+        let _config: rpc::RpcConfigFile = toml::from_str("").unwrap();
+    }
+
+    #[test]
+    fn read_config_file_nonexistent() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config_path = dir.path().join("config.toml");
+        let config_file_data = NodeConfigFile::read_to_string_with_policy(config_path).unwrap();
+        assert_eq!(config_file_data, "");
+    }
+
+    #[test]
+    fn read_config_file_exists_with_data() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config_path = dir.path().join("config.toml");
+        let injected_config_data = make_pseudo_rng()
+            .sample_iter(&Alphanumeric)
+            .take(1024)
+            .map(char::from)
+            .collect::<String>();
+
+        {
+            let mut file = fs::File::create(config_path.clone()).unwrap();
+            file.write_all(injected_config_data.as_bytes()).unwrap();
+        }
+        let read_config_data = NodeConfigFile::read_to_string_with_policy(config_path).unwrap();
+        assert_eq!(read_config_data, injected_config_data);
+    }
+
+    #[test]
+    fn read_config_file_path_exists_but_is_not_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config_path = dir.path().join("config.toml");
+
+        fs::create_dir(config_path.clone()).unwrap();
+
+        let _err = NodeConfigFile::read_to_string_with_policy(config_path).unwrap_err();
     }
 }

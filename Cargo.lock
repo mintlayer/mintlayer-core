@@ -1965,6 +1965,7 @@ dependencies = [
  "chainstate-launcher",
  "clap",
  "common",
+ "crypto",
  "directories",
  "jsonrpsee",
  "logging",

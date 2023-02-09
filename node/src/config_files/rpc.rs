@@ -19,7 +19,8 @@ use rpc::RpcConfig;
 use serde::{Deserialize, Serialize};
 
 /// The rpc subsystem configuration.
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[must_use]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct RpcConfigFile {
     /// Address to bind http RPC to.
     pub http_bind_address: Option<SocketAddr>,
