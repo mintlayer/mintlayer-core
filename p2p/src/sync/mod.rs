@@ -281,8 +281,9 @@ where
             )?;
         }
 
-        block_ids.truncate(requested_blocks_limit - peer_state.num_block_to_send());
-        peer_state.add_num_block_to_send(block_ids.len());
+        block_ids.truncate(requested_blocks_limit - peer_state.num_blocks_to_send);
+        peer_state.num_blocks_to_send += block_ids.len();
+        debug_assert!(peer_state.num_blocks_to_send <= requested_blocks_limit);
         self.blocks_queue.extend(block_ids.into_iter().map(|id| (peer, request_id, id)));
 
         Ok(())
@@ -385,7 +386,7 @@ where
         self.chainstate_handle
             .call(|c| c.preliminary_header_check(first_header))
             .await??;
-        self.request_blocks(peer, headers).await
+        self.request_blocks(peer, headers)
     }
 
     // TODO: This shouldn't be public.
@@ -429,7 +430,7 @@ where
                 // Download remaining blocks.
                 let mut headers = Vec::new();
                 mem::swap(&mut headers, &mut peer_state.known_headers);
-                self.request_blocks(peer, headers).await?;
+                self.request_blocks(peer, headers)?;
             }
         }
 
@@ -476,7 +477,7 @@ where
 
         let header_ = header.clone();
         self.chainstate_handle.call(|c| c.preliminary_header_check(header_)).await??;
-        self.request_blocks(peer, vec![header]).await
+        self.request_blocks(peer, vec![header])
     }
 
     // TODO: This shouldn't be public.
@@ -487,7 +488,7 @@ where
         log::debug!("register peer {peer} to sync manager");
 
         self.request_headers(peer).await?;
-        match self.peers.insert(peer, PeerContext::new(Arc::clone(&self.p2p_config))) {
+        match self.peers.insert(peer, PeerContext::new()) {
             // This should never happen because a peer can only connect once.
             Some(_) => Err(P2pError::PeerError(PeerError::PeerAlreadyExists)),
             None => Ok(()),
@@ -527,7 +528,7 @@ where
             // This function is only called when the queue isn't empty.
             .expect("The block queue is empty");
         match self.peers.get_mut(&peer) {
-            Some(state) => state.decrement_num_block_to_send(),
+            Some(state) => state.num_blocks_to_send -= 1,
             None => return Ok(()),
         }
 
@@ -601,16 +602,12 @@ where
         self.messaging_handle
             .send_request(
                 peer,
-                SyncRequest::HeaderListRequest(HeaderListRequest::new(locator.clone())),
+                SyncRequest::HeaderListRequest(HeaderListRequest::new(locator)),
             )
             .map(|_| ())
     }
 
-    async fn request_blocks(
-        &mut self,
-        peer: T::PeerId,
-        mut headers: Vec<BlockHeader>,
-    ) -> Result<()> {
+    fn request_blocks(&mut self, peer: T::PeerId, mut headers: Vec<BlockHeader>) -> Result<()> {
         let peer_state = self
             .peers
             .get_mut(&peer)
