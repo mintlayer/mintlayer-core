@@ -132,10 +132,6 @@ impl ChainConfig {
         &self.magic_bytes
     }
 
-    pub fn magic_bytes_as_u32(&self) -> u32 {
-        u32::from_le_bytes(*self.magic_bytes())
-    }
-
     pub fn p2p_port(&self) -> u16 {
         self.p2p_port
     }
