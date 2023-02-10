@@ -153,7 +153,7 @@ impl AuthorityImpl {
         let ipv4 = self
             .ip4
             .lock()
-            .expect("mutex must be valid (ipv4)")
+            .expect("mutex must be valid (refresh ipv4)")
             .choose_multiple(&mut make_pseudo_rng(), MAX_IPV4_RECORDS)
             .cloned()
             .collect::<Vec<_>>();
@@ -161,7 +161,7 @@ impl AuthorityImpl {
         let ipv6 = self
             .ip6
             .lock()
-            .expect("mutex must be valid (ipv6)")
+            .expect("mutex must be valid (refresh ipv6)")
             .choose_multiple(&mut make_pseudo_rng(), MAX_IPV6_RECORDS)
             .cloned()
             .collect::<Vec<_>>();
@@ -269,16 +269,22 @@ impl Authority for AuthorityImpl {
 fn handle_command(auth: &AuthorityImpl, command: ServerCommands) {
     match command {
         ServerCommands::AddAddress(IpAddr::V4(ip)) => {
-            auth.ip4.lock().expect("mutex must be valid (ipv4)").push(ip);
+            auth.ip4.lock().expect("mutex must be valid (add ipv4)").push(ip);
         }
         ServerCommands::AddAddress(IpAddr::V6(ip)) => {
-            auth.ip6.lock().expect("mutex must be valid (ipv6)").push(ip);
+            auth.ip6.lock().expect("mutex must be valid (add ipv6)").push(ip);
         }
         ServerCommands::DelAddress(IpAddr::V4(ip)) => {
-            auth.ip4.lock().expect("mutex must be valid (ipv4)").retain(|val| *val != ip);
+            auth.ip4
+                .lock()
+                .expect("mutex must be valid (remove ipv4)")
+                .retain(|val| *val != ip);
         }
         ServerCommands::DelAddress(IpAddr::V6(ip)) => {
-            auth.ip6.lock().expect("mutex must be valid (ipv6)").retain(|val| *val != ip);
+            auth.ip6
+                .lock()
+                .expect("mutex must be valid (remove ipv6)")
+                .retain(|val| *val != ip);
         }
     };
 }

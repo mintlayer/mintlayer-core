@@ -151,13 +151,32 @@ impl subsystem::Subsystem for Box<dyn P2pInterface> {}
 
 pub type P2pHandle = subsystem::Handle<Box<dyn P2pInterface>>;
 
+pub type P2pNetworkingService = DefaultNetworkingService<NoiseTcpTransport>;
+
 pub fn make_p2p_transport() -> NoiseTcpTransport {
     let stream_adapter = NoiseEncryptionAdapter::gen_new();
     let base_transport = net::default_backend::transport::TcpTransportSocket::new();
     NoiseTcpTransport::new(stream_adapter, base_transport)
 }
 
-pub type P2pNetworkingService = DefaultNetworkingService<NoiseTcpTransport>;
+fn get_p2p_bind_addresses(bind_addresses: &[String], p2p_port: u16) -> Result<Vec<SocketAddr>> {
+    if !bind_addresses.is_empty() {
+        bind_addresses
+            .iter()
+            .map(|address| {
+                address.parse::<<P2pNetworkingService as NetworkingService>::Address>().map_err(
+                    |_| P2pError::ConversionError(ConversionError::InvalidAddress(address.clone())),
+                )
+            })
+            .collect::<Result<Vec<_>>>()
+    } else {
+        // Bind to default addresses if none are specified by the user
+        Ok(vec![
+            SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), p2p_port),
+            SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), p2p_port),
+        ])
+    }
+}
 
 pub async fn make_p2p<S: PeerDbStorage + 'static>(
     chain_config: Arc<ChainConfig>,
@@ -169,23 +188,8 @@ pub async fn make_p2p<S: PeerDbStorage + 'static>(
 ) -> Result<Box<dyn P2pInterface>> {
     let transport = make_p2p_transport();
 
-    let bind_addresses = if !p2p_config.bind_addresses.is_empty() {
-        p2p_config
-            .bind_addresses
-            .iter()
-            .map(|address| {
-                address.parse::<<P2pNetworkingService as NetworkingService>::Address>().map_err(
-                    |_| P2pError::ConversionError(ConversionError::InvalidAddress(address.clone())),
-                )
-            })
-            .collect::<Result<Vec<_>>>()?
-    } else {
-        // Bind to default addresses if none are specified by the user
-        vec![
-            SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), chain_config.p2p_port()),
-            SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), chain_config.p2p_port()),
-        ]
-    };
+    let bind_addresses =
+        get_p2p_bind_addresses(&p2p_config.bind_addresses, chain_config.p2p_port())?;
 
     let p2p = P2p::<P2pNetworkingService>::new(
         transport,

@@ -512,7 +512,9 @@ where
         true
     }
 
-    /// Address list maintenance
+    /// Peer and address list maintenance.
+    ///
+    /// Select random addresses to connect to, delete old addresses from memory and DB.
     fn heartbeat(&mut self) {
         let now = tokio::time::Instant::now();
         let connecting_addresses = self
