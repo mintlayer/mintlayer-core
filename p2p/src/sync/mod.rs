@@ -281,9 +281,8 @@ where
             )?;
         }
 
-        block_ids.truncate(requested_blocks_limit - peer_state.num_blocks_to_send);
-        peer_state.num_blocks_to_send += block_ids.len();
-        debug_assert!(peer_state.num_blocks_to_send <= requested_blocks_limit);
+        block_ids.truncate(requested_blocks_limit - peer_state.num_block_to_send());
+        peer_state.add_num_block_to_send(block_ids.len());
         self.blocks_queue.extend(block_ids.into_iter().map(|id| (peer, request_id, id)));
 
         Ok(())
@@ -488,7 +487,7 @@ where
         log::debug!("register peer {peer} to sync manager");
 
         self.request_headers(peer).await?;
-        match self.peers.insert(peer, PeerContext::new()) {
+        match self.peers.insert(peer, PeerContext::new(Arc::clone(&self.p2p_config))) {
             // This should never happen because a peer can only connect once.
             Some(_) => Err(P2pError::PeerError(PeerError::PeerAlreadyExists)),
             None => Ok(()),
@@ -528,7 +527,7 @@ where
             // This function is only called when the queue isn't empty.
             .expect("The block queue is empty");
         match self.peers.get_mut(&peer) {
-            Some(state) => state.num_blocks_to_send -= 1,
+            Some(state) => state.decrement_num_block_to_send(),
             None => return Ok(()),
         }
 

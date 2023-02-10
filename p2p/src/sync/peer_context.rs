@@ -13,20 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::Arc};
 
 use common::{
     chain::block::{Block, BlockHeader},
     primitives::Id,
 };
 
+use crate::P2pConfig;
+
 // TODO: FIXME: Private fields.
-// TODO: FIXME: Recheck every field.
+// TODO: Investigate if we need some kind of "timeouts" (waiting for blocks or headers).
 pub struct PeerContext {
+    p2p_config: Arc<P2pConfig>,
+
     /// A number of blocks that a peer has requested. This shouldn't be bigger than the
     /// `P2pConfig::requested_blocks_limit` value. The actual block identifiers are stored in
     /// `BlockSyncManager::blocks_queue`.
-    pub num_blocks_to_send: usize,
+    num_blocks_to_send: usize,
 
     /// A list of blocks that we requested from this peer.
     pub requested_blocks: BTreeSet<Id<Block>>,
@@ -37,145 +41,35 @@ pub struct PeerContext {
 }
 
 impl PeerContext {
-    pub fn new() -> Self {
+    pub fn new(p2p_config: Arc<P2pConfig>) -> Self {
         Self {
+            p2p_config,
             num_blocks_to_send: 0,
             requested_blocks: Default::default(),
             known_headers: Default::default(),
         }
     }
-}
-
-/*
-/// State of the peer
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PeerSyncState {
-    /// Peer state is unknown
-    Unknown,
-
-    /// Peer is uploading blocks to local node
-    UploadingBlocks(Id<Block>),
-
-    /// Peer is uploading headers to local node
-    UploadingHeaders(Locator),
-
-    /// Peer is idling and can be used for block requests
-    Idle,
-}
-
-/// Syncing-related context of the peer
-pub struct PeerContext<T>
-where
-    T: NetworkingService,
-{
-    /// Unique peer ID
-    _peer_id: T::PeerId,
-
-    /// State of the peer
-    state: PeerSyncState,
-
-    /// List of block headers indicating which blocks
-    /// still need to be downloaded from the remote peer
-    work: VecDeque<BlockHeader>,
-}
-
-impl<T: NetworkingService> PeerContext<T> {
-    pub fn new(_peer_id: T::PeerId) -> Self {
-        Self {
-            _peer_id,
-            state: PeerSyncState::Unknown,
-            work: VecDeque::new(),
-        }
+    pub fn num_block_to_send(&self) -> usize {
+        self.num_blocks_to_send
     }
 
-    pub fn new_with_locator(_peer_id: T::PeerId, locator: Locator) -> Self {
-        Self {
-            _peer_id,
-            state: PeerSyncState::UploadingHeaders(locator),
-            work: VecDeque::new(),
-        }
+    /// Reduces the "number of block to send" by one.
+    pub fn decrement_num_block_to_send(&mut self) {
+        debug_assert!(self.num_blocks_to_send > 0);
+        self.num_blocks_to_send -= 1;
     }
 
-    pub fn register_header_response(&mut self, headers: &[BlockHeader]) {
-        self.state = PeerSyncState::Idle;
-        self.work = VecDeque::from(headers.to_vec());
-    }
-
-    pub fn get_header_for_download(&mut self) -> Option<BlockHeader> {
-        self.get_next_block()
-    }
-
-    pub fn register_block_response(
-        &mut self,
-        header: &BlockHeader,
-    ) -> crate::Result<Option<BlockHeader>> {
-        match &self.state {
-            PeerSyncState::UploadingBlocks(expected) => {
-                ensure!(
-                    expected == &header.get_id(),
-                    P2pError::ProtocolError(ProtocolError::InvalidMessage),
-                );
-
-                Ok(self.get_next_block())
-            }
-            PeerSyncState::Idle | PeerSyncState::Unknown | PeerSyncState::UploadingHeaders(_) => {
-                Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
-            }
-        }
-    }
-
-    fn get_next_block(&mut self) -> Option<BlockHeader> {
-        self.work.pop_front()
-    }
-
-    /// Set peer state
-    pub fn set_state(&mut self, state: PeerSyncState) {
-        self.state = state;
-    }
-
-    /// Get peer state
-    pub fn state(&self) -> &PeerSyncState {
-        &self.state
+    pub fn add_num_block_to_send(&mut self, n: usize) {
+        self.num_blocks_to_send += n;
+        debug_assert!(
+            self.num_blocks_to_send <= self.p2p_config.requested_blocks_limit.clone().into()
+        );
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::default_backend::{
-        transport::TcpTransportSocket, types, DefaultNetworkingService,
-    };
-    use common::chain::block::{
-        consensus_data::ConsensusData, timestamp::BlockTimestamp, BlockReward,
-    };
 
-    fn new_peersyncstate() -> PeerContext<DefaultNetworkingService<TcpTransportSocket>> {
-        PeerContext::<DefaultNetworkingService<TcpTransportSocket>>::new(types::PeerId::new())
-    }
-
-    #[test]
-    fn create_new_peersyncstate() {
-        let peer = new_peersyncstate();
-        assert_eq!(peer.state, PeerSyncState::Unknown);
-    }
-
-    #[test]
-    fn test_set_state() {
-        let mut peer = new_peersyncstate();
-        let header = Block::new(
-            vec![],
-            Id::new(common::primitives::H256([0x07; 32])),
-            BlockTimestamp::from_int_seconds(1337u64),
-            ConsensusData::None,
-            BlockReward::new(Vec::new()),
-        )
-        .unwrap()
-        .header()
-        .clone();
-
-        assert_eq!(peer.state, PeerSyncState::Unknown);
-        peer.set_state(PeerSyncState::UploadingBlocks(header.get_id()));
-        assert_eq!(peer.state, PeerSyncState::UploadingBlocks(header.get_id()));
-    }
+    // TODO: FIXME:
 }
-*/
