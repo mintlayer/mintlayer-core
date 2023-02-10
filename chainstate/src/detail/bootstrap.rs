@@ -23,7 +23,7 @@ use serialization::{Decode, Encode};
 use crate::{BlockError, ChainstateConfig};
 
 use super::{
-    orphan_blocks::OrphanBlocks, query::ChainstateQuery,
+    orphan_blocks::OrphanBlocksRef, query::ChainstateQuery,
     tx_verification_strategy::TransactionVerificationStrategy,
 };
 
@@ -112,7 +112,7 @@ fn fill_buffer<S: std::io::Read>(
 pub fn export_bootstrap_stream<
     'a,
     S: BlockchainStorageRead,
-    O: OrphanBlocks,
+    O: OrphanBlocksRef,
     V: TransactionVerificationStrategy,
 >(
     magic_bytes: &[u8],

@@ -24,15 +24,9 @@ use common::primitives::semver::SemVer;
 use p2p::{
     config::P2pConfig,
     error::{DialError, P2pError},
-    message::{
-        AnnounceAddrRequest, Announcement, PeerManagerRequest, PeerManagerResponse, SyncRequest,
-        SyncResponse,
-    },
+    message::{AnnounceAddrRequest, Announcement, PeerManagerMessage, SyncMessage},
     net::{
-        default_backend::{
-            transport::TransportAddress,
-            types::{PeerId, RequestId},
-        },
+        default_backend::{transport::TransportAddress, types::PeerId},
         types::{ConnectivityEvent, PeerInfo, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
@@ -65,12 +59,11 @@ impl MockStateRef {
     }
 
     pub fn announce_address(&self, from: SocketAddr, announced_ip: SocketAddr) {
-        let peer_id = *self.connected.lock().unwrap().get(&from).unwrap();
+        let peer = *self.connected.lock().unwrap().get(&from).unwrap();
         self.conn_tx
-            .send(ConnectivityEvent::Request {
-                peer_id,
-                request_id: RequestId::new(),
-                request: PeerManagerRequest::AnnounceAddrRequest(AnnounceAddrRequest {
+            .send(ConnectivityEvent::Message {
+                peer,
+                message: PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest {
                     address: announced_ip.as_peer_address(),
                 }),
             })
@@ -94,7 +87,6 @@ impl NetworkingService for MockNetworkingService {
     type Address = SocketAddr;
     type BannableAddress = IpAddr;
     type PeerId = PeerId;
-    type PeerRequestId = RequestId;
     type ConnectivityHandle = MockConnectivityHandle;
     type SyncingMessagingHandle = MockSyncingMessagingHandle;
 
@@ -147,19 +139,7 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
         unreachable!()
     }
 
-    fn send_request(
-        &mut self,
-        _peer_id: PeerId,
-        _request: PeerManagerRequest,
-    ) -> p2p::Result<RequestId> {
-        unreachable!()
-    }
-
-    fn send_response(
-        &mut self,
-        _request_id: RequestId,
-        _response: PeerManagerResponse,
-    ) -> p2p::Result<()> {
+    fn send_message(&mut self, _peer_id: PeerId, _request: PeerManagerMessage) -> p2p::Result<()> {
         unreachable!()
     }
 
@@ -174,15 +154,7 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
 
 #[async_trait]
 impl SyncingMessagingService<MockNetworkingService> for MockSyncingMessagingHandle {
-    fn send_request(&mut self, _peer_id: PeerId, _request: SyncRequest) -> p2p::Result<RequestId> {
-        unreachable!()
-    }
-
-    fn send_response(
-        &mut self,
-        _request_id: RequestId,
-        _response: SyncResponse,
-    ) -> p2p::Result<()> {
+    fn send_message(&mut self, _peer_id: PeerId, _request: SyncMessage) -> p2p::Result<()> {
         unreachable!()
     }
 

@@ -37,9 +37,7 @@ use crypto::random::{make_pseudo_rng, seq::IteratorRandom};
 use logging::log;
 use p2p::{
     error::P2pError,
-    message::{
-        AnnounceAddrRequest, PeerManagerRequest, PeerManagerResponse, PingRequest, PingResponse,
-    },
+    message::{AnnounceAddrRequest, PeerManagerMessage, PingRequest, PingResponse},
     net::{
         default_backend::transport::TransportAddress,
         types::{ConnectivityEvent, PeerInfo, SyncingEvent},
@@ -193,17 +191,12 @@ where
         Ok(addresses)
     }
 
-    fn handle_conn_request(
-        &mut self,
-        _peer_id: N::PeerId,
-        request_id: N::PeerRequestId,
-        request: PeerManagerRequest,
-    ) {
+    fn handle_conn_request(&mut self, peer_id: N::PeerId, request: PeerManagerMessage) {
         match request {
-            PeerManagerRequest::AddrListRequest(_) => {
+            PeerManagerMessage::AddrListRequest(_) => {
                 // Ignored
             }
-            PeerManagerRequest::AnnounceAddrRequest(AnnounceAddrRequest { address }) => {
+            PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest { address }) => {
                 // TODO: Rate limit `AnnounceAddrRequest` requests from a specific peer to prevent DoS attack,
                 // when too many invalid addresses are announced, preventing the server from discovering new addresses.
                 // For example, Bitcoin Core allows 0.1 address/sec.
@@ -211,22 +204,16 @@ where
                     Self::new_address(&mut self.addresses, address, false);
                 }
             }
-            PeerManagerRequest::PingRequest(PingRequest { nonce }) => {
-                let _ = self.conn.send_response(
-                    request_id,
-                    PeerManagerResponse::PingResponse(PingResponse { nonce }),
+            PeerManagerMessage::PingRequest(PingRequest { nonce }) => {
+                let _ = self.conn.send_message(
+                    peer_id,
+                    PeerManagerMessage::PingResponse(PingResponse { nonce }),
                 );
             }
+            PeerManagerMessage::AddrListResponse(_) => {}
+            PeerManagerMessage::AnnounceAddrResponse(_) => {}
+            PeerManagerMessage::PingResponse(_) => {}
         }
-    }
-
-    fn handle_conn_response(
-        &mut self,
-        _peer_id: N::PeerId,
-        _request_id: N::PeerRequestId,
-        _response: PeerManagerResponse,
-    ) {
-        // Ignore all
     }
 
     fn handle_outbound_accepted(
@@ -315,19 +302,8 @@ where
 
     fn handle_conn_event(&mut self, event: ConnectivityEvent<N>) {
         match event {
-            ConnectivityEvent::Request {
-                peer_id,
-                request_id,
-                request,
-            } => {
-                self.handle_conn_request(peer_id, request_id, request);
-            }
-            ConnectivityEvent::Response {
-                peer_id,
-                request_id,
-                response,
-            } => {
-                self.handle_conn_response(peer_id, request_id, response);
+            ConnectivityEvent::Message { peer, message } => {
+                self.handle_conn_request(peer, message);
             }
             ConnectivityEvent::OutboundAccepted {
                 address,

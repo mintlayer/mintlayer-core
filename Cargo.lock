@@ -2269,6 +2269,7 @@ dependencies = [
  "storage",
  "subsystem",
  "tap",
+ "test-utils",
  "thiserror",
  "tokio",
  "tokio-util",

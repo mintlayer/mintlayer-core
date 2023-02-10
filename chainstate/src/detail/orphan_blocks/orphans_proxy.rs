@@ -15,6 +15,7 @@
 
 use std::sync::mpsc;
 
+use logging::log;
 use utils::tap_error_log::LogError;
 
 use super::OrphanBlocksPool;
@@ -29,10 +30,7 @@ pub struct OrphansProxy {
     tx: mpsc::Sender<RemoteCall>,
 }
 
-// TODO: remove #[allow(dead_code)] from the functions below once this is integrated into chainstate
-
 impl OrphansProxy {
-    #[allow(dead_code)]
     pub fn new(max_orphans: usize) -> Self {
         let (tx, rx) = mpsc::channel();
         let thread_handle = Some(std::thread::spawn(move || {
@@ -48,7 +46,6 @@ impl OrphansProxy {
         Self { thread_handle, tx }
     }
 
-    #[allow(dead_code)]
     pub fn call<R: Send + 'static>(
         &self,
         f: impl FnOnce(&OrphanBlocksPool) -> R + Send + 'static,
@@ -56,7 +53,6 @@ impl OrphansProxy {
         self.call_mut(|this| f(this))
     }
 
-    #[allow(dead_code)]
     pub fn call_mut<R: Send + 'static>(
         &self,
         f: impl FnOnce(&mut OrphanBlocksPool) -> R + Send + 'static,
@@ -66,7 +62,10 @@ impl OrphansProxy {
             .tx
             .send(Some(Box::new(move |subsys| {
                 let result = f(subsys);
-                tx.send(result).unwrap();
+                let send_result = tx.send(result);
+                if let Err(e) = send_result {
+                    log::error!("OrphansProxy: Failed to send result: {:?}", e);
+                }
             })))
             .log_err_pfx("Orphans call");
         rx

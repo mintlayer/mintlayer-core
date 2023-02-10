@@ -43,8 +43,8 @@ use crate::{
     event::{PeerManagerEvent, SyncControlEvent},
     interface::types::ConnectedPeer,
     message::{
-        AddrListRequest, AddrListResponse, AnnounceAddrRequest, AnnounceAddrResponse,
-        PeerManagerRequest, PeerManagerResponse, PingRequest, PingResponse,
+        AddrListRequest, AddrListResponse, AnnounceAddrRequest, PeerManagerMessage, PingRequest,
+        PingResponse,
     },
     net::{
         self,
@@ -226,9 +226,9 @@ where
     fn announce_address(&mut self, peer_id: T::PeerId, address: T::Address) -> crate::Result<()> {
         let peer = self.peers.get_mut(&peer_id).expect("peer must be known");
         if !peer.announced_addresses.contains(&address) {
-            self.peer_connectivity_handle.send_request(
+            self.peer_connectivity_handle.send_message(
                 peer_id,
-                PeerManagerRequest::AnnounceAddrRequest(AnnounceAddrRequest {
+                PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest {
                     address: address.as_peer_address(),
                 }),
             )?;
@@ -275,9 +275,9 @@ where
         );
 
         if role == Role::Outbound {
-            self.peer_connectivity_handle.send_request(
+            self.peer_connectivity_handle.send_message(
                 peer_id,
-                PeerManagerRequest::AddrListRequest(AddrListRequest {}),
+                PeerManagerMessage::AddrListRequest(AddrListRequest {}),
             )?;
         }
 
@@ -553,93 +553,97 @@ where
         Ok(())
     }
 
-    fn handle_incoming_request(
+    fn handle_incoming_message(
         &mut self,
-        peer_id: T::PeerId,
-        request_id: T::PeerRequestId,
-        request: PeerManagerRequest,
+        peer: T::PeerId,
+        message: PeerManagerMessage,
     ) -> crate::Result<()> {
-        match request {
-            PeerManagerRequest::AddrListRequest(AddrListRequest {}) => {
-                let addresses = self
-                    .peerdb
-                    .random_known_addresses(MAX_ADDRESS_COUNT)
-                    .iter()
-                    .map(TransportAddress::as_peer_address)
-                    .filter(|address| self.is_peer_address_valid(address))
-                    .collect();
-
-                self.peer_connectivity_handle.send_response(
-                    request_id,
-                    PeerManagerResponse::AddrListResponse(AddrListResponse { addresses }),
-                )
+        match message {
+            PeerManagerMessage::AddrListRequest(_) => self.handle_add_list_request(peer),
+            PeerManagerMessage::AnnounceAddrRequest(r) => {
+                self.handle_announce_addr_request(peer, r.address)
             }
-            PeerManagerRequest::AnnounceAddrRequest(AnnounceAddrRequest { address }) => {
-                // TODO: Rate limit announce address requests to prevent DoS attacks.
-                // For example it's 0.1 req/sec in Bitcoin Core.
-                let is_address_valid = self.is_peer_address_valid(&address);
-                if let (true, Some(address)) = (
-                    is_address_valid,
-                    TransportAddress::from_peer_address(&address),
-                ) {
-                    self.peerdb.peer_discovered(&address)?;
-
-                    self.peers
-                        .get_mut(&peer_id)
-                        .expect("peer sending AnnounceAddrRequest must be known")
-                        .announced_addresses
-                        .insert(address.clone());
-
-                    let peer_ids = self
-                        .subscribed_to_peer_addresses
-                        .iter()
-                        .cloned()
-                        .choose_multiple(&mut make_pseudo_rng(), PEER_ADDRESS_RESEND_COUNT);
-                    for new_peer_id in peer_ids {
-                        self.announce_address(new_peer_id, address.clone())?;
-                    }
-                }
-                Ok(())
-            }
-            PeerManagerRequest::PingRequest(PingRequest { nonce }) => {
-                self.peer_connectivity_handle.send_response(
-                    request_id,
-                    PeerManagerResponse::PingResponse(PingResponse { nonce }),
-                )
-            }
+            PeerManagerMessage::PingRequest(r) => self.handle_ping_request(peer, r.nonce),
+            PeerManagerMessage::AddrListResponse(r) => self.handle_add_list_response(r.addresses),
+            PeerManagerMessage::AnnounceAddrResponse(_) => Ok(()),
+            PeerManagerMessage::PingResponse(r) => self.handle_ping_response(peer, r.nonce),
         }
     }
 
-    fn handle_incoming_response(
+    fn handle_add_list_request(&mut self, peer: T::PeerId) -> crate::Result<()> {
+        let addresses = self
+            .peerdb
+            .random_known_addresses(MAX_ADDRESS_COUNT)
+            .iter()
+            .map(TransportAddress::as_peer_address)
+            .filter(|address| self.is_peer_address_valid(address))
+            .collect();
+
+        self.peer_connectivity_handle.send_message(
+            peer,
+            PeerManagerMessage::AddrListResponse(AddrListResponse { addresses }),
+        )
+    }
+
+    fn handle_announce_addr_request(
         &mut self,
-        peer_id: T::PeerId,
-        _request_id: T::PeerRequestId,
-        response: PeerManagerResponse,
+        peer: T::PeerId,
+        address: PeerAddress,
     ) -> crate::Result<()> {
-        // TODO: Check that unsolicited responses are not allowed
-        match response {
-            PeerManagerResponse::AddrListResponse(AddrListResponse { addresses }) => {
-                for address in addresses {
-                    if let (true, Some(address)) = (
-                        self.is_peer_address_valid(&address),
-                        TransportAddress::from_peer_address(&address),
-                    ) {
-                        self.peerdb.peer_discovered(&address)?;
-                    }
-                }
-                Ok(())
-            }
-            PeerManagerResponse::AnnounceAddrResponse(AnnounceAddrResponse {}) => Ok(()),
-            PeerManagerResponse::PingResponse(PingResponse { nonce }) => {
-                if let Some(peer) = self.peers.get_mut(&peer_id) {
-                    if peer.sent_ping.as_ref().map(|sent_ping| sent_ping.nonce) == Some(nonce) {
-                        // Correct reply received, clear pending request.
-                        peer.sent_ping = None;
-                    }
-                }
-                Ok(())
+        // TODO: Rate limit announce address requests to prevent DoS attacks.
+        // For example it's 0.1 req/sec in Bitcoin Core.
+        let is_address_valid = self.is_peer_address_valid(&address);
+        if let (true, Some(address)) = (
+            is_address_valid,
+            TransportAddress::from_peer_address(&address),
+        ) {
+            self.peerdb.peer_discovered(&address)?;
+
+            self.peers
+                .get_mut(&peer)
+                .expect("peer sending AnnounceAddrRequest must be known")
+                .announced_addresses
+                .insert(address.clone());
+
+            let peer_ids = self
+                .subscribed_to_peer_addresses
+                .iter()
+                .cloned()
+                .choose_multiple(&mut make_pseudo_rng(), PEER_ADDRESS_RESEND_COUNT);
+            for new_peer_id in peer_ids {
+                self.announce_address(new_peer_id, address.clone())?;
             }
         }
+        Ok(())
+    }
+
+    fn handle_ping_request(&mut self, peer: T::PeerId, nonce: u64) -> crate::Result<()> {
+        self.peer_connectivity_handle.send_message(
+            peer,
+            PeerManagerMessage::PingResponse(PingResponse { nonce }),
+        )
+    }
+
+    fn handle_add_list_response(&mut self, addresses: Vec<PeerAddress>) -> crate::Result<()> {
+        for address in addresses {
+            if let (true, Some(address)) = (
+                self.is_peer_address_valid(&address),
+                TransportAddress::from_peer_address(&address),
+            ) {
+                self.peerdb.peer_discovered(&address)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn handle_ping_response(&mut self, peer: T::PeerId, nonce: u64) -> crate::Result<()> {
+        if let Some(peer) = self.peers.get_mut(&peer) {
+            if peer.sent_ping.as_ref().map(|sent_ping| sent_ping.nonce) == Some(nonce) {
+                // Correct reply received, clear pending request.
+                peer.sent_ping = None;
+            }
+        }
+        Ok(())
     }
 
     /// Handle the result of a control/network event
@@ -722,19 +726,8 @@ where
     ) -> crate::Result<()> {
         match event_res {
             Ok(event) => match event {
-                net::types::ConnectivityEvent::Request {
-                    peer_id,
-                    request_id,
-                    request,
-                } => {
-                    self.handle_incoming_request(peer_id, request_id, request)?;
-                }
-                net::types::ConnectivityEvent::Response {
-                    peer_id,
-                    request_id,
-                    response,
-                } => {
-                    self.handle_incoming_response(peer_id, request_id, response)?;
+                ConnectivityEvent::Message { peer, message } => {
+                    self.handle_incoming_message(peer, message)?
                 }
                 net::types::ConnectivityEvent::InboundAccepted {
                     address,
@@ -835,9 +828,9 @@ where
                 }
                 None => {
                     let nonce = make_pseudo_rng().gen();
-                    self.peer_connectivity_handle.send_request(
+                    self.peer_connectivity_handle.send_message(
                         *peer_id,
-                        PeerManagerRequest::PingRequest(PingRequest { nonce }),
+                        PeerManagerMessage::PingRequest(PingRequest { nonce }),
                     )?;
                     peer.sent_ping = Some(SentPing {
                         nonce,

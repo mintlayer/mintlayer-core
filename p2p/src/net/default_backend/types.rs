@@ -24,9 +24,13 @@ use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
 
 use crate::{
-    error, message,
+    error,
+    message::{
+        AddrListRequest, AddrListResponse, AnnounceAddrRequest, AnnounceAddrResponse, Announcement,
+        BlockListRequest, BlockListResponse, HeaderListRequest, HeaderListResponse,
+        PeerManagerMessage, PingRequest, PingResponse, SyncMessage,
+    },
     net::{
-        self,
         default_backend::transport::TransportSocket,
         types::{PeerInfo, PubSubTopic},
     },
@@ -41,15 +45,9 @@ pub enum Command<T: TransportSocket> {
     Disconnect {
         peer_id: PeerId,
     },
-    SendRequest {
-        peer_id: PeerId,
-        request_id: RequestId,
-        message: message::Request,
-    },
-    /// Send response to remote peer
-    SendResponse {
-        request_id: RequestId,
-        message: message::Response,
+    SendMessage {
+        peer: PeerId,
+        message: Message,
     },
     AnnounceData {
         topic: PubSubTopic,
@@ -58,33 +56,21 @@ pub enum Command<T: TransportSocket> {
 }
 
 pub enum SyncingEvent {
-    Request {
-        peer_id: PeerId,
-        request_id: RequestId,
-        request: message::SyncRequest,
-    },
-    Response {
-        peer_id: PeerId,
-        request_id: RequestId,
-        response: message::SyncResponse,
+    Message {
+        peer: PeerId,
+        message: SyncMessage,
     },
     Announcement {
         peer_id: PeerId,
-        announcement: Box<message::Announcement>,
+        announcement: Box<Announcement>,
     },
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConnectivityEvent<T: TransportSocket> {
-    Request {
-        peer_id: PeerId,
-        request_id: RequestId,
-        request: message::PeerManagerRequest,
-    },
-    Response {
-        peer_id: PeerId,
-        request_id: RequestId,
-        response: message::PeerManagerResponse,
+    Message {
+        peer: PeerId,
+        message: PeerManagerMessage,
     },
     InboundAccepted {
         address: T::Address,
@@ -115,27 +101,9 @@ pub enum PubSubEvent<T: TransportSocket> {
     /// Message received from one of the pubsub topics
     Announcement {
         peer_id: T::Address,
-        topic: net::types::PubSubTopic,
-        message: message::Announcement,
+        topic: PubSubTopic,
+        message: Announcement,
     },
-}
-
-static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Encode, Decode, Default)]
-pub struct RequestId(u64);
-
-impl RequestId {
-    pub fn new() -> Self {
-        let id = NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed);
-        Self(id)
-    }
-}
-
-impl std::fmt::Display for RequestId {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Encode, Decode)]
@@ -221,18 +189,42 @@ pub enum HandshakeMessage {
     },
 }
 
-#[derive(Debug, Encode, Decode, PartialEq, Eq)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq, Clone)]
 pub enum Message {
     Handshake(HandshakeMessage),
-    Request {
-        request_id: RequestId,
-        request: message::Request,
-    },
-    Response {
-        request_id: RequestId,
-        response: message::Response,
-    },
-    Announcement {
-        announcement: message::Announcement,
-    },
+    HeaderListRequest(HeaderListRequest),
+    BlockListRequest(BlockListRequest),
+    AddrListRequest(AddrListRequest),
+    AnnounceAddrRequest(AnnounceAddrRequest),
+    PingRequest(PingRequest),
+    HeaderListResponse(HeaderListResponse),
+    BlockListResponse(BlockListResponse),
+    AddrListResponse(AddrListResponse),
+    AnnounceAddrResponse(AnnounceAddrResponse),
+    PingResponse(PingResponse),
+    Announcement(Announcement),
+}
+
+impl From<PeerManagerMessage> for Message {
+    fn from(message: PeerManagerMessage) -> Self {
+        match message {
+            PeerManagerMessage::AddrListRequest(r) => Message::AddrListRequest(r),
+            PeerManagerMessage::AnnounceAddrRequest(r) => Message::AnnounceAddrRequest(r),
+            PeerManagerMessage::PingRequest(r) => Message::PingRequest(r),
+            PeerManagerMessage::AddrListResponse(r) => Message::AddrListResponse(r),
+            PeerManagerMessage::AnnounceAddrResponse(r) => Message::AnnounceAddrResponse(r),
+            PeerManagerMessage::PingResponse(r) => Message::PingResponse(r),
+        }
+    }
+}
+
+impl From<SyncMessage> for Message {
+    fn from(message: SyncMessage) -> Self {
+        match message {
+            SyncMessage::HeaderListRequest(r) => Message::HeaderListRequest(r),
+            SyncMessage::BlockListRequest(r) => Message::BlockListRequest(r),
+            SyncMessage::HeaderListResponse(r) => Message::HeaderListResponse(r),
+            SyncMessage::BlockListResponse(r) => Message::BlockListResponse(r),
+        }
+    }
 }

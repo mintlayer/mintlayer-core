@@ -64,11 +64,11 @@ use utils::{
 use utxo::UtxosDB;
 
 use self::{
-    orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut},
-    query::ChainstateQuery,
+    orphan_blocks::OrphanBlocksMut, orphan_blocks::OrphansProxy, query::ChainstateQuery,
     tx_verification_strategy::TransactionVerificationStrategy,
 };
-use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
+use crate::{ChainstateConfig, ChainstateEvent};
+pub use orphan_blocks::OrphanBlocksRef;
 
 type TxRw<'a, S> = <S as Transactional<'a>>::TransactionRw;
 type TxRo<'a, S> = <S as Transactional<'a>>::TransactionRo;
@@ -85,7 +85,7 @@ pub struct Chainstate<S, V> {
     chainstate_config: ChainstateConfig,
     chainstate_storage: S,
     tx_verification_strategy: V,
-    orphan_blocks: OrphanBlocksPool,
+    orphan_blocks: OrphansProxy,
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     events_controller: EventsController<ChainstateEvent>,
     time_getter: TimeGetter,
@@ -106,7 +106,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     fn make_db_tx(
         &mut self,
-    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRw<'_, S>, OrphanBlocksRefMut, V>>
+    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRw<'_, S>, &mut OrphansProxy, V>>
     {
         let db_tx = self.chainstate_storage.transaction_rw(None)?;
         Ok(chainstateref::ChainstateRef::new_rw(
@@ -114,14 +114,14 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             &self.chainstate_config,
             &self.tx_verification_strategy,
             db_tx,
-            self.orphan_blocks.as_rw_ref(),
+            &mut self.orphan_blocks,
             self.time_getter.getter(),
         ))
     }
 
     pub(crate) fn make_db_tx_ro(
         &self,
-    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRo<'_, S>, OrphanBlocksRef, V>>
+    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRo<'_, S>, &OrphansProxy, V>>
     {
         let db_tx = self.chainstate_storage.transaction_ro()?;
         Ok(chainstateref::ChainstateRef::new_ro(
@@ -129,14 +129,14 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             &self.chainstate_config,
             &self.tx_verification_strategy,
             db_tx,
-            self.orphan_blocks.as_ro_ref(),
+            &self.orphan_blocks,
             self.time_getter.getter(),
         ))
     }
 
     pub fn query(
         &self,
-    ) -> Result<ChainstateQuery<TxRo<'_, S>, OrphanBlocksRef, V>, PropertyQueryError> {
+    ) -> Result<ChainstateQuery<TxRo<'_, S>, &OrphansProxy, V>, PropertyQueryError> {
         self.make_db_tx_ro().map(ChainstateQuery::new).map_err(PropertyQueryError::from)
     }
 
@@ -192,7 +192,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
     ) -> Self {
-        let orphan_blocks = OrphanBlocksPool::new(*chainstate_config.max_orphan_blocks);
+        let orphan_blocks = OrphansProxy::new(*chainstate_config.max_orphan_blocks);
         Self {
             chain_config,
             chainstate_config,
@@ -279,7 +279,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     /// returns the new block index, which is the new tip, if any
     fn process_orphans(&mut self, last_processed_block: &Id<Block>) -> Option<BlockIndex> {
-        let orphans = self.orphan_blocks.take_all_children_of(&(*last_processed_block).into());
+        let orphans =
+            (&mut self.orphan_blocks).take_all_children_of(&(*last_processed_block).into());
         let (block_indexes, block_errors): (Vec<Option<BlockIndex>>, Vec<BlockError>) = orphans
             .into_iter()
             .map(|blk| self.process_block(blk, BlockSource::Local))
@@ -438,7 +439,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         &self.chainstate_config
     }
 
-    pub fn orphan_blocks_pool(&self) -> &OrphanBlocksPool {
+    pub fn orphan_blocks_pool(&self) -> &OrphansProxy {
         &self.orphan_blocks
     }
 
